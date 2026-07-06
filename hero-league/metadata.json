@@ -1,0 +1,6 @@
+{
+  "name": "Hero League",
+  "description": "Eine hochmoderne, responsive Sport-Plattform für Fußball-Ligen mit automatischer Tabellenberechnung und Admin-Steuerung.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
