@@ -1,0 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-brand-dark: #0A0118;
+  --color-brand-deep: #1E1B4B;
+  --color-brand-accent: #2563eb; /* Active Blue */
+  --color-brand-accent-light: #3B82F6; /* Bright Blue */
+  --color-brand-glow: rgba(59, 130, 246, 0.25);
+}
+
+/* Custom styling for sleek scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0A0118;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1E1B4B;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3B82F6;
+}
+
+/* Animation classes or utilities */
+.neon-glow-blue {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.35);
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #ffffff 30%, #3b82f6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.blue-gradient {
+  background: linear-gradient(135deg, #3B82F6 0%, #2563eb 100%);
+}
+
