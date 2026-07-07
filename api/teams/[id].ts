@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { Team } from '../../src/types';
-import { normalizeRoster, sql } from '../_lib/db';
-import { requireAdmin } from '../_lib/auth';
-import { badRequest, isNonEmptyString, isRoster } from '../_lib/validate';
+import { normalizeRoster, sql } from '../_lib/db.js';
+import { requireAdmin } from '../_lib/auth.js';
+import { badRequest, isNonEmptyString, isRoster } from '../_lib/validate.js';
 
 const updateTeam = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
   const id = String(req.query.id);

@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getSeasons, sql } from '../_lib/db';
-import { requireAdmin } from '../_lib/auth';
-import { badRequest, isNonEmptyString } from '../_lib/validate';
+import { getSeasons, sql } from '../_lib/db.js';
+import { requireAdmin } from '../_lib/auth.js';
+import { badRequest, isNonEmptyString } from '../_lib/validate.js';
 
 // Neue Saison starten: anlegen und als aktiv setzen.
 // Vereine/Kader bleiben, alte Saisons samt Spielen bleiben erhalten.

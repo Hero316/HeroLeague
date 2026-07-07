@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { sql } from '../_lib/db';
-import { requireAdmin } from '../_lib/auth';
-import { badRequest, isOptionalScore, isScorersArray, isStatus } from '../_lib/validate';
+import { sql } from '../_lib/db.js';
+import { requireAdmin } from '../_lib/auth.js';
+import { badRequest, isOptionalScore, isScorersArray, isStatus } from '../_lib/validate.js';
 
 const updateMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
   const id = String(req.query.id);

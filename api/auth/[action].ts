@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { clearSessionCookie, createSessionToken, isAuthenticated, sessionCookie } from '../_lib/auth';
+import { clearSessionCookie, createSessionToken, isAuthenticated, sessionCookie } from '../_lib/auth.js';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

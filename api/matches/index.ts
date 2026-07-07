@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getCurrentSeason, getMatches, sql } from '../_lib/db';
-import { requireAdmin } from '../_lib/auth';
-import { badRequest, isDateString, isNonEmptyString, isTimeString } from '../_lib/validate';
+import { getCurrentSeason, getMatches, sql } from '../_lib/db.js';
+import { requireAdmin } from '../_lib/auth.js';
+import { badRequest, isDateString, isNonEmptyString, isTimeString } from '../_lib/validate.js';
 
 const createMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
   const { matchday, homeTeamId, awayTeamId, date, time } = req.body ?? {};

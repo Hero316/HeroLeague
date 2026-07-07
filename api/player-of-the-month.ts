@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { sql } from './_lib/db';
-import { requireAdmin } from './_lib/auth';
-import { badRequest, isNonEmptyString } from './_lib/validate';
-import { DEFAULT_PLAYER_OF_MONTH } from './_lib/seed';
+import { sql } from './_lib/db.js';
+import { requireAdmin } from './_lib/auth.js';
+import { badRequest, isNonEmptyString } from './_lib/validate.js';
+import { DEFAULT_PLAYER_OF_MONTH } from './_lib/seed.js';
 
 const savePom = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
   const { name, club, goals, assists, image } = req.body ?? {};

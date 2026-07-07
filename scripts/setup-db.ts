@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { neon } from '@neondatabase/serverless';
-import { applySeed } from '../api/_lib/seed';
+import { applySeed } from '../api/_lib/seed.js';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {

@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getCurrentSeason, getMatches, getTeams } from './_lib/db';
-import { calculatePlayers } from './_lib/league';
+import { getCurrentSeason, getMatches, getTeams } from './_lib/db.js';
+import { calculatePlayers } from './_lib/league.js';
 
 // Spielerstatistiken, abgeleitet aus den Spielen einer Saison (Default: aktive Saison)
 export default async function handler(req: VercelRequest, res: VercelResponse) {

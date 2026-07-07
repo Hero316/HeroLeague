@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { put } from '@vercel/blob';
-import { requireAdmin } from './_lib/auth';
-import { badRequest } from './_lib/validate';
+import { requireAdmin } from './_lib/auth.js';
+import { badRequest } from './_lib/validate.js';
 
 // Erlaubte Bildformate (kein SVG – Skript-Injektionsrisiko)
 const ALLOWED_TYPES: Record<string, string> = {
