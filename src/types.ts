@@ -48,6 +48,11 @@ export interface PlayerOfMonth {
   image: string;
 }
 
+export interface TwitchConfig {
+  channel: string; // Kanalname ohne URL, z.B. "heroleague"
+  isLive: boolean; // manuell im Admin geschaltet
+}
+
 export interface Standing {
   teamId: string;
   teamName: string;

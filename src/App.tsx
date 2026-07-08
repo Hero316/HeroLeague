@@ -11,6 +11,7 @@ import AdminPanel from './components/AdminPanel';
 import AdminLogin from './components/AdminLogin';
 import MatchManager from './components/MatchManager';
 import TeamDetail from './components/TeamDetail';
+import LiveBanner from './components/LiveBanner';
 import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History } from 'lucide-react';
 
 export default function App() {
@@ -296,6 +297,7 @@ export default function App() {
                 <div className="bg-[#1E1B4B]/20 border border-white/5 rounded-2xl p-6">
                   <AdminPanel
                     teams={teams}
+                    matches={currentSeasonMatches}
                     currentSeasonLabel={currentSeason?.label ?? ''}
                     onAddTeam={handleAddTeam}
                     onEditTeam={handleEditTeam}
@@ -320,6 +322,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0A0118] text-white font-sans selection:bg-brand-accent selection:text-white">
+      <LiveBanner />
       <Navbar
         activeTab={activeTab}
         setActiveTab={(tab) => {

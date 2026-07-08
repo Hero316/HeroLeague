@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X } from 'lucide-react';
-import { Player, Team } from '../types';
+import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles } from 'lucide-react';
+import { Player, Team, Match } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
 
@@ -178,11 +178,67 @@ function RosterEditor({
 
 interface AdminPanelProps {
   teams: Team[];
+  matches: Match[];
   currentSeasonLabel: string;
   onAddTeam: (team: Omit<Team, 'id'>) => Promise<boolean>;
   onEditTeam: (teamId: string, updatedData: Partial<Team>) => Promise<boolean>;
   onDeleteTeam: (teamId: string) => Promise<boolean>;
   onStartSeason: (label: string) => Promise<boolean>;
+}
+
+const MONTH_NAMES = [
+  'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+  'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
+];
+
+// Ermittelt den besten Spieler eines Monats aus den Torschützen-/Vorlagendaten.
+// Bewertung: Tore zählen doppelt, Vorlagen einfach. Nutzt den aktuellen Kalendermonat;
+// gibt es dort keine Daten, wird der jüngste Monat mit Spielen verwendet.
+function computeMonthPom(matches: Match[], teams: Team[]) {
+  const withGoals = matches.filter(
+    (m) => (m.status === 'beendet' || m.status === 'live') && Array.isArray(m.scorers) && m.scorers.length > 0
+  );
+  if (withGoals.length === 0) return null;
+
+  const monthOf = (d: string) => (d || '').slice(0, 7); // 'YYYY-MM'
+  const now = new Date();
+  const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const monthKeys = Array.from(new Set(withGoals.map((m) => monthOf(m.date))));
+  const key = monthKeys.includes(currentKey)
+    ? currentKey
+    : monthKeys.sort().reverse()[0];
+
+  const monthMatches = withGoals.filter((m) => monthOf(m.date) === key);
+  const stats: Record<string, { name: string; teamId: string; goals: number; assists: number }> = {};
+  const bump = (name: string, teamId: string, field: 'goals' | 'assists') => {
+    if (!name || name === 'Eigentor' || name === 'Unbekannt') return;
+    if (!stats[name]) stats[name] = { name, teamId, goals: 0, assists: 0 };
+    stats[name][field] += 1;
+  };
+
+  monthMatches.forEach((m) =>
+    (m.scorers || []).forEach((s) => {
+      bump(s.playerName, s.teamId, 'goals');
+      if (s.assistName) bump(s.assistName, s.teamId, 'assists');
+    })
+  );
+
+  const ranked = Object.values(stats).sort(
+    (a, b) => b.goals * 2 + b.assists - (a.goals * 2 + a.assists) || b.goals - a.goals
+  );
+  const top = ranked[0];
+  if (!top) return null;
+
+  const team = teams.find((t) => t.id === top.teamId);
+  const [y, mm] = key.split('-');
+  return {
+    name: top.name,
+    teamName: team?.name ?? '',
+    goals: top.goals,
+    assists: top.assists,
+    imageUrl: team?.spielerliste?.find((p) => p.name === top.name)?.imageUrl ?? '',
+    monthLabel: `${MONTH_NAMES[parseInt(mm, 10) - 1]} ${y}`,
+  };
 }
 
 // Vorschlag für das Label der Folgesaison: "2026/27" -> "2027/28"
@@ -195,6 +251,7 @@ function suggestNextSeasonLabel(current: string): string {
 
 export default function AdminPanel({
   teams,
+  matches,
   currentSeasonLabel,
   onAddTeam,
   onEditTeam,
@@ -238,6 +295,12 @@ export default function AdminPanel({
   const [pomAssists, setPomAssists] = useState(0);
   const [pomImage, setPomImage] = useState('');
   const [pomSuccess, setPomSuccess] = useState(false);
+  const [pomAutoNote, setPomAutoNote] = useState('');
+
+  // Twitch-Livestream (manueller Schalter)
+  const [twitchChannel, setTwitchChannel] = useState('');
+  const [twitchLive, setTwitchLive] = useState(false);
+  const [twitchSuccess, setTwitchSuccess] = useState(false);
 
   // Neue Saison starten
   const [seasonModalOpen, setSeasonModalOpen] = useState(false);
@@ -276,6 +339,51 @@ export default function AdminPanel({
       });
       setPomSuccess(true);
       setTimeout(() => setPomSuccess(false), 3000);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
+    }
+  };
+
+  // Spieler des Monats automatisch aus den Monatsdaten vorbefüllen (manuell weiter editierbar)
+  const handleAutoPom = () => {
+    const res = computeMonthPom(matches, teams);
+    if (!res) {
+      alert('Keine Tordaten für eine automatische Berechnung gefunden. Trage zuerst Ergebnisse mit Torschützen ein.');
+      return;
+    }
+    setPomName(res.name);
+    setPomClub(res.teamName);
+    setPomGoals(res.goals);
+    setPomAssists(res.assists);
+    if (res.imageUrl) setPomImage(res.imageUrl);
+    setPomAutoNote(
+      `Automatisch berechnet für ${res.monthLabel}: ${res.name} (${res.goals} Tore, ${res.assists} Vorlagen). Noch speichern nicht vergessen.`
+    );
+  };
+
+  // Twitch-Konfiguration laden
+  useEffect(() => {
+    apiFetch<{ channel: string; isLive: boolean }>('/api/twitch')
+      .then((data) => {
+        setTwitchChannel(data.channel || '');
+        setTwitchLive(Boolean(data.isLive));
+      })
+      .catch(() => {
+        /* noch nicht konfiguriert */
+      });
+  }, []);
+
+  const handleSaveTwitch = async (nextLive?: boolean) => {
+    const isLive = typeof nextLive === 'boolean' ? nextLive : twitchLive;
+    try {
+      const saved = await apiFetch<{ channel: string; isLive: boolean }>('/api/twitch', {
+        method: 'POST',
+        body: JSON.stringify({ channel: twitchChannel.trim(), isLive }),
+      });
+      setTwitchChannel(saved.channel || '');
+      setTwitchLive(Boolean(saved.isLive));
+      setTwitchSuccess(true);
+      setTimeout(() => setTwitchSuccess(false), 3000);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
     }
@@ -688,10 +796,24 @@ export default function AdminPanel({
             <Award className="w-5 h-5 text-yellow-400" />
             Spieler des Monats konfigurieren
           </h3>
-          <p className="text-xs text-gray-400 font-sans mb-6">
+          <p className="text-xs text-gray-400 font-sans mb-4">
             Bestimme den ausgezeichneten Spieler, seinen Verein, die Leistungsdaten und lade sein Portraitfoto hoch —
             erscheint prominent auf der Startseite.
           </p>
+
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
+            <button
+              type="button"
+              onClick={handleAutoPom}
+              className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 bg-brand-accent-light/15 hover:bg-brand-accent-light/25 border border-brand-accent-light/40 text-brand-accent-light rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>Aus Monatsdaten berechnen</span>
+            </button>
+            {pomAutoNote && (
+              <span className="text-xs text-emerald-400 font-sans">{pomAutoNote}</span>
+            )}
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <div>
@@ -737,6 +859,74 @@ export default function AdminPanel({
                 <span>Spieler auszeichnen</span>
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Twitch-Livestream */}
+      <div className="lg:col-span-12 mt-4">
+        <div className="bg-[#1E1B4B]/40 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm">
+          <h3 className="font-display font-bold text-xl uppercase tracking-tight text-white mb-4 flex items-center gap-2">
+            <Radio className="w-5 h-5 text-[#9147ff]" />
+            Twitch-Livestream
+          </h3>
+          <p className="text-xs text-gray-400 font-sans mb-6">
+            Trage deinen Twitch-Kanal ein und schalte das Live-Banner an, sobald der Stream läuft. Ist der Schalter aus,
+            erscheint auf der Website kein Banner.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div className="md:col-span-2">
+              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">TWITCH-KANAL</label>
+              <input
+                type="text"
+                value={twitchChannel}
+                onChange={(e) => setTwitchChannel(e.target.value)}
+                placeholder="z.B. heroleague"
+                className={inputClass}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">LIVE-STATUS</label>
+              <button
+                type="button"
+                onClick={() => handleSaveTwitch(!twitchLive)}
+                className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer border ${
+                  twitchLive
+                    ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                    : 'bg-[#0A0118]/60 text-gray-400 border-white/10 hover:text-white hover:border-white/20'
+                }`}
+              >
+                <span className="relative flex h-2 w-2">
+                  {twitchLive && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                  )}
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${twitchLive ? 'bg-red-500' : 'bg-gray-500'}`} />
+                </span>
+                {twitchLive ? 'LIVE – Banner aktiv' : 'Offline (Banner aus)'}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 mt-4">
+            {twitchSuccess && (
+              <motion.span
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-xs text-emerald-400 uppercase tracking-wider font-mono mr-2"
+              >
+                ✓ Gespeichert!
+              </motion.span>
+            )}
+            <button
+              type="button"
+              onClick={() => handleSaveTwitch()}
+              className="px-6 py-3 bg-brand-accent hover:bg-brand-accent/80 border border-brand-accent-light/30 rounded-full text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center gap-1.5 cursor-pointer shadow-lg shadow-brand-accent-light/10"
+            >
+              <Check className="w-4 h-4" />
+              <span>Kanal speichern</span>
+            </button>
           </div>
         </div>
       </div>
