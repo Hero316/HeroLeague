@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Play, Check, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Play, Check, RotateCcw, ChevronLeft, ChevronRight, Plus, Minus, Pencil } from 'lucide-react';
 import { Match, Scorer, Team } from '../types';
 
 export function LiveTimer({ liveStartedAt }: { liveStartedAt?: string }) {
@@ -110,41 +110,68 @@ export default function Spielplan({
   // Quick lookup helper for team details
   const getTeam = (teamId: string) => teams.find((t) => t.id === teamId);
 
-  // Handle local score edits
-  const handleScoreChange = (matchId: string, side: 'home' | 'away', val: string) => {
-    // Only allow numbers or empty string
-    if (val !== '' && !/^\d+$/.test(val)) return;
-    
-    setEditingScores((prev) => ({
-      ...prev,
-      [matchId]: {
-        ...prev[matchId],
-        home: prev[matchId]?.home ?? '',
-        away: prev[matchId]?.away ?? '',
-        [side]: val,
-      },
-    }));
+  // Torschützen eines Spiels aus den gespeicherten Daten in den lokalen Bearbeitungszustand laden
+  const seedScorers = (match: Match) => ({
+    homeScorers: (match.scorers || [])
+      .filter((s) => s.teamId === match.homeTeamId)
+      .map((s) => ({ playerName: s.playerName, assistName: s.assistName || '' })),
+    awayScorers: (match.scorers || [])
+      .filter((s) => s.teamId === match.awayTeamId)
+      .map((s) => ({ playerName: s.playerName, assistName: s.assistName || '' })),
+  });
 
-    // Adjust scorers array size dynamically to match goals count
-    const numGoals = val === '' ? 0 : parseInt(val, 10);
+  // Bearbeitung eines Spiels starten (Score + Torschützen aus dem gespeicherten Stand übernehmen)
+  const beginEdit = (match: Match) => {
+    setEditingScores((prev) =>
+      prev[match.id] !== undefined
+        ? prev
+        : {
+            ...prev,
+            [match.id]: {
+              home: match.homeScore?.toString() ?? '0',
+              away: match.awayScore?.toString() ?? '0',
+            },
+          }
+    );
+    setMatchScorers((prev) => (prev[match.id] ? prev : { ...prev, [match.id]: seedScorers(match) }));
+  };
+
+  // Bearbeitung abbrechen / lokalen Zustand verwerfen
+  const cancelEdit = (match: Match) => {
+    setEditingScores((prev) => {
+      const updated = { ...prev };
+      delete updated[match.id];
+      return updated;
+    });
     setMatchScorers((prev) => {
-      const current = prev[matchId] || { homeScorers: [], awayScorers: [] };
-      const currentScorersForSide = side === 'home' ? [...current.homeScorers] : [...current.awayScorers];
-      
-      if (currentScorersForSide.length < numGoals) {
-        while (currentScorersForSide.length < numGoals) {
-          currentScorersForSide.push({ playerName: '', assistName: '' });
-        }
-      } else if (currentScorersForSide.length > numGoals) {
-        currentScorersForSide.length = numGoals;
-      }
+      const updated = { ...prev };
+      delete updated[match.id];
+      return updated;
+    });
+  };
 
+  // Liveticker-Kern: Tor +1 / -1, ohne bereits erfasste Torschützen zu verlieren
+  const adjustGoals = (match: Match, side: 'home' | 'away', delta: number) => {
+    setEditingScores((prev) => {
+      const cur = prev[match.id] ?? {
+        home: match.homeScore?.toString() ?? '0',
+        away: match.awayScore?.toString() ?? '0',
+      };
+      const curVal = parseInt((side === 'home' ? cur.home : cur.away) || '0', 10) || 0;
+      const next = Math.max(0, Math.min(99, curVal + delta));
+      return { ...prev, [match.id]: { ...cur, [side]: String(next) } };
+    });
+    setMatchScorers((prev) => {
+      const seeded = prev[match.id] ?? seedScorers(match);
+      const arr = side === 'home' ? [...seeded.homeScorers] : [...seeded.awayScorers];
+      if (delta > 0) arr.push({ playerName: '', assistName: '' });
+      else if (delta < 0 && arr.length > 0) arr.pop();
       return {
         ...prev,
-        [matchId]: {
-          homeScorers: side === 'home' ? currentScorersForSide : current.homeScorers,
-          awayScorers: side === 'away' ? currentScorersForSide : current.awayScorers,
-        }
+        [match.id]: {
+          homeScorers: side === 'home' ? arr : seeded.homeScorers,
+          awayScorers: side === 'away' ? arr : seeded.awayScorers,
+        },
       };
     });
   };
@@ -178,29 +205,21 @@ export default function Spielplan({
     });
   };
 
-  // Save the edited score with associated scorers and assistants
-  const handleSaveScore = (match: Match) => {
+  // Aktuellen Bearbeitungsstand mit gewähltem Status speichern (live = Ticker läuft weiter, beendet = final)
+  const saveWithStatus = (match: Match, status: 'live' | 'beendet') => {
     const edit = editingScores[match.id];
-    const homeVal = edit?.home ?? '';
-    const awayVal = edit?.away ?? '';
-
-    if (homeVal === '' || awayVal === '') {
-      alert('Bitte geben Sie für beide Teams gültige Tore ein.');
-      return;
-    }
-
-    const homeGoals = parseInt(homeVal, 10);
-    const awayGoals = parseInt(awayVal, 10);
+    const homeGoals = parseInt(edit?.home ?? String(match.homeScore ?? 0), 10) || 0;
+    const awayGoals = parseInt(edit?.away ?? String(match.awayScore ?? 0), 10) || 0;
 
     const scorers: Scorer[] = [];
-    const localScorers = matchScorers[match.id] || { homeScorers: [], awayScorers: [] };
+    const localScorers = matchScorers[match.id] || seedScorers(match);
 
     for (let i = 0; i < homeGoals; i++) {
       const pObj = localScorers.homeScorers[i] || { playerName: 'Unbekannt', assistName: '' };
       scorers.push({
         playerName: pObj.playerName || 'Unbekannt',
         teamId: match.homeTeamId,
-        assistName: pObj.assistName || undefined
+        assistName: pObj.assistName || undefined,
       });
     }
 
@@ -209,11 +228,14 @@ export default function Spielplan({
       scorers.push({
         playerName: pObj.playerName || 'Unbekannt',
         teamId: match.awayTeamId,
-        assistName: pObj.assistName || undefined
+        assistName: pObj.assistName || undefined,
       });
     }
 
-    onUpdateMatchScore(match.id, homeGoals, awayGoals, 'beendet', scorers);
+    Promise.resolve(onUpdateMatchScore(match.id, homeGoals, awayGoals, status, scorers)).then(() => {
+      // Bei "beendet" den lokalen Bearbeitungsmodus schließen; bei "live" offen lassen zum Weitertickern
+      if (status === 'beendet') cancelEdit(match);
+    });
   };
 
   // Reset a completed match back to "upcoming"
@@ -308,6 +330,14 @@ export default function Spielplan({
           const isCompleted = match.status === 'beendet';
           const isLive = match.status === 'live';
 
+          // Admin darf ein nicht beendetes Spiel direkt bearbeiten (Liveticker); beendete erst nach Klick auf "Bearbeiten"
+          const showEditor = isAdmin && (isLocalEditing || !isCompleted);
+          const scoreVisible = isLocalEditing || isCompleted || isLive || match.homeScore !== null;
+          const displayHome = isLocalEditing ? currentHomeEdit || '0' : match.homeScore ?? 0;
+          const displayAway = isLocalEditing ? currentAwayEdit || '0' : match.awayScore ?? 0;
+          const homeGoalsEdit = parseInt(currentHomeEdit || '0', 10) || 0;
+          const awayGoalsEdit = parseInt(currentAwayEdit || '0', 10) || 0;
+
           return (
             <div
               key={match.id}
@@ -343,7 +373,7 @@ export default function Spielplan({
               {/* Match Row with generous padding & gap */}
               <div className="grid grid-cols-12 gap-2 items-center py-4 px-2 bg-white/[0.02] rounded-xl border border-white/5">
                 {/* Home Team Column */}
-                <div className="col-span-5 flex items-center justify-end gap-3 text-right">
+                <div className="col-span-5 min-w-0 flex items-center justify-end gap-3 text-right">
                   {onSelectTeam ? (
                     <button
                       onClick={() => onSelectTeam(home.id)}
@@ -369,105 +399,33 @@ export default function Spielplan({
                   </div>
                 </div>
 
-                {/* Score / Edit Column */}
+                {/* Score Column (Anzeige; Bearbeitung erfolgt im Torschützen-Panel darunter) */}
                 <div className="col-span-2 flex items-center justify-center">
-                  {isAdmin && (!isCompleted || isLive || isLocalEditing) ? (
-                    /* Score Editor (Admin Mode) */
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="text"
-                        maxLength={2}
-                        placeholder="-"
-                        value={currentHomeEdit}
-                        onChange={(e) => handleScoreChange(match.id, 'home', e.target.value)}
-                        onFocus={() => {
-                          if (editingScores[match.id] === undefined) {
-                            setEditingScores((prev) => ({
-                              ...prev,
-                              [match.id]: {
-                                home: match.homeScore?.toString() ?? '',
-                                away: match.awayScore?.toString() ?? '',
-                              },
-                            }));
-                            
-                            const homeScorers = (match.scorers || [])
-                              .filter(s => s.teamId === match.homeTeamId)
-                              .map(s => ({ playerName: s.playerName, assistName: s.assistName || '' }));
-                            const awayScorers = (match.scorers || [])
-                              .filter(s => s.teamId === match.awayTeamId)
-                              .map(s => ({ playerName: s.playerName, assistName: s.assistName || '' }));
-
-                            setMatchScorers((prev) => ({
-                              ...prev,
-                              [match.id]: { homeScorers, awayScorers }
-                            }));
-                          }
-                        }}
-                        className="w-8 h-8 sm:w-10 sm:h-10 bg-[#0A0118] border border-white/20 rounded-lg text-center font-mono text-sm sm:text-base font-bold text-white focus:outline-none focus:border-brand-accent-light"
-                      />
-                      <span className="text-gray-500 font-mono font-semibold">:</span>
-                      <input
-                        type="text"
-                        maxLength={2}
-                        placeholder="-"
-                        value={currentAwayEdit}
-                        onChange={(e) => handleScoreChange(match.id, 'away', e.target.value)}
-                        onFocus={() => {
-                          if (editingScores[match.id] === undefined) {
-                            setEditingScores((prev) => ({
-                              ...prev,
-                              [match.id]: {
-                                home: match.homeScore?.toString() ?? '',
-                                away: match.awayScore?.toString() ?? '',
-                              },
-                            }));
-
-                            const homeScorers = (match.scorers || [])
-                              .filter(s => s.teamId === match.homeTeamId)
-                              .map(s => ({ playerName: s.playerName, assistName: s.assistName || '' }));
-                            const awayScorers = (match.scorers || [])
-                              .filter(s => s.teamId === match.awayTeamId)
-                              .map(s => ({ playerName: s.playerName, assistName: s.assistName || '' }));
-
-                            setMatchScorers((prev) => ({
-                              ...prev,
-                              [match.id]: { homeScorers, awayScorers }
-                            }));
-                          }
-                        }}
-                        className="w-8 h-8 sm:w-10 sm:h-10 bg-[#0A0118] border border-white/20 rounded-lg text-center font-mono text-sm sm:text-base font-bold text-white focus:outline-none focus:border-brand-accent-light"
-                      />
+                  {scoreVisible ? (
+                    <div className="flex items-center justify-center bg-[#0A0118] border border-white/10 px-3 py-1 rounded-lg relative">
+                      {(isLive || (isLocalEditing && !isCompleted)) && (
+                        <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                        </span>
+                      )}
+                      <span className="text-base sm:text-lg font-mono font-black text-white">
+                        {displayHome}
+                      </span>
+                      <span className="text-gray-500 font-mono font-semibold px-1.5">:</span>
+                      <span className="text-base sm:text-lg font-mono font-black text-white">
+                        {displayAway}
+                      </span>
                     </div>
                   ) : (
-                    /* Score Display */
-                    <div className="flex items-center justify-center gap-2">
-                      {isCompleted || isLive || match.homeScore !== null ? (
-                        <div className="flex items-center justify-center bg-[#0A0118] border border-white/10 px-3 py-1 rounded-lg relative">
-                          {isLive && (
-                            <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                            </span>
-                          )}
-                          <span className="text-base sm:text-lg font-mono font-black text-white">
-                            {match.homeScore ?? 0}
-                          </span>
-                          <span className="text-gray-500 font-mono font-semibold px-1.5">:</span>
-                          <span className="text-base sm:text-lg font-mono font-black text-white">
-                            {match.awayScore ?? 0}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="text-[10px] sm:text-xs font-mono font-bold text-gray-500 bg-[#0A0118] px-2.5 py-1 rounded-lg border border-white/5">
-                          - : -
-                        </div>
-                      )}
+                    <div className="text-[10px] sm:text-xs font-mono font-bold text-gray-500 bg-[#0A0118] px-2.5 py-1 rounded-lg border border-white/5">
+                      - : -
                     </div>
                   )}
                 </div>
 
                 {/* Away Team Column */}
-                <div className="col-span-5 flex items-center justify-start gap-3 text-left">
+                <div className="col-span-5 min-w-0 flex items-center justify-start gap-3 text-left">
                   <div
                     className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 border relative overflow-hidden shadow-inner"
                     style={{ backgroundColor: `${away.logoColor}15`, borderColor: away.logoColor }}
@@ -494,18 +452,40 @@ export default function Spielplan({
                 </div>
               </div>
 
-              {/* Goalscorers Entry Form (Admin Select Dropdowns) */}
-              {isLocalEditing && (
+              {/* Goalscorers Entry Form (Admin) – Liveticker mit +/- Steppern */}
+              {showEditor && (
                 <div className="mt-4 p-4 bg-brand-accent/5 rounded-xl border border-white/10 space-y-4 animate-fadeIn">
                   <h4 className="text-xs font-mono text-brand-accent-light uppercase tracking-wider font-bold flex items-center gap-1.5">
-                    <span>⚽</span> Torschützen & Vorlagengeber zuweisen
+                    <span>⚽</span> Tore erfassen &amp; Torschützen zuweisen
                   </h4>
-                  
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     {/* Home Scorers */}
                     <div className="space-y-3">
-                      <div className="text-xs font-semibold text-white truncate border-b border-white/5 pb-1">Tore für {home.name}:</div>
-                      {Array.from({ length: parseInt(currentHomeEdit || '0', 10) }).map((_, i) => {
+                      <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
+                        <span className="text-xs font-semibold text-white truncate">Tore für {home.name}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => adjustGoals(match, 'home', -1)}
+                            disabled={homeGoalsEdit <= 0}
+                            className="w-6 h-6 rounded-md bg-[#0A0118] border border-white/15 text-gray-300 hover:text-white hover:border-white/30 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center cursor-pointer"
+                            aria-label="Tor abziehen"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="w-6 text-center font-mono font-bold text-white text-sm">{homeGoalsEdit}</span>
+                          <button
+                            type="button"
+                            onClick={() => adjustGoals(match, 'home', 1)}
+                            className="w-6 h-6 rounded-md bg-brand-accent-light/20 border border-brand-accent-light/40 text-brand-accent-light hover:bg-brand-accent-light/30 flex items-center justify-center cursor-pointer"
+                            aria-label="Tor hinzufügen"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      {Array.from({ length: homeGoalsEdit }).map((_, i) => {
                         const selectedScorerObj = matchScorers[match.id]?.homeScorers[i] || { playerName: '', assistName: '' };
                         return (
                           <div key={`home-scorer-${i}`} className="p-2.5 bg-[#0A0118]/60 border border-white/5 rounded-lg space-y-1.5">
@@ -545,15 +525,37 @@ export default function Spielplan({
                           </div>
                         );
                       })}
-                      {parseInt(currentHomeEdit || '0', 10) === 0 && (
-                        <div className="text-[10px] text-gray-500 font-sans italic">Keine Tore geschossen.</div>
+                      {homeGoalsEdit === 0 && (
+                        <div className="text-[10px] text-gray-500 font-sans italic">Noch keine Tore. Mit + ein Tor hinzufügen.</div>
                       )}
                     </div>
- 
+
                     {/* Away Scorers */}
                     <div className="space-y-3">
-                      <div className="text-xs font-semibold text-white truncate border-b border-white/5 pb-1">Tore für {away.name}:</div>
-                      {Array.from({ length: parseInt(currentAwayEdit || '0', 10) }).map((_, i) => {
+                      <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
+                        <span className="text-xs font-semibold text-white truncate">Tore für {away.name}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => adjustGoals(match, 'away', -1)}
+                            disabled={awayGoalsEdit <= 0}
+                            className="w-6 h-6 rounded-md bg-[#0A0118] border border-white/15 text-gray-300 hover:text-white hover:border-white/30 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center cursor-pointer"
+                            aria-label="Tor abziehen"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="w-6 text-center font-mono font-bold text-white text-sm">{awayGoalsEdit}</span>
+                          <button
+                            type="button"
+                            onClick={() => adjustGoals(match, 'away', 1)}
+                            className="w-6 h-6 rounded-md bg-brand-accent-light/20 border border-brand-accent-light/40 text-brand-accent-light hover:bg-brand-accent-light/30 flex items-center justify-center cursor-pointer"
+                            aria-label="Tor hinzufügen"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      {Array.from({ length: awayGoalsEdit }).map((_, i) => {
                         const selectedScorerObj = matchScorers[match.id]?.awayScorers[i] || { playerName: '', assistName: '' };
                         return (
                           <div key={`away-scorer-${i}`} className="p-2.5 bg-[#0A0118]/60 border border-white/5 rounded-lg space-y-1.5">
@@ -593,8 +595,8 @@ export default function Spielplan({
                           </div>
                         );
                       })}
-                      {parseInt(currentAwayEdit || '0', 10) === 0 && (
-                        <div className="text-[10px] text-gray-500 font-sans italic">Keine Tore geschossen.</div>
+                      {awayGoalsEdit === 0 && (
+                        <div className="text-[10px] text-gray-500 font-sans italic">Noch keine Tore. Mit + ein Tor hinzufügen.</div>
                       )}
                     </div>
                   </div>
@@ -644,63 +646,54 @@ export default function Spielplan({
               {/* Action Toolbar for Admins underneath each card */}
               {isAdmin && (
                 <div className="mt-3 pt-3 border-t border-white/5 flex flex-wrap justify-end items-center gap-2">
-                  {/* LIVE Toggle Button */}
-                  {!isCompleted && (
-                    <button
-                      onClick={() => {
-                        if (isLive) {
-                          onUpdateMatchScore(match.id, match.homeScore ?? 0, match.awayScore ?? 0, 'beendet', match.scorers || []);
-                        } else {
-                          onUpdateMatchScore(match.id, match.homeScore ?? 0, match.awayScore ?? 0, 'live', match.scorers || []);
-                        }
-                      }}
-                      className={`flex items-center space-x-1 text-[11px] font-mono px-2.5 py-1 rounded-md cursor-pointer transition-all ${
-                        isLive
-                          ? 'bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse font-bold'
-                          : 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 hover:bg-indigo-500/20'
-                      }`}
-                    >
-                      <Play className="w-3 h-3" />
-                      <span>{isLive ? 'LIVE Beenden' : 'Status: LIVE setzen'}</span>
-                    </button>
-                  )}
-
                   {isCompleted && !isLocalEditing ? (
-                    <button
-                      onClick={() => handleResetMatch(match.id)}
-                      className="flex items-center space-x-1 text-[11px] font-mono text-rose-400 hover:text-rose-300 bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 rounded-md cursor-pointer"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                      <span>Ergebnis zurücksetzen</span>
-                    </button>
+                    <>
+                      <button
+                        onClick={() => beginEdit(match)}
+                        className="flex items-center space-x-1 text-[11px] font-mono text-gray-300 hover:text-white bg-white/5 border border-white/10 px-2.5 py-1 rounded-md cursor-pointer"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        <span>Ergebnis bearbeiten</span>
+                      </button>
+                      <button
+                        onClick={() => handleResetMatch(match.id)}
+                        className="flex items-center space-x-1 text-[11px] font-mono text-rose-400 hover:text-rose-300 bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 rounded-md cursor-pointer"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Zurücksetzen</span>
+                      </button>
+                    </>
                   ) : (
                     <>
+                      {/* LIVE setzen / aktualisieren – speichert den aktuellen Ticker-Stand */}
+                      {!isCompleted && (
+                        <button
+                          onClick={() => saveWithStatus(match, 'live')}
+                          className={`flex items-center space-x-1 text-[11px] font-mono px-2.5 py-1 rounded-md cursor-pointer transition-all ${
+                            isLive
+                              ? 'bg-red-500/20 text-red-400 border border-red-500/30 font-bold'
+                              : 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 hover:bg-indigo-500/20'
+                          }`}
+                        >
+                          <Play className="w-3 h-3" />
+                          <span>{isLive ? 'LIVE aktualisieren' : 'LIVE setzen'}</span>
+                        </button>
+                      )}
                       {isLocalEditing && (
                         <button
                           type="button"
-                          onClick={() => {
-                            setEditingScores((prev) => {
-                              const updated = { ...prev };
-                              delete updated[match.id];
-                              return updated;
-                            });
-                            setMatchScorers((prev) => {
-                              const updated = { ...prev };
-                              delete updated[match.id];
-                              return updated;
-                            });
-                          }}
+                          onClick={() => cancelEdit(match)}
                           className="text-[11px] font-mono text-gray-400 hover:text-gray-200 px-2 py-1 cursor-pointer"
                         >
                           Abbrechen
                         </button>
                       )}
                       <button
-                        onClick={() => handleSaveScore(match)}
+                        onClick={() => saveWithStatus(match, 'beendet')}
                         className="flex items-center space-x-1 text-[11px] font-mono text-emerald-400 hover:text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-3 py-1 rounded-md cursor-pointer"
                       >
                         <Check className="w-3.5 h-3.5" />
-                        <span>Ergebnis speichern</span>
+                        <span>{isCompleted ? 'Änderungen speichern' : 'Spiel beenden'}</span>
                       </button>
                     </>
                   )}

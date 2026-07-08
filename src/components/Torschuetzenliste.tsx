@@ -71,7 +71,7 @@ export default function Torschuetzenliste({ matches, teams, onSelectTeam }: Tors
         </div>
       ) : (
         <div className="space-y-3">
-          {scorerCounts.map((scorer, index) => {
+          {scorerCounts.slice(0, 10).map((scorer, index) => {
             const isTop1 = index === 0;
             const isTop2 = index === 1;
             const isTop3 = index === 2;

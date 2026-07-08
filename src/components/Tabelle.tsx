@@ -21,32 +21,11 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam }: T
 
   return (
     <div className="bg-[#1E1B4B]/40 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between pb-6 border-b border-white/10 gap-4">
-        <div>
-          <h2 className="font-display font-bold text-2xl uppercase tracking-tight text-white flex items-center gap-2">
-            <Trophy className="w-6 h-6 text-yellow-400" />
-            Aktuelle Ligatabelle
-          </h2>
-          <p className="text-xs text-gray-400 font-sans mt-1">
-            Automatisch berechnete Platzierungen basierend auf Spielergebnissen
-          </p>
-        </div>
-        
-        {/* Quick Legend indicators */}
-        <div className="flex flex-wrap gap-3 text-[11px] font-mono uppercase tracking-wider">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
-            <span className="text-gray-300">Champions League (1-4)</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-purple-500 inline-block" />
-            <span className="text-gray-300">Europa League (5)</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />
-            <span className="text-gray-300">Abstieg (letzte 2)</span>
-          </div>
-        </div>
+      <div className="flex items-center pb-6 border-b border-white/10">
+        <h2 className="font-display font-bold text-2xl uppercase tracking-tight text-white flex items-center gap-2">
+          <Trophy className="w-6 h-6 text-yellow-400" />
+          Aktuelle Ligatabelle
+        </h2>
       </div>
 
       <div className="overflow-x-auto mt-6">
