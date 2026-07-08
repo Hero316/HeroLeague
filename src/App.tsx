@@ -405,7 +405,7 @@ export default function App() {
         )}
 
         {activeTab === 'spielplan' && (
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-6xl mx-auto">
             <Spielplan
               teams={teams}
               matches={seasonMatches}

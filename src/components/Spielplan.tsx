@@ -232,67 +232,69 @@ export default function Spielplan({
   };
 
   return (
-    <div className="bg-[#1E1B4B]/40 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm">
+    <div className="bg-[#1E1B4B]/40 border border-white/10 rounded-xl p-4 sm:p-6 shadow-xl backdrop-blur-sm">
       {/* Title Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-white/10 gap-4 mb-6">
-        <div>
-          <h2 className="font-display font-bold text-2xl uppercase tracking-tight text-white flex items-center gap-2">
-            <Calendar className="w-6 h-6 text-brand-accent-light" />
-            Spielplan & Ergebnisse
-          </h2>
-          <p className="text-xs text-gray-400 font-sans mt-1">
-            Navigiere durch Spieltage und {isAdmin ? 'trage Spielergebnisse ein' : 'betrachte die aktuellen Partien'}
-          </p>
-        </div>
-
-        {/* Matchday Slider / Buttons - Beautiful Scroll-Container */}
-        <div className="w-full md:max-w-md lg:max-w-xl xl:max-w-2xl">
-          <div 
-            ref={scrollContainerRef}
-            className="flex items-center space-x-2 overflow-x-auto pb-2 md:pb-1 w-full custom-scrollbar scroll-smooth"
-            id="spieltags-liste-container"
-          >
-            {matchdays.map((day) => (
-              <button
-                key={day}
-                data-active={activeMatchday === day}
-                onClick={() => setActiveMatchday(day)}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition-all duration-150 whitespace-nowrap cursor-pointer shrink-0 ${
-                  activeMatchday === day
-                    ? 'bg-brand-accent-light text-white shadow-[0_0_15px_rgba(59,130,246,0.35)]'
-                    : 'bg-[#0A0118]/80 text-gray-400 hover:text-white hover:bg-white/5 border border-white/5'
-                }`}
-              >
-                {day}. Spieltag
-              </button>
-            ))}
-          </div>
-        </div>
+      <div className="pb-5 border-b border-white/10 mb-5">
+        <h2 className="font-display font-bold text-xl sm:text-2xl uppercase tracking-tight text-white flex items-center gap-2">
+          <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-brand-accent-light shrink-0" />
+          Spielplan & Ergebnisse
+        </h2>
+        <p className="text-xs text-gray-400 font-sans mt-1">
+          Navigiere durch Spieltage und {isAdmin ? 'trage Spielergebnisse ein' : 'betrachte die aktuellen Partien'}
+        </p>
       </div>
 
-      {matches.length === 0 && (
+      {matches.length === 0 ? (
         <div className="text-center py-12 text-gray-400 font-sans text-sm">
           In dieser Saison sind noch keine Spiele angesetzt.
           {isAdmin && ' Lege im Backoffice unter "Spielplan verwalten" die ersten Spiele an.'}
         </div>
-      )}
+      ) : (
+        <>
+          {/* Spieltag-Navigation: Pfeile + Button-Leiste */}
+          <div className="flex items-center gap-2 mb-6">
+            <button
+              onClick={handlePrevMatchday}
+              disabled={activeIndex <= 0}
+              className="flex items-center justify-center w-9 h-9 rounded-full bg-[#0A0118]/80 text-gray-400 hover:text-white hover:bg-brand-accent-light/20 border border-white/10 hover:border-white/20 disabled:opacity-20 disabled:pointer-events-none transition-all duration-200 shrink-0 cursor-pointer"
+              title="Vorheriger Spieltag"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
 
-      {/* Main Spielplan Container with Left & Right Navigations */}
-      <div className="flex items-center gap-2 sm:gap-4 w-full">
-        {/* Left/Zurück Navigation Button */}
-        <button
-          onClick={handlePrevMatchday}
-          disabled={activeIndex <= 0}
-          className="flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-[#0A0118]/80 text-gray-400 hover:text-white hover:bg-brand-accent-light/20 border border-white/10 hover:border-white/20 disabled:opacity-20 disabled:pointer-events-none transition-all duration-200 shrink-0 shadow-lg cursor-pointer hover:scale-105 active:scale-95"
-          title="Vorheriger Spieltag"
-          id="spielplan-prev-button"
-        >
-          <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-        </button>
+            <div
+              ref={scrollContainerRef}
+              className="flex-1 flex items-center gap-2 overflow-x-auto custom-scrollbar scroll-smooth py-1"
+            >
+              {matchdays.map((day) => (
+                <button
+                  key={day}
+                  data-active={activeMatchday === day}
+                  onClick={() => setActiveMatchday(day)}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold uppercase tracking-wider transition-all duration-150 whitespace-nowrap cursor-pointer shrink-0 ${
+                    activeMatchday === day
+                      ? 'bg-brand-accent-light text-white shadow-[0_0_15px_rgba(59,130,246,0.35)]'
+                      : 'bg-[#0A0118]/80 text-gray-400 hover:text-white hover:bg-white/5 border border-white/5'
+                  }`}
+                >
+                  {day}. Spieltag
+                </button>
+              ))}
+            </div>
 
-        <div className="flex-1 overflow-hidden w-full">
-          {/* Matches List - Horizontal Scroll with flex & overflow-x-auto */}
-          <div className="flex flex-row overflow-x-auto pb-6 gap-4 scroll-smooth custom-scrollbar w-full" id="spielplan-matches-container">
+            <button
+              onClick={handleNextMatchday}
+              disabled={activeIndex >= matchdays.length - 1}
+              className="flex items-center justify-center w-9 h-9 rounded-full bg-[#0A0118]/80 text-gray-400 hover:text-white hover:bg-brand-accent-light/20 border border-white/10 hover:border-white/20 disabled:opacity-20 disabled:pointer-events-none transition-all duration-200 shrink-0 cursor-pointer"
+              title="Nächster Spieltag"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Match-Karten: responsives Raster, passt sich der Container-Breite an */}
+          <div className="@container">
+            <div className="grid grid-cols-1 @3xl:grid-cols-2 gap-4">
         {matchdayMatches.map((match) => {
           const home = getTeam(match.homeTeamId);
           const away = getTeam(match.awayTeamId);
@@ -309,7 +311,7 @@ export default function Spielplan({
           return (
             <div
               key={match.id}
-              className={`relative overflow-hidden border rounded-xl p-5 transition-all duration-200 min-w-[310px] sm:min-w-[420px] max-w-[450px] shrink-0 flex flex-col justify-between ${
+              className={`relative overflow-hidden border rounded-xl p-4 sm:p-5 transition-all duration-200 w-full min-w-0 flex flex-col justify-between ${
                 isLive
                   ? 'border-red-500/50 bg-[#3F0A18]/30 shadow-[0_0_20px_rgba(239,68,68,0.15)]'
                   : isCompleted
@@ -356,11 +358,11 @@ export default function Spielplan({
                     </span>
                   )}
                   <div
-                    className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 border relative overflow-hidden shadow-inner"
+                    className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 border relative overflow-hidden shadow-inner"
                     style={{ backgroundColor: `${home.logoColor}15`, borderColor: home.logoColor }}
                   >
                     {home.logoUrl ? (
-                      <img src={home.logoUrl} alt={home.shortName} className="w-7 h-7 object-contain" referrerPolicy="no-referrer" />
+                      <img src={home.logoUrl} alt={home.shortName} className="w-6 h-6 object-contain" referrerPolicy="no-referrer" />
                     ) : (
                       <span className="text-sm">{home.logoIcon}</span>
                     )}
@@ -467,11 +469,11 @@ export default function Spielplan({
                 {/* Away Team Column */}
                 <div className="col-span-5 flex items-center justify-start gap-3 text-left">
                   <div
-                    className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 border relative overflow-hidden shadow-inner"
+                    className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 border relative overflow-hidden shadow-inner"
                     style={{ backgroundColor: `${away.logoColor}15`, borderColor: away.logoColor }}
                   >
                     {away.logoUrl ? (
-                      <img src={away.logoUrl} alt={away.shortName} className="w-7 h-7 object-contain" referrerPolicy="no-referrer" />
+                      <img src={away.logoUrl} alt={away.shortName} className="w-6 h-6 object-contain" referrerPolicy="no-referrer" />
                     ) : (
                       <span className="text-sm">{away.logoIcon}</span>
                     )}
@@ -707,20 +709,10 @@ export default function Spielplan({
             </div>
           );
         })}
+            </div>
           </div>
-        </div>
-
-        {/* Right/Vor Navigation Button */}
-        <button
-          onClick={handleNextMatchday}
-          disabled={activeIndex >= matchdays.length - 1}
-          className="flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-[#0A0118]/80 text-gray-400 hover:text-white hover:bg-brand-accent-light/20 border border-white/10 hover:border-white/20 disabled:opacity-20 disabled:pointer-events-none transition-all duration-200 shrink-0 shadow-lg cursor-pointer hover:scale-105 active:scale-95"
-          title="Nächster Spieltag"
-          id="spielplan-next-button"
-        >
-          <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
-        </button>
-      </div>
+        </>
+      )}
     </div>
   );
 }
