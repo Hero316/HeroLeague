@@ -142,6 +142,35 @@ export function Footer({ onNavigate }: FooterProps) {
   );
 }
 
+// Aktuelle Live-Minute aus dem Anstoß-Zeitstempel, tickt selbstständig weiter.
+// Ohne Zeitstempel (0) blenden die Aufrufer die Minute einfach aus.
+export function useLiveMinute(liveStartedAt?: string | null): number {
+  const [minute, setMinute] = React.useState(0);
+
+  React.useEffect(() => {
+    if (!liveStartedAt) {
+      setMinute(0);
+      return;
+    }
+    const compute = () => {
+      const elapsedMs = Date.now() - new Date(liveStartedAt).getTime();
+      const elapsedMin = Math.floor(elapsedMs / 60000) + 1;
+      setMinute(elapsedMin > 90 ? 90 : elapsedMin < 1 ? 1 : elapsedMin);
+    };
+    compute();
+    const interval = setInterval(compute, 10000);
+    return () => clearInterval(interval);
+  }, [liveStartedAt]);
+
+  return minute;
+}
+
+// Live-Badge inkl. mitlaufender Minute – für Match-Karten auf der Startseite.
+export function LiveBadge({ liveStartedAt }: { liveStartedAt?: string | null }) {
+  const minute = useLiveMinute(liveStartedAt);
+  return <MatchStatusBadge status="live" liveMinute={minute || undefined} />;
+}
+
 // Status-Badge für Match-Karten
 export function MatchStatusBadge({ status, liveMinute }: { status: 'geplant' | 'live' | 'beendet'; liveMinute?: number }) {
   if (status === 'live') {

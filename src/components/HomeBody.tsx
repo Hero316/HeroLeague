@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActiveTab, Match, PlayerStat, Team } from '../types';
 import Tabelle from './Tabelle';
 import PlayerAvatar from './PlayerAvatar';
-import { TeamCrest, MatchStatusBadge, shortDate } from './ui';
+import { TeamCrest, MatchStatusBadge, LiveBadge, shortDate } from './ui';
 
 interface HomeBodyProps {
   teams: Team[];
@@ -162,7 +162,7 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
                       <span className="font-sans font-semibold text-[11px] tracking-[.8px] text-hl-dim">
                         {shortDate(m.date)} · {m.time} Uhr
                       </span>
-                      <MatchStatusBadge status={m.status} />
+                      {isLive ? <LiveBadge liveStartedAt={m.liveStartedAt} /> : <MatchStatusBadge status={m.status} />}
                     </div>
                     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2.5">
                       <div className="flex items-center gap-2 min-w-0">

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActiveTab, Match, PlayerOfMonth, Team } from '../types';
 import { apiFetch } from '../lib/api';
 import { calculateStandings } from '../lib/standings';
-import { TeamCrest, shortDate } from './ui';
+import { TeamCrest, shortDate, useLiveMinute } from './ui';
 
 interface HeroProps {
   teams: Team[];
@@ -44,6 +44,9 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate }: HeroPr
     if (finished) return { match: finished, kind: 'finished' as const };
     return null;
   }, [matches]);
+
+  // Live-Minute des vorgestellten Spiels (nur wenn es tatsächlich live ist)
+  const featuredLiveMinute = useLiveMinute(featured?.kind === 'live' ? featured.match.liveStartedAt : null);
 
   const standings = useMemo(() => calculateStandings(teams, matches), [teams, matches]);
   const leader = standings[0];
@@ -196,7 +199,9 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate }: HeroPr
                   </div>
                   <div className="text-center mt-5 pt-4 border-t border-white/[.08]">
                     <div className="font-display font-black text-3xl text-white leading-none">
-                      {featured.kind === 'live' ? 'LIVE' : featured.match.time}
+                      {featured.kind === 'live'
+                        ? `LIVE${featuredLiveMinute ? ` ${featuredLiveMinute}'` : ''}`
+                        : featured.match.time}
                     </div>
                     <div className="font-sans font-semibold text-[10.5px] tracking-[2px] text-hl-dim mt-1.5 uppercase">
                       {shortDate(featured.match.date)} · HERO LEAGUE

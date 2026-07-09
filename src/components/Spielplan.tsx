@@ -2,35 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Play, Check, RotateCcw, Plus, Minus, Pencil, Save, AlertTriangle } from 'lucide-react';
 import { Match, Scorer, Team } from '../types';
-import { TeamCrest, shortDate } from './ui';
+import { TeamCrest, shortDate, useLiveMinute } from './ui';
 
-export function LiveTimer({ liveStartedAt }: { liveStartedAt?: string }) {
-  const [minutes, setMinutes] = useState(1);
-
-  useEffect(() => {
-    if (!liveStartedAt) {
-      // Ohne Start-Zeitstempel einfach hochzählen
-      const interval = setInterval(() => {
-        setMinutes(prev => (prev >= 90 ? 90 : prev + 1));
-      }, 5000);
-      return () => clearInterval(interval);
-    }
-
-    const updateMinutes = () => {
-      const elapsedMs = Date.now() - new Date(liveStartedAt).getTime();
-      const elapsedMin = Math.floor(elapsedMs / 60000) + 1;
-      setMinutes(elapsedMin > 90 ? 90 : elapsedMin);
-    };
-
-    updateMinutes();
-    const interval = setInterval(updateMinutes, 10000);
-    return () => clearInterval(interval);
-  }, [liveStartedAt]);
+export function LiveTimer({ liveStartedAt }: { liveStartedAt?: string | null }) {
+  const minutes = useLiveMinute(liveStartedAt);
 
   return (
     <span className="px-2.5 py-1 rounded-md font-sans font-extrabold text-[9.5px] tracking-[1.2px] bg-[rgba(255,84,66,.15)] text-hl-red-soft flex items-center gap-1.5 shrink-0">
       <span className="w-[7px] h-[7px] bg-hl-red rounded-full inline-block hl-pulse" />
-      <span>LIVE {minutes}'</span>
+      <span>LIVE{minutes ? ` ${minutes}'` : ''}</span>
     </span>
   );
 }
