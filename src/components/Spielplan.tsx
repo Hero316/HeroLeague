@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Check, RotateCcw, Plus, Minus, Pencil } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Check, RotateCcw, Plus, Minus, Pencil, Save, AlertTriangle } from 'lucide-react';
 import { Match, Scorer, Team } from '../types';
 import { TeamCrest, shortDate } from './ui';
 
@@ -105,6 +106,22 @@ export default function Spielplan({
     };
   }>({});
 
+  // Kurze "✓ Gespeichert"-Rückmeldung je Spiel
+  const [savedFlash, setSavedFlash] = useState<{ [matchId: string]: boolean }>({});
+  // Spiel, für das gerade das Zurücksetzen bestätigt werden muss
+  const [resetTarget, setResetTarget] = useState<Match | null>(null);
+
+  const flashSaved = (matchId: string) => {
+    setSavedFlash((prev) => ({ ...prev, [matchId]: true }));
+    setTimeout(() => {
+      setSavedFlash((prev) => {
+        const updated = { ...prev };
+        delete updated[matchId];
+        return updated;
+      });
+    }, 2500);
+  };
+
   const matchdayMatches = matches.filter((m) => m.matchday === activeMatchday);
 
   const getTeam = (teamId: string) => teams.find((t) => t.id === teamId);
@@ -118,6 +135,19 @@ export default function Spielplan({
       .filter((s) => s.teamId === match.awayTeamId)
       .map((s) => ({ playerName: s.playerName, assistName: s.assistName || '' })),
   });
+
+  // Bei Live-/geplanten Spielen ist der Editor direkt sichtbar. Damit die bereits
+  // gespeicherten Torschützen/Vorlagen dort erscheinen (und beim Weiter-Erfassen nicht
+  // verloren gehen), den lokalen Zustand einmalig aus den DB-Daten vorbefüllen.
+  useEffect(() => {
+    matchdayMatches.forEach((m) => {
+      const editorVisible = isAdmin && (editingScores[m.id] !== undefined || m.status !== 'beendet');
+      if (editorVisible && matchScorers[m.id] === undefined) {
+        setMatchScorers((prev) => (prev[m.id] === undefined ? { ...prev, [m.id]: seedScorers(m) } : prev));
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchdayMatches, isAdmin, editingScores, matchScorers]);
 
   // Bearbeitung eines Spiels starten (Score + Torschützen aus dem gespeicherten Stand übernehmen)
   const beginEdit = (match: Match) => {
@@ -183,7 +213,10 @@ export default function Spielplan({
     value: string
   ) => {
     setMatchScorers((prev) => {
-      const current = prev[matchId] || { homeScorers: [], awayScorers: [] };
+      // Falls noch nicht vorbefüllt: aus den gespeicherten Daten seeden, damit die
+      // übrigen bereits erfassten Torschützen nicht verloren gehen.
+      const match = matches.find((m) => m.id === matchId);
+      const current = prev[matchId] || (match ? seedScorers(match) : { homeScorers: [], awayScorers: [] });
       const updated = side === 'home' ? [...current.homeScorers] : [...current.awayScorers];
 
       if (!updated[index]) {
@@ -204,8 +237,14 @@ export default function Spielplan({
     });
   };
 
-  // Aktuellen Bearbeitungsstand mit gewähltem Status speichern (live = Ticker läuft weiter, beendet = final)
-  const saveWithStatus = (match: Match, status: 'live' | 'beendet') => {
+  // Aktuellen Bearbeitungsstand speichern. Kann beliebig oft aufgerufen werden
+  // (Zwischenspeichern während ein Spiel live läuft). `close` schließt den Editor,
+  // `flash` zeigt kurz die "✓ Gespeichert"-Rückmeldung.
+  const commit = (
+    match: Match,
+    status: 'live' | 'beendet',
+    opts?: { close?: boolean; flash?: boolean }
+  ) => {
     const edit = editingScores[match.id];
     const homeGoals = parseInt(edit?.home ?? String(match.homeScore ?? 0), 10) || 0;
     const awayGoals = parseInt(edit?.away ?? String(match.awayScore ?? 0), 10) || 0;
@@ -231,9 +270,9 @@ export default function Spielplan({
       });
     }
 
-    Promise.resolve(onUpdateMatchScore(match.id, homeGoals, awayGoals, status, scorers)).then(() => {
-      // Bei "beendet" den lokalen Bearbeitungsmodus schließen; bei "live" offen lassen zum Weitertickern
-      if (status === 'beendet') cancelEdit(match);
+    return Promise.resolve(onUpdateMatchScore(match.id, homeGoals, awayGoals, status, scorers)).then(() => {
+      if (opts?.close) cancelEdit(match);
+      if (opts?.flash) flashSaved(match.id);
     });
   };
 
@@ -255,8 +294,72 @@ export default function Spielplan({
   const selectClasses =
     'w-full bg-brand-dark border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-brand-accent-light cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed';
 
+  const resetHome = resetTarget ? getTeam(resetTarget.homeTeamId) : null;
+  const resetAway = resetTarget ? getTeam(resetTarget.awayTeamId) : null;
+
   return (
     <div>
+      {/* Bestätigungs-Popup: beendetes Spiel zurücksetzen */}
+      <AnimatePresence>
+        {resetTarget && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setResetTarget(null)}
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-md bg-[#130B24] border-2 border-[rgba(255,84,66,.35)] rounded-2xl p-6 sm:p-8 shadow-2xl overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 right-0 h-1 bg-hl-red" />
+
+              <div className="flex items-center gap-3 text-hl-red-soft mb-4">
+                <AlertTriangle className="w-7 h-7 shrink-0" />
+                <h3 className="font-display font-black text-lg sm:text-xl uppercase tracking-tight">
+                  Ergebnis zurücksetzen?
+                </h3>
+              </div>
+
+              <p className="text-xs text-gray-300 font-sans leading-relaxed mb-6">
+                Das Spiel{' '}
+                <strong className="text-white">
+                  {resetHome?.name ?? '?'} {resetTarget.homeScore ?? 0}:{resetTarget.awayScore ?? 0} {resetAway?.name ?? '?'}
+                </strong>{' '}
+                wird auf <strong className="text-white">„geplant"</strong> zurückgesetzt. Das eingetragene Ergebnis und
+                alle Torschützen gehen dabei verloren, und die Tabelle wird neu berechnet. Das kann nicht rückgängig
+                gemacht werden.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setResetTarget(null)}
+                  className="flex-1 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold uppercase text-gray-300 transition-all cursor-pointer"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleResetMatch(resetTarget.id);
+                    setResetTarget(null);
+                  }}
+                  className="flex-1 py-3 bg-hl-red hover:bg-[rgba(255,84,66,.85)] text-white font-bold uppercase rounded-xl text-xs tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Ja, zurücksetzen</span>
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {matches.length === 0 ? (
         <div className="hl-card text-center py-12 text-hl-mute font-sans text-sm">
           In dieser Saison sind noch keine Spiele angesetzt.
@@ -397,8 +500,8 @@ export default function Spielplan({
                     </div>
                   </div>
 
-                  {/* Torschützen bei beendeten Spielen */}
-                  {isCompleted && match.scorers && match.scorers.length > 0 && (
+                  {/* Torschützen bei beendeten & laufenden Spielen (nicht während der Admin-Erfassung) */}
+                  {(isCompleted || isLive) && !showEditor && match.scorers && match.scorers.length > 0 && (
                     <div className="mt-3.5 pt-3 border-t border-white/[.06] text-xs font-sans">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="text-right space-y-1">
@@ -579,6 +682,37 @@ export default function Spielplan({
                           )}
                         </div>
                       </div>
+
+                      {/* Speichern: übernimmt Ergebnis + Torschützen sofort – beliebig oft während des Spiels */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/10">
+                        <span className="text-[10px] text-hl-faint font-sans max-w-[60%]">
+                          {isCompleted
+                            ? 'Korrekturen werden sofort für alle übernommen.'
+                            : 'Speichert den aktuellen Stand live für alle – so oft du willst.'}
+                        </span>
+                        <div className="flex items-center gap-2.5">
+                          <AnimatePresence>
+                            {savedFlash[match.id] && (
+                              <motion.span
+                                initial={{ opacity: 0, x: 6 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0 }}
+                                className="text-[11px] font-sans font-bold text-hl-green-soft flex items-center gap-1"
+                              >
+                                <Check className="w-3.5 h-3.5" /> Gespeichert
+                              </motion.span>
+                            )}
+                          </AnimatePresence>
+                          <button
+                            type="button"
+                            onClick={() => commit(match, isCompleted ? 'beendet' : 'live', { flash: true })}
+                            className="flex items-center gap-1.5 text-xs font-sans font-bold text-[#06120f] bg-brand-accent-light hover:bg-brand-accent px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-lg shadow-brand-accent-light/20"
+                          >
+                            <Save className="w-4 h-4" />
+                            <span>Speichern</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -595,7 +729,7 @@ export default function Spielplan({
                             <span>Ergebnis bearbeiten</span>
                           </button>
                           <button
-                            onClick={() => handleResetMatch(match.id)}
+                            onClick={() => setResetTarget(match)}
                             className="flex items-center space-x-1 text-[11px] font-sans font-semibold text-hl-red-soft hover:text-white bg-[rgba(255,84,66,.1)] border border-[rgba(255,84,66,.2)] px-2.5 py-1 rounded-md cursor-pointer"
                           >
                             <RotateCcw className="w-3 h-3" />
@@ -604,36 +738,32 @@ export default function Spielplan({
                         </>
                       ) : (
                         <>
-                          {/* LIVE setzen / aktualisieren – speichert den aktuellen Ticker-Stand */}
-                          {!isCompleted && (
-                            <button
-                              onClick={() => saveWithStatus(match, 'live')}
-                              className={`flex items-center space-x-1 text-[11px] font-sans font-semibold px-2.5 py-1 rounded-md cursor-pointer transition-all ${
-                                isLive
-                                  ? 'bg-[rgba(255,84,66,.2)] text-hl-red-soft border border-[rgba(255,84,66,.3)] font-bold'
-                                  : 'bg-white/5 text-hl-soft border border-white/10 hover:bg-white/10'
-                              }`}
-                            >
-                              <Play className="w-3 h-3" />
-                              <span>{isLive ? 'LIVE aktualisieren' : 'LIVE setzen'}</span>
-                            </button>
-                          )}
                           {isLocalEditing && (
                             <button
                               type="button"
                               onClick={() => cancelEdit(match)}
                               className="text-[11px] font-sans font-semibold text-hl-dim hover:text-hl-soft px-2 py-1 cursor-pointer"
                             >
-                              Abbrechen
+                              {isCompleted ? 'Bearbeitung schließen' : 'Abbrechen'}
                             </button>
                           )}
-                          <button
-                            onClick={() => saveWithStatus(match, 'beendet')}
-                            className="flex items-center space-x-1 text-[11px] font-sans font-bold text-hl-green-soft hover:text-white bg-[rgba(67,229,160,.15)] border border-[rgba(67,229,160,.3)] px-3 py-1 rounded-md cursor-pointer"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                            <span>{isCompleted ? 'Änderungen speichern' : 'Spiel beenden'}</span>
-                          </button>
+                          {isCompleted ? (
+                            <button
+                              onClick={() => setResetTarget(match)}
+                              className="flex items-center space-x-1 text-[11px] font-sans font-semibold text-hl-red-soft hover:text-white bg-[rgba(255,84,66,.1)] border border-[rgba(255,84,66,.2)] px-2.5 py-1 rounded-md cursor-pointer"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              <span>Zurücksetzen</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => commit(match, 'beendet', { close: true })}
+                              className="flex items-center space-x-1 text-[11px] font-sans font-bold text-hl-green-soft hover:text-white bg-[rgba(67,229,160,.15)] border border-[rgba(67,229,160,.3)] px-3 py-1 rounded-md cursor-pointer"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Spiel beenden</span>
+                            </button>
+                          )}
                         </>
                       )}
                     </div>

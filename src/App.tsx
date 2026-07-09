@@ -75,6 +75,21 @@ export default function App() {
       .catch((err) => console.error('Fehler beim Laden der Spielerstatistiken', err));
   }, [selectedSeason?.id, matches, teams]);
 
+  // Solange ein Spiel live ist: regelmäßig nachladen, damit Besucher den Spielstand
+  // und die Torschützen ohne Neuladen mitverfolgen. Endet das Spiel, stoppt das Polling.
+  useEffect(() => {
+    if (!hasLiveMatch) return;
+    const interval = setInterval(fetchData, 15000);
+    return () => clearInterval(interval);
+  }, [hasLiveMatch, fetchData]);
+
+  // Beim Zurückkehren zum Tab sofort den aktuellen Stand holen
+  useEffect(() => {
+    const onFocus = () => fetchData();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [fetchData]);
+
   useEffect(() => {
     setUnauthorizedHandler(() => setIsAdmin(false));
 
