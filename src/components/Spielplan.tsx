@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Check, RotateCcw, Plus, Minus, Pencil, Save, AlertTriangle } from 'lucide-react';
+import { Play, Check, RotateCcw, Plus, Minus, Pencil, Save, AlertTriangle } from 'lucide-react';
 import { Match, Scorer, Team } from '../types';
 import { TeamCrest, shortDate } from './ui';
 
@@ -683,12 +683,14 @@ export default function Spielplan({
                         </div>
                       </div>
 
-                      {/* Speichern: übernimmt Ergebnis + Torschützen sofort – beliebig oft während des Spiels */}
+                      {/* Primär-Aktion: geplant → LIVE setzen · live → Zwischenspeichern · beendet → Korrektur speichern */}
                       <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/10">
                         <span className="text-[10px] text-hl-faint font-sans max-w-[60%]">
                           {isCompleted
                             ? 'Korrekturen werden sofort für alle übernommen.'
-                            : 'Speichert den aktuellen Stand live für alle – so oft du willst.'}
+                            : isLive
+                            ? 'Zwischenspeichern – der Stand geht sofort live für alle. So oft du willst.'
+                            : 'Stelle das Spiel LIVE, um während des Spiels Tore einzutragen.'}
                         </span>
                         <div className="flex items-center gap-2.5">
                           <AnimatePresence>
@@ -703,14 +705,25 @@ export default function Spielplan({
                               </motion.span>
                             )}
                           </AnimatePresence>
-                          <button
-                            type="button"
-                            onClick={() => commit(match, isCompleted ? 'beendet' : 'live', { flash: true })}
-                            className="flex items-center gap-1.5 text-xs font-sans font-bold text-[#06120f] bg-brand-accent-light hover:bg-brand-accent px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-lg shadow-brand-accent-light/20"
-                          >
-                            <Save className="w-4 h-4" />
-                            <span>Speichern</span>
-                          </button>
+                          {isLive || isCompleted ? (
+                            <button
+                              type="button"
+                              onClick={() => commit(match, isCompleted ? 'beendet' : 'live', { flash: true })}
+                              className="flex items-center gap-1.5 text-xs font-sans font-bold text-[#06120f] bg-brand-accent-light hover:bg-brand-accent px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-lg shadow-brand-accent-light/20"
+                            >
+                              <Save className="w-4 h-4" />
+                              <span>Speichern</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => commit(match, 'live', { flash: true })}
+                              className="flex items-center gap-1.5 text-xs font-sans font-bold text-white bg-hl-red hover:bg-[rgba(255,84,66,.85)] px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-lg shadow-[rgba(255,84,66,.25)]"
+                            >
+                              <Play className="w-4 h-4" />
+                              <span>LIVE setzen</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
