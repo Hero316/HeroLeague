@@ -19,6 +19,13 @@ export interface Scorer {
   assistName?: string;
 }
 
+// Ein Kaderspieler, der in diesem Spiel NICHT mitgespielt hat (abwesend).
+// Fehlt der Eintrag, gilt der Spieler wie bisher als eingesetzt.
+export interface Absence {
+  playerName: string;
+  teamId: string;
+}
+
 export interface Match {
   id: string;
   seasonId: string;
@@ -31,6 +38,7 @@ export interface Match {
   time: string; // 'HH:MM'
   status: 'geplant' | 'live' | 'beendet';
   scorers?: Scorer[];
+  absentees?: Absence[]; // Kaderspieler, die in diesem Spiel gefehlt haben
   liveStartedAt?: string | null;
 }
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Play, Check, RotateCcw, Plus, Minus, Pencil, Save, AlertTriangle } from 'lucide-react';
-import { Match, Scorer, Team } from '../types';
+import { Play, Check, RotateCcw, Plus, Minus, Pencil, Save, AlertTriangle, Users } from 'lucide-react';
+import { Absence, Match, Scorer, Team } from '../types';
 import { TeamCrest, shortDate, useLiveMinute } from './ui';
 
 export function LiveTimer({ liveStartedAt }: { liveStartedAt?: string | null }) {
@@ -24,7 +24,8 @@ interface SpielplanProps {
     homeScore: number | null,
     awayScore: number | null,
     status: 'geplant' | 'live' | 'beendet',
-    scorers?: Scorer[]
+    scorers?: Scorer[],
+    absentees?: Absence[]
   ) => void | Promise<unknown>;
   onSelectTeam?: (teamId: string) => void;
 }
@@ -86,6 +87,11 @@ export default function Spielplan({
     };
   }>({});
 
+  // Lokal gewählte Abwesende (Kaderspieler, die nicht mitgespielt haben) je Spiel
+  const [matchAbsentees, setMatchAbsentees] = useState<{
+    [matchId: string]: { homeAbsent: string[]; awayAbsent: string[] };
+  }>({});
+
   // Kurze "✓ Gespeichert"-Rückmeldung je Spiel
   const [savedFlash, setSavedFlash] = useState<{ [matchId: string]: boolean }>({});
   // Spiel, für das gerade das Zurücksetzen bestätigt werden muss
@@ -116,18 +122,49 @@ export default function Spielplan({
       .map((s) => ({ playerName: s.playerName, assistName: s.assistName || '' })),
   });
 
+  // Abwesende eines Spiels aus den gespeicherten Daten laden
+  const seedAbsentees = (match: Match) => ({
+    homeAbsent: (match.absentees || [])
+      .filter((a) => a.teamId === match.homeTeamId)
+      .map((a) => a.playerName),
+    awayAbsent: (match.absentees || [])
+      .filter((a) => a.teamId === match.awayTeamId)
+      .map((a) => a.playerName),
+  });
+
   // Bei Live-/geplanten Spielen ist der Editor direkt sichtbar. Damit die bereits
-  // gespeicherten Torschützen/Vorlagen dort erscheinen (und beim Weiter-Erfassen nicht
-  // verloren gehen), den lokalen Zustand einmalig aus den DB-Daten vorbefüllen.
+  // gespeicherten Torschützen/Vorlagen/Abwesenheiten dort erscheinen (und beim Weiter-Erfassen
+  // nicht verloren gehen), den lokalen Zustand einmalig aus den DB-Daten vorbefüllen.
   useEffect(() => {
     matchdayMatches.forEach((m) => {
       const editorVisible = isAdmin && (editingScores[m.id] !== undefined || m.status !== 'beendet');
       if (editorVisible && matchScorers[m.id] === undefined) {
         setMatchScorers((prev) => (prev[m.id] === undefined ? { ...prev, [m.id]: seedScorers(m) } : prev));
       }
+      if (editorVisible && matchAbsentees[m.id] === undefined) {
+        setMatchAbsentees((prev) => (prev[m.id] === undefined ? { ...prev, [m.id]: seedAbsentees(m) } : prev));
+      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matchdayMatches, isAdmin, editingScores, matchScorers]);
+  }, [matchdayMatches, isAdmin, editingScores, matchScorers, matchAbsentees]);
+
+  // Anwesenheit eines Spielers umschalten (an-/abwesend)
+  const toggleAbsent = (match: Match, side: 'home' | 'away', playerName: string) => {
+    setMatchAbsentees((prev) => {
+      const cur = prev[match.id] ?? seedAbsentees(match);
+      const list = side === 'home' ? cur.homeAbsent : cur.awayAbsent;
+      const nextList = list.includes(playerName)
+        ? list.filter((n) => n !== playerName)
+        : [...list, playerName];
+      return {
+        ...prev,
+        [match.id]: {
+          homeAbsent: side === 'home' ? nextList : cur.homeAbsent,
+          awayAbsent: side === 'away' ? nextList : cur.awayAbsent,
+        },
+      };
+    });
+  };
 
   // Bearbeitung eines Spiels starten (Score + Torschützen aus dem gespeicherten Stand übernehmen)
   const beginEdit = (match: Match) => {
@@ -143,6 +180,7 @@ export default function Spielplan({
           }
     );
     setMatchScorers((prev) => (prev[match.id] ? prev : { ...prev, [match.id]: seedScorers(match) }));
+    setMatchAbsentees((prev) => (prev[match.id] ? prev : { ...prev, [match.id]: seedAbsentees(match) }));
   };
 
   // Bearbeitung abbrechen / lokalen Zustand verwerfen
@@ -153,6 +191,11 @@ export default function Spielplan({
       return updated;
     });
     setMatchScorers((prev) => {
+      const updated = { ...prev };
+      delete updated[match.id];
+      return updated;
+    });
+    setMatchAbsentees((prev) => {
       const updated = { ...prev };
       delete updated[match.id];
       return updated;
@@ -250,21 +293,35 @@ export default function Spielplan({
       });
     }
 
-    return Promise.resolve(onUpdateMatchScore(match.id, homeGoals, awayGoals, status, scorers)).then(() => {
+    // Abwesende (nur gültige Kaderspieler) zusammenstellen
+    const localAbsent = matchAbsentees[match.id] || seedAbsentees(match);
+    const homeRoster = new Set((getTeam(match.homeTeamId)?.spielerliste || []).map((p) => p.name));
+    const awayRoster = new Set((getTeam(match.awayTeamId)?.spielerliste || []).map((p) => p.name));
+    const absentees: Absence[] = [
+      ...localAbsent.homeAbsent.filter((n) => homeRoster.has(n)).map((n) => ({ playerName: n, teamId: match.homeTeamId })),
+      ...localAbsent.awayAbsent.filter((n) => awayRoster.has(n)).map((n) => ({ playerName: n, teamId: match.awayTeamId })),
+    ];
+
+    return Promise.resolve(onUpdateMatchScore(match.id, homeGoals, awayGoals, status, scorers, absentees)).then(() => {
       if (opts?.close) cancelEdit(match);
       if (opts?.flash) flashSaved(match.id);
     });
   };
 
-  // Beendetes Spiel zurück auf "geplant" setzen
+  // Beendetes Spiel zurück auf "geplant" setzen (Ergebnis, Torschützen und Abwesenheiten verwerfen)
   const handleResetMatch = (matchId: string) => {
-    onUpdateMatchScore(matchId, null, null, 'geplant', []);
+    onUpdateMatchScore(matchId, null, null, 'geplant', [], []);
     setEditingScores((prev) => {
       const updated = { ...prev };
       delete updated[matchId];
       return updated;
     });
     setMatchScorers((prev) => {
+      const updated = { ...prev };
+      delete updated[matchId];
+      return updated;
+    });
+    setMatchAbsentees((prev) => {
       const updated = { ...prev };
       delete updated[matchId];
       return updated;
@@ -660,6 +717,67 @@ export default function Spielplan({
                           {awayGoalsEdit === 0 && (
                             <div className="text-[10px] text-hl-faint font-sans italic">Noch keine Tore. Mit + ein Tor hinzufügen.</div>
                           )}
+                        </div>
+                      </div>
+
+                      {/* Anwesenheit: nicht eingesetzte Spieler abwählen, damit die Einsatz-Statistik stimmt */}
+                      <div className="pt-3 border-t border-white/10 space-y-3">
+                        <div className="flex items-center gap-1.5 text-xs font-sans text-brand-accent-light uppercase tracking-wider font-bold">
+                          <Users className="w-3.5 h-3.5" />
+                          <span>Anwesenheit</span>
+                        </div>
+                        <p className="text-[10px] text-hl-faint font-sans -mt-1.5 leading-relaxed">
+                          Standardmäßig zählt jeder Kaderspieler als eingesetzt. Tippe die Spieler an, die
+                          <strong className="text-hl-soft"> nicht mitgespielt</strong> haben – sie werden ausgegraut und
+                          nicht als Einsatz gewertet.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {([['home', home], ['away', away]] as const).map(([side, team]) => {
+                            const roster = team.spielerliste || [];
+                            const seeded = seedAbsentees(match);
+                            const absentList =
+                              side === 'home'
+                                ? matchAbsentees[match.id]?.homeAbsent ?? seeded.homeAbsent
+                                : matchAbsentees[match.id]?.awayAbsent ?? seeded.awayAbsent;
+                            return (
+                              <div key={side} className="space-y-1.5">
+                                <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-1.5">
+                                  <span className="text-xs font-semibold text-white truncate">{team.name}</span>
+                                  {absentList.length > 0 && (
+                                    <span className="text-[10px] font-mono text-hl-red-soft shrink-0">
+                                      {absentList.length} fehlt{absentList.length === 1 ? '' : 'en'}
+                                    </span>
+                                  )}
+                                </div>
+                                {roster.length === 0 ? (
+                                  <div className="text-[10px] text-hl-faint font-sans italic">
+                                    Noch kein Kader gepflegt (im Backoffice unter „Club &amp; Kader").
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {roster.map((p) => {
+                                      const absent = absentList.includes(p.name);
+                                      return (
+                                        <button
+                                          key={p.name}
+                                          type="button"
+                                          onClick={() => toggleAbsent(match, side, p.name)}
+                                          title={absent ? 'Abwesend – tippen zum Einsetzen' : 'Dabei – tippen für „abwesend“'}
+                                          className={`px-2.5 py-1 rounded-md text-[11px] font-sans font-semibold border transition-colors cursor-pointer ${
+                                            absent
+                                              ? 'bg-transparent border-white/10 text-hl-faint line-through'
+                                              : 'bg-[rgba(67,229,160,.12)] border-[rgba(67,229,160,.3)] text-hl-green-soft'
+                                          }`}
+                                        >
+                                          {p.name}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
 

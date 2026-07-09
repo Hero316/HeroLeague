@@ -64,10 +64,20 @@ export function calculatePlayers(teams: Team[], matches: Match[]): PlayerStat[] 
       }
     });
 
-    // Einsätze für alle Kaderspieler beider Teams zählen
+    // Einsätze zählen – aber nur für Kaderspieler, die nicht als abwesend markiert sind.
+    // Wer getroffen oder vorbereitet hat, gilt immer als eingesetzt (auch bei fälschlicher Abwesenheit).
+    const absentKeys = new Set((m.absentees || []).map((a) => `${a.teamId}::${a.playerName}`));
+    const contributed = new Set<string>();
+    m.scorers.forEach((s) => {
+      if (s.playerName) contributed.add(s.playerName);
+      if (s.assistName) contributed.add(s.assistName);
+    });
+
     [homeTeam, awayTeam].forEach((team) => {
       (team?.spielerliste || []).forEach((player) => {
-        if (playerMap[player.name]) {
+        if (!playerMap[player.name]) return;
+        const isAbsent = absentKeys.has(`${team!.id}::${player.name}`) && !contributed.has(player.name);
+        if (!isAbsent) {
           playerMap[player.name].matchesPlayed += 1;
         }
       });

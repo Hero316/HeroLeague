@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Match, PlayerStat, Scorer, Season, Team, ActiveTab } from './types';
+import { Absence, Match, PlayerStat, Scorer, Season, Team, ActiveTab } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
@@ -134,12 +134,13 @@ export default function App() {
     homeScore: number | null,
     awayScore: number | null,
     status: 'geplant' | 'live' | 'beendet',
-    scorers?: Scorer[]
+    scorers?: Scorer[],
+    absentees?: Absence[]
   ) =>
     runAdminAction(() =>
       apiFetch(`/api/matches/${matchId}`, {
         method: 'PUT',
-        body: JSON.stringify({ homeScore, awayScore, status, scorers }),
+        body: JSON.stringify({ homeScore, awayScore, status, scorers, absentees }),
       })
     );
 

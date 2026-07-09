@@ -1,5 +1,5 @@
 import type { VercelResponse } from '@vercel/node';
-import type { Player, Scorer } from '../../src/types';
+import type { Absence, Player, Scorer } from '../../src/types';
 
 export function badRequest(res: VercelResponse, message: string) {
   return res.status(400).json({ error: message });
@@ -41,6 +41,19 @@ export function isScorersArray(value: unknown): value is Scorer[] {
         isNonEmptyString((s as Scorer).playerName) &&
         isNonEmptyString((s as Scorer).teamId) &&
         ((s as Scorer).assistName === undefined || typeof (s as Scorer).assistName === 'string')
+    )
+  );
+}
+
+export function isAbsenteesArray(value: unknown): value is Absence[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (a) =>
+        a !== null &&
+        typeof a === 'object' &&
+        isNonEmptyString((a as Absence).playerName) &&
+        isNonEmptyString((a as Absence).teamId)
     )
   );
 }
