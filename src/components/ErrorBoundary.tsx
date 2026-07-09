@@ -19,7 +19,7 @@ export default class ErrorBoundary extends React.Component<React.PropsWithChildr
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-[#0A0118] text-white flex flex-col items-center justify-center font-sans space-y-6 p-6 text-center">
+        <div className="min-h-screen bg-[#060E0F] text-white flex flex-col items-center justify-center font-sans space-y-6 p-6 text-center">
           <span className="text-5xl">⚽</span>
           <div className="space-y-2">
             <h1 className="font-bold text-xl">Da ist etwas schiefgelaufen.</h1>

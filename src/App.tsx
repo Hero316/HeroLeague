@@ -12,6 +12,9 @@ import AdminLogin from './components/AdminLogin';
 import MatchManager from './components/MatchManager';
 import TeamDetail from './components/TeamDetail';
 import LiveBanner from './components/LiveBanner';
+import LiveTicker from './components/LiveTicker';
+import HomeBody from './components/HomeBody';
+import { PageHeader, Footer } from './components/ui';
 import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History } from 'lucide-react';
 
 export default function App() {
@@ -43,6 +46,8 @@ export default function App() {
     () => (currentSeason ? matches.filter((m) => m.seasonId === currentSeason.id) : matches),
     [matches, currentSeason]
   );
+
+  const hasLiveMatch = useMemo(() => currentSeasonMatches.some((m) => m.status === 'live'), [currentSeasonMatches]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -155,11 +160,17 @@ export default function App() {
 
   const openTeamDetail = (teamId: string) => navigateTo(`/verein/${encodeURIComponent(teamId)}`);
 
+  const goToTab = (tab: ActiveTab) => {
+    if (currentPath !== '/') navigateTo('/');
+    setActiveTab(tab);
+    window.scrollTo({ top: 0 });
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0A0118] text-white flex flex-col items-center justify-center font-sans space-y-4">
+      <div className="min-h-screen bg-brand-dark text-white flex flex-col items-center justify-center font-sans space-y-4">
         <div className="w-12 h-12 border-4 border-brand-accent-light border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-sm font-mono text-gray-400 uppercase tracking-wider animate-pulse">Lade Liga-Daten...</p>
+        <p className="text-sm font-sans font-semibold text-hl-mute uppercase tracking-wider animate-pulse">Lade Liga-Daten...</p>
       </div>
     );
   }
@@ -169,18 +180,17 @@ export default function App() {
     const teamId = decodeURIComponent(currentPath.slice('/verein/'.length).replace(/\/+$/, ''));
     const team = teams.find((t) => t.id === teamId);
     return (
-      <div className="min-h-screen bg-[#0A0118] text-white font-sans selection:bg-brand-accent selection:text-white">
+      <div className="min-h-screen bg-brand-dark text-hl-text font-sans flex flex-col">
         <Navbar
           activeTab={activeTab}
-          setActiveTab={(tab) => {
-            navigateTo('/');
-            setActiveTab(tab);
-          }}
+          setActiveTab={goToTab}
           isAdmin={isAdmin}
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
+          seasonLabel={selectedSeason?.label ?? ''}
+          hasLiveMatch={hasLiveMatch}
         />
-        <main className="max-w-5xl mx-auto px-4 py-10">
+        <main className="flex-1">
           {team ? (
             <TeamDetail
               team={team}
@@ -193,10 +203,10 @@ export default function App() {
             />
           ) : (
             <div className="text-center py-24 space-y-4">
-              <p className="text-gray-400 font-sans">Dieser Verein existiert nicht (mehr).</p>
+              <p className="text-hl-mute font-sans">Dieser Verein existiert nicht (mehr).</p>
               <button
                 onClick={() => navigateTo('/')}
-                className="inline-flex items-center gap-1.5 text-xs font-mono uppercase text-brand-accent-light hover:underline cursor-pointer"
+                className="inline-flex items-center gap-1.5 text-xs font-sans font-bold uppercase tracking-wider text-brand-accent-light hover:underline cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 Zurück zur Übersicht
@@ -204,6 +214,7 @@ export default function App() {
             </div>
           )}
         </main>
+        <Footer onNavigate={goToTab} />
       </div>
     );
   }
@@ -211,22 +222,17 @@ export default function App() {
   // ROUTE: /admin – geschütztes Backoffice
   if (currentPath === '/admin') {
     return (
-      <div className="min-h-screen bg-[#0A0118] text-white font-sans flex flex-col justify-between selection:bg-brand-accent selection:text-white">
-        <header className="border-b border-white/10 bg-[#0A0118]/80 backdrop-blur-md px-6 py-4">
+      <div className="min-h-screen bg-brand-dark text-hl-text font-sans flex flex-col justify-between">
+        <header className="border-b border-white/[.07] bg-[rgba(7,10,8,.72)] backdrop-blur-xl px-6 py-4">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 rounded-lg bg-brand-accent-light flex items-center justify-center font-bold italic text-lg shadow-md">
-                HL
-              </div>
-              <span className="font-display font-bold text-lg tracking-tight uppercase">
-                HERO <span className="text-brand-accent-light">LEAGUE</span>{' '}
-                <span className="text-xs text-gray-400 font-mono font-light tracking-wide ml-1">BACKOFFICE</span>
-              </span>
+              <img src="/assets/hero-league-logo.png" alt="Hero League" className="h-9 w-auto" />
+              <span className="font-sans font-semibold text-[11px] tracking-[2px] text-hl-dim uppercase">Backoffice</span>
             </div>
 
             <button
               onClick={() => navigateTo('/')}
-              className="flex items-center space-x-1 text-xs text-gray-400 hover:text-white transition-colors uppercase tracking-wider font-semibold font-mono"
+              className="flex items-center space-x-1 text-xs text-hl-mute hover:text-white transition-colors uppercase tracking-wider font-semibold font-sans cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Zurück zur Website</span>
@@ -239,16 +245,16 @@ export default function App() {
             <AdminLogin onLoginSuccess={() => setIsAdmin(true)} />
           ) : (
             <div className="w-full max-w-7xl mx-auto space-y-8 py-4">
-              <div className="bg-[#1E1B4B]/30 border border-emerald-500/20 rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="hl-card p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
+                  <div className="w-10 h-10 rounded-full bg-[rgba(67,229,160,.1)] flex items-center justify-center text-hl-green border border-[rgba(67,229,160,.2)]">
                     <Shield className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="font-display font-bold text-lg text-white uppercase tracking-tight">
+                    <h2 className="font-display font-black text-lg text-white uppercase tracking-tight">
                       Eingeloggt als Administrator
                     </h2>
-                    <p className="text-xs text-emerald-400 font-sans mt-0.5">
+                    <p className="text-xs text-hl-green-soft font-sans mt-0.5">
                       Aktive Saison: {currentSeason?.label ?? '–'}
                     </p>
                   </div>
@@ -256,7 +262,7 @@ export default function App() {
 
                 <button
                   onClick={handleLogout}
-                  className="px-5 py-2 bg-rose-600 hover:bg-rose-500 rounded-xl text-xs font-bold uppercase transition-all shadow-lg flex items-center gap-1.5 text-white cursor-pointer"
+                  className="px-5 py-2 bg-[rgba(255,84,66,.15)] border border-[rgba(255,84,66,.3)] hover:bg-[rgba(255,84,66,.25)] rounded-xl text-xs font-bold uppercase transition-all flex items-center gap-1.5 text-hl-red-soft cursor-pointer"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   <span>Abmelden</span>
@@ -264,12 +270,12 @@ export default function App() {
               </div>
 
               <div className="space-y-12">
-                <div className="bg-[#1E1B4B]/20 border border-white/5 rounded-2xl p-6">
+                <div className="hl-card p-6">
                   <h3 className="font-display font-black text-xl text-white uppercase tracking-tight mb-4 flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-brand-accent-light" />
                     Spielplan-Ergebnisse eintragen
                   </h3>
-                  <p className="text-xs text-gray-400 font-sans mb-6">
+                  <p className="text-xs text-hl-mute font-sans mb-6">
                     Wähle einen Spieltag aus, um Ergebnisse einzutragen, Torschützen und Vorlagengeber zuzuweisen oder
                     ein Spiel LIVE zu stellen.
                   </p>
@@ -281,7 +287,7 @@ export default function App() {
                   />
                 </div>
 
-                <div className="bg-[#1E1B4B]/20 border border-white/5 rounded-2xl p-6">
+                <div className="hl-card p-6">
                   <h3 className="font-display font-black text-xl text-white uppercase tracking-tight mb-4 flex items-center gap-2">
                     <CalendarPlus className="w-5 h-5 text-brand-accent-light" />
                     Spielplan verwalten
@@ -294,7 +300,7 @@ export default function App() {
                   />
                 </div>
 
-                <div className="bg-[#1E1B4B]/20 border border-white/5 rounded-2xl p-6">
+                <div className="hl-card p-6">
                   <AdminPanel
                     teams={teams}
                     matches={currentSeasonMatches}
@@ -310,7 +316,7 @@ export default function App() {
           )}
         </main>
 
-        <footer className="border-t border-white/5 bg-[#070114] py-6 text-center text-xs text-gray-500 font-sans">
+        <footer className="border-t border-white/5 bg-[#080b09] py-6 text-center text-xs text-hl-faint font-sans">
           <p>© 2026 Hero League. Geschützter Administrationsbereich.</p>
         </footer>
       </div>
@@ -320,95 +326,62 @@ export default function App() {
   // ÖFFENTLICHE WEBSITE
   const showSeasonSwitcher = seasons.length > 1 && activeTab !== 'home';
 
+  const seasonSwitcher = showSeasonSwitcher && (
+    <div className="max-w-[1320px] mx-auto px-4 sm:px-10 flex items-center justify-end gap-2 pb-4">
+      <History className="w-4 h-4 text-hl-dim" />
+      <label className="text-xs font-sans font-bold text-hl-dim uppercase tracking-wider">Saison:</label>
+      <select
+        value={selectedSeason?.id ?? ''}
+        onChange={(e) => setSelectedSeasonId(e.target.value)}
+        className="bg-brand-dark border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white font-sans font-semibold focus:outline-none focus:border-brand-accent-light cursor-pointer"
+      >
+        {seasons.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.label}
+            {s.isCurrent ? ' (aktiv)' : ''}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-[#0A0118] text-white font-sans selection:bg-brand-accent selection:text-white">
+    <div className="min-h-screen bg-brand-dark text-hl-text font-sans overflow-x-hidden">
       <LiveBanner />
       <Navbar
         activeTab={activeTab}
-        setActiveTab={(tab) => {
-          navigateTo('/');
-          setActiveTab(tab);
-        }}
+        setActiveTab={goToTab}
         isAdmin={isAdmin}
         onLogout={handleLogout}
         onOpenLogin={() => navigateTo('/admin')}
+        seasonLabel={currentSeason?.label ?? ''}
+        hasLiveMatch={hasLiveMatch}
       />
+      <LiveTicker matches={currentSeasonMatches} teams={teams} players={players} />
 
       {activeTab === 'home' && (
-        <Hero
-          teams={teams}
-          matches={currentSeasonMatches}
-          seasonLabel={currentSeason?.label ?? ''}
-          onExploreSchedule={() => setActiveTab('spielplan')}
-          onExploreStandings={() => setActiveTab('tabelle')}
-        />
+        <>
+          <Hero teams={teams} matches={currentSeasonMatches} seasonLabel={currentSeason?.label ?? ''} onNavigate={goToTab} />
+          <HomeBody
+            teams={teams}
+            matches={currentSeasonMatches}
+            players={players}
+            seasonLabel={currentSeason?.label ?? ''}
+            onNavigate={goToTab}
+            onSelectTeam={openTeamDetail}
+          />
+        </>
       )}
 
-      <main className="max-w-7xl mx-auto px-4 py-10">
-        {showSeasonSwitcher && (
-          <div className="flex items-center justify-end gap-2 mb-6">
-            <History className="w-4 h-4 text-gray-400" />
-            <label className="text-xs font-mono text-gray-400 uppercase tracking-wider">Saison:</label>
-            <select
-              value={selectedSeason?.id ?? ''}
-              onChange={(e) => setSelectedSeasonId(e.target.value)}
-              className="bg-[#0A0118] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-brand-accent-light cursor-pointer"
-            >
-              {seasons.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label}
-                  {s.isCurrent ? ' (aktiv)' : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {activeTab === 'home' && (
-          <div className="space-y-12">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-              <div className="lg:col-span-8 space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-display font-bold text-lg text-white uppercase tracking-tight">Tabellenführung</h3>
-                  <button
-                    onClick={() => setActiveTab('tabelle')}
-                    className="text-xs text-brand-accent-light hover:underline font-mono uppercase tracking-wider"
-                  >
-                    Vollständige Tabelle →
-                  </button>
-                </div>
-                <Tabelle
-                  teams={teams}
-                  matches={currentSeasonMatches}
-                  seasonLabel={currentSeason?.label ?? ''}
-                  onSelectTeam={openTeamDetail}
-                />
-              </div>
-
-              <div className="lg:col-span-4 space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-display font-bold text-lg text-white uppercase tracking-tight">Nächste Partien</h3>
-                  <button
-                    onClick={() => setActiveTab('spielplan')}
-                    className="text-xs text-brand-accent-light hover:underline font-mono uppercase tracking-wider"
-                  >
-                    Gesamter Spielplan →
-                  </button>
-                </div>
-                <Spielplan
-                  teams={teams}
-                  matches={currentSeasonMatches}
-                  isAdmin={false}
-                  onUpdateMatchScore={handleUpdateMatchScore}
-                  onSelectTeam={openTeamDetail}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'spielplan' && (
-          <div className="max-w-6xl mx-auto">
+      {activeTab === 'spielplan' && (
+        <>
+          <PageHeader
+            kicker={selectedSeason?.label ? `SAISON ${selectedSeason.label}` : 'HERO LEAGUE'}
+            title="Spielplan"
+            text="Alle Ergebnisse und Anstoßzeiten der Hero League — Spieltag für Spieltag."
+          />
+          {seasonSwitcher}
+          <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
             <Spielplan
               teams={teams}
               matches={seasonMatches}
@@ -417,10 +390,18 @@ export default function App() {
               onSelectTeam={openTeamDetail}
             />
           </div>
-        )}
+        </>
+      )}
 
-        {activeTab === 'tabelle' && (
-          <div className="max-w-5xl mx-auto">
+      {activeTab === 'tabelle' && (
+        <>
+          <PageHeader
+            kicker={selectedSeason?.label ? `SAISON ${selectedSeason.label}` : 'HERO LEAGUE'}
+            title="Ligatabelle"
+            text="Der komplette Tabellenstand der Hero League. Sortierung nach Punkten, Tordifferenz und erzielten Toren."
+          />
+          {seasonSwitcher}
+          <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
             <Tabelle
               teams={teams}
               matches={seasonMatches}
@@ -428,22 +409,38 @@ export default function App() {
               onSelectTeam={openTeamDetail}
             />
           </div>
-        )}
+        </>
+      )}
 
-        {activeTab === 'torschuetzen' && (
-          <div className="max-w-4xl mx-auto">
-            <Torschuetzenliste matches={seasonMatches} teams={teams} onSelectTeam={openTeamDetail} />
-          </div>
-        )}
+      {activeTab === 'torschuetzen' && (
+        <>
+          <PageHeader
+            kicker={selectedSeason?.label ? `SAISON ${selectedSeason.label} · TORJÄGERLISTE` : 'TORJÄGERLISTE'}
+            title="Torschützenkönig"
+            text="Das Rennen um den Goldenen Schuh der Hero League — die treffsichersten Spieler der Saison."
+          />
+          {seasonSwitcher}
+          <Torschuetzenliste players={players} teams={teams} onSelectTeam={openTeamDetail} />
+        </>
+      )}
 
-        {activeTab === 'statistiken' && <Statistiken players={players} matches={seasonMatches} teams={teams} />}
-      </main>
+      {activeTab === 'statistiken' && (
+        <>
+          <PageHeader
+            kicker={selectedSeason?.label ? `SAISON ${selectedSeason.label}` : 'HERO LEAGUE'}
+            title="Statistiken"
+            text="Die Bestwerte der Hero League — Spieler und Teams, die den Ton angeben."
+          />
+          {seasonSwitcher}
+          <Statistiken players={players} matches={seasonMatches} teams={teams} />
+        </>
+      )}
 
       {!isAdmin && (
         <div className="text-center pb-12">
           <button
             onClick={() => navigateTo('/admin')}
-            className="inline-flex items-center gap-1 text-[11px] font-mono uppercase text-gray-500 hover:text-brand-accent-light tracking-widest border border-white/5 bg-[#1E1B4B]/10 px-4 py-2 rounded-full transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 text-[11px] font-sans font-bold uppercase text-hl-faint hover:text-brand-accent-light tracking-widest border border-white/5 bg-white/[.02] px-4 py-2 rounded-full transition-all cursor-pointer"
           >
             <Shield className="w-3.5 h-3.5" />
             <span>Admin-Bereich</span>
@@ -452,15 +449,15 @@ export default function App() {
       )}
 
       {isAdmin && (
-        <section className="bg-[#1E1B4B]/50 border-t border-white/10 py-8 px-4 mt-16">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <section className="border-t border-white/10 bg-[rgba(34,223,201,.04)] py-8 px-4">
+          <div className="max-w-[1320px] mx-auto flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center space-x-2.5">
-              <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping" />
-              <h2 className="font-display font-bold text-xl text-white uppercase tracking-tight">Admin-Modus aktiv</h2>
+              <span className="w-2.5 h-2.5 bg-hl-green rounded-full animate-ping" />
+              <h2 className="font-display font-black text-xl text-white uppercase tracking-tight">Admin-Modus aktiv</h2>
             </div>
             <button
               onClick={() => navigateTo('/admin')}
-              className="px-4 py-1.5 border border-emerald-500/30 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-full text-xs font-semibold font-mono uppercase tracking-wider transition-all cursor-pointer"
+              className="px-4 py-1.5 border border-[rgba(67,229,160,.3)] text-hl-green-soft bg-[rgba(67,229,160,.1)] hover:bg-[rgba(67,229,160,.2)] rounded-full text-xs font-semibold font-sans uppercase tracking-wider transition-all cursor-pointer"
             >
               Backoffice öffnen →
             </button>
@@ -468,14 +465,7 @@ export default function App() {
         </section>
       )}
 
-      <footer className="border-t border-white/10 bg-[#0A0118] py-8 text-center text-xs text-gray-500 font-sans">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <span className="font-display font-bold text-sm text-white uppercase">
-            HERO <span className="text-brand-accent-light">LEAGUE</span>
-          </span>
-          <p className="font-light">© 2026 Hero League. Alle Rechte vorbehalten.</p>
-        </div>
-      </footer>
+      <Footer onNavigate={goToTab} />
     </div>
   );
 }

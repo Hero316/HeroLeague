@@ -40,7 +40,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
       animate={{ opacity: 1, y: 0 }}
       className="w-full max-w-md mx-auto"
     >
-      <div className="bg-[#1E1B4B]/40 border border-white/10 rounded-2xl p-8 shadow-2xl backdrop-blur-sm">
+      <div className="bg-[#101A19]/40 border border-white/10 rounded-2xl p-8 shadow-2xl backdrop-blur-sm">
         <div className="flex flex-col items-center text-center mb-8">
           <div className="w-14 h-14 rounded-2xl bg-brand-accent-light/15 border border-brand-accent-light/30 flex items-center justify-center mb-4">
             <Lock className="w-6 h-6 text-brand-accent-light" />
@@ -64,7 +64,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-[#0A0118] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-accent-light"
+              className="w-full bg-[#060E0F] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-accent-light"
             />
           </div>
 

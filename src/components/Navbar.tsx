@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Menu, X, Shield, Lock, Unlock, LogOut } from 'lucide-react';
+import { Menu, X, LogOut } from 'lucide-react';
 import { ActiveTab } from '../types';
 
 interface NavbarProps {
@@ -8,6 +8,8 @@ interface NavbarProps {
   isAdmin: boolean;
   onLogout: () => void;
   onOpenLogin: () => void;
+  seasonLabel?: string;
+  hasLiveMatch?: boolean;
 }
 
 export default function Navbar({
@@ -15,97 +17,94 @@ export default function Navbar({
   setActiveTab,
   isAdmin,
   onLogout,
-  onOpenLogin,
+  seasonLabel,
+  hasLiveMatch,
 }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const navItems: { label: string; value: ActiveTab }[] = [
-    { label: 'Home', value: 'home' },
-    { label: 'Spielplan', value: 'spielplan' },
-    { label: 'Tabelle', value: 'tabelle' },
-    { label: 'Torschützen', value: 'torschuetzen' },
-    { label: 'Statistiken', value: 'statistiken' },
+    { label: 'HOME', value: 'home' },
+    { label: 'SPIELPLAN', value: 'spielplan' },
+    { label: 'TABELLE', value: 'tabelle' },
+    { label: 'TORSCHÜTZEN', value: 'torschuetzen' },
+    { label: 'STATISTIKEN', value: 'statistiken' },
   ];
 
-  return (
-    <nav className="sticky top-0 z-50 bg-[#0A0118]/90 backdrop-blur-md border-b border-white/10 px-4 py-3">
-      <div className="max-w-7xl mx-auto flex items-center justify-between">
-        {/* Brand Logo */}
-        <div 
-          className="flex items-center space-x-3 cursor-pointer group"
-          onClick={() => setActiveTab('home')}
-        >
-          <div className="relative flex items-center justify-center w-10 h-10 rounded-lg bg-brand-accent-light font-black italic text-xl shadow-lg shadow-brand-accent-light/30 transition-transform duration-300 group-hover:scale-105">
-            HL
-          </div>
-          <div>
-            <span className="font-display font-bold text-xl tracking-tighter uppercase text-white group-hover:text-brand-accent-light transition-colors">
-              HERO <span className="text-brand-accent-light">LEAGUE</span>
-            </span>
-            <span className="block text-[9px] text-gray-400 font-mono tracking-widest uppercase mt-0.5">
-              The Ultimate Football Arena
-            </span>
-          </div>
-        </div>
+  // Saison-Pille: "2026/27" -> "26/27"
+  const seasonShort = seasonLabel ? seasonLabel.replace(/^20(\d{2})\/(\d{2})$/, '$1/$2') : '';
 
-        {/* Desktop Navigation */}
-        <div className="hidden md:flex items-center space-x-8">
+  return (
+    <div className="sticky top-0 z-50 bg-[rgba(7,10,8,.72)] backdrop-blur-xl border-b border-white/[.07]">
+      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 h-[68px] sm:h-[76px] flex items-center gap-5 lg:gap-9">
+        {/* Logo + Claim */}
+        <button
+          onClick={() => setActiveTab('home')}
+          className="flex items-center gap-3 sm:gap-4 cursor-pointer shrink-0"
+          aria-label="Zur Startseite"
+        >
+          <img src="/assets/hero-league-logo.png" alt="Hero League" className="h-8 sm:h-10 w-auto block" />
+          <div className="hidden sm:block w-px h-7 bg-white/[.13]" />
+          <div className="hidden sm:block font-sans font-semibold text-[9px] tracking-[2.6px] text-[#5b6560] leading-normal max-w-[92px] text-left">
+            THE ULTIMATE FOOTBALL ARENA
+          </div>
+        </button>
+
+        {/* Desktop-Navigation */}
+        <nav className="hidden lg:flex gap-8 ml-3.5">
           {navItems.map((item) => (
             <button
               key={item.value}
               onClick={() => setActiveTab(item.value)}
-              className={`font-sans text-sm font-medium uppercase tracking-wider transition-all duration-200 pb-1 cursor-pointer ${
-                activeTab === item.value
-                  ? 'text-brand-accent-light border-b-2 border-brand-accent-light'
-                  : 'text-gray-400 hover:text-white'
+              className={`relative font-sans text-[13px] tracking-[1.5px] py-1.5 transition-colors cursor-pointer ${
+                activeTab === item.value ? 'font-bold text-white' : 'font-semibold text-hl-dim hover:text-hl-text'
               }`}
             >
               {item.label}
+              {activeTab === item.value && (
+                <span className="absolute left-0 right-0 -bottom-[7px] h-0.5 bg-brand-accent-light rounded-sm shadow-[0_0_8px_rgba(34,223,201,.6)]" />
+              )}
             </button>
           ))}
-        </div>
+        </nav>
 
-        {/* Desktop Admin Status / Action */}
-        <div className="hidden md:flex items-center space-x-3">
-          {isAdmin && (
-            <div className="flex items-center space-x-3">
-              <span className="flex h-2 w-2 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded">
-                Admin-Modus
-              </span>
-              <button
-                onClick={onLogout}
-                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 rounded-full text-xs font-bold uppercase transition-all shadow-lg shadow-rose-600/20 cursor-pointer text-white"
-              >
-                Logout
-              </button>
+        {/* Rechts: LIVE-Pille, Saison, Admin */}
+        <div className="ml-auto flex items-center gap-2 sm:gap-3">
+          {hasLiveMatch && (
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-[rgba(255,84,66,.12)] border border-[rgba(255,84,66,.3)]">
+              <span className="w-2 h-2 rounded-full bg-hl-red hl-pulse" />
+              <span className="font-sans font-extrabold text-xs tracking-[1.5px] text-hl-red-soft">LIVE</span>
             </div>
           )}
-        </div>
-
-        {/* Mobile menu button */}
-        <div className="md:hidden flex items-center space-x-2">
-          {isAdmin && (
-            <div className="flex h-2 w-2 relative mr-1">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          {seasonShort && (
+            <div className="hidden sm:block px-[15px] py-[9px] rounded-full border border-white/[.12] font-sans font-bold text-xs tracking-wider text-hl-soft">
+              {seasonShort}
             </div>
           )}
+          {isAdmin && (
+            <button
+              onClick={onLogout}
+              className="hidden lg:flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[rgba(255,84,66,.1)] border border-[rgba(255,84,66,.25)] text-hl-red-soft font-sans font-bold text-[11px] tracking-wider uppercase hover:bg-[rgba(255,84,66,.2)] transition-colors cursor-pointer"
+              title="Admin abmelden"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Logout
+            </button>
+          )}
+
+          {/* Mobile-Menü-Button */}
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="text-gray-300 hover:text-white hover:bg-[#150a30] p-2 rounded-lg cursor-pointer"
+            className="lg:hidden text-hl-soft hover:text-white p-2 rounded-lg cursor-pointer"
+            aria-label="Menü öffnen"
           >
             {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
         </div>
       </div>
 
-      {/* Mobile Menu */}
+      {/* Mobile-Menü */}
       {isOpen && (
-        <div className="md:hidden mt-2 bg-[#0d0524] border border-[#221445] rounded-xl p-3 space-y-2">
+        <div className="lg:hidden border-t border-white/[.07] bg-[#080c0a] px-4 py-3 space-y-1">
           {navItems.map((item) => (
             <button
               key={item.value}
@@ -113,37 +112,29 @@ export default function Navbar({
                 setActiveTab(item.value);
                 setIsOpen(false);
               }}
-              className={`block w-full text-left px-4 py-2.5 rounded-lg font-sans text-sm font-medium transition-colors ${
+              className={`block w-full text-left px-4 py-2.5 rounded-xl font-sans text-sm tracking-[1.5px] transition-colors cursor-pointer ${
                 activeTab === item.value
-                  ? 'bg-brand-accent text-white shadow-md'
-                  : 'text-gray-300 hover:bg-[#1b0b42] hover:text-white'
+                  ? 'bg-[rgba(34,223,201,.12)] text-brand-accent-light font-bold border border-[rgba(34,223,201,.3)]'
+                  : 'text-hl-mute hover:bg-white/5 hover:text-white font-semibold'
               }`}
             >
               {item.label}
             </button>
           ))}
           {isAdmin && (
-            <div className="border-t border-[#221445] pt-2 mt-2">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between px-4 py-1.5">
-                  <span className="text-xs font-mono text-emerald-400">Admin-Modus aktiv</span>
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
-                </div>
-                <button
-                  onClick={() => {
-                    onLogout();
-                    setIsOpen(false);
-                  }}
-                  className="w-full flex items-center justify-center space-x-1.5 bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>Abmelden (Logout)</span>
-                </button>
-              </div>
-            </div>
+            <button
+              onClick={() => {
+                onLogout();
+                setIsOpen(false);
+              }}
+              className="w-full flex items-center justify-center gap-1.5 mt-2 bg-[rgba(255,84,66,.12)] border border-[rgba(255,84,66,.3)] text-hl-red-soft py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+              Abmelden (Logout)
+            </button>
           )}
         </div>
       )}
-    </nav>
+    </div>
   );
 }

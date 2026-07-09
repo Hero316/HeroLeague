@@ -1,170 +1,157 @@
 import React from 'react';
-import { Trophy } from 'lucide-react';
 import { Team, Match, Standing } from '../types';
 import { calculateStandings } from '../lib/standings';
+import { TeamCrest, FormPill } from './ui';
 
 interface TabelleProps {
   teams: Team[];
   matches: Match[];
   seasonLabel?: string;
   onSelectTeam?: (teamId: string) => void;
+  compact?: boolean; // kompakte Variante für die Home-Karte (ohne Zonen-Balken/Legende)
 }
 
-export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam }: TabelleProps) {
-  const standings: Standing[] = React.useMemo(
-    () => calculateStandings(teams, matches),
-    [teams, matches]
-  );
+// Ligatabelle im Glas-Karten-Design mit Zonen-Markierung und Form-Pillen.
+export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, compact = false }: TabelleProps) {
+  const standings: Standing[] = React.useMemo(() => calculateStandings(teams, matches), [teams, matches]);
 
-  // Zonen: CL Platz 1–4, EL Platz 5, Abstieg = letzte 2 Plätze (dynamisch zur Teamanzahl)
-  const relegationStart = Math.max(5, standings.length - 2);
+  // Zonen: Meisterschaftsrunde = Top 3, Abstiegszone = letzte 2 (nur bei genug Teams)
+  const championsEnd = 3;
+  const relegationStart = standings.length >= 6 ? standings.length - 1 : Number.POSITIVE_INFINITY;
+
+  const rankColors: Record<number, string> = { 1: '#E9C46A', 2: '#C9D1CC', 3: '#C98A5A' };
+
+  const gridCols =
+    'grid-cols-[30px_minmax(0,1fr)_32px_46px_46px] md:grid-cols-[34px_minmax(0,1fr)_36px_32px_32px_32px_56px_46px_46px] xl:grid-cols-[34px_minmax(0,1fr)_36px_32px_32px_32px_56px_46px_46px_92px]';
+
+  if (standings.length === 0) {
+    return (
+      <div className="hl-card p-8 text-center text-hl-mute font-sans text-sm">
+        Noch keine Vereine angelegt.
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-[#1E1B4B]/40 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm">
-      <div className="flex items-center pb-6 border-b border-white/10">
-        <h2 className="font-display font-bold text-2xl uppercase tracking-tight text-white flex items-center gap-2">
-          <Trophy className="w-6 h-6 text-yellow-400" />
-          Aktuelle Ligatabelle
-        </h2>
+    <div className={`hl-card ${compact ? 'p-5 sm:p-6' : 'px-4 sm:px-[22px] py-3 sm:pt-3 sm:pb-[18px]'}`}>
+      {/* Kopfzeile */}
+      <div
+        className={`grid ${gridCols} gap-2 px-2.5 pt-3 pb-3 border-b border-white/[.08] font-sans font-bold text-[10.5px] tracking-wider text-hl-faint`}
+      >
+        <span>#</span>
+        <span>CLUB</span>
+        <span className="text-center">SP</span>
+        <span className="text-center hidden md:block">S</span>
+        <span className="text-center hidden md:block">U</span>
+        <span className="text-center hidden md:block">N</span>
+        <span className="text-center hidden md:block">TORE</span>
+        <span className="text-center">TD</span>
+        <span className="text-center">PKT</span>
+        <span className="text-right hidden xl:block">FORM</span>
       </div>
 
-      <div className="overflow-x-auto mt-6">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="border-b border-white/10 text-xs font-mono text-gray-400 tracking-wider uppercase">
-              <th className="py-3 px-3 text-center w-12">#</th>
-              <th className="py-3 px-4">Club</th>
-              <th className="py-3 px-3 text-center w-12">Sp</th>
-              <th className="py-3 px-3 text-center w-10 hidden sm:table-cell">S</th>
-              <th className="py-3 px-3 text-center w-10 hidden sm:table-cell">U</th>
-              <th className="py-3 px-3 text-center w-10 hidden sm:table-cell">N</th>
-              <th className="py-3 px-4 text-center w-24">Tore</th>
-              <th className="py-3 px-3 text-center w-12">TD</th>
-              <th className="py-3 px-4 text-center w-16 bg-brand-accent/10 rounded-t-lg">Pkt</th>
-              <th className="py-3 px-4 text-center w-36 hidden md:table-cell">Form</th>
-            </tr>
-          </thead>
-          <tbody>
-            {standings.map((standing, index) => {
-              const rank = index + 1;
-              // Determine zones for border highlight
-              let rankBorderClass = 'border-l-4 border-transparent';
-              if (rank <= 4) rankBorderClass = 'border-l-4 border-blue-500';
-              else if (rank === 5) rankBorderClass = 'border-l-4 border-purple-500';
-              else if (rank > relegationStart) rankBorderClass = 'border-l-4 border-rose-500';
+      {standings.map((standing, index) => {
+        const rank = index + 1;
+        const isChamp = rank <= championsEnd;
+        const isReleg = rank > relegationStart;
+        const zoneColor = isChamp ? '#22DFC9' : isReleg ? '#FF5442' : 'transparent';
 
-              return (
-                <tr
-                  key={standing.teamId}
-                  onClick={onSelectTeam ? () => onSelectTeam(standing.teamId) : undefined}
-                  title={onSelectTeam ? `${standing.teamName} – Vereinsseite öffnen` : undefined}
-                  className={`border-b border-white/5 hover:bg-white/5 transition-colors duration-150 ${rankBorderClass} ${
-                    onSelectTeam ? 'cursor-pointer' : ''
+        return (
+          <button
+            key={standing.teamId}
+            onClick={onSelectTeam ? () => onSelectTeam(standing.teamId) : undefined}
+            title={onSelectTeam ? `${standing.teamName} – Vereinsseite öffnen` : undefined}
+            className={`grid ${gridCols} gap-2 items-center w-full text-left px-2.5 py-[9px] rounded-[11px] border-b border-white/[.04] transition-colors ${
+              onSelectTeam ? 'cursor-pointer hover:bg-white/5' : ''
+            } ${rank === 1 ? 'bg-[rgba(34,223,201,.06)]' : ''}`}
+          >
+            {/* Rang + Zonen-Balken */}
+            <span className="flex items-center gap-1.5">
+              {!compact && <span className="w-[3px] h-[26px] rounded-sm shrink-0" style={{ background: zoneColor }} />}
+              {rankColors[rank] ? (
+                <span
+                  className="grid place-items-center w-6 h-6 rounded-[7px] font-display font-black text-sm text-[#0b0f0b]"
+                  style={{ background: rankColors[rank] }}
+                >
+                  {rank}
+                </span>
+              ) : (
+                <span
+                  className={`grid place-items-center w-6 h-6 font-sans font-bold text-sm ${
+                    isReleg ? 'text-hl-red-soft' : 'text-hl-dim'
                   }`}
                 >
-                  {/* Position - Golden, Silber, Bronze styling only for top 3 */}
-                  <td className="py-3 px-3 text-center font-mono font-bold text-sm text-gray-300">
-                    <span className={`inline-flex items-center justify-center w-7 h-7 rounded-lg ${
-                      rank === 1 ? 'bg-yellow-500/20 text-yellow-400 font-extrabold border border-yellow-500/35 shadow-lg shadow-yellow-500/5' :
-                      rank === 2 ? 'bg-slate-300/20 text-slate-300 font-extrabold border border-slate-300/35' :
-                      rank === 3 ? 'bg-amber-600/20 text-amber-500 font-extrabold border border-amber-600/35' :
-                      'text-gray-400 font-medium'
-                    }`}>
-                      {rank}
-                    </span>
-                  </td>
+                  {rank}
+                </span>
+              )}
+            </span>
 
-                  {/* Club info */}
-                  <td className="py-3 px-4 font-sans font-medium text-white">
-                    <div className="flex items-center space-x-3">
-                      <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center font-display font-bold text-xs overflow-hidden shrink-0 border"
-                        style={{ backgroundColor: `${standing.logoColor}20`, borderColor: standing.logoColor }}
-                      >
-                        {standing.logoUrl ? (
-                          <img src={standing.logoUrl} alt={standing.shortName} className="w-5.5 h-5.5 object-contain" referrerPolicy="no-referrer" />
-                        ) : (
-                          <span className="text-sm">{standing.logoIcon}</span>
-                        )}
-                      </div>
-                      <div>
-                        <span className="hidden sm:inline text-sm font-semibold">{standing.teamName}</span>
-                        <span className="inline sm:hidden text-sm font-semibold">{standing.shortName}</span>
-                      </div>
-                    </div>
-                  </td>
+            {/* Verein */}
+            <span className="flex items-center gap-2.5 min-w-0">
+              <TeamCrest
+                name={standing.teamName}
+                shortName={standing.shortName}
+                color={standing.logoColor}
+                logoUrl={standing.logoUrl}
+                size="md"
+              />
+              <span className="font-sans font-semibold text-sm text-hl-text truncate">
+                <span className="hidden sm:inline">{standing.teamName}</span>
+                <span className="sm:hidden">{standing.shortName}</span>
+              </span>
+            </span>
 
-                  {/* Played */}
-                  <td className="py-3 px-3 text-center font-mono text-sm text-gray-300 font-medium">
-                    {standing.played}
-                  </td>
+            <span className="text-center font-sans text-[13px] text-hl-mute">{standing.played}</span>
+            <span className="text-center font-sans text-[13px] text-hl-mute hidden md:block">{standing.won}</span>
+            <span className="text-center font-sans text-[13px] text-hl-mute hidden md:block">{standing.drawn}</span>
+            <span className="text-center font-sans text-[13px] text-hl-mute hidden md:block">{standing.lost}</span>
+            <span className="text-center font-sans text-[13px] text-hl-soft hidden md:block">
+              {standing.goalsFor}:{standing.goalsAgainst}
+            </span>
+            <span
+              className={`text-center font-sans font-bold text-[13px] ${
+                standing.goalDifference > 0
+                  ? 'text-hl-green-soft'
+                  : standing.goalDifference < 0
+                  ? 'text-hl-red-soft'
+                  : 'text-hl-dim'
+              }`}
+            >
+              {standing.goalDifference > 0 ? `+${standing.goalDifference}` : standing.goalDifference}
+            </span>
+            <span className="text-center font-display font-black text-lg text-white">{standing.points}</span>
+            <span className="hidden xl:flex gap-1 justify-end">
+              {standing.form.map((res, i) => (
+                <FormPill key={i} result={res} />
+              ))}
+            </span>
+          </button>
+        );
+      })}
 
-                  {/* Won (hidden mobile) */}
-                  <td className="py-3 px-3 text-center font-mono text-sm text-gray-400 hidden sm:table-cell">
-                    {standing.won}
-                  </td>
-
-                  {/* Drawn (hidden mobile) */}
-                  <td className="py-3 px-3 text-center font-mono text-sm text-gray-400 hidden sm:table-cell">
-                    {standing.drawn}
-                  </td>
-
-                  {/* Lost (hidden mobile) */}
-                  <td className="py-3 px-3 text-center font-mono text-sm text-gray-400 hidden sm:table-cell">
-                    {standing.lost}
-                  </td>
-
-                  {/* Goals */}
-                  <td className="py-3 px-4 text-center font-mono text-sm text-gray-300">
-                    {standing.goalsFor}:{standing.goalsAgainst}
-                  </td>
-
-                  {/* Goal Difference */}
-                  <td className={`py-3 px-3 text-center font-mono text-sm font-bold ${
-                    standing.goalDifference > 0 ? 'text-emerald-400' :
-                    standing.goalDifference < 0 ? 'text-rose-400' : 'text-gray-400'
-                  }`}>
-                    {standing.goalDifference > 0 ? `+${standing.goalDifference}` : standing.goalDifference}
-                  </td>
-
-                  {/* Points */}
-                  <td className="py-3 px-4 text-center font-mono text-base font-bold text-white bg-brand-accent/5">
-                    {standing.points}
-                  </td>
-
-                  {/* Form (hidden mobile) */}
-                  <td className="py-3 px-4 hidden md:table-cell">
-                    <div className="flex items-center justify-center space-x-1.5">
-                      {standing.form.length === 0 ? (
-                        <span className="text-xs text-gray-500 font-sans font-light uppercase tracking-wider">Keine</span>
-                      ) : (
-                        standing.form.map((res, formIdx) => (
-                          <span
-                            key={formIdx}
-                            className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-mono font-bold select-none ${
-                              res === 'W' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                              res === 'D' ? 'bg-gray-500/20 text-gray-300 border border-gray-500/30' :
-                              'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                            }`}
-                            title={res === 'W' ? 'Sieg' : res === 'D' ? 'Unentschieden' : 'Niederlage'}
-                          >
-                            {res}
-                          </span>
-                        ))
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="mt-6 border-t border-white/10 pt-4 text-[11px] text-gray-400 font-sans flex flex-col sm:flex-row justify-between gap-2 uppercase tracking-wider">
-        <span>Sortierung: 1. Punkte, 2. Tordifferenz, 3. Erzielte Tore, 4. Alphabetisch</span>
-        {seasonLabel && <span>Saison {seasonLabel} • Hero League</span>}
-      </div>
+      {/* Fußzeile */}
+      {compact ? (
+        <div className="pt-4 px-2.5 font-sans font-semibold text-[10.5px] tracking-wider text-hl-faint">
+          SORTIERUNG: 1. PUNKTE · 2. TORDIFFERENZ · 3. ERZIELTE TORE
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-4 sm:gap-5 items-center pt-[18px] px-2.5 pb-1 font-sans font-semibold text-[11px] tracking-[.5px] text-hl-dim">
+          <span className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-[3px] bg-brand-accent-light" />
+            Meisterschaftsrunde (1–{Math.min(championsEnd, standings.length)})
+          </span>
+          {Number.isFinite(relegationStart) && (
+            <span className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-[3px] bg-hl-red" />
+              Abstiegszone ({relegationStart + 1}–{standings.length})
+            </span>
+          )}
+          <span className="sm:ml-auto">
+            SORTIERUNG: 1. PUNKTE · 2. TORDIFFERENZ · 3. ERZIELTE TORE
+            {seasonLabel ? ` · SAISON ${seasonLabel}` : ''}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

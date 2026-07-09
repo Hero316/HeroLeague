@@ -55,7 +55,7 @@ function ImageUploader({
           if (file) handleFile(file);
         }}
         className={`relative border-2 border-dashed rounded-xl p-4 transition-all flex flex-col items-center justify-center cursor-pointer ${
-          isDragging ? 'border-brand-accent-light bg-brand-accent/10' : 'border-white/10 hover:border-white/20 bg-[#0A0118]/40'
+          isDragging ? 'border-brand-accent-light bg-brand-accent/10' : 'border-white/10 hover:border-white/20 bg-[#060E0F]/40'
         }`}
         onClick={pickFile}
       >
@@ -122,7 +122,7 @@ function RosterEditor({
   return (
     <div className="space-y-2">
       {roster.map((player, index) => (
-        <div key={index} className="flex items-center gap-2 bg-[#0A0118]/60 border border-white/5 rounded-lg px-2.5 py-2">
+        <div key={index} className="flex items-center gap-2 bg-[#060E0F]/60 border border-white/5 rounded-lg px-2.5 py-2">
           <PlayerAvatar name={player.name || '?'} imageUrl={player.imageUrl} color={teamColor} size="sm" />
           <input
             type="text"
@@ -484,7 +484,7 @@ export default function AdminPanel({
   };
 
   const inputClass =
-    'w-full bg-[#0A0118] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent-light';
+    'w-full bg-[#060E0F] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent-light';
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 relative">
@@ -554,7 +554,7 @@ export default function AdminPanel({
 
       {/* Neuen Club registrieren */}
       <div className="lg:col-span-5">
-        <div className="bg-[#1E1B4B]/40 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm h-full">
+        <div className="bg-[#101A19]/40 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm h-full">
           <h3 className="font-display font-bold text-xl uppercase tracking-tight text-white mb-6 flex items-center gap-2">
             <Plus className="w-5 h-5 text-brand-accent-light" />
             Neuen Club registrieren
@@ -617,7 +617,7 @@ export default function AdminPanel({
                     className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg border transition-all duration-150 cursor-pointer ${
                       newTeamEmoji === emoji
                         ? 'bg-brand-accent/20 border-brand-accent-light text-white scale-105'
-                        : 'bg-[#0A0118] border-white/10 hover:bg-white/5 text-gray-300'
+                        : 'bg-[#060E0F] border-white/10 hover:bg-white/5 text-gray-300'
                     }`}
                   >
                     {emoji}
@@ -649,7 +649,7 @@ export default function AdminPanel({
 
       {/* Club & Kader bearbeiten */}
       <div className="lg:col-span-7">
-        <div className="bg-[#1E1B4B]/40 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm h-full">
+        <div className="bg-[#101A19]/40 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm h-full">
           <h3 className="font-display font-bold text-xl uppercase tracking-tight text-white mb-4 flex items-center gap-2">
             <Shield className="w-5 h-5 text-brand-accent-light" />
             Club & Kader bearbeiten
@@ -704,7 +704,7 @@ export default function AdminPanel({
                         className={`w-8 h-8 rounded-lg flex items-center justify-center text-base border transition-all duration-150 cursor-pointer ${
                           editTeamEmoji === emoji
                             ? 'bg-brand-accent/20 border-brand-accent-light text-white scale-105'
-                            : 'bg-[#0A0118] border-white/10 hover:bg-white/5 text-gray-300'
+                            : 'bg-[#060E0F] border-white/10 hover:bg-white/5 text-gray-300'
                         }`}
                       >
                         {emoji}
@@ -791,7 +791,7 @@ export default function AdminPanel({
 
       {/* Spieler des Monats */}
       <div className="lg:col-span-12 mt-4">
-        <div className="bg-[#1E1B4B]/40 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm">
+        <div className="bg-[#101A19]/40 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm">
           <h3 className="font-display font-bold text-xl uppercase tracking-tight text-white mb-4 flex items-center gap-2">
             <Award className="w-5 h-5 text-yellow-400" />
             Spieler des Monats konfigurieren
@@ -865,7 +865,7 @@ export default function AdminPanel({
 
       {/* Twitch-Livestream */}
       <div className="lg:col-span-12 mt-4">
-        <div className="bg-[#1E1B4B]/40 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm">
+        <div className="bg-[#101A19]/40 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm">
           <h3 className="font-display font-bold text-xl uppercase tracking-tight text-white mb-4 flex items-center gap-2">
             <Radio className="w-5 h-5 text-[#9147ff]" />
             Twitch-Livestream
@@ -895,7 +895,7 @@ export default function AdminPanel({
                 className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer border ${
                   twitchLive
                     ? 'bg-red-500/20 text-red-300 border-red-500/40'
-                    : 'bg-[#0A0118]/60 text-gray-400 border-white/10 hover:text-white hover:border-white/20'
+                    : 'bg-[#060E0F]/60 text-gray-400 border-white/10 hover:text-white hover:border-white/20'
                 }`}
               >
                 <span className="relative flex h-2 w-2">

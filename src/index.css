@@ -1,49 +1,125 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;700;800;900&family=Saira:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Space Grotesk", sans-serif;
+  --font-sans: "Saira", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Saira Condensed", "Saira", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  
-  --color-brand-dark: #0A0118;
-  --color-brand-deep: #1E1B4B;
-  --color-brand-accent: #2563eb; /* Active Blue */
-  --color-brand-accent-light: #3B82F6; /* Bright Blue */
-  --color-brand-glow: rgba(59, 130, 246, 0.25);
+
+  /* Hero-League-Designsystem (dunkles Teal) */
+  --color-brand-dark: #060E0F;
+  --color-brand-deep: #0C1413;
+  --color-brand-accent: #16BDA9;
+  --color-brand-accent-light: #22DFC9;
+  --color-brand-glow: rgba(34, 223, 201, 0.25);
+
+  --color-hl-text: #EAF0E8;
+  --color-hl-soft: #c3ccc4;
+  --color-hl-mute: #9aa39b;
+  --color-hl-dim: #7e877f;
+  --color-hl-faint: #59615a;
+  --color-hl-gold: #E9C46A;
+  --color-hl-silver: #C9D1CC;
+  --color-hl-bronze: #C98A5A;
+  --color-hl-red: #FF5442;
+  --color-hl-red-soft: #FF8578;
+  --color-hl-green: #43E5A0;
+  --color-hl-green-soft: #5CE9AC;
+  --color-hl-magenta: #E83E8C;
+  --color-hl-magenta-soft: #F79AC4;
 }
 
-/* Custom styling for sleek scrollbars */
+body {
+  background: #060E0F;
+}
+
+::selection {
+  background: #22DFC9;
+  color: #06120f;
+}
+
+/* Schlanke Scrollbars im neuen Look */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0A0118;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1E1B4B;
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3B82F6;
+  background: rgba(255, 255, 255, 0.18);
 }
 
-/* Animation classes or utilities */
-.neon-glow-blue {
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.35);
+/* Animationen aus dem Design-Prototyp */
+@keyframes hlFade {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
-.text-gradient {
-  background: linear-gradient(135deg, #ffffff 30%, #3b82f6 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+@keyframes hlPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.2;
+  }
 }
 
-.blue-gradient {
-  background: linear-gradient(135deg, #3B82F6 0%, #2563eb 100%);
+@keyframes hlMarquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }
 
+@keyframes hlZoom {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.09);
+  }
+}
+
+.hl-fade {
+  animation: hlFade 0.6s both;
+}
+
+.hl-pulse {
+  animation: hlPulse 1.4s infinite;
+}
+
+.hl-marquee {
+  animation: hlMarquee 38s linear infinite;
+  will-change: transform;
+}
+
+.hl-zoom {
+  animation: hlZoom 24s ease-in-out infinite alternate;
+}
+
+/* Glas-Karte: wiederkehrender Kartenstil des Designs */
+.hl-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 24px 60px rgba(0, 0, 0, 0.4);
+}

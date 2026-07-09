@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
-import { motion } from 'motion/react';
-import { ArrowLeft, Users, CalendarDays, Target } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Match, PlayerStat, Team } from '../types';
 import { calculateStandings } from '../lib/standings';
 import PlayerAvatar from './PlayerAvatar';
+import { TeamCrest, FormPill, MatchStatusBadge, shortDate, shade, monogram } from './ui';
 
 interface TeamDetailProps {
   team: Team;
@@ -36,6 +36,15 @@ export default function TeamDetail({
     [matches, team.id]
   );
 
+  // Nächstes Spiel: live vor geplant
+  const nextMatch = useMemo(() => {
+    const live = teamMatches.find((m) => m.status === 'live');
+    if (live) return live;
+    return [...teamMatches]
+      .filter((m) => m.status === 'geplant')
+      .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))[0];
+  }, [teamMatches]);
+
   // Kader mit Statistiken aus den Spieldaten verknüpfen
   const roster = useMemo(
     () =>
@@ -51,160 +60,142 @@ export default function TeamDetail({
     [team.spielerliste, players]
   );
 
+  // Star des Teams: bester Torschütze/Vorlagengeber des Kaders
+  const star = useMemo(() => {
+    const list = players.filter((p) => p.teamName === team.name && (p.goals > 0 || p.assists > 0));
+    return [...list].sort((a, b) => b.goals - a.goals || b.assists - a.assists)[0] ?? null;
+  }, [players, team.name]);
+
   const opponent = (m: Match) => teams.find((t) => t.id === (m.homeTeamId === team.id ? m.awayTeamId : m.homeTeamId));
 
   const resultBadge = (m: Match) => {
     if (m.status !== 'beendet' || m.homeScore === null || m.awayScore === null) return null;
     const own = m.homeTeamId === team.id ? m.homeScore : m.awayScore;
     const other = m.homeTeamId === team.id ? m.awayScore : m.homeScore;
-    if (own > other) return { label: 'S', classes: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' };
-    if (own < other) return { label: 'N', classes: 'bg-rose-500/20 text-rose-400 border-rose-500/30' };
-    return { label: 'U', classes: 'bg-gray-500/20 text-gray-300 border-gray-500/30' };
+    if (own > other) return { ch: 'S', cls: 'bg-[rgba(67,229,160,.15)] text-hl-green-soft' };
+    if (own < other) return { ch: 'N', cls: 'bg-[rgba(255,84,66,.15)] text-hl-red-soft' };
+    return { ch: 'U', cls: 'bg-[rgba(233,196,106,.16)] text-[#F0CE77]' };
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+    <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-11">
       <button
         onClick={onBack}
-        className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider text-gray-400 hover:text-white transition-colors cursor-pointer"
+        className="inline-flex items-center gap-1.5 mt-8 font-sans font-bold text-xs tracking-wider uppercase text-hl-dim hover:text-white transition-colors cursor-pointer"
       >
         <ArrowLeft className="w-3.5 h-3.5" />
         Zurück zur Übersicht
       </button>
 
       {/* Vereinskopf */}
-      <div
-        className="relative overflow-hidden bg-[#1E1B4B]/40 border border-white/10 rounded-2xl p-8 shadow-xl backdrop-blur-sm"
-        style={{ borderColor: `${team.logoColor}50` }}
-      >
+      <div className="relative overflow-hidden mt-4">
         <div
-          className="absolute top-0 right-0 w-64 h-64 blur-[100px] rounded-full pointer-events-none opacity-20"
-          style={{ backgroundColor: team.logoColor }}
+          className="absolute -top-40 -left-32 w-[560px] h-[560px] pointer-events-none opacity-60"
+          style={{ background: `radial-gradient(circle, ${team.logoColor}22, transparent 66%)` }}
         />
-        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 relative z-10">
-          <div
-            className="w-24 h-24 rounded-2xl flex items-center justify-center text-5xl border-2 shrink-0 overflow-hidden shadow-lg"
-            style={{ backgroundColor: `${team.logoColor}20`, borderColor: team.logoColor }}
-          >
-            {team.logoUrl ? (
-              <img src={team.logoUrl} alt={team.shortName} className="w-16 h-16 object-contain" referrerPolicy="no-referrer" />
-            ) : (
-              <span>{team.logoIcon}</span>
-            )}
-          </div>
-          <div className="text-center sm:text-left space-y-2">
-            <h1 className="font-display font-black text-3xl sm:text-4xl uppercase tracking-tight text-white italic">
+        <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-6 flex-wrap py-6">
+          {team.logoUrl ? (
+            <span className="grid place-items-center w-[118px] h-[118px] shrink-0 rounded-[32px] overflow-hidden border border-white/15 bg-white/5 shadow-[0_18px_40px_rgba(0,0,0,.4)]">
+              <img src={team.logoUrl} alt={team.name} className="w-20 h-20 object-contain" referrerPolicy="no-referrer" />
+            </span>
+          ) : (
+            <span
+              className="grid place-items-center w-[118px] h-[118px] shrink-0 rounded-[32px] font-display font-black text-5xl text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.18),0_18px_40px_rgba(0,0,0,.4)]"
+              style={{ background: `linear-gradient(140deg, ${team.logoColor}, ${shade(team.logoColor, 0.45)})` }}
+            >
+              {monogram(team.shortName || team.name)}
+            </span>
+          )}
+          <div className="flex-1 min-w-[260px]">
+            <div className="font-sans font-extrabold text-xs tracking-[2.5px] text-brand-accent-light uppercase">
+              HERO LEAGUE{rank > 0 ? ` · TABELLENPLATZ ${rank}` : ''}
+            </div>
+            <h1 className="mt-2 font-display font-black text-5xl sm:text-7xl leading-[.85] tracking-tight uppercase text-white">
               {team.name}
             </h1>
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 text-xs font-mono uppercase tracking-wider">
-              <span className="px-2 py-1 rounded bg-white/5 border border-white/10 text-gray-300">{team.shortName}</span>
+            <div className="flex gap-2.5 mt-4 flex-wrap">
+              <div className="flex flex-col gap-[3px] px-4 py-[11px] rounded-xl bg-white/[.04] border border-white/10">
+                <span className="font-sans font-bold text-[9.5px] tracking-[1.5px] text-hl-dim">KÜRZEL</span>
+                <span className="font-sans font-bold text-sm text-hl-text">{team.shortName}</span>
+              </div>
               {seasonLabel && (
-                <span className="px-2 py-1 rounded bg-white/5 border border-white/10 text-gray-300">Saison {seasonLabel}</span>
+                <div className="flex flex-col gap-[3px] px-4 py-[11px] rounded-xl bg-white/[.04] border border-white/10">
+                  <span className="font-sans font-bold text-[9.5px] tracking-[1.5px] text-hl-dim">SAISON</span>
+                  <span className="font-sans font-bold text-sm text-hl-text">{seasonLabel}</span>
+                </div>
               )}
-              {rank > 0 && (
-                <span
-                  className="px-2 py-1 rounded border font-bold"
-                  style={{ backgroundColor: `${team.logoColor}20`, borderColor: `${team.logoColor}60`, color: '#fff' }}
-                >
-                  Platz {rank}
-                </span>
+              {standing && (
+                <div className="flex flex-col gap-[3px] px-4 py-[11px] rounded-xl bg-white/[.04] border border-white/10">
+                  <span className="font-sans font-bold text-[9.5px] tracking-[1.5px] text-hl-dim">BILANZ</span>
+                  <span className="font-sans font-bold text-sm text-hl-text">
+                    {standing.won}S · {standing.drawn}U · {standing.lost}N
+                  </span>
+                </div>
               )}
             </div>
           </div>
+          {standing && (
+            <div className="flex gap-5 flex-none">
+              <div className="text-center">
+                <div className="font-display font-black text-[44px] leading-[.9] text-brand-accent-light">{standing.points}</div>
+                <div className="font-sans font-bold text-[10px] tracking-[1.5px] text-hl-dim mt-1">PUNKTE</div>
+              </div>
+              <div className="w-px bg-white/10" />
+              <div className="text-center">
+                <div className="font-display font-black text-[44px] leading-[.9] text-white">{standing.goalsFor}</div>
+                <div className="font-sans font-bold text-[10px] tracking-[1.5px] text-hl-dim mt-1">TORE</div>
+              </div>
+              <div className="w-px bg-white/10" />
+              <div className="text-center flex flex-col items-center">
+                <div className="flex gap-1 pt-3">
+                  {standing.form.length === 0 ? (
+                    <span className="text-xs text-hl-faint font-sans uppercase">–</span>
+                  ) : (
+                    standing.form.map((res, idx) => <FormPill key={idx} result={res} />)
+                  )}
+                </div>
+                <div className="font-sans font-bold text-[10px] tracking-[1.5px] text-hl-dim mt-2">FORM</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Saisonbilanz */}
-      {standing && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-[#1E1B4B]/40 border border-white/10 rounded-xl p-4 text-center">
-            <div className="text-3xl font-mono font-black text-white">{standing.points}</div>
-            <div className="text-[10px] text-gray-400 uppercase font-sans tracking-widest mt-1">Punkte</div>
-          </div>
-          <div className="bg-[#1E1B4B]/40 border border-white/10 rounded-xl p-4 text-center">
-            <div className="text-3xl font-mono font-black text-white">
-              {standing.won}-{standing.drawn}-{standing.lost}
-            </div>
-            <div className="text-[10px] text-gray-400 uppercase font-sans tracking-widest mt-1">S-U-N</div>
-          </div>
-          <div className="bg-[#1E1B4B]/40 border border-white/10 rounded-xl p-4 text-center">
-            <div className="text-3xl font-mono font-black text-white">
-              {standing.goalsFor}:{standing.goalsAgainst}
-            </div>
-            <div className="text-[10px] text-gray-400 uppercase font-sans tracking-widest mt-1">Tore</div>
-          </div>
-          <div className="bg-[#1E1B4B]/40 border border-white/10 rounded-xl p-4 text-center flex flex-col items-center justify-center">
-            <div className="flex items-center justify-center space-x-1">
-              {standing.form.length === 0 ? (
-                <span className="text-xs text-gray-500 font-sans uppercase">Keine Spiele</span>
-              ) : (
-                standing.form.map((res, idx) => (
-                  <span
-                    key={idx}
-                    className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-mono font-bold ${
-                      res === 'W'
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                        : res === 'D'
-                        ? 'bg-gray-500/20 text-gray-300 border border-gray-500/30'
-                        : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
-                    }`}
-                  >
-                    {res}
-                  </span>
-                ))
-              )}
-            </div>
-            <div className="text-[10px] text-gray-400 uppercase font-sans tracking-widest mt-2">Form (letzte 5)</div>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* Body: Kader + Sidebar */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.55fr_1fr] gap-6 items-start mt-6">
         {/* Kader */}
-        <div className="bg-[#1E1B4B]/40 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm">
-          <h3 className="font-display font-bold text-xl uppercase tracking-tight text-white mb-6 flex items-center gap-2">
-            <Users className="w-5 h-5 text-brand-accent-light" />
-            Kader
-          </h3>
+        <div>
+          <div className="font-display font-black text-2xl uppercase text-white mb-4">Kader</div>
           {roster.length === 0 ? (
-            <p className="text-sm text-gray-400 font-sans py-6 text-center">Noch keine Spieler hinterlegt.</p>
+            <div className="hl-card p-8 text-center text-hl-mute font-sans text-sm">Noch keine Spieler hinterlegt.</div>
           ) : (
-            <div className="space-y-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-[9px]">
               {roster.map((player) => (
                 <div
                   key={player.name}
-                  className="flex items-center justify-between gap-3 bg-[#0A0118]/40 border border-white/5 rounded-xl px-3.5 py-2.5"
+                  className="flex items-center gap-3 px-3.5 py-[11px] rounded-[13px] bg-[linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012))] border border-white/[.08] backdrop-blur-sm transition-colors hover:border-[rgba(34,223,201,.3)]"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <PlayerAvatar name={player.name} imageUrl={player.imageUrl} color={team.logoColor} size="md" />
-                    <span className="font-sans font-semibold text-white text-sm truncate">{player.name}</span>
+                  <PlayerAvatar name={player.name} imageUrl={player.imageUrl} color={team.logoColor} size="md" />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-sans font-semibold text-sm text-hl-text truncate">{player.name}</div>
+                    <div className="font-sans text-[11px] text-hl-dim">
+                      {player.matchesPlayed} Sp. · {player.assists} Assists
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4 shrink-0 text-right font-mono text-xs">
-                    <span title="Tore" className="text-brand-accent-light font-bold">
-                      <Target className="w-3 h-3 inline mr-1" />
-                      {player.goals}
+                  {player.goals > 0 && (
+                    <span className="flex-none font-sans font-extrabold text-[11px] text-brand-accent-light px-2 py-[3px] rounded-md bg-[rgba(34,223,201,.12)]">
+                      {player.goals} ⚽
                     </span>
-                    <span title="Vorlagen" className="text-purple-400 font-bold">
-                      A {player.assists}
-                    </span>
-                    <span title="Einsätze" className="text-gray-500">
-                      {player.matchesPlayed} Sp.
-                    </span>
-                  </div>
+                  )}
                 </div>
               ))}
             </div>
           )}
-        </div>
 
-        {/* Spiele */}
-        <div className="bg-[#1E1B4B]/40 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm">
-          <h3 className="font-display font-bold text-xl uppercase tracking-tight text-white mb-6 flex items-center gap-2">
-            <CalendarDays className="w-5 h-5 text-brand-accent-light" />
-            Spiele
-          </h3>
+          {/* Spiele */}
+          <div className="font-display font-black text-2xl uppercase text-white mb-4 mt-8">Spiele</div>
           {teamMatches.length === 0 ? (
-            <p className="text-sm text-gray-400 font-sans py-6 text-center">Noch keine Spiele in dieser Saison.</p>
+            <div className="hl-card p-8 text-center text-hl-mute font-sans text-sm">Noch keine Spiele in dieser Saison.</div>
           ) : (
             <div className="space-y-2">
               {teamMatches.map((m) => {
@@ -214,47 +205,40 @@ export default function TeamDetail({
                 return (
                   <div
                     key={m.id}
-                    className="flex items-center justify-between gap-3 bg-[#0A0118]/40 border border-white/5 rounded-xl px-3.5 py-2.5"
+                    className="flex items-center justify-between gap-3 px-3.5 py-[11px] rounded-[13px] bg-[linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012))] border border-white/[.08]"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 text-sm">
-                        <span className="text-[10px] font-mono text-gray-500 shrink-0">{m.matchday}. Sp.</span>
-                        <span className="text-[10px] font-mono text-gray-500 shrink-0 uppercase">{isHome ? 'H' : 'A'}</span>
+                        <span className="text-[10px] font-sans font-bold text-hl-faint shrink-0">{m.matchday}. Sp.</span>
+                        <span className="text-[10px] font-sans font-bold text-hl-faint shrink-0 uppercase">{isHome ? 'H' : 'A'}</span>
                         {opp ? (
                           <button
                             onClick={() => onSelectTeam(opp.id)}
-                            className="font-sans font-semibold text-white truncate hover:text-brand-accent-light transition-colors cursor-pointer"
+                            className="font-sans font-semibold text-hl-text truncate hover:text-brand-accent-light transition-colors cursor-pointer"
                             title={`${opp.name} – Vereinsseite öffnen`}
                           >
                             {opp.name}
                           </button>
                         ) : (
-                          <span className="font-sans font-semibold text-gray-400 truncate">Unbekannt</span>
+                          <span className="font-sans font-semibold text-hl-mute truncate">Unbekannt</span>
                         )}
                       </div>
-                      <div className="text-[10px] font-mono text-gray-500 mt-0.5">
-                        {new Date(m.date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })} • {m.time} Uhr
+                      <div className="text-[10px] font-sans font-semibold text-hl-faint mt-0.5">
+                        {shortDate(m.date)} · {m.time} Uhr
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      {m.status === 'live' && (
-                        <span className="text-[10px] font-mono text-red-400 bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded uppercase animate-pulse">
-                          LIVE
-                        </span>
-                      )}
+                      {m.status === 'live' && <MatchStatusBadge status="live" />}
                       {m.status === 'beendet' && m.homeScore !== null ? (
-                        <span className="font-mono font-black text-white text-sm bg-[#0A0118] border border-white/10 px-2.5 py-1 rounded-lg">
+                        <span className="font-display font-black text-white text-base px-2.5 py-1 rounded-lg bg-white/[.04] border border-white/10">
                           {isHome ? `${m.homeScore}:${m.awayScore}` : `${m.awayScore}:${m.homeScore}`}
                         </span>
                       ) : m.status !== 'live' ? (
-                        <span className="text-[10px] font-mono text-brand-accent-light uppercase">Geplant</span>
+                        <span className="text-[10px] font-sans font-bold text-brand-accent-light uppercase tracking-wider">Geplant</span>
                       ) : null}
                       {badge && (
-                        <span
-                          className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-mono font-bold border ${badge.classes}`}
-                          title={badge.label === 'S' ? 'Sieg' : badge.label === 'U' ? 'Unentschieden' : 'Niederlage'}
-                        >
-                          {badge.label}
+                        <span className={`grid place-items-center w-[22px] h-[22px] rounded-md font-sans font-extrabold text-[11px] ${badge.cls}`}>
+                          {badge.ch}
                         </span>
                       )}
                     </div>
@@ -264,7 +248,64 @@ export default function TeamDetail({
             </div>
           )}
         </div>
+
+        {/* Sidebar */}
+        <div className="flex flex-col gap-[18px]">
+          {/* Nächstes Spiel */}
+          {nextMatch && (() => {
+            const home = teams.find((t) => t.id === nextMatch.homeTeamId);
+            const away = teams.find((t) => t.id === nextMatch.awayTeamId);
+            if (!home || !away) return null;
+            return (
+              <div className="hl-card rounded-[20px] p-[22px]">
+                <div className="font-sans font-extrabold text-[11px] tracking-[2px] text-brand-accent-light mb-4">
+                  {nextMatch.status === 'live' ? 'JETZT LIVE' : 'NÄCHSTES SPIEL'}
+                </div>
+                <div className="font-sans font-semibold text-[11px] tracking-wider text-hl-dim mb-3.5 uppercase">
+                  {new Date(nextMatch.date).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short' })} · {nextMatch.time} UHR
+                </div>
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+                  <div className="flex flex-col items-center gap-2">
+                    <TeamCrest name={home.name} shortName={home.shortName} color={home.logoColor} logoUrl={home.logoUrl} size="lg" />
+                    <span className="font-sans font-semibold text-xs text-hl-text text-center">{home.name}</span>
+                  </div>
+                  <span className="font-display font-black text-xl text-brand-accent-light">
+                    {nextMatch.status === 'live' ? `${nextMatch.homeScore ?? 0}:${nextMatch.awayScore ?? 0}` : 'VS'}
+                  </span>
+                  <div className="flex flex-col items-center gap-2">
+                    <TeamCrest name={away.name} shortName={away.shortName} color={away.logoColor} logoUrl={away.logoUrl} size="lg" />
+                    <span className="font-sans font-semibold text-xs text-hl-text text-center">{away.name}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Star des Teams */}
+          {star && (
+            <div className="hl-card rounded-[20px] p-[22px]">
+              <div className="font-sans font-extrabold text-[11px] tracking-[2px] text-brand-accent-light mb-1.5">STAR DES TEAMS</div>
+              <div className="flex items-center gap-3.5 mt-3">
+                <PlayerAvatar name={star.name} imageUrl={star.imageUrl} color={team.logoColor} size="lg" />
+                <div>
+                  <div className="font-display font-black text-[22px] uppercase text-white leading-[.95]">{star.name}</div>
+                  <div className="font-sans font-semibold text-xs text-hl-mute mt-1">{star.matchesPlayed} Einsätze</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2.5 mt-4">
+                <div className="bg-white/[.03] border border-white/[.07] rounded-xl p-3 text-center">
+                  <div className="font-display font-black text-[26px] text-brand-accent-light">{star.goals}</div>
+                  <div className="font-sans font-bold text-[9px] tracking-[1.5px] text-hl-dim mt-[3px]">TORE</div>
+                </div>
+                <div className="bg-white/[.03] border border-white/[.07] rounded-xl p-3 text-center">
+                  <div className="font-display font-black text-[26px] text-white">{star.assists}</div>
+                  <div className="font-sans font-bold text-[9px] tracking-[1.5px] text-hl-dim mt-[3px]">ASSISTS</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

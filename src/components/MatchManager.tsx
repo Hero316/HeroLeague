@@ -76,16 +76,16 @@ export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch
   };
 
   const selectClass =
-    'w-full bg-[#0A0118] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent-light cursor-pointer';
+    'w-full bg-[#060E0F] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent-light cursor-pointer';
   const inputClass =
-    'w-full bg-[#0A0118] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent-light [color-scheme:dark]';
+    'w-full bg-[#060E0F] border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent-light [color-scheme:dark]';
 
   return (
     <div className="space-y-8">
       {/* Neues Spiel ansetzen */}
       <form
         onSubmit={handleSubmit}
-        className="grid grid-cols-2 md:grid-cols-6 gap-3 items-end bg-[#0A0118]/40 border border-white/5 rounded-xl p-4"
+        className="grid grid-cols-2 md:grid-cols-6 gap-3 items-end bg-[#060E0F]/40 border border-white/5 rounded-xl p-4"
       >
         <div>
           <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">Spieltag</label>
@@ -155,7 +155,7 @@ export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch
                 {dayMatches.map((m) => (
                   <div
                     key={m.id}
-                    className="flex items-center justify-between gap-3 bg-[#0A0118]/40 border border-white/5 rounded-lg px-3 py-2 text-sm"
+                    className="flex items-center justify-between gap-3 bg-[#060E0F]/40 border border-white/5 rounded-lg px-3 py-2 text-sm"
                   >
                     <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                       <span className="font-medium text-white truncate">
