@@ -493,27 +493,27 @@ export default function Spielplan({
                   </div>
 
                   {/* Teams + Ergebnis */}
-                  <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3.5">
+                  <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-3.5">
                     <div className="flex items-center gap-[11px] min-w-0">
                       <TeamCrest name={home.name} shortName={home.shortName} color={home.logoColor} logoUrl={home.logoUrl} size="lg" />
                       {onSelectTeam ? (
                         <button
                           onClick={() => onSelectTeam(home.id)}
-                          className="font-sans font-semibold text-[15px] text-hl-text truncate hover:text-brand-accent-light transition-colors cursor-pointer text-left"
+                          className="font-sans font-semibold text-sm sm:text-[15px] text-hl-text leading-tight break-words min-w-0 hover:text-brand-accent-light transition-colors cursor-pointer text-left"
                           title={`${home.name} – Vereinsseite öffnen`}
                         >
                           {home.name}
                         </button>
                       ) : (
-                        <span className="font-sans font-semibold text-[15px] text-hl-text truncate">{home.name}</span>
+                        <span className="font-sans font-semibold text-sm sm:text-[15px] text-hl-text leading-tight break-words min-w-0">{home.name}</span>
                       )}
                     </div>
 
                     {isUpcoming ? (
-                      <div className="min-w-[64px] text-center font-sans font-extrabold text-[15px] tracking-[2px] text-hl-faint">VS</div>
+                      <div className="min-w-[48px] sm:min-w-[64px] text-center font-sans font-extrabold text-sm sm:text-[15px] tracking-[2px] text-hl-faint">VS</div>
                     ) : (
                       <div
-                        className={`min-w-[64px] text-center font-display font-black text-3xl leading-none ${
+                        className={`min-w-[48px] sm:min-w-[64px] text-center font-display font-black text-2xl sm:text-3xl leading-none ${
                           isLive || (isLocalEditing && !isCompleted) ? 'text-brand-accent-light' : 'text-white'
                         }`}
                       >
@@ -525,13 +525,13 @@ export default function Spielplan({
                       {onSelectTeam ? (
                         <button
                           onClick={() => onSelectTeam(away.id)}
-                          className="font-sans font-semibold text-[15px] text-hl-text truncate hover:text-brand-accent-light transition-colors cursor-pointer text-right"
+                          className="font-sans font-semibold text-sm sm:text-[15px] text-hl-text leading-tight break-words min-w-0 hover:text-brand-accent-light transition-colors cursor-pointer text-right"
                           title={`${away.name} – Vereinsseite öffnen`}
                         >
                           {away.name}
                         </button>
                       ) : (
-                        <span className="font-sans font-semibold text-[15px] text-hl-text truncate text-right">{away.name}</span>
+                        <span className="font-sans font-semibold text-sm sm:text-[15px] text-hl-text leading-tight break-words min-w-0 text-right">{away.name}</span>
                       )}
                       <TeamCrest name={away.name} shortName={away.shortName} color={away.logoColor} logoUrl={away.logoUrl} size="lg" />
                     </div>

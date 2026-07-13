@@ -167,7 +167,7 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
                     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2.5">
                       <div className="flex items-center gap-2 min-w-0">
                         <TeamCrest name={home.name} shortName={home.shortName} color={home.logoColor} logoUrl={home.logoUrl} size="sm" />
-                        <span className="font-sans font-semibold text-[13.5px] text-hl-text truncate">{home.name}</span>
+                        <span className="font-sans font-semibold text-[13px] sm:text-[13.5px] text-hl-text leading-tight break-words min-w-0">{home.name}</span>
                       </div>
                       {upcoming ? (
                         <div className="min-w-[60px] text-center font-sans font-extrabold text-sm tracking-[2px] text-hl-faint">VS</div>
@@ -181,7 +181,7 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
                         </div>
                       )}
                       <div className="flex items-center gap-2 justify-end min-w-0">
-                        <span className="font-sans font-semibold text-[13.5px] text-hl-text truncate text-right">{away.name}</span>
+                        <span className="font-sans font-semibold text-[13px] sm:text-[13.5px] text-hl-text leading-tight break-words min-w-0 text-right">{away.name}</span>
                         <TeamCrest name={away.name} shortName={away.shortName} color={away.logoColor} logoUrl={away.logoUrl} size="sm" />
                       </div>
                     </div>

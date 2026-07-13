@@ -14,6 +14,7 @@ import TeamDetail from './components/TeamDetail';
 import LiveBanner from './components/LiveBanner';
 import LiveTicker from './components/LiveTicker';
 import HomeBody from './components/HomeBody';
+import InstallPrompt from './components/InstallPrompt';
 import { PageHeader, Footer } from './components/ui';
 import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History } from 'lucide-react';
 
@@ -452,17 +453,7 @@ export default function App() {
         </>
       )}
 
-      {!isAdmin && (
-        <div className="text-center pb-12">
-          <button
-            onClick={() => navigateTo('/admin')}
-            className="inline-flex items-center gap-1.5 text-[11px] font-sans font-bold uppercase text-hl-faint hover:text-brand-accent-light tracking-widest border border-white/5 bg-white/[.02] px-4 py-2 rounded-full transition-all cursor-pointer"
-          >
-            <Shield className="w-3.5 h-3.5" />
-            <span>Admin-Bereich</span>
-          </button>
-        </div>
-      )}
+      <InstallPrompt />
 
       {isAdmin && (
         <section className="border-t border-white/10 bg-[rgba(34,223,201,.04)] py-8 px-4">
