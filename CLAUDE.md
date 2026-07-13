@@ -8,21 +8,24 @@ Projekt: **Hero League** — Fußballliga-Plattform (öffentliche Website + gesc
 
 ## ⛔ Sicherheitsregeln (IMMER einhalten)
 
-1. **Niemals direkt auf `main` arbeiten.** `main` ist die **LIVE-Website**. Vor jeder Änderung einen neuen Branch anlegen:
+1. **Niemals direkt auf `main` arbeiten.** `main` ist die **LIVE-Website**. Es gibt genau zwei dauerhafte Branches:
+   - **`main`** = Production (live)
+   - **`staging`** = Entwicklung & Test — **hier wird gearbeitet**
    ```bash
-   git checkout main && git pull      # neuesten Stand holen
-   git checkout -b kurz-beschreibender-name
+   git checkout staging && git pull   # neuesten Stand holen
+   # ... ändern, committen, auf staging pushen
    ```
+   Keine neuen dauerhaften Branches anlegen. Nur für riskante Experimente darf ausnahmsweise ein kurzlebiger Branch von `staging` erstellt werden, der danach wieder gelöscht wird.
 2. **Vor jedem Commit prüfen, dass alles baut** — beides muss fehlerfrei durchlaufen:
    ```bash
    npm run lint      # TypeScript-Check
    npm run build     # Produktions-Build
    ```
    Läuft es nicht durch: **nicht committen**, erst den Fehler beheben.
-3. **Getestet wird auf der Vercel-Preview-URL**, die nach dem Push automatisch entsteht — **nie** direkt auf der Live-Seite.
+3. **Getestet wird auf der Staging-Preview-URL** (Vercel deployt jeden Push auf `staging` automatisch auf dieselbe URL) — **nie** direkt auf der Live-Seite.
 4. **Keine Secrets committen.** `.env`, `.env.local`, Passwörter, Tokens bleiben lokal (stehen in `.gitignore`). Committe niemals echte Zugangsdaten.
 5. **Bei riskanten Aktionen STOPP und nachfragen:** Daten löschen, `--force`, `git reset --hard`, Force-Push, `db:setup --force` (löscht die ganze Datenbank), Dateien/Verzeichnisse entfernen.
-6. Nach der Arbeit: committen und **auf den Branch** (nicht `main`) pushen. Den Merge nach `main` bestätigt ein Mensch über einen Pull Request auf GitHub.
+6. Nach der Arbeit: committen und **auf `staging`** (nicht `main`) pushen. Den Merge `staging → main` (= Live-Gang) bestätigt ein Mensch über einen Pull Request auf GitHub.
 
 ---
 
@@ -83,6 +86,6 @@ Erstes Setup / Env-Variablen holen: `npx vercel link` → `npx vercel env pull .
 
 1. `npm run lint` und `npm run build` grün?
 2. Lokal mit `vercel dev` ausprobiert?
-3. Auf einen **Branch** committen und pushen (nicht `main`).
-4. Preview-URL öffnen und die konkrete Änderung dort real durchklicken.
-5. Erst wenn das passt: über einen Pull Request nach `main` mergen (macht ein Mensch).
+3. Auf **`staging`** committen und pushen (nicht `main`).
+4. Staging-Preview-URL öffnen und die konkrete Änderung dort real durchklicken.
+5. Erst wenn das passt: über einen Pull Request `staging → main` mergen (macht ein Mensch) — damit geht es live.
