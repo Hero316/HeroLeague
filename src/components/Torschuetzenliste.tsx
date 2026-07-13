@@ -1,0 +1,124 @@
+import React from 'react';
+import { PlayerStat, Team } from '../types';
+import PlayerAvatar from './PlayerAvatar';
+import { TeamCrest } from './ui';
+
+interface TorschuetzenlisteProps {
+  players: PlayerStat[];
+  teams: Team[];
+  onSelectTeam?: (teamId: string) => void;
+}
+
+// Torjägerliste: Podium für die Top 3, darunter die restliche Rangliste.
+export default function Torschuetzenliste({ players, teams, onSelectTeam }: TorschuetzenlisteProps) {
+  const scorers = React.useMemo(
+    () => [...players].filter((p) => p.goals > 0).sort((a, b) => b.goals - a.goals || b.assists - a.assists),
+    [players]
+  );
+
+  const teamByName = (name: string) => teams.find((t) => t.name === name);
+
+  const rankColors: Record<number, string> = { 1: '#E9C46A', 2: '#C9D1CC', 3: '#C98A5A' };
+
+  if (scorers.length === 0) {
+    return (
+      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
+        <div className="hl-card text-center py-12 text-hl-mute font-sans text-sm">
+          Noch keine Tore eingetragen. Sobald Ergebnisse mit Torschützen erfasst sind, erscheint hier die Rangliste.
+        </div>
+      </div>
+    );
+  }
+
+  const podium = scorers.slice(0, 3);
+  const rest = scorers.slice(3, 15);
+
+  const clubChip = (p: PlayerStat) => {
+    const team = teamByName(p.teamName);
+    return (
+      <button
+        onClick={team && onSelectTeam ? () => onSelectTeam(team.id) : undefined}
+        className={`flex items-center gap-2 min-w-0 ${team && onSelectTeam ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+        title={team && onSelectTeam ? `${p.teamName} – Vereinsseite öffnen` : undefined}
+      >
+        {team ? (
+          <TeamCrest name={team.name} shortName={team.shortName} color={team.logoColor} logoUrl={team.logoUrl} size="xs" />
+        ) : (
+          <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: p.teamLogoColor }} />
+        )}
+        <span className="font-sans text-xs text-hl-mute truncate">{p.teamName}</span>
+      </button>
+    );
+  };
+
+  return (
+    <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
+      {/* Podium (Top 3) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end pt-3.5 pb-2">
+        {podium.map((p, i) => {
+          const rank = i + 1;
+          const lead = rank === 1;
+          return (
+            <div
+              key={p.id}
+              className={`relative flex flex-col items-center rounded-[20px] ${
+                lead
+                  ? 'px-5 pt-[30px] pb-[26px] bg-[linear-gradient(180deg,rgba(34,223,201,.14),rgba(10,14,11,.4))] border border-[rgba(34,223,201,.3)] shadow-[0_24px_60px_rgba(0,0,0,.4)] sm:-translate-y-3.5 order-first sm:order-none'
+                  : 'px-5 pt-[26px] pb-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] border border-white/10 backdrop-blur-md'
+              }`}
+            >
+              <span
+                className="absolute top-3.5 left-3.5 grid place-items-center w-7 h-7 rounded-lg font-display font-black text-[15px] text-[#0b0f0b]"
+                style={{ background: rankColors[rank] }}
+              >
+                {rank}
+              </span>
+              <PlayerAvatar name={p.name} imageUrl={p.imageUrl} color={p.teamLogoColor} size={lead ? 'lg' : 'md'} />
+              <div className="font-display font-black text-2xl leading-tight uppercase text-white mt-3.5 text-center">{p.name}</div>
+              <div className="mt-2">{clubChip(p)}</div>
+              <div className="flex items-baseline gap-1.5 mt-3.5">
+                <span
+                  className={`font-display font-black leading-[.9] ${lead ? 'text-[54px] text-brand-accent-light' : 'text-[44px] text-white'}`}
+                >
+                  {p.goals}
+                </span>
+                <span className="font-sans font-bold text-xs tracking-wider text-hl-dim">TORE</span>
+              </div>
+              <div className="font-sans font-semibold text-[11.5px] text-hl-dim mt-1">
+                {p.assists} Assists · {p.matchesPlayed} Spiele
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Liste ab Platz 4 */}
+      {rest.length > 0 && (
+        <div className="hl-card px-4 sm:px-5 pt-2.5 pb-3.5 mt-5">
+          <div className="grid grid-cols-[46px_minmax(0,1fr)_70px_70px] sm:grid-cols-[46px_minmax(0,1fr)_150px_70px_70px] gap-2 px-3.5 pt-3.5 pb-3 border-b border-white/[.08] font-sans font-bold text-[10.5px] tracking-wider text-hl-faint">
+            <span>#</span>
+            <span>SPIELER</span>
+            <span className="hidden sm:block">CLUB</span>
+            <span className="text-center">TORE</span>
+            <span className="text-center">ASSISTS</span>
+          </div>
+          {rest.map((p, i) => (
+            <div
+              key={p.id}
+              className="grid grid-cols-[46px_minmax(0,1fr)_70px_70px] sm:grid-cols-[46px_minmax(0,1fr)_150px_70px_70px] gap-2 items-center px-3.5 py-[11px] rounded-[11px] border-b border-white/[.04] transition-colors hover:bg-white/5"
+            >
+              <span className="font-display font-black text-lg text-hl-dim">{i + 4}</span>
+              <div className="flex items-center gap-3 min-w-0">
+                <PlayerAvatar name={p.name} imageUrl={p.imageUrl} color={p.teamLogoColor} size="sm" />
+                <span className="font-sans font-semibold text-[15px] text-hl-text truncate">{p.name}</span>
+              </div>
+              <div className="hidden sm:block min-w-0">{clubChip(p)}</div>
+              <span className="text-center font-display font-black text-[22px] text-brand-accent-light">{p.goals}</span>
+              <span className="text-center font-sans font-semibold text-[15px] text-hl-soft">{p.assists}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
