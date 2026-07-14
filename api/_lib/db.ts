@@ -1,5 +1,5 @@
 import { neon } from '@neondatabase/serverless';
-import type { Match, Player, Season, Team } from '../../src/types';
+import type { AppUser, Match, Player, Season, Team } from '../../src/types';
 
 export const sql = neon(process.env.DATABASE_URL!);
 
@@ -49,4 +49,20 @@ export async function getCurrentSeason(): Promise<Season | null> {
     SELECT id, label, is_current AS "isCurrent" FROM seasons WHERE is_current = true LIMIT 1
   `;
   return (rows[0] as Season) ?? null;
+}
+
+export async function getUsers(): Promise<AppUser[]> {
+  const rows = await sql`
+    SELECT id, email, name, role, is_active AS "isActive"
+    FROM users ORDER BY created_at
+  `;
+  return rows as AppUser[];
+}
+
+export async function getUserByEmail(email: string): Promise<AppUser | null> {
+  const rows = await sql`
+    SELECT id, email, name, role, is_active AS "isActive"
+    FROM users WHERE email = ${email.trim().toLowerCase()} LIMIT 1
+  `;
+  return (rows[0] as AppUser) ?? null;
 }

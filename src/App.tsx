@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Absence, Match, PlayerStat, Scorer, Season, Team, ActiveTab } from './types';
+import { Absence, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
@@ -9,6 +9,7 @@ import Torschuetzenliste from './components/Torschuetzenliste';
 import Statistiken from './components/Statistiken';
 import AdminPanel from './components/AdminPanel';
 import AdminLogin from './components/AdminLogin';
+import UserManager from './components/UserManager';
 import MatchManager from './components/MatchManager';
 import TeamDetail from './components/TeamDetail';
 import LiveBanner from './components/LiveBanner';
@@ -27,7 +28,9 @@ export default function App() {
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [players, setPlayers] = useState<PlayerStat[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
+  const isAdmin = sessionUser !== null;
+  const isSuperadmin = sessionUser?.role === 'superadmin';
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
 
   const currentSeason = useMemo(() => seasons.find((s) => s.isCurrent) ?? null, [seasons]);
@@ -92,12 +95,12 @@ export default function App() {
   }, [fetchData]);
 
   useEffect(() => {
-    setUnauthorizedHandler(() => setIsAdmin(false));
+    setUnauthorizedHandler(() => setSessionUser(null));
 
     fetchData();
-    apiFetch<{ isAdmin: boolean }>('/api/auth/session')
-      .then((data) => setIsAdmin(data.isAdmin))
-      .catch(() => setIsAdmin(false));
+    apiFetch<{ isAdmin: boolean; user: SessionUser | null }>('/api/auth/session')
+      .then((data) => setSessionUser(data.user))
+      .catch(() => setSessionUser(null));
 
     const handlePopState = () => setCurrentPath(window.location.pathname);
     window.addEventListener('popstate', handlePopState);
@@ -115,7 +118,7 @@ export default function App() {
     } catch {
       // Cookie ist ggf. schon abgelaufen – lokal trotzdem abmelden
     }
-    setIsAdmin(false);
+    setSessionUser(null);
   };
 
   // Fehler aus Admin-Aktionen sichtbar machen statt still zu schlucken
@@ -259,7 +262,7 @@ export default function App() {
 
         <main className="flex-1 flex items-center justify-center p-6">
           {!isAdmin ? (
-            <AdminLogin onLoginSuccess={() => setIsAdmin(true)} />
+            <AdminLogin onLoginSuccess={(user) => setSessionUser(user)} />
           ) : (
             <div className="w-full max-w-7xl mx-auto space-y-8 py-4">
               <div className="hl-card p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -269,9 +272,10 @@ export default function App() {
                   </div>
                   <div>
                     <h2 className="font-display font-black text-lg text-white uppercase tracking-tight">
-                      Eingeloggt als Administrator
+                      {isSuperadmin ? 'Eingeloggt als Super-Admin' : 'Eingeloggt als Spiel-Admin'}
                     </h2>
                     <p className="text-xs text-hl-green-soft font-sans mt-0.5">
+                      {sessionUser?.name || sessionUser?.email ? `${sessionUser?.name || sessionUser?.email} · ` : ''}
                       Aktive Saison: {currentSeason?.label ?? '–'}
                     </p>
                   </div>
@@ -322,12 +326,19 @@ export default function App() {
                     teams={teams}
                     matches={currentSeasonMatches}
                     currentSeasonLabel={currentSeason?.label ?? ''}
+                    isSuperadmin={isSuperadmin}
                     onAddTeam={handleAddTeam}
                     onEditTeam={handleEditTeam}
                     onDeleteTeam={handleDeleteTeam}
                     onStartSeason={handleStartSeason}
                   />
                 </div>
+
+                {isSuperadmin && (
+                  <div className="hl-card p-6">
+                    <UserManager />
+                  </div>
+                )}
               </div>
             </div>
           )}

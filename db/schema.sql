@@ -47,3 +47,24 @@ CREATE TABLE settings (
   key   TEXT PRIMARY KEY,
   value JSONB NOT NULL
 );
+
+-- Backoffice-Benutzer (passwortloser Login per E-Mail-Code).
+-- superadmin: darf alles · match_admin: nur Spiele/Live/Ticker pflegen.
+CREATE TABLE users (
+  id         TEXT PRIMARY KEY,
+  email      TEXT NOT NULL UNIQUE,
+  name       TEXT NOT NULL DEFAULT '',
+  role       TEXT NOT NULL DEFAULT 'match_admin' CHECK (role IN ('superadmin', 'match_admin')),
+  is_active  BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Einmal-Login-Codes (gehasht, mit Ablauf und Fehlversuchszähler)
+CREATE TABLE login_codes (
+  email      TEXT NOT NULL,
+  code_hash  TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  attempts   INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_login_codes_email ON login_codes(email);

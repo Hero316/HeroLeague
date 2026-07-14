@@ -1,11 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getSeasons, sql } from '../_lib/db.js';
-import { requireAdmin } from '../_lib/auth.js';
+import { requireSuperadmin } from '../_lib/auth.js';
 import { badRequest, isNonEmptyString } from '../_lib/validate.js';
 
 // Neue Saison starten: anlegen und als aktiv setzen.
 // Vereine/Kader bleiben, alte Saisons samt Spielen bleiben erhalten.
-const createSeason = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
+const createSeason = requireSuperadmin(async (req: VercelRequest, res: VercelResponse) => {
   const { label } = req.body ?? {};
   if (!isNonEmptyString(label)) return badRequest(res, 'Bitte ein Saison-Label angeben (z.B. "2027/28").');
 
