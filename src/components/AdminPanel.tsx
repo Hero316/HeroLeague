@@ -180,6 +180,7 @@ interface AdminPanelProps {
   teams: Team[];
   matches: Match[];
   currentSeasonLabel: string;
+  isSuperadmin: boolean;
   onAddTeam: (team: Omit<Team, 'id'>) => Promise<boolean>;
   onEditTeam: (teamId: string, updatedData: Partial<Team>) => Promise<boolean>;
   onDeleteTeam: (teamId: string) => Promise<boolean>;
@@ -253,6 +254,7 @@ export default function AdminPanel({
   teams,
   matches,
   currentSeasonLabel,
+  isSuperadmin,
   onAddTeam,
   onEditTeam,
   onDeleteTeam,
@@ -552,7 +554,9 @@ export default function AdminPanel({
         )}
       </AnimatePresence>
 
-      {/* Neuen Club registrieren */}
+      {/* Vereins-Verwaltung (nur Super-Admin) */}
+      {isSuperadmin && (
+      <>
       <div className="lg:col-span-5">
         <div className="bg-[#101A19]/40 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm h-full">
           <h3 className="font-display font-bold text-xl uppercase tracking-tight text-white mb-6 flex items-center gap-2">
@@ -788,6 +792,8 @@ export default function AdminPanel({
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {/* Spieler des Monats */}
       <div className="lg:col-span-12 mt-4">
@@ -931,7 +937,8 @@ export default function AdminPanel({
         </div>
       </div>
 
-      {/* Saisonverwaltung */}
+      {/* Saisonverwaltung (nur Super-Admin) */}
+      {isSuperadmin && (
       <div className="lg:col-span-12 mt-4">
         <div className="border border-brand-accent-light/20 bg-brand-accent/5 rounded-xl p-6 shadow-xl backdrop-blur-sm">
           <h3 className="font-display font-bold text-lg uppercase tracking-tight text-white mb-2 flex items-center gap-2">
@@ -955,6 +962,7 @@ export default function AdminPanel({
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

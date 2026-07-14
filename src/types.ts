@@ -61,6 +61,24 @@ export interface TwitchConfig {
   isLive: boolean; // manuell im Admin geschaltet
 }
 
+// Rollen: superadmin darf alles; match_admin darf nur Spiele/Live/Ticker pflegen.
+export type UserRole = 'superadmin' | 'match_admin';
+
+export interface AppUser {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  isActive: boolean;
+}
+
+// Die im Frontend bekannte Identität der aktiven Sitzung
+export interface SessionUser {
+  email: string;
+  name: string;
+  role: UserRole;
+}
+
 export interface Standing {
   teamId: string;
   teamName: string;

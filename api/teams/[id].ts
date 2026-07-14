@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { Absence, Scorer, Team } from '../../src/types';
 import { normalizeRoster, sql } from '../_lib/db.js';
-import { requireAdmin } from '../_lib/auth.js';
+import { requireSuperadmin } from '../_lib/auth.js';
 import { badRequest, isNonEmptyString, isRoster } from '../_lib/validate.js';
 
 // Neu in den Kader aufgenommene Spieler dürfen nicht rückwirkend als eingesetzt gelten.
@@ -41,7 +41,7 @@ async function markNewPlayersAbsentInPastMatches(teamId: string, addedNames: str
   }
 }
 
-const updateTeam = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
+const updateTeam = requireSuperadmin(async (req: VercelRequest, res: VercelResponse) => {
   const id = String(req.query.id);
   const { name, shortName, logoUrl, logoColor, logoIcon, spielerliste } = req.body ?? {};
 
@@ -88,7 +88,7 @@ const updateTeam = requireAdmin(async (req: VercelRequest, res: VercelResponse) 
   return res.json(team);
 });
 
-const deleteTeam = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
+const deleteTeam = requireSuperadmin(async (req: VercelRequest, res: VercelResponse) => {
   const id = String(req.query.id);
   // Spiele des Vereins werden per FK-Kaskade mitgelöscht
   const rows = await sql`DELETE FROM teams WHERE id = ${id} RETURNING id`;

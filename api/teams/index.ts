@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getTeams, sql } from '../_lib/db.js';
-import { requireAdmin } from '../_lib/auth.js';
+import { requireSuperadmin } from '../_lib/auth.js';
 import { badRequest, isNonEmptyString, isRoster } from '../_lib/validate.js';
 
 function slugify(name: string): string {
@@ -16,7 +16,7 @@ function slugify(name: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-const createTeam = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
+const createTeam = requireSuperadmin(async (req: VercelRequest, res: VercelResponse) => {
   const { name, shortName, logoColor, logoIcon, logoUrl, spielerliste } = req.body ?? {};
 
   if (!isNonEmptyString(name) || !isNonEmptyString(shortName)) {
