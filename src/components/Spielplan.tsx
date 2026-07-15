@@ -183,13 +183,15 @@ export default function Spielplan({
   // Verwalten-Popup öffnen: Spieldaten + Torschützen/Abwesende aus dem Speicherstand laden
   const openManage = (match: Match) => {
     setOpenMatchId(match.id);
+    // Ort gilt pro Spieltag: fehlt er am Spiel, den bereits am Spieltag hinterlegten Ort vorschlagen
+    const matchdayVenue = matches.find((m) => m.matchday === match.matchday && m.venue && m.venue.trim())?.venue?.trim() || '';
     setMeta({
       matchday: String(match.matchday),
       date: match.date,
       time: match.time,
       homeTeamId: match.homeTeamId,
       awayTeamId: match.awayTeamId,
-      venue: match.venue ?? '',
+      venue: (match.venue && match.venue.trim()) || matchdayVenue,
     });
     setMatchScorers((prev) => (prev[match.id] ? prev : { ...prev, [match.id]: seedScorers(match) }));
     setMatchAbsentees((prev) => (prev[match.id] ? prev : { ...prev, [match.id]: seedAbsentees(match) }));

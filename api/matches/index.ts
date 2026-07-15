@@ -26,6 +26,17 @@ const createMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse)
   const season = await getCurrentSeason();
   if (!season) return res.status(500).json({ error: 'Keine aktive Saison vorhanden.' });
 
+  // Ort gilt pro Spieltag: ohne Eingabe den bereits am Spieltag hinterlegten Ort übernehmen
+  let finalVenue = venueValue;
+  if (!finalVenue) {
+    const existing = await sql`
+      SELECT venue FROM matches
+      WHERE season_id = ${season.id} AND matchday = ${matchday} AND venue IS NOT NULL AND venue <> ''
+      LIMIT 1
+    `;
+    finalVenue = (existing[0]?.venue as string) ?? null;
+  }
+
   const match = {
     id: `m-${Date.now()}`,
     seasonId: season.id,
@@ -37,7 +48,7 @@ const createMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse)
     status: 'geplant' as const,
     date,
     time,
-    venue: venueValue,
+    venue: finalVenue,
     scorers: [],
   };
 
@@ -45,6 +56,14 @@ const createMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse)
     INSERT INTO matches (id, season_id, matchday, home_team_id, away_team_id, home_score, away_score, status, date, time, venue, scorers)
     VALUES (${match.id}, ${match.seasonId}, ${match.matchday}, ${match.homeTeamId}, ${match.awayTeamId}, null, null, ${match.status}, ${match.date}, ${match.time}, ${match.venue}, '[]'::jsonb)
   `;
+
+  // Wurde ein Ort eingegeben, gilt er für den ganzen Spieltag → auf die übrigen Spiele übernehmen
+  if (venueValue) {
+    await sql`
+      UPDATE matches SET venue = ${venueValue}
+      WHERE season_id = ${season.id} AND matchday = ${matchday} AND id <> ${match.id}
+    `;
+  }
 
   return res.json(match);
 });

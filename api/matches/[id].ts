@@ -99,6 +99,15 @@ const updateMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse)
     WHERE id = ${id}
   `;
 
+  // Der Spielort gilt für den ganzen Spieltag-Abend: auf alle übrigen Spiele
+  // desselben Spieltags (in derselben Saison) übernehmen.
+  if (venue !== undefined) {
+    await sql`
+      UPDATE matches SET venue = ${match.venue ?? null}
+      WHERE season_id = ${match.seasonId} AND matchday = ${match.matchday} AND id <> ${id}
+    `;
+  }
+
   return res.json(match);
 });
 

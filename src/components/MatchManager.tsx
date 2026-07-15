@@ -28,12 +28,17 @@ export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch
   const [venue, setVenue] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const lastVenue = useMemo(() => {
+  // Ort gilt pro Spieltag: für den gewählten Spieltag bereits hinterlegten Ort bevorzugen,
+  // sonst den zuletzt genutzten Ort vorschlagen.
+  const suggestedVenue = useMemo(() => {
+    const day = parseInt(matchday, 10);
+    const dayVenue = matches.find((m) => m.matchday === day && m.venue && m.venue.trim())?.venue?.trim();
+    if (dayVenue) return dayVenue;
     const withVenue = matches.filter((m) => m.venue && m.venue.trim());
     withVenue.sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
-    return withVenue[0]?.venue ?? '';
-  }, [matches]);
-  const venueValue = venue ?? lastVenue;
+    return withVenue[0]?.venue?.trim() ?? '';
+  }, [matches, matchday]);
+  const venueValue = venue ?? suggestedVenue;
 
   // Ein-/ausgeklappte Spieltage (explizit gesetzte Werte überschreiben die Voreinstellung)
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
@@ -151,7 +156,7 @@ export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch
         </div>
         <div className="col-span-2 md:col-span-6">
           <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
-            Spielort (Halle){lastVenue && !venue ? ' · zuletzt vorgeschlagen' : ''}
+            Spielort (Halle){suggestedVenue && venue === null ? ' · Vorschlag' : ''}
           </label>
           <input
             type="text"
