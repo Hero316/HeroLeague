@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Play, Check, RotateCcw, Plus, Minus, Pencil, Save, AlertTriangle, Users } from 'lucide-react';
+import { Play, Check, RotateCcw, Plus, Minus, Pencil, Save, AlertTriangle, Users, X } from 'lucide-react';
 import { Absence, Match, Scorer, Team } from '../types';
 import { TeamCrest, shortDate, useLiveMinute } from './ui';
 
@@ -27,6 +27,10 @@ interface SpielplanProps {
     scorers?: Scorer[],
     absentees?: Absence[]
   ) => void | Promise<unknown>;
+  onUpdateMatchMeta?: (
+    matchId: string,
+    data: { matchday: number; date: string; time: string; homeTeamId: string; awayTeamId: string; venue: string }
+  ) => void | Promise<unknown>;
   onSelectTeam?: (teamId: string) => void;
 }
 
@@ -35,6 +39,7 @@ export default function Spielplan({
   matches,
   isAdmin,
   onUpdateMatchScore,
+  onUpdateMatchMeta,
   onSelectTeam,
 }: SpielplanProps) {
   const [activeMatchday, setActiveMatchday] = useState<number>(1);
@@ -42,39 +47,29 @@ export default function Spielplan({
     [matchId: string]: { home: string; away: string };
   }>({});
 
-  // Ref für die horizontale Spieltag-Leiste
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
-  // Alle vorhandenen Spieltage (müssen nicht lückenlos sein)
   const matchdays = Array.from(new Set(matches.map((m) => m.matchday))).sort((a, b) => a - b);
 
-  // Falls der aktive Spieltag nicht (mehr) existiert (z.B. nach Saisonwechsel): auf den ersten springen
   useEffect(() => {
     if (matchdays.length > 0 && !matchdays.includes(activeMatchday)) {
       setActiveMatchday(matchdays[0]);
     }
   }, [matchdays, activeMatchday]);
 
-  // Den aktiven Spieltag-Button automatisch in Sicht scrollen
   useEffect(() => {
     if (scrollContainerRef.current) {
       const activeBtn = scrollContainerRef.current.querySelector('[data-active="true"]');
       if (activeBtn) {
-        activeBtn.scrollIntoView({
-          behavior: 'smooth',
-          block: 'nearest',
-          inline: 'center'
-        });
+        activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
     }
   }, [activeMatchday]);
 
   const activeIndex = matchdays.indexOf(activeMatchday);
-
   const handlePrevMatchday = () => {
     if (activeIndex > 0) setActiveMatchday(matchdays[activeIndex - 1]);
   };
-
   const handleNextMatchday = () => {
     if (activeIndex < matchdays.length - 1) setActiveMatchday(matchdays[activeIndex + 1]);
   };
@@ -92,10 +87,20 @@ export default function Spielplan({
     [matchId: string]: { homeAbsent: string[]; awayAbsent: string[] };
   }>({});
 
-  // Kurze "✓ Gespeichert"-Rückmeldung je Spiel
   const [savedFlash, setSavedFlash] = useState<{ [matchId: string]: boolean }>({});
-  // Spiel, für das gerade das Zurücksetzen bestätigt werden muss
   const [resetTarget, setResetTarget] = useState<Match | null>(null);
+
+  // Aktuell im Verwalten-Popup geöffnetes Spiel + Entwurf der Spieldaten (Metadaten)
+  const [openMatchId, setOpenMatchId] = useState<string | null>(null);
+  const [meta, setMeta] = useState<{
+    matchday: string;
+    date: string;
+    time: string;
+    homeTeamId: string;
+    awayTeamId: string;
+    venue: string;
+  } | null>(null);
+  const [metaSaved, setMetaSaved] = useState(false);
 
   const flashSaved = (matchId: string) => {
     setSavedFlash((prev) => ({ ...prev, [matchId]: true }));
@@ -109,8 +114,8 @@ export default function Spielplan({
   };
 
   const matchdayMatches = matches.filter((m) => m.matchday === activeMatchday);
-
   const getTeam = (teamId: string) => teams.find((t) => t.id === teamId);
+  const openMatch = openMatchId ? matches.find((m) => m.id === openMatchId) ?? null : null;
 
   // Torschützen eines Spiels aus den gespeicherten Daten in den lokalen Bearbeitungszustand laden
   const seedScorers = (match: Match) => ({
@@ -124,38 +129,28 @@ export default function Spielplan({
 
   // Abwesende eines Spiels aus den gespeicherten Daten laden
   const seedAbsentees = (match: Match) => ({
-    homeAbsent: (match.absentees || [])
-      .filter((a) => a.teamId === match.homeTeamId)
-      .map((a) => a.playerName),
-    awayAbsent: (match.absentees || [])
-      .filter((a) => a.teamId === match.awayTeamId)
-      .map((a) => a.playerName),
+    homeAbsent: (match.absentees || []).filter((a) => a.teamId === match.homeTeamId).map((a) => a.playerName),
+    awayAbsent: (match.absentees || []).filter((a) => a.teamId === match.awayTeamId).map((a) => a.playerName),
   });
 
-  // Bei Live-/geplanten Spielen ist der Editor direkt sichtbar. Damit die bereits
-  // gespeicherten Torschützen/Vorlagen/Abwesenheiten dort erscheinen (und beim Weiter-Erfassen
-  // nicht verloren gehen), den lokalen Zustand einmalig aus den DB-Daten vorbefüllen.
+  // Solange das Popup offen ist, den lokalen Zustand aus den DB-Daten vorhalten
+  // (auch nach automatischem Nachladen während eines Live-Spiels).
   useEffect(() => {
-    matchdayMatches.forEach((m) => {
-      const editorVisible = isAdmin && (editingScores[m.id] !== undefined || m.status !== 'beendet');
-      if (editorVisible && matchScorers[m.id] === undefined) {
-        setMatchScorers((prev) => (prev[m.id] === undefined ? { ...prev, [m.id]: seedScorers(m) } : prev));
-      }
-      if (editorVisible && matchAbsentees[m.id] === undefined) {
-        setMatchAbsentees((prev) => (prev[m.id] === undefined ? { ...prev, [m.id]: seedAbsentees(m) } : prev));
-      }
-    });
+    if (!openMatch || !isAdmin) return;
+    if (matchScorers[openMatch.id] === undefined) {
+      setMatchScorers((prev) => (prev[openMatch.id] === undefined ? { ...prev, [openMatch.id]: seedScorers(openMatch) } : prev));
+    }
+    if (matchAbsentees[openMatch.id] === undefined) {
+      setMatchAbsentees((prev) => (prev[openMatch.id] === undefined ? { ...prev, [openMatch.id]: seedAbsentees(openMatch) } : prev));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matchdayMatches, isAdmin, editingScores, matchScorers, matchAbsentees]);
+  }, [openMatch, isAdmin, matchScorers, matchAbsentees]);
 
-  // Anwesenheit eines Spielers umschalten (an-/abwesend)
   const toggleAbsent = (match: Match, side: 'home' | 'away', playerName: string) => {
     setMatchAbsentees((prev) => {
       const cur = prev[match.id] ?? seedAbsentees(match);
       const list = side === 'home' ? cur.homeAbsent : cur.awayAbsent;
-      const nextList = list.includes(playerName)
-        ? list.filter((n) => n !== playerName)
-        : [...list, playerName];
+      const nextList = list.includes(playerName) ? list.filter((n) => n !== playerName) : [...list, playerName];
       return {
         ...prev,
         [match.id]: {
@@ -166,43 +161,50 @@ export default function Spielplan({
     });
   };
 
-  // Bearbeitung eines Spiels starten (Score + Torschützen aus dem gespeicherten Stand übernehmen)
-  const beginEdit = (match: Match) => {
-    setEditingScores((prev) =>
-      prev[match.id] !== undefined
-        ? prev
-        : {
-            ...prev,
-            [match.id]: {
-              home: match.homeScore?.toString() ?? '0',
-              away: match.awayScore?.toString() ?? '0',
-            },
-          }
-    );
-    setMatchScorers((prev) => (prev[match.id] ? prev : { ...prev, [match.id]: seedScorers(match) }));
-    setMatchAbsentees((prev) => (prev[match.id] ? prev : { ...prev, [match.id]: seedAbsentees(match) }));
-  };
-
-  // Bearbeitung abbrechen / lokalen Zustand verwerfen
-  const cancelEdit = (match: Match) => {
+  // Lokalen Bearbeitungszustand eines Spiels verwerfen
+  const clearLocal = (matchId: string) => {
     setEditingScores((prev) => {
-      const updated = { ...prev };
-      delete updated[match.id];
-      return updated;
+      const u = { ...prev };
+      delete u[matchId];
+      return u;
     });
     setMatchScorers((prev) => {
-      const updated = { ...prev };
-      delete updated[match.id];
-      return updated;
+      const u = { ...prev };
+      delete u[matchId];
+      return u;
     });
     setMatchAbsentees((prev) => {
-      const updated = { ...prev };
-      delete updated[match.id];
-      return updated;
+      const u = { ...prev };
+      delete u[matchId];
+      return u;
     });
   };
 
-  // Liveticker-Kern: Tor +1 / -1, ohne bereits erfasste Torschützen zu verlieren
+  // Verwalten-Popup öffnen: Spieldaten + Torschützen/Abwesende aus dem Speicherstand laden
+  const openManage = (match: Match) => {
+    setOpenMatchId(match.id);
+    // Ort gilt pro Spieltag: fehlt er am Spiel, den bereits am Spieltag hinterlegten Ort vorschlagen
+    const matchdayVenue = matches.find((m) => m.matchday === match.matchday && m.venue && m.venue.trim())?.venue?.trim() || '';
+    setMeta({
+      matchday: String(match.matchday),
+      date: match.date,
+      time: match.time,
+      homeTeamId: match.homeTeamId,
+      awayTeamId: match.awayTeamId,
+      venue: (match.venue && match.venue.trim()) || matchdayVenue,
+    });
+    setMatchScorers((prev) => (prev[match.id] ? prev : { ...prev, [match.id]: seedScorers(match) }));
+    setMatchAbsentees((prev) => (prev[match.id] ? prev : { ...prev, [match.id]: seedAbsentees(match) }));
+    setMetaSaved(false);
+  };
+
+  const closeManage = () => {
+    if (openMatchId) clearLocal(openMatchId);
+    setOpenMatchId(null);
+    setMeta(null);
+    setMetaSaved(false);
+  };
+
   const adjustGoals = (match: Match, side: 'home' | 'away', delta: number) => {
     setEditingScores((prev) => {
       const cur = prev[match.id] ?? {
@@ -236,64 +238,38 @@ export default function Spielplan({
     value: string
   ) => {
     setMatchScorers((prev) => {
-      // Falls noch nicht vorbefüllt: aus den gespeicherten Daten seeden, damit die
-      // übrigen bereits erfassten Torschützen nicht verloren gehen.
       const match = matches.find((m) => m.id === matchId);
       const current = prev[matchId] || (match ? seedScorers(match) : { homeScorers: [], awayScorers: [] });
       const updated = side === 'home' ? [...current.homeScorers] : [...current.awayScorers];
-
-      if (!updated[index]) {
-        updated[index] = { playerName: '', assistName: '' };
-      }
-      updated[index] = {
-        ...updated[index],
-        [field]: value
-      };
-
+      if (!updated[index]) updated[index] = { playerName: '', assistName: '' };
+      updated[index] = { ...updated[index], [field]: value };
       return {
         ...prev,
         [matchId]: {
           homeScorers: side === 'home' ? updated : current.homeScorers,
           awayScorers: side === 'away' ? updated : current.awayScorers,
-        }
+        },
       };
     });
   };
 
-  // Aktuellen Bearbeitungsstand speichern. Kann beliebig oft aufgerufen werden
-  // (Zwischenspeichern während ein Spiel live läuft). `close` schließt den Editor,
-  // `flash` zeigt kurz die "✓ Gespeichert"-Rückmeldung.
-  const commit = (
-    match: Match,
-    status: 'live' | 'beendet',
-    opts?: { close?: boolean; flash?: boolean }
-  ) => {
+  // Aktuellen Bearbeitungsstand speichern (beliebig oft während eines Live-Spiels).
+  const commit = (match: Match, status: 'live' | 'beendet', opts?: { flash?: boolean }) => {
     const edit = editingScores[match.id];
     const homeGoals = parseInt(edit?.home ?? String(match.homeScore ?? 0), 10) || 0;
     const awayGoals = parseInt(edit?.away ?? String(match.awayScore ?? 0), 10) || 0;
 
     const scorers: Scorer[] = [];
     const localScorers = matchScorers[match.id] || seedScorers(match);
-
     for (let i = 0; i < homeGoals; i++) {
       const pObj = localScorers.homeScorers[i] || { playerName: 'Unbekannt', assistName: '' };
-      scorers.push({
-        playerName: pObj.playerName || 'Unbekannt',
-        teamId: match.homeTeamId,
-        assistName: pObj.assistName || undefined,
-      });
+      scorers.push({ playerName: pObj.playerName || 'Unbekannt', teamId: match.homeTeamId, assistName: pObj.assistName || undefined });
     }
-
     for (let i = 0; i < awayGoals; i++) {
       const pObj = localScorers.awayScorers[i] || { playerName: 'Unbekannt', assistName: '' };
-      scorers.push({
-        playerName: pObj.playerName || 'Unbekannt',
-        teamId: match.awayTeamId,
-        assistName: pObj.assistName || undefined,
-      });
+      scorers.push({ playerName: pObj.playerName || 'Unbekannt', teamId: match.awayTeamId, assistName: pObj.assistName || undefined });
     }
 
-    // Abwesende (nur gültige Kaderspieler) zusammenstellen
     const localAbsent = matchAbsentees[match.id] || seedAbsentees(match);
     const homeRoster = new Set((getTeam(match.homeTeamId)?.spielerliste || []).map((p) => p.name));
     const awayRoster = new Set((getTeam(match.awayTeamId)?.spielerliste || []).map((p) => p.name));
@@ -303,36 +279,62 @@ export default function Spielplan({
     ];
 
     return Promise.resolve(onUpdateMatchScore(match.id, homeGoals, awayGoals, status, scorers, absentees)).then(() => {
-      if (opts?.close) cancelEdit(match);
       if (opts?.flash) flashSaved(match.id);
     });
   };
 
-  // Beendetes Spiel zurück auf "geplant" setzen (Ergebnis, Torschützen und Abwesenheiten verwerfen)
+  const finishMatch = (match: Match) => {
+    Promise.resolve(commit(match, 'beendet')).then(() => closeManage());
+  };
+
   const handleResetMatch = (matchId: string) => {
     onUpdateMatchScore(matchId, null, null, 'geplant', [], []);
-    setEditingScores((prev) => {
-      const updated = { ...prev };
-      delete updated[matchId];
-      return updated;
+    clearLocal(matchId);
+  };
+
+  const saveMeta = async () => {
+    if (!openMatch || !meta || !onUpdateMatchMeta) return;
+    const day = parseInt(meta.matchday, 10);
+    if (!day || day < 1) return alert('Bitte einen gültigen Spieltag angeben.');
+    if (!meta.homeTeamId || !meta.awayTeamId) return alert('Bitte Heim- und Auswärtsteam wählen.');
+    if (meta.homeTeamId === meta.awayTeamId) return alert('Ein Team kann nicht gegen sich selbst spielen.');
+    if (!meta.date) return alert('Bitte ein Datum wählen.');
+    if (!meta.time) return alert('Bitte eine Uhrzeit wählen.');
+    const ok = await onUpdateMatchMeta(openMatch.id, {
+      matchday: day,
+      date: meta.date,
+      time: meta.time,
+      homeTeamId: meta.homeTeamId,
+      awayTeamId: meta.awayTeamId,
+      venue: meta.venue.trim(),
     });
-    setMatchScorers((prev) => {
-      const updated = { ...prev };
-      delete updated[matchId];
-      return updated;
-    });
-    setMatchAbsentees((prev) => {
-      const updated = { ...prev };
-      delete updated[matchId];
-      return updated;
-    });
+    if (ok !== false) {
+      // Bei Team-Wechsel wurden Torschützen/Abwesende serverseitig verworfen → lokal neu laden
+      clearLocal(openMatch.id);
+      setMetaSaved(true);
+      setTimeout(() => setMetaSaved(false), 2500);
+    }
   };
 
   const selectClasses =
     'w-full bg-brand-dark border border-white/10 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-brand-accent-light cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed';
+  const metaField =
+    'w-full bg-brand-dark border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent-light [color-scheme:dark]';
 
   const resetHome = resetTarget ? getTeam(resetTarget.homeTeamId) : null;
   const resetAway = resetTarget ? getTeam(resetTarget.awayTeamId) : null;
+
+  // Editor-Ableitungen für das offene Spiel
+  const oHome = openMatch ? getTeam(openMatch.homeTeamId) : null;
+  const oAway = openMatch ? getTeam(openMatch.awayTeamId) : null;
+  const oCompleted = openMatch?.status === 'beendet';
+  const oLive = openMatch?.status === 'live';
+  const oHomeGoals = openMatch
+    ? parseInt(editingScores[openMatch.id]?.home ?? String(openMatch.homeScore ?? 0), 10) || 0
+    : 0;
+  const oAwayGoals = openMatch
+    ? parseInt(editingScores[openMatch.id]?.away ?? String(openMatch.awayScore ?? 0), 10) || 0
+    : 0;
 
   return (
     <div>
@@ -344,7 +346,7 @@ export default function Spielplan({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setResetTarget(null)}
-            className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
           >
             <motion.div
               initial={{ scale: 0.95, y: 15 }}
@@ -354,24 +356,18 @@ export default function Spielplan({
               className="relative w-full max-w-md bg-[#130B24] border-2 border-[rgba(255,84,66,.35)] rounded-2xl p-6 sm:p-8 shadow-2xl overflow-hidden"
             >
               <div className="absolute top-0 left-0 right-0 h-1 bg-hl-red" />
-
               <div className="flex items-center gap-3 text-hl-red-soft mb-4">
                 <AlertTriangle className="w-7 h-7 shrink-0" />
-                <h3 className="font-display font-black text-lg sm:text-xl uppercase tracking-tight">
-                  Ergebnis zurücksetzen?
-                </h3>
+                <h3 className="font-display font-black text-lg sm:text-xl uppercase tracking-tight">Ergebnis zurücksetzen?</h3>
               </div>
-
               <p className="text-xs text-gray-300 font-sans leading-relaxed mb-6">
                 Das Spiel{' '}
                 <strong className="text-white">
                   {resetHome?.name ?? '?'} {resetTarget.homeScore ?? 0}:{resetTarget.awayScore ?? 0} {resetAway?.name ?? '?'}
                 </strong>{' '}
-                wird auf <strong className="text-white">„geplant"</strong> zurückgesetzt. Das eingetragene Ergebnis und
-                alle Torschützen gehen dabei verloren, und die Tabelle wird neu berechnet. Das kann nicht rückgängig
-                gemacht werden.
+                wird auf <strong className="text-white">„geplant"</strong> zurückgesetzt. Das eingetragene Ergebnis und alle
+                Torschützen gehen dabei verloren, und die Tabelle wird neu berechnet. Das kann nicht rückgängig gemacht werden.
               </p>
-
               <div className="flex gap-3">
                 <button
                   type="button"
@@ -397,6 +393,349 @@ export default function Spielplan({
         )}
       </AnimatePresence>
 
+      {/* Verwalten-Popup für ein einzelnes Spiel */}
+      <AnimatePresence>
+        {openMatch && oHome && oAway && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={closeManage}
+            className="fixed inset-0 z-[60] flex items-start sm:items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md overflow-y-auto"
+          >
+            <motion.div
+              initial={{ scale: 0.97, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.97, y: 15 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-2xl my-4 bg-[#0c1413] border border-white/12 rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto"
+            >
+              {/* Kopf */}
+              <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-5 py-4 bg-[#0c1413]/95 backdrop-blur border-b border-white/10">
+                <div className="flex items-center gap-2 min-w-0">
+                  <TeamCrest name={oHome.name} shortName={oHome.shortName} color={oHome.logoColor} logoUrl={oHome.logoUrl} size="sm" />
+                  <span className="font-display font-black text-sm sm:text-base text-white uppercase tracking-tight truncate">
+                    {oHome.name} <span className="text-hl-faint">vs</span> {oAway.name}
+                  </span>
+                  <TeamCrest name={oAway.name} shortName={oAway.shortName} color={oAway.logoColor} logoUrl={oAway.logoUrl} size="sm" />
+                </div>
+                <button
+                  type="button"
+                  onClick={closeManage}
+                  className="shrink-0 p-1.5 text-hl-mute hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+                  title="Schließen"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-6">
+                {/* Spieldaten (Metadaten) */}
+                {onUpdateMatchMeta && meta && (
+                  <div className="bg-[rgba(255,255,255,.02)] border border-white/[.07] rounded-xl p-4 space-y-3">
+                    <div className="flex items-center gap-1.5 text-xs font-sans text-brand-accent-light uppercase tracking-wider font-bold">
+                      <Pencil className="w-3.5 h-3.5" /> Spieldaten
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div>
+                        <label className="block text-[10px] text-hl-faint font-sans mb-1 uppercase tracking-wider">Spieltag</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={99}
+                          value={meta.matchday}
+                          onChange={(e) => setMeta({ ...meta, matchday: e.target.value })}
+                          className={metaField}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-hl-faint font-sans mb-1 uppercase tracking-wider">Datum</label>
+                        <input type="date" value={meta.date} onChange={(e) => setMeta({ ...meta, date: e.target.value })} className={metaField} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-hl-faint font-sans mb-1 uppercase tracking-wider">Uhrzeit</label>
+                        <input type="time" value={meta.time} onChange={(e) => setMeta({ ...meta, time: e.target.value })} className={metaField} />
+                      </div>
+                      <div className="flex items-end">
+                        <div className="flex items-center gap-2">
+                          {metaSaved && <span className="text-[11px] text-hl-green-soft font-sans font-bold">✓</span>}
+                          <button
+                            type="button"
+                            onClick={saveMeta}
+                            className="px-3 py-2 bg-white/[.06] hover:bg-white/[.12] border border-white/10 rounded-lg text-[11px] font-sans font-bold text-white uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap"
+                          >
+                            Speichern
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-hl-faint font-sans mb-1 uppercase tracking-wider">Heim</label>
+                        <select value={meta.homeTeamId} onChange={(e) => setMeta({ ...meta, homeTeamId: e.target.value })} className={metaField + ' cursor-pointer'}>
+                          {teams.map((t) => (
+                            <option key={t.id} value={t.id} disabled={t.id === meta.awayTeamId}>
+                              {t.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-hl-faint font-sans mb-1 uppercase tracking-wider">Auswärts</label>
+                        <select value={meta.awayTeamId} onChange={(e) => setMeta({ ...meta, awayTeamId: e.target.value })} className={metaField + ' cursor-pointer'}>
+                          {teams.map((t) => (
+                            <option key={t.id} value={t.id} disabled={t.id === meta.homeTeamId}>
+                              {t.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-span-2 sm:col-span-4">
+                        <label className="block text-[10px] text-hl-faint font-sans mb-1 uppercase tracking-wider">Spielort (Halle)</label>
+                        <input
+                          type="text"
+                          value={meta.venue}
+                          onChange={(e) => setMeta({ ...meta, venue: e.target.value })}
+                          placeholder="z.B. Halle Königsfeld"
+                          className={metaField}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-hl-faint font-sans">
+                      Änderst du die Teams eines bereits gespielten Spiels, werden dessen Torschützen zurückgesetzt.
+                    </p>
+                  </div>
+                )}
+
+                {/* Ergebnis & Live */}
+                <div className="bg-[rgba(34,223,201,.04)] rounded-xl border border-white/10 p-4 space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-xs font-sans text-brand-accent-light uppercase tracking-wider font-bold flex items-center gap-1.5">
+                      <span>⚽</span> Ergebnis &amp; Torschützen
+                    </h4>
+                    {oLive ? (
+                      <LiveTimer liveStartedAt={openMatch.liveStartedAt ?? undefined} />
+                    ) : oCompleted ? (
+                      <span className="px-2.5 py-1 rounded-md font-sans font-extrabold text-[9.5px] tracking-[1.2px] bg-white/[.06] text-hl-mute">BEENDET</span>
+                    ) : (
+                      <span className="px-2.5 py-1 rounded-md font-sans font-extrabold text-[9.5px] tracking-[1.2px] bg-[rgba(34,223,201,.12)] text-brand-accent-light">ANSTOSS</span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    {(['home', 'away'] as const).map((side) => {
+                      const team = side === 'home' ? oHome : oAway;
+                      const goals = side === 'home' ? oHomeGoals : oAwayGoals;
+                      return (
+                        <div key={side} className="space-y-3">
+                          <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
+                            <span className="text-xs font-semibold text-white truncate">Tore für {team.name}</span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => adjustGoals(openMatch, side, -1)}
+                                disabled={goals <= 0}
+                                className="w-6 h-6 rounded-md bg-brand-dark border border-white/15 text-hl-soft hover:text-white hover:border-white/30 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center cursor-pointer"
+                                aria-label="Tor abziehen"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <span className="w-6 text-center font-display font-black text-white text-base">{goals}</span>
+                              <button
+                                type="button"
+                                onClick={() => adjustGoals(openMatch, side, 1)}
+                                className="w-6 h-6 rounded-md bg-[rgba(34,223,201,.2)] border border-[rgba(34,223,201,.4)] text-brand-accent-light hover:bg-[rgba(34,223,201,.3)] flex items-center justify-center cursor-pointer"
+                                aria-label="Tor hinzufügen"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                          {Array.from({ length: goals }).map((_, i) => {
+                            const list = side === 'home' ? matchScorers[openMatch.id]?.homeScorers : matchScorers[openMatch.id]?.awayScorers;
+                            const selected = list?.[i] || { playerName: '', assistName: '' };
+                            return (
+                              <div key={`${side}-scorer-${i}`} className="p-2.5 bg-brand-dark/60 border border-white/5 rounded-lg space-y-1.5">
+                                <div className="text-[10px] font-sans font-semibold text-hl-dim">Tor {i + 1}:</div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="block text-[9px] text-hl-faint font-sans mb-0.5 uppercase tracking-wider">Torschütze</label>
+                                    <select
+                                      value={selected.playerName}
+                                      onChange={(e) => handleScorerSelect(openMatch.id, side, i, 'playerName', e.target.value)}
+                                      className={selectClasses}
+                                    >
+                                      <option value="">-- Wählen --</option>
+                                      {(team.spielerliste || []).map((p) => (
+                                        <option key={p.name} value={p.name}>{p.name}</option>
+                                      ))}
+                                      <option value="Eigentor">Eigentor (O.G.)</option>
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="block text-[9px] text-hl-faint font-sans mb-0.5 uppercase tracking-wider">Assist (Vorlage)</label>
+                                    <select
+                                      value={selected.assistName}
+                                      disabled={selected.playerName === 'Eigentor' || !selected.playerName}
+                                      onChange={(e) => handleScorerSelect(openMatch.id, side, i, 'assistName', e.target.value)}
+                                      className={selectClasses}
+                                    >
+                                      <option value="">-- Kein Assist --</option>
+                                      {(team.spielerliste || [])
+                                        .filter((p) => p.name !== selected.playerName)
+                                        .map((p) => (
+                                          <option key={p.name} value={p.name}>{p.name}</option>
+                                        ))}
+                                    </select>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {goals === 0 && (
+                            <div className="text-[10px] text-hl-faint font-sans italic">Noch keine Tore. Mit + ein Tor hinzufügen.</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Anwesenheit */}
+                  <div className="pt-3 border-t border-white/10 space-y-3">
+                    <div className="flex items-center gap-1.5 text-xs font-sans text-brand-accent-light uppercase tracking-wider font-bold">
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Anwesenheit</span>
+                    </div>
+                    <p className="text-[10px] text-hl-faint font-sans -mt-1.5 leading-relaxed">
+                      Standardmäßig zählt jeder Kaderspieler als eingesetzt. Tippe die Spieler an, die
+                      <strong className="text-hl-soft"> nicht mitgespielt</strong> haben – sie werden nicht als Einsatz gewertet.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {([['home', oHome], ['away', oAway]] as const).map(([side, team]) => {
+                        const roster = team.spielerliste || [];
+                        const seeded = seedAbsentees(openMatch);
+                        const absentList =
+                          side === 'home'
+                            ? matchAbsentees[openMatch.id]?.homeAbsent ?? seeded.homeAbsent
+                            : matchAbsentees[openMatch.id]?.awayAbsent ?? seeded.awayAbsent;
+                        return (
+                          <div key={side} className="space-y-1.5">
+                            <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-1.5">
+                              <span className="text-xs font-semibold text-white truncate">{team.name}</span>
+                              {absentList.length > 0 && (
+                                <span className="text-[10px] font-mono text-hl-red-soft shrink-0">
+                                  {absentList.length} fehlt{absentList.length === 1 ? '' : 'en'}
+                                </span>
+                              )}
+                            </div>
+                            {roster.length === 0 ? (
+                              <div className="text-[10px] text-hl-faint font-sans italic">Noch kein Kader gepflegt.</div>
+                            ) : (
+                              <div className="flex flex-wrap gap-1.5">
+                                {roster.map((p) => {
+                                  const absent = absentList.includes(p.name);
+                                  return (
+                                    <button
+                                      key={p.name}
+                                      type="button"
+                                      onClick={() => toggleAbsent(openMatch, side, p.name)}
+                                      title={absent ? 'Abwesend – tippen zum Einsetzen' : 'Dabei – tippen für „abwesend“'}
+                                      className={`px-2.5 py-1 rounded-md text-[11px] font-sans font-semibold border transition-colors cursor-pointer ${
+                                        absent
+                                          ? 'bg-transparent border-white/10 text-hl-faint line-through'
+                                          : 'bg-[rgba(67,229,160,.12)] border-[rgba(67,229,160,.3)] text-hl-green-soft'
+                                      }`}
+                                    >
+                                      {p.name}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Primär-Aktion + Statuswechsel */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/10">
+                    <span className="text-[10px] text-hl-faint font-sans max-w-[55%]">
+                      {oCompleted
+                        ? 'Korrekturen werden sofort für alle übernommen.'
+                        : oLive
+                        ? 'Zwischenspeichern – der Stand geht sofort live für alle.'
+                        : 'Stelle das Spiel LIVE, um während des Spiels Tore einzutragen.'}
+                    </span>
+                    <div className="flex items-center gap-2.5">
+                      <AnimatePresence>
+                        {savedFlash[openMatch.id] && (
+                          <motion.span
+                            initial={{ opacity: 0, x: 6 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0 }}
+                            className="text-[11px] font-sans font-bold text-hl-green-soft flex items-center gap-1"
+                          >
+                            <Check className="w-3.5 h-3.5" /> Gespeichert
+                          </motion.span>
+                        )}
+                      </AnimatePresence>
+                      {oLive || oCompleted ? (
+                        <button
+                          type="button"
+                          onClick={() => commit(openMatch, oCompleted ? 'beendet' : 'live', { flash: true })}
+                          className="flex items-center gap-1.5 text-xs font-sans font-bold text-[#06120f] bg-brand-accent-light hover:bg-brand-accent px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-lg shadow-brand-accent-light/20"
+                        >
+                          <Save className="w-4 h-4" />
+                          <span>Speichern</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => commit(openMatch, 'live', { flash: true })}
+                          className="flex items-center gap-1.5 text-xs font-sans font-bold text-white bg-hl-red hover:bg-[rgba(255,84,66,.85)] px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-lg shadow-[rgba(255,84,66,.25)]"
+                        >
+                          <Play className="w-4 h-4" />
+                          <span>LIVE setzen</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Statusleiste unten */}
+                  <div className="flex flex-wrap justify-end items-center gap-2 pt-3 border-t border-white/5">
+                    {oCompleted ? (
+                      <button
+                        type="button"
+                        onClick={() => setResetTarget(openMatch)}
+                        className="flex items-center gap-1 text-[11px] font-sans font-semibold text-hl-red-soft hover:text-white bg-[rgba(255,84,66,.1)] border border-[rgba(255,84,66,.2)] px-2.5 py-1.5 rounded-md cursor-pointer"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Zurücksetzen</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => finishMatch(openMatch)}
+                        className="flex items-center gap-1 text-[11px] font-sans font-bold text-hl-green-soft hover:text-white bg-[rgba(67,229,160,.15)] border border-[rgba(67,229,160,.3)] px-3 py-1.5 rounded-md cursor-pointer"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Spiel beenden</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={closeManage}
+                      className="text-[11px] font-sans font-semibold text-hl-dim hover:text-hl-soft px-3 py-1.5 cursor-pointer"
+                    >
+                      Schließen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {matches.length === 0 ? (
         <div className="hl-card text-center py-12 text-hl-mute font-sans text-sm">
           In dieser Saison sind noch keine Spiele angesetzt.
@@ -404,7 +743,7 @@ export default function Spielplan({
         </div>
       ) : (
         <>
-          {/* Spieltag-Navigation: Pfeile + Pill-Leiste */}
+          {/* Spieltag-Navigation */}
           <div className="flex items-center gap-2.5 mb-6">
             <button
               onClick={handlePrevMatchday}
@@ -414,7 +753,6 @@ export default function Spielplan({
             >
               ‹
             </button>
-
             <div ref={scrollContainerRef} className="flex-1 flex items-center gap-2 overflow-x-auto scroll-smooth py-0.5">
               {matchdays.map((day) => (
                 <button
@@ -431,7 +769,6 @@ export default function Spielplan({
                 </button>
               ))}
             </div>
-
             <button
               onClick={handleNextMatchday}
               disabled={activeIndex >= matchdays.length - 1}
@@ -442,28 +779,16 @@ export default function Spielplan({
             </button>
           </div>
 
-          {/* Match-Karten */}
+          {/* Match-Karten (kompakt) */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
             {matchdayMatches.map((match) => {
               const home = getTeam(match.homeTeamId);
               const away = getTeam(match.awayTeamId);
-
               if (!home || !away) return null;
-
-              const isLocalEditing = editingScores[match.id] !== undefined;
-              const currentHomeEdit = editingScores[match.id]?.home ?? match.homeScore?.toString() ?? '';
-              const currentAwayEdit = editingScores[match.id]?.away ?? match.awayScore?.toString() ?? '';
 
               const isCompleted = match.status === 'beendet';
               const isLive = match.status === 'live';
-              const isUpcoming = !isCompleted && !isLive && match.homeScore === null && !isLocalEditing;
-
-              // Admin darf ein nicht beendetes Spiel direkt bearbeiten (Liveticker); beendete erst nach Klick auf "Bearbeiten"
-              const showEditor = isAdmin && (isLocalEditing || !isCompleted);
-              const displayHome = isLocalEditing ? currentHomeEdit || '0' : match.homeScore ?? 0;
-              const displayAway = isLocalEditing ? currentAwayEdit || '0' : match.awayScore ?? 0;
-              const homeGoalsEdit = parseInt(currentHomeEdit || '0', 10) || 0;
-              const awayGoalsEdit = parseInt(currentAwayEdit || '0', 10) || 0;
+              const isUpcoming = match.status === 'geplant' && match.homeScore === null;
 
               return (
                 <div
@@ -482,13 +807,9 @@ export default function Spielplan({
                     {isLive ? (
                       <LiveTimer liveStartedAt={match.liveStartedAt ?? undefined} />
                     ) : isCompleted ? (
-                      <span className="px-2.5 py-1 rounded-md font-sans font-extrabold text-[9.5px] tracking-[1.2px] bg-white/[.06] text-hl-mute">
-                        BEENDET
-                      </span>
+                      <span className="px-2.5 py-1 rounded-md font-sans font-extrabold text-[9.5px] tracking-[1.2px] bg-white/[.06] text-hl-mute">BEENDET</span>
                     ) : (
-                      <span className="px-2.5 py-1 rounded-md font-sans font-extrabold text-[9.5px] tracking-[1.2px] bg-[rgba(34,223,201,.12)] text-brand-accent-light">
-                        ANSTOSS
-                      </span>
+                      <span className="px-2.5 py-1 rounded-md font-sans font-extrabold text-[9.5px] tracking-[1.2px] bg-[rgba(34,223,201,.12)] text-brand-accent-light">ANSTOSS</span>
                     )}
                   </div>
 
@@ -514,10 +835,10 @@ export default function Spielplan({
                     ) : (
                       <div
                         className={`min-w-[48px] sm:min-w-[64px] text-center font-display font-black text-2xl sm:text-3xl leading-none ${
-                          isLive || (isLocalEditing && !isCompleted) ? 'text-brand-accent-light' : 'text-white'
+                          isLive ? 'text-brand-accent-light' : 'text-white'
                         }`}
                       >
-                        {displayHome} : {displayAway}
+                        {match.homeScore ?? 0} : {match.awayScore ?? 0}
                       </div>
                     )}
 
@@ -537,347 +858,42 @@ export default function Spielplan({
                     </div>
                   </div>
 
-                  {/* Torschützen bei beendeten & laufenden Spielen (nicht während der Admin-Erfassung) */}
-                  {(isCompleted || isLive) && !showEditor && match.scorers && match.scorers.length > 0 && (
+                  {/* Torschützen bei beendeten & laufenden Spielen */}
+                  {(isCompleted || isLive) && match.scorers && match.scorers.length > 0 && (
                     <div className="mt-3.5 pt-3 border-t border-white/[.06] text-xs font-sans">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="text-right space-y-1">
-                          {match.scorers
-                            .filter(s => s.teamId === match.homeTeamId)
-                            .map((s, idx) => (
-                              <div key={idx} className="truncate text-hl-soft">
-                                <span className="font-semibold text-hl-text">{s.playerName}</span>
-                                {s.assistName && (
-                                  <span className="text-[10px] text-hl-dim ml-1 italic">(Vorlage: {s.assistName})</span>
-                                )}
-                                <span className="text-brand-accent-light text-[10px] ml-1.5">⚽</span>
-                              </div>
-                            ))}
+                          {match.scorers.filter((s) => s.teamId === match.homeTeamId).map((s, idx) => (
+                            <div key={idx} className="truncate text-hl-soft">
+                              <span className="font-semibold text-hl-text">{s.playerName}</span>
+                              {s.assistName && <span className="text-[10px] text-hl-dim ml-1 italic">(Vorlage: {s.assistName})</span>}
+                              <span className="text-brand-accent-light text-[10px] ml-1.5">⚽</span>
+                            </div>
+                          ))}
                         </div>
                         <div className="text-left space-y-1">
-                          {match.scorers
-                            .filter(s => s.teamId === match.awayTeamId)
-                            .map((s, idx) => (
-                              <div key={idx} className="truncate text-hl-soft">
-                                <span className="text-brand-accent-light text-[10px] mr-1.5">⚽</span>
-                                <span className="font-semibold text-hl-text">{s.playerName}</span>
-                                {s.assistName && (
-                                  <span className="text-[10px] text-hl-dim ml-1 italic">(Vorlage: {s.assistName})</span>
-                                )}
-                              </div>
-                            ))}
+                          {match.scorers.filter((s) => s.teamId === match.awayTeamId).map((s, idx) => (
+                            <div key={idx} className="truncate text-hl-soft">
+                              <span className="text-brand-accent-light text-[10px] mr-1.5">⚽</span>
+                              <span className="font-semibold text-hl-text">{s.playerName}</span>
+                              {s.assistName && <span className="text-[10px] text-hl-dim ml-1 italic">(Vorlage: {s.assistName})</span>}
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* Erfassungs-Panel (Admin) – Liveticker mit +/- Steppern */}
-                  {showEditor && (
-                    <div className="mt-4 p-4 bg-[rgba(34,223,201,.04)] rounded-xl border border-white/10 space-y-4">
-                      <h4 className="text-xs font-sans text-brand-accent-light uppercase tracking-wider font-bold flex items-center gap-1.5">
-                        <span>⚽</span> Tore erfassen &amp; Torschützen zuweisen
-                      </h4>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        {/* Heim-Tore */}
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
-                            <span className="text-xs font-semibold text-white truncate">Tore für {home.name}</span>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => adjustGoals(match, 'home', -1)}
-                                disabled={homeGoalsEdit <= 0}
-                                className="w-6 h-6 rounded-md bg-brand-dark border border-white/15 text-hl-soft hover:text-white hover:border-white/30 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center cursor-pointer"
-                                aria-label="Tor abziehen"
-                              >
-                                <Minus className="w-3.5 h-3.5" />
-                              </button>
-                              <span className="w-6 text-center font-display font-black text-white text-base">{homeGoalsEdit}</span>
-                              <button
-                                type="button"
-                                onClick={() => adjustGoals(match, 'home', 1)}
-                                className="w-6 h-6 rounded-md bg-[rgba(34,223,201,.2)] border border-[rgba(34,223,201,.4)] text-brand-accent-light hover:bg-[rgba(34,223,201,.3)] flex items-center justify-center cursor-pointer"
-                                aria-label="Tor hinzufügen"
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                          {Array.from({ length: homeGoalsEdit }).map((_, i) => {
-                            const selectedScorerObj = matchScorers[match.id]?.homeScorers[i] || { playerName: '', assistName: '' };
-                            return (
-                              <div key={`home-scorer-${i}`} className="p-2.5 bg-brand-dark/60 border border-white/5 rounded-lg space-y-1.5">
-                                <div className="text-[10px] font-sans font-semibold text-hl-dim">Tor {i + 1}:</div>
-                                <div className="grid grid-cols-2 gap-2">
-                                  <div>
-                                    <label className="block text-[9px] text-hl-faint font-sans mb-0.5 uppercase tracking-wider">Torschütze</label>
-                                    <select
-                                      value={selectedScorerObj.playerName}
-                                      onChange={(e) => handleScorerSelect(match.id, 'home', i, 'playerName', e.target.value)}
-                                      className={selectClasses}
-                                    >
-                                      <option value="">-- Wählen --</option>
-                                      {home.spielerliste && home.spielerliste.map((p) => (
-                                        <option key={p.name} value={p.name}>{p.name}</option>
-                                      ))}
-                                      <option value="Eigentor">Eigentor (O.G.)</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label className="block text-[9px] text-hl-faint font-sans mb-0.5 uppercase tracking-wider">Assist (Vorlage)</label>
-                                    <select
-                                      value={selectedScorerObj.assistName}
-                                      disabled={selectedScorerObj.playerName === 'Eigentor' || !selectedScorerObj.playerName}
-                                      onChange={(e) => handleScorerSelect(match.id, 'home', i, 'assistName', e.target.value)}
-                                      className={selectClasses}
-                                    >
-                                      <option value="">-- Kein Assist --</option>
-                                      {home.spielerliste && home.spielerliste
-                                        .filter(p => p.name !== selectedScorerObj.playerName)
-                                        .map((p) => (
-                                          <option key={p.name} value={p.name}>{p.name}</option>
-                                        ))}
-                                    </select>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                          {homeGoalsEdit === 0 && (
-                            <div className="text-[10px] text-hl-faint font-sans italic">Noch keine Tore. Mit + ein Tor hinzufügen.</div>
-                          )}
-                        </div>
-
-                        {/* Auswärts-Tore */}
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-2">
-                            <span className="text-xs font-semibold text-white truncate">Tore für {away.name}</span>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => adjustGoals(match, 'away', -1)}
-                                disabled={awayGoalsEdit <= 0}
-                                className="w-6 h-6 rounded-md bg-brand-dark border border-white/15 text-hl-soft hover:text-white hover:border-white/30 disabled:opacity-30 disabled:pointer-events-none flex items-center justify-center cursor-pointer"
-                                aria-label="Tor abziehen"
-                              >
-                                <Minus className="w-3.5 h-3.5" />
-                              </button>
-                              <span className="w-6 text-center font-display font-black text-white text-base">{awayGoalsEdit}</span>
-                              <button
-                                type="button"
-                                onClick={() => adjustGoals(match, 'away', 1)}
-                                className="w-6 h-6 rounded-md bg-[rgba(34,223,201,.2)] border border-[rgba(34,223,201,.4)] text-brand-accent-light hover:bg-[rgba(34,223,201,.3)] flex items-center justify-center cursor-pointer"
-                                aria-label="Tor hinzufügen"
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                          {Array.from({ length: awayGoalsEdit }).map((_, i) => {
-                            const selectedScorerObj = matchScorers[match.id]?.awayScorers[i] || { playerName: '', assistName: '' };
-                            return (
-                              <div key={`away-scorer-${i}`} className="p-2.5 bg-brand-dark/60 border border-white/5 rounded-lg space-y-1.5">
-                                <div className="text-[10px] font-sans font-semibold text-hl-dim">Tor {i + 1}:</div>
-                                <div className="grid grid-cols-2 gap-2">
-                                  <div>
-                                    <label className="block text-[9px] text-hl-faint font-sans mb-0.5 uppercase tracking-wider">Torschütze</label>
-                                    <select
-                                      value={selectedScorerObj.playerName}
-                                      onChange={(e) => handleScorerSelect(match.id, 'away', i, 'playerName', e.target.value)}
-                                      className={selectClasses}
-                                    >
-                                      <option value="">-- Wählen --</option>
-                                      {away.spielerliste && away.spielerliste.map((p) => (
-                                        <option key={p.name} value={p.name}>{p.name}</option>
-                                      ))}
-                                      <option value="Eigentor">Eigentor (O.G.)</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label className="block text-[9px] text-hl-faint font-sans mb-0.5 uppercase tracking-wider">Assist (Vorlage)</label>
-                                    <select
-                                      value={selectedScorerObj.assistName}
-                                      disabled={selectedScorerObj.playerName === 'Eigentor' || !selectedScorerObj.playerName}
-                                      onChange={(e) => handleScorerSelect(match.id, 'away', i, 'assistName', e.target.value)}
-                                      className={selectClasses}
-                                    >
-                                      <option value="">-- Kein Assist --</option>
-                                      {away.spielerliste && away.spielerliste
-                                        .filter(p => p.name !== selectedScorerObj.playerName)
-                                        .map((p) => (
-                                          <option key={p.name} value={p.name}>{p.name}</option>
-                                        ))}
-                                    </select>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                          {awayGoalsEdit === 0 && (
-                            <div className="text-[10px] text-hl-faint font-sans italic">Noch keine Tore. Mit + ein Tor hinzufügen.</div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Anwesenheit: nicht eingesetzte Spieler abwählen, damit die Einsatz-Statistik stimmt */}
-                      <div className="pt-3 border-t border-white/10 space-y-3">
-                        <div className="flex items-center gap-1.5 text-xs font-sans text-brand-accent-light uppercase tracking-wider font-bold">
-                          <Users className="w-3.5 h-3.5" />
-                          <span>Anwesenheit</span>
-                        </div>
-                        <p className="text-[10px] text-hl-faint font-sans -mt-1.5 leading-relaxed">
-                          Standardmäßig zählt jeder Kaderspieler als eingesetzt. Tippe die Spieler an, die
-                          <strong className="text-hl-soft"> nicht mitgespielt</strong> haben – sie werden ausgegraut und
-                          nicht als Einsatz gewertet.
-                        </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {([['home', home], ['away', away]] as const).map(([side, team]) => {
-                            const roster = team.spielerliste || [];
-                            const seeded = seedAbsentees(match);
-                            const absentList =
-                              side === 'home'
-                                ? matchAbsentees[match.id]?.homeAbsent ?? seeded.homeAbsent
-                                : matchAbsentees[match.id]?.awayAbsent ?? seeded.awayAbsent;
-                            return (
-                              <div key={side} className="space-y-1.5">
-                                <div className="flex items-center justify-between gap-2 border-b border-white/5 pb-1.5">
-                                  <span className="text-xs font-semibold text-white truncate">{team.name}</span>
-                                  {absentList.length > 0 && (
-                                    <span className="text-[10px] font-mono text-hl-red-soft shrink-0">
-                                      {absentList.length} fehlt{absentList.length === 1 ? '' : 'en'}
-                                    </span>
-                                  )}
-                                </div>
-                                {roster.length === 0 ? (
-                                  <div className="text-[10px] text-hl-faint font-sans italic">
-                                    Noch kein Kader gepflegt (im Backoffice unter „Club &amp; Kader").
-                                  </div>
-                                ) : (
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {roster.map((p) => {
-                                      const absent = absentList.includes(p.name);
-                                      return (
-                                        <button
-                                          key={p.name}
-                                          type="button"
-                                          onClick={() => toggleAbsent(match, side, p.name)}
-                                          title={absent ? 'Abwesend – tippen zum Einsetzen' : 'Dabei – tippen für „abwesend“'}
-                                          className={`px-2.5 py-1 rounded-md text-[11px] font-sans font-semibold border transition-colors cursor-pointer ${
-                                            absent
-                                              ? 'bg-transparent border-white/10 text-hl-faint line-through'
-                                              : 'bg-[rgba(67,229,160,.12)] border-[rgba(67,229,160,.3)] text-hl-green-soft'
-                                          }`}
-                                        >
-                                          {p.name}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Primär-Aktion: geplant → LIVE setzen · live → Zwischenspeichern · beendet → Korrektur speichern */}
-                      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/10">
-                        <span className="text-[10px] text-hl-faint font-sans max-w-[60%]">
-                          {isCompleted
-                            ? 'Korrekturen werden sofort für alle übernommen.'
-                            : isLive
-                            ? 'Zwischenspeichern – der Stand geht sofort live für alle. So oft du willst.'
-                            : 'Stelle das Spiel LIVE, um während des Spiels Tore einzutragen.'}
-                        </span>
-                        <div className="flex items-center gap-2.5">
-                          <AnimatePresence>
-                            {savedFlash[match.id] && (
-                              <motion.span
-                                initial={{ opacity: 0, x: 6 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0 }}
-                                className="text-[11px] font-sans font-bold text-hl-green-soft flex items-center gap-1"
-                              >
-                                <Check className="w-3.5 h-3.5" /> Gespeichert
-                              </motion.span>
-                            )}
-                          </AnimatePresence>
-                          {isLive || isCompleted ? (
-                            <button
-                              type="button"
-                              onClick={() => commit(match, isCompleted ? 'beendet' : 'live', { flash: true })}
-                              className="flex items-center gap-1.5 text-xs font-sans font-bold text-[#06120f] bg-brand-accent-light hover:bg-brand-accent px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-lg shadow-brand-accent-light/20"
-                            >
-                              <Save className="w-4 h-4" />
-                              <span>Speichern</span>
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => commit(match, 'live', { flash: true })}
-                              className="flex items-center gap-1.5 text-xs font-sans font-bold text-white bg-hl-red hover:bg-[rgba(255,84,66,.85)] px-4 py-2 rounded-lg cursor-pointer transition-colors shadow-lg shadow-[rgba(255,84,66,.25)]"
-                            >
-                              <Play className="w-4 h-4" />
-                              <span>LIVE setzen</span>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Admin-Aktionsleiste */}
+                  {/* Admin: Verwalten-Button öffnet das Popup */}
                   {isAdmin && (
-                    <div className="mt-3 pt-3 border-t border-white/5 flex flex-wrap justify-end items-center gap-2">
-                      {isCompleted && !isLocalEditing ? (
-                        <>
-                          <button
-                            onClick={() => beginEdit(match)}
-                            className="flex items-center space-x-1 text-[11px] font-sans font-semibold text-hl-soft hover:text-white bg-white/5 border border-white/10 px-2.5 py-1 rounded-md cursor-pointer"
-                          >
-                            <Pencil className="w-3 h-3" />
-                            <span>Ergebnis bearbeiten</span>
-                          </button>
-                          <button
-                            onClick={() => setResetTarget(match)}
-                            className="flex items-center space-x-1 text-[11px] font-sans font-semibold text-hl-red-soft hover:text-white bg-[rgba(255,84,66,.1)] border border-[rgba(255,84,66,.2)] px-2.5 py-1 rounded-md cursor-pointer"
-                          >
-                            <RotateCcw className="w-3 h-3" />
-                            <span>Zurücksetzen</span>
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          {isLocalEditing && (
-                            <button
-                              type="button"
-                              onClick={() => cancelEdit(match)}
-                              className="text-[11px] font-sans font-semibold text-hl-dim hover:text-hl-soft px-2 py-1 cursor-pointer"
-                            >
-                              {isCompleted ? 'Bearbeitung schließen' : 'Abbrechen'}
-                            </button>
-                          )}
-                          {isCompleted ? (
-                            <button
-                              onClick={() => setResetTarget(match)}
-                              className="flex items-center space-x-1 text-[11px] font-sans font-semibold text-hl-red-soft hover:text-white bg-[rgba(255,84,66,.1)] border border-[rgba(255,84,66,.2)] px-2.5 py-1 rounded-md cursor-pointer"
-                            >
-                              <RotateCcw className="w-3 h-3" />
-                              <span>Zurücksetzen</span>
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => commit(match, 'beendet', { close: true })}
-                              className="flex items-center space-x-1 text-[11px] font-sans font-bold text-hl-green-soft hover:text-white bg-[rgba(67,229,160,.15)] border border-[rgba(67,229,160,.3)] px-3 py-1 rounded-md cursor-pointer"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                              <span>Spiel beenden</span>
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openManage(match)}
+                      className="mt-3.5 w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-white/[.04] hover:bg-white/[.08] border border-white/10 text-[12px] font-sans font-bold uppercase tracking-wider text-hl-soft hover:text-white transition-colors cursor-pointer"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>{isLive ? 'Live verwalten' : isCompleted ? 'Ergebnis bearbeiten' : 'Spiel verwalten'}</span>
+                    </button>
                   )}
                 </div>
               );

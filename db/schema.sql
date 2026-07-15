@@ -31,6 +31,8 @@ CREATE TABLE matches (
   status          TEXT NOT NULL DEFAULT 'geplant' CHECK (status IN ('geplant', 'live', 'beendet')),
   date            TEXT NOT NULL,
   time            TEXT NOT NULL,
+  -- Spielort/Halle des Spieltag-Abends (z.B. "Halle Königsfeld"), optional.
+  venue           TEXT,
   -- Feld/Platz (z.B. 1 oder 2) und Zeitfenster im Ligaabend – aus dem Excel-Import.
   -- Nullable: manuell angesetzte Spiele brauchen diese Werte nicht.
   field           INTEGER,

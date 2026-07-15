@@ -59,10 +59,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const normalized = email.trim().toLowerCase();
 
       const user = await getUserByEmail(normalized);
-      // Aus Datenschutzgründen immer „ok" antworten – nie verraten, ob die E-Mail existiert.
+      // Für dieses interne Backoffice ist eine klare Rückmeldung gewünscht,
+      // wenn die E-Mail keinen (aktiven) Zugang hat.
       if (!user || !user.isActive) {
         await sleep(400);
-        return res.json({ ok: true });
+        return res.status(404).json({ error: 'Für diese E-Mail besteht kein Admin-Zugang. Bitte wende dich an einen Super-Admin.' });
       }
 
       // Throttle: kürzlich erzeugten Code nicht sofort erneut versenden

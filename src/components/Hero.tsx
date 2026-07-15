@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActiveTab, Match, PlayerOfMonth, Team } from '../types';
 import { apiFetch } from '../lib/api';
+import { MapPin } from 'lucide-react';
 import { calculateStandings } from '../lib/standings';
-import { TeamCrest, shortDate, useLiveMinute } from './ui';
+import { TeamCrest, shortDate } from './ui';
 
 interface HeroProps {
   teams: Team[];
@@ -30,23 +31,26 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate }: HeroPr
 
   const getTeam = (id: string) => teams.find((t) => t.id === id);
 
-  // Featured Match: live > nächstes geplantes > letztes beendetes
-  const featured = useMemo(() => {
-    const live = matches.find((m) => m.status === 'live');
-    if (live) return { match: live, kind: 'live' as const };
-    const upcoming = [...matches]
-      .filter((m) => m.status === 'geplant')
-      .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))[0];
-    if (upcoming) return { match: upcoming, kind: 'upcoming' as const };
-    const finished = [...matches]
-      .filter((m) => m.status === 'beendet')
-      .sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))[0];
-    if (finished) return { match: finished, kind: 'finished' as const };
+  // Vorgestellter Spieltag (Abend): live > nächster geplanter > letzter beendeter.
+  // Es spielen mehrere Teams parallel an einem Abend – daher der ganze Spieltag statt ein Einzelspiel.
+  const featuredDay = useMemo(() => {
+    if (matches.length === 0) return null;
+    const byDay = (day: number) =>
+      matches
+        .filter((m) => m.matchday === day)
+        .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`) || (a.field ?? 0) - (b.field ?? 0));
+
+    const live = [...matches].filter((m) => m.status === 'live').sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+    if (live.length) return { day: live[0].matchday, kind: 'live' as const, matches: byDay(live[0].matchday) };
+
+    const upcoming = [...matches].filter((m) => m.status === 'geplant').sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+    if (upcoming.length) return { day: upcoming[0].matchday, kind: 'upcoming' as const, matches: byDay(upcoming[0].matchday) };
+
+    const finished = [...matches].filter((m) => m.status === 'beendet').sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
+    if (finished.length) return { day: finished[0].matchday, kind: 'finished' as const, matches: byDay(finished[0].matchday) };
+
     return null;
   }, [matches]);
-
-  // Live-Minute des vorgestellten Spiels (nur wenn es tatsächlich live ist)
-  const featuredLiveMinute = useLiveMinute(featured?.kind === 'live' ? featured.match.liveStartedAt : null);
 
   const standings = useMemo(() => calculateStandings(teams, matches), [teams, matches]);
   const leader = standings[0];
@@ -55,12 +59,12 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate }: HeroPr
   // Slides dynamisch zusammenstellen – nur, was Daten hat
   const slides = useMemo(() => {
     const list: ('match' | 'pom' | 'table')[] = [];
-    if (featured) list.push('match');
+    if (featuredDay) list.push('match');
     if (pom) list.push('pom');
     if (hasTable) list.push('table');
     if (list.length === 0) list.push('match'); // leerer Zustand
     return list;
-  }, [featured, pom, hasTable]);
+  }, [featuredDay, pom, hasTable]);
 
   const count = slides.length;
   const current = active % count;
@@ -101,18 +105,35 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate }: HeroPr
 
   const dotLabels: Record<string, string> = { match: 'SPIELTAG', pom: 'SPIELER DES MONATS', table: 'TABELLE' };
 
-  // ---------- Slide 1: Spieltag ----------
+  // ---------- Slide 1: Spieltag (Abend-Übersicht) ----------
   const renderMatchSlide = () => {
-    const home = featured ? getTeam(featured.match.homeTeamId) : undefined;
-    const away = featured ? getTeam(featured.match.awayTeamId) : undefined;
+    const dayMatches = featuredDay?.matches ?? [];
+    const first = dayMatches[0];
+    const venue = dayMatches.find((m) => m.venue && m.venue.trim())?.venue?.trim() || '';
+    const dateLong = first
+      ? new Date(first.date).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long' })
+      : '';
+    const dateShortWd = first
+      ? new Date(first.date).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'long' })
+      : '';
+    const cnt = dayMatches.length;
+    const games = cnt === 1 ? 'Begegnung' : 'Begegnungen';
 
-    const kicker = !featured
+    const kicker = !featuredDay
       ? `SAISON ${seasonLabel || ''}`
-      : featured.kind === 'live'
-      ? 'JETZT LIVE · SPIELTAG ' + featured.match.matchday
-      : featured.kind === 'upcoming'
-      ? `NÄCHSTER SPIELTAG · SPIELTAG ${featured.match.matchday}`
-      : `LETZTES SPIEL · SPIELTAG ${featured.match.matchday}`;
+      : featuredDay.kind === 'live'
+      ? `JETZT LIVE · SPIELTAG ${featuredDay.day}`
+      : featuredDay.kind === 'upcoming'
+      ? 'NÄCHSTER SPIELTAG'
+      : 'LETZTER SPIELTAG';
+
+    const intro = !featuredDay
+      ? ''
+      : featuredDay.kind === 'live'
+      ? `Der ${featuredDay.day}. Spieltag läuft gerade${venue ? ` in ${venue}` : ''} — ${cnt} ${games} an einem Abend. Verfolge die Ergebnisse live.`
+      : featuredDay.kind === 'upcoming'
+      ? `Der ${featuredDay.day}. Spieltag der Hero League steigt am ${dateLong}${first ? ` ab ${first.time} Uhr` : ''}${venue ? ` in ${venue}` : ''} — ${cnt} ${games} an einem Abend.`
+      : `Der ${featuredDay.day}. Spieltag ist gespielt${venue ? ` in ${venue}` : ''} — alle Ergebnisse und die Tabelle findest du hier.`;
 
     return (
       <>
@@ -131,24 +152,14 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate }: HeroPr
                 <span className="w-[7px] h-[7px] rounded-full bg-brand-accent-light shadow-[0_0_10px_#22DFC9] hl-pulse" />
                 <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-brand-accent-light">{kicker}</span>
               </div>
-              {featured && home && away ? (
+              {featuredDay ? (
                 <>
-                  <h1 className="mt-5 font-display font-black text-5xl sm:text-7xl xl:text-[92px] leading-[.85] tracking-tight uppercase text-white">
-                    {home.name}
+                  <h1 className="mt-5 font-display font-black text-6xl sm:text-7xl xl:text-[92px] leading-[.85] tracking-tight uppercase text-white">
+                    {featuredDay.day}.
                     <br />
-                    <span className="inline-block text-[.42em] tracking-[2px] text-hl-magenta-soft align-middle my-[.1em] mx-[.3em] normal-case">
-                      gegen
-                    </span>
-                    <br />
-                    {away.name}
+                    <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">Spieltag</span>
                   </h1>
-                  <p className="mt-5 max-w-[440px] text-[16.5px] leading-relaxed text-hl-soft">
-                    {featured.kind === 'live'
-                      ? 'Das Spiel läuft — verfolge den Stand live im Spielplan.'
-                      : featured.kind === 'upcoming'
-                      ? `Spieltag ${featured.match.matchday} der Hero League — Anstoß am ${new Date(featured.match.date).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long' })} um ${featured.match.time} Uhr.`
-                      : 'Der letzte Spieltag ist gespielt — alle Ergebnisse und die Tabelle findest du hier.'}
-                  </p>
+                  <p className="mt-5 max-w-[460px] text-[16.5px] leading-relaxed text-hl-soft">{intro}</p>
                 </>
               ) : (
                 <>
@@ -172,41 +183,70 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate }: HeroPr
               </div>
             </div>
 
-            {featured && home && away && (
-              <div className="flex-none w-full max-w-[328px] relative rounded-[22px] overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,.5)]">
+            {featuredDay && first && (
+              <div className="flex-none w-full max-w-[368px] relative rounded-[22px] overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,.5)]">
                 <div className="absolute inset-0 bg-[linear-gradient(140deg,rgba(34,223,201,.16),rgba(232,62,140,.1)_62%,rgba(255,255,255,.02))] pointer-events-none" />
                 <div className="relative bg-[rgba(11,17,17,.5)] border border-white/[.12] rounded-[22px] p-[22px] backdrop-blur-2xl">
-                  <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
                     <span className="font-sans font-extrabold text-[10.5px] tracking-[2px] text-brand-accent-light uppercase">
-                      {new Date(featured.match.date).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'long' })}
+                      {dateShortWd}
                     </span>
                     <span className="font-sans font-bold text-[10px] tracking-[1.5px] text-hl-magenta-soft px-2 py-[3px] rounded-md bg-[rgba(232,62,140,.14)]">
-                      SPIELTAG {featured.match.matchday}
+                      {featuredDay.kind === 'live' ? 'LIVE' : `SPIELTAG ${featuredDay.day}`}
                     </span>
                   </div>
-                  <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-                    <div className="flex flex-col items-center gap-2.5">
-                      <TeamCrest name={home.name} shortName={home.shortName} color={home.logoColor} logoUrl={home.logoUrl} size="xl" />
-                      <span className="font-sans font-bold text-[12.5px] text-hl-text text-center leading-tight">{home.name}</span>
+                  {venue && (
+                    <div className="flex items-center gap-1.5 text-[11.5px] text-hl-soft font-sans mb-3">
+                      <MapPin className="w-3.5 h-3.5 text-brand-accent-light shrink-0" />
+                      <span className="truncate">{venue}</span>
                     </div>
-                    <div className="font-display font-black text-3xl text-brand-accent-light leading-none">
-                      {featured.kind === 'upcoming' ? 'VS' : `${featured.match.homeScore ?? 0}:${featured.match.awayScore ?? 0}`}
-                    </div>
-                    <div className="flex flex-col items-center gap-2.5">
-                      <TeamCrest name={away.name} shortName={away.shortName} color={away.logoColor} logoUrl={away.logoUrl} size="xl" />
-                      <span className="font-sans font-bold text-[12.5px] text-hl-text text-center leading-tight">{away.name}</span>
-                    </div>
+                  )}
+                  <div className="border-t border-white/[.08]">
+                    {dayMatches.slice(0, 5).map((m) => {
+                      const h = getTeam(m.homeTeamId);
+                      const a = getTeam(m.awayTeamId);
+                      if (!h || !a) return null;
+                      const isL = m.status === 'live';
+                      const isF = m.status === 'beendet';
+                      return (
+                        <div key={m.id} className="flex items-center gap-2 py-2 border-b border-white/[.06] last:border-0">
+                          <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
+                            <span title={h.name} className="font-sans font-bold text-[12px] text-hl-text truncate">{h.shortName || h.name}</span>
+                            <TeamCrest name={h.name} shortName={h.shortName} color={h.logoColor} logoUrl={h.logoUrl} size="sm" />
+                          </div>
+                          <div className="w-[54px] shrink-0 flex flex-col items-center">
+                            {isL || isF ? (
+                              <span className={`font-display font-black text-[15px] leading-none ${isL ? 'text-brand-accent-light' : 'text-white'}`}>
+                                {m.homeScore ?? 0}:{m.awayScore ?? 0}
+                              </span>
+                            ) : (
+                              <span className="font-mono font-semibold text-[12px] text-hl-soft leading-none">{m.time}</span>
+                            )}
+                            {isL ? (
+                              <span className="mt-1 flex items-center gap-1 text-[8px] font-sans font-extrabold tracking-[1px] text-hl-red-soft">
+                                <span className="w-[5px] h-[5px] bg-hl-red rounded-full hl-pulse" /> LIVE
+                              </span>
+                            ) : m.field ? (
+                              <span className="mt-1 text-[8.5px] font-sans font-semibold tracking-[.5px] text-hl-faint uppercase">Feld {m.field}</span>
+                            ) : null}
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                            <TeamCrest name={a.name} shortName={a.shortName} color={a.logoColor} logoUrl={a.logoUrl} size="sm" />
+                            <span title={a.name} className="font-sans font-bold text-[12px] text-hl-text truncate">{a.shortName || a.name}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div className="text-center mt-5 pt-4 border-t border-white/[.08]">
-                    <div className="font-display font-black text-3xl text-white leading-none">
-                      {featured.kind === 'live'
-                        ? `LIVE${featuredLiveMinute ? ` ${featuredLiveMinute}'` : ''}`
-                        : featured.match.time}
-                    </div>
-                    <div className="font-sans font-semibold text-[10.5px] tracking-[2px] text-hl-dim mt-1.5 uppercase">
-                      {shortDate(featured.match.date)} · HERO LEAGUE
-                    </div>
-                  </div>
+                  {cnt > 5 && (
+                    <div className="text-center text-[11px] text-hl-dim font-sans mt-2">+{cnt - 5} weitere Spiele</div>
+                  )}
+                  <button
+                    onClick={() => onNavigate('spielplan')}
+                    className="mt-3.5 w-full flex items-center justify-center gap-1.5 py-2 rounded-[11px] bg-white/[.05] hover:bg-[rgba(34,223,201,.1)] border border-white/[.12] hover:border-brand-accent-light/40 text-[11.5px] font-sans font-bold uppercase tracking-wider text-hl-soft hover:text-white transition-colors cursor-pointer"
+                  >
+                    Zum Spieltag · {shortDate(first.date)}
+                  </button>
                 </div>
               </div>
             )}

@@ -4,7 +4,7 @@ import { requireAdmin } from '../_lib/auth.js';
 import { badRequest, isDateString, isNonEmptyString, isTimeString } from '../_lib/validate.js';
 
 const createMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
-  const { matchday, homeTeamId, awayTeamId, date, time } = req.body ?? {};
+  const { matchday, homeTeamId, awayTeamId, date, time, venue } = req.body ?? {};
 
   if (typeof matchday !== 'number' || !Number.isInteger(matchday) || matchday < 1 || matchday > 99) {
     return badRequest(res, 'Ungültiger Spieltag (1–99).');
@@ -17,12 +17,25 @@ const createMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse)
   }
   if (!isDateString(date)) return badRequest(res, 'Ungültiges Datum (JJJJ-MM-TT).');
   if (!isTimeString(time)) return badRequest(res, 'Ungültige Uhrzeit (HH:MM).');
+  if (venue !== undefined && typeof venue !== 'string') return badRequest(res, 'Ungültiger Spielort.');
+  const venueValue = typeof venue === 'string' && venue.trim() ? venue.trim() : null;
 
   const teams = await sql`SELECT id FROM teams WHERE id IN (${homeTeamId}, ${awayTeamId})`;
   if (teams.length !== 2) return badRequest(res, 'Mindestens ein Team existiert nicht.');
 
   const season = await getCurrentSeason();
   if (!season) return res.status(500).json({ error: 'Keine aktive Saison vorhanden.' });
+
+  // Ort gilt pro Spieltag: ohne Eingabe den bereits am Spieltag hinterlegten Ort übernehmen
+  let finalVenue = venueValue;
+  if (!finalVenue) {
+    const existing = await sql`
+      SELECT venue FROM matches
+      WHERE season_id = ${season.id} AND matchday = ${matchday} AND venue IS NOT NULL AND venue <> ''
+      LIMIT 1
+    `;
+    finalVenue = (existing[0]?.venue as string) ?? null;
+  }
 
   const match = {
     id: `m-${Date.now()}`,
@@ -35,13 +48,22 @@ const createMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse)
     status: 'geplant' as const,
     date,
     time,
+    venue: finalVenue,
     scorers: [],
   };
 
   await sql`
-    INSERT INTO matches (id, season_id, matchday, home_team_id, away_team_id, home_score, away_score, status, date, time, scorers)
-    VALUES (${match.id}, ${match.seasonId}, ${match.matchday}, ${match.homeTeamId}, ${match.awayTeamId}, null, null, ${match.status}, ${match.date}, ${match.time}, '[]'::jsonb)
+    INSERT INTO matches (id, season_id, matchday, home_team_id, away_team_id, home_score, away_score, status, date, time, venue, scorers)
+    VALUES (${match.id}, ${match.seasonId}, ${match.matchday}, ${match.homeTeamId}, ${match.awayTeamId}, null, null, ${match.status}, ${match.date}, ${match.time}, ${match.venue}, '[]'::jsonb)
   `;
+
+  // Wurde ein Ort eingegeben, gilt er für den ganzen Spieltag → auf die übrigen Spiele übernehmen
+  if (venueValue) {
+    await sql`
+      UPDATE matches SET venue = ${venueValue}
+      WHERE season_id = ${season.id} AND matchday = ${matchday} AND id <> ${match.id}
+    `;
+  }
 
   return res.json(match);
 });

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Plus, Trash2, CalendarDays } from 'lucide-react';
+import { Plus, Trash2, CalendarDays, ChevronDown } from 'lucide-react';
 import { Match, Team } from '../types';
 
 interface MatchManagerProps {
@@ -11,6 +11,7 @@ interface MatchManagerProps {
     awayTeamId: string;
     date: string;
     time: string;
+    venue: string;
   }) => Promise<boolean>;
   onDeleteMatch: (matchId: string) => Promise<boolean>;
 }
@@ -23,7 +24,24 @@ export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch
   const [awayTeamId, setAwayTeamId] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('15:30');
+  // null = noch nicht angefasst → dann wird der zuletzt genutzte Ort vorgeschlagen
+  const [venue, setVenue] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Ort gilt pro Spieltag: für den gewählten Spieltag bereits hinterlegten Ort bevorzugen,
+  // sonst den zuletzt genutzten Ort vorschlagen.
+  const suggestedVenue = useMemo(() => {
+    const day = parseInt(matchday, 10);
+    const dayVenue = matches.find((m) => m.matchday === day && m.venue && m.venue.trim())?.venue?.trim();
+    if (dayVenue) return dayVenue;
+    const withVenue = matches.filter((m) => m.venue && m.venue.trim());
+    withVenue.sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
+    return withVenue[0]?.venue?.trim() ?? '';
+  }, [matches, matchday]);
+  const venueValue = venue ?? suggestedVenue;
+
+  // Ein-/ausgeklappte Spieltage (explizit gesetzte Werte überschreiben die Voreinstellung)
+  const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
 
   const matchesByMatchday = useMemo(() => {
     const grouped = new Map<number, Match[]>();
@@ -36,6 +54,13 @@ export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch
       });
     return grouped;
   }, [matches]);
+
+  const days = [...matchesByMatchday.keys()];
+  const latestDay = days.length ? Math.max(...days) : 0;
+  // Voreinstellung: nur der neueste Spieltag offen, ältere zugeklappt
+  const isCollapsed = (day: number) => collapsed[day] ?? day !== latestDay;
+  const toggleDay = (day: number) => setCollapsed((prev) => ({ ...prev, [day]: !isCollapsed(day) }));
+  const setAll = (value: boolean) => setCollapsed(Object.fromEntries(days.map((d) => [d, value])));
 
   const teamName = (id: string) => teams.find((t) => t.id === id)?.name ?? id;
 
@@ -60,11 +85,12 @@ export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch
     }
 
     setIsSubmitting(true);
-    const ok = await onAddMatch({ matchday: day, homeTeamId, awayTeamId, date, time });
+    const ok = await onAddMatch({ matchday: day, homeTeamId, awayTeamId, date, time, venue: venueValue.trim() });
     setIsSubmitting(false);
     if (ok) {
       setHomeTeamId('');
       setAwayTeamId('');
+      setVenue(null); // wieder auf „zuletzt genutzt" zurückfallen
     }
   };
 
@@ -128,30 +154,62 @@ export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch
           <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">Uhrzeit</label>
           <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={inputClass} />
         </div>
+        <div className="col-span-2 md:col-span-6">
+          <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
+            Spielort (Halle){suggestedVenue && venue === null ? ' · Vorschlag' : ''}
+          </label>
+          <input
+            type="text"
+            value={venueValue}
+            onChange={(e) => setVenue(e.target.value)}
+            placeholder="z.B. Halle Königsfeld"
+            className={inputClass}
+          />
+        </div>
         <button
           type="submit"
           disabled={isSubmitting}
-          className="col-span-2 md:col-span-1 px-4 py-2.5 bg-brand-accent-light hover:bg-brand-accent disabled:opacity-50 rounded-xl text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center justify-center gap-1.5 cursor-pointer"
+          className="col-span-2 md:col-span-6 px-4 py-2.5 bg-brand-accent-light hover:bg-brand-accent disabled:opacity-50 rounded-xl text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center justify-center gap-1.5 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Ansetzen</span>
         </button>
       </form>
 
-      {/* Bestehende Spiele je Spieltag */}
+      {/* Bestehende Spiele je Spieltag (einklappbar) */}
       {matchesByMatchday.size === 0 ? (
         <p className="text-sm text-gray-400 font-sans text-center py-6">
           Noch keine Spiele in dieser Saison. Setze oben das erste Spiel an.
         </p>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-3">
+          {days.length > 1 && (
+            <div className="flex items-center justify-end gap-3 text-[11px] font-sans font-semibold uppercase tracking-wider">
+              <button type="button" onClick={() => setAll(false)} className="text-hl-dim hover:text-brand-accent-light transition-colors cursor-pointer">
+                Alle aufklappen
+              </button>
+              <span className="text-white/10">·</span>
+              <button type="button" onClick={() => setAll(true)} className="text-hl-dim hover:text-brand-accent-light transition-colors cursor-pointer">
+                Alle einklappen
+              </button>
+            </div>
+          )}
           {[...matchesByMatchday.entries()].map(([day, dayMatches]) => (
-            <div key={day}>
-              <h4 className="flex items-center gap-2 text-xs font-mono font-bold text-gray-300 uppercase tracking-wider mb-2">
-                <CalendarDays className="w-4 h-4 text-brand-accent-light" />
-                {day}. Spieltag
-              </h4>
-              <div className="space-y-1.5">
+            <div key={day} className="border border-white/[.07] rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleDay(day)}
+                className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-white/[.03] hover:bg-white/[.06] transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2 text-xs font-mono font-bold text-gray-300 uppercase tracking-wider">
+                  <CalendarDays className="w-4 h-4 text-brand-accent-light" />
+                  {day}. Spieltag
+                  <span className="text-[10px] font-sans text-gray-500 normal-case">({dayMatches.length} Spiele)</span>
+                </span>
+                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isCollapsed(day) ? '' : 'rotate-180'}`} />
+              </button>
+              {!isCollapsed(day) && (
+              <div className="space-y-1.5 p-2.5">
                 {dayMatches.map((m) => (
                   <div
                     key={m.id}
@@ -187,6 +245,7 @@ export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch
                   </div>
                 ))}
               </div>
+              )}
             </div>
           ))}
         </div>
