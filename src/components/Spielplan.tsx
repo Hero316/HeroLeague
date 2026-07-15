@@ -29,7 +29,7 @@ interface SpielplanProps {
   ) => void | Promise<unknown>;
   onUpdateMatchMeta?: (
     matchId: string,
-    data: { matchday: number; date: string; time: string; homeTeamId: string; awayTeamId: string }
+    data: { matchday: number; date: string; time: string; homeTeamId: string; awayTeamId: string; venue: string }
   ) => void | Promise<unknown>;
   onSelectTeam?: (teamId: string) => void;
 }
@@ -98,6 +98,7 @@ export default function Spielplan({
     time: string;
     homeTeamId: string;
     awayTeamId: string;
+    venue: string;
   } | null>(null);
   const [metaSaved, setMetaSaved] = useState(false);
 
@@ -188,6 +189,7 @@ export default function Spielplan({
       time: match.time,
       homeTeamId: match.homeTeamId,
       awayTeamId: match.awayTeamId,
+      venue: match.venue ?? '',
     });
     setMatchScorers((prev) => (prev[match.id] ? prev : { ...prev, [match.id]: seedScorers(match) }));
     setMatchAbsentees((prev) => (prev[match.id] ? prev : { ...prev, [match.id]: seedAbsentees(match) }));
@@ -302,6 +304,7 @@ export default function Spielplan({
       time: meta.time,
       homeTeamId: meta.homeTeamId,
       awayTeamId: meta.awayTeamId,
+      venue: meta.venue.trim(),
     });
     if (ok !== false) {
       // Bei Team-Wechsel wurden Torschützen/Abwesende serverseitig verworfen → lokal neu laden
@@ -482,6 +485,16 @@ export default function Spielplan({
                             </option>
                           ))}
                         </select>
+                      </div>
+                      <div className="col-span-2 sm:col-span-4">
+                        <label className="block text-[10px] text-hl-faint font-sans mb-1 uppercase tracking-wider">Spielort (Halle)</label>
+                        <input
+                          type="text"
+                          value={meta.venue}
+                          onChange={(e) => setMeta({ ...meta, venue: e.target.value })}
+                          placeholder="z.B. Halle Königsfeld"
+                          className={metaField}
+                        />
                       </div>
                     </div>
                     <p className="text-[10px] text-hl-faint font-sans">

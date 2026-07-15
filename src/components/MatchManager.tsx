@@ -11,6 +11,7 @@ interface MatchManagerProps {
     awayTeamId: string;
     date: string;
     time: string;
+    venue: string;
   }) => Promise<boolean>;
   onDeleteMatch: (matchId: string) => Promise<boolean>;
 }
@@ -23,7 +24,16 @@ export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch
   const [awayTeamId, setAwayTeamId] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('15:30');
+  // null = noch nicht angefasst → dann wird der zuletzt genutzte Ort vorgeschlagen
+  const [venue, setVenue] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const lastVenue = useMemo(() => {
+    const withVenue = matches.filter((m) => m.venue && m.venue.trim());
+    withVenue.sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`));
+    return withVenue[0]?.venue ?? '';
+  }, [matches]);
+  const venueValue = venue ?? lastVenue;
 
   // Ein-/ausgeklappte Spieltage (explizit gesetzte Werte überschreiben die Voreinstellung)
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
@@ -70,11 +80,12 @@ export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch
     }
 
     setIsSubmitting(true);
-    const ok = await onAddMatch({ matchday: day, homeTeamId, awayTeamId, date, time });
+    const ok = await onAddMatch({ matchday: day, homeTeamId, awayTeamId, date, time, venue: venueValue.trim() });
     setIsSubmitting(false);
     if (ok) {
       setHomeTeamId('');
       setAwayTeamId('');
+      setVenue(null); // wieder auf „zuletzt genutzt" zurückfallen
     }
   };
 
@@ -138,10 +149,22 @@ export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch
           <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">Uhrzeit</label>
           <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={inputClass} />
         </div>
+        <div className="col-span-2 md:col-span-6">
+          <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
+            Spielort (Halle){lastVenue && !venue ? ' · zuletzt vorgeschlagen' : ''}
+          </label>
+          <input
+            type="text"
+            value={venueValue}
+            onChange={(e) => setVenue(e.target.value)}
+            placeholder="z.B. Halle Königsfeld"
+            className={inputClass}
+          />
+        </div>
         <button
           type="submit"
           disabled={isSubmitting}
-          className="col-span-2 md:col-span-1 px-4 py-2.5 bg-brand-accent-light hover:bg-brand-accent disabled:opacity-50 rounded-xl text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center justify-center gap-1.5 cursor-pointer"
+          className="col-span-2 md:col-span-6 px-4 py-2.5 bg-brand-accent-light hover:bg-brand-accent disabled:opacity-50 rounded-xl text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center justify-center gap-1.5 cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>Ansetzen</span>

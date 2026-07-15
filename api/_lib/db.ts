@@ -31,7 +31,7 @@ export async function getMatches(): Promise<Match[]> {
   const rows = await sql`
     SELECT id, season_id AS "seasonId", matchday, home_team_id AS "homeTeamId",
            away_team_id AS "awayTeamId", home_score AS "homeScore", away_score AS "awayScore",
-           status, date, time, field, slot, import_ref AS "importRef",
+           status, date, time, venue, field, slot, import_ref AS "importRef",
            scorers, absentees, live_started_at AS "liveStartedAt"
     FROM matches ORDER BY matchday, date, time, id
   `;

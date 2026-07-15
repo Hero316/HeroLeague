@@ -4,7 +4,7 @@ import { requireAdmin } from '../_lib/auth.js';
 import { badRequest, isDateString, isNonEmptyString, isTimeString } from '../_lib/validate.js';
 
 const createMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
-  const { matchday, homeTeamId, awayTeamId, date, time } = req.body ?? {};
+  const { matchday, homeTeamId, awayTeamId, date, time, venue } = req.body ?? {};
 
   if (typeof matchday !== 'number' || !Number.isInteger(matchday) || matchday < 1 || matchday > 99) {
     return badRequest(res, 'Ungültiger Spieltag (1–99).');
@@ -17,6 +17,8 @@ const createMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse)
   }
   if (!isDateString(date)) return badRequest(res, 'Ungültiges Datum (JJJJ-MM-TT).');
   if (!isTimeString(time)) return badRequest(res, 'Ungültige Uhrzeit (HH:MM).');
+  if (venue !== undefined && typeof venue !== 'string') return badRequest(res, 'Ungültiger Spielort.');
+  const venueValue = typeof venue === 'string' && venue.trim() ? venue.trim() : null;
 
   const teams = await sql`SELECT id FROM teams WHERE id IN (${homeTeamId}, ${awayTeamId})`;
   if (teams.length !== 2) return badRequest(res, 'Mindestens ein Team existiert nicht.');
@@ -35,12 +37,13 @@ const createMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse)
     status: 'geplant' as const,
     date,
     time,
+    venue: venueValue,
     scorers: [],
   };
 
   await sql`
-    INSERT INTO matches (id, season_id, matchday, home_team_id, away_team_id, home_score, away_score, status, date, time, scorers)
-    VALUES (${match.id}, ${match.seasonId}, ${match.matchday}, ${match.homeTeamId}, ${match.awayTeamId}, null, null, ${match.status}, ${match.date}, ${match.time}, '[]'::jsonb)
+    INSERT INTO matches (id, season_id, matchday, home_team_id, away_team_id, home_score, away_score, status, date, time, venue, scorers)
+    VALUES (${match.id}, ${match.seasonId}, ${match.matchday}, ${match.homeTeamId}, ${match.awayTeamId}, null, null, ${match.status}, ${match.date}, ${match.time}, ${match.venue}, '[]'::jsonb)
   `;
 
   return res.json(match);

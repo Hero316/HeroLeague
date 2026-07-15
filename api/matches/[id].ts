@@ -14,7 +14,7 @@ import {
 
 const updateMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
   const id = String(req.query.id);
-  const { homeScore, awayScore, status, scorers, absentees, matchday, date, time, homeTeamId, awayTeamId } =
+  const { homeScore, awayScore, status, scorers, absentees, matchday, date, time, homeTeamId, awayTeamId, venue } =
     req.body ?? {};
 
   if (homeScore !== undefined && !isOptionalScore(homeScore)) return badRequest(res, 'Ungültiges Heim-Ergebnis.');
@@ -29,11 +29,12 @@ const updateMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse)
   if (time !== undefined && !isTimeString(time)) return badRequest(res, 'Ungültige Uhrzeit (HH:MM).');
   if (homeTeamId !== undefined && !isNonEmptyString(homeTeamId)) return badRequest(res, 'Ungültiges Heimteam.');
   if (awayTeamId !== undefined && !isNonEmptyString(awayTeamId)) return badRequest(res, 'Ungültiges Auswärtsteam.');
+  if (venue !== undefined && venue !== null && typeof venue !== 'string') return badRequest(res, 'Ungültiger Spielort.');
 
   const rows = await sql`
     SELECT id, season_id AS "seasonId", matchday, home_team_id AS "homeTeamId",
            away_team_id AS "awayTeamId", home_score AS "homeScore", away_score AS "awayScore",
-           status, date, time, scorers, absentees, live_started_at AS "liveStartedAt"
+           status, date, time, venue, scorers, absentees, live_started_at AS "liveStartedAt"
     FROM matches WHERE id = ${id}
   `;
   if (rows.length === 0) return res.status(404).json({ error: 'Spiel nicht gefunden.' });
@@ -77,6 +78,7 @@ const updateMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse)
   if (matchday !== undefined) match.matchday = matchday;
   if (date !== undefined) match.date = date;
   if (time !== undefined) match.time = time;
+  if (venue !== undefined) match.venue = typeof venue === 'string' && venue.trim() ? venue.trim() : null;
   match.homeTeamId = nextHome;
   match.awayTeamId = nextAway;
 
@@ -92,7 +94,7 @@ const updateMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse)
         scorers = ${JSON.stringify(match.scorers ?? [])}::jsonb,
         absentees = ${JSON.stringify(match.absentees ?? [])}::jsonb,
         live_started_at = ${match.liveStartedAt},
-        matchday = ${match.matchday}, date = ${match.date}, time = ${match.time},
+        matchday = ${match.matchday}, date = ${match.date}, time = ${match.time}, venue = ${match.venue ?? null},
         home_team_id = ${match.homeTeamId}, away_team_id = ${match.awayTeamId}
     WHERE id = ${id}
   `;

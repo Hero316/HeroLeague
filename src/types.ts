@@ -37,6 +37,7 @@ export interface Match {
   date: string; // 'YYYY-MM-DD'
   time: string; // 'HH:MM'
   status: 'geplant' | 'live' | 'beendet';
+  venue?: string | null; // Spielort/Halle des Spieltag-Abends, z.B. "Halle Königsfeld"
   field?: number | null; // Feld/Platz (z.B. 1 oder 2), aus dem Spielplan-Import
   slot?: number | null; // Zeitfenster im Ligaabend, aus dem Spielplan-Import
   importRef?: string | null; // Spiel-ID aus der Import-Datei, z.B. "HL-001"

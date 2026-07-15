@@ -150,7 +150,7 @@ export default function App() {
 
   const handleUpdateMatchMeta = (
     matchId: string,
-    data: { matchday: number; date: string; time: string; homeTeamId: string; awayTeamId: string }
+    data: { matchday: number; date: string; time: string; homeTeamId: string; awayTeamId: string; venue: string }
   ) =>
     runAdminAction(() =>
       apiFetch(`/api/matches/${matchId}`, { method: 'PUT', body: JSON.stringify(data) })
@@ -173,6 +173,7 @@ export default function App() {
     awayTeamId: string;
     date: string;
     time: string;
+    venue: string;
   }) => runAdminAction(() => apiFetch('/api/matches', { method: 'POST', body: JSON.stringify(data) }));
 
   const handleDeleteMatch = (matchId: string) =>
