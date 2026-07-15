@@ -5,6 +5,7 @@ import {
   badRequest,
   isAbsenteesArray,
   isBestPlayersArray,
+  isGoalkeepersArray,
   isDateString,
   isNonEmptyString,
   isOptionalScore,
@@ -15,7 +16,7 @@ import {
 
 const updateMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
   const id = String(req.query.id);
-  const { homeScore, awayScore, status, scorers, absentees, bestPlayers, matchday, date, time, homeTeamId, awayTeamId, venue } =
+  const { homeScore, awayScore, status, scorers, absentees, bestPlayers, goalkeepers, matchday, date, time, homeTeamId, awayTeamId, venue } =
     req.body ?? {};
 
   if (homeScore !== undefined && !isOptionalScore(homeScore)) return badRequest(res, 'Ungültiges Heim-Ergebnis.');
@@ -24,6 +25,7 @@ const updateMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse)
   if (scorers !== undefined && !isScorersArray(scorers)) return badRequest(res, 'Ungültiges Torschützen-Format.');
   if (absentees !== undefined && !isAbsenteesArray(absentees)) return badRequest(res, 'Ungültiges Abwesenheits-Format.');
   if (bestPlayers !== undefined && !isBestPlayersArray(bestPlayers)) return badRequest(res, 'Ungültiges Format für „Bester Spieler".');
+  if (goalkeepers !== undefined && !isGoalkeepersArray(goalkeepers)) return badRequest(res, 'Ungültiges Torwart-Format.');
   if (matchday !== undefined && (!Number.isInteger(matchday) || matchday < 1 || matchday > 99)) {
     return badRequest(res, 'Ungültiger Spieltag (1–99).');
   }
@@ -37,7 +39,7 @@ const updateMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse)
     SELECT id, season_id AS "seasonId", matchday, home_team_id AS "homeTeamId",
            away_team_id AS "awayTeamId", home_score AS "homeScore", away_score AS "awayScore",
            status, date, time, venue, scorers, absentees, best_players AS "bestPlayers",
-           live_started_at AS "liveStartedAt"
+           goalkeepers, live_started_at AS "liveStartedAt"
     FROM matches WHERE id = ${id}
   `;
   if (rows.length === 0) return res.status(404).json({ error: 'Spiel nicht gefunden.' });
@@ -79,6 +81,18 @@ const updateMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse)
     }
     match.bestPlayers = bestPlayers;
   }
+  if (goalkeepers !== undefined) {
+    if (!goalkeepers.every((g: { teamId: string }) => validTeamIds.includes(g.teamId))) {
+      return badRequest(res, 'Torwart muss zu einem der beiden Teams gehören.');
+    }
+    if (
+      goalkeepers.filter((g: { teamId: string }) => g.teamId === nextHome).length > 1 ||
+      goalkeepers.filter((g: { teamId: string }) => g.teamId === nextAway).length > 1
+    ) {
+      return badRequest(res, 'Pro Team ist nur ein Torwart erlaubt.');
+    }
+    match.goalkeepers = goalkeepers;
+  }
 
   if (homeScore !== undefined) match.homeScore = homeScore;
   if (awayScore !== undefined) match.awayScore = awayScore;
@@ -97,11 +111,12 @@ const updateMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse)
   match.homeTeamId = nextHome;
   match.awayTeamId = nextAway;
 
-  // Bei Team-Wechsel sind alte Torschützen/Abwesenheiten/beste Spieler nicht mehr gültig (falscher Team-Bezug)
+  // Bei Team-Wechsel sind alte Torschützen/Abwesenheiten/beste Spieler/Torhüter nicht mehr gültig (falscher Team-Bezug)
   if (teamsChanged) {
     if (scorers === undefined) match.scorers = [];
     if (absentees === undefined) match.absentees = [];
     if (bestPlayers === undefined) match.bestPlayers = [];
+    if (goalkeepers === undefined) match.goalkeepers = [];
   }
 
   await sql`
@@ -110,6 +125,7 @@ const updateMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse)
         scorers = ${JSON.stringify(match.scorers ?? [])}::jsonb,
         absentees = ${JSON.stringify(match.absentees ?? [])}::jsonb,
         best_players = ${JSON.stringify(match.bestPlayers ?? [])}::jsonb,
+        goalkeepers = ${JSON.stringify(match.goalkeepers ?? [])}::jsonb,
         live_started_at = ${match.liveStartedAt},
         matchday = ${match.matchday}, date = ${match.date}, time = ${match.time}, venue = ${match.venue ?? null},
         home_team_id = ${match.homeTeamId}, away_team_id = ${match.awayTeamId}

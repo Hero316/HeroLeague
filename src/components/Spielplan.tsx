@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Play, Check, RotateCcw, Plus, Minus, Pencil, Save, AlertTriangle, Users, X, Star } from 'lucide-react';
-import { Absence, BestPlayer, Match, Scorer, Team } from '../types';
+import { Play, Check, RotateCcw, Plus, Minus, Pencil, Save, AlertTriangle, Users, X, Star, Hand } from 'lucide-react';
+import { Absence, BestPlayer, Goalkeeper, Match, Scorer, Team } from '../types';
 import { TeamCrest, shortDate, useLiveMinute } from './ui';
 
 export function LiveTimer({ liveStartedAt }: { liveStartedAt?: string | null }) {
@@ -26,7 +26,8 @@ interface SpielplanProps {
     status: 'geplant' | 'live' | 'beendet',
     scorers?: Scorer[],
     absentees?: Absence[],
-    bestPlayers?: BestPlayer[]
+    bestPlayers?: BestPlayer[],
+    goalkeepers?: Goalkeeper[]
   ) => void | Promise<unknown>;
   onUpdateMatchMeta?: (
     matchId: string,
@@ -93,6 +94,11 @@ export default function Spielplan({
     [matchId: string]: { home: string; away: string };
   }>({});
 
+  // Lokal gewählter Torwart je Team (Spielername oder '') je Spiel
+  const [matchGoalkeepers, setMatchGoalkeepers] = useState<{
+    [matchId: string]: { home: string; away: string };
+  }>({});
+
   const [savedFlash, setSavedFlash] = useState<{ [matchId: string]: boolean }>({});
   const [resetTarget, setResetTarget] = useState<Match | null>(null);
 
@@ -145,6 +151,31 @@ export default function Spielplan({
     away: (match.bestPlayers || []).find((b) => b.teamId === match.awayTeamId)?.playerName ?? '',
   });
 
+  // Reihenfolge der Spiele (wie in der DB): Spieltag, Datum, Uhrzeit, ID
+  const cmpMatches = (a: Match, b: Match) =>
+    a.matchday - b.matchday || a.date.localeCompare(b.date) || a.time.localeCompare(b.time) || a.id.localeCompare(b.id);
+
+  // Torwart eines Teams aus dem letzten FRÜHEREN Spiel übernehmen (Vorschlag für neue Spiele).
+  // Nur aus Spielen, die vor diesem liegen – so ändert ein späteres Spiel nie die Wertung früherer.
+  const carriedGoalkeeper = (teamId: string, match: Match): string => {
+    const earlier = matches
+      .filter((m) => (m.homeTeamId === teamId || m.awayTeamId === teamId) && cmpMatches(m, match) < 0)
+      .filter((m) => (m.goalkeepers || []).some((g) => g.teamId === teamId))
+      .sort(cmpMatches);
+    const last = earlier[earlier.length - 1];
+    return last ? (last.goalkeepers || []).find((g) => g.teamId === teamId)?.playerName ?? '' : '';
+  };
+
+  // Torwart je Team laden: gespeicherter Wert des Spiels, sonst Übernahme aus dem letzten früheren Spiel
+  const seedGoalkeepers = (match: Match) => ({
+    home:
+      (match.goalkeepers || []).find((g) => g.teamId === match.homeTeamId)?.playerName ??
+      carriedGoalkeeper(match.homeTeamId, match),
+    away:
+      (match.goalkeepers || []).find((g) => g.teamId === match.awayTeamId)?.playerName ??
+      carriedGoalkeeper(match.awayTeamId, match),
+  });
+
   // Solange das Popup offen ist, den lokalen Zustand aus den DB-Daten vorhalten
   // (auch nach automatischem Nachladen während eines Live-Spiels).
   useEffect(() => {
@@ -158,8 +189,11 @@ export default function Spielplan({
     if (matchBestPlayers[openMatch.id] === undefined) {
       setMatchBestPlayers((prev) => (prev[openMatch.id] === undefined ? { ...prev, [openMatch.id]: seedBestPlayers(openMatch) } : prev));
     }
+    if (matchGoalkeepers[openMatch.id] === undefined) {
+      setMatchGoalkeepers((prev) => (prev[openMatch.id] === undefined ? { ...prev, [openMatch.id]: seedGoalkeepers(openMatch) } : prev));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openMatch, isAdmin, matchScorers, matchAbsentees, matchBestPlayers]);
+  }, [openMatch, isAdmin, matchScorers, matchAbsentees, matchBestPlayers, matchGoalkeepers]);
 
   const toggleAbsent = (match: Match, side: 'home' | 'away', playerName: string) => {
     setMatchAbsentees((prev) => {
@@ -180,6 +214,14 @@ export default function Spielplan({
   const setBestPlayer = (match: Match, side: 'home' | 'away', playerName: string) => {
     setMatchBestPlayers((prev) => {
       const cur = prev[match.id] ?? seedBestPlayers(match);
+      return { ...prev, [match.id]: { ...cur, [side]: playerName } };
+    });
+  };
+
+  // Torwart eines Teams setzen (leer = keiner)
+  const setGoalkeeper = (match: Match, side: 'home' | 'away', playerName: string) => {
+    setMatchGoalkeepers((prev) => {
+      const cur = prev[match.id] ?? seedGoalkeepers(match);
       return { ...prev, [match.id]: { ...cur, [side]: playerName } };
     });
   };
@@ -206,6 +248,11 @@ export default function Spielplan({
       delete u[matchId];
       return u;
     });
+    setMatchGoalkeepers((prev) => {
+      const u = { ...prev };
+      delete u[matchId];
+      return u;
+    });
   };
 
   // Verwalten-Popup öffnen: Spieldaten + Torschützen/Abwesende aus dem Speicherstand laden
@@ -224,6 +271,7 @@ export default function Spielplan({
     setMatchScorers((prev) => (prev[match.id] ? prev : { ...prev, [match.id]: seedScorers(match) }));
     setMatchAbsentees((prev) => (prev[match.id] ? prev : { ...prev, [match.id]: seedAbsentees(match) }));
     setMatchBestPlayers((prev) => (prev[match.id] ? prev : { ...prev, [match.id]: seedBestPlayers(match) }));
+    setMatchGoalkeepers((prev) => (prev[match.id] ? prev : { ...prev, [match.id]: seedGoalkeepers(match) }));
     setMetaSaved(false);
   };
 
@@ -317,7 +365,19 @@ export default function Spielplan({
       bestPlayers.push({ playerName: localBest.away, teamId: match.awayTeamId });
     }
 
-    return Promise.resolve(onUpdateMatchScore(match.id, homeGoals, awayGoals, status, scorers, absentees, bestPlayers)).then(() => {
+    // Torwart je Team (nur gültige Kaderspieler; leere Auswahl weglassen)
+    const localGk = matchGoalkeepers[match.id] || seedGoalkeepers(match);
+    const goalkeepers: Goalkeeper[] = [];
+    if (localGk.home && homeRoster.has(localGk.home)) {
+      goalkeepers.push({ playerName: localGk.home, teamId: match.homeTeamId });
+    }
+    if (localGk.away && awayRoster.has(localGk.away)) {
+      goalkeepers.push({ playerName: localGk.away, teamId: match.awayTeamId });
+    }
+
+    return Promise.resolve(
+      onUpdateMatchScore(match.id, homeGoals, awayGoals, status, scorers, absentees, bestPlayers, goalkeepers)
+    ).then(() => {
       if (opts?.flash) flashSaved(match.id);
     });
   };
@@ -327,7 +387,7 @@ export default function Spielplan({
   };
 
   const handleResetMatch = (matchId: string) => {
-    onUpdateMatchScore(matchId, null, null, 'geplant', [], [], []);
+    onUpdateMatchScore(matchId, null, null, 'geplant', [], [], [], []);
     clearLocal(matchId);
   };
 
@@ -722,6 +782,48 @@ export default function Spielplan({
                               <select
                                 value={value}
                                 onChange={(e) => setBestPlayer(openMatch, side, e.target.value)}
+                                className={selectClasses}
+                              >
+                                <option value="">-- Kein --</option>
+                                {roster.map((p) => (
+                                  <option key={p.name} value={p.name}>{p.name}</option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Torwart je Team (optional) – „zu null" gibt Punkte für den Goldenen Handschuh */}
+                  <div className="pt-3 border-t border-white/10 space-y-3">
+                    <div className="flex items-center gap-1.5 text-xs font-sans text-brand-accent-light uppercase tracking-wider font-bold">
+                      <Hand className="w-3.5 h-3.5" />
+                      <span>Torwart</span>
+                    </div>
+                    <p className="text-[10px] text-hl-faint font-sans -mt-1.5 leading-relaxed">
+                      Wer stand im Tor? Wird für die nächsten Spiele <strong className="text-hl-soft">vorausgewählt</strong>,
+                      ist aber pro Spiel änderbar. Bleibt das Team ohne Gegentor („zu null"), gibt es einen Punkt für den
+                      Goldenen Handschuh.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {([['home', oHome], ['away', oAway]] as const).map(([side, team]) => {
+                        const seeded = seedGoalkeepers(openMatch);
+                        const value =
+                          side === 'home'
+                            ? matchGoalkeepers[openMatch.id]?.home ?? seeded.home
+                            : matchGoalkeepers[openMatch.id]?.away ?? seeded.away;
+                        const roster = team.spielerliste || [];
+                        return (
+                          <div key={side} className="space-y-1.5">
+                            <label className="block text-[9px] text-hl-faint font-sans uppercase tracking-wider">{team.name}</label>
+                            {roster.length === 0 ? (
+                              <div className="text-[10px] text-hl-faint font-sans italic">Noch kein Kader gepflegt.</div>
+                            ) : (
+                              <select
+                                value={value}
+                                onChange={(e) => setGoalkeeper(openMatch, side, e.target.value)}
                                 className={selectClasses}
                               >
                                 <option value="">-- Kein --</option>

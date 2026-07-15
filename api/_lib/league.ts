@@ -2,11 +2,12 @@ import type { Match, PlayerStat, Team } from '../../src/types';
 
 // Punktegewichte der Ballon-d'Or-Wertung, in Zehnteln als Ganzzahl gerechnet,
 // um Fließkomma-Rundungsfehler (0,1 + 0,2 ≠ 0,3) zu vermeiden.
-const PTS_GOAL = 8; // 0,8 pro Tor
-const PTS_ASSIST = 6; // 0,6 pro Vorlage
+const PTS_GOAL = 5; // 0,5 pro Tor
+const PTS_ASSIST = 3; // 0,3 pro Vorlage
 const PTS_MOTM = 10; // 1,0 als bester Spieler des Spiels
-const PTS_WIN = 4; // 0,4 pro eingesetztem Spieler bei Sieg
-const PTS_DRAW = 2; // 0,2 pro eingesetztem Spieler bei Unentschieden
+const PTS_GK_CLEAN = 5; // 0,5 für den Torwart bei „zu null" (Team ohne Gegentor)
+const PTS_WIN = 3; // 0,3 pro eingesetztem Spieler bei Sieg
+const PTS_DRAW = 1; // 0,1 pro eingesetztem Spieler bei Unentschieden
 
 // Spielerstatistiken (Tore, Assists, Einsätze, MOTM, Wertungspunkte) aus Kadern und den
 // Torschützen-/Bester-Spieler-Einträgen der beendeten Spiele ableiten – nie manuell gepflegt.
@@ -26,6 +27,9 @@ export function calculatePlayers(teams: Team[], matches: Match[]): PlayerStat[] 
         assists: 0,
         matchesPlayed: 0,
         motmCount: 0,
+        cleanSheets: 0, // Spiele als Torwart ohne Gegentor („zu null")
+        gamesInGoal: 0, // Spiele, in denen der Spieler im Tor stand
+        goalsConceded: 0, // kassierte Gegentore in seinen Torwart-Spielen
         points: 0, // hier zunächst in Zehnteln
       };
     }
@@ -73,6 +77,22 @@ export function calculatePlayers(teams: Team[], matches: Match[]): PlayerStat[] 
       const p = ensurePlayer(b.playerName, teamName, teamLogoColor, 'p-dyn');
       p.motmCount += 1;
       p.points += PTS_MOTM;
+    });
+
+    // Torwart je Team: Gegentore zählen, bei „zu null" +0,5 (Basis für den Goldenen Handschuh)
+    (m.goalkeepers || []).forEach((g) => {
+      if (!g.playerName || m.homeScore === null || m.awayScore === null) return;
+      const conceded =
+        g.teamId === m.homeTeamId ? m.awayScore : g.teamId === m.awayTeamId ? m.homeScore : null;
+      if (conceded === null) return;
+      const team = teams.find((t) => t.id === g.teamId);
+      const p = ensurePlayer(g.playerName, team ? team.name : 'Unbekannt', team?.logoColor || '#3B82F6', 'p-dyn');
+      p.gamesInGoal += 1;
+      p.goalsConceded += conceded;
+      if (conceded === 0) {
+        p.cleanSheets += 1;
+        p.points += PTS_GK_CLEAN;
+      }
     });
 
     // Einsätze zählen + Team-Ergebnis-Punkte – aber nur für Kaderspieler, die nicht als abwesend markiert sind.

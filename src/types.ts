@@ -33,6 +33,13 @@ export interface BestPlayer {
   teamId: string;
 }
 
+// Torwart eines Teams in diesem Spiel (pro Team höchstens einer).
+// Wird je Spiel gespeichert; bei „zu null" gibt es Punkte (Goldener Handschuh).
+export interface Goalkeeper {
+  playerName: string;
+  teamId: string;
+}
+
 export interface Match {
   id: string;
   seasonId: string;
@@ -51,6 +58,7 @@ export interface Match {
   scorers?: Scorer[];
   absentees?: Absence[]; // Kaderspieler, die in diesem Spiel gefehlt haben
   bestPlayers?: BestPlayer[]; // Bester Spieler je Team (max. einer pro Team)
+  goalkeepers?: Goalkeeper[]; // Torwart je Team (max. einer pro Team)
   liveStartedAt?: string | null;
 }
 
@@ -119,7 +127,10 @@ export interface PlayerStat {
   assists: number;
   matchesPlayed: number;
   motmCount: number; // Anzahl „bester Spieler des Spiels"-Auszeichnungen
-  points: number; // Ballon-d'Or-Wertung (aus Toren, Vorlagen, MOTM, Team-Ergebnis)
+  cleanSheets: number; // Spiele als Torwart ohne Gegentor („zu null")
+  gamesInGoal: number; // Spiele, in denen der Spieler im Tor stand
+  goalsConceded: number; // kassierte Gegentore in seinen Torwart-Spielen
+  points: number; // Ballon-d'Or-Wertung (aus Toren, Vorlagen, MOTM, Team-Ergebnis, Torwart-zu-null)
 }
 
 export type ActiveTab = 'home' | 'spielplan' | 'tabelle' | 'torschuetzen' | 'statistiken';

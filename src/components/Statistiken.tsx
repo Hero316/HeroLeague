@@ -73,7 +73,7 @@ export default function Statistiken({ players, matches, teams }: StatistikenProp
       .filter((p) => p.goals > 0 && p.matchesPlayed > 0)
       .sort((a, b) => b.goals / b.matchesPlayed - a.goals / a.matchesPlayed)[0] ?? null;
 
-  // Ballon d'Or: Top 5 nach Wertungspunkten (Tore, Vorlagen, bester Spieler, Team-Ergebnis)
+  // Ballon d'Or: Top 5 nach Wertungspunkten (Tore, Vorlagen, bester Spieler, Team-Ergebnis, Torwart-zu-null)
   const ballonRanking = React.useMemo(
     () =>
       [...players]
@@ -83,6 +83,23 @@ export default function Statistiken({ players, matches, teams }: StatistikenProp
             b.points - a.points ||
             b.goals - a.goals ||
             b.assists - a.assists ||
+            a.name.localeCompare(b.name)
+        )
+        .slice(0, 5),
+    [players]
+  );
+
+  // Goldener Handschuh: Top 5 Torhüter nach „zu null"-Spielen (0,5 pro weißer Weste).
+  // Tie-Break: weniger Gegentore, dann weniger Torwart-Spiele (bessere Quote), dann Name.
+  const gloveRanking = React.useMemo(
+    () =>
+      [...players]
+        .filter((p) => p.gamesInGoal > 0 && p.cleanSheets > 0)
+        .sort(
+          (a, b) =>
+            b.cleanSheets - a.cleanSheets ||
+            a.goalsConceded - b.goalsConceded ||
+            a.gamesInGoal - b.gamesInGoal ||
             a.name.localeCompare(b.name)
         )
         .slice(0, 5),
@@ -234,53 +251,106 @@ export default function Statistiken({ players, matches, teams }: StatistikenProp
         </div>
       )}
 
-      {/* Ballon d'Or – Spielerwertung (Top 5 nach Punkten) */}
-      {ballonRanking.length > 0 && (
-        <div className="mt-8">
-          <div className="flex items-center gap-2.5 mb-4">
-            <span className="text-2xl">🏆</span>
-            <h3 className="font-display font-black text-xl sm:text-2xl uppercase tracking-tight text-white">
-              Ballon d'Or
-            </h3>
-            <span className="font-sans font-bold text-[11px] tracking-[1.5px] text-hl-dim mt-1">
-              TOP 5 · SPIELERWERTUNG
-            </span>
-          </div>
-          <div className="relative rounded-[20px] overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] border border-white/10 backdrop-blur-lg shadow-[0_20px_50px_rgba(0,0,0,.35)]">
-            <div className="absolute top-0 right-0 w-[220px] h-[220px] pointer-events-none" style={{ background: GLOW.gold }} />
-            <div className="relative divide-y divide-white/[.06]">
-              {ballonRanking.map((p, idx) => {
-                const rankColor =
-                  idx === 0 ? 'text-hl-gold' : idx === 1 ? 'text-[#C7D0DA]' : idx === 2 ? 'text-[#E0A46B]' : 'text-hl-dim';
-                const breakdown = [
-                  p.goals > 0 ? `${p.goals} ⚽` : null,
-                  p.assists > 0 ? `${p.assists} 🅰️` : null,
-                  p.motmCount > 0 ? `${p.motmCount}× ⭐` : null,
-                ].filter(Boolean);
-                return (
-                  <div key={p.id} className="flex items-center gap-3.5 px-4 sm:px-6 py-3.5">
-                    <div className={`font-display font-black text-2xl sm:text-3xl w-8 text-center shrink-0 ${rankColor}`}>
-                      {idx + 1}
-                    </div>
-                    <PlayerAvatar name={p.name} imageUrl={p.imageUrl} color={p.teamLogoColor} size="md" />
-                    <div className="min-w-0 flex-1">
-                      <div className="font-sans font-bold text-sm sm:text-[15px] text-white truncate">{p.name}</div>
-                      <div className="font-sans text-[11.5px] text-hl-mute truncate">
-                        {p.teamName}
-                        {breakdown.length > 0 && <span className="text-hl-dim"> · {breakdown.join(' · ')}</span>}
+      {/* Auszeichnungen: Ballon d'Or (Feldwertung) + Goldener Handschuh (Torhüter) nebeneinander */}
+      {(ballonRanking.length > 0 || gloveRanking.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+          {/* Ballon d'Or – Spielerwertung (Top 5 nach Punkten) */}
+          {ballonRanking.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2.5 mb-4">
+                <span className="text-2xl">🏆</span>
+                <h3 className="font-display font-black text-xl sm:text-2xl uppercase tracking-tight text-white">
+                  Ballon d'Or
+                </h3>
+                <span className="font-sans font-bold text-[11px] tracking-[1.5px] text-hl-dim mt-1">TOP 5 · SPIELER</span>
+              </div>
+              <div className="relative rounded-[20px] overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] border border-white/10 backdrop-blur-lg shadow-[0_20px_50px_rgba(0,0,0,.35)]">
+                <div className="absolute top-0 right-0 w-[220px] h-[220px] pointer-events-none" style={{ background: GLOW.gold }} />
+                <div className="relative divide-y divide-white/[.06]">
+                  {ballonRanking.map((p, idx) => {
+                    const rankColor =
+                      idx === 0 ? 'text-hl-gold' : idx === 1 ? 'text-[#C7D0DA]' : idx === 2 ? 'text-[#E0A46B]' : 'text-hl-dim';
+                    const breakdown = [
+                      p.goals > 0 ? `${p.goals} ⚽` : null,
+                      p.assists > 0 ? `${p.assists} 🅰️` : null,
+                      p.motmCount > 0 ? `${p.motmCount}× ⭐` : null,
+                      p.cleanSheets > 0 ? `${p.cleanSheets}× 🧤` : null,
+                    ].filter(Boolean);
+                    return (
+                      <div key={p.id} className="flex items-center gap-3.5 px-4 sm:px-6 py-3.5">
+                        <div className={`font-display font-black text-2xl sm:text-3xl w-8 text-center shrink-0 ${rankColor}`}>
+                          {idx + 1}
+                        </div>
+                        <PlayerAvatar name={p.name} imageUrl={p.imageUrl} color={p.teamLogoColor} size="md" />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-sans font-bold text-sm sm:text-[15px] text-white truncate">{p.name}</div>
+                          <div className="font-sans text-[11.5px] text-hl-mute truncate">
+                            {p.teamName}
+                            {breakdown.length > 0 && <span className="text-hl-dim"> · {breakdown.join(' · ')}</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-baseline gap-1.5 shrink-0">
+                          <span className="font-display font-black text-2xl sm:text-3xl leading-none text-hl-gold">
+                            {p.points.toFixed(1)}
+                          </span>
+                          <span className="font-sans font-bold text-[11px] tracking-wider text-hl-dim">PKT</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-baseline gap-1.5 shrink-0">
-                      <span className="font-display font-black text-2xl sm:text-3xl leading-none text-hl-gold">
-                        {p.points.toFixed(1)}
-                      </span>
-                      <span className="font-sans font-bold text-[11px] tracking-wider text-hl-dim">PKT</span>
-                    </div>
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Goldener Handschuh – Torhüterwertung (Top 5 nach „zu null") */}
+          {gloveRanking.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2.5 mb-4">
+                <span className="text-2xl">🧤</span>
+                <h3 className="font-display font-black text-xl sm:text-2xl uppercase tracking-tight text-white">
+                  Goldener Handschuh
+                </h3>
+                <span className="font-sans font-bold text-[11px] tracking-[1.5px] text-hl-dim mt-1">TOP 5 · TORHÜTER</span>
+              </div>
+              <div className="relative rounded-[20px] overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] border border-white/10 backdrop-blur-lg shadow-[0_20px_50px_rgba(0,0,0,.35)]">
+                <div className="absolute top-0 right-0 w-[220px] h-[220px] pointer-events-none" style={{ background: GLOW.teal }} />
+                <div className="relative divide-y divide-white/[.06]">
+                  {gloveRanking.map((p, idx) => {
+                    const rankColor =
+                      idx === 0 ? 'text-hl-gold' : idx === 1 ? 'text-[#C7D0DA]' : idx === 2 ? 'text-[#E0A46B]' : 'text-hl-dim';
+                    const glovePoints = p.cleanSheets * 0.5;
+                    const sub = [
+                      `${p.cleanSheets}× zu null`,
+                      `${p.gamesInGoal} im Tor`,
+                      `${p.goalsConceded} Gegentore`,
+                    ].join(' · ');
+                    return (
+                      <div key={p.id} className="flex items-center gap-3.5 px-4 sm:px-6 py-3.5">
+                        <div className={`font-display font-black text-2xl sm:text-3xl w-8 text-center shrink-0 ${rankColor}`}>
+                          {idx + 1}
+                        </div>
+                        <PlayerAvatar name={p.name} imageUrl={p.imageUrl} color={p.teamLogoColor} size="md" />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-sans font-bold text-sm sm:text-[15px] text-white truncate">{p.name}</div>
+                          <div className="font-sans text-[11.5px] text-hl-mute truncate">
+                            {p.teamName}
+                            <span className="text-hl-dim"> · {sub}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-baseline gap-1.5 shrink-0">
+                          <span className="font-display font-black text-2xl sm:text-3xl leading-none text-brand-accent-light">
+                            {glovePoints.toFixed(1)}
+                          </span>
+                          <span className="font-sans font-bold text-[11px] tracking-wider text-hl-dim">PKT</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
