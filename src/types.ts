@@ -37,6 +37,9 @@ export interface Match {
   date: string; // 'YYYY-MM-DD'
   time: string; // 'HH:MM'
   status: 'geplant' | 'live' | 'beendet';
+  field?: number | null; // Feld/Platz (z.B. 1 oder 2), aus dem Spielplan-Import
+  slot?: number | null; // Zeitfenster im Ligaabend, aus dem Spielplan-Import
+  importRef?: string | null; // Spiel-ID aus der Import-Datei, z.B. "HL-001"
   scorers?: Scorer[];
   absentees?: Absence[]; // Kaderspieler, die in diesem Spiel gefehlt haben
   liveStartedAt?: string | null;

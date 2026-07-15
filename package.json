@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "tsc --noEmit",
-    "db:setup": "tsx --env-file=.env.local scripts/setup-db.ts"
+    "db:setup": "tsx --env-file=.env.local scripts/setup-db.ts",
+    "import:schedule": "tsx --env-file=.env.local scripts/import-schedule.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.0",
@@ -28,6 +29,7 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz"
   }
 }

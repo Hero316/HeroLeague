@@ -31,6 +31,13 @@ CREATE TABLE matches (
   status          TEXT NOT NULL DEFAULT 'geplant' CHECK (status IN ('geplant', 'live', 'beendet')),
   date            TEXT NOT NULL,
   time            TEXT NOT NULL,
+  -- Feld/Platz (z.B. 1 oder 2) und Zeitfenster im Ligaabend – aus dem Excel-Import.
+  -- Nullable: manuell angesetzte Spiele brauchen diese Werte nicht.
+  field           INTEGER,
+  slot            INTEGER,
+  -- Referenz auf die Spiel-ID aus der Import-Datei (z.B. "HL-001"), je Saison eindeutig.
+  -- Ermöglicht wiederholbaren Import, ohne bereits eingetragene Ergebnisse zu überschreiben.
+  import_ref      TEXT,
   -- Torschützen: Array von { "playerName": string, "teamId": string, "assistName": string? }
   scorers         JSONB NOT NULL DEFAULT '[]',
   -- Abwesende Kaderspieler: Array von { "playerName": string, "teamId": string }
@@ -42,6 +49,8 @@ CREATE TABLE matches (
 
 CREATE INDEX idx_matches_season ON matches(season_id);
 CREATE INDEX idx_matches_matchday ON matches(matchday);
+-- Ein Import-Spiel (Spiel-ID) darf je Saison nur einmal existieren – Basis für den Upsert.
+CREATE UNIQUE INDEX idx_matches_import_ref ON matches(season_id, import_ref) WHERE import_ref IS NOT NULL;
 
 CREATE TABLE settings (
   key   TEXT PRIMARY KEY,
