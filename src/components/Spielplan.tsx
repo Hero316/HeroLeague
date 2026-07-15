@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Play, Check, RotateCcw, Plus, Minus, Pencil, Save, AlertTriangle, Users, X } from 'lucide-react';
-import { Absence, Match, Scorer, Team } from '../types';
+import { Play, Check, RotateCcw, Plus, Minus, Pencil, Save, AlertTriangle, Users, X, Star } from 'lucide-react';
+import { Absence, BestPlayer, Match, Scorer, Team } from '../types';
 import { TeamCrest, shortDate, useLiveMinute } from './ui';
 
 export function LiveTimer({ liveStartedAt }: { liveStartedAt?: string | null }) {
@@ -25,7 +25,8 @@ interface SpielplanProps {
     awayScore: number | null,
     status: 'geplant' | 'live' | 'beendet',
     scorers?: Scorer[],
-    absentees?: Absence[]
+    absentees?: Absence[],
+    bestPlayers?: BestPlayer[]
   ) => void | Promise<unknown>;
   onUpdateMatchMeta?: (
     matchId: string,
@@ -87,6 +88,11 @@ export default function Spielplan({
     [matchId: string]: { homeAbsent: string[]; awayAbsent: string[] };
   }>({});
 
+  // Lokal gewählter bester Spieler je Team (Spielername oder '') je Spiel
+  const [matchBestPlayers, setMatchBestPlayers] = useState<{
+    [matchId: string]: { home: string; away: string };
+  }>({});
+
   const [savedFlash, setSavedFlash] = useState<{ [matchId: string]: boolean }>({});
   const [resetTarget, setResetTarget] = useState<Match | null>(null);
 
@@ -133,6 +139,12 @@ export default function Spielplan({
     awayAbsent: (match.absentees || []).filter((a) => a.teamId === match.awayTeamId).map((a) => a.playerName),
   });
 
+  // Besten Spieler je Team aus den gespeicherten Daten laden
+  const seedBestPlayers = (match: Match) => ({
+    home: (match.bestPlayers || []).find((b) => b.teamId === match.homeTeamId)?.playerName ?? '',
+    away: (match.bestPlayers || []).find((b) => b.teamId === match.awayTeamId)?.playerName ?? '',
+  });
+
   // Solange das Popup offen ist, den lokalen Zustand aus den DB-Daten vorhalten
   // (auch nach automatischem Nachladen während eines Live-Spiels).
   useEffect(() => {
@@ -143,8 +155,11 @@ export default function Spielplan({
     if (matchAbsentees[openMatch.id] === undefined) {
       setMatchAbsentees((prev) => (prev[openMatch.id] === undefined ? { ...prev, [openMatch.id]: seedAbsentees(openMatch) } : prev));
     }
+    if (matchBestPlayers[openMatch.id] === undefined) {
+      setMatchBestPlayers((prev) => (prev[openMatch.id] === undefined ? { ...prev, [openMatch.id]: seedBestPlayers(openMatch) } : prev));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openMatch, isAdmin, matchScorers, matchAbsentees]);
+  }, [openMatch, isAdmin, matchScorers, matchAbsentees, matchBestPlayers]);
 
   const toggleAbsent = (match: Match, side: 'home' | 'away', playerName: string) => {
     setMatchAbsentees((prev) => {
@@ -161,6 +176,14 @@ export default function Spielplan({
     });
   };
 
+  // Besten Spieler eines Teams setzen (leer = keiner)
+  const setBestPlayer = (match: Match, side: 'home' | 'away', playerName: string) => {
+    setMatchBestPlayers((prev) => {
+      const cur = prev[match.id] ?? seedBestPlayers(match);
+      return { ...prev, [match.id]: { ...cur, [side]: playerName } };
+    });
+  };
+
   // Lokalen Bearbeitungszustand eines Spiels verwerfen
   const clearLocal = (matchId: string) => {
     setEditingScores((prev) => {
@@ -174,6 +197,11 @@ export default function Spielplan({
       return u;
     });
     setMatchAbsentees((prev) => {
+      const u = { ...prev };
+      delete u[matchId];
+      return u;
+    });
+    setMatchBestPlayers((prev) => {
       const u = { ...prev };
       delete u[matchId];
       return u;
@@ -195,6 +223,7 @@ export default function Spielplan({
     });
     setMatchScorers((prev) => (prev[match.id] ? prev : { ...prev, [match.id]: seedScorers(match) }));
     setMatchAbsentees((prev) => (prev[match.id] ? prev : { ...prev, [match.id]: seedAbsentees(match) }));
+    setMatchBestPlayers((prev) => (prev[match.id] ? prev : { ...prev, [match.id]: seedBestPlayers(match) }));
     setMetaSaved(false);
   };
 
@@ -278,7 +307,17 @@ export default function Spielplan({
       ...localAbsent.awayAbsent.filter((n) => awayRoster.has(n)).map((n) => ({ playerName: n, teamId: match.awayTeamId })),
     ];
 
-    return Promise.resolve(onUpdateMatchScore(match.id, homeGoals, awayGoals, status, scorers, absentees)).then(() => {
+    // Besten Spieler je Team (nur gültige Kaderspieler; leere Auswahl weglassen)
+    const localBest = matchBestPlayers[match.id] || seedBestPlayers(match);
+    const bestPlayers: BestPlayer[] = [];
+    if (localBest.home && homeRoster.has(localBest.home)) {
+      bestPlayers.push({ playerName: localBest.home, teamId: match.homeTeamId });
+    }
+    if (localBest.away && awayRoster.has(localBest.away)) {
+      bestPlayers.push({ playerName: localBest.away, teamId: match.awayTeamId });
+    }
+
+    return Promise.resolve(onUpdateMatchScore(match.id, homeGoals, awayGoals, status, scorers, absentees, bestPlayers)).then(() => {
       if (opts?.flash) flashSaved(match.id);
     });
   };
@@ -288,7 +327,7 @@ export default function Spielplan({
   };
 
   const handleResetMatch = (matchId: string) => {
-    onUpdateMatchScore(matchId, null, null, 'geplant', [], []);
+    onUpdateMatchScore(matchId, null, null, 'geplant', [], [], []);
     clearLocal(matchId);
   };
 
@@ -649,6 +688,47 @@ export default function Spielplan({
                                   );
                                 })}
                               </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Bester Spieler je Team (optional) – fließt in die Ballon-d'Or-Wertung ein */}
+                  <div className="pt-3 border-t border-white/10 space-y-3">
+                    <div className="flex items-center gap-1.5 text-xs font-sans text-hl-gold uppercase tracking-wider font-bold">
+                      <Star className="w-3.5 h-3.5" />
+                      <span>Bester Spieler des Spiels</span>
+                    </div>
+                    <p className="text-[10px] text-hl-faint font-sans -mt-1.5 leading-relaxed">
+                      Jedes Team wählt seinen besten Spieler aus dem <strong className="text-hl-soft">eigenen Kader</strong>{' '}
+                      (optional). Das gibt einen Punkt für die Ballon-d'Or-Wertung.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {([['home', oHome], ['away', oAway]] as const).map(([side, team]) => {
+                        const seeded = seedBestPlayers(openMatch);
+                        const value =
+                          side === 'home'
+                            ? matchBestPlayers[openMatch.id]?.home ?? seeded.home
+                            : matchBestPlayers[openMatch.id]?.away ?? seeded.away;
+                        const roster = team.spielerliste || [];
+                        return (
+                          <div key={side} className="space-y-1.5">
+                            <label className="block text-[9px] text-hl-faint font-sans uppercase tracking-wider">{team.name}</label>
+                            {roster.length === 0 ? (
+                              <div className="text-[10px] text-hl-faint font-sans italic">Noch kein Kader gepflegt.</div>
+                            ) : (
+                              <select
+                                value={value}
+                                onChange={(e) => setBestPlayer(openMatch, side, e.target.value)}
+                                className={selectClasses}
+                              >
+                                <option value="">-- Kein --</option>
+                                {roster.map((p) => (
+                                  <option key={p.name} value={p.name}>{p.name}</option>
+                                ))}
+                              </select>
                             )}
                           </div>
                         );

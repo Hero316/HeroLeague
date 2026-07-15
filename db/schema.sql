@@ -45,6 +45,9 @@ CREATE TABLE matches (
   -- Abwesende Kaderspieler: Array von { "playerName": string, "teamId": string }
   -- Fehlt ein Spieler hier, gilt er als eingesetzt (Rückwärtskompatibilität)
   absentees       JSONB NOT NULL DEFAULT '[]',
+  -- Bester Spieler je Team (max. einer pro Team): Array von { "playerName": string, "teamId": string }
+  -- Fließt in die Ballon-d'Or-Spielerwertung ein.
+  best_players    JSONB NOT NULL DEFAULT '[]',
   live_started_at TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );

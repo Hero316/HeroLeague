@@ -26,6 +26,13 @@ export interface Absence {
   teamId: string;
 }
 
+// Bester Spieler eines Teams in diesem Spiel (vom eigenen Team gewählt).
+// Pro Team höchstens einer; gibt Punkte für die Ballon-d'Or-Wertung.
+export interface BestPlayer {
+  playerName: string;
+  teamId: string;
+}
+
 export interface Match {
   id: string;
   seasonId: string;
@@ -43,6 +50,7 @@ export interface Match {
   importRef?: string | null; // Spiel-ID aus der Import-Datei, z.B. "HL-001"
   scorers?: Scorer[];
   absentees?: Absence[]; // Kaderspieler, die in diesem Spiel gefehlt haben
+  bestPlayers?: BestPlayer[]; // Bester Spieler je Team (max. einer pro Team)
   liveStartedAt?: string | null;
 }
 
@@ -110,6 +118,8 @@ export interface PlayerStat {
   goals: number;
   assists: number;
   matchesPlayed: number;
+  motmCount: number; // Anzahl „bester Spieler des Spiels"-Auszeichnungen
+  points: number; // Ballon-d'Or-Wertung (aus Toren, Vorlagen, MOTM, Team-Ergebnis)
 }
 
 export type ActiveTab = 'home' | 'spielplan' | 'tabelle' | 'torschuetzen' | 'statistiken';
