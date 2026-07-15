@@ -148,6 +148,14 @@ export default function App() {
       })
     );
 
+  const handleUpdateMatchMeta = (
+    matchId: string,
+    data: { matchday: number; date: string; time: string; homeTeamId: string; awayTeamId: string }
+  ) =>
+    runAdminAction(() =>
+      apiFetch(`/api/matches/${matchId}`, { method: 'PUT', body: JSON.stringify(data) })
+    );
+
   const handleAddTeam = (newTeam: Omit<Team, 'id'>) =>
     runAdminAction(() => apiFetch('/api/teams', { method: 'POST', body: JSON.stringify(newTeam) }));
 
@@ -305,6 +313,7 @@ export default function App() {
                     matches={currentSeasonMatches}
                     isAdmin={isAdmin}
                     onUpdateMatchScore={handleUpdateMatchScore}
+                    onUpdateMatchMeta={handleUpdateMatchMeta}
                   />
                 </div>
 
@@ -415,6 +424,7 @@ export default function App() {
               matches={seasonMatches}
               isAdmin={isAdmin && isCurrentSeasonSelected}
               onUpdateMatchScore={handleUpdateMatchScore}
+              onUpdateMatchMeta={handleUpdateMatchMeta}
               onSelectTeam={openTeamDetail}
             />
           </div>

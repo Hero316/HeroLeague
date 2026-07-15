@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Plus, Trash2, CalendarDays } from 'lucide-react';
+import { Plus, Trash2, CalendarDays, ChevronDown } from 'lucide-react';
 import { Match, Team } from '../types';
 
 interface MatchManagerProps {
@@ -25,6 +25,9 @@ export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch
   const [time, setTime] = useState('15:30');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Ein-/ausgeklappte Spieltage (explizit gesetzte Werte überschreiben die Voreinstellung)
+  const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
+
   const matchesByMatchday = useMemo(() => {
     const grouped = new Map<number, Match[]>();
     [...matches]
@@ -36,6 +39,13 @@ export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch
       });
     return grouped;
   }, [matches]);
+
+  const days = [...matchesByMatchday.keys()];
+  const latestDay = days.length ? Math.max(...days) : 0;
+  // Voreinstellung: nur der neueste Spieltag offen, ältere zugeklappt
+  const isCollapsed = (day: number) => collapsed[day] ?? day !== latestDay;
+  const toggleDay = (day: number) => setCollapsed((prev) => ({ ...prev, [day]: !isCollapsed(day) }));
+  const setAll = (value: boolean) => setCollapsed(Object.fromEntries(days.map((d) => [d, value])));
 
   const teamName = (id: string) => teams.find((t) => t.id === id)?.name ?? id;
 
@@ -138,20 +148,40 @@ export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch
         </button>
       </form>
 
-      {/* Bestehende Spiele je Spieltag */}
+      {/* Bestehende Spiele je Spieltag (einklappbar) */}
       {matchesByMatchday.size === 0 ? (
         <p className="text-sm text-gray-400 font-sans text-center py-6">
           Noch keine Spiele in dieser Saison. Setze oben das erste Spiel an.
         </p>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-3">
+          {days.length > 1 && (
+            <div className="flex items-center justify-end gap-3 text-[11px] font-sans font-semibold uppercase tracking-wider">
+              <button type="button" onClick={() => setAll(false)} className="text-hl-dim hover:text-brand-accent-light transition-colors cursor-pointer">
+                Alle aufklappen
+              </button>
+              <span className="text-white/10">·</span>
+              <button type="button" onClick={() => setAll(true)} className="text-hl-dim hover:text-brand-accent-light transition-colors cursor-pointer">
+                Alle einklappen
+              </button>
+            </div>
+          )}
           {[...matchesByMatchday.entries()].map(([day, dayMatches]) => (
-            <div key={day}>
-              <h4 className="flex items-center gap-2 text-xs font-mono font-bold text-gray-300 uppercase tracking-wider mb-2">
-                <CalendarDays className="w-4 h-4 text-brand-accent-light" />
-                {day}. Spieltag
-              </h4>
-              <div className="space-y-1.5">
+            <div key={day} className="border border-white/[.07] rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleDay(day)}
+                className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-white/[.03] hover:bg-white/[.06] transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2 text-xs font-mono font-bold text-gray-300 uppercase tracking-wider">
+                  <CalendarDays className="w-4 h-4 text-brand-accent-light" />
+                  {day}. Spieltag
+                  <span className="text-[10px] font-sans text-gray-500 normal-case">({dayMatches.length} Spiele)</span>
+                </span>
+                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isCollapsed(day) ? '' : 'rotate-180'}`} />
+              </button>
+              {!isCollapsed(day) && (
+              <div className="space-y-1.5 p-2.5">
                 {dayMatches.map((m) => (
                   <div
                     key={m.id}
@@ -187,6 +217,7 @@ export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch
                   </div>
                 ))}
               </div>
+              )}
             </div>
           ))}
         </div>
