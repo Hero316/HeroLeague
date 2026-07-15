@@ -1,5 +1,6 @@
 import React from 'react';
 import { PlayerStat, Match, Team } from '../types';
+import { rankGoldenGlove } from '../lib/goldenGlove';
 import PlayerAvatar from './PlayerAvatar';
 import { TeamCrest } from './ui';
 
@@ -89,22 +90,10 @@ export default function Statistiken({ players, matches, teams }: StatistikenProp
     [players]
   );
 
-  // Goldener Handschuh: Top 5 Torhüter nach „zu null"-Spielen (0,5 pro weißer Weste).
-  // Tie-Break: weniger Gegentore, dann weniger Torwart-Spiele (bessere Quote), dann Name.
-  const gloveRanking = React.useMemo(
-    () =>
-      [...players]
-        .filter((p) => p.gamesInGoal > 0 && p.cleanSheets > 0)
-        .sort(
-          (a, b) =>
-            b.cleanSheets - a.cleanSheets ||
-            a.goalsConceded - b.goalsConceded ||
-            a.gamesInGoal - b.gamesInGoal ||
-            a.name.localeCompare(b.name)
-        )
-        .slice(0, 5),
-    [players]
-  );
+  // Goldener Handschuh: Top 5 Torhüter nach der „Goals Saved Above Average"-Wertung.
+  // Der Score wird dynamisch aus dem Liga-Durchschnitt berechnet; angezeigt werden
+  // nur Keeper mit mindestens MIN_GAMES Torwart-Spielen, absteigend nach Score.
+  const gloveRanking = React.useMemo(() => rankGoldenGlove(players, matches).slice(0, 5), [players, matches]);
 
   interface LeaderCard {
     kind: 'SPIELER' | 'TEAM';
@@ -319,12 +308,14 @@ export default function Statistiken({ players, matches, teams }: StatistikenProp
                   {gloveRanking.map((p, idx) => {
                     const rankColor =
                       idx === 0 ? 'text-hl-gold' : idx === 1 ? 'text-[#C7D0DA]' : idx === 2 ? 'text-[#E0A46B]' : 'text-hl-dim';
-                    const glovePoints = p.cleanSheets * 0.5;
                     const sub = [
-                      `${p.cleanSheets}× zu null`,
                       `${p.gamesInGoal} im Tor`,
+                      `${p.cleanSheets}× zu null`,
                       `${p.goalsConceded} Gegentore`,
-                    ].join(' · ');
+                      p.motmCount > 0 ? `${p.motmCount}× ⭐` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ');
                     return (
                       <div key={p.id} className="flex items-center gap-3.5 px-4 sm:px-6 py-3.5">
                         <div className={`font-display font-black text-2xl sm:text-3xl w-8 text-center shrink-0 ${rankColor}`}>
@@ -340,7 +331,7 @@ export default function Statistiken({ players, matches, teams }: StatistikenProp
                         </div>
                         <div className="flex items-baseline gap-1.5 shrink-0">
                           <span className="font-display font-black text-2xl sm:text-3xl leading-none text-brand-accent-light">
-                            {glovePoints.toFixed(1)}
+                            {p.score.toFixed(1)}
                           </span>
                           <span className="font-sans font-bold text-[11px] tracking-wider text-hl-dim">PKT</span>
                         </div>
