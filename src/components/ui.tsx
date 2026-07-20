@@ -1,5 +1,6 @@
 import React from 'react';
-import { ChevronDown } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ChevronDown, X } from 'lucide-react';
 import { ActiveTab, Team } from '../types';
 
 // Gemeinsame Design-Bausteine des neuen Hero-League-Looks.
@@ -44,28 +45,47 @@ interface TeamCrestProps {
   color: string;
   logoUrl?: string;
   size?: CrestSize;
+  onSelect?: () => void; // gesetzt = anklickbar, öffnet die Vereinsseite
 }
 
-// Vereins-Wappen: Logo-Bild falls gepflegt, sonst Verlaufs-Monogramm im Design-Stil
-export function TeamCrest({ name, shortName, color, logoUrl, size = 'md' }: TeamCrestProps) {
+// Vereins-Wappen: Logo-Bild falls gepflegt, sonst Verlaufs-Monogramm im Design-Stil.
+// Mit onSelect wird das Wappen zu einer Taste, die die Vereinsseite öffnet (Desktop + Handy).
+export function TeamCrest({ name, shortName, color, logoUrl, size = 'md', onSelect }: TeamCrestProps) {
   const s = CREST_SIZES[size];
-  if (logoUrl) {
+  const isLogo = Boolean(logoUrl);
+
+  const inner = isLogo ? (
+    <img src={logoUrl} alt={name} className={`${s.img} object-contain`} referrerPolicy="no-referrer" />
+  ) : (
+    monogram(shortName || name)
+  );
+
+  const baseClass = `${s.box} grid place-items-center shrink-0`;
+  const fallbackClass = isLogo ? '' : 'font-display font-black text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.16)]';
+  const fallbackStyle = isLogo
+    ? undefined
+    : { background: `linear-gradient(140deg, ${color || '#22DFC9'}, ${shade(color || '#22DFC9', 0.45)})` };
+
+  if (onSelect) {
     return (
-      <span
-        className={`${s.box} grid place-items-center shrink-0`}
-        title={name}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect();
+        }}
+        title={`${name} – Vereinsseite öffnen`}
+        className={`${baseClass} ${fallbackClass} cursor-pointer transition-transform duration-150 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-brand-accent-light`}
+        style={fallbackStyle}
       >
-        <img src={logoUrl} alt={name} className={`${s.img} object-contain`} referrerPolicy="no-referrer" />
-      </span>
+        {inner}
+      </button>
     );
   }
+
   return (
-    <span
-      className={`${s.box} grid place-items-center shrink-0 font-display font-black text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.16)]`}
-      style={{ background: `linear-gradient(140deg, ${color || '#22DFC9'}, ${shade(color || '#22DFC9', 0.45)})` }}
-      title={name}
-    >
-      {monogram(shortName || name)}
+    <span className={`${baseClass} ${fallbackClass}`} style={fallbackStyle} title={name}>
+      {inner}
     </span>
   );
 }
@@ -204,10 +224,90 @@ export function shortDate(dateStr: string): string {
   return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
 }
 
-export function crestFromTeam(team: Team | undefined, size: CrestSize = 'md') {
+export function crestFromTeam(team: Team | undefined, size: CrestSize = 'md', onSelect?: () => void) {
   if (!team) return null;
   return (
-    <TeamCrest name={team.name} shortName={team.shortName} color={team.logoColor} logoUrl={team.logoUrl} size={size} />
+    <TeamCrest
+      name={team.name}
+      shortName={team.shortName}
+      color={team.logoColor}
+      logoUrl={team.logoUrl}
+      size={size}
+      onSelect={onSelect}
+    />
+  );
+}
+
+// Bild, das per Klick als Lightbox vergrößert wird – gleiches Muster wie die Spieler-Portraits.
+// Wird z.B. für das große Vereins-Logo auf der Team-Seite genutzt.
+export function ImageZoom({
+  src,
+  alt,
+  className,
+  zoomClassName,
+}: {
+  src: string;
+  alt: string;
+  className?: string; // Darstellung im normalen Fluss
+  zoomClassName?: string; // Darstellung in der Lightbox
+}) {
+  const [open, setOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
+        title={`${alt} – vergrößern`}
+        className="shrink-0 cursor-zoom-in transition-transform duration-150 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-brand-accent-light rounded-2xl"
+      >
+        <img src={src} alt={alt} referrerPolicy="no-referrer" className={className} />
+      </button>
+
+      {open &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            onClick={() => setOpen(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-label={alt}
+          >
+            <div className="relative flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Schließen"
+                className="absolute -top-3 -right-3 z-10 w-9 h-9 rounded-full bg-brand-deep border border-white/20 text-hl-soft hover:text-white flex items-center justify-center shadow-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <img
+                src={src}
+                alt={alt}
+                referrerPolicy="no-referrer"
+                className={zoomClassName ?? 'w-64 sm:w-80 max-w-[80vw] max-h-[80vh] object-contain'}
+              />
+              <span className="mt-4 font-display font-black text-lg text-white uppercase tracking-tight text-center">
+                {alt}
+              </span>
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
   );
 }
 

@@ -10,11 +10,12 @@ interface HeroProps {
   matches: Match[];
   seasonLabel: string;
   onNavigate: (tab: ActiveTab) => void;
+  onSelectTeam?: (teamId: string) => void;
 }
 
 // Vollflächiges Hero-Carousel (Magenta-TV-Stil) mit drei Slides:
 // 1. Nächster Spieltag / Live-Spiel  2. Spieler des Monats  3. Tabellenführer
-export default function Hero({ teams, matches, seasonLabel, onNavigate }: HeroProps) {
+export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelectTeam }: HeroProps) {
   const [pom, setPom] = useState<PlayerOfMonth | null>(null);
   const [active, setActive] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -212,7 +213,7 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate }: HeroPr
                         <div key={m.id} className="flex items-center gap-2 py-2 border-b border-white/[.06] last:border-0">
                           <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
                             <span title={h.name} className="font-sans font-bold text-[12px] text-hl-text truncate">{h.shortName || h.name}</span>
-                            <TeamCrest name={h.name} shortName={h.shortName} color={h.logoColor} logoUrl={h.logoUrl} size="sm" />
+                            <TeamCrest name={h.name} shortName={h.shortName} color={h.logoColor} logoUrl={h.logoUrl} size="sm" onSelect={onSelectTeam ? () => onSelectTeam(h.id) : undefined} />
                           </div>
                           <div className="w-[54px] shrink-0 flex flex-col items-center">
                             {isL || isF ? (
@@ -231,7 +232,7 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate }: HeroPr
                             ) : null}
                           </div>
                           <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                            <TeamCrest name={a.name} shortName={a.shortName} color={a.logoColor} logoUrl={a.logoUrl} size="sm" />
+                            <TeamCrest name={a.name} shortName={a.shortName} color={a.logoColor} logoUrl={a.logoUrl} size="sm" onSelect={onSelectTeam ? () => onSelectTeam(a.id) : undefined} />
                             <span title={a.name} className="font-sans font-bold text-[12px] text-hl-text truncate">{a.shortName || a.name}</span>
                           </div>
                         </div>
@@ -391,7 +392,7 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate }: HeroPr
                       >
                         {rank}
                       </span>
-                      <TeamCrest name={s.teamName} shortName={s.shortName} color={s.logoColor} logoUrl={s.logoUrl} size="sm" />
+                      <TeamCrest name={s.teamName} shortName={s.shortName} color={s.logoColor} logoUrl={s.logoUrl} size="sm" onSelect={onSelectTeam ? () => onSelectTeam(s.teamId) : undefined} />
                       <span className="flex-1 font-sans font-bold text-[13.5px] text-hl-text truncate">{s.teamName}</span>
                       <span className={`font-display font-black text-lg ${rank === 1 ? 'text-brand-accent-light' : 'text-white'}`}>
                         {s.points}
