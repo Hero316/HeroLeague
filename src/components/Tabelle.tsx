@@ -140,7 +140,7 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
       {/* Fußzeile */}
       {compact ? (
         <div className="pt-4 px-1.5 sm:px-2.5 font-sans font-semibold text-[10px] sm:text-[10.5px] tracking-wider text-hl-faint">
-          SORTIERUNG: 1. PUNKTE · 2. TORDIFFERENZ · 3. ERZIELTE TORE
+          SORTIERUNG: 1. PUNKTE · 2. TORDIFFERENZ · 3. DIREKTER VERGLEICH · 4. ERZIELTE TORE
         </div>
       ) : (
         <div className="flex flex-wrap gap-3 sm:gap-5 items-center pt-[18px] px-1.5 sm:px-2.5 pb-1 font-sans font-semibold text-[10.5px] sm:text-[11px] tracking-[.5px] text-hl-dim">
@@ -155,7 +155,7 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
             </span>
           )}
           <span className="sm:ml-auto">
-            SORTIERUNG: 1. PUNKTE · 2. TORDIFFERENZ · 3. ERZIELTE TORE
+            SORTIERUNG: 1. PUNKTE · 2. TORDIFFERENZ · 3. DIREKTER VERGLEICH · 4. ERZIELTE TORE
             {seasonLabel ? ` · SAISON ${seasonLabel}` : ''}
           </span>
         </div>

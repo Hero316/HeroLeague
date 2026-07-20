@@ -24,13 +24,15 @@ export function monogram(name: string): string {
   return trimmed.slice(0, 2).toUpperCase();
 }
 
+// box = einheitlicher quadratischer Slot (alle Logos gleich groß & zentriert),
+// img = Bildgröße; freigestellte Logos füllen den Slot (fast) vollständig aus.
 const CREST_SIZES = {
-  xs: { box: 'w-5 h-5 text-[8px] rounded-[6px]', img: 'w-3.5 h-3.5' },
-  sm: { box: 'w-7 h-7 text-[11px] rounded-[9px]', img: 'w-5 h-5' },
-  md: { box: 'w-8 h-8 text-xs rounded-[10px]', img: 'w-6 h-6' },
-  lg: { box: 'w-11 h-11 text-base rounded-[13px]', img: 'w-8 h-8' },
-  xl: { box: 'w-[58px] h-[58px] text-2xl rounded-[16px]', img: 'w-11 h-11' },
-  hero: { box: 'w-24 h-24 text-4xl rounded-[26px]', img: 'w-16 h-16' },
+  xs: { box: 'w-5 h-5 text-[8px] rounded-[6px]', img: 'w-5 h-5' },
+  sm: { box: 'w-7 h-7 text-[11px] rounded-[9px]', img: 'w-7 h-7' },
+  md: { box: 'w-8 h-8 text-xs rounded-[10px]', img: 'w-8 h-8' },
+  lg: { box: 'w-11 h-11 text-base rounded-[13px]', img: 'w-11 h-11' },
+  xl: { box: 'w-[58px] h-[58px] text-2xl rounded-[16px]', img: 'w-[58px] h-[58px]' },
+  hero: { box: 'w-24 h-24 text-4xl rounded-[26px]', img: 'w-24 h-24' },
 } as const;
 
 export type CrestSize = keyof typeof CREST_SIZES;
@@ -49,7 +51,7 @@ export function TeamCrest({ name, shortName, color, logoUrl, size = 'md' }: Team
   if (logoUrl) {
     return (
       <span
-        className={`${s.box} grid place-items-center shrink-0 overflow-hidden border border-white/15 bg-white/5`}
+        className={`${s.box} grid place-items-center shrink-0`}
         title={name}
       >
         <img src={logoUrl} alt={name} className={`${s.img} object-contain`} referrerPolicy="no-referrer" />
