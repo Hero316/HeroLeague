@@ -1,4 +1,5 @@
 import React from 'react';
+import { ChevronDown } from 'lucide-react';
 import { ActiveTab, Team } from '../types';
 
 // Gemeinsame Design-Bausteine des neuen Hero-League-Looks.
@@ -207,5 +208,98 @@ export function crestFromTeam(team: Team | undefined, size: CrestSize = 'md') {
   if (!team) return null;
   return (
     <TeamCrest name={team.name} shortName={team.shortName} color={team.logoColor} logoUrl={team.logoUrl} size={size} />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Akkordeon: aufgeräumte „dicke Tasten", von denen immer nur eine offen ist.
+// Wird im Backoffice genutzt, damit man nicht endlos scrollen muss.
+// ---------------------------------------------------------------------------
+
+interface AccordionContextValue {
+  openId: string | null;
+  toggle: (id: string) => void;
+}
+
+const AccordionContext = React.createContext<AccordionContextValue | null>(null);
+
+// Gruppiert mehrere AccordionSection; sorgt dafür, dass immer nur eine offen ist.
+// Standardmäßig ist alles zugeklappt (defaultOpenId = null).
+export function AccordionGroup({
+  children,
+  defaultOpenId = null,
+}: {
+  children: React.ReactNode;
+  defaultOpenId?: string | null;
+}) {
+  const [openId, setOpenId] = React.useState<string | null>(defaultOpenId);
+  const toggle = React.useCallback((id: string) => {
+    setOpenId((current) => (current === id ? null : id));
+  }, []);
+  return <AccordionContext.Provider value={{ openId, toggle }}>{children}</AccordionContext.Provider>;
+}
+
+// Eine „dicke Taste": Kopf mit Symbol + Titel + Pfeil; klappt den Inhalt sanft auf.
+export function AccordionSection({
+  id,
+  title,
+  icon,
+  subtitle,
+  accent = '#22DFC9',
+  children,
+}: {
+  id: string;
+  title: string;
+  icon?: React.ReactNode;
+  subtitle?: string;
+  accent?: string; // Farbe des Symbol-Kästchens
+  children: React.ReactNode;
+}) {
+  const ctx = React.useContext(AccordionContext);
+  const open = ctx?.openId === id;
+  const panelId = `acc-panel-${id}`;
+
+  return (
+    <div
+      className={`hl-card overflow-hidden transition-colors ${
+        open ? 'border-brand-accent-light/25' : ''
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => ctx?.toggle(id)}
+        aria-expanded={open}
+        aria-controls={panelId}
+        className="w-full flex items-center gap-3 sm:gap-4 p-4 sm:p-5 text-left cursor-pointer hover:bg-white/[.03] transition-colors"
+      >
+        {icon && (
+          <span
+            className="grid place-items-center w-10 h-10 rounded-xl shrink-0 border"
+            style={{ background: `${accent}1a`, borderColor: `${accent}40`, color: accent }}
+          >
+            {icon}
+          </span>
+        )}
+        <span className="flex-1 min-w-0">
+          <span className="block font-display font-black text-base sm:text-lg text-white uppercase tracking-tight leading-tight">
+            {title}
+          </span>
+          {subtitle && <span className="block text-[11px] sm:text-xs text-hl-mute font-sans mt-0.5">{subtitle}</span>}
+        </span>
+        <ChevronDown
+          className={`w-5 h-5 shrink-0 text-hl-mute transition-transform duration-300 ${open ? 'rotate-180 text-brand-accent-light' : ''}`}
+        />
+      </button>
+
+      {/* Sanftes Auf-/Zuklappen ohne feste Höhe (grid-rows 0fr↔1fr) */}
+      <div
+        id={panelId}
+        className={`grid transition-[grid-template-rows] duration-300 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
+      >
+        <div className="overflow-hidden min-h-0">
+          <div className="px-4 sm:px-5 pb-5 pt-1 border-t border-white/[.06]">{children}</div>
+        </div>
+      </div>
+    </div>
   );
 }

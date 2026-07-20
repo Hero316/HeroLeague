@@ -16,8 +16,8 @@ import LiveBanner from './components/LiveBanner';
 import LiveTicker from './components/LiveTicker';
 import HomeBody from './components/HomeBody';
 import InstallPrompt from './components/InstallPrompt';
-import { PageHeader, Footer } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History } from 'lucide-react';
+import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('home');
@@ -301,39 +301,38 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="space-y-12">
-                <div className="hl-card p-6">
-                  <h3 className="font-display font-black text-xl text-white uppercase tracking-tight mb-4 flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-brand-accent-light" />
-                    Spielplan-Ergebnisse eintragen
-                  </h3>
-                  <p className="text-xs text-hl-mute font-sans mb-6">
-                    Wähle einen Spieltag aus, um Ergebnisse einzutragen, Torschützen und Vorlagengeber zuzuweisen oder
-                    ein Spiel LIVE zu stellen.
-                  </p>
-                  <Spielplan
-                    teams={teams}
-                    matches={currentSeasonMatches}
-                    isAdmin={isAdmin}
-                    onUpdateMatchScore={handleUpdateMatchScore}
-                    onUpdateMatchMeta={handleUpdateMatchMeta}
-                  />
-                </div>
+              {/* Aufgeräumtes Backoffice: „dicke Tasten", immer nur eine offen */}
+              <AccordionGroup>
+                <div className="space-y-4">
+                  <AccordionSection
+                    id="results"
+                    title="Spielplan-Ergebnisse eintragen"
+                    subtitle="Ergebnisse, Torschützen & Vorlagen zuweisen, Spiele LIVE stellen"
+                    icon={<Sparkles className="w-5 h-5" />}
+                  >
+                    <Spielplan
+                      teams={teams}
+                      matches={currentSeasonMatches}
+                      isAdmin={isAdmin}
+                      onUpdateMatchScore={handleUpdateMatchScore}
+                      onUpdateMatchMeta={handleUpdateMatchMeta}
+                    />
+                  </AccordionSection>
 
-                <div className="hl-card p-6">
-                  <h3 className="font-display font-black text-xl text-white uppercase tracking-tight mb-4 flex items-center gap-2">
-                    <CalendarPlus className="w-5 h-5 text-brand-accent-light" />
-                    Spielplan verwalten
-                  </h3>
-                  <MatchManager
-                    teams={teams}
-                    matches={currentSeasonMatches}
-                    onAddMatch={handleAddMatch}
-                    onDeleteMatch={handleDeleteMatch}
-                  />
-                </div>
+                  <AccordionSection
+                    id="schedule"
+                    title="Spielplan verwalten"
+                    subtitle="Spiele anlegen oder löschen"
+                    icon={<CalendarPlus className="w-5 h-5" />}
+                  >
+                    <MatchManager
+                      teams={teams}
+                      matches={currentSeasonMatches}
+                      onAddMatch={handleAddMatch}
+                      onDeleteMatch={handleDeleteMatch}
+                    />
+                  </AccordionSection>
 
-                <div className="hl-card p-6">
                   <AdminPanel
                     teams={teams}
                     matches={currentSeasonMatches}
@@ -344,14 +343,20 @@ export default function App() {
                     onDeleteTeam={handleDeleteTeam}
                     onStartSeason={handleStartSeason}
                   />
-                </div>
 
-                {isSuperadmin && (
-                  <div className="hl-card p-6">
-                    <UserManager />
-                  </div>
-                )}
-              </div>
+                  {isSuperadmin && (
+                    <AccordionSection
+                      id="users"
+                      title="Benutzerverwaltung"
+                      subtitle="Admin-Zugänge anlegen und verwalten"
+                      icon={<Users className="w-5 h-5" />}
+                      accent="#C9D1CC"
+                    >
+                      <UserManager />
+                    </AccordionSection>
+                  )}
+                </div>
+              </AccordionGroup>
             </div>
           )}
         </main>

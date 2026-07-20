@@ -4,6 +4,7 @@ import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Ra
 import { Player, Team, Match } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
+import { AccordionSection } from './ui';
 
 function ImageUploader({
   label,
@@ -489,7 +490,7 @@ export default function AdminPanel({
     'w-full bg-[#060E0F] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent-light';
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 relative">
+    <>
       {/* Bestätigungsdialog: Neue Saison starten */}
       <AnimatePresence>
         {seasonModalOpen && (
@@ -554,12 +555,18 @@ export default function AdminPanel({
         )}
       </AnimatePresence>
 
-      {/* Vereins-Verwaltung (nur Super-Admin) */}
+      {/* Klubs registrieren & bearbeiten (nur Super-Admin) */}
       {isSuperadmin && (
-      <>
+      <AccordionSection
+        id="clubs"
+        title="Klubs registrieren & bearbeiten"
+        subtitle="Neue Vereine anlegen · Kader, Logos, Farben & Wappen pflegen"
+        icon={<Shield className="w-5 h-5" />}
+      >
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
       <div className="lg:col-span-5">
-        <div className="bg-[#101A19]/40 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm h-full">
-          <h3 className="font-display font-bold text-xl uppercase tracking-tight text-white mb-6 flex items-center gap-2">
+        <div>
+          <h3 className="font-display font-bold text-lg uppercase tracking-tight text-white mb-5 flex items-center gap-2">
             <Plus className="w-5 h-5 text-brand-accent-light" />
             Neuen Club registrieren
           </h3>
@@ -653,8 +660,8 @@ export default function AdminPanel({
 
       {/* Club & Kader bearbeiten */}
       <div className="lg:col-span-7">
-        <div className="bg-[#101A19]/40 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm h-full">
-          <h3 className="font-display font-bold text-xl uppercase tracking-tight text-white mb-4 flex items-center gap-2">
+        <div>
+          <h3 className="font-display font-bold text-lg uppercase tracking-tight text-white mb-4 flex items-center gap-2">
             <Shield className="w-5 h-5 text-brand-accent-light" />
             Club & Kader bearbeiten
           </h3>
@@ -792,16 +799,19 @@ export default function AdminPanel({
           </div>
         </div>
       </div>
-      </>
+      </div>
+      </AccordionSection>
       )}
 
       {/* Spieler des Monats */}
-      <div className="lg:col-span-12 mt-4">
-        <div className="bg-[#101A19]/40 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm">
-          <h3 className="font-display font-bold text-xl uppercase tracking-tight text-white mb-4 flex items-center gap-2">
-            <Award className="w-5 h-5 text-yellow-400" />
-            Spieler des Monats konfigurieren
-          </h3>
+      <AccordionSection
+        id="pom"
+        title="Spieler des Monats konfigurieren"
+        subtitle="Auszeichnung, Verein, Leistungsdaten & Portraitfoto"
+        icon={<Award className="w-5 h-5" />}
+        accent="#E9C46A"
+      >
+        <div>
           <p className="text-xs text-gray-400 font-sans mb-4">
             Bestimme den ausgezeichneten Spieler, seinen Verein, die Leistungsdaten und lade sein Portraitfoto hoch —
             erscheint prominent auf der Startseite.
@@ -867,15 +877,17 @@ export default function AdminPanel({
             </div>
           </div>
         </div>
-      </div>
+      </AccordionSection>
 
       {/* Twitch-Livestream */}
-      <div className="lg:col-span-12 mt-4">
-        <div className="bg-[#101A19]/40 border border-white/10 rounded-xl p-6 shadow-xl backdrop-blur-sm">
-          <h3 className="font-display font-bold text-xl uppercase tracking-tight text-white mb-4 flex items-center gap-2">
-            <Radio className="w-5 h-5 text-[#9147ff]" />
-            Twitch-Livestream
-          </h3>
+      <AccordionSection
+        id="twitch"
+        title="Twitch-Livestream"
+        subtitle="Kanal eintragen & Live-Banner schalten"
+        icon={<Radio className="w-5 h-5" />}
+        accent="#9147ff"
+      >
+        <div>
           <p className="text-xs text-gray-400 font-sans mb-6">
             Trage deinen Twitch-Kanal ein und schalte das Live-Banner an, sobald der Stream läuft. Ist der Schalter aus,
             erscheint auf der Website kein Banner.
@@ -935,16 +947,17 @@ export default function AdminPanel({
             </button>
           </div>
         </div>
-      </div>
+      </AccordionSection>
 
-      {/* Saisonverwaltung (nur Super-Admin) */}
+      {/* Saison verwalten (nur Super-Admin) */}
       {isSuperadmin && (
-      <div className="lg:col-span-12 mt-4">
-        <div className="border border-brand-accent-light/20 bg-brand-accent/5 rounded-xl p-6 shadow-xl backdrop-blur-sm">
-          <h3 className="font-display font-bold text-lg uppercase tracking-tight text-white mb-2 flex items-center gap-2">
-            <CalendarPlus className="w-5 h-5 text-brand-accent-light" />
-            Saisonverwaltung
-          </h3>
+      <AccordionSection
+        id="season"
+        title="Saison verwalten"
+        subtitle="Neue Saison starten – Ergebnisse werden archiviert"
+        icon={<CalendarPlus className="w-5 h-5" />}
+      >
+        <div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <p className="text-xs text-gray-400 font-sans leading-relaxed max-w-2xl">
               Aktive Saison: <strong className="text-white font-mono">{currentSeasonLabel || '–'}</strong>. Beim Start
@@ -961,8 +974,8 @@ export default function AdminPanel({
             </button>
           </div>
         </div>
-      </div>
+      </AccordionSection>
       )}
-    </div>
+    </>
   );
 }
