@@ -439,7 +439,7 @@ export default function App() {
           <PageHeader
             kicker={selectedSeason?.label ? `SAISON ${selectedSeason.label}` : 'HERO LEAGUE'}
             title="Ligatabelle"
-            text="Der komplette Tabellenstand der Hero League. Sortierung nach Punkten, Tordifferenz und erzielten Toren."
+            text="Der komplette Tabellenstand der Hero League. Sortierung nach Punkten, Tordifferenz, direktem Vergleich und erzielten Toren."
           />
           {seasonSwitcher}
           <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
