@@ -34,7 +34,7 @@ export default function Navbar({
   const seasonShort = seasonLabel ? seasonLabel.replace(/^20(\d{2})\/(\d{2})$/, '$1/$2') : '';
 
   return (
-    <div className="sticky top-0 z-50 bg-[rgba(7,10,8,.72)] backdrop-blur-xl border-b border-white/[.07]">
+    <div className="sticky top-0 z-50 bg-[rgba(7,10,8,.72)] backdrop-blur-xl border-b border-white/[.07] pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       <div className="max-w-[1320px] mx-auto px-4 sm:px-10 h-[68px] sm:h-[76px] flex items-center gap-5 lg:gap-9">
         {/* Logo + Claim */}
         <button

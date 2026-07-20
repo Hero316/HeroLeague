@@ -1,8 +1,55 @@
 import { Match, Standing, Team } from '../types';
 
 // Tabellenberechnung: Sieg=3, Unentschieden=1, Niederlage=0.
-// Sortierung: Punkte, Tordifferenz, erzielte Tore, alphabetisch.
+// Sortierung: Punkte, Tordifferenz, direkter Vergleich, erzielte Tore, alphabetisch.
 // Wird von Tabelle und Vereins-Detailseite gemeinsam genutzt.
+
+// Direkter Vergleich: Für eine Gruppe punkt- und tordifferenzgleicher Teams eine
+// Mini-Tabelle nur aus den Spielen untereinander (Punkte, dann Tordifferenz, dann
+// erzielte Tore). Liefert je teamId einen Rang (0 = am besten). Gruppen mit weniger
+// als zwei Teams bekommen Rang 0 (kein Effekt).
+function headToHeadRanks(groupTeamIds: string[], matches: Match[]): { [teamId: string]: number } {
+  const ranks: { [teamId: string]: number } = {};
+  groupTeamIds.forEach((id) => (ranks[id] = 0));
+  if (groupTeamIds.length < 2) return ranks;
+
+  const groupSet = new Set(groupTeamIds);
+  const mini: { [teamId: string]: { points: number; goalsFor: number; goalsAgainst: number } } = {};
+  groupTeamIds.forEach((id) => (mini[id] = { points: 0, goalsFor: 0, goalsAgainst: 0 }));
+
+  matches.forEach((match) => {
+    if (match.status !== 'beendet' || match.homeScore === null || match.awayScore === null) return;
+    if (!groupSet.has(match.homeTeamId) || !groupSet.has(match.awayTeamId)) return;
+
+    const home = mini[match.homeTeamId];
+    const away = mini[match.awayTeamId];
+    home.goalsFor += match.homeScore;
+    home.goalsAgainst += match.awayScore;
+    away.goalsFor += match.awayScore;
+    away.goalsAgainst += match.homeScore;
+
+    if (match.homeScore > match.awayScore) home.points += 3;
+    else if (match.homeScore < match.awayScore) away.points += 3;
+    else {
+      home.points += 1;
+      away.points += 1;
+    }
+  });
+
+  // Innerhalb der Gruppe nach direktem Vergleich sortieren und Rang vergeben.
+  const ordered = [...groupTeamIds].sort((a, b) => {
+    const ma = mini[a];
+    const mb = mini[b];
+    if (mb.points !== ma.points) return mb.points - ma.points;
+    const gdA = ma.goalsFor - ma.goalsAgainst;
+    const gdB = mb.goalsFor - mb.goalsAgainst;
+    if (gdB !== gdA) return gdB - gdA;
+    return mb.goalsFor - ma.goalsFor;
+  });
+  ordered.forEach((id, index) => (ranks[id] = index));
+  return ranks;
+}
+
 export function calculateStandings(teams: Team[], matches: Match[]): Standing[] {
   const standingsMap: { [teamId: string]: Standing } = {};
 
@@ -65,16 +112,29 @@ export function calculateStandings(teams: Team[], matches: Match[]): Standing[] 
     }
   });
 
-  return Object.values(standingsMap)
-    .map((standing) => {
-      standing.goalDifference = standing.goalsFor - standing.goalsAgainst;
-      standing.form = standing.form.slice(-5);
-      return standing;
-    })
-    .sort((a, b) => {
-      if (b.points !== a.points) return b.points - a.points;
-      if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
-      if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
-      return a.teamName.localeCompare(b.teamName);
-    });
+  const standings = Object.values(standingsMap).map((standing) => {
+    standing.goalDifference = standing.goalsFor - standing.goalsAgainst;
+    standing.form = standing.form.slice(-5);
+    return standing;
+  });
+
+  // Direkten Vergleich pro Gruppe punkt- und tordifferenzgleicher Teams berechnen.
+  const h2hRank: { [teamId: string]: number } = {};
+  const groups: { [key: string]: string[] } = {};
+  standings.forEach((s) => {
+    const key = `${s.points}|${s.goalDifference}`;
+    (groups[key] ??= []).push(s.teamId);
+  });
+  Object.values(groups).forEach((groupTeamIds) => {
+    const ranks = headToHeadRanks(groupTeamIds, matches);
+    Object.assign(h2hRank, ranks);
+  });
+
+  return standings.sort((a, b) => {
+    if (b.points !== a.points) return b.points - a.points;
+    if (b.goalDifference !== a.goalDifference) return b.goalDifference - a.goalDifference;
+    if (h2hRank[a.teamId] !== h2hRank[b.teamId]) return h2hRank[a.teamId] - h2hRank[b.teamId];
+    if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
+    return a.teamName.localeCompare(b.teamName);
+  });
 }

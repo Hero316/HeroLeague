@@ -95,8 +95,8 @@ export default function TeamDetail({
         />
         <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-6 flex-wrap py-6">
           {team.logoUrl ? (
-            <span className="grid place-items-center w-[118px] h-[118px] shrink-0 rounded-[32px] overflow-hidden border border-white/15 bg-white/5 shadow-[0_18px_40px_rgba(0,0,0,.4)]">
-              <img src={team.logoUrl} alt={team.name} className="w-20 h-20 object-contain" referrerPolicy="no-referrer" />
+            <span className="grid place-items-center w-[118px] h-[118px] shrink-0">
+              <img src={team.logoUrl} alt={team.name} className="w-[118px] h-[118px] object-contain" referrerPolicy="no-referrer" />
             </span>
           ) : (
             <span

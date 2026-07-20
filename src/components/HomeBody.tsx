@@ -57,7 +57,7 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
       <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pt-6 pb-8 grid grid-cols-1 xl:grid-cols-[1.5fr_1fr] gap-6 items-start">
         {/* Tabellen-Karte */}
         <div>
-          <div className="hl-card p-6 pb-5">
+          <div className="hl-card p-4 pb-4 sm:p-6 sm:pb-5">
             <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
               <div className="flex items-center gap-3">
                 <span className="w-[34px] h-[34px] rounded-[10px] bg-[rgba(34,223,201,.14)] border border-[rgba(34,223,201,.25)] flex items-end justify-center gap-[3px] p-2">
