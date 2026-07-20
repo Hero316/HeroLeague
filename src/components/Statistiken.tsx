@@ -8,6 +8,7 @@ interface StatistikenProps {
   players: PlayerStat[];
   matches: Match[];
   teams: Team[];
+  onSelectTeam?: (teamId: string) => void;
 }
 
 type Accent = 'teal' | 'gold' | 'magenta';
@@ -25,7 +26,7 @@ const VALUE_COLOR: Record<Accent, string> = {
 };
 
 // Statistik-Seite: Liga-Kennzahlen als Kachelzeile + Leader-Cards für Spieler und Teams.
-export default function Statistiken({ players, matches, teams }: StatistikenProps) {
+export default function Statistiken({ players, matches, teams, onSelectTeam }: StatistikenProps) {
   const finished = matches.filter((m) => m.status === 'beendet' && m.homeScore !== null && m.awayScore !== null);
   const totalGoals = finished.reduce((acc, m) => acc + (m.homeScore || 0) + (m.awayScore || 0), 0);
   const avgGoals = finished.length ? (totalGoals / finished.length).toFixed(1) : '0.0';
@@ -154,7 +155,16 @@ export default function Statistiken({ players, matches, teams }: StatistikenProp
       unit: 'Tore',
       name: t.name,
       sub: `${clubStats.bestAttack.goalsFor} erzielte Tore`,
-      avatar: <TeamCrest name={t.name} shortName={t.shortName} color={t.logoColor} logoUrl={t.logoUrl} size="lg" />,
+      avatar: (
+        <TeamCrest
+          name={t.name}
+          shortName={t.shortName}
+          color={t.logoColor}
+          logoUrl={t.logoUrl}
+          size="lg"
+          onSelect={onSelectTeam ? () => onSelectTeam(t.id) : undefined}
+        />
+      ),
     });
   }
   if (clubStats.bestDefense) {
@@ -167,7 +177,16 @@ export default function Statistiken({ players, matches, teams }: StatistikenProp
       unit: clubStats.bestDefense.goalsAgainst === 1 ? 'Gegentor' : 'Gegentore',
       name: t.name,
       sub: `Nur ${clubStats.bestDefense.goalsAgainst} Gegentore`,
-      avatar: <TeamCrest name={t.name} shortName={t.shortName} color={t.logoColor} logoUrl={t.logoUrl} size="lg" />,
+      avatar: (
+        <TeamCrest
+          name={t.name}
+          shortName={t.shortName}
+          color={t.logoColor}
+          logoUrl={t.logoUrl}
+          size="lg"
+          onSelect={onSelectTeam ? () => onSelectTeam(t.id) : undefined}
+        />
+      ),
     });
   }
   if (clubStats.mostCleanSheets && clubStats.mostCleanSheets.cleanSheets > 0) {
@@ -180,7 +199,16 @@ export default function Statistiken({ players, matches, teams }: StatistikenProp
       unit: clubStats.mostCleanSheets.cleanSheets === 1 ? 'Spiel' : 'Spiele',
       name: t.name,
       sub: `Zu null in ${clubStats.mostCleanSheets.cleanSheets} ${clubStats.mostCleanSheets.cleanSheets === 1 ? 'Spiel' : 'Spielen'}`,
-      avatar: <TeamCrest name={t.name} shortName={t.shortName} color={t.logoColor} logoUrl={t.logoUrl} size="lg" />,
+      avatar: (
+        <TeamCrest
+          name={t.name}
+          shortName={t.shortName}
+          color={t.logoColor}
+          logoUrl={t.logoUrl}
+          size="lg"
+          onSelect={onSelectTeam ? () => onSelectTeam(t.id) : undefined}
+        />
+      ),
     });
   }
 

@@ -149,9 +149,17 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
                 const isLive = m.status === 'live';
                 const upcoming = m.status === 'geplant';
                 return (
-                  <button
+                  <div
                     key={m.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => onNavigate('spielplan')}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onNavigate('spielplan');
+                      }
+                    }}
                     className={`block w-full text-left rounded-[14px] px-4 py-3.5 mb-3 last:mb-0 cursor-pointer transition-all hover:-translate-y-0.5 hover:border-[rgba(34,223,201,.45)] ${
                       isLive
                         ? 'bg-[linear-gradient(135deg,rgba(34,223,201,.08),rgba(255,255,255,.02))] border border-[rgba(34,223,201,.3)] shadow-[0_0_26px_rgba(34,223,201,.08)]'
@@ -166,7 +174,7 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
                     </div>
                     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2.5">
                       <div className="flex items-center gap-2 min-w-0">
-                        <TeamCrest name={home.name} shortName={home.shortName} color={home.logoColor} logoUrl={home.logoUrl} size="sm" />
+                        <TeamCrest name={home.name} shortName={home.shortName} color={home.logoColor} logoUrl={home.logoUrl} size="sm" onSelect={onSelectTeam ? () => onSelectTeam(home.id) : undefined} />
                         <span className="font-sans font-semibold text-[13px] sm:text-[13.5px] text-hl-text leading-tight break-words min-w-0">{home.name}</span>
                       </div>
                       {upcoming ? (
@@ -182,10 +190,10 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
                       )}
                       <div className="flex items-center gap-2 justify-end min-w-0">
                         <span className="font-sans font-semibold text-[13px] sm:text-[13.5px] text-hl-text leading-tight break-words min-w-0 text-right">{away.name}</span>
-                        <TeamCrest name={away.name} shortName={away.shortName} color={away.logoColor} logoUrl={away.logoUrl} size="sm" />
+                        <TeamCrest name={away.name} shortName={away.shortName} color={away.logoColor} logoUrl={away.logoUrl} size="sm" onSelect={onSelectTeam ? () => onSelectTeam(away.id) : undefined} />
                       </div>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </>

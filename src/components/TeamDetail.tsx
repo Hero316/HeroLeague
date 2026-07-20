@@ -3,7 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Match, PlayerStat, Team } from '../types';
 import { calculateStandings } from '../lib/standings';
 import PlayerAvatar from './PlayerAvatar';
-import { TeamCrest, FormPill, MatchStatusBadge, shortDate, shade, monogram } from './ui';
+import { TeamCrest, FormPill, MatchStatusBadge, shortDate, shade, monogram, ImageZoom } from './ui';
 
 interface TeamDetailProps {
   team: Team;
@@ -95,9 +95,12 @@ export default function TeamDetail({
         />
         <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-6 flex-wrap py-6">
           {team.logoUrl ? (
-            <span className="grid place-items-center w-[118px] h-[118px] shrink-0">
-              <img src={team.logoUrl} alt={team.name} className="w-[118px] h-[118px] object-contain" referrerPolicy="no-referrer" />
-            </span>
+            <ImageZoom
+              src={team.logoUrl}
+              alt={team.name}
+              className="w-[118px] h-[118px] object-contain"
+              zoomClassName="w-72 sm:w-96 max-w-[85vw] max-h-[80vh] object-contain"
+            />
           ) : (
             <span
               className="grid place-items-center w-[118px] h-[118px] shrink-0 rounded-[32px] font-display font-black text-5xl text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.18),0_18px_40px_rgba(0,0,0,.4)]"
@@ -266,14 +269,14 @@ export default function TeamDetail({
                 </div>
                 <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
                   <div className="flex flex-col items-center gap-2">
-                    <TeamCrest name={home.name} shortName={home.shortName} color={home.logoColor} logoUrl={home.logoUrl} size="lg" />
+                    <TeamCrest name={home.name} shortName={home.shortName} color={home.logoColor} logoUrl={home.logoUrl} size="lg" onSelect={() => onSelectTeam(home.id)} />
                     <span className="font-sans font-semibold text-xs text-hl-text text-center">{home.name}</span>
                   </div>
                   <span className="font-display font-black text-xl text-brand-accent-light">
                     {nextMatch.status === 'live' ? `${nextMatch.homeScore ?? 0}:${nextMatch.awayScore ?? 0}` : 'VS'}
                   </span>
                   <div className="flex flex-col items-center gap-2">
-                    <TeamCrest name={away.name} shortName={away.shortName} color={away.logoColor} logoUrl={away.logoUrl} size="lg" />
+                    <TeamCrest name={away.name} shortName={away.shortName} color={away.logoColor} logoUrl={away.logoUrl} size="lg" onSelect={() => onSelectTeam(away.id)} />
                     <span className="font-sans font-semibold text-xs text-hl-text text-center">{away.name}</span>
                   </div>
                 </div>

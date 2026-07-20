@@ -110,6 +110,7 @@ export default function App() {
   const navigateTo = (path: string) => {
     window.history.pushState({}, '', path);
     setCurrentPath(path);
+    window.scrollTo({ top: 0 }); // neue Seite (z.B. Vereinsseite) immer oben starten
   };
 
   const handleLogout = async () => {
@@ -406,7 +407,7 @@ export default function App() {
 
       {activeTab === 'home' && (
         <>
-          <Hero teams={teams} matches={currentSeasonMatches} seasonLabel={currentSeason?.label ?? ''} onNavigate={goToTab} />
+          <Hero teams={teams} matches={currentSeasonMatches} seasonLabel={currentSeason?.label ?? ''} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
           <HomeBody
             teams={teams}
             matches={currentSeasonMatches}
@@ -478,7 +479,7 @@ export default function App() {
             text="Die Bestwerte der Hero League — Spieler und Teams, die den Ton angeben."
           />
           {seasonSwitcher}
-          <Statistiken players={players} matches={seasonMatches} teams={teams} />
+          <Statistiken players={players} matches={seasonMatches} teams={teams} onSelectTeam={openTeamDetail} />
         </>
       )}
 

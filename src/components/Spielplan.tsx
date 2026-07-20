@@ -998,7 +998,7 @@ export default function Spielplan({
                   {/* Teams + Ergebnis */}
                   <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-3.5">
                     <div className="flex items-center gap-[11px] min-w-0">
-                      <TeamCrest name={home.name} shortName={home.shortName} color={home.logoColor} logoUrl={home.logoUrl} size="lg" />
+                      <TeamCrest name={home.name} shortName={home.shortName} color={home.logoColor} logoUrl={home.logoUrl} size="lg" onSelect={onSelectTeam ? () => onSelectTeam(home.id) : undefined} />
                       {onSelectTeam ? (
                         <button
                           onClick={() => onSelectTeam(home.id)}
@@ -1036,7 +1036,7 @@ export default function Spielplan({
                       ) : (
                         <span className="font-sans font-semibold text-sm sm:text-[15px] text-hl-text leading-tight break-words min-w-0 text-right">{away.name}</span>
                       )}
-                      <TeamCrest name={away.name} shortName={away.shortName} color={away.logoColor} logoUrl={away.logoUrl} size="lg" />
+                      <TeamCrest name={away.name} shortName={away.shortName} color={away.logoColor} logoUrl={away.logoUrl} size="lg" onSelect={onSelectTeam ? () => onSelectTeam(away.id) : undefined} />
                     </div>
                   </div>
 
