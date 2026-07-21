@@ -114,6 +114,21 @@ body {
   animation: hlZoom 24s ease-in-out infinite alternate;
 }
 
+/* Bewegung reduzieren: Endlos-Animationen ausschalten, Einblendungen sofort final.
+   Die JS-Animationen (motion) respektieren die Einstellung bereits ueber useReducedMotion. */
+@media (prefers-reduced-motion: reduce) {
+  .hl-zoom,
+  .hl-marquee,
+  .hl-pulse {
+    animation: none !important;
+  }
+  .hl-fade {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
 /* Glas-Karte: wiederkehrender Kartenstil des Designs */
 .hl-card {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));

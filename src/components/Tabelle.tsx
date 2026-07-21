@@ -1,7 +1,9 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import { Team, Match, Standing } from '../types';
 import { calculateStandings } from '../lib/standings';
 import { TeamCrest, FormPill } from './ui';
+import { CountUp, useSettledList } from './anim';
 
 interface TabelleProps {
   teams: Team[];
@@ -15,6 +17,9 @@ interface TabelleProps {
 // Mobil: weniger Spalten, volle Vereinsnamen dürfen zweizeilig umbrechen (kein Abschneiden).
 export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, compact = false }: TabelleProps) {
   const standings: Standing[] = React.useMemo(() => calculateStandings(teams, matches), [teams, matches]);
+
+  // Einsortier-Animation: startet alphabetisch und rutscht in die echte Tabelle.
+  const { ref: listRef, items: displayStandings } = useSettledList(standings, (s) => s.teamName);
 
   // Zonen: Meisterschaftsrunde = Top 3, Abstiegszone = letzte 2 (nur bei genug Teams)
   const championsEnd = 3;
@@ -42,7 +47,7 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
   }
 
   return (
-    <div className={compact ? '' : 'hl-card px-2.5 sm:px-[22px] py-3 sm:pt-3 sm:pb-[18px]'}>
+    <div ref={listRef} className={compact ? '' : 'hl-card px-2.5 sm:px-[22px] py-3 sm:pt-3 sm:pb-[18px]'}>
       {/* Kopfzeile */}
       <div
         className={`grid ${gridCols} gap-1.5 sm:gap-2 px-1.5 sm:px-2.5 pt-3 pb-3 border-b border-white/[.08] font-sans font-bold text-[10px] sm:text-[10.5px] tracking-wider text-hl-faint`}
@@ -59,14 +64,16 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
         <span className={`text-right ${formCls === 'hidden' ? 'hidden' : 'hidden xl:block'}`}>FORM</span>
       </div>
 
-      {standings.map((standing, index) => {
+      {displayStandings.map((standing, index) => {
         const rank = index + 1;
         const isChamp = rank <= championsEnd;
         const isReleg = rank > relegationStart;
         const zoneColor = isChamp ? '#22DFC9' : isReleg ? '#FF5442' : 'transparent';
 
         return (
-          <button
+          <motion.button
+            layout="position"
+            transition={{ type: 'spring', stiffness: 520, damping: 42 }}
             key={standing.teamId}
             onClick={onSelectTeam ? () => onSelectTeam(standing.teamId) : undefined}
             title={onSelectTeam ? `${standing.teamName} – Vereinsseite öffnen` : undefined}
@@ -109,7 +116,9 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
               </span>
             </span>
 
-            <span className="text-center font-sans text-xs sm:text-[13px] text-hl-mute">{standing.played}</span>
+            <span className="text-center font-sans text-xs sm:text-[13px] text-hl-mute">
+              <CountUp value={standing.played} />
+            </span>
             <span className={`text-center font-sans text-[13px] text-hl-mute ${sunCls}`}>{standing.won}</span>
             <span className={`text-center font-sans text-[13px] text-hl-mute ${sunCls}`}>{standing.drawn}</span>
             <span className={`text-center font-sans text-[13px] text-hl-mute ${sunCls}`}>{standing.lost}</span>
@@ -125,15 +134,17 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
                   : 'text-hl-dim'
               }`}
             >
-              {standing.goalDifference > 0 ? `+${standing.goalDifference}` : standing.goalDifference}
+              <CountUp value={standing.goalDifference} signed />
             </span>
-            <span className="text-center font-display font-black text-base sm:text-lg text-white">{standing.points}</span>
+            <span className="text-center font-display font-black text-base sm:text-lg text-white">
+              <CountUp value={standing.points} />
+            </span>
             <span className={`gap-1 justify-end ${formCls}`}>
               {standing.form.map((res, i) => (
                 <FormPill key={i} result={res} />
               ))}
             </span>
-          </button>
+          </motion.button>
         );
       })}
 

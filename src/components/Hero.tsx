@@ -148,7 +148,7 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
         </div>
         <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-16 sm:pt-10 sm:pb-26 min-h-[inherit] flex items-center">
           <div className="w-full flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 sm:gap-8 lg:gap-11">
-            <div className="max-w-[600px]">
+            <div className="max-w-[600px] hl-fade">
               <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.3)]">
                 <span className="w-[7px] h-[7px] rounded-full bg-brand-accent-light shadow-[0_0_10px_#22DFC9] hl-pulse" />
                 <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-brand-accent-light">{kicker}</span>
@@ -273,12 +273,15 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
             )}
           </div>
           <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_80%_26%,rgba(233,196,106,.16),transparent_55%)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,#0A1415_8%,rgba(6,14,15,.7)_36%,rgba(6,14,15,.15)_62%,transparent)]" />
+          {/* Handy: nur den unteren Bereich abdunkeln, damit Gesicht/Foto oben klar sichtbar bleibt */}
+          <div className="absolute inset-0 sm:hidden bg-[linear-gradient(0deg,#0A1415_16%,rgba(10,20,21,.5)_44%,transparent_74%)]" />
+          {/* Desktop: seitliche Abdunkelung fuer die Textspalte links */}
+          <div className="absolute inset-0 hidden sm:block bg-[linear-gradient(90deg,#0A1415_8%,rgba(6,14,15,.7)_36%,rgba(6,14,15,.15)_62%,transparent)]" />
           <div className="absolute inset-0 bg-[linear-gradient(180deg,#0A1415_4%,transparent_26%)]" />
           <div className="absolute inset-0 bg-[linear-gradient(0deg,#0A1415_2%,transparent_34%)]" />
         </div>
-        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-16 sm:pt-10 sm:pb-26 min-h-[inherit] flex items-center">
-          <div className="max-w-[560px]">
+        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-16 sm:pt-10 sm:pb-26 min-h-[inherit] flex items-end sm:items-center">
+          <div className="max-w-[560px] hl-fade">
             <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(233,196,106,.12)] border border-[rgba(233,196,106,.34)]">
               <span className="text-xs leading-none text-hl-gold">★</span>
               <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-hl-gold">SPIELER DES MONATS</span>
@@ -342,7 +345,7 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
         </div>
         <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-16 sm:pt-10 sm:pb-26 min-h-[inherit] flex items-center">
           <div className="w-full flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 sm:gap-8 lg:gap-11">
-            <div className="max-w-[560px]">
+            <div className="max-w-[560px] hl-fade">
               <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.3)]">
                 <span className="text-[11px] leading-none text-brand-accent-light">▲</span>
                 <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-brand-accent-light">TABELLENFÜHRER</span>
