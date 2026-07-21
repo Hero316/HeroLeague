@@ -1,13 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActiveTab, Match, PlayerOfMonth, Team } from '../types';
+import { ActiveTab, Match, PlayerOfMonth, PlayerStat, Team } from '../types';
 import { apiFetch } from '../lib/api';
 import { MapPin } from 'lucide-react';
 import { calculateStandings } from '../lib/standings';
 import { TeamCrest, shortDate } from './ui';
+import PlayerOfMonthCard from './PlayerOfMonthCard';
 
 interface HeroProps {
   teams: Team[];
   matches: Match[];
+  players: PlayerStat[];
   seasonLabel: string;
   onNavigate: (tab: ActiveTab) => void;
   onSelectTeam?: (teamId: string) => void;
@@ -15,7 +17,7 @@ interface HeroProps {
 
 // Vollflächiges Hero-Carousel (Magenta-TV-Stil) mit drei Slides:
 // 1. Nächster Spieltag / Live-Spiel  2. Spieler des Monats  3. Tabellenführer
-export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelectTeam }: HeroProps) {
+export default function Hero({ teams, matches, players, seasonLabel, onNavigate, onSelectTeam }: HeroProps) {
   const [pom, setPom] = useState<PlayerOfMonth | null>(null);
   const [active, setActive] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -260,67 +262,49 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
   // ---------- Slide 2: Spieler des Monats ----------
   const renderPomSlide = () => {
     if (!pom) return null;
-    const ratio = pom.goals > 0 ? (pom.goals / Math.max(1, 3)).toFixed(1) : null;
-    void ratio;
+    const pomTeam = teams.find((t) => t.name === pom.club);
+    const crest = pomTeam
+      ? { name: pomTeam.name, shortName: pomTeam.shortName, logoColor: pomTeam.logoColor, logoUrl: pomTeam.logoUrl }
+      : undefined;
+    const pomPoints = players.find((p) => p.name === pom.name)?.points;
     return (
       <>
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -inset-[4%] hl-zoom">
-            {pom.image ? (
-              <img src={pom.image} alt={pom.name} className="absolute inset-0 w-full h-full object-cover object-top" referrerPolicy="no-referrer" />
-            ) : (
-              <img src="/assets/hero-crowd.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
-            )}
+          <div className="absolute -inset-[5%] hl-zoom">
+            <img src="/assets/hero-crowd.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
           </div>
-          <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_80%_26%,rgba(233,196,106,.16),transparent_55%)]" />
-          {/* Handy: nur den unteren Bereich abdunkeln, damit Gesicht/Foto oben klar sichtbar bleibt */}
-          <div className="absolute inset-0 sm:hidden bg-[linear-gradient(0deg,#0A1415_16%,rgba(10,20,21,.5)_44%,transparent_74%)]" />
-          {/* Desktop: seitliche Abdunkelung fuer die Textspalte links */}
-          <div className="absolute inset-0 hidden sm:block bg-[linear-gradient(90deg,#0A1415_8%,rgba(6,14,15,.7)_36%,rgba(6,14,15,.15)_62%,transparent)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,#0A1415_4%,transparent_26%)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(0deg,#0A1415_2%,transparent_34%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_78%_30%,rgba(233,196,106,.14),transparent_55%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,#0A1415_6%,rgba(6,14,15,.82)_38%,rgba(6,14,15,.4)_66%,transparent)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(0deg,#0A1415_2%,transparent_36%)]" />
         </div>
-        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-16 sm:pt-10 sm:pb-26 min-h-[inherit] flex items-end sm:items-center">
-          <div className="max-w-[560px] hl-fade">
-            <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(233,196,106,.12)] border border-[rgba(233,196,106,.34)]">
-              <span className="text-xs leading-none text-hl-gold">★</span>
-              <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-hl-gold">SPIELER DES MONATS</span>
-            </div>
-            <div className="font-sans font-bold text-[13px] tracking-[3px] text-[#8a938c] mt-6 uppercase">{pom.club}</div>
-            <h1 className="mt-2 font-display font-black text-[40px] sm:text-7xl xl:text-[98px] leading-[.85] tracking-tight uppercase text-white">
-              {pom.name.split(' ').slice(0, -1).join(' ') || pom.name}
-              {pom.name.includes(' ') && (
-                <>
-                  <br />
-                  <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">
-                    {pom.name.split(' ').slice(-1)[0]}
-                  </span>
-                </>
-              )}
-            </h1>
-            <div className="flex gap-2.5 mt-6 max-w-[380px]">
-              <div className="flex-1 relative rounded-[14px] overflow-hidden">
-                <div className="absolute inset-0 bg-[linear-gradient(150deg,rgba(34,223,201,.14),rgba(255,255,255,.02))] pointer-events-none" />
-                <div className="relative bg-[rgba(11,17,17,.4)] border border-white/[.12] rounded-[14px] px-2 py-3 text-center backdrop-blur-xl">
-                  <div className="font-display font-black text-3xl leading-none text-brand-accent-light">{pom.goals}</div>
-                  <div className="font-sans font-bold text-[9px] tracking-[1.5px] text-hl-mute mt-1.5">TORE</div>
-                </div>
+        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-8 pb-16 sm:pt-10 sm:pb-26 min-h-[inherit] flex items-center">
+          <div className="w-full flex flex-col lg:flex-row items-center justify-between gap-9 lg:gap-11">
+            {/* Textspalte */}
+            <div className="max-w-[520px] hl-fade text-center lg:text-left">
+              <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(233,196,106,.12)] border border-[rgba(233,196,106,.34)]">
+                <span className="text-xs leading-none text-hl-gold">★</span>
+                <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-hl-gold">AUSZEICHNUNG</span>
               </div>
-              <div className="flex-1 relative rounded-[14px] overflow-hidden">
-                <div className="absolute inset-0 bg-[linear-gradient(150deg,rgba(255,255,255,.06),rgba(255,255,255,.02))] pointer-events-none" />
-                <div className="relative bg-[rgba(11,17,17,.4)] border border-white/[.12] rounded-[14px] px-2 py-3 text-center backdrop-blur-xl">
-                  <div className="font-display font-black text-3xl leading-none text-white">{pom.assists}</div>
-                  <div className="font-sans font-bold text-[9px] tracking-[1.5px] text-hl-mute mt-1.5">ASSISTS</div>
-                </div>
+              <h1 className="mt-5 font-display font-black text-[40px] sm:text-7xl xl:text-[88px] leading-[.85] tracking-tight uppercase text-white">
+                Spieler des
+                <br />
+                <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">Monats</span>
+              </h1>
+              <p className="mt-5 max-w-[430px] mx-auto lg:mx-0 text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
+                Die herausragende Leistung des Monats in der Hero League.
+              </p>
+              <div className="flex gap-3 mt-7 flex-wrap justify-center lg:justify-start">
+                <button onClick={() => onNavigate('torschuetzen')} className={primaryBtn}>
+                  ▸ TORSCHÜTZEN
+                </button>
+                <button onClick={() => onNavigate('statistiken')} className={secondaryBtn}>
+                  STATISTIKEN
+                </button>
               </div>
             </div>
-            <div className="flex gap-3 mt-6 flex-wrap">
-              <button onClick={() => onNavigate('torschuetzen')} className={primaryBtn}>
-                ▸ TORSCHÜTZEN
-              </button>
-              <button onClick={() => onNavigate('statistiken')} className={secondaryBtn}>
-                STATISTIKEN
-              </button>
+            {/* Karte */}
+            <div className="flex-none w-full max-w-[360px] hl-fade">
+              <PlayerOfMonthCard pom={pom} crest={crest} points={pomPoints} />
             </div>
           </div>
         </div>

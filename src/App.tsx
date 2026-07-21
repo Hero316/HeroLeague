@@ -20,9 +20,25 @@ import Ergebniszettel from './components/Ergebniszettel';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
 import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer } from 'lucide-react';
 
+// Öffentliche Tabs haben eigene URLs, damit man nach einem Reload dort bleibt, wo man war.
+const TAB_PATHS: Record<ActiveTab, string> = {
+  home: '/',
+  spielplan: '/spielplan',
+  tabelle: '/tabelle',
+  torschuetzen: '/torschuetzen',
+  statistiken: '/statistiken',
+};
+
+const tabFromPath = (path: string): ActiveTab => {
+  const clean = path.replace(/\/+$/, '') || '/';
+  const entry = (Object.entries(TAB_PATHS) as [ActiveTab, string][]).find(([, p]) => p === clean);
+  return entry ? entry[0] : 'home';
+};
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('home');
   const [currentPath, setCurrentPath] = useState<string>(window.location.pathname);
+  // Aktiver Tab wird aus der URL abgeleitet – überlebt so den Reload
+  const activeTab = tabFromPath(currentPath);
 
   const [teams, setTeams] = useState<Team[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -194,9 +210,7 @@ export default function App() {
   const openTeamDetail = (teamId: string) => navigateTo(`/verein/${encodeURIComponent(teamId)}`);
 
   const goToTab = (tab: ActiveTab) => {
-    if (currentPath !== '/') navigateTo('/');
-    setActiveTab(tab);
-    window.scrollTo({ top: 0 });
+    navigateTo(TAB_PATHS[tab]);
   };
 
   if (isLoading) {
@@ -414,7 +428,7 @@ export default function App() {
       <div key={activeTab} className="hl-fade">
       {activeTab === 'home' && (
         <>
-          <Hero teams={teams} matches={currentSeasonMatches} seasonLabel={currentSeason?.label ?? ''} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
+          <Hero teams={teams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeason?.label ?? ''} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
           <HomeBody
             teams={teams}
             matches={currentSeasonMatches}

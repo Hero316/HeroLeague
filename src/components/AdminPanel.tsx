@@ -853,7 +853,7 @@ export default function AdminPanel({
             </div>
 
             <div className="md:col-span-2">
-              <ImageUploader label="Spieler-Portraitfoto (Upload)" value={pomImage} onChange={setPomImage} />
+              <ImageUploader label="Spieler-Portraitfoto — am besten freigestellt (transparenter Hintergrund)" value={pomImage} onChange={setPomImage} />
             </div>
 
             <div className="md:col-span-2 flex items-center justify-end gap-3 pb-1">
