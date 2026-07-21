@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActiveTab, Match, PlayerStat, Team } from '../types';
 import Tabelle from './Tabelle';
-import PlayerAvatar from './PlayerAvatar';
 import { TeamCrest, MatchStatusBadge, LiveBadge, shortDate } from './ui';
-import { CountUp, Reveal } from './anim';
+import { Reveal } from './anim';
 
 interface HomeBodyProps {
   teams: Team[];
@@ -14,8 +13,7 @@ interface HomeBodyProps {
   onSelectTeam: (teamId: string) => void;
 }
 
-// Inhalt der Startseite unter dem Hero: Tabelle + Spielplan-Karte,
-// Top-Torschützen und Abschluss-CTA.
+// Inhalt der Startseite unter dem Hero: Tabelle + Spielplan-Karte und Abschluss-CTA.
 export default function HomeBody({ teams, matches, players, seasonLabel, onNavigate, onSelectTeam }: HomeBodyProps) {
   const getTeam = (id: string) => teams.find((t) => t.id === id);
 
@@ -45,20 +43,13 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
   const windowStart = Math.max(0, Math.min(activeIndex, matchdays.length - 2));
   const visibleTabs = matchdays.slice(windowStart, windowStart + 2);
 
-  const scorers = useMemo(
-    () => [...players].filter((p) => p.goals > 0).sort((a, b) => b.goals - a.goals || b.assists - a.assists),
-    [players]
-  );
-  const topScorer = scorers[0];
-  const restScorers = scorers.slice(1, 5);
-
   return (
     <>
       {/* ===== Tabelle + Spielplan ===== */}
-      <Reveal className="max-w-[1320px] mx-auto px-4 sm:px-10 pt-6 pb-8 grid grid-cols-1 xl:grid-cols-[1.5fr_1fr] gap-6 items-start">
+      <Reveal className="max-w-[1320px] mx-auto px-4 sm:px-10 pt-6 pb-8 grid grid-cols-1 xl:grid-cols-[1.5fr_1fr] gap-6 items-stretch">
         {/* Tabellen-Karte */}
-        <div>
-          <div className="hl-card p-4 pb-4 sm:p-6 sm:pb-5">
+        <div className="h-full">
+          <div className="hl-card p-4 pb-4 sm:p-6 sm:pb-5 h-full">
             <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
               <div className="flex items-center gap-3">
                 <span className="w-[34px] h-[34px] rounded-[10px] bg-[rgba(34,223,201,.14)] border border-[rgba(34,223,201,.25)] flex items-end justify-center gap-[3px] p-2">
@@ -85,7 +76,7 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
         </div>
 
         {/* Spielplan-Karte */}
-        <div className="hl-card p-6 pb-[22px]">
+        <div className="hl-card p-6 pb-[22px] flex flex-col h-full">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-3">
               <span className="w-[34px] h-[34px] rounded-[10px] bg-[rgba(67,229,160,.14)] border border-[rgba(67,229,160,.25)] relative flex items-center justify-center">
@@ -142,8 +133,8 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
                 </button>
               </div>
 
-              {/* Spiele */}
-              {fixtures.map((m) => {
+              {/* Spiele (auf der Startseite begrenzt) */}
+              {fixtures.slice(0, 6).map((m) => {
                 const home = getTeam(m.homeTeamId);
                 const away = getTeam(m.awayTeamId);
                 if (!home || !away) return null;
@@ -197,111 +188,26 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
                   </div>
                 );
               })}
+              {/* Abschluss der Karte: fuellt die Hoehe & fuehrt zum vollen Spielplan */}
+              <div className="mt-auto pt-4">
+                {fixtures.length > 6 && (
+                  <div className="text-center text-[11px] text-hl-dim font-sans mb-2.5">
+                    +{fixtures.length - 6} weitere Spiele
+                  </div>
+                )}
+                <button
+                  onClick={() => onNavigate('spielplan')}
+                  className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-[12px] bg-white/[.04] hover:bg-[rgba(67,229,160,.1)] border border-white/[.1] hover:border-[rgba(67,229,160,.4)] text-xs font-sans font-bold uppercase tracking-wider text-hl-soft hover:text-white transition-colors cursor-pointer"
+                >
+                  Ganzen Spielplan ansehen →
+                </button>
+              </div>
             </>
           )}
         </div>
       </Reveal>
 
-      {/* ===== Top-Torschützen ===== */}
-      {topScorer && (
-        <Reveal className="max-w-[1320px] mx-auto px-4 sm:px-10 pt-2 pb-10">
-          <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-            <div className="flex items-baseline gap-3.5 flex-wrap">
-              <span className="font-sans font-extrabold text-[11px] tracking-[3px] text-brand-accent-light">TORJÄGERLISTE</span>
-              <span className="font-display font-black text-[28px] tracking-[.5px] uppercase text-white">Torschützenkönig</span>
-            </div>
-            <button
-              onClick={() => onNavigate('torschuetzen')}
-              className="font-sans font-bold text-xs tracking-wider text-brand-accent-light hover:text-[#6FF0E0] cursor-pointer"
-            >
-              ALLE TORSCHÜTZEN →
-            </button>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-[1.05fr_1fr] gap-6 items-stretch">
-            {/* Featured #1 */}
-            <div className="relative overflow-hidden rounded-[22px] bg-[linear-gradient(135deg,rgba(34,223,201,.14),rgba(10,14,11,.55))] border border-[rgba(34,223,201,.22)] p-6 sm:p-8">
-              <span className="absolute right-1.5 -top-6 font-display font-black text-[220px] leading-none text-[rgba(34,223,201,.08)] pointer-events-none select-none">
-                01
-              </span>
-              <div className="relative">
-                <div className="font-sans font-extrabold text-[11px] tracking-[2px] text-brand-accent-light">GOLDENER SCHUH</div>
-                <div className="flex items-center gap-4 mt-5">
-                  <PlayerAvatar name={topScorer.name} imageUrl={topScorer.imageUrl} color={topScorer.teamLogoColor} size="lg" />
-                  <div>
-                    <div className="font-display font-black text-3xl sm:text-[34px] leading-[.92] uppercase text-white">{topScorer.name}</div>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span
-                        className="w-2 h-2 rounded-full inline-block"
-                        style={{ backgroundColor: topScorer.teamLogoColor }}
-                      />
-                      <span className="font-sans font-semibold text-[13px] text-hl-mute">{topScorer.teamName}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex gap-6 sm:gap-[30px] mt-7">
-                  <div>
-                    <div className="font-display font-black text-5xl sm:text-[52px] leading-[.9] text-brand-accent-light">
-                      <CountUp value={topScorer.goals} />
-                    </div>
-                    <div className="font-sans font-bold text-[10px] tracking-[2px] text-hl-dim mt-1">TORE</div>
-                  </div>
-                  <div className="w-px bg-white/10" />
-                  <div>
-                    <div className="font-display font-black text-5xl sm:text-[52px] leading-[.9] text-white">
-                      <CountUp value={topScorer.assists} />
-                    </div>
-                    <div className="font-sans font-bold text-[10px] tracking-[2px] text-hl-dim mt-1">ASSISTS</div>
-                  </div>
-                  <div className="w-px bg-white/10" />
-                  <div>
-                    <div className="font-display font-black text-5xl sm:text-[52px] leading-[.9] text-white">
-                      <CountUp value={topScorer.matchesPlayed} />
-                    </div>
-                    <div className="font-sans font-bold text-[10px] tracking-[2px] text-hl-dim mt-1">SPIELE</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            {/* Liste 2–5 */}
-            <div className="flex flex-col gap-[11px]">
-              {restScorers.map((s, i) => (
-                <div
-                  key={s.id}
-                  className="flex items-center gap-3 sm:gap-[15px] px-4 py-[15px] rounded-[15px] bg-white/[.025] border border-white/[.06] transition-colors hover:border-[rgba(34,223,201,.3)] hover:bg-[rgba(34,223,201,.04)]"
-                >
-                  <span className="font-display font-black text-xl text-hl-faint w-[22px] text-center shrink-0">{i + 2}</span>
-                  <PlayerAvatar name={s.name} imageUrl={s.imageUrl} color={s.teamLogoColor} size="md" />
-                  <div className="min-w-0 flex-1">
-                    <div className="font-sans font-bold text-[15px] text-hl-text truncate">{s.name}</div>
-                    <div className="flex items-center gap-[7px] mt-1">
-                      <span className="w-1.5 h-1.5 rounded-full inline-block shrink-0" style={{ backgroundColor: s.teamLogoColor }} />
-                      <span className="font-sans text-xs text-hl-dim truncate">{s.teamName}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-baseline gap-1 shrink-0">
-                    <span className="font-display font-black text-[26px] text-brand-accent-light">
-                      <CountUp value={s.goals} />
-                    </span>
-                    <span className="font-sans font-bold text-[11px] text-hl-dim">TORE</span>
-                  </div>
-                  <div className="w-px h-[26px] bg-white/[.08] hidden sm:block" />
-                  <div className="hidden sm:flex items-baseline gap-1 w-[58px] justify-end">
-                    <span className="font-display font-black text-xl text-hl-soft">{s.assists}</span>
-                    <span className="font-sans font-bold text-[11px] text-hl-dim">A</span>
-                  </div>
-                </div>
-              ))}
-              {restScorers.length === 0 && (
-                <div className="flex-1 flex items-center justify-center rounded-[15px] bg-white/[.025] border border-white/[.06] text-hl-mute font-sans text-sm py-10">
-                  Noch keine weiteren Torschützen.
-                </div>
-              )}
-            </div>
-          </div>
-        </Reveal>
-      )}
-
-      {/* ===== Closer-CTA ===== */}
+      {/* ===== Closer-CTA (Abschluss) ===== */}
       <Reveal className="relative overflow-hidden border-t border-white/[.07]">
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute -bottom-[260px] left-1/2 -translate-x-1/2 w-[900px] h-[520px] bg-[radial-gradient(circle,rgba(34,223,201,.16),transparent_65%)]" />
