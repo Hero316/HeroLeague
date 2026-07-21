@@ -92,15 +92,6 @@ export default function Hero({ teams, matches, players, seasonLabel, onNavigate,
     arm();
   };
 
-  const wrapStyle = (i: number): React.CSSProperties => ({
-    position: 'absolute',
-    inset: 0,
-    transition: 'opacity 1s ease',
-    opacity: i === current ? 1 : 0,
-    zIndex: i === current ? 2 : 1,
-    pointerEvents: i === current ? 'auto' : 'none',
-  });
-
   const primaryBtn =
     'inline-flex items-center gap-2 px-4 py-2.5 sm:gap-2.5 sm:px-6 sm:py-[15px] rounded-[11px] sm:rounded-[13px] bg-brand-accent-light text-[#062018] font-sans font-extrabold text-xs sm:text-sm tracking-wider shadow-[0_10px_30px_rgba(34,223,201,.28)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_42px_rgba(34,223,201,.42)] cursor-pointer';
   const secondaryBtn =
@@ -148,7 +139,7 @@ export default function Hero({ teams, matches, players, seasonLabel, onNavigate,
           <div className="absolute inset-0 bg-[linear-gradient(90deg,#0A1415_6%,rgba(6,14,15,.78)_34%,rgba(6,14,15,.2)_64%,transparent)]" />
           <div className="absolute inset-0 bg-[linear-gradient(0deg,#0A1415_2%,transparent_34%)]" />
         </div>
-        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-16 sm:pt-10 sm:pb-26 min-h-[inherit] flex items-center">
+        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-24 sm:pt-10 sm:pb-26 w-full flex items-center">
           <div className="w-full flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 sm:gap-8 lg:gap-11">
             <div className="max-w-[600px] hl-fade">
               <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.3)]">
@@ -287,7 +278,7 @@ export default function Hero({ teams, matches, players, seasonLabel, onNavigate,
           <div className="absolute -inset-[10%] opacity-70 bg-[repeating-linear-gradient(115deg,transparent_0,transparent_46px,rgba(255,255,255,.02)_46px,rgba(255,255,255,.02)_47px)]" />
           <div className="absolute inset-0 bg-[linear-gradient(0deg,#08110f_2%,transparent_34%)]" />
         </div>
-        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-8 pb-16 sm:pt-10 sm:pb-26 min-h-[inherit] flex items-center">
+        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-8 pb-24 sm:pt-10 sm:pb-26 w-full flex items-center">
           <div className="w-full flex flex-col lg:flex-row items-center justify-between gap-6 lg:gap-11">
             {/* Textspalte */}
             <div className="max-w-[520px] hl-fade text-center lg:text-left">
@@ -352,7 +343,7 @@ export default function Hero({ teams, matches, players, seasonLabel, onNavigate,
           <div className="absolute inset-0 bg-[linear-gradient(90deg,#0A1415_6%,rgba(6,14,15,.78)_34%,rgba(6,14,15,.2)_64%,transparent)]" />
           <div className="absolute inset-0 bg-[linear-gradient(0deg,#0A1415_2%,transparent_34%)]" />
         </div>
-        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-16 sm:pt-10 sm:pb-26 min-h-[inherit] flex items-center">
+        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-24 sm:pt-10 sm:pb-26 w-full flex items-center">
           <div className="w-full flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 sm:gap-8 lg:gap-11">
             <div className="max-w-[560px] hl-fade">
               <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.3)]">
@@ -436,9 +427,21 @@ export default function Hero({ teams, matches, players, seasonLabel, onNavigate,
   };
 
   return (
-    <div className="relative overflow-hidden min-h-[500px] sm:min-h-[640px] lg:min-h-[calc(100vh-118px)]">
+    <div
+      className="relative grid overflow-hidden min-h-[500px] sm:min-h-[640px] lg:min-h-[calc(100vh-118px)]"
+      style={{ gridTemplateRows: 'minmax(min-content, 1fr)' }}
+    >
+      {/* Slides als Grid-Stack: Containerhöhe = höchster Slide, alle gleich hoch, nichts abgeschnitten */}
       {slides.map((kind, i) => (
-        <div key={kind} style={wrapStyle(i)} className="min-h-[inherit]">
+        <div
+          key={kind}
+          className="col-start-1 row-start-1 relative flex flex-col justify-center transition-opacity duration-1000"
+          style={{
+            opacity: i === current ? 1 : 0,
+            zIndex: i === current ? 2 : 1,
+            pointerEvents: i === current ? 'auto' : 'none',
+          }}
+        >
           {renderSlide(kind)}
         </div>
       ))}
