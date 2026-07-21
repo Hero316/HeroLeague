@@ -1,8 +1,10 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import { PlayerStat, Match, Team } from '../types';
 import { rankGoldenGlove } from '../lib/goldenGlove';
 import PlayerAvatar from './PlayerAvatar';
 import { TeamCrest } from './ui';
+import { CountUp, Reveal, useSettledList } from './anim';
 
 interface StatistikenProps {
   players: PlayerStat[];
@@ -29,13 +31,13 @@ const VALUE_COLOR: Record<Accent, string> = {
 export default function Statistiken({ players, matches, teams, onSelectTeam }: StatistikenProps) {
   const finished = matches.filter((m) => m.status === 'beendet' && m.homeScore !== null && m.awayScore !== null);
   const totalGoals = finished.reduce((acc, m) => acc + (m.homeScore || 0) + (m.awayScore || 0), 0);
-  const avgGoals = finished.length ? (totalGoals / finished.length).toFixed(1) : '0.0';
+  const avgGoals = finished.length ? totalGoals / finished.length : 0;
 
   const leagueTiles = [
-    { value: String(totalGoals), label: 'TORE GESAMT' },
-    { value: avgGoals, label: 'Ø TORE / SPIEL' },
-    { value: String(finished.length), label: 'GESPIELTE PARTIEN' },
-    { value: String(teams.length), label: 'CLUBS' },
+    { value: totalGoals, decimals: 0, label: 'TORE GESAMT' },
+    { value: avgGoals, decimals: 1, label: 'Ø TORE / SPIEL' },
+    { value: finished.length, decimals: 0, label: 'GESPIELTE PARTIEN' },
+    { value: teams.length, decimals: 0, label: 'CLUBS' },
   ];
 
   // Team-Auswertungen
@@ -96,11 +98,16 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
   // nur Keeper mit mindestens MIN_GAMES Torwart-Spielen, absteigend nach Score.
   const gloveRanking = React.useMemo(() => rankGoldenGlove(players, matches).slice(0, 5), [players, matches]);
 
+  // Einsortier-Animation fuer die beiden Ranglisten (startet alphabetisch).
+  const ballon = useSettledList(ballonRanking, (p) => p.name);
+  const glove = useSettledList(gloveRanking, (p) => p.name);
+
   interface LeaderCard {
     kind: 'SPIELER' | 'TEAM';
     category: string;
     accent: Accent;
-    value: string;
+    value: number;
+    decimals?: number;
     unit: string;
     name: string;
     sub: string;
@@ -114,7 +121,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
       kind: 'SPIELER',
       category: 'MEISTE TORE',
       accent: 'gold',
-      value: String(topScorer.goals),
+      value: topScorer.goals,
       unit: 'Tore',
       name: topScorer.name,
       sub: topScorer.teamName,
@@ -126,7 +133,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
       kind: 'SPIELER',
       category: 'MEISTE ASSISTS',
       accent: 'teal',
-      value: String(topAssist.assists),
+      value: topAssist.assists,
       unit: 'Vorlagen',
       name: topAssist.name,
       sub: topAssist.teamName,
@@ -138,7 +145,8 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
       kind: 'SPIELER',
       category: 'BESTE QUOTE',
       accent: 'magenta',
-      value: (bestRatio.goals / bestRatio.matchesPlayed).toFixed(1),
+      value: bestRatio.goals / bestRatio.matchesPlayed,
+      decimals: 1,
       unit: 'Tore/Spiel',
       name: bestRatio.name,
       sub: bestRatio.teamName,
@@ -151,7 +159,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
       kind: 'TEAM',
       category: 'BESTE OFFENSIVE',
       accent: 'teal',
-      value: String(clubStats.bestAttack.goalsFor),
+      value: clubStats.bestAttack.goalsFor,
       unit: 'Tore',
       name: t.name,
       sub: `${clubStats.bestAttack.goalsFor} erzielte Tore`,
@@ -173,7 +181,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
       kind: 'TEAM',
       category: 'BESTE DEFENSIVE',
       accent: 'teal',
-      value: String(clubStats.bestDefense.goalsAgainst),
+      value: clubStats.bestDefense.goalsAgainst,
       unit: clubStats.bestDefense.goalsAgainst === 1 ? 'Gegentor' : 'Gegentore',
       name: t.name,
       sub: `Nur ${clubStats.bestDefense.goalsAgainst} Gegentore`,
@@ -195,7 +203,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
       kind: 'TEAM',
       category: 'MEISTE WEISSE WESTEN',
       accent: 'gold',
-      value: String(clubStats.mostCleanSheets.cleanSheets),
+      value: clubStats.mostCleanSheets.cleanSheets,
       unit: clubStats.mostCleanSheets.cleanSheets === 1 ? 'Spiel' : 'Spiele',
       name: t.name,
       sub: `Zu null in ${clubStats.mostCleanSheets.cleanSheets} ${clubStats.mostCleanSheets.cleanSheets === 1 ? 'Spiel' : 'Spielen'}`,
@@ -221,7 +229,9 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
             key={tile.label}
             className="relative rounded-2xl overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.012))] border border-white/10 p-5 backdrop-blur-md"
           >
-            <div className="font-display font-black text-[42px] leading-[.9] text-brand-accent-light">{tile.value}</div>
+            <div className="font-display font-black text-[42px] leading-[.9] text-brand-accent-light">
+              <CountUp value={tile.value} decimals={tile.decimals} />
+            </div>
             <div className="font-sans font-bold text-[11px] tracking-[1.5px] text-hl-dim mt-1.5">{tile.label}</div>
           </div>
         ))}
@@ -233,7 +243,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
           Noch keine Statistiken verfügbar. Sobald Spiele beendet sind, erscheinen hier die Bestwerte.
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-5">
+        <Reveal className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-5">
           {cards.map((c) => (
             <div
               key={c.category}
@@ -259,18 +269,20 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
                   </div>
                 </div>
                 <div className="flex items-baseline gap-2 mt-5">
-                  <span className={`font-display font-black text-[52px] leading-[.9] ${VALUE_COLOR[c.accent]}`}>{c.value}</span>
+                  <span className={`font-display font-black text-[52px] leading-[.9] ${VALUE_COLOR[c.accent]}`}>
+                    <CountUp value={c.value} decimals={c.decimals ?? 0} />
+                  </span>
                   <span className="font-sans font-bold text-[13px] tracking-wider text-hl-dim">{c.unit}</span>
                 </div>
               </div>
             </div>
           ))}
-        </div>
+        </Reveal>
       )}
 
       {/* Auszeichnungen: Ballon d'Or (Feldwertung) + Goldener Handschuh (Torhüter) nebeneinander */}
       {(ballonRanking.length > 0 || gloveRanking.length > 0) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+        <Reveal className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
           {/* Ballon d'Or – Spielerwertung (Top 5 nach Punkten) */}
           {ballonRanking.length > 0 && (
             <div>
@@ -283,8 +295,8 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
               </div>
               <div className="relative rounded-[20px] overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] border border-white/10 backdrop-blur-lg shadow-[0_20px_50px_rgba(0,0,0,.35)]">
                 <div className="absolute top-0 right-0 w-[220px] h-[220px] pointer-events-none" style={{ background: GLOW.gold }} />
-                <div className="relative divide-y divide-white/[.06]">
-                  {ballonRanking.map((p, idx) => {
+                <div ref={ballon.ref} className="relative divide-y divide-white/[.06]">
+                  {ballon.items.map((p, idx) => {
                     const rankColor =
                       idx === 0 ? 'text-hl-gold' : idx === 1 ? 'text-[#C7D0DA]' : idx === 2 ? 'text-[#E0A46B]' : 'text-hl-dim';
                     const breakdown = [
@@ -294,7 +306,12 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
                       p.cleanSheets > 0 ? `${p.cleanSheets}× 🧤` : null,
                     ].filter(Boolean);
                     return (
-                      <div key={p.id} className="flex items-center gap-3.5 px-4 sm:px-6 py-3.5">
+                      <motion.div
+                        layout="position"
+                        transition={{ type: 'spring', stiffness: 240, damping: 32 }}
+                        key={p.id}
+                        className="flex items-center gap-3.5 px-4 sm:px-6 py-3.5"
+                      >
                         <div className={`font-display font-black text-2xl sm:text-3xl w-8 text-center shrink-0 ${rankColor}`}>
                           {idx + 1}
                         </div>
@@ -308,11 +325,11 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
                         </div>
                         <div className="flex items-baseline gap-1.5 shrink-0">
                           <span className="font-display font-black text-2xl sm:text-3xl leading-none text-hl-gold">
-                            {p.points.toFixed(1)}
+                            <CountUp value={p.points} decimals={1} />
                           </span>
                           <span className="font-sans font-bold text-[11px] tracking-wider text-hl-dim">PKT</span>
                         </div>
-                      </div>
+                      </motion.div>
                     );
                   })}
                 </div>
@@ -332,8 +349,8 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
               </div>
               <div className="relative rounded-[20px] overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] border border-white/10 backdrop-blur-lg shadow-[0_20px_50px_rgba(0,0,0,.35)]">
                 <div className="absolute top-0 right-0 w-[220px] h-[220px] pointer-events-none" style={{ background: GLOW.teal }} />
-                <div className="relative divide-y divide-white/[.06]">
-                  {gloveRanking.map((p, idx) => {
+                <div ref={glove.ref} className="relative divide-y divide-white/[.06]">
+                  {glove.items.map((p, idx) => {
                     const rankColor =
                       idx === 0 ? 'text-hl-gold' : idx === 1 ? 'text-[#C7D0DA]' : idx === 2 ? 'text-[#E0A46B]' : 'text-hl-dim';
                     const sub = [
@@ -345,7 +362,12 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
                       .filter(Boolean)
                       .join(' · ');
                     return (
-                      <div key={p.id} className="flex items-center gap-3.5 px-4 sm:px-6 py-3.5">
+                      <motion.div
+                        layout="position"
+                        transition={{ type: 'spring', stiffness: 240, damping: 32 }}
+                        key={p.id}
+                        className="flex items-center gap-3.5 px-4 sm:px-6 py-3.5"
+                      >
                         <div className={`font-display font-black text-2xl sm:text-3xl w-8 text-center shrink-0 ${rankColor}`}>
                           {idx + 1}
                         </div>
@@ -359,18 +381,18 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
                         </div>
                         <div className="flex items-baseline gap-1.5 shrink-0">
                           <span className="font-display font-black text-2xl sm:text-3xl leading-none text-brand-accent-light">
-                            {p.score.toFixed(1)}
+                            <CountUp value={p.score} decimals={1} />
                           </span>
                           <span className="font-sans font-bold text-[11px] tracking-wider text-hl-dim">PKT</span>
                         </div>
-                      </div>
+                      </motion.div>
                     );
                   })}
                 </div>
               </div>
             </div>
           )}
-        </div>
+        </Reveal>
       )}
     </div>
   );

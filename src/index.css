@@ -7,7 +7,7 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
   /* Hero-League-Designsystem (dunkles Teal) */
-  --color-brand-dark: #060E0F;
+  --color-brand-dark: #0A1415;
   --color-brand-deep: #0C1413;
   --color-brand-accent: #16BDA9;
   --color-brand-accent-light: #22DFC9;
@@ -30,7 +30,7 @@
 }
 
 body {
-  background: #060E0F;
+  background: #0A1415;
 }
 
 ::selection {
@@ -112,6 +112,21 @@ body {
 
 .hl-zoom {
   animation: hlZoom 24s ease-in-out infinite alternate;
+}
+
+/* Bewegung reduzieren: Endlos-Animationen ausschalten, Einblendungen sofort final.
+   Die JS-Animationen (motion) respektieren die Einstellung bereits ueber useReducedMotion. */
+@media (prefers-reduced-motion: reduce) {
+  .hl-zoom,
+  .hl-marquee,
+  .hl-pulse {
+    animation: none !important;
+  }
+  .hl-fade {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }
 
 /* Glas-Karte: wiederkehrender Kartenstil des Designs */

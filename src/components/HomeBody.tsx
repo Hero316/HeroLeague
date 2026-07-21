@@ -3,6 +3,7 @@ import { ActiveTab, Match, PlayerStat, Team } from '../types';
 import Tabelle from './Tabelle';
 import PlayerAvatar from './PlayerAvatar';
 import { TeamCrest, MatchStatusBadge, LiveBadge, shortDate } from './ui';
+import { CountUp, Reveal } from './anim';
 
 interface HomeBodyProps {
   teams: Team[];
@@ -54,7 +55,7 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
   return (
     <>
       {/* ===== Tabelle + Spielplan ===== */}
-      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pt-6 pb-8 grid grid-cols-1 xl:grid-cols-[1.5fr_1fr] gap-6 items-start">
+      <Reveal className="max-w-[1320px] mx-auto px-4 sm:px-10 pt-6 pb-8 grid grid-cols-1 xl:grid-cols-[1.5fr_1fr] gap-6 items-start">
         {/* Tabellen-Karte */}
         <div>
           <div className="hl-card p-4 pb-4 sm:p-6 sm:pb-5">
@@ -199,11 +200,11 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
             </>
           )}
         </div>
-      </div>
+      </Reveal>
 
       {/* ===== Top-Torschützen ===== */}
       {topScorer && (
-        <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pt-2 pb-10">
+        <Reveal className="max-w-[1320px] mx-auto px-4 sm:px-10 pt-2 pb-10">
           <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
             <div className="flex items-baseline gap-3.5 flex-wrap">
               <span className="font-sans font-extrabold text-[11px] tracking-[3px] text-brand-accent-light">TORJÄGERLISTE</span>
@@ -239,17 +240,23 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
                 </div>
                 <div className="flex gap-6 sm:gap-[30px] mt-7">
                   <div>
-                    <div className="font-display font-black text-5xl sm:text-[52px] leading-[.9] text-brand-accent-light">{topScorer.goals}</div>
+                    <div className="font-display font-black text-5xl sm:text-[52px] leading-[.9] text-brand-accent-light">
+                      <CountUp value={topScorer.goals} />
+                    </div>
                     <div className="font-sans font-bold text-[10px] tracking-[2px] text-hl-dim mt-1">TORE</div>
                   </div>
                   <div className="w-px bg-white/10" />
                   <div>
-                    <div className="font-display font-black text-5xl sm:text-[52px] leading-[.9] text-white">{topScorer.assists}</div>
+                    <div className="font-display font-black text-5xl sm:text-[52px] leading-[.9] text-white">
+                      <CountUp value={topScorer.assists} />
+                    </div>
                     <div className="font-sans font-bold text-[10px] tracking-[2px] text-hl-dim mt-1">ASSISTS</div>
                   </div>
                   <div className="w-px bg-white/10" />
                   <div>
-                    <div className="font-display font-black text-5xl sm:text-[52px] leading-[.9] text-white">{topScorer.matchesPlayed}</div>
+                    <div className="font-display font-black text-5xl sm:text-[52px] leading-[.9] text-white">
+                      <CountUp value={topScorer.matchesPlayed} />
+                    </div>
                     <div className="font-sans font-bold text-[10px] tracking-[2px] text-hl-dim mt-1">SPIELE</div>
                   </div>
                 </div>
@@ -272,7 +279,9 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
                     </div>
                   </div>
                   <div className="flex items-baseline gap-1 shrink-0">
-                    <span className="font-display font-black text-[26px] text-brand-accent-light">{s.goals}</span>
+                    <span className="font-display font-black text-[26px] text-brand-accent-light">
+                      <CountUp value={s.goals} />
+                    </span>
                     <span className="font-sans font-bold text-[11px] text-hl-dim">TORE</span>
                   </div>
                   <div className="w-px h-[26px] bg-white/[.08] hidden sm:block" />
@@ -289,11 +298,11 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
               )}
             </div>
           </div>
-        </div>
+        </Reveal>
       )}
 
       {/* ===== Closer-CTA ===== */}
-      <div className="relative overflow-hidden border-t border-white/[.07]">
+      <Reveal className="relative overflow-hidden border-t border-white/[.07]">
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute -bottom-[260px] left-1/2 -translate-x-1/2 w-[900px] h-[520px] bg-[radial-gradient(circle,rgba(34,223,201,.16),transparent_65%)]" />
         </div>
@@ -316,7 +325,7 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
             </button>
           </div>
         </div>
-      </div>
+      </Reveal>
     </>
   );
 }

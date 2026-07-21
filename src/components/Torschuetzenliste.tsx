@@ -1,7 +1,9 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import { PlayerStat, Team } from '../types';
 import PlayerAvatar from './PlayerAvatar';
 import { TeamCrest } from './ui';
+import { CountUp, Reveal, useSettledList } from './anim';
 
 interface TorschuetzenlisteProps {
   players: PlayerStat[];
@@ -15,6 +17,10 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
     () => [...players].filter((p) => p.goals > 0).sort((a, b) => b.goals - a.goals || b.assists - a.assists),
     [players]
   );
+
+  // Rangliste ab Platz 4 – mit Einsortier-Animation (Hooks vor moeglichem Early-Return).
+  const rest = React.useMemo(() => scorers.slice(3, 15), [scorers]);
+  const restList = useSettledList(rest, (p) => p.name);
 
   const teamByName = (name: string) => teams.find((t) => t.name === name);
 
@@ -31,7 +37,6 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
   }
 
   const podium = scorers.slice(0, 3);
-  const rest = scorers.slice(3, 15);
 
   const clubChip = (p: PlayerStat) => {
     const team = teamByName(p.teamName);
@@ -54,7 +59,7 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
   return (
     <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
       {/* Podium (Top 3) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end pt-3.5 pb-2">
+      <Reveal className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end pt-3.5 pb-2">
         {podium.map((p, i) => {
           const rank = i + 1;
           const lead = rank === 1;
@@ -80,7 +85,7 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
                 <span
                   className={`font-display font-black leading-[.9] ${lead ? 'text-[54px] text-brand-accent-light' : 'text-[44px] text-white'}`}
                 >
-                  {p.goals}
+                  <CountUp value={p.goals} />
                 </span>
                 <span className="font-sans font-bold text-xs tracking-wider text-hl-dim">TORE</span>
               </div>
@@ -90,11 +95,11 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
             </div>
           );
         })}
-      </div>
+      </Reveal>
 
       {/* Liste ab Platz 4 */}
       {rest.length > 0 && (
-        <div className="hl-card px-4 sm:px-5 pt-2.5 pb-3.5 mt-5">
+        <div ref={restList.ref} className="hl-card px-4 sm:px-5 pt-2.5 pb-3.5 mt-5">
           <div className="grid grid-cols-[46px_minmax(0,1fr)_70px_70px] sm:grid-cols-[46px_minmax(0,1fr)_150px_70px_70px] gap-2 px-3.5 pt-3.5 pb-3 border-b border-white/[.08] font-sans font-bold text-[10.5px] tracking-wider text-hl-faint">
             <span>#</span>
             <span>SPIELER</span>
@@ -102,8 +107,10 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
             <span className="text-center">TORE</span>
             <span className="text-center">ASSISTS</span>
           </div>
-          {rest.map((p, i) => (
-            <div
+          {restList.items.map((p, i) => (
+            <motion.div
+              layout="position"
+              transition={{ type: 'spring', stiffness: 240, damping: 32 }}
               key={p.id}
               className="grid grid-cols-[46px_minmax(0,1fr)_70px_70px] sm:grid-cols-[46px_minmax(0,1fr)_150px_70px_70px] gap-2 items-center px-3.5 py-[11px] rounded-[11px] border-b border-white/[.04] transition-colors hover:bg-white/5"
             >
@@ -113,9 +120,11 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
                 <span className="font-sans font-semibold text-[15px] text-hl-text truncate">{p.name}</span>
               </div>
               <div className="hidden sm:block min-w-0">{clubChip(p)}</div>
-              <span className="text-center font-display font-black text-[22px] text-brand-accent-light">{p.goals}</span>
+              <span className="text-center font-display font-black text-[22px] text-brand-accent-light">
+                <CountUp value={p.goals} />
+              </span>
               <span className="text-center font-sans font-semibold text-[15px] text-hl-soft">{p.assists}</span>
-            </div>
+            </motion.div>
           ))}
         </div>
       )}

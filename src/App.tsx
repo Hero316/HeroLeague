@@ -411,6 +411,7 @@ export default function App() {
       />
       <LiveTicker matches={currentSeasonMatches} teams={teams} players={players} />
 
+      <div key={activeTab} className="hl-fade">
       {activeTab === 'home' && (
         <>
           <Hero teams={teams} matches={currentSeasonMatches} seasonLabel={currentSeason?.label ?? ''} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
@@ -499,6 +500,7 @@ export default function App() {
           <Statistiken players={players} matches={seasonMatches} teams={teams} onSelectTeam={openTeamDetail} />
         </>
       )}
+      </div>
 
       <InstallPrompt />
 
