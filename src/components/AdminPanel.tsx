@@ -186,6 +186,8 @@ interface AdminPanelProps {
   onEditTeam: (teamId: string, updatedData: Partial<Team>) => Promise<boolean>;
   onDeleteTeam: (teamId: string) => Promise<boolean>;
   onStartSeason: (label: string) => Promise<boolean>;
+  demoActive: boolean;
+  onToggleDemo: () => Promise<boolean>;
 }
 
 const MONTH_NAMES = [
@@ -266,7 +268,10 @@ export default function AdminPanel({
   onEditTeam,
   onDeleteTeam,
   onStartSeason,
+  demoActive,
+  onToggleDemo,
 }: AdminPanelProps) {
+  const [isTogglingDemo, setIsTogglingDemo] = useState(false);
   const colors = [
     { name: 'Blau', hex: '#3B82F6' },
     { name: 'Gelb', hex: '#F59E0B' },
@@ -1036,6 +1041,52 @@ export default function AdminPanel({
             >
               <CalendarPlus className="w-4 h-4" />
               <span>Neue Saison starten</span>
+            </button>
+          </div>
+
+          {/* Demo-Modus: komplette Zufalls-Kopie zum Vorstellen */}
+          <div className="mt-6 pt-6 border-t border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-block w-2.5 h-2.5 rounded-full ${demoActive ? 'bg-hl-green animate-pulse' : 'bg-hl-faint'}`}
+                />
+                <span className="text-sm font-bold text-white font-sans uppercase tracking-wider">
+                  Demo-Modus {demoActive ? 'aktiv' : 'aus'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-400 font-sans leading-relaxed mt-2">
+                Erstellt eine komplette Kopie (Teams, Kader, eigene Saison) und füllt alles per Zufall —
+                Ergebnisse, Torschützen, Statistiken und Tabelle. Ideal zum Vorstellen. Die echte Saison bleibt
+                unberührt; beim Deaktivieren wird die Demo restlos entfernt.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={isTogglingDemo}
+              onClick={async () => {
+                if (!demoActive && !window.confirm('Demo aktivieren? Es wird eine komplette Zufalls-Kopie erstellt. Die echte Saison bleibt unberührt.')) return;
+                if (demoActive && !window.confirm('Demo deaktivieren und alle Demo-Daten entfernen? Die echte Saison kommt zurück.')) return;
+                setIsTogglingDemo(true);
+                try {
+                  await onToggleDemo();
+                } finally {
+                  setIsTogglingDemo(false);
+                }
+              }}
+              className={`shrink-0 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${
+                demoActive
+                  ? 'bg-[rgba(255,84,66,.15)] border border-[rgba(255,84,66,.35)] text-hl-red-soft hover:bg-[rgba(255,84,66,.25)]'
+                  : 'bg-hl-green/90 hover:bg-hl-green text-[#062018]'
+              }`}
+            >
+              {isTogglingDemo
+                ? demoActive
+                  ? 'Deaktiviere...'
+                  : 'Erstelle Demo...'
+                : demoActive
+                ? 'Demo deaktivieren'
+                : 'Demo aktivieren'}
             </button>
           </div>
         </div>
