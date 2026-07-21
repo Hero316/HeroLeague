@@ -16,8 +16,10 @@ import LiveBanner from './components/LiveBanner';
 import LiveTicker from './components/LiveTicker';
 import HomeBody from './components/HomeBody';
 import InstallPrompt from './components/InstallPrompt';
+import Ergebniszettel from './components/Ergebniszettel';
+import ScheduleCombine from './components/ScheduleCombine';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, CalendarClock } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('home');
@@ -182,6 +184,18 @@ export default function App() {
   const handleDeleteMatch = (matchId: string) =>
     runAdminAction(() => apiFetch(`/api/matches/${matchId}`, { method: 'DELETE' }));
 
+  // Auftakt-/Abschlussabend zusammenlegen: nur Datum & Uhrzeit der betroffenen Spiele setzen
+  // (Teil-Body an die bestehende PUT-Route → Ergebnisse/Torschützen bleiben unangetastet).
+  const handleCombineOpeningClosing = (updates: { id: string; date: string; time: string }[]) =>
+    runAdminAction(async () => {
+      for (const u of updates) {
+        await apiFetch(`/api/matches/${u.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ date: u.date, time: u.time }),
+        });
+      }
+    });
+
   const handleStartSeason = async (label: string) => {
     const ok = await runAdminAction(() =>
       apiFetch('/api/seasons', { method: 'POST', body: JSON.stringify({ label }) })
@@ -334,6 +348,19 @@ export default function App() {
                     />
                   </AccordionSection>
 
+                  <AccordionSection
+                    id="combine"
+                    title="Auftakt & Abschluss zusammenlegen"
+                    subtitle="Ersten und letzten Termin je zu einem Doppelabend (19:00 & 20:30) zusammenführen"
+                    icon={<CalendarClock className="w-5 h-5" />}
+                  >
+                    <ScheduleCombine
+                      teams={teams}
+                      matches={currentSeasonMatches}
+                      onCombine={handleCombineOpeningClosing}
+                    />
+                  </AccordionSection>
+
                   <AdminPanel
                     teams={teams}
                     matches={currentSeasonMatches}
@@ -367,6 +394,11 @@ export default function App() {
         </footer>
       </div>
     );
+  }
+
+  // ROUTE: /ergebniszettel – druckbare Ergebnis-Vorlage (nur für angemeldete Admins)
+  if (currentPath === '/ergebniszettel' && isAdmin) {
+    return <Ergebniszettel teams={teams} matches={currentSeasonMatches} onBack={() => navigateTo('/')} />;
   }
 
   // ÖFFENTLICHE WEBSITE
@@ -427,6 +459,17 @@ export default function App() {
             text="Alle Ergebnisse und Anstoßzeiten der Hero League — Spieltag für Spieltag."
           />
           {seasonSwitcher}
+          {isAdmin && (
+            <div className="max-w-[1320px] mx-auto px-4 sm:px-10 flex justify-end pb-4">
+              <button
+                onClick={() => navigateTo('/ergebniszettel')}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-brand-accent-light/30 bg-[rgba(34,223,201,.08)] text-brand-accent-light hover:bg-[rgba(34,223,201,.16)] text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                Ergebniszettel drucken
+              </button>
+            </div>
+          )}
           <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
             <Spielplan
               teams={teams}
