@@ -396,8 +396,8 @@ export default function App() {
     );
   }
 
-  // ROUTE: /ergebniszettel – druckbare Ergebnis-Vorlage zum handschriftlichen Eintragen
-  if (currentPath === '/ergebniszettel') {
+  // ROUTE: /ergebniszettel – druckbare Ergebnis-Vorlage (nur für angemeldete Admins)
+  if (currentPath === '/ergebniszettel' && isAdmin) {
     return <Ergebniszettel teams={teams} matches={currentSeasonMatches} onBack={() => navigateTo('/')} />;
   }
 
@@ -459,15 +459,17 @@ export default function App() {
             text="Alle Ergebnisse und Anstoßzeiten der Hero League — Spieltag für Spieltag."
           />
           {seasonSwitcher}
-          <div className="max-w-[1320px] mx-auto px-4 sm:px-10 flex justify-end pb-4">
-            <button
-              onClick={() => navigateTo('/ergebniszettel')}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-brand-accent-light/30 bg-[rgba(34,223,201,.08)] text-brand-accent-light hover:bg-[rgba(34,223,201,.16)] text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
-            >
-              <Printer className="w-4 h-4" />
-              Ergebniszettel drucken
-            </button>
-          </div>
+          {isAdmin && (
+            <div className="max-w-[1320px] mx-auto px-4 sm:px-10 flex justify-end pb-4">
+              <button
+                onClick={() => navigateTo('/ergebniszettel')}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-brand-accent-light/30 bg-[rgba(34,223,201,.08)] text-brand-accent-light hover:bg-[rgba(34,223,201,.16)] text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                Ergebniszettel drucken
+              </button>
+            </div>
+          )}
           <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
             <Spielplan
               teams={teams}
