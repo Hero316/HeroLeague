@@ -102,9 +102,9 @@ export default function Hero({ teams, matches, players, seasonLabel, onNavigate,
   });
 
   const primaryBtn =
-    'inline-flex items-center gap-2.5 px-6 py-[15px] rounded-[13px] bg-brand-accent-light text-[#062018] font-sans font-extrabold text-sm tracking-wider shadow-[0_10px_30px_rgba(34,223,201,.28)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_42px_rgba(34,223,201,.42)] cursor-pointer';
+    'inline-flex items-center gap-2 px-4 py-2.5 sm:gap-2.5 sm:px-6 sm:py-[15px] rounded-[11px] sm:rounded-[13px] bg-brand-accent-light text-[#062018] font-sans font-extrabold text-xs sm:text-sm tracking-wider shadow-[0_10px_30px_rgba(34,223,201,.28)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_42px_rgba(34,223,201,.42)] cursor-pointer';
   const secondaryBtn =
-    'inline-flex items-center gap-2.5 px-6 py-[15px] rounded-[13px] bg-white/5 border border-white/[.16] text-hl-text font-sans font-bold text-sm tracking-wider transition-colors hover:border-brand-accent-light hover:bg-[rgba(34,223,201,.06)] cursor-pointer';
+    'inline-flex items-center gap-2 px-4 py-2.5 sm:gap-2.5 sm:px-6 sm:py-[15px] rounded-[11px] sm:rounded-[13px] bg-white/5 border border-white/[.16] text-hl-text font-sans font-bold text-xs sm:text-sm tracking-wider transition-colors hover:border-brand-accent-light hover:bg-[rgba(34,223,201,.06)] cursor-pointer';
 
   const dotLabels: Record<string, string> = { match: 'SPIELTAG', pom: 'SPIELER DES MONATS', table: 'TABELLE' };
 
@@ -157,26 +157,26 @@ export default function Hero({ teams, matches, players, seasonLabel, onNavigate,
               </div>
               {featuredDay ? (
                 <>
-                  <h1 className="mt-5 font-display font-black text-[40px] sm:text-7xl xl:text-[92px] leading-[.85] tracking-tight uppercase text-white">
+                  <h1 className="mt-5 font-display font-black text-[30px] sm:text-7xl xl:text-[92px] leading-[.85] tracking-tight uppercase text-white">
                     {featuredDay.day}.
                     <br />
                     <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">Spieltag</span>
                   </h1>
-                  <p className="mt-5 max-w-[460px] text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">{intro}</p>
+                  <p className="mt-5 max-w-[460px] hidden sm:block text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">{intro}</p>
                 </>
               ) : (
                 <>
-                  <h1 className="mt-5 font-display font-black text-[40px] sm:text-7xl xl:text-[92px] leading-[.85] tracking-tight uppercase text-white">
+                  <h1 className="mt-5 font-display font-black text-[30px] sm:text-7xl xl:text-[92px] leading-[.85] tracking-tight uppercase text-white">
                     Hero
                     <br />
                     <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">League</span>
                   </h1>
-                  <p className="mt-5 max-w-[440px] text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
+                  <p className="mt-5 max-w-[440px] hidden sm:block text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
                     Die Saison startet in Kürze — sobald Spiele angesetzt sind, findest du hier alles live.
                   </p>
                 </>
               )}
-              <div className="flex gap-3 mt-7 flex-wrap">
+              <div className="hidden lg:flex gap-3 mt-7 flex-wrap">
                 <button onClick={() => onNavigate('spielplan')} className={primaryBtn}>
                   ▸ SPIELPLAN ANSEHEN
                 </button>
@@ -253,6 +253,15 @@ export default function Hero({ teams, matches, players, seasonLabel, onNavigate,
                 </div>
               </div>
             )}
+            {/* Buttons auf dem Handy unter der Karte */}
+            <div className="flex lg:hidden gap-3 flex-wrap w-full">
+              <button onClick={() => onNavigate('spielplan')} className={primaryBtn}>
+                ▸ SPIELPLAN ANSEHEN
+              </button>
+              <button onClick={() => onNavigate('tabelle')} className={secondaryBtn}>
+                TABELLE
+              </button>
+            </div>
           </div>
         </div>
       </>
@@ -279,22 +288,23 @@ export default function Hero({ teams, matches, players, seasonLabel, onNavigate,
           <div className="absolute inset-0 bg-[linear-gradient(0deg,#08110f_2%,transparent_34%)]" />
         </div>
         <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-8 pb-16 sm:pt-10 sm:pb-26 min-h-[inherit] flex items-center">
-          <div className="w-full flex flex-col lg:flex-row items-center justify-between gap-9 lg:gap-11">
+          <div className="w-full flex flex-col lg:flex-row items-center justify-between gap-6 lg:gap-11">
             {/* Textspalte */}
             <div className="max-w-[520px] hl-fade text-center lg:text-left">
               <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(233,196,106,.12)] border border-[rgba(233,196,106,.34)]">
                 <span className="text-xs leading-none text-hl-gold">★</span>
                 <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-hl-gold">AUSZEICHNUNG</span>
               </div>
-              <h1 className="mt-5 font-display font-black text-[40px] sm:text-7xl xl:text-[88px] leading-[.85] tracking-tight uppercase text-white">
+              <h1 className="mt-5 font-display font-black text-[30px] sm:text-7xl xl:text-[88px] leading-[.85] tracking-tight uppercase text-white">
                 Spieler des
                 <br />
                 <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">Monats</span>
               </h1>
-              <p className="mt-5 max-w-[430px] mx-auto lg:mx-0 text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
+              <p className="mt-5 max-w-[430px] mx-auto lg:mx-0 hidden sm:block text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
                 Die herausragende Leistung des Monats in der Hero League.
               </p>
-              <div className="flex gap-3 mt-7 flex-wrap justify-center lg:justify-start">
+              {/* Buttons auf Desktop in der Textspalte */}
+              <div className="hidden lg:flex gap-3 mt-7 flex-wrap justify-start">
                 <button onClick={() => onNavigate('torschuetzen')} className={primaryBtn}>
                   ▸ TORSCHÜTZEN
                 </button>
@@ -311,6 +321,15 @@ export default function Hero({ teams, matches, players, seasonLabel, onNavigate,
                 points={pomPoints}
                 onSelect={pomTeam && onSelectTeam ? () => onSelectTeam(pomTeam.id) : undefined}
               />
+            </div>
+            {/* Buttons auf dem Handy unter der Karte */}
+            <div className="flex lg:hidden gap-3 flex-wrap justify-center w-full">
+              <button onClick={() => onNavigate('torschuetzen')} className={primaryBtn}>
+                ▸ TORSCHÜTZEN
+              </button>
+              <button onClick={() => onNavigate('statistiken')} className={secondaryBtn}>
+                STATISTIKEN
+              </button>
             </div>
           </div>
         </div>
@@ -340,16 +359,16 @@ export default function Hero({ teams, matches, players, seasonLabel, onNavigate,
                 <span className="text-[11px] leading-none text-brand-accent-light">▲</span>
                 <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-brand-accent-light">TABELLENFÜHRER</span>
               </div>
-              <h1 className="mt-5 font-display font-black text-[40px] sm:text-7xl xl:text-[96px] leading-[.85] tracking-tight uppercase text-white">
+              <h1 className="mt-5 font-display font-black text-[30px] sm:text-7xl xl:text-[96px] leading-[.85] tracking-tight uppercase text-white">
                 An der
                 <br />
                 <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">Spitze</span>
               </h1>
-              <p className="mt-5 max-w-[430px] text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
+              <p className="mt-5 max-w-[430px] hidden sm:block text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
                 {leader.teamName} führt die Hero League mit {leader.points} Punkten an
                 {standings[1] ? ` — dicht gefolgt von ${standings[1].teamName}` : ''}. Das Titelrennen ist eröffnet.
               </p>
-              <div className="flex gap-3 mt-7 flex-wrap">
+              <div className="hidden lg:flex gap-3 mt-7 flex-wrap">
                 <button onClick={() => onNavigate('tabelle')} className={primaryBtn}>
                   ▸ TABELLE ANSEHEN
                 </button>
@@ -394,6 +413,15 @@ export default function Hero({ teams, matches, players, seasonLabel, onNavigate,
                   );
                 })}
               </div>
+            </div>
+            {/* Buttons auf dem Handy unter der Karte */}
+            <div className="flex lg:hidden gap-3 flex-wrap w-full">
+              <button onClick={() => onNavigate('tabelle')} className={primaryBtn}>
+                ▸ TABELLE ANSEHEN
+              </button>
+              <button onClick={() => onNavigate('statistiken')} className={secondaryBtn}>
+                STATISTIKEN
+              </button>
             </div>
           </div>
         </div>
