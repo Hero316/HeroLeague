@@ -73,7 +73,7 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
         return (
           <motion.button
             layout="position"
-            transition={{ type: 'spring', stiffness: 520, damping: 42 }}
+            transition={{ type: 'spring', stiffness: 240, damping: 32 }}
             key={standing.teamId}
             onClick={onSelectTeam ? () => onSelectTeam(standing.teamId) : undefined}
             title={onSelectTeam ? `${standing.teamName} – Vereinsseite öffnen` : undefined}

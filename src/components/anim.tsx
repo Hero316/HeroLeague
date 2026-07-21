@@ -84,7 +84,7 @@ interface CountUpProps {
 export function CountUp({
   value,
   decimals = 0,
-  duration = 1.1,
+  duration = 1.6,
   className,
   prefix = '',
   suffix = '',
@@ -103,7 +103,7 @@ export function CountUp({
     if (!inView) return;
     const controls = animate(0, value, {
       duration,
-      ease: 'easeOut',
+      ease: [0.22, 1, 0.36, 1], // weiches easeOut (smooth ausklingend)
       onUpdate: (v) => setDisplay(v),
     });
     return () => controls.stop();
@@ -126,7 +126,7 @@ export function CountUp({
 // Solange nicht settled: neutrale Startreihenfolge rendern; nach kurzem Delay
 // (sobald sichtbar) auf die finale Reihenfolge umschalten -> motion `layout`
 // laesst die Zeilen an ihre Endposition rutschen.
-export function useSettle(delay = 400) {
+export function useSettle(delay = 550) {
   const reduce = useReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, margin: '-5% 0px' });

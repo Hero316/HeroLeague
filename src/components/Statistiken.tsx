@@ -308,7 +308,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
                     return (
                       <motion.div
                         layout="position"
-                        transition={{ type: 'spring', stiffness: 520, damping: 42 }}
+                        transition={{ type: 'spring', stiffness: 240, damping: 32 }}
                         key={p.id}
                         className="flex items-center gap-3.5 px-4 sm:px-6 py-3.5"
                       >
@@ -364,7 +364,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
                     return (
                       <motion.div
                         layout="position"
-                        transition={{ type: 'spring', stiffness: 520, damping: 42 }}
+                        transition={{ type: 'spring', stiffness: 240, damping: 32 }}
                         key={p.id}
                         className="flex items-center gap-3.5 px-4 sm:px-6 py-3.5"
                       >

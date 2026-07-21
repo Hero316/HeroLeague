@@ -110,7 +110,7 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
           {restList.items.map((p, i) => (
             <motion.div
               layout="position"
-              transition={{ type: 'spring', stiffness: 520, damping: 42 }}
+              transition={{ type: 'spring', stiffness: 240, damping: 32 }}
               key={p.id}
               className="grid grid-cols-[46px_minmax(0,1fr)_70px_70px] sm:grid-cols-[46px_minmax(0,1fr)_150px_70px_70px] gap-2 items-center px-3.5 py-[11px] rounded-[11px] border-b border-white/[.04] transition-colors hover:bg-white/5"
             >
