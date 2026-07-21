@@ -262,20 +262,21 @@ export default function Hero({ teams, matches, players, seasonLabel, onNavigate,
   // ---------- Slide 2: Spieler des Monats ----------
   const renderPomSlide = () => {
     if (!pom) return null;
-    const pomTeam = teams.find((t) => t.name === pom.club);
+    // Team zuverlässig über die gespeicherte ID auflösen (Fallback: Name – für Altdaten)
+    const pomTeam = (pom.teamId ? teams.find((t) => t.id === pom.teamId) : undefined) || teams.find((t) => t.name === pom.club);
     const crest = pomTeam
       ? { name: pomTeam.name, shortName: pomTeam.shortName, logoColor: pomTeam.logoColor, logoUrl: pomTeam.logoUrl }
       : undefined;
     const pomPoints = players.find((p) => p.name === pom.name)?.points;
     return (
       <>
+        {/* Eigener, gestalteter Hintergrund (kein Menschenfoto) – hebt die Karte hervor */}
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -inset-[5%] hl-zoom">
-            <img src="/assets/hero-crowd.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
-          </div>
-          <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_78%_30%,rgba(233,196,106,.14),transparent_55%)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,#0A1415_6%,rgba(6,14,15,.82)_38%,rgba(6,14,15,.4)_66%,transparent)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(0deg,#0A1415_2%,transparent_36%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,#0c1a19,#0a1415_58%,#08110f)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(58%_70%_at_72%_36%,rgba(34,223,201,.22),transparent_60%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(48%_60%_at_18%_18%,rgba(233,196,106,.10),transparent_55%)]" />
+          <div className="absolute -inset-[10%] opacity-70 bg-[repeating-linear-gradient(115deg,transparent_0,transparent_46px,rgba(255,255,255,.02)_46px,rgba(255,255,255,.02)_47px)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(0deg,#08110f_2%,transparent_34%)]" />
         </div>
         <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-8 pb-16 sm:pt-10 sm:pb-26 min-h-[inherit] flex items-center">
           <div className="w-full flex flex-col lg:flex-row items-center justify-between gap-9 lg:gap-11">
@@ -304,7 +305,12 @@ export default function Hero({ teams, matches, players, seasonLabel, onNavigate,
             </div>
             {/* Karte */}
             <div className="flex-none w-full max-w-[360px] hl-fade">
-              <PlayerOfMonthCard pom={pom} crest={crest} points={pomPoints} />
+              <PlayerOfMonthCard
+                pom={pom}
+                crest={crest}
+                points={pomPoints}
+                onSelect={pomTeam && onSelectTeam ? () => onSelectTeam(pomTeam.id) : undefined}
+              />
             </div>
           </div>
         </div>

@@ -15,22 +15,33 @@ interface PlayerOfMonthCardProps {
   pom: PlayerOfMonth;
   crest?: CrestInfo;
   points?: number; // Ballon-d'Or-Wertung, falls zum Spieler gefunden
+  onSelect?: () => void; // Klick führt zur Team-Seite (falls Team bekannt)
 }
 
-// Schild-Silhouette in Anlehnung an eine FIFA-Ultimate-Team-Karte.
-const SHIELD = 'polygon(0% 0%, 100% 0%, 100% 86%, 50% 100%, 0% 86%)';
+// Schild-Silhouette in Anlehnung an eine FIFA-Ultimate-Team-Karte:
+// oben dezent abgeschrägte Schultern, unten mittig zulaufende Spitze.
+const SHIELD = 'polygon(0% 5%, 7% 0%, 93% 0%, 100% 5%, 100% 86%, 50% 100%, 0% 86%)';
 
 // Spieler-des-Monats-Karte im Sammelkarten-Stil (FIFA-Ultimate-Team-Anmutung),
 // in Hero-League-Farben/-Schriften. Das freigestellte Foto verschmilzt mit der
 // Karte: Kopf ragt oben zwischen die Symbole, Beine verschwinden hinter dem Panel.
-export default function PlayerOfMonthCard({ pom, crest, points }: PlayerOfMonthCardProps) {
+export default function PlayerOfMonthCard({ pom, crest, points, onSelect }: PlayerOfMonthCardProps) {
   const parts = pom.name.trim().split(/\s+/);
   const lastName = parts.length > 1 ? parts[parts.length - 1] : pom.name;
   const firstNames = parts.length > 1 ? parts.slice(0, -1).join(' ') : '';
 
   return (
-    <div className="relative w-full max-w-[330px] mx-auto">
-      <div className="relative w-full aspect-[0.72] [filter:drop-shadow(0_30px_54px_rgba(0,0,0,.6))]">
+    <div
+      className={`relative w-full max-w-[330px] mx-auto ${onSelect ? 'cursor-pointer' : ''}`}
+      onClick={onSelect}
+      role={onSelect ? 'button' : undefined}
+      title={onSelect && crest ? `${crest.name} – Vereinsseite öffnen` : undefined}
+    >
+      <div
+        className={`relative w-full aspect-[0.72] transition-transform duration-300 [filter:drop-shadow(0_30px_54px_rgba(0,0,0,.6))] ${
+          onSelect ? 'hover:-translate-y-1.5' : ''
+        }`}
+      >
         {/* Akzent-Rahmen (Teal -> Gold) */}
         <div
           className="absolute inset-0 bg-[linear-gradient(160deg,#2ee6cf,rgba(233,196,106,.9)_52%,rgba(34,223,201,.28))]"
