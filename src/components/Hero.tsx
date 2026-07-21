@@ -143,11 +143,11 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
             <img src="/assets/hero-stadium.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
           </div>
           <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_78%_30%,rgba(232,62,140,.22),transparent_55%)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,#060E0F_6%,rgba(6,14,15,.78)_34%,rgba(6,14,15,.2)_64%,transparent)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(0deg,#060E0F_2%,transparent_34%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,#0A1415_6%,rgba(6,14,15,.78)_34%,rgba(6,14,15,.2)_64%,transparent)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(0deg,#0A1415_2%,transparent_34%)]" />
         </div>
-        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-10 pb-24 sm:pb-26 min-h-[inherit] flex items-center">
-          <div className="w-full flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8 lg:gap-11">
+        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-16 sm:pt-10 sm:pb-26 min-h-[inherit] flex items-center">
+          <div className="w-full flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 sm:gap-8 lg:gap-11">
             <div className="max-w-[600px]">
               <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.3)]">
                 <span className="w-[7px] h-[7px] rounded-full bg-brand-accent-light shadow-[0_0_10px_#22DFC9] hl-pulse" />
@@ -155,21 +155,21 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
               </div>
               {featuredDay ? (
                 <>
-                  <h1 className="mt-5 font-display font-black text-6xl sm:text-7xl xl:text-[92px] leading-[.85] tracking-tight uppercase text-white">
+                  <h1 className="mt-5 font-display font-black text-[40px] sm:text-7xl xl:text-[92px] leading-[.85] tracking-tight uppercase text-white">
                     {featuredDay.day}.
                     <br />
                     <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">Spieltag</span>
                   </h1>
-                  <p className="mt-5 max-w-[460px] text-[16.5px] leading-relaxed text-hl-soft">{intro}</p>
+                  <p className="mt-5 max-w-[460px] text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">{intro}</p>
                 </>
               ) : (
                 <>
-                  <h1 className="mt-5 font-display font-black text-5xl sm:text-7xl xl:text-[92px] leading-[.85] tracking-tight uppercase text-white">
+                  <h1 className="mt-5 font-display font-black text-[40px] sm:text-7xl xl:text-[92px] leading-[.85] tracking-tight uppercase text-white">
                     Hero
                     <br />
                     <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">League</span>
                   </h1>
-                  <p className="mt-5 max-w-[440px] text-[16.5px] leading-relaxed text-hl-soft">
+                  <p className="mt-5 max-w-[440px] text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
                     Die Saison startet in Kürze — sobald Spiele angesetzt sind, findest du hier alles live.
                   </p>
                 </>
@@ -273,18 +273,18 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
             )}
           </div>
           <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_80%_26%,rgba(233,196,106,.16),transparent_55%)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,#060E0F_8%,rgba(6,14,15,.7)_36%,rgba(6,14,15,.15)_62%,transparent)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,#060E0F_4%,transparent_26%)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(0deg,#060E0F_2%,transparent_34%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,#0A1415_8%,rgba(6,14,15,.7)_36%,rgba(6,14,15,.15)_62%,transparent)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,#0A1415_4%,transparent_26%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(0deg,#0A1415_2%,transparent_34%)]" />
         </div>
-        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-10 pb-24 sm:pb-26 min-h-[inherit] flex items-center">
+        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-16 sm:pt-10 sm:pb-26 min-h-[inherit] flex items-center">
           <div className="max-w-[560px]">
             <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(233,196,106,.12)] border border-[rgba(233,196,106,.34)]">
               <span className="text-xs leading-none text-hl-gold">★</span>
               <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-hl-gold">SPIELER DES MONATS</span>
             </div>
             <div className="font-sans font-bold text-[13px] tracking-[3px] text-[#8a938c] mt-6 uppercase">{pom.club}</div>
-            <h1 className="mt-2 font-display font-black text-5xl sm:text-7xl xl:text-[98px] leading-[.85] tracking-tight uppercase text-white">
+            <h1 className="mt-2 font-display font-black text-[40px] sm:text-7xl xl:text-[98px] leading-[.85] tracking-tight uppercase text-white">
               {pom.name.split(' ').slice(0, -1).join(' ') || pom.name}
               {pom.name.includes(' ') && (
                 <>
@@ -337,22 +337,22 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
             <img src="/assets/hero-crowd.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
           </div>
           <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_80%_30%,rgba(34,223,201,.2),transparent_55%)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,#060E0F_6%,rgba(6,14,15,.78)_34%,rgba(6,14,15,.2)_64%,transparent)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(0deg,#060E0F_2%,transparent_34%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,#0A1415_6%,rgba(6,14,15,.78)_34%,rgba(6,14,15,.2)_64%,transparent)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(0deg,#0A1415_2%,transparent_34%)]" />
         </div>
-        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-10 pb-24 sm:pb-26 min-h-[inherit] flex items-center">
-          <div className="w-full flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8 lg:gap-11">
+        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-16 sm:pt-10 sm:pb-26 min-h-[inherit] flex items-center">
+          <div className="w-full flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 sm:gap-8 lg:gap-11">
             <div className="max-w-[560px]">
               <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.3)]">
                 <span className="text-[11px] leading-none text-brand-accent-light">▲</span>
                 <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-brand-accent-light">TABELLENFÜHRER</span>
               </div>
-              <h1 className="mt-5 font-display font-black text-5xl sm:text-7xl xl:text-[96px] leading-[.85] tracking-tight uppercase text-white">
+              <h1 className="mt-5 font-display font-black text-[40px] sm:text-7xl xl:text-[96px] leading-[.85] tracking-tight uppercase text-white">
                 An der
                 <br />
                 <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">Spitze</span>
               </h1>
-              <p className="mt-5 max-w-[430px] text-[16.5px] leading-relaxed text-hl-soft">
+              <p className="mt-5 max-w-[430px] text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
                 {leader.teamName} führt die Hero League mit {leader.points} Punkten an
                 {standings[1] ? ` — dicht gefolgt von ${standings[1].teamName}` : ''}. Das Titelrennen ist eröffnet.
               </p>
@@ -415,7 +415,7 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
   };
 
   return (
-    <div className="relative overflow-hidden min-h-[640px] lg:min-h-[calc(100vh-118px)]">
+    <div className="relative overflow-hidden min-h-[500px] sm:min-h-[640px] lg:min-h-[calc(100vh-118px)]">
       {slides.map((kind, i) => (
         <div key={kind} style={wrapStyle(i)} className="min-h-[inherit]">
           {renderSlide(kind)}
@@ -473,7 +473,7 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
       )}
 
       {/* Weicher Übergang in den Seitenhintergrund */}
-      <div className="absolute left-0 right-0 bottom-0 h-[150px] z-[5] bg-[linear-gradient(to_top,#060E0F_8%,transparent)] pointer-events-none" />
+      <div className="absolute left-0 right-0 bottom-0 h-[150px] z-[5] bg-[linear-gradient(to_top,#0A1415_8%,transparent)] pointer-events-none" />
     </div>
   );
 }
