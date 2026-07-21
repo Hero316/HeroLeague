@@ -187,7 +187,7 @@ export default function Hero({ teams, matches, players, seasonLabel, onNavigate,
             </div>
 
             {featuredDay && first && (
-              <div className="flex-none w-full max-w-[368px] relative rounded-[22px] overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,.5)]">
+              <div className="flex-none w-full max-w-[368px] lg:max-w-[430px] relative rounded-[22px] overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,.5)]">
                 <div className="absolute inset-0 bg-[linear-gradient(140deg,rgba(34,223,201,.16),rgba(232,62,140,.1)_62%,rgba(255,255,255,.02))] pointer-events-none" />
                 <div className="relative bg-[rgba(11,17,17,.5)] border border-white/[.12] rounded-[22px] p-[22px] backdrop-blur-2xl">
                   <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -352,7 +352,7 @@ export default function Hero({ teams, matches, players, seasonLabel, onNavigate,
                 </button>
               </div>
             </div>
-            <div className="flex-none w-full max-w-[340px] relative rounded-[22px] overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,.5)]">
+            <div className="flex-none w-full max-w-[340px] lg:max-w-[390px] relative rounded-[22px] overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,.5)]">
               <div className="absolute inset-0 bg-[linear-gradient(140deg,rgba(34,223,201,.16),rgba(232,62,140,.08)_62%,rgba(255,255,255,.02))] pointer-events-none" />
               <div className="relative bg-[rgba(11,17,17,.5)] border border-white/[.12] rounded-[22px] p-5 backdrop-blur-2xl">
                 <div className="font-sans font-extrabold text-[10.5px] tracking-[2px] text-brand-accent-light mb-3.5">
