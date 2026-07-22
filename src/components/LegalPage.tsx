@@ -9,11 +9,11 @@ import { PageHeader } from './ui';
 //  BETREIBERDATEN – hier die echten Angaben eintragen (Platzhalter ersetzen)
 // ====================================================================
 const BETREIBER = {
-  name: '[VOLLSTÄNDIGER NAME]',
-  strasse: '[STRASSE + HAUSNUMMER]',
-  ort: '[PLZ + ORT]',
-  email: '[E-MAIL-ADRESSE]',
-  telefon: '[TELEFONNUMMER]',
+  name: 'Maik Schirling',
+  strasse: 'Achauerstraße 8',
+  ort: '78647 Trossingen',
+  email: 'maikyschirling@gmail.com',
+  telefon: '0173 4756557',
 };
 // Stand der Rechtstexte (bei inhaltlichen Änderungen aktualisieren)
 const STAND = 'Juli 2026';
@@ -188,7 +188,8 @@ function Datenschutz() {
       <P>
         Unbeschadet anderer Rechtsbehelfe hast du das Recht, dich bei einer Datenschutz-Aufsichtsbehörde zu beschweren,
         insbesondere in dem Mitgliedstaat deines Aufenthaltsorts, deines Arbeitsplatzes oder des Orts des mutmaßlichen
-        Verstoßes.
+        Verstoßes. Für den Verantwortlichen zuständig ist der Landesbeauftragte für den Datenschutz und die
+        Informationsfreiheit Baden-Württemberg (Lautenschlagerstraße 20, 70173 Stuttgart).
       </P>
 
       <P>
