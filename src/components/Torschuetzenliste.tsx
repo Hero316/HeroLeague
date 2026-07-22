@@ -38,12 +38,12 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
 
   const podium = scorers.slice(0, 3);
 
-  // Nur das Vereinswappen (klickbar → Vereinsseite). Mobil zwischen Rang und Name.
+  // Nur das Vereinswappen (klickbar → Vereinsseite).
   const teamCrestButton = (p: PlayerStat) => {
     const team = teamByName(p.teamName);
     if (!team) {
       return (
-        <span className="w-7 h-7 grid place-items-center shrink-0">
+        <span className="w-8 h-8 grid place-items-center shrink-0">
           <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: p.teamLogoColor }} />
         </span>
       );
@@ -54,11 +54,19 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
         shortName={team.shortName}
         color={team.logoColor}
         logoUrl={team.logoUrl}
-        size="sm"
+        size="md"
         onSelect={onSelectTeam ? () => onSelectTeam(team.id) : undefined}
       />
     );
   };
+
+  // Ein Bild pro Spieler: Spielerfoto, falls vorhanden – sonst das Vereinswappen.
+  const playerOrTeamAvatar = (p: PlayerStat) =>
+    p.imageUrl ? (
+      <PlayerAvatar name={p.name} imageUrl={p.imageUrl} color={p.teamLogoColor} size="sm" />
+    ) : (
+      teamCrestButton(p)
+    );
 
   const clubChip = (p: PlayerStat) => {
     const team = teamByName(p.teamName);
@@ -119,44 +127,38 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
         })}
       </Reveal>
 
-      {/* Liste ab Platz 4 – Flex-Reihen im „Goldener Handschuh"-Stil:
-          dicke Platzierungs-Kachel · Spielerfoto · klickbares Wappen · Name/Zusatz · Tore rechts.
-          Skaliert clean von Handy bis PC (Name bekommt den Rest per flex-1). */}
+      {/* Liste ab Platz 4 – bewusst reduziert: Rang · ein Bild (Spielerfoto falls vorhanden,
+          sonst Vereinslogo) · Name mit gespielten Spielen · Tore groß · Assists. */}
       {rest.length > 0 && (
         <div ref={restList.ref} className="hl-card px-2 sm:px-3 pt-2.5 pb-3 mt-5">
-          <div className="flex items-center justify-between px-2 sm:px-3 pt-3.5 pb-3 border-b border-white/[.08] font-sans font-bold text-[10.5px] tracking-wider text-hl-faint">
-            <span>SPIELER</span>
-            <span>TORE</span>
+          <div className="flex items-center gap-3 px-2 sm:px-3 pt-3.5 pb-3 border-b border-white/[.08] font-sans font-bold text-[10.5px] tracking-wider text-hl-faint">
+            <span className="w-6 text-center shrink-0">#</span>
+            <span className="flex-1">SPIELER</span>
+            <span className="w-9 text-center shrink-0">TORE</span>
+            <span className="w-8 text-center shrink-0">AST</span>
           </div>
           {restList.items.map((p, i) => (
             <motion.div
               layout="position"
               transition={{ type: 'spring', stiffness: 240, damping: 32 }}
               key={p.id}
-              className="flex items-center gap-2.5 sm:gap-3.5 px-2 sm:px-3 py-2.5 rounded-[13px] border-b border-white/[.04] transition-colors hover:bg-white/5"
+              className="flex items-center gap-3 px-2 sm:px-3 py-2.5 rounded-[13px] border-b border-white/[.04] transition-colors hover:bg-white/5"
             >
-              {/* Platzierung als Kachel (Backend-Button-Form) */}
-              <span className="grid place-items-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white/[.05] border border-white/10 font-display font-black text-base sm:text-xl text-hl-soft shrink-0">
-                {i + 4}
-              </span>
-              {/* Spielerfoto */}
-              <PlayerAvatar name={p.name} imageUrl={p.imageUrl} color={p.teamLogoColor} size="sm" />
-              {/* Vereinswappen (klickbar → Vereinsseite) */}
-              {teamCrestButton(p)}
-              {/* Name + Zusatzzeile */}
+              {/* Rang (schlicht) */}
+              <span className="w-6 text-center font-display font-black text-lg text-hl-dim shrink-0">{i + 4}</span>
+              {/* Ein Bild: Spielerfoto falls vorhanden, sonst Vereinslogo */}
+              {playerOrTeamAvatar(p)}
+              {/* Name + gespielte Spiele */}
               <div className="min-w-0 flex-1">
                 <div className="font-sans font-semibold text-[15px] text-hl-text truncate">{p.name}</div>
-                <div className="font-sans text-[11.5px] text-hl-mute truncate">
-                  {p.assists} Assists · {p.matchesPlayed} Spiele
-                </div>
+                <div className="font-sans text-[11.5px] text-hl-mute">{p.matchesPlayed} Spiele</div>
               </div>
-              {/* Tore rechts */}
-              <div className="flex items-baseline gap-1.5 shrink-0 pr-0.5">
-                <span className="font-display font-black text-[22px] sm:text-2xl leading-none text-brand-accent-light">
-                  <CountUp value={p.goals} />
-                </span>
-                <span className="font-sans font-bold text-[11px] tracking-wider text-hl-dim">TORE</span>
-              </div>
+              {/* Tore (groß) */}
+              <span className="w-9 text-center font-display font-black text-[22px] sm:text-2xl leading-none text-brand-accent-light shrink-0">
+                <CountUp value={p.goals} />
+              </span>
+              {/* Assists */}
+              <span className="w-8 text-center font-sans font-bold text-[15px] text-hl-soft shrink-0">{p.assists}</span>
             </motion.div>
           ))}
         </div>
