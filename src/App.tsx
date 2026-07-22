@@ -282,6 +282,7 @@ export default function App() {
           isAdmin={isAdmin}
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
+          onOpenBackoffice={() => navigateTo('/admin')}
           seasonLabel={selectedSeason?.label ?? ''}
           hasLiveMatch={hasLiveMatch}
         />
@@ -305,6 +306,7 @@ export default function App() {
           isAdmin={isAdmin}
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
+          onOpenBackoffice={() => navigateTo('/admin')}
           seasonLabel={selectedSeason?.label ?? ''}
           hasLiveMatch={hasLiveMatch}
         />
@@ -496,6 +498,7 @@ export default function App() {
         isAdmin={isAdmin}
         onLogout={handleLogout}
         onOpenLogin={() => navigateTo('/admin')}
+        onOpenBackoffice={() => navigateTo('/admin')}
         seasonLabel={currentSeason?.label ?? ''}
         hasLiveMatch={hasLiveMatch}
       />
