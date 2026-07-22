@@ -65,6 +65,18 @@ CREATE TABLE settings (
   value JSONB NOT NULL
 );
 
+-- Anonyme Besucherzählung (Live-Anzeige + Ø pro Tag/Woche/Monat im Backoffice).
+-- Kein Personenbezug: nur eine zufällige, im Browser erzeugte Besucher-ID plus
+-- Datum/Zeitstempel. Eine Zeile pro Besucher & Tag; last_seen = letzter Heartbeat.
+-- Wird von api/_lib/analytics.ts bei Bedarf automatisch angelegt (CREATE IF NOT EXISTS).
+CREATE TABLE visits (
+  visitor_id TEXT NOT NULL,
+  day        DATE NOT NULL,
+  last_seen  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (visitor_id, day)
+);
+CREATE INDEX idx_visits_last_seen ON visits(last_seen);
+
 -- Backoffice-Benutzer (passwortloser Login per E-Mail-Code).
 -- superadmin: darf alles · match_admin: nur Spiele/Live/Ticker pflegen.
 CREATE TABLE users (
