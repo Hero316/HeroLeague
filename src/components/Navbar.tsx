@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Menu, X, LogOut } from 'lucide-react';
+import { Menu, X, LogOut, LayoutDashboard } from 'lucide-react';
 import { ActiveTab } from '../types';
 
 interface NavbarProps {
@@ -8,6 +8,7 @@ interface NavbarProps {
   isAdmin: boolean;
   onLogout: () => void;
   onOpenLogin: () => void;
+  onOpenBackoffice: () => void;
   seasonLabel?: string;
   hasLiveMatch?: boolean;
 }
@@ -17,6 +18,7 @@ export default function Navbar({
   setActiveTab,
   isAdmin,
   onLogout,
+  onOpenBackoffice,
   seasonLabel,
   hasLiveMatch,
 }: NavbarProps) {
@@ -82,6 +84,16 @@ export default function Navbar({
           )}
           {isAdmin && (
             <button
+              onClick={onOpenBackoffice}
+              className="hidden lg:flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.3)] text-brand-accent-light font-sans font-bold text-[11px] tracking-wider uppercase hover:bg-[rgba(34,223,201,.2)] transition-colors cursor-pointer"
+              title="Backoffice öffnen"
+            >
+              <LayoutDashboard className="w-3.5 h-3.5" />
+              Backoffice
+            </button>
+          )}
+          {isAdmin && (
+            <button
               onClick={onLogout}
               className="hidden lg:flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[rgba(255,84,66,.1)] border border-[rgba(255,84,66,.25)] text-hl-red-soft font-sans font-bold text-[11px] tracking-wider uppercase hover:bg-[rgba(255,84,66,.2)] transition-colors cursor-pointer"
               title="Admin abmelden"
@@ -121,6 +133,18 @@ export default function Navbar({
               {item.label}
             </button>
           ))}
+          {isAdmin && (
+            <button
+              onClick={() => {
+                onOpenBackoffice();
+                setIsOpen(false);
+              }}
+              className="w-full flex items-center justify-center gap-1.5 mt-2 bg-[rgba(34,223,201,.12)] border border-[rgba(34,223,201,.3)] text-brand-accent-light py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer"
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              Backoffice öffnen
+            </button>
+          )}
           {isAdmin && (
             <button
               onClick={() => {
