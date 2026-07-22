@@ -135,14 +135,20 @@ export function PageHeader({ kicker, title, text }: PageHeaderProps) {
 
 interface FooterProps {
   onNavigate: (tab: ActiveTab) => void;
+  // Navigation zu Nicht-Tab-Seiten (Impressum/Datenschutz) über den rohen Pfad.
+  onNavigatePath?: (path: string) => void;
 }
 
-export function Footer({ onNavigate }: FooterProps) {
+export function Footer({ onNavigate, onNavigatePath }: FooterProps) {
   const links: { label: string; tab: ActiveTab }[] = [
     { label: 'SPIELPLAN', tab: 'spielplan' },
     { label: 'TABELLE', tab: 'tabelle' },
     { label: 'TORSCHÜTZEN', tab: 'torschuetzen' },
     { label: 'STATISTIKEN', tab: 'statistiken' },
+  ];
+  const legalLinks: { label: string; path: string }[] = [
+    { label: 'IMPRESSUM', path: '/impressum' },
+    { label: 'DATENSCHUTZ', path: '/datenschutz' },
   ];
   return (
     <footer className="border-t border-white/[.07] bg-[#080b09]">
@@ -161,6 +167,16 @@ export function Footer({ onNavigate }: FooterProps) {
               {l.label}
             </button>
           ))}
+          {onNavigatePath &&
+            legalLinks.map((l) => (
+              <button
+                key={l.path}
+                onClick={() => onNavigatePath(l.path)}
+                className="font-sans font-semibold text-xs tracking-wider text-hl-faint hover:text-hl-text transition-colors cursor-pointer"
+              >
+                {l.label}
+              </button>
+            ))}
         </div>
       </div>
     </footer>

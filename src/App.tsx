@@ -17,6 +17,7 @@ import LiveTicker from './components/LiveTicker';
 import HomeBody from './components/HomeBody';
 import InstallPrompt from './components/InstallPrompt';
 import Ergebniszettel from './components/Ergebniszettel';
+import LegalPage from './components/LegalPage';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
 import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer } from 'lucide-react';
 
@@ -260,6 +261,28 @@ export default function App() {
     );
   }
 
+  // ROUTE: /impressum & /datenschutz – rechtliche Pflichtseiten (aus dem Footer erreichbar)
+  if (currentPath === '/impressum' || currentPath === '/datenschutz') {
+    const kind = currentPath === '/impressum' ? 'impressum' : 'datenschutz';
+    return (
+      <div className="min-h-screen bg-brand-dark text-hl-text font-sans flex flex-col">
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={goToTab}
+          isAdmin={isAdmin}
+          onLogout={handleLogout}
+          onOpenLogin={() => navigateTo('/admin')}
+          seasonLabel={selectedSeason?.label ?? ''}
+          hasLiveMatch={hasLiveMatch}
+        />
+        <main className="flex-1">
+          <LegalPage kind={kind} onBack={() => navigateTo('/')} />
+        </main>
+        <Footer onNavigate={goToTab} onNavigatePath={navigateTo} />
+      </div>
+    );
+  }
+
   // ROUTE: /verein/:id – öffentliche Vereins-Detailseite
   if (currentPath.startsWith('/verein/')) {
     const teamId = decodeURIComponent(currentPath.slice('/verein/'.length).replace(/\/+$/, ''));
@@ -299,7 +322,7 @@ export default function App() {
             </div>
           )}
         </main>
-        <Footer onNavigate={goToTab} />
+        <Footer onNavigate={goToTab} onNavigatePath={navigateTo} />
       </div>
     );
   }
@@ -575,7 +598,7 @@ export default function App() {
         </section>
       )}
 
-      <Footer onNavigate={goToTab} />
+      <Footer onNavigate={goToTab} onNavigatePath={navigateTo} />
     </div>
   );
 }
