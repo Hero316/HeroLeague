@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
+import { startPresence } from './lib/presence';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import Tabelle from './components/Tabelle';
@@ -15,6 +16,7 @@ import TeamDetail from './components/TeamDetail';
 import LiveBanner from './components/LiveBanner';
 import LiveTicker from './components/LiveTicker';
 import HomeBody from './components/HomeBody';
+import LiveVisitors from './components/LiveVisitors';
 import InstallPrompt from './components/InstallPrompt';
 import Ergebniszettel from './components/Ergebniszettel';
 import LegalPage from './components/LegalPage';
@@ -139,6 +141,14 @@ export default function App() {
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [fetchData]);
+
+  // Anonyme Besucherzählung: nur echte Website-Besucher melden, nicht das
+  // Backoffice oder den Ergebniszettel. Speist die Live-Anzeige im Backend.
+  const isPublicPath = !currentPath.startsWith('/admin') && !currentPath.startsWith('/ergebniszettel');
+  useEffect(() => {
+    if (!isPublicPath) return;
+    return startPresence();
+  }, [isPublicPath]);
 
   useEffect(() => {
     setUnauthorizedHandler(() => setSessionUser(null));
@@ -377,6 +387,9 @@ export default function App() {
                   <span>Abmelden</span>
                 </button>
               </div>
+
+              {/* Live-Besucher: ganz oben im Backoffice */}
+              <LiveVisitors />
 
               {/* Aufgeräumtes Backoffice: „dicke Tasten", immer nur eine offen */}
               <AccordionGroup>

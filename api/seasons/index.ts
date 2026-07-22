@@ -1,8 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getSeasons, sql } from '../_lib/db.js';
-import { requireSuperadmin } from '../_lib/auth.js';
+import { requireSuperadmin, requireAdmin } from '../_lib/auth.js';
 import { badRequest, isNonEmptyString } from '../_lib/validate.js';
 import { readDemo, activateDemo, deactivateDemo } from '../_lib/demo.js';
+import { recordVisit, readVisitStats } from '../_lib/analytics.js';
+
+// Besucher-Statistik lesen (nur eingeloggte Admins). Aus Function-Limit-Gründen
+// mit auf die Saison-Funktion gelegt – Aufruf: GET /api/seasons?stats
+const readStats = requireAdmin(async (_req: VercelRequest, res: VercelResponse) => {
+  return res.json(await readVisitStats());
+});
 
 // Demo-Modus an-/ausschalten (in die Saison-Funktion integriert, um die
 // Serverless-Function-Anzahl klein zu halten).
@@ -42,10 +49,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'GET') {
       res.setHeader('Cache-Control', 'no-store');
       if (req.query.demo !== undefined) return res.json(await readDemo());
+      if (req.query.stats !== undefined) return readStats(req, res);
       return res.json(await getSeasons());
     }
     if (req.method === 'POST') {
       const action = (req.body ?? {}).action;
+      // Öffentlicher Besucher-Heartbeat (kein Login nötig, kein Personenbezug)
+      if (action === 'ping') {
+        await recordVisit((req.body ?? {}).vid);
+        return res.json({ ok: true });
+      }
       if (action === 'demoActivate' || action === 'demoDeactivate') return handleDemo(req, res);
       return createSeason(req, res);
     }
