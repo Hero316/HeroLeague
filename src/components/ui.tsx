@@ -91,7 +91,7 @@ export function TeamCrest({ name, shortName, color, logoUrl, size = 'md', onSele
 }
 
 // Form-Pille (W/U/N) im Design-Stil
-export function FormPill({ result }: { result: 'W' | 'D' | 'L' }) {
+export function FormPill({ result, size = 'md' }: { result: 'W' | 'D' | 'L'; size?: 'sm' | 'md' }) {
   const styles: Record<string, string> = {
     W: 'bg-[rgba(67,229,160,.15)] text-hl-green-soft',
     D: 'bg-[rgba(233,196,106,.16)] text-[#F0CE77]',
@@ -99,9 +99,11 @@ export function FormPill({ result }: { result: 'W' | 'D' | 'L' }) {
   };
   const labels: Record<string, string> = { W: 'Sieg', D: 'Unentschieden', L: 'Niederlage' };
   const chars: Record<string, string> = { W: 'S', D: 'U', L: 'N' };
+  // sm: kompakte Variante für die Anzeige direkt unter dem Vereinsnamen (mobil).
+  const sizeCls = size === 'sm' ? 'w-[15px] h-[15px] rounded text-[9px]' : 'w-[22px] h-[22px] rounded-md text-[11px]';
   return (
     <span
-      className={`grid place-items-center w-[22px] h-[22px] rounded-md font-sans font-extrabold text-[11px] ${styles[result]}`}
+      className={`grid place-items-center font-sans font-extrabold ${sizeCls} ${styles[result]}`}
       title={labels[result]}
     >
       {chars[result]}
