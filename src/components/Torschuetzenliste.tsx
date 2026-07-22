@@ -122,7 +122,7 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
       {/* Liste ab Platz 4 */}
       {rest.length > 0 && (
         <div ref={restList.ref} className="hl-card px-4 sm:px-5 pt-2.5 pb-3.5 mt-5">
-          <div className="grid grid-cols-[30px_minmax(0,1fr)_38px_38px] sm:grid-cols-[46px_minmax(0,1fr)_150px_70px_70px] gap-2 px-3.5 pt-3.5 pb-3 border-b border-white/[.08] font-sans font-bold text-[10.5px] tracking-wider text-hl-faint">
+          <div className="grid grid-cols-[26px_minmax(0,1fr)_34px_34px] sm:grid-cols-[46px_minmax(0,1fr)_150px_70px_70px] gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 pt-3.5 pb-3 border-b border-white/[.08] font-sans font-bold text-[10.5px] tracking-wider text-hl-faint">
             <span>#</span>
             <span>SPIELER</span>
             <span className="hidden sm:block">CLUB</span>
@@ -137,7 +137,7 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
               layout="position"
               transition={{ type: 'spring', stiffness: 240, damping: 32 }}
               key={p.id}
-              className="grid grid-cols-[30px_minmax(0,1fr)_38px_38px] sm:grid-cols-[46px_minmax(0,1fr)_150px_70px_70px] gap-2 items-center px-3.5 py-[11px] rounded-[11px] border-b border-white/[.04] transition-colors hover:bg-white/5"
+              className="grid grid-cols-[26px_minmax(0,1fr)_34px_34px] sm:grid-cols-[46px_minmax(0,1fr)_150px_70px_70px] gap-1.5 sm:gap-2 items-center px-2.5 sm:px-3.5 py-[11px] rounded-[11px] border-b border-white/[.04] transition-colors hover:bg-white/5"
             >
               <span className="font-display font-black text-lg text-hl-dim">{i + 4}</span>
               <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
@@ -150,10 +150,10 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
                 <span className="font-sans font-semibold text-[15px] text-hl-text truncate">{p.name}</span>
               </div>
               <div className="hidden sm:block min-w-0">{clubChip(p)}</div>
-              <span className="text-center font-display font-black text-[22px] text-brand-accent-light">
+              <span className="text-center font-display font-black text-[18px] sm:text-[22px] text-brand-accent-light">
                 <CountUp value={p.goals} />
               </span>
-              <span className="text-center font-sans font-semibold text-[15px] text-hl-soft">{p.assists}</span>
+              <span className="text-center font-sans font-semibold text-[14px] sm:text-[15px] text-hl-soft">{p.assists}</span>
             </motion.div>
           ))}
         </div>
