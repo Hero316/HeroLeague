@@ -98,7 +98,7 @@ export default function App() {
         apiFetch<Team[]>('/api/teams'),
         apiFetch<Match[]>('/api/matches'),
         apiFetch<Season[]>('/api/seasons'),
-        apiFetch<{ active: boolean; seasonId: string; teamIds: string[] }>('/api/demo').catch(() => ({
+        apiFetch<{ active: boolean; seasonId: string; teamIds: string[] }>('/api/seasons?demo=1').catch(() => ({
           active: false,
           seasonId: '',
           teamIds: [],
@@ -237,9 +237,9 @@ export default function App() {
 
   // Demo an-/ausschalten: legt die Zufalls-Kopie an bzw. entfernt sie wieder.
   const handleToggleDemo = async () => {
-    const action = demo.active ? 'deactivate' : 'activate';
+    const action = demo.active ? 'demoDeactivate' : 'demoActivate';
     const ok = await runAdminAction(() =>
-      apiFetch('/api/demo', { method: 'POST', body: JSON.stringify({ action }) })
+      apiFetch('/api/seasons', { method: 'POST', body: JSON.stringify({ action }) })
     );
     if (ok) setSelectedSeasonId(null); // im Demo-Modus die Demo-Saison zeigen
     return ok;

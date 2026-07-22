@@ -1,14 +1,12 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import type { Player, Team } from '../src/types';
-import { getTeams, getMatches, getCurrentSeason, sql } from './_lib/db.js';
-import { requireSuperadmin } from './_lib/auth.js';
+import type { Player, Team } from '../../src/types';
+import { getTeams, getMatches, getCurrentSeason, sql } from './db.js';
 
 // Demo-Modus: legt eine komplette, per Zufall gefuellte Kopie (Teams + Kader +
 // eigene Saison mit Ergebnissen) an, die sich an-/ausschalten laesst. Die echte
 // Saison wird dabei NIE angefasst – die Demo besteht aus eigenen Zeilen mit
 // eigenen IDs und wird beim Deaktivieren restlos wieder entfernt.
 
-interface DemoState {
+export interface DemoState {
   active: boolean;
   seasonId: string;
   teamIds: string[];
@@ -16,7 +14,7 @@ interface DemoState {
 
 const EMPTY: DemoState = { active: false, seasonId: '', teamIds: [] };
 
-async function readDemo(): Promise<DemoState> {
+export async function readDemo(): Promise<DemoState> {
   const rows = await sql`SELECT value FROM settings WHERE key = 'demo'`;
   const v = rows[0]?.value as Partial<DemoState> | undefined;
   if (!v) return EMPTY;
@@ -53,7 +51,7 @@ function makeScorers(goals: number, teamId: string, names: string[]) {
 
 // Aktiviert die Demo: raeumt eine evtl. bestehende Demo weg, kopiert Teams/Kader,
 // legt eine Demo-Saison an und fuellt alle Spiele der echten aktiven Saison per Zufall.
-async function activate(): Promise<DemoState> {
+export async function activateDemo(): Promise<DemoState> {
   const prev = await readDemo();
 
   // 1) Alte Demo restlos entfernen + Flag aus (falls der naechste Schritt scheitert, ist alles sauber aus)
@@ -162,7 +160,7 @@ async function activate(): Promise<DemoState> {
 }
 
 // Deaktiviert die Demo: entfernt alle Demo-Zeilen restlos, Flag aus. Echte Daten bleiben unberuehrt.
-async function deactivate(): Promise<DemoState> {
+export async function deactivateDemo(): Promise<DemoState> {
   const prev = await readDemo();
   const stmts = [] as ReturnType<typeof sql>[];
   if (prev.seasonId) {
@@ -178,27 +176,4 @@ async function deactivate(): Promise<DemoState> {
   );
   await sql.transaction(stmts);
   return EMPTY;
-}
-
-const handleWrite = requireSuperadmin(async (req: VercelRequest, res: VercelResponse) => {
-  const action = (req.body ?? {}).action;
-  if (action === 'activate') return res.json(await activate());
-  if (action === 'deactivate') return res.json(await deactivate());
-  return res.status(400).json({ error: 'Unbekannte Aktion.' });
-});
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  try {
-    if (req.method === 'GET') {
-      res.setHeader('Cache-Control', 'no-store');
-      return res.json(await readDemo());
-    }
-    if (req.method === 'POST') {
-      return handleWrite(req, res);
-    }
-    return res.status(405).json({ error: 'Nicht unterstützt' });
-  } catch (err) {
-    console.error('Fehler in /api/demo:', err);
-    return res.status(500).json({ error: err instanceof Error ? err.message : 'Interner Fehler' });
-  }
 }
