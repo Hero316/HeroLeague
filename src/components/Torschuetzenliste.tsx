@@ -119,41 +119,44 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
         })}
       </Reveal>
 
-      {/* Liste ab Platz 4 */}
+      {/* Liste ab Platz 4 – Flex-Reihen im „Goldener Handschuh"-Stil:
+          dicke Platzierungs-Kachel · Spielerfoto · klickbares Wappen · Name/Zusatz · Tore rechts.
+          Skaliert clean von Handy bis PC (Name bekommt den Rest per flex-1). */}
       {rest.length > 0 && (
-        <div ref={restList.ref} className="hl-card px-4 sm:px-5 pt-2.5 pb-3.5 mt-5">
-          <div className="grid grid-cols-[26px_minmax(0,1fr)_34px_34px] sm:grid-cols-[46px_minmax(0,1fr)_150px_70px_70px] gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 pt-3.5 pb-3 border-b border-white/[.08] font-sans font-bold text-[10.5px] tracking-wider text-hl-faint">
-            <span>#</span>
+        <div ref={restList.ref} className="hl-card px-2 sm:px-3 pt-2.5 pb-3 mt-5">
+          <div className="flex items-center justify-between px-2 sm:px-3 pt-3.5 pb-3 border-b border-white/[.08] font-sans font-bold text-[10.5px] tracking-wider text-hl-faint">
             <span>SPIELER</span>
-            <span className="hidden sm:block">CLUB</span>
-            <span className="text-center">TORE</span>
-            <span className="text-center">
-              <span className="sm:hidden">AST</span>
-              <span className="hidden sm:inline">ASSISTS</span>
-            </span>
+            <span>TORE</span>
           </div>
           {restList.items.map((p, i) => (
             <motion.div
               layout="position"
               transition={{ type: 'spring', stiffness: 240, damping: 32 }}
               key={p.id}
-              className="grid grid-cols-[26px_minmax(0,1fr)_34px_34px] sm:grid-cols-[46px_minmax(0,1fr)_150px_70px_70px] gap-1.5 sm:gap-2 items-center px-2.5 sm:px-3.5 py-[11px] rounded-[11px] border-b border-white/[.04] transition-colors hover:bg-white/5"
+              className="flex items-center gap-2.5 sm:gap-3.5 px-2 sm:px-3 py-2.5 rounded-[13px] border-b border-white/[.04] transition-colors hover:bg-white/5"
             >
-              <span className="font-display font-black text-lg text-hl-dim">{i + 4}</span>
-              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                {/* Mobil: klickbares Vereinswappen zwischen Rang und Name (spart Platz fürs Foto) */}
-                <span className="sm:hidden shrink-0">{teamCrestButton(p)}</span>
-                {/* Ab sm: Spielerfoto */}
-                <span className="hidden sm:block shrink-0">
-                  <PlayerAvatar name={p.name} imageUrl={p.imageUrl} color={p.teamLogoColor} size="sm" />
-                </span>
-                <span className="font-sans font-semibold text-[15px] text-hl-text truncate">{p.name}</span>
-              </div>
-              <div className="hidden sm:block min-w-0">{clubChip(p)}</div>
-              <span className="text-center font-display font-black text-[18px] sm:text-[22px] text-brand-accent-light">
-                <CountUp value={p.goals} />
+              {/* Platzierung als Kachel (Backend-Button-Form) */}
+              <span className="grid place-items-center w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white/[.05] border border-white/10 font-display font-black text-base sm:text-xl text-hl-soft shrink-0">
+                {i + 4}
               </span>
-              <span className="text-center font-sans font-semibold text-[14px] sm:text-[15px] text-hl-soft">{p.assists}</span>
+              {/* Spielerfoto */}
+              <PlayerAvatar name={p.name} imageUrl={p.imageUrl} color={p.teamLogoColor} size="sm" />
+              {/* Vereinswappen (klickbar → Vereinsseite) */}
+              {teamCrestButton(p)}
+              {/* Name + Zusatzzeile */}
+              <div className="min-w-0 flex-1">
+                <div className="font-sans font-semibold text-[15px] text-hl-text truncate">{p.name}</div>
+                <div className="font-sans text-[11.5px] text-hl-mute truncate">
+                  {p.assists} Assists · {p.matchesPlayed} Spiele
+                </div>
+              </div>
+              {/* Tore rechts */}
+              <div className="flex items-baseline gap-1.5 shrink-0 pr-0.5">
+                <span className="font-display font-black text-[22px] sm:text-2xl leading-none text-brand-accent-light">
+                  <CountUp value={p.goals} />
+                </span>
+                <span className="font-sans font-bold text-[11px] tracking-wider text-hl-dim">TORE</span>
+              </div>
             </motion.div>
           ))}
         </div>
