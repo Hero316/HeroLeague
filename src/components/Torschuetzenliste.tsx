@@ -38,6 +38,28 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
 
   const podium = scorers.slice(0, 3);
 
+  // Nur das Vereinswappen (klickbar → Vereinsseite). Mobil zwischen Rang und Name.
+  const teamCrestButton = (p: PlayerStat) => {
+    const team = teamByName(p.teamName);
+    if (!team) {
+      return (
+        <span className="w-7 h-7 grid place-items-center shrink-0">
+          <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: p.teamLogoColor }} />
+        </span>
+      );
+    }
+    return (
+      <TeamCrest
+        name={team.name}
+        shortName={team.shortName}
+        color={team.logoColor}
+        logoUrl={team.logoUrl}
+        size="sm"
+        onSelect={onSelectTeam ? () => onSelectTeam(team.id) : undefined}
+      />
+    );
+  };
+
   const clubChip = (p: PlayerStat) => {
     const team = teamByName(p.teamName);
     return (
@@ -100,23 +122,31 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
       {/* Liste ab Platz 4 */}
       {rest.length > 0 && (
         <div ref={restList.ref} className="hl-card px-4 sm:px-5 pt-2.5 pb-3.5 mt-5">
-          <div className="grid grid-cols-[46px_minmax(0,1fr)_70px_70px] sm:grid-cols-[46px_minmax(0,1fr)_150px_70px_70px] gap-2 px-3.5 pt-3.5 pb-3 border-b border-white/[.08] font-sans font-bold text-[10.5px] tracking-wider text-hl-faint">
+          <div className="grid grid-cols-[30px_minmax(0,1fr)_38px_38px] sm:grid-cols-[46px_minmax(0,1fr)_150px_70px_70px] gap-2 px-3.5 pt-3.5 pb-3 border-b border-white/[.08] font-sans font-bold text-[10.5px] tracking-wider text-hl-faint">
             <span>#</span>
             <span>SPIELER</span>
             <span className="hidden sm:block">CLUB</span>
             <span className="text-center">TORE</span>
-            <span className="text-center">ASSISTS</span>
+            <span className="text-center">
+              <span className="sm:hidden">AST</span>
+              <span className="hidden sm:inline">ASSISTS</span>
+            </span>
           </div>
           {restList.items.map((p, i) => (
             <motion.div
               layout="position"
               transition={{ type: 'spring', stiffness: 240, damping: 32 }}
               key={p.id}
-              className="grid grid-cols-[46px_minmax(0,1fr)_70px_70px] sm:grid-cols-[46px_minmax(0,1fr)_150px_70px_70px] gap-2 items-center px-3.5 py-[11px] rounded-[11px] border-b border-white/[.04] transition-colors hover:bg-white/5"
+              className="grid grid-cols-[30px_minmax(0,1fr)_38px_38px] sm:grid-cols-[46px_minmax(0,1fr)_150px_70px_70px] gap-2 items-center px-3.5 py-[11px] rounded-[11px] border-b border-white/[.04] transition-colors hover:bg-white/5"
             >
               <span className="font-display font-black text-lg text-hl-dim">{i + 4}</span>
-              <div className="flex items-center gap-3 min-w-0">
-                <PlayerAvatar name={p.name} imageUrl={p.imageUrl} color={p.teamLogoColor} size="sm" />
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                {/* Mobil: klickbares Vereinswappen zwischen Rang und Name (spart Platz fürs Foto) */}
+                <span className="sm:hidden shrink-0">{teamCrestButton(p)}</span>
+                {/* Ab sm: Spielerfoto */}
+                <span className="hidden sm:block shrink-0">
+                  <PlayerAvatar name={p.name} imageUrl={p.imageUrl} color={p.teamLogoColor} size="sm" />
+                </span>
                 <span className="font-sans font-semibold text-[15px] text-hl-text truncate">{p.name}</span>
               </div>
               <div className="hidden sm:block min-w-0">{clubChip(p)}</div>
