@@ -102,7 +102,8 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
               )}
             </span>
 
-            {/* Verein: voller Name, darf mobil zweizeilig umbrechen */}
+            {/* Verein: voller Name, darf mobil zweizeilig umbrechen.
+                Form kompakt darunter, wo keine eigene Form-Spalte sichtbar ist (mobil + Home-Karte). */}
             <span className="flex items-center gap-2 sm:gap-2.5 min-w-0">
               <TeamCrest
                 name={standing.teamName}
@@ -111,8 +112,17 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
                 logoUrl={standing.logoUrl}
                 size="md"
               />
-              <span className="font-sans font-semibold text-[13px] sm:text-sm text-hl-text leading-tight break-words min-w-0">
-                {standing.teamName}
+              <span className="flex flex-col gap-1 min-w-0">
+                <span className="font-sans font-semibold text-[13px] sm:text-sm text-hl-text leading-tight break-words">
+                  {standing.teamName}
+                </span>
+                {standing.form.length > 0 && (
+                  <span className={`gap-1 ${compact ? 'flex' : 'flex xl:hidden'}`}>
+                    {standing.form.map((res, i) => (
+                      <FormPill key={i} result={res} size="sm" />
+                    ))}
+                  </span>
+                )}
               </span>
             </span>
 
