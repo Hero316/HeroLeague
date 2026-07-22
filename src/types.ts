@@ -71,6 +71,7 @@ export interface Season {
 export interface PlayerOfMonth {
   name: string;
   club: string;
+  teamId?: string; // Verein-Zuordnung (für Wappen + Link zur Team-Seite)
   goals: number;
   assists: number;
   image: string;

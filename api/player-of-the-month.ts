@@ -5,12 +5,13 @@ import { badRequest, isNonEmptyString } from './_lib/validate.js';
 import { DEFAULT_PLAYER_OF_MONTH } from './_lib/seed.js';
 
 const savePom = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
-  const { name, club, goals, assists, image } = req.body ?? {};
+  const { name, club, teamId, goals, assists, image } = req.body ?? {};
   if (!isNonEmptyString(name)) return badRequest(res, 'Bitte einen Spieler-Namen angeben.');
 
   const pom = {
     name: name.trim(),
     club: typeof club === 'string' ? club.trim() : '',
+    teamId: typeof teamId === 'string' ? teamId : '',
     goals: Number.isFinite(Number(goals)) ? Math.max(0, Math.floor(Number(goals))) : 0,
     assists: Number.isFinite(Number(assists)) ? Math.max(0, Math.floor(Number(assists))) : 0,
     image: typeof image === 'string' ? image : '',

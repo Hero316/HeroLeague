@@ -20,9 +20,25 @@ import Ergebniszettel from './components/Ergebniszettel';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
 import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer } from 'lucide-react';
 
+// Öffentliche Tabs haben eigene URLs, damit man nach einem Reload dort bleibt, wo man war.
+const TAB_PATHS: Record<ActiveTab, string> = {
+  home: '/',
+  spielplan: '/spielplan',
+  tabelle: '/tabelle',
+  torschuetzen: '/torschuetzen',
+  statistiken: '/statistiken',
+};
+
+const tabFromPath = (path: string): ActiveTab => {
+  const clean = path.replace(/\/+$/, '') || '/';
+  const entry = (Object.entries(TAB_PATHS) as [ActiveTab, string][]).find(([, p]) => p === clean);
+  return entry ? entry[0] : 'home';
+};
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('home');
   const [currentPath, setCurrentPath] = useState<string>(window.location.pathname);
+  // Aktiver Tab wird aus der URL abgeleitet – überlebt so den Reload
+  const activeTab = tabFromPath(currentPath);
 
   const [teams, setTeams] = useState<Team[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -33,11 +49,33 @@ export default function App() {
   const isAdmin = sessionUser !== null;
   const isSuperadmin = sessionUser?.role === 'superadmin';
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
+  // Demo-Modus: komplette Zufalls-Kopie (eigene Teams + Saison). Echte Daten bleiben unberührt.
+  const [demo, setDemo] = useState<{ active: boolean; seasonId: string; teamIds: string[] }>({
+    active: false,
+    seasonId: '',
+    teamIds: [],
+  });
 
-  const currentSeason = useMemo(() => seasons.find((s) => s.isCurrent) ?? null, [seasons]);
+  // Bei aktiver Demo wird die Demo-Saison als „aktuelle" behandelt (öffentlich + Backend)
+  const demoSeason = useMemo(
+    () => (demo.active ? seasons.find((s) => s.id === demo.seasonId) ?? null : null),
+    [seasons, demo]
+  );
+  const currentSeason = useMemo(
+    () => demoSeason ?? seasons.find((s) => s.isCurrent) ?? null,
+    [seasons, demoSeason]
+  );
+  // Sichtbare Teams: im Demo-Modus nur die Demo-Kopien, sonst nur die echten (Demo ausgeblendet)
+  const visibleTeams = useMemo(() => {
+    const demoIds = new Set(demo.teamIds);
+    return demo.active ? teams.filter((t) => demoIds.has(t.id)) : teams.filter((t) => !demoIds.has(t.id));
+  }, [teams, demo]);
+  // Saison-Umschalter: die interne Demo-Saison nie als wählbare Historie zeigen
+  const visibleSeasons = useMemo(() => seasons.filter((s) => s.id !== demo.seasonId), [seasons, demo.seasonId]);
+
   const selectedSeason = useMemo(
-    () => seasons.find((s) => s.id === selectedSeasonId) ?? currentSeason,
-    [seasons, selectedSeasonId, currentSeason]
+    () => visibleSeasons.find((s) => s.id === selectedSeasonId) ?? currentSeason,
+    [visibleSeasons, selectedSeasonId, currentSeason]
   );
   const isCurrentSeasonSelected = !selectedSeason || selectedSeason.id === currentSeason?.id;
 
@@ -56,14 +94,20 @@ export default function App() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [dataTeams, dataMatches, dataSeasons] = await Promise.all([
+      const [dataTeams, dataMatches, dataSeasons, dataDemo] = await Promise.all([
         apiFetch<Team[]>('/api/teams'),
         apiFetch<Match[]>('/api/matches'),
         apiFetch<Season[]>('/api/seasons'),
+        apiFetch<{ active: boolean; seasonId: string; teamIds: string[] }>('/api/seasons?demo=1').catch(() => ({
+          active: false,
+          seasonId: '',
+          teamIds: [],
+        })),
       ]);
       setTeams(dataTeams);
       setMatches(dataMatches);
       setSeasons(dataSeasons);
+      setDemo(dataDemo);
     } catch (err) {
       console.error('Fehler beim Laden der Liga-Daten', err);
     } finally {
@@ -191,12 +235,20 @@ export default function App() {
     return ok;
   };
 
+  // Demo an-/ausschalten: legt die Zufalls-Kopie an bzw. entfernt sie wieder.
+  const handleToggleDemo = async () => {
+    const action = demo.active ? 'demoDeactivate' : 'demoActivate';
+    const ok = await runAdminAction(() =>
+      apiFetch('/api/seasons', { method: 'POST', body: JSON.stringify({ action }) })
+    );
+    if (ok) setSelectedSeasonId(null); // im Demo-Modus die Demo-Saison zeigen
+    return ok;
+  };
+
   const openTeamDetail = (teamId: string) => navigateTo(`/verein/${encodeURIComponent(teamId)}`);
 
   const goToTab = (tab: ActiveTab) => {
-    if (currentPath !== '/') navigateTo('/');
-    setActiveTab(tab);
-    window.scrollTo({ top: 0 });
+    navigateTo(TAB_PATHS[tab]);
   };
 
   if (isLoading) {
@@ -211,7 +263,7 @@ export default function App() {
   // ROUTE: /verein/:id – öffentliche Vereins-Detailseite
   if (currentPath.startsWith('/verein/')) {
     const teamId = decodeURIComponent(currentPath.slice('/verein/'.length).replace(/\/+$/, ''));
-    const team = teams.find((t) => t.id === teamId);
+    const team = visibleTeams.find((t) => t.id === teamId);
     return (
       <div className="min-h-screen bg-brand-dark text-hl-text font-sans flex flex-col">
         <Navbar
@@ -227,7 +279,7 @@ export default function App() {
           {team ? (
             <TeamDetail
               team={team}
-              teams={teams}
+              teams={visibleTeams}
               matches={seasonMatches}
               players={players}
               seasonLabel={selectedSeason?.label ?? ''}
@@ -313,7 +365,7 @@ export default function App() {
                     icon={<Sparkles className="w-5 h-5" />}
                   >
                     <Spielplan
-                      teams={teams}
+                      teams={visibleTeams}
                       matches={currentSeasonMatches}
                       isAdmin={isAdmin}
                       onUpdateMatchScore={handleUpdateMatchScore}
@@ -328,7 +380,7 @@ export default function App() {
                     icon={<CalendarPlus className="w-5 h-5" />}
                   >
                     <MatchManager
-                      teams={teams}
+                      teams={visibleTeams}
                       matches={currentSeasonMatches}
                       onAddMatch={handleAddMatch}
                       onDeleteMatch={handleDeleteMatch}
@@ -336,7 +388,7 @@ export default function App() {
                   </AccordionSection>
 
                   <AdminPanel
-                    teams={teams}
+                    teams={visibleTeams}
                     matches={currentSeasonMatches}
                     currentSeasonLabel={currentSeason?.label ?? ''}
                     isSuperadmin={isSuperadmin}
@@ -344,6 +396,8 @@ export default function App() {
                     onEditTeam={handleEditTeam}
                     onDeleteTeam={handleDeleteTeam}
                     onStartSeason={handleStartSeason}
+                    demoActive={demo.active}
+                    onToggleDemo={handleToggleDemo}
                   />
 
                   {isSuperadmin && (
@@ -372,11 +426,11 @@ export default function App() {
 
   // ROUTE: /ergebniszettel – druckbare Ergebnis-Vorlage (nur für angemeldete Admins)
   if (currentPath === '/ergebniszettel' && isAdmin) {
-    return <Ergebniszettel teams={teams} matches={currentSeasonMatches} onBack={() => navigateTo('/')} />;
+    return <Ergebniszettel teams={visibleTeams} matches={currentSeasonMatches} onBack={() => navigateTo('/')} />;
   }
 
   // ÖFFENTLICHE WEBSITE
-  const showSeasonSwitcher = seasons.length > 1 && activeTab !== 'home';
+  const showSeasonSwitcher = visibleSeasons.length > 1 && activeTab !== 'home';
 
   const seasonSwitcher = showSeasonSwitcher && (
     <div className="max-w-[1320px] mx-auto px-4 sm:px-10 flex items-center justify-end gap-2 pb-4">
@@ -387,7 +441,7 @@ export default function App() {
         onChange={(e) => setSelectedSeasonId(e.target.value)}
         className="bg-brand-dark border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white font-sans font-semibold focus:outline-none focus:border-brand-accent-light cursor-pointer"
       >
-        {seasons.map((s) => (
+        {visibleSeasons.map((s) => (
           <option key={s.id} value={s.id}>
             {s.label}
             {s.isCurrent ? ' (aktiv)' : ''}
@@ -409,14 +463,14 @@ export default function App() {
         seasonLabel={currentSeason?.label ?? ''}
         hasLiveMatch={hasLiveMatch}
       />
-      <LiveTicker matches={currentSeasonMatches} teams={teams} players={players} />
+      <LiveTicker matches={currentSeasonMatches} teams={visibleTeams} players={players} />
 
       <div key={activeTab} className="hl-fade">
       {activeTab === 'home' && (
         <>
-          <Hero teams={teams} matches={currentSeasonMatches} seasonLabel={currentSeason?.label ?? ''} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
+          <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeason?.label ?? ''} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
           <HomeBody
-            teams={teams}
+            teams={visibleTeams}
             matches={currentSeasonMatches}
             players={players}
             seasonLabel={currentSeason?.label ?? ''}
@@ -447,7 +501,7 @@ export default function App() {
           )}
           <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
             <Spielplan
-              teams={teams}
+              teams={visibleTeams}
               matches={seasonMatches}
               isAdmin={isAdmin && isCurrentSeasonSelected}
               onUpdateMatchScore={handleUpdateMatchScore}
@@ -468,7 +522,7 @@ export default function App() {
           {seasonSwitcher}
           <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
             <Tabelle
-              teams={teams}
+              teams={visibleTeams}
               matches={seasonMatches}
               seasonLabel={selectedSeason?.label ?? ''}
               onSelectTeam={openTeamDetail}
@@ -485,7 +539,7 @@ export default function App() {
             text="Das Rennen um den Goldenen Schuh der Hero League — die treffsichersten Spieler der Saison."
           />
           {seasonSwitcher}
-          <Torschuetzenliste players={players} teams={teams} onSelectTeam={openTeamDetail} />
+          <Torschuetzenliste players={players} teams={visibleTeams} onSelectTeam={openTeamDetail} />
         </>
       )}
 
@@ -497,7 +551,7 @@ export default function App() {
             text="Die Bestwerte der Hero League — Spieler und Teams, die den Ton angeben."
           />
           {seasonSwitcher}
-          <Statistiken players={players} matches={seasonMatches} teams={teams} onSelectTeam={openTeamDetail} />
+          <Statistiken players={players} matches={seasonMatches} teams={visibleTeams} onSelectTeam={openTeamDetail} />
         </>
       )}
       </div>

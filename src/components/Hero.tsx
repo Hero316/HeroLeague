@@ -1,13 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActiveTab, Match, PlayerOfMonth, Team } from '../types';
+import { ActiveTab, Match, PlayerOfMonth, PlayerStat, Team } from '../types';
 import { apiFetch } from '../lib/api';
 import { MapPin } from 'lucide-react';
 import { calculateStandings } from '../lib/standings';
 import { TeamCrest, shortDate } from './ui';
+import PlayerOfMonthCard from './PlayerOfMonthCard';
 
 interface HeroProps {
   teams: Team[];
   matches: Match[];
+  players: PlayerStat[];
   seasonLabel: string;
   onNavigate: (tab: ActiveTab) => void;
   onSelectTeam?: (teamId: string) => void;
@@ -15,7 +17,7 @@ interface HeroProps {
 
 // Vollflächiges Hero-Carousel (Magenta-TV-Stil) mit drei Slides:
 // 1. Nächster Spieltag / Live-Spiel  2. Spieler des Monats  3. Tabellenführer
-export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelectTeam }: HeroProps) {
+export default function Hero({ teams, matches, players, seasonLabel, onNavigate, onSelectTeam }: HeroProps) {
   const [pom, setPom] = useState<PlayerOfMonth | null>(null);
   const [active, setActive] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -90,19 +92,10 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
     arm();
   };
 
-  const wrapStyle = (i: number): React.CSSProperties => ({
-    position: 'absolute',
-    inset: 0,
-    transition: 'opacity 1s ease',
-    opacity: i === current ? 1 : 0,
-    zIndex: i === current ? 2 : 1,
-    pointerEvents: i === current ? 'auto' : 'none',
-  });
-
   const primaryBtn =
-    'inline-flex items-center gap-2.5 px-6 py-[15px] rounded-[13px] bg-brand-accent-light text-[#062018] font-sans font-extrabold text-sm tracking-wider shadow-[0_10px_30px_rgba(34,223,201,.28)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_42px_rgba(34,223,201,.42)] cursor-pointer';
+    'inline-flex items-center gap-2 px-4 py-2.5 sm:gap-2.5 sm:px-6 sm:py-[15px] rounded-[11px] sm:rounded-[13px] bg-brand-accent-light text-[#062018] font-sans font-extrabold text-xs sm:text-sm tracking-wider shadow-[0_10px_30px_rgba(34,223,201,.28)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_42px_rgba(34,223,201,.42)] cursor-pointer';
   const secondaryBtn =
-    'inline-flex items-center gap-2.5 px-6 py-[15px] rounded-[13px] bg-white/5 border border-white/[.16] text-hl-text font-sans font-bold text-sm tracking-wider transition-colors hover:border-brand-accent-light hover:bg-[rgba(34,223,201,.06)] cursor-pointer';
+    'inline-flex items-center gap-2 px-4 py-2.5 sm:gap-2.5 sm:px-6 sm:py-[15px] rounded-[11px] sm:rounded-[13px] bg-white/5 border border-white/[.16] text-hl-text font-sans font-bold text-xs sm:text-sm tracking-wider transition-colors hover:border-brand-accent-light hover:bg-[rgba(34,223,201,.06)] cursor-pointer';
 
   const dotLabels: Record<string, string> = { match: 'SPIELTAG', pom: 'SPIELER DES MONATS', table: 'TABELLE' };
 
@@ -146,7 +139,7 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
           <div className="absolute inset-0 bg-[linear-gradient(90deg,#0A1415_6%,rgba(6,14,15,.78)_34%,rgba(6,14,15,.2)_64%,transparent)]" />
           <div className="absolute inset-0 bg-[linear-gradient(0deg,#0A1415_2%,transparent_34%)]" />
         </div>
-        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-16 sm:pt-10 sm:pb-26 min-h-[inherit] flex items-center">
+        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-24 sm:pt-10 sm:pb-26 w-full flex items-center">
           <div className="w-full flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 sm:gap-8 lg:gap-11">
             <div className="max-w-[600px] hl-fade">
               <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.3)]">
@@ -155,26 +148,26 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
               </div>
               {featuredDay ? (
                 <>
-                  <h1 className="mt-5 font-display font-black text-[40px] sm:text-7xl xl:text-[92px] leading-[.85] tracking-tight uppercase text-white">
+                  <h1 className="mt-5 font-display font-black text-[30px] sm:text-7xl xl:text-[92px] leading-[.85] tracking-tight uppercase text-white">
                     {featuredDay.day}.
                     <br />
                     <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">Spieltag</span>
                   </h1>
-                  <p className="mt-5 max-w-[460px] text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">{intro}</p>
+                  <p className="mt-5 max-w-[460px] hidden sm:block text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">{intro}</p>
                 </>
               ) : (
                 <>
-                  <h1 className="mt-5 font-display font-black text-[40px] sm:text-7xl xl:text-[92px] leading-[.85] tracking-tight uppercase text-white">
+                  <h1 className="mt-5 font-display font-black text-[30px] sm:text-7xl xl:text-[92px] leading-[.85] tracking-tight uppercase text-white">
                     Hero
                     <br />
                     <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">League</span>
                   </h1>
-                  <p className="mt-5 max-w-[440px] text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
+                  <p className="mt-5 max-w-[440px] hidden sm:block text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
                     Die Saison startet in Kürze — sobald Spiele angesetzt sind, findest du hier alles live.
                   </p>
                 </>
               )}
-              <div className="flex gap-3 mt-7 flex-wrap">
+              <div className="hidden lg:flex gap-3 mt-7 flex-wrap">
                 <button onClick={() => onNavigate('spielplan')} className={primaryBtn}>
                   ▸ SPIELPLAN ANSEHEN
                 </button>
@@ -185,7 +178,7 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
             </div>
 
             {featuredDay && first && (
-              <div className="flex-none w-full max-w-[368px] relative rounded-[22px] overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,.5)]">
+              <div className="flex-none w-full max-w-[368px] lg:max-w-[430px] relative rounded-[22px] overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,.5)]">
                 <div className="absolute inset-0 bg-[linear-gradient(140deg,rgba(34,223,201,.16),rgba(232,62,140,.1)_62%,rgba(255,255,255,.02))] pointer-events-none" />
                 <div className="relative bg-[rgba(11,17,17,.5)] border border-white/[.12] rounded-[22px] p-[22px] backdrop-blur-2xl">
                   <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -251,6 +244,15 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
                 </div>
               </div>
             )}
+            {/* Buttons auf dem Handy unter der Karte */}
+            <div className="flex lg:hidden gap-3 flex-wrap w-full">
+              <button onClick={() => onNavigate('spielplan')} className={primaryBtn}>
+                ▸ SPIELPLAN ANSEHEN
+              </button>
+              <button onClick={() => onNavigate('tabelle')} className={secondaryBtn}>
+                TABELLE
+              </button>
+            </div>
           </div>
         </div>
       </>
@@ -260,61 +262,59 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
   // ---------- Slide 2: Spieler des Monats ----------
   const renderPomSlide = () => {
     if (!pom) return null;
-    const ratio = pom.goals > 0 ? (pom.goals / Math.max(1, 3)).toFixed(1) : null;
-    void ratio;
+    // Team zuverlässig über die gespeicherte ID auflösen (Fallback: Name – für Altdaten)
+    const pomTeam = (pom.teamId ? teams.find((t) => t.id === pom.teamId) : undefined) || teams.find((t) => t.name === pom.club);
+    const crest = pomTeam
+      ? { name: pomTeam.name, shortName: pomTeam.shortName, logoColor: pomTeam.logoColor, logoUrl: pomTeam.logoUrl }
+      : undefined;
+    const pomPoints = players.find((p) => p.name === pom.name)?.points;
     return (
       <>
+        {/* Eigener, gestalteter Hintergrund (kein Menschenfoto) – hebt die Karte hervor */}
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -inset-[4%] hl-zoom">
-            {pom.image ? (
-              <img src={pom.image} alt={pom.name} className="absolute inset-0 w-full h-full object-cover object-top" referrerPolicy="no-referrer" />
-            ) : (
-              <img src="/assets/hero-crowd.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
-            )}
-          </div>
-          <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_80%_26%,rgba(233,196,106,.16),transparent_55%)]" />
-          {/* Handy: nur den unteren Bereich abdunkeln, damit Gesicht/Foto oben klar sichtbar bleibt */}
-          <div className="absolute inset-0 sm:hidden bg-[linear-gradient(0deg,#0A1415_16%,rgba(10,20,21,.5)_44%,transparent_74%)]" />
-          {/* Desktop: seitliche Abdunkelung fuer die Textspalte links */}
-          <div className="absolute inset-0 hidden sm:block bg-[linear-gradient(90deg,#0A1415_8%,rgba(6,14,15,.7)_36%,rgba(6,14,15,.15)_62%,transparent)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,#0A1415_4%,transparent_26%)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(0deg,#0A1415_2%,transparent_34%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,#0c1a19,#0a1415_58%,#08110f)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(58%_70%_at_72%_36%,rgba(34,223,201,.22),transparent_60%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(48%_60%_at_18%_18%,rgba(233,196,106,.10),transparent_55%)]" />
+          <div className="absolute -inset-[10%] opacity-70 bg-[repeating-linear-gradient(115deg,transparent_0,transparent_46px,rgba(255,255,255,.02)_46px,rgba(255,255,255,.02)_47px)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(0deg,#08110f_2%,transparent_34%)]" />
         </div>
-        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-16 sm:pt-10 sm:pb-26 min-h-[inherit] flex items-end sm:items-center">
-          <div className="max-w-[560px] hl-fade">
-            <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(233,196,106,.12)] border border-[rgba(233,196,106,.34)]">
-              <span className="text-xs leading-none text-hl-gold">★</span>
-              <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-hl-gold">SPIELER DES MONATS</span>
-            </div>
-            <div className="font-sans font-bold text-[13px] tracking-[3px] text-[#8a938c] mt-6 uppercase">{pom.club}</div>
-            <h1 className="mt-2 font-display font-black text-[40px] sm:text-7xl xl:text-[98px] leading-[.85] tracking-tight uppercase text-white">
-              {pom.name.split(' ').slice(0, -1).join(' ') || pom.name}
-              {pom.name.includes(' ') && (
-                <>
-                  <br />
-                  <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">
-                    {pom.name.split(' ').slice(-1)[0]}
-                  </span>
-                </>
-              )}
-            </h1>
-            <div className="flex gap-2.5 mt-6 max-w-[380px]">
-              <div className="flex-1 relative rounded-[14px] overflow-hidden">
-                <div className="absolute inset-0 bg-[linear-gradient(150deg,rgba(34,223,201,.14),rgba(255,255,255,.02))] pointer-events-none" />
-                <div className="relative bg-[rgba(11,17,17,.4)] border border-white/[.12] rounded-[14px] px-2 py-3 text-center backdrop-blur-xl">
-                  <div className="font-display font-black text-3xl leading-none text-brand-accent-light">{pom.goals}</div>
-                  <div className="font-sans font-bold text-[9px] tracking-[1.5px] text-hl-mute mt-1.5">TORE</div>
-                </div>
+        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-8 pb-24 sm:pt-10 sm:pb-26 w-full flex items-center">
+          <div className="w-full flex flex-col lg:flex-row items-center justify-between gap-6 lg:gap-11">
+            {/* Textspalte */}
+            <div className="max-w-[520px] hl-fade text-center lg:text-left">
+              <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(233,196,106,.12)] border border-[rgba(233,196,106,.34)]">
+                <span className="text-xs leading-none text-hl-gold">★</span>
+                <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-hl-gold">AUSZEICHNUNG</span>
               </div>
-              <div className="flex-1 relative rounded-[14px] overflow-hidden">
-                <div className="absolute inset-0 bg-[linear-gradient(150deg,rgba(255,255,255,.06),rgba(255,255,255,.02))] pointer-events-none" />
-                <div className="relative bg-[rgba(11,17,17,.4)] border border-white/[.12] rounded-[14px] px-2 py-3 text-center backdrop-blur-xl">
-                  <div className="font-display font-black text-3xl leading-none text-white">{pom.assists}</div>
-                  <div className="font-sans font-bold text-[9px] tracking-[1.5px] text-hl-mute mt-1.5">ASSISTS</div>
-                </div>
+              <h1 className="mt-5 font-display font-black text-[30px] sm:text-7xl xl:text-[88px] leading-[.85] tracking-tight uppercase text-white">
+                Spieler des
+                <br />
+                <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">Monats</span>
+              </h1>
+              <p className="mt-5 max-w-[430px] mx-auto lg:mx-0 hidden sm:block text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
+                Die herausragende Leistung des Monats in der Hero League.
+              </p>
+              {/* Buttons auf Desktop in der Textspalte */}
+              <div className="hidden lg:flex gap-3 mt-7 flex-wrap justify-start">
+                <button onClick={() => onNavigate('torschuetzen')} className={primaryBtn}>
+                  ▸ TORSCHÜTZEN
+                </button>
+                <button onClick={() => onNavigate('statistiken')} className={secondaryBtn}>
+                  STATISTIKEN
+                </button>
               </div>
             </div>
-            <div className="flex gap-3 mt-6 flex-wrap">
+            {/* Karte */}
+            <div className="flex-none w-full max-w-[360px] hl-fade">
+              <PlayerOfMonthCard
+                pom={pom}
+                crest={crest}
+                points={pomPoints}
+                onSelect={pomTeam && onSelectTeam ? () => onSelectTeam(pomTeam.id) : undefined}
+              />
+            </div>
+            {/* Buttons auf dem Handy unter der Karte */}
+            <div className="flex lg:hidden gap-3 flex-wrap justify-center w-full">
               <button onClick={() => onNavigate('torschuetzen')} className={primaryBtn}>
                 ▸ TORSCHÜTZEN
               </button>
@@ -343,23 +343,23 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
           <div className="absolute inset-0 bg-[linear-gradient(90deg,#0A1415_6%,rgba(6,14,15,.78)_34%,rgba(6,14,15,.2)_64%,transparent)]" />
           <div className="absolute inset-0 bg-[linear-gradient(0deg,#0A1415_2%,transparent_34%)]" />
         </div>
-        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-16 sm:pt-10 sm:pb-26 min-h-[inherit] flex items-center">
+        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-24 sm:pt-10 sm:pb-26 w-full flex items-center">
           <div className="w-full flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 sm:gap-8 lg:gap-11">
             <div className="max-w-[560px] hl-fade">
               <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.3)]">
                 <span className="text-[11px] leading-none text-brand-accent-light">▲</span>
                 <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-brand-accent-light">TABELLENFÜHRER</span>
               </div>
-              <h1 className="mt-5 font-display font-black text-[40px] sm:text-7xl xl:text-[96px] leading-[.85] tracking-tight uppercase text-white">
+              <h1 className="mt-5 font-display font-black text-[30px] sm:text-7xl xl:text-[96px] leading-[.85] tracking-tight uppercase text-white">
                 An der
                 <br />
                 <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">Spitze</span>
               </h1>
-              <p className="mt-5 max-w-[430px] text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
+              <p className="mt-5 max-w-[430px] hidden sm:block text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
                 {leader.teamName} führt die Hero League mit {leader.points} Punkten an
                 {standings[1] ? ` — dicht gefolgt von ${standings[1].teamName}` : ''}. Das Titelrennen ist eröffnet.
               </p>
-              <div className="flex gap-3 mt-7 flex-wrap">
+              <div className="hidden lg:flex gap-3 mt-7 flex-wrap">
                 <button onClick={() => onNavigate('tabelle')} className={primaryBtn}>
                   ▸ TABELLE ANSEHEN
                 </button>
@@ -368,7 +368,7 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
                 </button>
               </div>
             </div>
-            <div className="flex-none w-full max-w-[340px] relative rounded-[22px] overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,.5)]">
+            <div className="flex-none w-full max-w-[340px] lg:max-w-[390px] relative rounded-[22px] overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,.5)]">
               <div className="absolute inset-0 bg-[linear-gradient(140deg,rgba(34,223,201,.16),rgba(232,62,140,.08)_62%,rgba(255,255,255,.02))] pointer-events-none" />
               <div className="relative bg-[rgba(11,17,17,.5)] border border-white/[.12] rounded-[22px] p-5 backdrop-blur-2xl">
                 <div className="font-sans font-extrabold text-[10.5px] tracking-[2px] text-brand-accent-light mb-3.5">
@@ -405,6 +405,15 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
                 })}
               </div>
             </div>
+            {/* Buttons auf dem Handy unter der Karte */}
+            <div className="flex lg:hidden gap-3 flex-wrap w-full">
+              <button onClick={() => onNavigate('tabelle')} className={primaryBtn}>
+                ▸ TABELLE ANSEHEN
+              </button>
+              <button onClick={() => onNavigate('statistiken')} className={secondaryBtn}>
+                STATISTIKEN
+              </button>
+            </div>
           </div>
         </div>
       </>
@@ -418,9 +427,21 @@ export default function Hero({ teams, matches, seasonLabel, onNavigate, onSelect
   };
 
   return (
-    <div className="relative overflow-hidden min-h-[500px] sm:min-h-[640px] lg:min-h-[calc(100vh-118px)]">
+    <div
+      className="relative grid overflow-hidden min-h-[500px] sm:min-h-[640px] lg:min-h-[calc(100vh-118px)]"
+      style={{ gridTemplateRows: 'minmax(min-content, 1fr)' }}
+    >
+      {/* Slides als Grid-Stack: Containerhöhe = höchster Slide, alle gleich hoch, nichts abgeschnitten */}
       {slides.map((kind, i) => (
-        <div key={kind} style={wrapStyle(i)} className="min-h-[inherit]">
+        <div
+          key={kind}
+          className="col-start-1 row-start-1 relative flex flex-col justify-center transition-opacity duration-1000"
+          style={{
+            opacity: i === current ? 1 : 0,
+            zIndex: i === current ? 2 : 1,
+            pointerEvents: i === current ? 'auto' : 'none',
+          }}
+        >
           {renderSlide(kind)}
         </div>
       ))}

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles } from 'lucide-react';
 import { Player, Team, Match } from '../types';
@@ -186,6 +186,8 @@ interface AdminPanelProps {
   onEditTeam: (teamId: string, updatedData: Partial<Team>) => Promise<boolean>;
   onDeleteTeam: (teamId: string) => Promise<boolean>;
   onStartSeason: (label: string) => Promise<boolean>;
+  demoActive: boolean;
+  onToggleDemo: () => Promise<boolean>;
 }
 
 const MONTH_NAMES = [
@@ -193,10 +195,9 @@ const MONTH_NAMES = [
   'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
 ];
 
-// Ermittelt den besten Spieler eines Monats aus den Torschützen-/Vorlagendaten.
-// Bewertung: Tore zählen doppelt, Vorlagen einfach. Nutzt den aktuellen Kalendermonat;
-// gibt es dort keine Daten, wird der jüngste Monat mit Spielen verwendet.
-function computeMonthPom(matches: Match[], teams: Team[]) {
+// Pro-Spieler-Monatswerte (Tore/Vorlagen) aus den Torschützen-/Vorlagendaten.
+// Nutzt den aktuellen Kalendermonat; gibt es dort keine Daten, den jüngsten Monat mit Spielen.
+function monthPlayerStats(matches: Match[]) {
   const withGoals = matches.filter(
     (m) => (m.status === 'beendet' || m.status === 'live') && Array.isArray(m.scorers) && m.scorers.length > 0
   );
@@ -206,16 +207,14 @@ function computeMonthPom(matches: Match[], teams: Team[]) {
   const now = new Date();
   const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const monthKeys = Array.from(new Set(withGoals.map((m) => monthOf(m.date))));
-  const key = monthKeys.includes(currentKey)
-    ? currentKey
-    : monthKeys.sort().reverse()[0];
+  const key = monthKeys.includes(currentKey) ? currentKey : monthKeys.sort().reverse()[0];
 
   const monthMatches = withGoals.filter((m) => monthOf(m.date) === key);
-  const stats: Record<string, { name: string; teamId: string; goals: number; assists: number }> = {};
+  const byName: Record<string, { name: string; teamId: string; goals: number; assists: number }> = {};
   const bump = (name: string, teamId: string, field: 'goals' | 'assists') => {
     if (!name || name === 'Eigentor' || name === 'Unbekannt') return;
-    if (!stats[name]) stats[name] = { name, teamId, goals: 0, assists: 0 };
-    stats[name][field] += 1;
+    if (!byName[name]) byName[name] = { name, teamId, goals: 0, assists: 0 };
+    byName[name][field] += 1;
   };
 
   monthMatches.forEach((m) =>
@@ -225,21 +224,30 @@ function computeMonthPom(matches: Match[], teams: Team[]) {
     })
   );
 
-  const ranked = Object.values(stats).sort(
+  const [y, mm] = key.split('-');
+  return { byName, key, monthLabel: `${MONTH_NAMES[parseInt(mm, 10) - 1]} ${y}` };
+}
+
+// Ermittelt den besten Spieler eines Monats (Tore zählen doppelt, Vorlagen einfach).
+function computeMonthPom(matches: Match[], teams: Team[]) {
+  const month = monthPlayerStats(matches);
+  if (!month) return null;
+
+  const ranked = Object.values(month.byName).sort(
     (a, b) => b.goals * 2 + b.assists - (a.goals * 2 + a.assists) || b.goals - a.goals
   );
   const top = ranked[0];
   if (!top) return null;
 
   const team = teams.find((t) => t.id === top.teamId);
-  const [y, mm] = key.split('-');
   return {
     name: top.name,
+    teamId: top.teamId,
     teamName: team?.name ?? '',
     goals: top.goals,
     assists: top.assists,
     imageUrl: team?.spielerliste?.find((p) => p.name === top.name)?.imageUrl ?? '',
-    monthLabel: `${MONTH_NAMES[parseInt(mm, 10) - 1]} ${y}`,
+    monthLabel: month.monthLabel,
   };
 }
 
@@ -260,7 +268,10 @@ export default function AdminPanel({
   onEditTeam,
   onDeleteTeam,
   onStartSeason,
+  demoActive,
+  onToggleDemo,
 }: AdminPanelProps) {
+  const [isTogglingDemo, setIsTogglingDemo] = useState(false);
   const colors = [
     { name: 'Blau', hex: '#3B82F6' },
     { name: 'Gelb', hex: '#F59E0B' },
@@ -294,11 +305,35 @@ export default function AdminPanel({
   // Spieler des Monats
   const [pomName, setPomName] = useState('');
   const [pomClub, setPomClub] = useState('');
+  const [pomTeamId, setPomTeamId] = useState('');
   const [pomGoals, setPomGoals] = useState(0);
   const [pomAssists, setPomAssists] = useState(0);
   const [pomImage, setPomImage] = useState('');
   const [pomSuccess, setPomSuccess] = useState(false);
   const [pomAutoNote, setPomAutoNote] = useState('');
+
+  // Monatswerte pro Spieler (für automatische Tore/Vorlagen bei Spielerauswahl)
+  const pomMonth = useMemo(() => monthPlayerStats(matches), [matches]);
+  const pomTeam = useMemo(() => teams.find((t) => t.id === pomTeamId) ?? null, [teams, pomTeamId]);
+
+  // Verein wählen: setzt Team + Vereinsname, Spieler wird zurückgesetzt
+  const handleSelectPomTeam = (teamId: string) => {
+    setPomTeamId(teamId);
+    setPomClub(teams.find((t) => t.id === teamId)?.name ?? '');
+    setPomName('');
+    setPomAutoNote('');
+  };
+
+  // Spieler aus dem Kader wählen: Name + Foto + Monats-Tore/-Vorlagen automatisch
+  const handleSelectPomPlayer = (name: string) => {
+    setPomName(name);
+    const rosterImg = pomTeam?.spielerliste?.find((p) => p.name === name)?.imageUrl;
+    if (rosterImg) setPomImage(rosterImg);
+    const stat = pomMonth?.byName[name];
+    setPomGoals(stat?.goals ?? 0);
+    setPomAssists(stat?.assists ?? 0);
+    setPomAutoNote('');
+  };
 
   // Twitch-Livestream (manueller Schalter)
   const [twitchChannel, setTwitchChannel] = useState('');
@@ -311,10 +346,11 @@ export default function AdminPanel({
   const [isStartingSeason, setIsStartingSeason] = useState(false);
 
   useEffect(() => {
-    apiFetch<{ name: string; club: string; goals: number; assists: number; image: string }>('/api/player-of-the-month')
+    apiFetch<{ name: string; club: string; teamId?: string; goals: number; assists: number; image: string }>('/api/player-of-the-month')
       .then((data) => {
         setPomName(data.name || '');
         setPomClub(data.club || '');
+        setPomTeamId(data.teamId || '');
         setPomGoals(data.goals || 0);
         setPomAssists(data.assists || 0);
         setPomImage(data.image || '');
@@ -335,6 +371,7 @@ export default function AdminPanel({
         body: JSON.stringify({
           name: pomName.trim(),
           club: pomClub.trim(),
+          teamId: pomTeamId,
           goals: Number(pomGoals),
           assists: Number(pomAssists),
           image: pomImage,
@@ -356,6 +393,7 @@ export default function AdminPanel({
     }
     setPomName(res.name);
     setPomClub(res.teamName);
+    setPomTeamId(res.teamId);
     setPomGoals(res.goals);
     setPomAssists(res.assists);
     if (res.imageUrl) setPomImage(res.imageUrl);
@@ -833,13 +871,45 @@ export default function AdminPanel({
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <div>
-              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">SPIELER-NAME</label>
-              <input type="text" value={pomName} onChange={(e) => setPomName(e.target.value)} placeholder="z.B. Florian Wirtz" className={inputClass} />
+              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">VEREIN</label>
+              <select
+                value={pomTeamId}
+                onChange={(e) => handleSelectPomTeam(e.target.value)}
+                className={`${inputClass} cursor-pointer`}
+              >
+                <option value="">-- Verein auswählen --</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.logoIcon} {t.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
-              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">VEREIN</label>
-              <input type="text" value={pomClub} onChange={(e) => setPomClub(e.target.value)} placeholder="z.B. Phönix Leverkusen" className={inputClass} />
+              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">SPIELER</label>
+              {pomTeam && (pomTeam.spielerliste?.length ?? 0) > 0 ? (
+                <select
+                  value={pomName}
+                  onChange={(e) => handleSelectPomPlayer(e.target.value)}
+                  className={`${inputClass} cursor-pointer`}
+                >
+                  <option value="">-- Spieler auswählen --</option>
+                  {(pomTeam.spielerliste || []).map((p) => (
+                    <option key={p.name} value={p.name}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={pomName}
+                  onChange={(e) => setPomName(e.target.value)}
+                  placeholder={pomTeamId ? 'Kader leer – Name eintippen' : 'Zuerst Verein wählen'}
+                  className={inputClass}
+                />
+              )}
             </div>
 
             <div>
@@ -853,7 +923,7 @@ export default function AdminPanel({
             </div>
 
             <div className="md:col-span-2">
-              <ImageUploader label="Spieler-Portraitfoto (Upload)" value={pomImage} onChange={setPomImage} />
+              <ImageUploader label="Spieler-Portraitfoto — am besten freigestellt (transparenter Hintergrund)" value={pomImage} onChange={setPomImage} />
             </div>
 
             <div className="md:col-span-2 flex items-center justify-end gap-3 pb-1">
@@ -971,6 +1041,52 @@ export default function AdminPanel({
             >
               <CalendarPlus className="w-4 h-4" />
               <span>Neue Saison starten</span>
+            </button>
+          </div>
+
+          {/* Demo-Modus: komplette Zufalls-Kopie zum Vorstellen */}
+          <div className="mt-6 pt-6 border-t border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-block w-2.5 h-2.5 rounded-full ${demoActive ? 'bg-hl-green animate-pulse' : 'bg-hl-faint'}`}
+                />
+                <span className="text-sm font-bold text-white font-sans uppercase tracking-wider">
+                  Demo-Modus {demoActive ? 'aktiv' : 'aus'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-400 font-sans leading-relaxed mt-2">
+                Erstellt eine komplette Kopie (Teams, Kader, eigene Saison) und füllt alles per Zufall —
+                Ergebnisse, Torschützen, Statistiken und Tabelle. Ideal zum Vorstellen. Die echte Saison bleibt
+                unberührt; beim Deaktivieren wird die Demo restlos entfernt.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={isTogglingDemo}
+              onClick={async () => {
+                if (!demoActive && !window.confirm('Demo aktivieren? Es wird eine komplette Zufalls-Kopie erstellt. Die echte Saison bleibt unberührt.')) return;
+                if (demoActive && !window.confirm('Demo deaktivieren und alle Demo-Daten entfernen? Die echte Saison kommt zurück.')) return;
+                setIsTogglingDemo(true);
+                try {
+                  await onToggleDemo();
+                } finally {
+                  setIsTogglingDemo(false);
+                }
+              }}
+              className={`shrink-0 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${
+                demoActive
+                  ? 'bg-[rgba(255,84,66,.15)] border border-[rgba(255,84,66,.35)] text-hl-red-soft hover:bg-[rgba(255,84,66,.25)]'
+                  : 'bg-hl-green/90 hover:bg-hl-green text-[#062018]'
+              }`}
+            >
+              {isTogglingDemo
+                ? demoActive
+                  ? 'Deaktiviere...'
+                  : 'Erstelle Demo...'
+                : demoActive
+                ? 'Demo deaktivieren'
+                : 'Demo aktivieren'}
             </button>
           </div>
         </div>
