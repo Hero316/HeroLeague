@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, useInView, useReducedMotion, animate, type Variants } from 'motion/react';
 
 // Gemeinsame Animations-Bausteine fuer das oeffentliche Frontend.
@@ -145,19 +145,19 @@ export function useSettle(delay = 550) {
   return { ref, settled: reduce ? true : settled };
 }
 
-// Kleiner Helfer: neutrale Startreihenfolge (alphabetisch nach Name) fuer die
-// Einsortier-Animation. Gibt bei `settled` die finale Liste zurueck.
+// Ranglisten IMMER sofort in der korrekten (finalen) Reihenfolge rendern.
+// Frueher wurde als Startzustand eine alphabetische Reihenfolge gezeigt und dann
+// "eingerutscht" – das klebte die Platznummern (1..n) an die falschen Zeilen, sodass
+// fuer ~0,5s z.B. ein Spieler mit weniger Punkten auf Platz 1 stand. Bei einer
+// Rangliste ist das schlicht falsch. Die weiche Umsortier-Animation bei echten
+// Datenaenderungen (z.B. Live-Ergebnisse) macht weiterhin motion `layout` an den
+// Zeilen selbst – dafuer braucht es keinen falschen Startzustand.
+// Signatur bleibt unveraendert, damit die aufrufenden Komponenten gleich bleiben.
 export function useSettledList<T>(
   finalItems: T[],
-  getName: (item: T) => string,
-  delay?: number
+  _getName?: (item: T) => string,
+  _delay?: number
 ): { ref: React.RefObject<HTMLDivElement | null>; items: T[]; settled: boolean } {
-  const { ref, settled } = useSettle(delay);
-  const initialItems = useMemo(
-    () => [...finalItems].sort((a, b) => getName(a).localeCompare(getName(b))),
-    // getName ist stabil pro Aufruf; bewusst nur an finalItems gekoppelt
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [finalItems]
-  );
-  return { ref, items: settled ? finalItems : initialItems, settled };
+  const ref = useRef<HTMLDivElement>(null);
+  return { ref, items: finalItems, settled: true };
 }
