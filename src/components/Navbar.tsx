@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Menu, X, LogOut, LayoutDashboard } from 'lucide-react';
 import { ActiveTab } from '../types';
+import { numberWord } from '../lib/heroAward';
 
 interface NavbarProps {
   activeTab: ActiveTab;
@@ -10,6 +11,7 @@ interface NavbarProps {
   onOpenLogin: () => void;
   onOpenBackoffice: () => void;
   seasonLabel?: string;
+  seasonNumber?: number; // für den HERO-Award-Titel (HERO ONE/TWO …)
   hasLiveMatch?: boolean;
 }
 
@@ -20,6 +22,7 @@ export default function Navbar({
   onLogout,
   onOpenBackoffice,
   seasonLabel,
+  seasonNumber,
   hasLiveMatch,
 }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -28,9 +31,19 @@ export default function Navbar({
     { label: 'HOME', value: 'home' },
     { label: 'SPIELPLAN', value: 'spielplan' },
     { label: 'TABELLE', value: 'tabelle' },
-    { label: 'TORSCHÜTZEN', value: 'torschuetzen' },
+    { label: 'HERO ONE', value: 'heroone' },
     { label: 'STATISTIKEN', value: 'statistiken' },
   ];
+
+  // HERO-Award: „HERO" kräftig, Zahlwort golden leuchtend – hebt sich bewusst
+  // von den übrigen Tabs ab (höchste Auszeichnung der Liga).
+  const heroWord = numberWord(seasonNumber ?? 1);
+  const heroLabel = (compact = false) => (
+    <span className={`inline-flex items-baseline gap-1 font-display ${compact ? 'text-[15px]' : 'text-[15px]'}`}>
+      <span className="font-black tracking-wide text-white">HERO</span>
+      <span className="font-black tracking-wide hl-gold-text">{heroWord}</span>
+    </span>
+  );
 
   // Saison-Pille: "2026/27" -> "26/27"
   const seasonShort = seasonLabel ? seasonLabel.replace(/^20(\d{2})\/(\d{2})$/, '$1/$2') : '';
@@ -53,20 +66,33 @@ export default function Navbar({
 
         {/* Desktop-Navigation */}
         <nav className="hidden lg:flex gap-8 ml-3.5">
-          {navItems.map((item) => (
-            <button
-              key={item.value}
-              onClick={() => setActiveTab(item.value)}
-              className={`relative font-sans text-[13px] tracking-[1.5px] py-1.5 transition-colors cursor-pointer ${
-                activeTab === item.value ? 'font-bold text-white' : 'font-semibold text-hl-dim hover:text-hl-text'
-              }`}
-            >
-              {item.label}
-              {activeTab === item.value && (
-                <span className="absolute left-0 right-0 -bottom-[7px] h-0.5 bg-brand-accent-light rounded-sm shadow-[0_0_8px_rgba(34,223,201,.6)]" />
-              )}
-            </button>
-          ))}
+          {navItems.map((item) => {
+            const isHero = item.value === 'heroone';
+            return (
+              <button
+                key={item.value}
+                onClick={() => setActiveTab(item.value)}
+                className={`relative py-1.5 transition-colors cursor-pointer ${
+                  isHero
+                    ? ''
+                    : `font-sans text-[13px] tracking-[1.5px] ${
+                        activeTab === item.value ? 'font-bold text-white' : 'font-semibold text-hl-dim hover:text-hl-text'
+                      }`
+                }`}
+              >
+                {isHero ? heroLabel() : item.label}
+                {activeTab === item.value && (
+                  <span
+                    className={`absolute left-0 right-0 -bottom-[7px] h-0.5 rounded-sm ${
+                      isHero
+                        ? 'bg-hl-gold shadow-[0_0_8px_rgba(233,196,106,.7)]'
+                        : 'bg-brand-accent-light shadow-[0_0_8px_rgba(34,223,201,.6)]'
+                    }`}
+                  />
+                )}
+              </button>
+            );
+          })}
         </nav>
 
         {/* Rechts: LIVE-Pille, Saison, Admin */}
@@ -117,22 +143,31 @@ export default function Navbar({
       {/* Mobile-Menü */}
       {isOpen && (
         <div className="lg:hidden border-t border-white/[.07] bg-[#080c0a] px-4 py-3 space-y-1">
-          {navItems.map((item) => (
-            <button
-              key={item.value}
-              onClick={() => {
-                setActiveTab(item.value);
-                setIsOpen(false);
-              }}
-              className={`block w-full text-left px-4 py-2.5 rounded-xl font-sans text-sm tracking-[1.5px] transition-colors cursor-pointer ${
-                activeTab === item.value
-                  ? 'bg-[rgba(34,223,201,.12)] text-brand-accent-light font-bold border border-[rgba(34,223,201,.3)]'
-                  : 'text-hl-mute hover:bg-white/5 hover:text-white font-semibold'
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
+          {navItems.map((item) => {
+            const isHero = item.value === 'heroone';
+            return (
+              <button
+                key={item.value}
+                onClick={() => {
+                  setActiveTab(item.value);
+                  setIsOpen(false);
+                }}
+                className={`block w-full text-left px-4 py-2.5 rounded-xl transition-colors cursor-pointer ${
+                  isHero
+                    ? activeTab === item.value
+                      ? 'bg-[rgba(233,196,106,.12)] border border-[rgba(233,196,106,.35)]'
+                      : 'hover:bg-white/5'
+                    : `font-sans text-sm tracking-[1.5px] ${
+                        activeTab === item.value
+                          ? 'bg-[rgba(34,223,201,.12)] text-brand-accent-light font-bold border border-[rgba(34,223,201,.3)]'
+                          : 'text-hl-mute hover:bg-white/5 hover:text-white font-semibold'
+                      }`
+                }`}
+              >
+                {isHero ? heroLabel(true) : item.label}
+              </button>
+            );
+          })}
           {isAdmin && (
             <button
               onClick={() => {

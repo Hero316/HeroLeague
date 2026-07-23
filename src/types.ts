@@ -135,4 +135,4 @@ export interface PlayerStat {
   points: number; // Ballon-d'Or-Wertung (aus Toren, Vorlagen, MOTM, Team-Ergebnis, Torwart-zu-null)
 }
 
-export type ActiveTab = 'home' | 'spielplan' | 'tabelle' | 'torschuetzen' | 'statistiken';
+export type ActiveTab = 'home' | 'spielplan' | 'tabelle' | 'heroone' | 'statistiken';

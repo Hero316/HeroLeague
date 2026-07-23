@@ -7,7 +7,7 @@ interface PlayerAvatarProps {
   name: string;
   imageUrl?: string;
   color?: string; // Vereinsfarbe für den Initialen-Fallback
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
 // Größen im neuen Design: abgerundete Rechtecke statt Kreise
@@ -15,6 +15,7 @@ const SIZES = {
   sm: 'w-8 h-8 text-[11px] rounded-[10px]',
   md: 'w-11 h-11 text-base rounded-[13px]',
   lg: 'w-[58px] h-[58px] text-xl rounded-[16px]',
+  xl: 'w-[104px] h-[104px] text-4xl rounded-[26px]',
 };
 
 // Spielerfoto mit Initialen-Fallback in Vereinsfarbe.

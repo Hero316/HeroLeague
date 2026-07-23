@@ -143,7 +143,7 @@ export function Footer({ onNavigate, onNavigatePath }: FooterProps) {
   const links: { label: string; tab: ActiveTab }[] = [
     { label: 'SPIELPLAN', tab: 'spielplan' },
     { label: 'TABELLE', tab: 'tabelle' },
-    { label: 'TORSCHÜTZEN', tab: 'torschuetzen' },
+    { label: 'HERO ONE', tab: 'heroone' },
     { label: 'STATISTIKEN', tab: 'statistiken' },
   ];
   const legalLinks: { label: string; path: string }[] = [

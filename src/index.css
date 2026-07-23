@@ -97,6 +97,13 @@ body {
   }
 }
 
+/* Gold-Schimmer fuer den HERO-ONE-Titel (hoechste Auszeichnung) */
+@keyframes hlGoldShimmer {
+  to {
+    background-position: 200% center;
+  }
+}
+
 .hl-fade {
   animation: hlFade 0.6s both;
 }
@@ -114,13 +121,33 @@ body {
   animation: hlZoom 24s ease-in-out infinite alternate;
 }
 
+/* HERO-ONE-Gold: leuchtender, schimmernder Goldverlauf auf Text.
+   Fuer den Award-Titel (Tab + Sektion) – die hoechste Auszeichnung. */
+.hl-gold-text {
+  background: linear-gradient(100deg, #C9982F 0%, #E9C46A 25%, #FBE7B2 50%, #E9C46A 75%, #C9982F 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: hlGoldShimmer 4s linear infinite;
+  filter: drop-shadow(0 0 10px rgba(233, 196, 106, 0.45));
+}
+
 /* Bewegung reduzieren: Endlos-Animationen ausschalten, Einblendungen sofort final.
    Die JS-Animationen (motion) respektieren die Einstellung bereits ueber useReducedMotion. */
 @media (prefers-reduced-motion: reduce) {
   .hl-zoom,
   .hl-marquee,
-  .hl-pulse {
+  .hl-pulse,
+  .hl-gold-text {
     animation: none !important;
+  }
+  /* Ohne Animation trotzdem golden lesbar halten */
+  .hl-gold-text {
+    -webkit-text-fill-color: #E9C46A;
+    color: #E9C46A;
+    background: none;
   }
   .hl-fade {
     animation: none !important;

@@ -10,26 +10,7 @@ interface StatistikenProps {
   players: PlayerStat[];
   matches: Match[];
   teams: Team[];
-  seasonNumber?: number; // fortlaufende Saison-Nummer (1 = erste Saison) für den HERO-Titel
   onSelectTeam?: (teamId: string) => void;
-}
-
-// Englisches Zahlwort für den saisonweise hochzählenden Award-Titel: 1 -> "ONE",
-// 2 -> "TWO" … Bei sehr hohen Zahlen (>99) fällt es auf die Ziffer zurück.
-const NUMBER_ONES = [
-  'ZERO', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE', 'TEN',
-  'ELEVEN', 'TWELVE', 'THIRTEEN', 'FOURTEEN', 'FIFTEEN', 'SIXTEEN', 'SEVENTEEN', 'EIGHTEEN', 'NINETEEN',
-];
-const NUMBER_TENS = ['', '', 'TWENTY', 'THIRTY', 'FORTY', 'FIFTY', 'SIXTY', 'SEVENTY', 'EIGHTY', 'NINETY'];
-function numberWord(n: number): string {
-  if (!Number.isFinite(n) || n < 1) return NUMBER_ONES[1]; // Fallback: ONE
-  if (n < 20) return NUMBER_ONES[n];
-  if (n < 100) {
-    const tens = Math.floor(n / 10);
-    const ones = n % 10;
-    return ones ? `${NUMBER_TENS[tens]}-${NUMBER_ONES[ones]}` : NUMBER_TENS[tens];
-  }
-  return String(n);
 }
 
 type Accent = 'teal' | 'gold' | 'magenta';
@@ -47,7 +28,7 @@ const VALUE_COLOR: Record<Accent, string> = {
 };
 
 // Statistik-Seite: Liga-Kennzahlen als Kachelzeile + Leader-Cards für Spieler und Teams.
-export default function Statistiken({ players, matches, teams, seasonNumber, onSelectTeam }: StatistikenProps) {
+export default function Statistiken({ players, matches, teams, onSelectTeam }: StatistikenProps) {
   const finished = matches.filter((m) => m.status === 'beendet' && m.homeScore !== null && m.awayScore !== null);
   const totalGoals = finished.reduce((acc, m) => acc + (m.homeScore || 0) + (m.awayScore || 0), 0);
   const avgGoals = finished.length ? totalGoals / finished.length : 0;
@@ -96,14 +77,13 @@ export default function Statistiken({ players, matches, teams, seasonNumber, onS
       .filter((p) => p.goals > 0 && p.matchesPlayed > 0)
       .sort((a, b) => b.goals / b.matchesPlayed - a.goals / a.matchesPlayed)[0] ?? null;
 
-  // Ballon d'Or: Top 5 nach Wertungspunkten (Tore, Vorlagen, bester Spieler, Team-Ergebnis, Torwart-zu-null)
-  const ballonRanking = React.useMemo(
+  // Torschützenkönig: Top 5 nach erzielten Toren (Tiebreak: Vorlagen, dann Name)
+  const scorerRanking = React.useMemo(
     () =>
       [...players]
-        .filter((p) => p.points > 0)
+        .filter((p) => p.goals > 0)
         .sort(
           (a, b) =>
-            b.points - a.points ||
             b.goals - a.goals ||
             b.assists - a.assists ||
             a.name.localeCompare(b.name)
@@ -117,8 +97,8 @@ export default function Statistiken({ players, matches, teams, seasonNumber, onS
   // nur Keeper mit mindestens MIN_GAMES Torwart-Spielen, absteigend nach Score.
   const gloveRanking = React.useMemo(() => rankGoldenGlove(players, matches).slice(0, 5), [players, matches]);
 
-  // Einsortier-Animation fuer die beiden Ranglisten (startet alphabetisch).
-  const ballon = useSettledList(ballonRanking, (p) => p.name);
+  // Container-Refs für die weiche Umsortier-Animation (motion layout) bei Live-Updates.
+  const scorer = useSettledList(scorerRanking, (p) => p.name);
   const glove = useSettledList(gloveRanking, (p) => p.name);
 
   interface LeaderCard {
@@ -299,31 +279,31 @@ export default function Statistiken({ players, matches, teams, seasonNumber, onS
         </Reveal>
       )}
 
-      {/* Auszeichnungen: HERO-Award (Feldwertung) + Goldener Handschuh (Torhüter) nebeneinander */}
-      {(ballonRanking.length > 0 || gloveRanking.length > 0) && (
+      {/* Auszeichnungen: Torschützenkönig + Goldener Handschuh nebeneinander */}
+      {(scorerRanking.length > 0 || gloveRanking.length > 0) && (
         <Reveal className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-          {/* HERO-Award – Spielerwertung (Top 5 nach Punkten), saisonweise hochgezählt */}
-          {ballonRanking.length > 0 && (
+          {/* Torschützenkönig – Top 5 nach erzielten Toren */}
+          {scorerRanking.length > 0 && (
             <div>
               <div className="flex items-center gap-2.5 mb-4">
-                <span className="text-2xl">🏆</span>
+                <span className="text-2xl">⚽</span>
                 <h3 className="font-display font-black text-xl sm:text-2xl uppercase tracking-tight text-white">
-                  HERO {numberWord(seasonNumber ?? 1)}
+                  Torschützenkönig
                 </h3>
                 <span className="font-sans font-bold text-[11px] tracking-[1.5px] text-hl-dim mt-1">TOP 5 · SPIELER</span>
               </div>
               <div className="relative rounded-[20px] overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] border border-white/10 backdrop-blur-lg shadow-[0_20px_50px_rgba(0,0,0,.35)]">
                 <div className="absolute top-0 right-0 w-[220px] h-[220px] pointer-events-none" style={{ background: GLOW.gold }} />
-                <div ref={ballon.ref} className="relative divide-y divide-white/[.06]">
-                  {ballon.items.map((p, idx) => {
+                <div ref={scorer.ref} className="relative divide-y divide-white/[.06]">
+                  {scorer.items.map((p, idx) => {
                     const rankColor =
                       idx === 0 ? 'text-hl-gold' : idx === 1 ? 'text-[#C7D0DA]' : idx === 2 ? 'text-[#E0A46B]' : 'text-hl-dim';
-                    const breakdown = [
-                      p.goals > 0 ? `${p.goals} ⚽` : null,
-                      p.assists > 0 ? `${p.assists} 🅰️` : null,
-                      p.motmCount > 0 ? `${p.motmCount}× ⭐` : null,
-                      p.cleanSheets > 0 ? `${p.cleanSheets}× 🧤` : null,
-                    ].filter(Boolean);
+                    const sub = [
+                      `${p.assists} Assists`,
+                      p.matchesPlayed > 0 ? `${p.matchesPlayed} Spiele` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ');
                     return (
                       <motion.div
                         layout="position"
@@ -339,14 +319,14 @@ export default function Statistiken({ players, matches, teams, seasonNumber, onS
                           <div className="font-sans font-bold text-sm sm:text-[15px] text-white truncate">{p.name}</div>
                           <div className="font-sans text-[11.5px] text-hl-mute truncate">
                             {p.teamName}
-                            {breakdown.length > 0 && <span className="text-hl-dim"> · {breakdown.join(' · ')}</span>}
+                            <span className="text-hl-dim"> · {sub}</span>
                           </div>
                         </div>
                         <div className="flex items-baseline gap-1.5 shrink-0">
                           <span className="font-display font-black text-2xl sm:text-3xl leading-none text-hl-gold">
-                            <CountUp value={p.points} decimals={1} />
+                            <CountUp value={p.goals} />
                           </span>
-                          <span className="font-sans font-bold text-[11px] tracking-wider text-hl-dim">PKT</span>
+                          <span className="font-sans font-bold text-[11px] tracking-wider text-hl-dim">TORE</span>
                         </div>
                       </motion.div>
                     );
