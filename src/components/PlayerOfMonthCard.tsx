@@ -54,11 +54,24 @@ export default function PlayerOfMonthCard({ pom, crest, points, onSelect }: Play
         >
           {/* Glow + Wasserzeichen */}
           <div className="absolute inset-0 bg-[radial-gradient(120%_70%_at_50%_0%,rgba(34,223,201,.28),transparent_62%)]" />
-          <div className="absolute inset-x-0 top-[30%] -translate-y-1/2 text-center font-display font-black text-[62px] leading-[.8] tracking-tighter uppercase text-white/[.05] select-none pointer-events-none">
-            Hero
-            <br />
-            League
-          </div>
+          {crest?.logoUrl ? (
+            // Vereinswappen groß im Hintergrund – bewusst über die Kartenränder
+            // hinaus (angeschnitten) und mit Verlauf: oben heller, nach unten
+            // ausblendend (durchsichtig), damit es hinter dem Spieler verschwimmt.
+            <img
+              src={crest.logoUrl}
+              alt=""
+              aria-hidden="true"
+              referrerPolicy="no-referrer"
+              className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 w-[140%] max-w-none object-contain opacity-[.22] select-none pointer-events-none [mask-image:linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,0,0,.6)_46%,rgba(0,0,0,0)_80%)] [-webkit-mask-image:linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,0,0,.6)_46%,rgba(0,0,0,0)_80%)]"
+            />
+          ) : (
+            <div className="absolute inset-x-0 top-[30%] -translate-y-1/2 text-center font-display font-black text-[62px] leading-[.8] tracking-tighter uppercase text-white/[.05] select-none pointer-events-none">
+              Hero
+              <br />
+              League
+            </div>
+          )}
 
           {/* Freigestelltes Foto – füllt die Karte, Kopf oben, Füße unten */}
           {pom.image ? (
