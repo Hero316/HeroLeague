@@ -63,7 +63,7 @@ export default function PlayerOfMonthCard({ pom, crest, points, onSelect }: Play
               alt=""
               aria-hidden="true"
               referrerPolicy="no-referrer"
-              className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 w-[140%] max-w-none object-contain opacity-[.22] select-none pointer-events-none [mask-image:linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,0,0,.6)_46%,rgba(0,0,0,0)_80%)] [-webkit-mask-image:linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,0,0,.6)_46%,rgba(0,0,0,0)_80%)]"
+              className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 w-[155%] max-w-none object-contain opacity-40 select-none pointer-events-none [mask-image:linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,0,0,.7)_50%,rgba(0,0,0,0)_82%)] [-webkit-mask-image:linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,0,0,.7)_50%,rgba(0,0,0,0)_82%)]"
             />
           ) : (
             <div className="absolute inset-x-0 top-[30%] -translate-y-1/2 text-center font-display font-black text-[62px] leading-[.8] tracking-tighter uppercase text-white/[.05] select-none pointer-events-none">
