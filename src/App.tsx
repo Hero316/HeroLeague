@@ -82,6 +82,18 @@ export default function App() {
   );
   const isCurrentSeasonSelected = !selectedSeason || selectedSeason.id === currentSeason?.id;
 
+  // Fortlaufende Saison-Nummer (1 = erste je angelegte Saison) für den HERO-Award-Titel:
+  // erste Saison = HERO ONE, nächste = HERO TWO … Saisons kommen chronologisch (created_at)
+  // vom Server. Die Demo-Saison spiegelt die Nummer der aktuellen echten Saison.
+  const selectedSeasonNumber = useMemo(() => {
+    const idx = selectedSeason ? visibleSeasons.findIndex((s) => s.id === selectedSeason.id) : -1;
+    if (idx >= 0) return idx + 1;
+    const currentReal = seasons.find((s) => s.isCurrent);
+    const curIdx = currentReal ? visibleSeasons.findIndex((s) => s.id === currentReal.id) : -1;
+    if (curIdx >= 0) return curIdx + 1;
+    return visibleSeasons.length || 1;
+  }, [selectedSeason, visibleSeasons, seasons]);
+
   // Spiele der ausgewählten Saison – Basis für alle öffentlichen Ansichten
   const seasonMatches = useMemo(
     () => (selectedSeason ? matches.filter((m) => m.seasonId === selectedSeason.id) : matches),
@@ -590,7 +602,7 @@ export default function App() {
             text="Die Bestwerte der Hero League — Spieler und Teams, die den Ton angeben."
           />
           {seasonSwitcher}
-          <Statistiken players={players} matches={seasonMatches} teams={visibleTeams} onSelectTeam={openTeamDetail} />
+          <Statistiken players={players} matches={seasonMatches} teams={visibleTeams} seasonNumber={selectedSeasonNumber} onSelectTeam={openTeamDetail} />
         </>
       )}
       </div>

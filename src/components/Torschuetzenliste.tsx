@@ -22,7 +22,7 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
   const rest = React.useMemo(() => scorers.slice(3, 15), [scorers]);
   const restList = useSettledList(rest, (p) => p.name);
 
-  const teamByName = (name: string) => teams.find((t) => t.name === name);
+  const teamOf = (p: PlayerStat) => teams.find((t) => t.id === p.teamId);
 
   const rankColors: Record<number, string> = { 1: '#E9C46A', 2: '#C9D1CC', 3: '#C98A5A' };
 
@@ -40,7 +40,7 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
 
   // Nur das Vereinswappen (klickbar → Vereinsseite).
   const teamCrestButton = (p: PlayerStat) => {
-    const team = teamByName(p.teamName);
+    const team = teamOf(p);
     if (!team) {
       return (
         <span className="w-8 h-8 grid place-items-center shrink-0">
@@ -69,7 +69,7 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
     );
 
   const clubChip = (p: PlayerStat) => {
-    const team = teamByName(p.teamName);
+    const team = teamOf(p);
     return (
       <button
         onClick={team && onSelectTeam ? () => onSelectTeam(team.id) : undefined}

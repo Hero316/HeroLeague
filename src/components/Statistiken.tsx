@@ -10,7 +10,26 @@ interface StatistikenProps {
   players: PlayerStat[];
   matches: Match[];
   teams: Team[];
+  seasonNumber?: number; // fortlaufende Saison-Nummer (1 = erste Saison) für den HERO-Titel
   onSelectTeam?: (teamId: string) => void;
+}
+
+// Englisches Zahlwort für den saisonweise hochzählenden Award-Titel: 1 -> "ONE",
+// 2 -> "TWO" … Bei sehr hohen Zahlen (>99) fällt es auf die Ziffer zurück.
+const NUMBER_ONES = [
+  'ZERO', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE', 'TEN',
+  'ELEVEN', 'TWELVE', 'THIRTEEN', 'FOURTEEN', 'FIFTEEN', 'SIXTEEN', 'SEVENTEEN', 'EIGHTEEN', 'NINETEEN',
+];
+const NUMBER_TENS = ['', '', 'TWENTY', 'THIRTY', 'FORTY', 'FIFTY', 'SIXTY', 'SEVENTY', 'EIGHTY', 'NINETY'];
+function numberWord(n: number): string {
+  if (!Number.isFinite(n) || n < 1) return NUMBER_ONES[1]; // Fallback: ONE
+  if (n < 20) return NUMBER_ONES[n];
+  if (n < 100) {
+    const tens = Math.floor(n / 10);
+    const ones = n % 10;
+    return ones ? `${NUMBER_TENS[tens]}-${NUMBER_ONES[ones]}` : NUMBER_TENS[tens];
+  }
+  return String(n);
 }
 
 type Accent = 'teal' | 'gold' | 'magenta';
@@ -28,7 +47,7 @@ const VALUE_COLOR: Record<Accent, string> = {
 };
 
 // Statistik-Seite: Liga-Kennzahlen als Kachelzeile + Leader-Cards für Spieler und Teams.
-export default function Statistiken({ players, matches, teams, onSelectTeam }: StatistikenProps) {
+export default function Statistiken({ players, matches, teams, seasonNumber, onSelectTeam }: StatistikenProps) {
   const finished = matches.filter((m) => m.status === 'beendet' && m.homeScore !== null && m.awayScore !== null);
   const totalGoals = finished.reduce((acc, m) => acc + (m.homeScore || 0) + (m.awayScore || 0), 0);
   const avgGoals = finished.length ? totalGoals / finished.length : 0;
@@ -280,16 +299,16 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
         </Reveal>
       )}
 
-      {/* Auszeichnungen: Ballon d'Or (Feldwertung) + Goldener Handschuh (Torhüter) nebeneinander */}
+      {/* Auszeichnungen: HERO-Award (Feldwertung) + Goldener Handschuh (Torhüter) nebeneinander */}
       {(ballonRanking.length > 0 || gloveRanking.length > 0) && (
         <Reveal className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-          {/* Ballon d'Or – Spielerwertung (Top 5 nach Punkten) */}
+          {/* HERO-Award – Spielerwertung (Top 5 nach Punkten), saisonweise hochgezählt */}
           {ballonRanking.length > 0 && (
             <div>
               <div className="flex items-center gap-2.5 mb-4">
                 <span className="text-2xl">🏆</span>
                 <h3 className="font-display font-black text-xl sm:text-2xl uppercase tracking-tight text-white">
-                  Ballon d'Or
+                  HERO {numberWord(seasonNumber ?? 1)}
                 </h3>
                 <span className="font-sans font-bold text-[11px] tracking-[1.5px] text-hl-dim mt-1">TOP 5 · SPIELER</span>
               </div>
