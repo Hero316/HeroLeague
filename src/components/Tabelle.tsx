@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { Team, Match, Standing } from '../types';
 import { calculateStandings } from '../lib/standings';
 import { TeamCrest, FormPill } from './ui';
-import { CountUp, useSettledList } from './anim';
+import { useSettledList } from './anim';
 
 interface TabelleProps {
   teams: Team[];
@@ -127,7 +127,7 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
             </span>
 
             <span className="text-center font-sans text-xs sm:text-[13px] text-hl-mute">
-              <CountUp value={standing.played} />
+              {standing.played}
             </span>
             <span className={`text-center font-sans text-[13px] text-hl-mute ${sunCls}`}>{standing.won}</span>
             <span className={`text-center font-sans text-[13px] text-hl-mute ${sunCls}`}>{standing.drawn}</span>
@@ -144,10 +144,10 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
                   : 'text-hl-dim'
               }`}
             >
-              <CountUp value={standing.goalDifference} signed />
+              {standing.goalDifference > 0 ? '+' : ''}{standing.goalDifference}
             </span>
             <span className="text-center font-display font-black text-base sm:text-lg text-white">
-              <CountUp value={standing.points} />
+              {standing.points}
             </span>
             <span className={`gap-1 justify-end ${formCls}`}>
               {standing.form.map((res, i) => (
