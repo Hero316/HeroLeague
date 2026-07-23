@@ -2,7 +2,6 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { PlayerStat, Match, Team } from '../types';
 import { rankGoldenGlove } from '../lib/goldenGlove';
-import PlayerAvatar from './PlayerAvatar';
 import PlayerCrest from './PlayerCrest';
 import { TeamCrest } from './ui';
 import { CountUp, Reveal, useSettledList } from './anim';
@@ -132,7 +131,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
       unit: 'Tore',
       name: topScorer.name,
       sub: topScorer.teamName,
-      avatar: <PlayerAvatar name={topScorer.name} imageUrl={topScorer.imageUrl} color={topScorer.teamLogoColor} size="lg" />,
+      avatar: <PlayerCrest player={topScorer} teams={teams} photoSize="lg" crestSize="xl" onSelectTeam={onSelectTeam} />,
     });
   }
   if (topAssist) {
@@ -144,7 +143,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
       unit: 'Vorlagen',
       name: topAssist.name,
       sub: topAssist.teamName,
-      avatar: <PlayerAvatar name={topAssist.name} imageUrl={topAssist.imageUrl} color={topAssist.teamLogoColor} size="lg" />,
+      avatar: <PlayerCrest player={topAssist} teams={teams} photoSize="lg" crestSize="xl" onSelectTeam={onSelectTeam} />,
     });
   }
   if (bestRatio) {
@@ -157,7 +156,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
       unit: 'Tore/Spiel',
       name: bestRatio.name,
       sub: bestRatio.teamName,
-      avatar: <PlayerAvatar name={bestRatio.name} imageUrl={bestRatio.imageUrl} color={bestRatio.teamLogoColor} size="lg" />,
+      avatar: <PlayerCrest player={bestRatio} teams={teams} photoSize="lg" crestSize="xl" onSelectTeam={onSelectTeam} />,
     });
   }
   if (clubStats.bestAttack && clubStats.bestAttack.goalsFor > 0) {
