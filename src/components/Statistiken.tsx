@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { PlayerStat, Match, Team } from '../types';
 import { rankGoldenGlove } from '../lib/goldenGlove';
 import PlayerAvatar from './PlayerAvatar';
+import PlayerCrest from './PlayerCrest';
 import { TeamCrest } from './ui';
 import { CountUp, Reveal, useSettledList } from './anim';
 
@@ -100,6 +101,13 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
   // Container-Refs für die weiche Umsortier-Animation (motion layout) bei Live-Updates.
   const scorer = useSettledList(scorerRanking, (p) => p.name);
   const glove = useSettledList(gloveRanking, (p) => p.name);
+
+  // Klick auf den Spielernamen führt zur Vereinsseite (Team ist am Wappen erkennbar).
+  const teamOf = (p: PlayerStat) => teams.find((t) => t.id === p.teamId);
+  const goTeam = (p: PlayerStat) => {
+    const t = teamOf(p);
+    if (t && onSelectTeam) onSelectTeam(t.id);
+  };
 
   interface LeaderCard {
     kind: 'SPIELER' | 'TEAM';
@@ -311,22 +319,27 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
                         key={p.id}
                         className="flex items-center gap-3.5 px-4 sm:px-6 py-3.5"
                       >
-                        <div className={`font-display font-black text-2xl sm:text-3xl w-8 text-center shrink-0 ${rankColor}`}>
+                        <div className={`font-display font-black text-2xl sm:text-3xl w-7 sm:w-8 text-center shrink-0 ${rankColor}`}>
                           {idx + 1}
                         </div>
-                        <PlayerAvatar name={p.name} imageUrl={p.imageUrl} color={p.teamLogoColor} size="md" />
-                        <div className="min-w-0 flex-1">
-                          <div className="font-sans font-bold text-sm sm:text-[15px] text-white truncate">{p.name}</div>
-                          <div className="font-sans text-[11.5px] text-hl-mute truncate">
-                            {p.teamName}
-                            <span className="text-hl-dim"> · {sub}</span>
-                          </div>
+                        <div className="shrink-0">
+                          <PlayerCrest player={p} teams={teams} photoSize="md" crestSize="lg" onSelectTeam={onSelectTeam} />
                         </div>
-                        <div className="flex items-baseline gap-1.5 shrink-0">
-                          <span className="font-display font-black text-2xl sm:text-3xl leading-none text-hl-gold">
+                        <div className="min-w-0 flex-1">
+                          <button
+                            onClick={() => goTeam(p)}
+                            title={teamOf(p) ? `${p.teamName} – Vereinsseite öffnen` : undefined}
+                            className={`block max-w-full text-left font-sans font-bold text-sm sm:text-[15px] text-white truncate ${teamOf(p) && onSelectTeam ? 'cursor-pointer hover:text-hl-gold transition-colors' : 'cursor-default'}`}
+                          >
+                            {p.name}
+                          </button>
+                          <div className="font-sans text-[11.5px] text-hl-dim truncate mt-0.5">{sub}</div>
+                        </div>
+                        <div className="flex items-baseline gap-1 shrink-0 pl-2">
+                          <span className="font-display font-black text-2xl sm:text-3xl leading-none text-hl-gold tabular-nums">
                             <CountUp value={p.goals} />
                           </span>
-                          <span className="font-sans font-bold text-[11px] tracking-wider text-hl-dim">TORE</span>
+                          <span className="font-sans font-bold text-[10px] tracking-wider text-hl-dim">TORE</span>
                         </div>
                       </motion.div>
                     );
@@ -367,22 +380,27 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
                         key={p.id}
                         className="flex items-center gap-3.5 px-4 sm:px-6 py-3.5"
                       >
-                        <div className={`font-display font-black text-2xl sm:text-3xl w-8 text-center shrink-0 ${rankColor}`}>
+                        <div className={`font-display font-black text-2xl sm:text-3xl w-7 sm:w-8 text-center shrink-0 ${rankColor}`}>
                           {idx + 1}
                         </div>
-                        <PlayerAvatar name={p.name} imageUrl={p.imageUrl} color={p.teamLogoColor} size="md" />
-                        <div className="min-w-0 flex-1">
-                          <div className="font-sans font-bold text-sm sm:text-[15px] text-white truncate">{p.name}</div>
-                          <div className="font-sans text-[11.5px] text-hl-mute truncate">
-                            {p.teamName}
-                            <span className="text-hl-dim"> · {sub}</span>
-                          </div>
+                        <div className="shrink-0">
+                          <PlayerCrest player={p} teams={teams} photoSize="md" crestSize="lg" onSelectTeam={onSelectTeam} />
                         </div>
-                        <div className="flex items-baseline gap-1.5 shrink-0">
-                          <span className="font-display font-black text-2xl sm:text-3xl leading-none text-brand-accent-light">
+                        <div className="min-w-0 flex-1">
+                          <button
+                            onClick={() => goTeam(p)}
+                            title={teamOf(p) ? `${p.teamName} – Vereinsseite öffnen` : undefined}
+                            className={`block max-w-full text-left font-sans font-bold text-sm sm:text-[15px] text-white truncate ${teamOf(p) && onSelectTeam ? 'cursor-pointer hover:text-hl-gold transition-colors' : 'cursor-default'}`}
+                          >
+                            {p.name}
+                          </button>
+                          <div className="font-sans text-[11.5px] text-hl-dim truncate mt-0.5">{sub}</div>
+                        </div>
+                        <div className="flex items-baseline gap-1 shrink-0 pl-2">
+                          <span className="font-display font-black text-2xl sm:text-3xl leading-none text-brand-accent-light tabular-nums">
                             <CountUp value={p.score} decimals={1} />
                           </span>
-                          <span className="font-sans font-bold text-[11px] tracking-wider text-hl-dim">PKT</span>
+                          <span className="font-sans font-bold text-[10px] tracking-wider text-hl-dim">PKT</span>
                         </div>
                       </motion.div>
                     );

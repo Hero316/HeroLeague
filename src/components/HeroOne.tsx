@@ -1,7 +1,6 @@
 import React from 'react';
 import { PlayerStat, Team } from '../types';
-import PlayerAvatar from './PlayerAvatar';
-import { TeamCrest } from './ui';
+import PlayerCrest from './PlayerCrest';
 import { Reveal } from './anim';
 import { numberWord } from '../lib/heroAward';
 
@@ -41,6 +40,11 @@ export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onS
       p.motmCount > 0 ? `${p.motmCount}× ⭐` : null,
       p.cleanSheets > 0 ? `${p.cleanSheets}× 🧤` : null,
     ].filter(Boolean);
+
+  const goTeam = (p: PlayerStat) => {
+    const t = teamOf(p);
+    if (t && onSelectTeam) onSelectTeam(t.id);
+  };
 
   const leader = ranking[0] ?? null;
   const rest = ranking.slice(1, 10);
@@ -87,36 +91,25 @@ export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onS
                     <span className="absolute -top-2 -left-2 z-10 grid place-items-center w-9 h-9 rounded-xl bg-hl-gold text-[#0b0f0b] font-display font-black text-lg shadow-[0_6px_18px_rgba(233,196,106,.5)]">
                       1
                     </span>
-                    <PlayerAvatar name={leader.name} imageUrl={leader.imageUrl} color={leader.teamLogoColor} size="xl" />
+                    <PlayerCrest player={leader} teams={teams} photoSize="xl" crestSize="hero" onSelectTeam={onSelectTeam} />
                   </div>
                   <div className="flex-1 min-w-0 text-center sm:text-left">
                     <div className="font-sans font-extrabold text-[11px] tracking-[2px] text-hl-gold uppercase mb-1.5">
                       Aktueller Spitzenreiter
                     </div>
-                    <div className="font-display font-black text-4xl sm:text-6xl uppercase text-white leading-[.9] truncate">
-                      {leader.name}
-                    </div>
                     <button
-                      onClick={() => {
-                        const t = teamOf(leader);
-                        if (t && onSelectTeam) onSelectTeam(t.id);
-                      }}
-                      className={`inline-flex items-center gap-2 mt-3 ${teamOf(leader) && onSelectTeam ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+                      onClick={() => goTeam(leader)}
+                      title={teamOf(leader) ? `${leader.teamName} – Vereinsseite öffnen` : undefined}
+                      className={`block max-w-full font-display font-black text-4xl sm:text-6xl uppercase text-white leading-[.9] truncate text-center sm:text-left ${teamOf(leader) && onSelectTeam ? 'cursor-pointer hover:text-hl-gold transition-colors' : 'cursor-default'}`}
                     >
-                      {(() => {
-                        const t = teamOf(leader);
-                        return t ? (
-                          <TeamCrest name={t.name} shortName={t.shortName} color={t.logoColor} logoUrl={t.logoUrl} size="sm" />
-                        ) : null;
-                      })()}
-                      <span className="font-sans font-semibold text-sm text-hl-soft">{leader.teamName}</span>
+                      {leader.name}
                     </button>
                     {breakdown(leader).length > 0 && (
                       <div className="mt-3 font-sans text-[13px] text-hl-mute">{breakdown(leader).join('  ·  ')}</div>
                     )}
                   </div>
                   <div className="shrink-0 text-center">
-                    <div className="font-display font-black text-6xl sm:text-7xl leading-none text-hl-gold drop-shadow-[0_0_18px_rgba(233,196,106,.4)]">
+                    <div className="font-display font-black text-6xl sm:text-7xl leading-none text-hl-gold drop-shadow-[0_0_18px_rgba(233,196,106,.4)] tabular-nums">
                       {leader.points.toFixed(1)}
                     </div>
                     <div className="font-sans font-bold text-[11px] tracking-[2px] text-hl-dim mt-1">PUNKTE</div>
@@ -131,31 +124,36 @@ export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onS
             <div className="hl-card mt-5 px-2 sm:px-4 pt-2 pb-3">
               {rest.map((p, i) => {
                 const rank = i + 2;
-                const t = teamOf(p);
+                const bd = breakdown(p);
+                const canClick = Boolean(teamOf(p) && onSelectTeam);
                 return (
                   <div
                     key={p.id}
-                    className="flex items-center gap-3.5 px-2 sm:px-4 py-3.5 border-b border-white/[.05] last:border-0"
+                    className="flex items-center gap-3 sm:gap-3.5 px-2 sm:px-4 py-3.5 border-b border-white/[.05] last:border-0"
                   >
-                    <div className="w-8 text-center font-display font-black text-2xl sm:text-3xl text-hl-dim shrink-0">
+                    <div className="w-7 sm:w-8 text-center font-display font-black text-xl sm:text-3xl text-hl-dim shrink-0">
                       {rank}
                     </div>
-                    <PlayerAvatar name={p.name} imageUrl={p.imageUrl} color={p.teamLogoColor} size="md" />
-                    <div className="min-w-0 flex-1">
-                      <div className="font-sans font-bold text-[15px] text-white truncate">{p.name}</div>
-                      <button
-                        onClick={() => t && onSelectTeam && onSelectTeam(t.id)}
-                        className={`font-sans text-[12px] text-hl-mute truncate ${t && onSelectTeam ? 'cursor-pointer hover:text-hl-soft' : 'cursor-default'}`}
-                      >
-                        {p.teamName}
-                        {breakdown(p).length > 0 && <span className="text-hl-dim"> · {breakdown(p).join(' · ')}</span>}
-                      </button>
+                    <div className="shrink-0">
+                      <PlayerCrest player={p} teams={teams} photoSize="md" crestSize="lg" onSelectTeam={onSelectTeam} />
                     </div>
-                    <div className="flex items-baseline gap-1.5 shrink-0">
-                      <span className="font-display font-black text-2xl sm:text-3xl leading-none text-hl-gold">
+                    <div className="min-w-0 flex-1">
+                      <button
+                        onClick={() => goTeam(p)}
+                        title={teamOf(p) ? `${p.teamName} – Vereinsseite öffnen` : undefined}
+                        className={`block max-w-full text-left font-sans font-bold text-[15px] text-white truncate ${canClick ? 'cursor-pointer hover:text-hl-gold transition-colors' : 'cursor-default'}`}
+                      >
+                        {p.name}
+                      </button>
+                      {bd.length > 0 && (
+                        <div className="font-sans text-[12px] text-hl-dim truncate mt-0.5">{bd.join(' · ')}</div>
+                      )}
+                    </div>
+                    <div className="flex items-baseline gap-1 shrink-0 pl-2">
+                      <span className="font-display font-black text-2xl sm:text-3xl leading-none text-hl-gold tabular-nums">
                         {p.points.toFixed(1)}
                       </span>
-                      <span className="font-sans font-bold text-[11px] tracking-wider text-hl-dim">PKT</span>
+                      <span className="font-sans font-bold text-[10px] tracking-wider text-hl-dim">PKT</span>
                     </div>
                   </div>
                 );
