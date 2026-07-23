@@ -755,7 +755,7 @@ export default function Spielplan({
                     </div>
                   </div>
 
-                  {/* Bester Spieler je Team (optional) – fließt in die Ballon-d'Or-Wertung ein */}
+                  {/* Bester Spieler je Team (optional) – fließt in die HERO-Wertung ein */}
                   <div className="pt-3 border-t border-white/10 space-y-3">
                     <div className="flex items-center gap-1.5 text-xs font-sans text-hl-gold uppercase tracking-wider font-bold">
                       <Star className="w-3.5 h-3.5" />
@@ -763,7 +763,7 @@ export default function Spielplan({
                     </div>
                     <p className="text-[10px] text-hl-faint font-sans -mt-1.5 leading-relaxed">
                       Jedes Team wählt seinen besten Spieler aus dem <strong className="text-hl-soft">eigenen Kader</strong>{' '}
-                      (optional). Das gibt einen Punkt für die Ballon-d'Or-Wertung.
+                      (optional). Das gibt einen Punkt für die HERO-Wertung.
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {([['home', oHome], ['away', oAway]] as const).map(([side, team]) => {
