@@ -6,7 +6,7 @@ import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import Tabelle from './components/Tabelle';
 import Spielplan from './components/Spielplan';
-import Torschuetzenliste from './components/Torschuetzenliste';
+import HeroOne from './components/HeroOne';
 import Statistiken from './components/Statistiken';
 import AdminPanel from './components/AdminPanel';
 import AdminLogin from './components/AdminLogin';
@@ -28,7 +28,7 @@ const TAB_PATHS: Record<ActiveTab, string> = {
   home: '/',
   spielplan: '/spielplan',
   tabelle: '/tabelle',
-  torschuetzen: '/torschuetzen',
+  heroone: '/hero-one',
   statistiken: '/statistiken',
 };
 
@@ -93,6 +93,12 @@ export default function App() {
     if (curIdx >= 0) return curIdx + 1;
     return visibleSeasons.length || 1;
   }, [selectedSeason, visibleSeasons, seasons]);
+
+  // Nummer der aktuellen Saison – für das HERO-Award-Label in der Navigation (immer aktuell).
+  const currentSeasonNumber = useMemo(() => {
+    const idx = currentSeason ? visibleSeasons.findIndex((s) => s.id === currentSeason.id) : -1;
+    return idx >= 0 ? idx + 1 : visibleSeasons.length || 1;
+  }, [currentSeason, visibleSeasons]);
 
   // Spiele der ausgewählten Saison – Basis für alle öffentlichen Ansichten
   const seasonMatches = useMemo(
@@ -296,6 +302,7 @@ export default function App() {
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')}
           seasonLabel={selectedSeason?.label ?? ''}
+          seasonNumber={currentSeasonNumber}
           hasLiveMatch={hasLiveMatch}
         />
         <main className="flex-1">
@@ -320,6 +327,7 @@ export default function App() {
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')}
           seasonLabel={selectedSeason?.label ?? ''}
+          seasonNumber={currentSeasonNumber}
           hasLiveMatch={hasLiveMatch}
         />
         <main className="flex-1">
@@ -512,6 +520,7 @@ export default function App() {
         onOpenLogin={() => navigateTo('/admin')}
         onOpenBackoffice={() => navigateTo('/admin')}
         seasonLabel={currentSeason?.label ?? ''}
+        seasonNumber={currentSeasonNumber}
         hasLiveMatch={hasLiveMatch}
       />
       <LiveTicker matches={currentSeasonMatches} teams={visibleTeams} players={players} />
@@ -519,7 +528,7 @@ export default function App() {
       <div key={activeTab} className="hl-fade">
       {activeTab === 'home' && (
         <>
-          <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeason?.label ?? ''} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
+          <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeason?.label ?? ''} seasonNumber={currentSeasonNumber} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
           <HomeBody
             teams={visibleTeams}
             matches={currentSeasonMatches}
@@ -582,15 +591,16 @@ export default function App() {
         </>
       )}
 
-      {activeTab === 'torschuetzen' && (
+      {activeTab === 'heroone' && (
         <>
-          <PageHeader
-            kicker={selectedSeason?.label ? `SAISON ${selectedSeason.label} · TORJÄGERLISTE` : 'TORJÄGERLISTE'}
-            title="Torschützenkönig"
-            text="Das Rennen um den Goldenen Schuh der Hero League — die treffsichersten Spieler der Saison."
-          />
           {seasonSwitcher}
-          <Torschuetzenliste players={players} teams={visibleTeams} onSelectTeam={openTeamDetail} />
+          <HeroOne
+            players={players}
+            teams={visibleTeams}
+            seasonNumber={selectedSeasonNumber}
+            seasonLabel={selectedSeason?.label ?? ''}
+            onSelectTeam={openTeamDetail}
+          />
         </>
       )}
 
@@ -602,7 +612,7 @@ export default function App() {
             text="Die Bestwerte der Hero League — Spieler und Teams, die den Ton angeben."
           />
           {seasonSwitcher}
-          <Statistiken players={players} matches={seasonMatches} teams={visibleTeams} seasonNumber={selectedSeasonNumber} onSelectTeam={openTeamDetail} />
+          <Statistiken players={players} matches={seasonMatches} teams={visibleTeams} onSelectTeam={openTeamDetail} />
         </>
       )}
       </div>

@@ -3,6 +3,7 @@ import { ActiveTab, Match, PlayerOfMonth, PlayerStat, Team } from '../types';
 import { apiFetch } from '../lib/api';
 import { MapPin } from 'lucide-react';
 import { calculateStandings } from '../lib/standings';
+import { numberWord } from '../lib/heroAward';
 import { TeamCrest, shortDate } from './ui';
 import PlayerOfMonthCard from './PlayerOfMonthCard';
 
@@ -11,13 +12,14 @@ interface HeroProps {
   matches: Match[];
   players: PlayerStat[];
   seasonLabel: string;
+  seasonNumber?: number;
   onNavigate: (tab: ActiveTab) => void;
   onSelectTeam?: (teamId: string) => void;
 }
 
 // Vollflächiges Hero-Carousel (Magenta-TV-Stil) mit drei Slides:
 // 1. Nächster Spieltag / Live-Spiel  2. Spieler des Monats  3. Tabellenführer
-export default function Hero({ teams, matches, players, seasonLabel, onNavigate, onSelectTeam }: HeroProps) {
+export default function Hero({ teams, matches, players, seasonLabel, seasonNumber, onNavigate, onSelectTeam }: HeroProps) {
   const [pom, setPom] = useState<PlayerOfMonth | null>(null);
   const [active, setActive] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -298,8 +300,8 @@ export default function Hero({ teams, matches, players, seasonLabel, onNavigate,
               </p>
               {/* Buttons auf Desktop in der Textspalte */}
               <div className="hidden lg:flex gap-3 mt-7 flex-wrap justify-start">
-                <button onClick={() => onNavigate('torschuetzen')} className={primaryBtn}>
-                  ▸ TORSCHÜTZEN
+                <button onClick={() => onNavigate('heroone')} className={primaryBtn}>
+                  ▸ HERO {numberWord(seasonNumber ?? 1)}
                 </button>
                 <button onClick={() => onNavigate('statistiken')} className={secondaryBtn}>
                   STATISTIKEN
@@ -317,8 +319,8 @@ export default function Hero({ teams, matches, players, seasonLabel, onNavigate,
             </div>
             {/* Buttons auf dem Handy unter der Karte */}
             <div className="flex lg:hidden gap-3 flex-wrap justify-center w-full">
-              <button onClick={() => onNavigate('torschuetzen')} className={primaryBtn}>
-                ▸ TORSCHÜTZEN
+              <button onClick={() => onNavigate('heroone')} className={primaryBtn}>
+                ▸ HERO {numberWord(seasonNumber ?? 1)}
               </button>
               <button onClick={() => onNavigate('statistiken')} className={secondaryBtn}>
                 STATISTIKEN
