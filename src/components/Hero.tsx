@@ -267,7 +267,9 @@ export default function Hero({ teams, matches, players, seasonLabel, onNavigate,
     const crest = pomTeam
       ? { name: pomTeam.name, shortName: pomTeam.shortName, logoColor: pomTeam.logoColor, logoUrl: pomTeam.logoUrl }
       : undefined;
-    const pomPoints = players.find((p) => p.name === pom.name)?.points;
+    const pomPoints = players.find(
+      (p) => p.name === pom.name && (!pomTeam || p.teamId === pomTeam.id)
+    )?.points;
     return (
       <>
         {/* Eigener, gestalteter Hintergrund (kein Menschenfoto) – hebt die Karte hervor */}

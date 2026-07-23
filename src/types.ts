@@ -122,6 +122,7 @@ export interface PlayerStat {
   id: string;
   name: string;
   imageUrl?: string;
+  teamId: string; // Verein-Zuordnung – eindeutig, auch bei gleichen Spielernamen in mehreren Teams
   teamName: string;
   teamLogoColor: string;
   goals: number;

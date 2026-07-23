@@ -210,11 +210,14 @@ function monthPlayerStats(matches: Match[]) {
   const key = monthKeys.includes(currentKey) ? currentKey : monthKeys.sort().reverse()[0];
 
   const monthMatches = withGoals.filter((m) => monthOf(m.date) === key);
+  // Verschlüsselt nach Team UND Name, damit gleiche Namen in verschiedenen Teams
+  // nicht verschmelzen (Schlüssel: `teamId::name`).
   const byName: Record<string, { name: string; teamId: string; goals: number; assists: number }> = {};
   const bump = (name: string, teamId: string, field: 'goals' | 'assists') => {
     if (!name || name === 'Eigentor' || name === 'Unbekannt') return;
-    if (!byName[name]) byName[name] = { name, teamId, goals: 0, assists: 0 };
-    byName[name][field] += 1;
+    const k = `${teamId}::${name}`;
+    if (!byName[k]) byName[k] = { name, teamId, goals: 0, assists: 0 };
+    byName[k][field] += 1;
   };
 
   monthMatches.forEach((m) =>
@@ -329,7 +332,7 @@ export default function AdminPanel({
     setPomName(name);
     const rosterImg = pomTeam?.spielerliste?.find((p) => p.name === name)?.imageUrl;
     if (rosterImg) setPomImage(rosterImg);
-    const stat = pomMonth?.byName[name];
+    const stat = pomMonth?.byName[`${pomTeamId}::${name}`];
     setPomGoals(stat?.goals ?? 0);
     setPomAssists(stat?.assists ?? 0);
     setPomAutoNote('');

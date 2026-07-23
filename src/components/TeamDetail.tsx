@@ -49,7 +49,7 @@ export default function TeamDetail({
   const roster = useMemo(
     () =>
       (team.spielerliste || []).map((player) => {
-        const stats = players.find((p) => p.name === player.name);
+        const stats = players.find((p) => p.teamId === team.id && p.name === player.name);
         return {
           ...player,
           goals: stats?.goals ?? 0,
@@ -62,9 +62,9 @@ export default function TeamDetail({
 
   // Star des Teams: bester Torschütze/Vorlagengeber des Kaders
   const star = useMemo(() => {
-    const list = players.filter((p) => p.teamName === team.name && (p.goals > 0 || p.assists > 0));
+    const list = players.filter((p) => p.teamId === team.id && (p.goals > 0 || p.assists > 0));
     return [...list].sort((a, b) => b.goals - a.goals || b.assists - a.assists)[0] ?? null;
-  }, [players, team.name]);
+  }, [players, team.id]);
 
   const opponent = (m: Match) => teams.find((t) => t.id === (m.homeTeamId === team.id ? m.awayTeamId : m.homeTeamId));
 

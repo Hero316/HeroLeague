@@ -13,14 +13,20 @@ const PTS_DRAW = 1; // 0,1 pro eingesetztem Spieler bei Unentschieden
 // Torschützen-/Bester-Spieler-Einträgen der beendeten Spiele ableiten – nie manuell gepflegt.
 // Die `points` werden intern in Zehnteln akkumuliert und erst am Ende in echte Punkte umgerechnet.
 export function calculatePlayers(teams: Team[], matches: Match[]): PlayerStat[] {
-  const playerMap: { [name: string]: PlayerStat } = {};
+  // Verschlüsselt nach Team UND Name: Gleiche Spielernamen in verschiedenen Teams
+  // (z.B. zwei „Jonathan Siegel") sind unterschiedliche Personen und dürfen NICHT
+  // zu einem Eintrag verschmelzen. Innerhalb eines Teams ist der Name eindeutig.
+  const playerMap: { [key: string]: PlayerStat } = {};
+  const keyOf = (teamId: string, name: string) => `${teamId}::${name}`;
 
-  const ensurePlayer = (name: string, teamName: string, teamLogoColor: string, idPrefix: string, imageUrl?: string) => {
-    if (!playerMap[name]) {
-      playerMap[name] = {
-        id: `${idPrefix}-${name.replace(/\s+/g, '-')}`,
+  const ensurePlayer = (name: string, teamId: string, teamName: string, teamLogoColor: string, imageUrl?: string) => {
+    const key = keyOf(teamId, name);
+    if (!playerMap[key]) {
+      playerMap[key] = {
+        id: `p-${teamId}-${name.replace(/\s+/g, '-')}`,
         name,
         imageUrl,
+        teamId,
         teamName,
         teamLogoColor,
         goals: 0,
@@ -32,13 +38,16 @@ export function calculatePlayers(teams: Team[], matches: Match[]): PlayerStat[] 
         goalsConceded: 0, // kassierte Gegentore in seinen Torwart-Spielen
         points: 0, // hier zunächst in Zehnteln
       };
+    } else if (imageUrl && !playerMap[key].imageUrl) {
+      // Kaderfoto nachtragen, falls der Spieler zuerst über einen Torschützen-Eintrag entstand
+      playerMap[key].imageUrl = imageUrl;
     }
-    return playerMap[name];
+    return playerMap[key];
   };
 
   teams.forEach((t) => {
     (t.spielerliste || []).forEach((player) => {
-      ensurePlayer(player.name, t.name, t.logoColor || '#3B82F6', `p-${t.id}`, player.imageUrl);
+      ensurePlayer(player.name, t.id, t.name, t.logoColor || '#3B82F6', player.imageUrl);
     });
   });
 
@@ -56,13 +65,13 @@ export function calculatePlayers(teams: Team[], matches: Match[]): PlayerStat[] 
       const teamLogoColor = team?.logoColor || '#3B82F6';
 
       if (s.playerName && s.playerName !== 'Eigentor' && s.playerName !== 'Unbekannt') {
-        const p = ensurePlayer(s.playerName, teamName, teamLogoColor, 'p-dyn');
+        const p = ensurePlayer(s.playerName, s.teamId, teamName, teamLogoColor);
         p.goals += 1;
         p.points += PTS_GOAL;
       }
 
       if (s.assistName && s.assistName !== 'Unbekannt') {
-        const p = ensurePlayer(s.assistName, teamName, teamLogoColor, 'p-dyn');
+        const p = ensurePlayer(s.assistName, s.teamId, teamName, teamLogoColor);
         p.assists += 1;
         p.points += PTS_ASSIST;
       }
@@ -74,7 +83,7 @@ export function calculatePlayers(teams: Team[], matches: Match[]): PlayerStat[] 
       const team = teams.find((t) => t.id === b.teamId);
       const teamName = team ? team.name : 'Unbekannt';
       const teamLogoColor = team?.logoColor || '#3B82F6';
-      const p = ensurePlayer(b.playerName, teamName, teamLogoColor, 'p-dyn');
+      const p = ensurePlayer(b.playerName, b.teamId, teamName, teamLogoColor);
       p.motmCount += 1;
       p.points += PTS_MOTM;
     });
@@ -86,7 +95,7 @@ export function calculatePlayers(teams: Team[], matches: Match[]): PlayerStat[] 
         g.teamId === m.homeTeamId ? m.awayScore : g.teamId === m.awayTeamId ? m.homeScore : null;
       if (conceded === null) return;
       const team = teams.find((t) => t.id === g.teamId);
-      const p = ensurePlayer(g.playerName, team ? team.name : 'Unbekannt', team?.logoColor || '#3B82F6', 'p-dyn');
+      const p = ensurePlayer(g.playerName, g.teamId, team ? team.name : 'Unbekannt', team?.logoColor || '#3B82F6');
       p.gamesInGoal += 1;
       p.goalsConceded += conceded;
       if (conceded === 0) {
@@ -100,11 +109,11 @@ export function calculatePlayers(teams: Team[], matches: Match[]): PlayerStat[] 
     const absentKeys = new Set((m.absentees || []).map((a) => `${a.teamId}::${a.playerName}`));
     const contributed = new Set<string>();
     scorers.forEach((s) => {
-      if (s.playerName) contributed.add(s.playerName);
-      if (s.assistName) contributed.add(s.assistName);
+      if (s.playerName) contributed.add(`${s.teamId}::${s.playerName}`);
+      if (s.assistName) contributed.add(`${s.teamId}::${s.assistName}`);
     });
 
-    // Team-Ergebnis in Zehntel-Punkte übersetzen (Sieg 0,4 · Remis 0,2 · Niederlage 0)
+    // Team-Ergebnis in Zehntel-Punkte übersetzen (Sieg 0,3 · Remis 0,1 · Niederlage 0)
     const resultPoints = (side: 'home' | 'away'): number => {
       if (m.homeScore === null || m.awayScore === null) return 0;
       if (m.homeScore === m.awayScore) return PTS_DRAW;
@@ -113,10 +122,12 @@ export function calculatePlayers(teams: Team[], matches: Match[]): PlayerStat[] 
     };
 
     ([[homeTeam, 'home'], [awayTeam, 'away']] as const).forEach(([team, side]) => {
-      (team?.spielerliste || []).forEach((player) => {
-        const stat = playerMap[player.name];
+      if (!team) return;
+      (team.spielerliste || []).forEach((player) => {
+        const stat = playerMap[keyOf(team.id, player.name)];
         if (!stat) return;
-        const isAbsent = absentKeys.has(`${team!.id}::${player.name}`) && !contributed.has(player.name);
+        const isAbsent =
+          absentKeys.has(`${team.id}::${player.name}`) && !contributed.has(`${team.id}::${player.name}`);
         if (!isAbsent) {
           stat.matchesPlayed += 1;
           stat.points += resultPoints(side);
