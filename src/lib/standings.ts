@@ -108,6 +108,7 @@ export function calculateStandings(teams: Team[], matches: Match[]): Standing[] 
       home.points += 1;
       home.form.push('D');
       away.drawn += 1;
+      away.points += 1;
       away.form.push('D');
     }
   });
