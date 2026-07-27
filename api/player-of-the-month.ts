@@ -4,6 +4,10 @@ import { requireAdmin } from './_lib/auth.js';
 import { badRequest, isNonEmptyString } from './_lib/validate.js';
 import { DEFAULT_PLAYER_OF_MONTH } from './_lib/seed.js';
 
+// Leerer Spieler des Monats – wird bewusst gespeichert, wenn die Auszeichnung
+// entfernt wird, damit das GET nicht auf die Demo-Vorgabe zurückfällt.
+const EMPTY_PLAYER_OF_MONTH = { name: '', club: '', teamId: '', goals: 0, assists: 0, image: '' };
+
 const savePom = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
   const { name, club, teamId, goals, assists, image } = req.body ?? {};
   if (!isNonEmptyString(name)) return badRequest(res, 'Bitte einen Spieler-Namen angeben.');
@@ -25,6 +29,15 @@ const savePom = requireAdmin(async (req: VercelRequest, res: VercelResponse) => 
   return res.json(pom);
 });
 
+// Auszeichnung entfernen: leeren Datensatz speichern -> Karte verschwindet von der Startseite.
+const clearPom = requireAdmin(async (_req: VercelRequest, res: VercelResponse) => {
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('playerOfMonth', ${JSON.stringify(EMPTY_PLAYER_OF_MONTH)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+  return res.json(EMPTY_PLAYER_OF_MONTH);
+});
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method === 'GET') {
@@ -34,6 +47,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (req.method === 'POST') {
       return savePom(req, res);
+    }
+    if (req.method === 'DELETE') {
+      return clearPom(req, res);
     }
     return res.status(405).json({ error: 'Nicht unterstützt' });
   } catch (err) {
