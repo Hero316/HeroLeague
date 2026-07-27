@@ -106,7 +106,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam }: EventP
         <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-10 sm:py-14">
           <button
             onClick={onBack}
-            className="inline-flex items-center gap-1.5 text-xs font-sans font-bold uppercase tracking-wider text-hl-mute hover:text-white transition-colors cursor-pointer mb-6"
+            className="flex w-fit items-center gap-1.5 text-xs font-sans font-bold uppercase tracking-wider text-hl-mute hover:text-white transition-colors cursor-pointer mb-6"
           >
             <ArrowLeft className="w-4 h-4" />
             Zurück

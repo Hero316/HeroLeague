@@ -19,7 +19,8 @@ const em = (
 ) => ({ id, block, field, start, end, home, away, homeScore: null, awayScore: null });
 
 const DEFAULT_EVENT = {
-  active: false,
+  id: 'testspiel-1',
+  label: 'Testspiel 1',
   title: 'Testspieltag',
   tagline: '6 Teams · jeder gegen jeden · ab 20:30 Uhr',
   dateLabel: 'Sonntag, 2. August 2026',
@@ -43,6 +44,9 @@ const DEFAULT_EVENT = {
     em('b8f2', 8, 2, '21:47', '21:55', 'FC Patchwork', 'New Way F.C.'),
   ],
 };
+
+// Archiv aller Testspiele – standardmäßig eins (Testspiel 1), keins aktiv.
+const DEFAULT_EVENT_ARCHIVE = { activeId: null as string | null, events: [DEFAULT_EVENT] };
 
 // Kanalnamen aus einer evtl. eingefügten URL extrahieren
 function normalizeChannel(input: unknown): string {
@@ -106,12 +110,13 @@ function str(v: unknown, fallback = ''): string {
   return typeof v === 'string' ? v : fallback;
 }
 
-// Eingehendes Event säubern (nur erwartete Felder übernehmen).
-function normalizeEvent(body: unknown) {
+// Ein einzelnes Event säubern (nur erwartete Felder übernehmen).
+function normalizeEvent(body: unknown, index = 0) {
   const b = (body ?? {}) as Record<string, unknown>;
   const matches = Array.isArray(b.matches) ? b.matches : [];
   return {
-    active: Boolean(b.active),
+    id: str(b.id).trim() || `testspiel-${index + 1}`,
+    label: str(b.label).trim() || `Testspiel ${index + 1}`,
     title: str(b.title, 'Testspieltag').trim() || 'Testspieltag',
     tagline: str(b.tagline).trim(),
     dateLabel: str(b.dateLabel).trim(),
@@ -153,13 +158,22 @@ function normalizeEvent(body: unknown) {
   };
 }
 
+// Ganzes Archiv säubern (Liste von Events + activeId).
+function normalizeArchive(body: unknown) {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const events = (Array.isArray(b.events) ? b.events : []).map((e, i) => normalizeEvent(e, i));
+  const ids = new Set(events.map((e) => e.id));
+  const activeId = typeof b.activeId === 'string' && ids.has(b.activeId) ? b.activeId : null;
+  return { activeId, events };
+}
+
 const saveEvent = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
-  const cfg = normalizeEvent(req.body);
+  const archive = normalizeArchive(req.body);
   await sql`
-    INSERT INTO settings (key, value) VALUES ('event', ${JSON.stringify(cfg)}::jsonb)
+    INSERT INTO settings (key, value) VALUES ('event', ${JSON.stringify(archive)}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
   `;
-  return res.json(cfg);
+  return res.json(archive);
 });
 
 // Ein Endpunkt für alle Website-Einstellungen (Twitch + Social Media + Event),
@@ -177,7 +191,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (resource === 'event') {
         const rows = await sql`SELECT value FROM settings WHERE key = 'event'`;
-        return res.json(rows[0]?.value ?? DEFAULT_EVENT);
+        return res.json(rows[0]?.value ?? DEFAULT_EVENT_ARCHIVE);
       }
       const rows = await sql`SELECT value FROM settings WHERE key = 'twitch'`;
       return res.json(rows[0]?.value ?? DEFAULT_TWITCH);
