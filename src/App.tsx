@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
 import { startPresence } from './lib/presence';
@@ -181,10 +181,21 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [fetchData]);
 
+  // Merkt sich, ob innerhalb der App navigiert wurde (für „Zurück").
+  const navigatedInApp = useRef(false);
+
   const navigateTo = (path: string) => {
     window.history.pushState({}, '', path);
+    navigatedInApp.current = true;
     setCurrentPath(path);
     window.scrollTo({ top: 0 }); // neue Seite (z.B. Vereinsseite) immer oben starten
+  };
+
+  // Zurück zur zuletzt besuchten Seite (statt fest zur Startseite). Wurde die
+  // Seite direkt per Link geöffnet (keine In-App-Historie), geht es zur Startseite.
+  const goBack = () => {
+    if (navigatedInApp.current) window.history.back();
+    else navigateTo('/');
   };
 
   const handleLogout = async () => {
@@ -306,7 +317,7 @@ export default function App() {
           hasLiveMatch={hasLiveMatch}
         />
         <main className="flex-1">
-          <LegalPage kind={kind} onBack={() => navigateTo('/')} />
+          <LegalPage kind={kind} onBack={goBack} />
         </main>
         <Footer onNavigate={goToTab} onNavigatePath={navigateTo} />
       </div>
@@ -338,7 +349,7 @@ export default function App() {
               matches={seasonMatches}
               players={players}
               seasonLabel={selectedSeason?.label ?? ''}
-              onBack={() => navigateTo('/')}
+              onBack={goBack}
               onSelectTeam={openTeamDetail}
             />
           ) : (
