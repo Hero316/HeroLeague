@@ -517,7 +517,7 @@ export default function AdminPanel({
     apiFetch<EventArchive>('/api/twitch?resource=event')
       .then((data) => {
         setEventArchive(data);
-        setSelectedEventId(data.activeId ?? data.events[0]?.id ?? '');
+        setSelectedEventId(data.activeId ?? data.events?.[0]?.id ?? '');
       })
       .catch(() => {
         /* noch nichts hinterlegt */
@@ -525,7 +525,7 @@ export default function AdminPanel({
   }, []);
 
   type EMatch = EventConfig['matches'][number];
-  const selectedEvent = eventArchive?.events.find((e) => e.id === selectedEventId) ?? null;
+  const selectedEvent = eventArchive?.events?.find((e) => e.id === selectedEventId) ?? null;
 
   const updateArchive = (updater: (a: EventArchive) => EventArchive) =>
     setEventArchive((a) => (a ? updater(a) : a));
