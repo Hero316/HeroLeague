@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles } from 'lucide-react';
+import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2 } from 'lucide-react';
 import { Player, Team, Match } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
@@ -355,6 +355,12 @@ export default function AdminPanel({
   const [twitchLive, setTwitchLive] = useState(false);
   const [twitchSuccess, setTwitchSuccess] = useState(false);
 
+  // Social-Media-Links (Instagram / TikTok / YouTube)
+  const [socialInstagram, setSocialInstagram] = useState('');
+  const [socialTiktok, setSocialTiktok] = useState('');
+  const [socialYoutube, setSocialYoutube] = useState('');
+  const [socialSuccess, setSocialSuccess] = useState(false);
+
   // Neue Saison starten
   const [seasonModalOpen, setSeasonModalOpen] = useState(false);
   const [newSeasonLabel, setNewSeasonLabel] = useState('');
@@ -459,6 +465,39 @@ export default function AdminPanel({
       setTwitchLive(Boolean(saved.isLive));
       setTwitchSuccess(true);
       setTimeout(() => setTwitchSuccess(false), 3000);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
+    }
+  };
+
+  // Social-Media-Links laden
+  useEffect(() => {
+    apiFetch<{ instagram: string; tiktok: string; youtube: string }>('/api/social')
+      .then((data) => {
+        setSocialInstagram(data.instagram || '');
+        setSocialTiktok(data.tiktok || '');
+        setSocialYoutube(data.youtube || '');
+      })
+      .catch(() => {
+        /* noch nicht konfiguriert */
+      });
+  }, []);
+
+  const handleSaveSocial = async () => {
+    try {
+      const saved = await apiFetch<{ instagram: string; tiktok: string; youtube: string }>('/api/social', {
+        method: 'POST',
+        body: JSON.stringify({
+          instagram: socialInstagram.trim(),
+          tiktok: socialTiktok.trim(),
+          youtube: socialYoutube.trim(),
+        }),
+      });
+      setSocialInstagram(saved.instagram || '');
+      setSocialTiktok(saved.tiktok || '');
+      setSocialYoutube(saved.youtube || '');
+      setSocialSuccess(true);
+      setTimeout(() => setSocialSuccess(false), 3000);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
     }
@@ -991,11 +1030,11 @@ export default function AdminPanel({
         </div>
       </AccordionSection>
 
-      {/* Twitch-Livestream */}
+      {/* Twitch-Livestream & Social Media */}
       <AccordionSection
         id="twitch"
-        title="Twitch-Livestream"
-        subtitle="Kanal eintragen & Live-Banner schalten"
+        title="Twitch & Social Media"
+        subtitle="Twitch-Kanal, Live-Banner & Social-Media-Links"
         icon={<Radio className="w-5 h-5" />}
         accent="#9147ff"
       >
@@ -1057,6 +1096,71 @@ export default function AdminPanel({
               <Check className="w-4 h-4" />
               <span>Kanal speichern</span>
             </button>
+          </div>
+
+          {/* Social-Media-Links – im selben Abschnitt gepflegt */}
+          <div className="mt-8 pt-6 border-t border-white/10">
+            <div className="flex items-center gap-2 mb-1.5">
+              <Share2 className="w-4 h-4 text-brand-accent-light" />
+              <h4 className="text-sm font-bold text-white font-sans">Social-Media-Links</h4>
+            </div>
+            <p className="text-xs text-gray-400 font-sans mb-5">
+              Trage die Links zu euren Kanälen ein. Jeder ausgefüllte Link erscheint als anklickbares Symbol oben in der
+              Navigation (auf Handy und PC). Leer lassen blendet das jeweilige Symbol aus.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">INSTAGRAM</label>
+                <input
+                  type="text"
+                  value={socialInstagram}
+                  onChange={(e) => setSocialInstagram(e.target.value)}
+                  placeholder="z.B. instagram.com/heroleague"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">TIKTOK</label>
+                <input
+                  type="text"
+                  value={socialTiktok}
+                  onChange={(e) => setSocialTiktok(e.target.value)}
+                  placeholder="z.B. tiktok.com/@heroleague"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">YOUTUBE</label>
+                <input
+                  type="text"
+                  value={socialYoutube}
+                  onChange={(e) => setSocialYoutube(e.target.value)}
+                  placeholder="z.B. youtube.com/@heroleague"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 mt-4">
+              {socialSuccess && (
+                <motion.span
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-xs text-emerald-400 uppercase tracking-wider font-mono mr-2"
+                >
+                  ✓ Gespeichert!
+                </motion.span>
+              )}
+              <button
+                type="button"
+                onClick={handleSaveSocial}
+                className="px-6 py-3 bg-brand-accent hover:bg-brand-accent/80 border border-brand-accent-light/30 rounded-full text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center gap-1.5 cursor-pointer shadow-lg shadow-brand-accent-light/10"
+              >
+                <Check className="w-4 h-4" />
+                <span>Links speichern</span>
+              </button>
+            </div>
           </div>
         </div>
       </AccordionSection>
