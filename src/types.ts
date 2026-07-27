@@ -112,9 +112,12 @@ export interface EventMatch {
   away: string; // Teamname
   homeScore: number | null; // null = noch nicht gespielt
   awayScore: number | null;
+  status?: 'geplant' | 'live' | 'beendet'; // Spielstatus (wie bei den echten Spielen)
+  liveStartedAt?: string | null; // Zeitstempel, seit dem das Spiel läuft (für Live-Minute)
   scorers?: EventScorer[]; // Torschützen (mit optionaler Vorlage)
   bestPlayers?: EventAward[]; // bester Spieler je Team (max. einer pro Team)
   goalkeepers?: EventAward[]; // Torwart je Team (für „zu null")
+  absentees?: EventAward[]; // abwesende Kaderspieler je Team
 }
 
 export interface EventConfig {

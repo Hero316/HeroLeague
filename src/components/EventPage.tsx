@@ -227,19 +227,24 @@ export default function EventPage({ event, teams, onBack, onSelectTeam }: EventP
                   <div className="divide-y divide-white/[.06]">
                     {ms.map((m) => {
                       const played = m.homeScore !== null && m.awayScore !== null;
+                      const isLive = m.status === 'live';
                       return (
-                        <div key={m.id} className="flex items-center gap-3 px-4 py-3">
-                          <span className="shrink-0 w-12 text-[10px] font-mono uppercase tracking-wider text-hl-mute">
-                            Feld {m.field}
+                        <div key={m.id} className={`flex items-center gap-3 px-4 py-3 ${isLive ? 'bg-red-500/[.06]' : ''}`}>
+                          <span className="shrink-0 w-12 text-[10px] font-mono uppercase tracking-wider leading-tight">
+                            {isLive ? (
+                              <span className="text-red-400 animate-pulse">● LIVE</span>
+                            ) : (
+                              <span className="text-hl-mute">Feld {m.field}</span>
+                            )}
                           </span>
                           <div className="flex-1 grid grid-cols-[1fr_auto_1fr] items-center gap-2 min-w-0">
                             {renderTeam(m.home, 'left')}
                             <span
                               className={`px-2.5 py-1 rounded-md font-display font-black text-sm tabular-nums ${
-                                played ? 'bg-white/[.06] text-white' : 'text-hl-mute'
+                                isLive ? 'bg-red-500/20 text-red-300' : played ? 'bg-white/[.06] text-white' : 'text-hl-mute'
                               }`}
                             >
-                              {played ? `${m.homeScore} : ${m.awayScore}` : 'vs'}
+                              {played ? `${m.homeScore} : ${m.awayScore}` : isLive ? 'LIVE' : 'vs'}
                             </span>
                             {renderTeam(m.away, 'right')}
                           </div>
