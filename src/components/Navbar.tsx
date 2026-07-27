@@ -1,7 +1,17 @@
-import React, { useState } from 'react';
-import { Menu, X, LogOut, LayoutDashboard } from 'lucide-react';
-import { ActiveTab } from '../types';
+import React, { useEffect, useState } from 'react';
+import { Menu, X, LogOut, LayoutDashboard, Instagram, Youtube } from 'lucide-react';
+import { ActiveTab, SocialLinks } from '../types';
 import { numberWord } from '../lib/heroAward';
+import { apiFetch } from '../lib/api';
+
+// TikTok-Symbol – lucide hat kein Marken-Icon, daher als schlankes Inline-SVG.
+function TikTokIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M16.5 3c.29 2.06 1.45 3.6 3.5 3.86v2.94c-1.36.1-2.55-.29-3.66-1.02v5.68c0 3.4-2.62 5.54-5.34 5.54A5.34 5.34 0 0 1 5.66 14.7c0-3.02 2.5-5.06 5.4-4.62v3.02c-.41-.13-.85-.19-1.28-.11-.95.16-1.66.99-1.6 1.96a1.8 1.8 0 0 0 3.6-.02V3h2.72z" />
+    </svg>
+  );
+}
 
 interface NavbarProps {
   activeTab: ActiveTab;
@@ -26,6 +36,40 @@ export default function Navbar({
   hasLiveMatch,
 }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [social, setSocial] = useState<SocialLinks>({ instagram: '', tiktok: '', youtube: '' });
+
+  useEffect(() => {
+    apiFetch<SocialLinks>('/api/social')
+      .then((data) => setSocial({ instagram: data.instagram || '', tiktok: data.tiktok || '', youtube: data.youtube || '' }))
+      .catch(() => {
+        /* noch nicht konfiguriert – keine Symbole */
+      });
+  }, []);
+
+  // Nur gepflegte Kanäle bekommen ein anklickbares Symbol.
+  const socialItems = [
+    { key: 'instagram', url: social.instagram, label: 'Instagram', Icon: Instagram },
+    { key: 'tiktok', url: social.tiktok, label: 'TikTok', Icon: TikTokIcon },
+    { key: 'youtube', url: social.youtube, label: 'YouTube', Icon: Youtube },
+  ].filter((s) => s.url);
+
+  const socialLinks = (
+    <div className="flex items-center gap-0.5 sm:gap-1">
+      {socialItems.map(({ key, url, label, Icon }) => (
+        <a
+          key={key}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={label}
+          title={label}
+          className="p-1.5 sm:p-2 rounded-lg text-hl-soft hover:text-white hover:bg-white/5 transition-colors"
+        >
+          <Icon className="w-5 h-5" />
+        </a>
+      ))}
+    </div>
+  );
 
   const navItems: { label: string; value: ActiveTab }[] = [
     { label: 'HOME', value: 'home' },
@@ -128,6 +172,9 @@ export default function Navbar({
               Logout
             </button>
           )}
+
+          {/* Social-Media-Symbole (Instagram / TikTok / YouTube) – Handy & PC */}
+          {socialItems.length > 0 && socialLinks}
 
           {/* Mobile-Menü-Button */}
           <button

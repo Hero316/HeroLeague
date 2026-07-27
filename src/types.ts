@@ -82,6 +82,12 @@ export interface TwitchConfig {
   isLive: boolean; // manuell im Admin geschaltet
 }
 
+export interface SocialLinks {
+  instagram: string; // volle URL zum Kanal (leer = Symbol wird ausgeblendet)
+  tiktok: string;
+  youtube: string;
+}
+
 // Rollen: superadmin darf alles; match_admin darf nur Spiele/Live/Ticker pflegen.
 export type UserRole = 'superadmin' | 'match_admin';
 
