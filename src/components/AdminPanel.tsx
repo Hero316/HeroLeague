@@ -559,6 +559,29 @@ export default function AdminPanel({
   const getAward = (m: EMatch, key: 'bestPlayers' | 'goalkeepers', team: string) =>
     (m[key] ?? []).find((a) => a.team === team)?.player ?? '';
 
+  // Spielstatus (wie im Original): geplant / live / beendet
+  const setMatchStatus = (id: string, status: 'geplant' | 'live' | 'beendet') =>
+    updateEventMatch(id, (m) => ({
+      ...m,
+      status,
+      liveStartedAt:
+        status === 'live' ? m.liveStartedAt ?? new Date().toISOString() : status === 'geplant' ? null : m.liveStartedAt ?? null,
+    }));
+
+  // Abwesende Kaderspieler je Team an-/abwählen
+  const toggleAbsent = (id: string, team: string, player: string) =>
+    updateEventMatch(id, (m) => {
+      const list = m.absentees ?? [];
+      const exists = list.some((a) => a.team === team && a.player === player);
+      return { ...m, absentees: exists ? list.filter((a) => !(a.team === team && a.player === player)) : [...list, { player, team }] };
+    });
+  const isAbsent = (m: EMatch, team: string, player: string) =>
+    (m.absentees ?? []).some((a) => a.team === team && a.player === player);
+
+  // Kader (echte Spieler) eines Event-Team-Namens holen
+  const rosterOf = (teamName: string) =>
+    teams.find((t) => normTeamName(t.name) === normTeamName(teamName))?.spielerliste ?? [];
+
   const saveEventArchive = async (override?: EventArchive) => {
     const archive = override ?? eventArchive;
     if (!archive) return;
@@ -1417,7 +1440,11 @@ export default function AdminPanel({
                             <span className="shrink-0 w-20 text-[10px] font-mono uppercase tracking-wider text-gray-500 leading-tight">
                               B{m.block} · F{m.field}
                               <br />
-                              <span className="text-[#ff7ac4]">{m.start}</span>
+                              {m.status === 'live' ? (
+                                <span className="text-red-400 animate-pulse">● LIVE</span>
+                              ) : (
+                                <span className="text-[#ff7ac4]">{m.start}</span>
+                              )}
                             </span>
                             <input type="text" value={m.home} onChange={(e) => patchEventMatch(m.id, { home: e.target.value })} className={`${nameInput} text-right`} />
                             <input
@@ -1463,6 +1490,40 @@ export default function AdminPanel({
                                   <option key={n} value={n} />
                                 ))}
                               </datalist>
+
+                              {/* Status: geplant / live / beendet */}
+                              <div>
+                                <span className="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Status</span>
+                                <div className="inline-flex rounded-lg border border-white/10 overflow-hidden">
+                                  {([
+                                    ['geplant', 'Geplant'],
+                                    ['live', 'LIVE'],
+                                    ['beendet', 'Beendet'],
+                                  ] as const).map(([val, lbl]) => {
+                                    const cur = (m.status ?? 'geplant') === val;
+                                    const liveOn = val === 'live' && cur;
+                                    return (
+                                      <button
+                                        key={val}
+                                        type="button"
+                                        onClick={() => setMatchStatus(m.id, val)}
+                                        className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                                          cur
+                                            ? liveOn
+                                              ? 'bg-red-500/25 text-red-300'
+                                              : val === 'beendet'
+                                                ? 'bg-emerald-500/20 text-emerald-300'
+                                                : 'bg-white/10 text-white'
+                                            : 'text-gray-400 hover:text-white'
+                                        }`}
+                                      >
+                                        {val === 'live' && cur && <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 mr-1 align-middle animate-pulse" />}
+                                        {lbl}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
                               {/* Torschützen */}
                               <div>
                                 <div className="flex items-center justify-between mb-1.5">
@@ -1532,6 +1593,47 @@ export default function AdminPanel({
                                       />
                                     ))}
                                   </div>
+                                </div>
+                              </div>
+
+                              {/* Abwesende Spieler (aus dem echten Kader) */}
+                              <div>
+                                <span className="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">
+                                  Abwesende Spieler
+                                </span>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  {[m.home, m.away].map((team) => {
+                                    const roster = rosterOf(team);
+                                    return (
+                                      <div key={team} className="rounded-lg border border-white/10 p-2.5">
+                                        <div className="text-[11px] font-sans font-bold text-gray-300 mb-1.5 truncate">{team}</div>
+                                        {roster.length === 0 ? (
+                                          <p className="text-[10px] text-gray-600 font-sans">Kein Kader hinterlegt.</p>
+                                        ) : (
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {roster.map((p) => {
+                                              const absent = isAbsent(m, team, p.name);
+                                              return (
+                                                <button
+                                                  key={p.name}
+                                                  type="button"
+                                                  onClick={() => toggleAbsent(m.id, team, p.name)}
+                                                  className={`px-2 py-1 rounded-md text-[11px] font-sans border transition-colors cursor-pointer ${
+                                                    absent
+                                                      ? 'bg-rose-500/15 border-rose-500/40 text-rose-300 line-through'
+                                                      : 'bg-[#060E0F]/60 border-white/10 text-gray-300 hover:text-white hover:border-white/25'
+                                                  }`}
+                                                  title={absent ? 'Ist abwesend – klicken zum Zurücknehmen' : 'Als abwesend markieren'}
+                                                >
+                                                  {p.name}
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               </div>
                             </div>

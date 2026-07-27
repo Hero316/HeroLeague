@@ -135,6 +135,14 @@ function normalizeEvent(body: unknown, index = 0) {
         away: str(m.away).trim(),
         homeScore: toScore(m.homeScore),
         awayScore: toScore(m.awayScore),
+        status: ['geplant', 'live', 'beendet'].includes(str(m.status)) ? (str(m.status) as string) : 'geplant',
+        liveStartedAt: typeof m.liveStartedAt === 'string' ? m.liveStartedAt : null,
+        absentees: arr(m.absentees)
+          .map((s) => {
+            const o = (s ?? {}) as Record<string, unknown>;
+            return { player: str(o.player).trim(), team: str(o.team).trim() };
+          })
+          .filter((s) => s.player),
         scorers: arr(m.scorers)
           .map((s) => {
             const o = (s ?? {}) as Record<string, unknown>;
