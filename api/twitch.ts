@@ -175,6 +175,17 @@ function normalizeArchive(body: unknown) {
   return { activeId, events };
 }
 
+// Gespeicherten Wert in ein Archiv umwandeln – inkl. Migration vom alten
+// Einzel-Event-Format (ohne `events`-Liste) auf das neue Archiv-Format.
+function toArchive(stored: unknown) {
+  if (!stored || typeof stored !== 'object') return DEFAULT_EVENT_ARCHIVE;
+  const s = stored as Record<string, unknown>;
+  if (Array.isArray(s.events)) return normalizeArchive(s);
+  // Alt-Format: ein einzelnes Event -> in ein Archiv verpacken.
+  const single = normalizeEvent(s, 0);
+  return { activeId: s.active ? single.id : null, events: [single] };
+}
+
 const saveEvent = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
   const archive = normalizeArchive(req.body);
   await sql`
@@ -199,7 +210,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (resource === 'event') {
         const rows = await sql`SELECT value FROM settings WHERE key = 'event'`;
-        return res.json(rows[0]?.value ?? DEFAULT_EVENT_ARCHIVE);
+        return res.json(toArchive(rows[0]?.value));
       }
       const rows = await sql`SELECT value FROM settings WHERE key = 'twitch'`;
       return res.json(rows[0]?.value ?? DEFAULT_TWITCH);

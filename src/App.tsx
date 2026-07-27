@@ -53,7 +53,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Aktuell sichtbares Event (per activeId). null = keins sichtbar.
-  const activeEvent = eventArchive?.events.find((e) => e.id === eventArchive.activeId) ?? null;
+  const activeEvent = eventArchive?.events?.find((e) => e.id === eventArchive.activeId) ?? null;
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const isAdmin = sessionUser !== null;
   const isSuperadmin = sessionUser?.role === 'superadmin';
@@ -389,7 +389,7 @@ export default function App() {
   // zuletzt angelegte Event vorab prüfen, auch wenn keins aktiv ist)
   if (currentPath.startsWith('/testspiel')) {
     const previewEvent =
-      activeEvent ?? (isAdmin ? eventArchive?.events[eventArchive.events.length - 1] ?? null : null);
+      activeEvent ?? (isAdmin ? eventArchive?.events?.[(eventArchive.events?.length ?? 0) - 1] ?? null : null);
     const isPreviewOnly = !activeEvent && !!previewEvent;
     return (
       <div className="min-h-screen bg-brand-dark text-hl-text font-sans flex flex-col">
