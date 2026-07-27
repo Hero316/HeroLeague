@@ -412,7 +412,7 @@ export default function App() {
                   </div>
                 </div>
               )}
-              <EventPage event={event} teams={visibleTeams} onBack={goBack} />
+              <EventPage event={event} teams={visibleTeams} onBack={goBack} onSelectTeam={openTeamDetail} />
             </>
           ) : (
             <div className="text-center py-24 space-y-4">

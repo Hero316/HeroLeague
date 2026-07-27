@@ -8,19 +8,33 @@ interface EventPageProps {
   event: EventConfig;
   teams: Team[]; // echte Vereine – für Wappen/Farben, per Namensabgleich
   onBack: () => void;
+  onSelectTeam?: (teamId: string) => void; // Klick aufs Wappen -> Vereinsseite
 }
+
+// Namen tolerant vergleichen (Groß/Klein, Leerzeichen, Punkte egal).
+const normName = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/\./g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 
 // Sonder-Event-Seite (z.B. Testspieltag): Kopf + Live-Tabelle + kompletter
 // Spielplan mit Uhrzeiten und Feldern – im Look der Hauptseite, aber mit
 // eigener Magenta/Gold-Farbwelt, damit es sich besonders anfühlt.
-export default function EventPage({ event, teams, onBack }: EventPageProps) {
+export default function EventPage({ event, teams, onBack, onSelectTeam }: EventPageProps) {
   const standings = useMemo(
     () => calculateEventStandings(event.teams, event.matches),
     [event.teams, event.matches]
   );
 
   // Teamname -> echtes Vereins-Wappen (falls der Name mit einem Verein übereinstimmt).
-  const crestFor = (name: string) => teams.find((t) => t.name.trim().toLowerCase() === name.trim().toLowerCase());
+  const crestFor = (name: string) => teams.find((t) => normName(t.name) === normName(name));
+  // Klick-Handler fürs Wappen (nur wenn der Verein bekannt ist).
+  const crestClick = (name: string) => {
+    const t = crestFor(name);
+    return t && onSelectTeam ? () => onSelectTeam(t.id) : undefined;
+  };
 
   // Abend-Statistiken (team-basiert, nur aus den Event-Ergebnissen – völlig
   // getrennt von der echten Liga).
@@ -78,6 +92,7 @@ export default function EventPage({ event, teams, onBack }: EventPageProps) {
           color={crest?.logoColor ?? '#E6238E'}
           logoUrl={crest?.logoUrl}
           size="sm"
+          onSelect={crestClick(name)}
         />
         <span className="font-sans font-semibold text-sm text-white truncate">{name}</span>
       </div>
@@ -162,6 +177,7 @@ export default function EventPage({ event, teams, onBack }: EventPageProps) {
                             color={crest?.logoColor ?? '#E6238E'}
                             logoUrl={crest?.logoUrl}
                             size="sm"
+                            onSelect={crestClick(row.team)}
                           />
                           <span className="font-sans font-semibold text-white truncate">{row.team}</span>
                         </div>
@@ -254,6 +270,7 @@ export default function EventPage({ event, teams, onBack }: EventPageProps) {
                 value={stats.bestOffense.team}
                 sub={`${stats.bestOffense.goalsFor} Tore`}
                 crest={crestFor(stats.bestOffense.team)}
+                onSelect={crestClick(stats.bestOffense.team)}
               />
             )}
             {stats.bestDefense && (
@@ -263,6 +280,7 @@ export default function EventPage({ event, teams, onBack }: EventPageProps) {
                 value={stats.bestDefense.team}
                 sub={`${stats.bestDefense.goalsAgainst} Gegentore`}
                 crest={crestFor(stats.bestDefense.team)}
+                onSelect={crestClick(stats.bestDefense.team)}
               />
             )}
             {stats.mostCleanSheets && (
@@ -272,6 +290,7 @@ export default function EventPage({ event, teams, onBack }: EventPageProps) {
                 value={stats.mostCleanSheets[0]}
                 sub={`${stats.mostCleanSheets[1]}× zu Null`}
                 crest={crestFor(stats.mostCleanSheets[0])}
+                onSelect={crestClick(stats.mostCleanSheets[0])}
               />
             )}
             <StatTile
@@ -302,6 +321,7 @@ export default function EventPage({ event, teams, onBack }: EventPageProps) {
                   value={awards.topScorers[0].player}
                   sub={`${awards.topScorers[0].count} Tore · ${awards.topScorers[0].team}`}
                   crest={crestFor(awards.topScorers[0].team)}
+                  onSelect={crestClick(awards.topScorers[0].team)}
                 />
               )}
               {awards.topAssists[0] && (
@@ -311,6 +331,7 @@ export default function EventPage({ event, teams, onBack }: EventPageProps) {
                   value={awards.topAssists[0].player}
                   sub={`${awards.topAssists[0].count} Vorlagen · ${awards.topAssists[0].team}`}
                   crest={crestFor(awards.topAssists[0].team)}
+                  onSelect={crestClick(awards.topAssists[0].team)}
                 />
               )}
               {awards.bestPlayer && (
@@ -320,6 +341,7 @@ export default function EventPage({ event, teams, onBack }: EventPageProps) {
                   value={awards.bestPlayer.player}
                   sub={awards.bestPlayer.team}
                   crest={crestFor(awards.bestPlayer.team)}
+                  onSelect={crestClick(awards.bestPlayer.team)}
                 />
               )}
               {awards.bestKeeper && (
@@ -329,6 +351,7 @@ export default function EventPage({ event, teams, onBack }: EventPageProps) {
                   value={awards.bestKeeper.player}
                   sub={`${awards.bestKeeper.count}× zu Null · ${awards.bestKeeper.team}`}
                   crest={crestFor(awards.bestKeeper.team)}
+                  onSelect={crestClick(awards.bestKeeper.team)}
                 />
               )}
             </div>
@@ -364,12 +387,14 @@ function StatTile({
   value,
   sub,
   crest,
+  onSelect,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   sub: string;
   crest?: Team;
+  onSelect?: () => void;
 }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,.02)] p-4">
@@ -379,7 +404,7 @@ function StatTile({
       </div>
       <div className="flex items-center gap-2 min-w-0">
         {crest && (
-          <TeamCrest name={crest.name} shortName={crest.shortName} color={crest.logoColor} logoUrl={crest.logoUrl} size="sm" />
+          <TeamCrest name={crest.name} shortName={crest.shortName} color={crest.logoColor} logoUrl={crest.logoUrl} size="sm" onSelect={onSelect} />
         )}
         <span className="font-display font-black text-white text-lg leading-tight truncate">{value}</span>
       </div>
