@@ -118,13 +118,22 @@ export interface EventMatch {
 }
 
 export interface EventConfig {
-  active: boolean; // Schalter: Event auf der Website sichtbar?
+  id: string; // eindeutige ID (z.B. "testspiel-1")
+  label: string; // Anzeigename in der Verwaltung, z.B. "Testspiel 1"
   title: string; // z.B. "Testspieltag"
   tagline: string; // kurzer Untertitel fürs Banner
   dateLabel: string; // z.B. "Sonntag, 2. August 2026"
   location: string; // z.B. "Soccer Center Königsfeld"
   teams: string[]; // Teamnamen (für die Tabelle, auch ohne Ergebnisse)
   matches: EventMatch[];
+}
+
+// Archiv aller Testspiele – vergangene bleiben gespeichert (wie Saisons).
+// `activeId` bestimmt, welches Event aktuell auf der Website sichtbar ist
+// (null = keins sichtbar, Seite ist komplett normal).
+export interface EventArchive {
+  activeId: string | null;
+  events: EventConfig[];
 }
 
 // Rollen: superadmin darf alles; match_admin darf nur Spiele/Live/Ticker pflegen.

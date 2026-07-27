@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap } from 'lucide-react';
-import { Player, Team, Match, EventConfig } from '../types';
+import { Player, Team, Match, EventConfig, EventArchive } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
 import { AccordionSection } from './ui';
@@ -364,8 +364,9 @@ export default function AdminPanel({
   const [socialYoutube, setSocialYoutube] = useState('');
   const [socialSuccess, setSocialSuccess] = useState(false);
 
-  // Sonder-Event (Testspieltag)
-  const [eventCfg, setEventCfg] = useState<EventConfig | null>(null);
+  // Sonder-Events (Testspiel-Archiv)
+  const [eventArchive, setEventArchive] = useState<EventArchive | null>(null);
+  const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [eventSuccess, setEventSuccess] = useState(false);
   const [openEventMatch, setOpenEventMatch] = useState<string | null>(null);
 
@@ -511,22 +512,35 @@ export default function AdminPanel({
     }
   };
 
-  // Sonder-Event laden
+  // Sonder-Event-Archiv laden
   useEffect(() => {
-    apiFetch<EventConfig>('/api/twitch?resource=event')
-      .then((data) => setEventCfg(data))
+    apiFetch<EventArchive>('/api/twitch?resource=event')
+      .then((data) => {
+        setEventArchive(data);
+        setSelectedEventId(data.activeId ?? data.events[0]?.id ?? '');
+      })
       .catch(() => {
         /* noch nichts hinterlegt */
       });
   }, []);
 
-  const patchEvent = (patch: Partial<EventConfig>) => setEventCfg((e) => (e ? { ...e, ...patch } : e));
-  const patchEventMatch = (id: string, patch: Partial<EventConfig['matches'][number]>) =>
-    setEventCfg((e) => (e ? { ...e, matches: e.matches.map((m) => (m.id === id ? { ...m, ...patch } : m)) } : e));
-
   type EMatch = EventConfig['matches'][number];
+  const selectedEvent = eventArchive?.events.find((e) => e.id === selectedEventId) ?? null;
+
+  const updateArchive = (updater: (a: EventArchive) => EventArchive) =>
+    setEventArchive((a) => (a ? updater(a) : a));
+
+  // Änderungen betreffen immer das aktuell ausgewählte Event.
+  const patchEvent = (patch: Partial<EventConfig>) =>
+    updateArchive((a) => ({ ...a, events: a.events.map((e) => (e.id === selectedEventId ? { ...e, ...patch } : e)) }));
   const updateEventMatch = (id: string, updater: (m: EMatch) => EMatch) =>
-    setEventCfg((e) => (e ? { ...e, matches: e.matches.map((m) => (m.id === id ? updater(m) : m)) } : e));
+    updateArchive((a) => ({
+      ...a,
+      events: a.events.map((e) =>
+        e.id === selectedEventId ? { ...e, matches: e.matches.map((m) => (m.id === id ? updater(m) : m)) } : e
+      ),
+    }));
+  const patchEventMatch = (id: string, patch: Partial<EMatch>) => updateEventMatch(id, (m) => ({ ...m, ...patch }));
 
   // Torschützen je Spiel
   const addScorer = (id: string, homeTeam: string) =>
@@ -545,15 +559,15 @@ export default function AdminPanel({
   const getAward = (m: EMatch, key: 'bestPlayers' | 'goalkeepers', team: string) =>
     (m[key] ?? []).find((a) => a.team === team)?.player ?? '';
 
-  const saveEventCfg = async (override?: EventConfig) => {
-    const cfg = override ?? eventCfg;
-    if (!cfg) return;
+  const saveEventArchive = async (override?: EventArchive) => {
+    const archive = override ?? eventArchive;
+    if (!archive) return;
     try {
-      const saved = await apiFetch<EventConfig>('/api/twitch?resource=event', {
+      const saved = await apiFetch<EventArchive>('/api/twitch?resource=event', {
         method: 'POST',
-        body: JSON.stringify(cfg),
+        body: JSON.stringify(archive),
       });
-      setEventCfg(saved);
+      setEventArchive(saved);
       setEventSuccess(true);
       setTimeout(() => setEventSuccess(false), 3000);
     } catch (err) {
@@ -561,16 +575,46 @@ export default function AdminPanel({
     }
   };
 
-  // Schalter an/aus – speichert sofort, damit es direkt live wirkt.
-  const toggleEventActive = () => {
-    if (!eventCfg) return;
-    saveEventCfg({ ...eventCfg, active: !eventCfg.active });
+  // Ausgewähltes Event sichtbar schalten (oder alle verstecken) – speichert sofort.
+  const setActiveEvent = (id: string | null) => {
+    if (!eventArchive) return;
+    saveEventArchive({ ...eventArchive, activeId: id });
+  };
+
+  // Neues Testspiel anlegen (leer) und direkt auswählen.
+  const addNewEvent = () => {
+    if (!eventArchive) return;
+    const n = eventArchive.events.length + 1;
+    const fresh: EventConfig = {
+      id: `testspiel-${Date.now()}`,
+      label: `Testspiel ${n}`,
+      title: 'Testspieltag',
+      tagline: '',
+      dateLabel: '',
+      location: '',
+      teams: [],
+      matches: [],
+    };
+    setEventArchive({ ...eventArchive, events: [...eventArchive.events, fresh] });
+    setSelectedEventId(fresh.id);
+  };
+
+  const deleteSelectedEvent = () => {
+    if (!eventArchive || !selectedEvent) return;
+    if (!window.confirm(`„${selectedEvent.label}" mit allen Daten wirklich löschen?`)) return;
+    const events = eventArchive.events.filter((e) => e.id !== selectedEventId);
+    const activeId = eventArchive.activeId === selectedEventId ? null : eventArchive.activeId;
+    const next = { activeId, events };
+    setSelectedEventId(events[0]?.id ?? '');
+    saveEventArchive(next);
   };
 
   const clearEventResults = () => {
-    if (!eventCfg) return;
+    if (!selectedEvent) return;
     if (!window.confirm('Alle eingetragenen Ergebnisse dieses Events zurücksetzen?')) return;
-    setEventCfg({ ...eventCfg, matches: eventCfg.matches.map((m) => ({ ...m, homeScore: null, awayScore: null })) });
+    patchEvent({
+      matches: selectedEvent.matches.map((m) => ({ ...m, homeScore: null, awayScore: null, scorers: [], bestPlayers: [], goalkeepers: [] })),
+    });
   };
 
   const handleSubmitTeam = async (e: React.FormEvent) => {
@@ -1244,61 +1288,100 @@ export default function AdminPanel({
         accent="#E6238E"
       >
         <div>
-          {!eventCfg ? (
+          {!eventArchive ? (
             <p className="text-xs text-gray-400 font-sans">Lädt…</p>
           ) : (
             <div className="space-y-6">
               <p className="text-xs text-gray-400 font-sans">
-                Blende ein spontanes Event (z.B. Testspieltag) auf der Website ein. Ist der Schalter aus, ist die Seite
-                komplett normal – kein Banner, kein Menüpunkt.
+                Lege beliebig viele Testspiele an – vergangene bleiben gespeichert (wie Saisons). Es ist immer höchstens
+                eins auf der Website sichtbar. Steht nichts auf „aktiv", ist die Seite komplett normal.
               </p>
 
-              {/* An/Aus-Schalter */}
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl border border-[rgba(230,35,142,.3)] bg-[rgba(230,35,142,.06)]">
+              {/* Event-Auswahl + neues Event */}
+              <div className="flex flex-col sm:flex-row sm:items-end gap-3">
                 <div className="flex-1">
-                  <div className="font-sans font-bold text-white text-sm">Event auf der Website anzeigen</div>
-                  <div className="text-xs text-gray-400 font-sans">
-                    Zeigt Banner auf der Startseite + farbigen Menüpunkt „{eventCfg.title}".
-                  </div>
+                  <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">Testspiel wählen</label>
+                  <select
+                    value={selectedEventId}
+                    onChange={(e) => {
+                      setSelectedEventId(e.target.value);
+                      setOpenEventMatch(null);
+                    }}
+                    className={`${inputClass} cursor-pointer`}
+                  >
+                    {eventArchive.events.length === 0 && <option value="">— noch keins —</option>}
+                    {eventArchive.events.map((ev) => (
+                      <option key={ev.id} value={ev.id}>
+                        {ev.label}
+                        {eventArchive.activeId === ev.id ? ' — aktiv' : ''}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <button
                   type="button"
-                  onClick={toggleEventActive}
-                  className={`shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer border ${
-                    eventCfg.active
-                      ? 'bg-[rgba(230,35,142,.25)] text-[#ff9ad4] border-[rgba(230,35,142,.5)]'
-                      : 'bg-[#060E0F]/60 text-gray-400 border-white/10 hover:text-white hover:border-white/20'
-                  }`}
+                  onClick={addNewEvent}
+                  className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider border border-white/15 text-gray-200 hover:border-white/30 hover:text-white transition-all cursor-pointer"
                 >
-                  <span className="relative flex h-2 w-2">
-                    {eventCfg.active && (
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#E6238E] opacity-75" />
-                    )}
-                    <span className={`relative inline-flex rounded-full h-2 w-2 ${eventCfg.active ? 'bg-[#E6238E]' : 'bg-gray-500'}`} />
-                  </span>
-                  {eventCfg.active ? 'AKTIV – sichtbar' : 'Aus (versteckt)'}
+                  <Plus className="w-4 h-4" /> Neues Testspiel
                 </button>
               </div>
 
-              {/* Meta-Felder */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">TITEL</label>
-                  <input type="text" value={eventCfg.title} onChange={(e) => patchEvent({ title: e.target.value })} className={inputClass} />
+              {/* Sichtbarkeit */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl border border-[rgba(230,35,142,.3)] bg-[rgba(230,35,142,.06)]">
+                <div className="flex-1">
+                  <div className="font-sans font-bold text-white text-sm">Auf der Website anzeigen</div>
+                  <div className="text-xs text-gray-400 font-sans">Es kann immer nur ein Testspiel gleichzeitig sichtbar sein.</div>
                 </div>
-                <div>
-                  <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">UNTERTITEL</label>
-                  <input type="text" value={eventCfg.tagline} onChange={(e) => patchEvent({ tagline: e.target.value })} className={inputClass} />
-                </div>
-                <div>
-                  <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">DATUM (TEXT)</label>
-                  <input type="text" value={eventCfg.dateLabel} onChange={(e) => patchEvent({ dateLabel: e.target.value })} placeholder="z.B. Sonntag, 2. August 2026" className={inputClass} />
-                </div>
-                <div>
-                  <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">ORT</label>
-                  <input type="text" value={eventCfg.location} onChange={(e) => patchEvent({ location: e.target.value })} className={inputClass} />
-                </div>
+                {selectedEvent && eventArchive.activeId === selectedEvent.id ? (
+                  <button
+                    type="button"
+                    onClick={() => setActiveEvent(null)}
+                    className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider border bg-[rgba(230,35,142,.25)] text-[#ff9ad4] border-[rgba(230,35,142,.5)] cursor-pointer"
+                  >
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#E6238E] opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[#E6238E]" />
+                    </span>
+                    AKTIV – ausblenden
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => selectedEvent && setActiveEvent(selectedEvent.id)}
+                    disabled={!selectedEvent}
+                    className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider border bg-[#060E0F]/60 text-gray-300 border-white/10 hover:text-white hover:border-[rgba(230,35,142,.5)] transition-all cursor-pointer disabled:opacity-40"
+                  >
+                    Dieses Testspiel aktivieren
+                  </button>
+                )}
               </div>
+
+              {selectedEvent ? (
+                <>
+                  {/* Meta-Felder */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">NAME (VERWALTUNG)</label>
+                      <input type="text" value={selectedEvent.label} onChange={(e) => patchEvent({ label: e.target.value })} placeholder="z.B. Testspiel 1" className={inputClass} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">TITEL (ANZEIGE)</label>
+                      <input type="text" value={selectedEvent.title} onChange={(e) => patchEvent({ title: e.target.value })} className={inputClass} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">UNTERTITEL</label>
+                      <input type="text" value={selectedEvent.tagline} onChange={(e) => patchEvent({ tagline: e.target.value })} className={inputClass} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">DATUM (TEXT)</label>
+                      <input type="text" value={selectedEvent.dateLabel} onChange={(e) => patchEvent({ dateLabel: e.target.value })} placeholder="z.B. Sonntag, 2. August 2026" className={inputClass} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">ORT</label>
+                      <input type="text" value={selectedEvent.location} onChange={(e) => patchEvent({ location: e.target.value })} className={inputClass} />
+                    </div>
+                  </div>
 
               {/* Ergebnisse / Spielplan */}
               <div>
@@ -1313,7 +1396,12 @@ export default function AdminPanel({
                   </button>
                 </div>
                 <div className="rounded-xl border border-white/10 divide-y divide-white/[.06]">
-                  {[...eventCfg.matches]
+                  {selectedEvent.matches.length === 0 && (
+                    <p className="px-3 py-4 text-[11px] text-gray-500 font-sans">
+                      Noch keine Spiele hinterlegt. Schick mir den Spielplan (PDF/Excel), dann fülle ich die Paarungen ein.
+                    </p>
+                  )}
+                  {[...selectedEvent.matches]
                     .sort((a, b) => a.block - b.block || a.field - b.field)
                     .map((m) => {
                       const isOpen = openEventMatch === m.id;
@@ -1457,25 +1545,39 @@ export default function AdminPanel({
                 </p>
               </div>
 
-              <div className="flex items-center justify-end gap-3">
-                {eventSuccess && (
-                  <motion.span
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="text-xs text-emerald-400 uppercase tracking-wider font-mono mr-2"
-                  >
-                    ✓ Gespeichert!
-                  </motion.span>
-                )}
+              <div className="flex items-center justify-between gap-3 flex-wrap">
                 <button
                   type="button"
-                  onClick={() => saveEventCfg()}
-                  className="px-6 py-3 bg-brand-accent hover:bg-brand-accent/80 border border-brand-accent-light/30 rounded-full text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center gap-1.5 cursor-pointer shadow-lg shadow-brand-accent-light/10"
+                  onClick={deleteSelectedEvent}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full border border-red-500/30 text-red-300 hover:bg-red-500/10 hover:border-red-500/50 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
                 >
-                  <Check className="w-4 h-4" />
-                  <span>Event speichern</span>
+                  <Trash2 className="w-4 h-4" />
+                  Testspiel löschen
                 </button>
+                <div className="flex items-center gap-3">
+                  {eventSuccess && (
+                    <motion.span
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="text-xs text-emerald-400 uppercase tracking-wider font-mono mr-2"
+                    >
+                      ✓ Gespeichert!
+                    </motion.span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => saveEventArchive()}
+                    className="px-6 py-3 bg-brand-accent hover:bg-brand-accent/80 border border-brand-accent-light/30 rounded-full text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center gap-1.5 cursor-pointer shadow-lg shadow-brand-accent-light/10"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>Speichern</span>
+                  </button>
+                </div>
               </div>
+                </>
+              ) : (
+                <p className="text-xs text-gray-400 font-sans">Kein Testspiel ausgewählt – lege oben ein neues an.</p>
+              )}
             </div>
           )}
         </div>
