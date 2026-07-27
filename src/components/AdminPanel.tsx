@@ -582,6 +582,46 @@ export default function AdminPanel({
   const rosterOf = (teamName: string) =>
     teams.find((t) => normTeamName(t.name) === normTeamName(teamName))?.spielerliste ?? [];
 
+  // Spieler-Auswahl streng aus dem Kader EINES Teams (wie im Original). Ohne
+  // hinterlegten Kader Freitext. `exclude` blendet z.B. den Torschützen bei der
+  // Vorlage aus. Ein bereits gespeicherter, nicht (mehr) im Kader stehender Name
+  // bleibt als Option erhalten, damit nichts verloren geht.
+  const evFieldClass =
+    'w-full bg-[#060E0F]/60 border border-white/10 rounded-md px-2 py-1.5 text-white text-xs focus:outline-none focus:border-[#E6238E]';
+  const rosterField = (
+    teamName: string,
+    value: string,
+    onChange: (v: string) => void,
+    placeholder: string,
+    exclude?: string
+  ) => {
+    const roster = rosterOf(teamName);
+    if (roster.length === 0) {
+      return (
+        <input
+          type="text"
+          value={value}
+          placeholder={placeholder}
+          onChange={(e) => onChange(e.target.value)}
+          className={evFieldClass}
+        />
+      );
+    }
+    const names = roster.map((p) => p.name).filter((n) => n && n !== exclude);
+    const missing = Boolean(value) && !names.includes(value) && value !== exclude;
+    return (
+      <select value={value} onChange={(e) => onChange(e.target.value)} className={`${evFieldClass} cursor-pointer`}>
+        <option value="">— {placeholder} —</option>
+        {missing && <option value={value}>{value} (nicht im Kader)</option>}
+        {names.map((n) => (
+          <option key={n} value={n}>
+            {n}
+          </option>
+        ))}
+      </select>
+    );
+  };
+
   const saveEventArchive = async (override?: EventArchive) => {
     const archive = override ?? eventArchive;
     if (!archive) return;
@@ -1432,8 +1472,6 @@ export default function AdminPanel({
                         'shrink-0 w-11 bg-[#060E0F]/80 border border-white/10 rounded-md px-1 py-1.5 text-white text-center text-sm focus:outline-none focus:border-[#E6238E]';
                       const nameInput =
                         'flex-1 min-w-0 bg-[#060E0F]/60 border border-white/10 rounded-md px-2 py-1.5 text-white text-xs focus:outline-none focus:border-[#E6238E]';
-                      const detailInput =
-                        'w-full bg-[#060E0F]/60 border border-white/10 rounded-md px-2 py-1.5 text-white text-xs focus:outline-none focus:border-[#E6238E]';
                       return (
                         <div key={m.id}>
                           <div className="flex items-center gap-2 px-3 py-2.5 text-sm">
@@ -1477,20 +1515,6 @@ export default function AdminPanel({
 
                           {isOpen && (
                             <div className="px-3 pb-4 pt-1 space-y-4 bg-[#060E0F]/30">
-                              {/* Kader-Vorschläge (aus den echten Vereinen, falls Name passt) */}
-                              <datalist id={`ev-roster-${m.id}`}>
-                                {Array.from(
-                                  new Set(
-                                    [m.home, m.away].flatMap((nm) => {
-                                      const t = teams.find((tt) => normTeamName(tt.name) === normTeamName(nm));
-                                      return (t?.spielerliste ?? []).map((p) => p.name).filter(Boolean);
-                                    })
-                                  )
-                                ).map((n) => (
-                                  <option key={n} value={n} />
-                                ))}
-                              </datalist>
-
                               {/* Status: geplant / live / beendet */}
                               <div>
                                 <span className="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Status</span>
@@ -1541,17 +1565,17 @@ export default function AdminPanel({
                                     <p className="text-[11px] text-gray-600 font-sans">Noch keine Tore erfasst.</p>
                                   )}
                                   {(m.scorers ?? []).map((s, i) => (
-                                    <div key={i} className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-1.5 items-center">
+                                    <div key={i} className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-1.5 items-center">
                                       <select
-                                        value={s.team}
-                                        onChange={(e) => updateScorer(m.id, i, { team: e.target.value })}
-                                        className={`${detailInput} cursor-pointer`}
+                                        value={s.team === m.away ? m.away : m.home}
+                                        onChange={(e) => updateScorer(m.id, i, { team: e.target.value, player: '', assist: '' })}
+                                        className={`${evFieldClass} cursor-pointer`}
                                       >
                                         <option value={m.home}>{m.home}</option>
                                         <option value={m.away}>{m.away}</option>
                                       </select>
-                                      <input type="text" list={`ev-roster-${m.id}`} value={s.player} placeholder="Torschütze" onChange={(e) => updateScorer(m.id, i, { player: e.target.value })} className={detailInput} />
-                                      <input type="text" list={`ev-roster-${m.id}`} value={s.assist ?? ''} placeholder="Vorlage (optional)" onChange={(e) => updateScorer(m.id, i, { assist: e.target.value })} className={detailInput} />
+                                      {rosterField(s.team, s.player, (v) => updateScorer(m.id, i, { player: v }), 'Torschütze')}
+                                      {rosterField(s.team, s.assist ?? '', (v) => updateScorer(m.id, i, { assist: v }), 'Vorlage', s.player)}
                                       <button type="button" onClick={() => removeScorer(m.id, i)} className="p-1 text-gray-500 hover:text-rose-400 cursor-pointer" title="Entfernen">
                                         <X className="w-3.5 h-3.5" />
                                       </button>
@@ -1566,15 +1590,10 @@ export default function AdminPanel({
                                   <span className="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Bester Spieler</span>
                                   <div className="space-y-1.5">
                                     {[m.home, m.away].map((team) => (
-                                      <input
-                                        key={team}
-                                        type="text"
-                                        list={`ev-roster-${m.id}`}
-                                        value={getAward(m, 'bestPlayers', team)}
-                                        placeholder={team}
-                                        onChange={(e) => setAward(m.id, 'bestPlayers', team, e.target.value)}
-                                        className={detailInput}
-                                      />
+                                      <div key={team}>
+                                        <span className="block text-[9px] font-sans text-gray-500 mb-0.5 truncate">{team}</span>
+                                        {rosterField(team, getAward(m, 'bestPlayers', team), (v) => setAward(m.id, 'bestPlayers', team, v), 'kein')}
+                                      </div>
                                     ))}
                                   </div>
                                 </div>
@@ -1582,15 +1601,10 @@ export default function AdminPanel({
                                   <span className="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Torwart (für „zu null")</span>
                                   <div className="space-y-1.5">
                                     {[m.home, m.away].map((team) => (
-                                      <input
-                                        key={team}
-                                        type="text"
-                                        list={`ev-roster-${m.id}`}
-                                        value={getAward(m, 'goalkeepers', team)}
-                                        placeholder={team}
-                                        onChange={(e) => setAward(m.id, 'goalkeepers', team, e.target.value)}
-                                        className={detailInput}
-                                      />
+                                      <div key={team}>
+                                        <span className="block text-[9px] font-sans text-gray-500 mb-0.5 truncate">{team}</span>
+                                        {rosterField(team, getAward(m, 'goalkeepers', team), (v) => setAward(m.id, 'goalkeepers', team, v), 'kein')}
+                                      </div>
                                     ))}
                                   </div>
                                 </div>

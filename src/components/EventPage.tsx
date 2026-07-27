@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shield, Lock, Goal, Crown, Star, Hand, Handshake } from 'lucide-react';
 import { EventConfig, Team } from '../types';
-import { TeamCrest } from './ui';
+import { TeamCrest, LiveBadge } from './ui';
 import { calculateEventStandings, calculateEventAwards } from '../lib/eventStandings';
 
 interface EventPageProps {
@@ -229,10 +229,10 @@ export default function EventPage({ event, teams, onBack, onSelectTeam }: EventP
                       const played = m.homeScore !== null && m.awayScore !== null;
                       const isLive = m.status === 'live';
                       return (
-                        <div key={m.id} className={`flex items-center gap-3 px-4 py-3 ${isLive ? 'bg-red-500/[.06]' : ''}`}>
-                          <span className="shrink-0 w-12 text-[10px] font-mono uppercase tracking-wider leading-tight">
+                        <div key={m.id} className={`flex items-center gap-3 px-4 py-3 ${isLive ? 'bg-red-500/[.07]' : ''}`}>
+                          <span className="shrink-0 min-w-[3.25rem] text-[10px] font-mono uppercase tracking-wider leading-tight">
                             {isLive ? (
-                              <span className="text-red-400 animate-pulse">● LIVE</span>
+                              <LiveBadge liveStartedAt={m.liveStartedAt} />
                             ) : (
                               <span className="text-hl-mute">Feld {m.field}</span>
                             )}
@@ -244,7 +244,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam }: EventP
                                 isLive ? 'bg-red-500/20 text-red-300' : played ? 'bg-white/[.06] text-white' : 'text-hl-mute'
                               }`}
                             >
-                              {played ? `${m.homeScore} : ${m.awayScore}` : isLive ? 'LIVE' : 'vs'}
+                              {played ? `${m.homeScore} : ${m.awayScore}` : isLive ? '– : –' : 'vs'}
                             </span>
                             {renderTeam(m.away, 'right')}
                           </div>
