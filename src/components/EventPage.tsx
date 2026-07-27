@@ -263,16 +263,35 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                             </div>
                           </div>
                           {(m.scorers ?? []).some((s) => s.player) && (
-                            <div className="mt-2 pl-[3.75rem] flex flex-wrap gap-x-4 gap-y-1">
-                              {(m.scorers ?? [])
-                                .filter((s) => s.player)
-                                .map((s, i) => (
-                                  <span key={i} className="inline-flex items-center gap-1 text-[11px] font-sans text-hl-soft">
-                                    <span className="text-[#ff7ac4]">⚽</span>
-                                    {s.player}
-                                    {s.assist ? <span className="text-hl-mute"> · Vorlage {s.assist}</span> : null}
-                                  </span>
-                                ))}
+                            <div className="mt-2 pl-[3.75rem] flex gap-3">
+                              {/* Torschützen des Heimteams – links */}
+                              <div className="flex-1 min-w-0 space-y-0.5">
+                                {(m.scorers ?? [])
+                                  .filter((s) => s.player && s.team === m.home)
+                                  .map((s, i) => (
+                                    <div key={i} className="flex items-center gap-1 text-[11px] font-sans text-hl-soft">
+                                      <span className="text-[#ff7ac4]">⚽</span>
+                                      <span className="truncate">
+                                        {s.player}
+                                        {s.assist ? <span className="text-hl-mute"> · Vorlage {s.assist}</span> : null}
+                                      </span>
+                                    </div>
+                                  ))}
+                              </div>
+                              {/* Torschützen des Auswärtsteams – rechts */}
+                              <div className="flex-1 min-w-0 space-y-0.5 text-right">
+                                {(m.scorers ?? [])
+                                  .filter((s) => s.player && s.team === m.away)
+                                  .map((s, i) => (
+                                    <div key={i} className="flex flex-row-reverse items-center gap-1 text-[11px] font-sans text-hl-soft">
+                                      <span className="text-[#ff7ac4]">⚽</span>
+                                      <span className="truncate">
+                                        {s.player}
+                                        {s.assist ? <span className="text-hl-mute"> · Vorlage {s.assist}</span> : null}
+                                      </span>
+                                    </div>
+                                  ))}
+                              </div>
                             </div>
                           )}
                         </div>
