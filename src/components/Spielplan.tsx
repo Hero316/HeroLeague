@@ -275,11 +275,26 @@ export default function Spielplan({
     setMetaSaved(false);
   };
 
-  const closeManage = () => {
+  // Popup nur schließen (ohne Speichern) – für Fälle, in denen schon
+  // gespeichert wurde (z.B. nach „Beendet").
+  const justCloseManage = () => {
     if (openMatchId) clearLocal(openMatchId);
     setOpenMatchId(null);
     setMeta(null);
     setMetaSaved(false);
+  };
+
+  const closeManage = () => {
+    const id = openMatchId;
+    // Auto-Speichern beim Verlassen: laufende/beendete Spiele sichern den
+    // aktuellen Bearbeitungsstand automatisch (die Daten werden synchron
+    // aufgebaut, das Speichern läuft im Hintergrund). Geplante Spiele bleiben
+    // unangetastet, damit nicht versehentlich ein 0:0 gespeichert wird.
+    const m = id ? matches.find((x) => x.id === id) : null;
+    if (m && (m.status === 'live' || m.status === 'beendet')) {
+      commit(m, m.status);
+    }
+    justCloseManage();
   };
 
   const adjustGoals = (match: Match, side: 'home' | 'away', delta: number) => {
@@ -383,7 +398,7 @@ export default function Spielplan({
   };
 
   const finishMatch = (match: Match) => {
-    Promise.resolve(commit(match, 'beendet')).then(() => closeManage());
+    Promise.resolve(commit(match, 'beendet')).then(() => justCloseManage());
   };
 
   const handleResetMatch = (matchId: string) => {
