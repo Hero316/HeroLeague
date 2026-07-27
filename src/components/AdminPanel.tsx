@@ -6,6 +6,9 @@ import { apiFetch, uploadImage } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
 import { AccordionSection } from './ui';
 
+// Teamnamen tolerant vergleichen (für den Abgleich Event-Team <-> echter Verein).
+const normTeamName = (s: string) => s.toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
+
 function ImageUploader({
   label,
   value,
@@ -1359,6 +1362,19 @@ export default function AdminPanel({
 
                           {isOpen && (
                             <div className="px-3 pb-4 pt-1 space-y-4 bg-[#060E0F]/30">
+                              {/* Kader-Vorschläge (aus den echten Vereinen, falls Name passt) */}
+                              <datalist id={`ev-roster-${m.id}`}>
+                                {Array.from(
+                                  new Set(
+                                    [m.home, m.away].flatMap((nm) => {
+                                      const t = teams.find((tt) => normTeamName(tt.name) === normTeamName(nm));
+                                      return (t?.spielerliste ?? []).map((p) => p.name).filter(Boolean);
+                                    })
+                                  )
+                                ).map((n) => (
+                                  <option key={n} value={n} />
+                                ))}
+                              </datalist>
                               {/* Torschützen */}
                               <div>
                                 <div className="flex items-center justify-between mb-1.5">
@@ -1385,8 +1401,8 @@ export default function AdminPanel({
                                         <option value={m.home}>{m.home}</option>
                                         <option value={m.away}>{m.away}</option>
                                       </select>
-                                      <input type="text" value={s.player} placeholder="Torschütze" onChange={(e) => updateScorer(m.id, i, { player: e.target.value })} className={detailInput} />
-                                      <input type="text" value={s.assist ?? ''} placeholder="Vorlage (optional)" onChange={(e) => updateScorer(m.id, i, { assist: e.target.value })} className={detailInput} />
+                                      <input type="text" list={`ev-roster-${m.id}`} value={s.player} placeholder="Torschütze" onChange={(e) => updateScorer(m.id, i, { player: e.target.value })} className={detailInput} />
+                                      <input type="text" list={`ev-roster-${m.id}`} value={s.assist ?? ''} placeholder="Vorlage (optional)" onChange={(e) => updateScorer(m.id, i, { assist: e.target.value })} className={detailInput} />
                                       <button type="button" onClick={() => removeScorer(m.id, i)} className="p-1 text-gray-500 hover:text-rose-400 cursor-pointer" title="Entfernen">
                                         <X className="w-3.5 h-3.5" />
                                       </button>
@@ -1404,6 +1420,7 @@ export default function AdminPanel({
                                       <input
                                         key={team}
                                         type="text"
+                                        list={`ev-roster-${m.id}`}
                                         value={getAward(m, 'bestPlayers', team)}
                                         placeholder={team}
                                         onChange={(e) => setAward(m.id, 'bestPlayers', team, e.target.value)}
@@ -1419,6 +1436,7 @@ export default function AdminPanel({
                                       <input
                                         key={team}
                                         type="text"
+                                        list={`ev-roster-${m.id}`}
                                         value={getAward(m, 'goalkeepers', team)}
                                         placeholder={team}
                                         onChange={(e) => setAward(m.id, 'goalkeepers', team, e.target.value)}
