@@ -22,6 +22,7 @@ import Ergebniszettel from './components/Ergebniszettel';
 import LegalPage from './components/LegalPage';
 import EventPage from './components/EventPage';
 import EventBanner from './components/EventBanner';
+import EventErgebniszettel from './components/EventErgebniszettel';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
 import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer } from 'lucide-react';
 
@@ -398,6 +399,15 @@ export default function App() {
     );
   }
 
+  // ROUTE: /testspiel-zettel – Ergebniszettel zum Ausdrucken (nur Admin)
+  if (currentPath.startsWith('/testspiel-zettel')) {
+    const printEvent = activeEvent ?? eventArchive?.events?.[(eventArchive.events?.length ?? 0) - 1] ?? null;
+    if (isAdmin && printEvent) {
+      return <EventErgebniszettel event={printEvent} teams={visibleTeams} onBack={() => navigateTo('/testspiel')} />;
+    }
+    // Kein Admin / kein Event -> fällt auf die normale Event-Seite zurück
+  }
+
   // ROUTE: /testspiel – Sonder-Event-Seite (zeigt das aktive Event; Admin darf das
   // zuletzt angelegte Event vorab prüfen, auch wenn keins aktiv ist)
   if (currentPath.startsWith('/testspiel')) {
@@ -431,7 +441,14 @@ export default function App() {
                   </div>
                 </div>
               )}
-              <EventPage event={previewEvent} teams={visibleTeams} onBack={goBack} onSelectTeam={openTeamDetail} />
+              <EventPage
+                event={previewEvent}
+                teams={visibleTeams}
+                onBack={goBack}
+                onSelectTeam={openTeamDetail}
+                isAdmin={isAdmin}
+                onPrint={() => navigateTo('/testspiel-zettel')}
+              />
             </>
           ) : (
             <div className="text-center py-24 space-y-4">
