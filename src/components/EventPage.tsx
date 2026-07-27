@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shield, Lock, Goal, Crown, Star, Hand, Handshake } from 'lucide-react';
+import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shield, Lock, Goal, Crown, Star, Hand, Handshake, Printer } from 'lucide-react';
 import { EventConfig, Team } from '../types';
 import { TeamCrest, LiveBadge } from './ui';
 import { calculateEventStandings, calculateEventAwards } from '../lib/eventStandings';
@@ -9,6 +9,8 @@ interface EventPageProps {
   teams: Team[]; // echte Vereine – für Wappen/Farben, per Namensabgleich
   onBack: () => void;
   onSelectTeam?: (teamId: string) => void; // Klick aufs Wappen -> Vereinsseite
+  isAdmin?: boolean;
+  onPrint?: () => void; // Ergebniszettel öffnen (nur Admin)
 }
 
 // Namen tolerant vergleichen (Groß/Klein, Leerzeichen, Punkte egal).
@@ -22,7 +24,7 @@ const normName = (s: string) =>
 // Sonder-Event-Seite (z.B. Testspieltag): Kopf + Live-Tabelle + kompletter
 // Spielplan mit Uhrzeiten und Feldern – im Look der Hauptseite, aber mit
 // eigener Magenta/Gold-Farbwelt, damit es sich besonders anfühlt.
-export default function EventPage({ event, teams, onBack, onSelectTeam }: EventPageProps) {
+export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin, onPrint }: EventPageProps) {
   const standings = useMemo(
     () => calculateEventStandings(event.teams, event.matches),
     [event.teams, event.matches]
@@ -138,6 +140,16 @@ export default function EventPage({ event, teams, onBack, onSelectTeam }: EventP
               </span>
             )}
           </div>
+
+          {isAdmin && onPrint && (
+            <button
+              onClick={onPrint}
+              className="mt-6 inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-[rgba(230,35,142,.4)] bg-[rgba(230,35,142,.1)] text-[#ff9ad4] hover:bg-[rgba(230,35,142,.2)] text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+            >
+              <Printer className="w-4 h-4" />
+              Ergebniszettel drucken
+            </button>
+          )}
         </div>
       </div>
 
