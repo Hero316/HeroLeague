@@ -712,6 +712,22 @@ export default function AdminPanel({
       liveStartedAt: status === 'live' ? m.liveStartedAt ?? new Date().toISOString() : status === 'geplant' ? null : m.liveStartedAt ?? null,
     }));
 
+  // Spiel komplett zurücksetzen (Ergebnis, Torschützen, Status) – speichert sofort.
+  const resetEventMatch = (id: string) => {
+    if (!window.confirm('Dieses Spiel zurücksetzen? Ergebnis, Torschützen, Vorlagen, Torwart, Abwesende und Status werden gelöscht.')) return;
+    updateAndSaveMatch(id, (m) => ({
+      ...m,
+      homeScore: null,
+      awayScore: null,
+      status: 'geplant',
+      liveStartedAt: null,
+      scorers: [],
+      bestPlayers: [],
+      goalkeepers: [],
+      absentees: [],
+    }));
+  };
+
   // Popup schließen und dabei alles sichern.
   const closeManage = async () => {
     await saveEventArchive();
@@ -1745,7 +1761,14 @@ export default function AdminPanel({
               </div>
 
               <div className="flex items-center justify-between gap-3 pt-1">
-                <span className="text-[10px] text-gray-500 font-sans">Wird beim Schließen gespeichert.</span>
+                <button
+                  type="button"
+                  onClick={() => resetEventMatch(managedMatch.id)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full border border-white/15 text-gray-300 hover:text-rose-300 hover:border-rose-500/40 text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Zurücksetzen
+                </button>
                 <button
                   type="button"
                   onClick={closeManage}
