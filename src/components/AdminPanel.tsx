@@ -72,6 +72,18 @@ function ImageUploader({
               <span className="text-[10px] text-gray-400 font-mono block truncate">{value}</span>
               <span className="text-[9px] text-brand-accent-light hover:underline block mt-0.5">Anderes Bild wählen</span>
             </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange('');
+              }}
+              title="Bild entfernen"
+              aria-label="Bild entfernen"
+              className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         ) : (
           <div className="text-center py-1.5 flex flex-col items-center justify-center">
@@ -384,6 +396,25 @@ export default function AdminPanel({
       setTimeout(() => setPomSuccess(false), 3000);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
+    }
+  };
+
+  // Auszeichnung komplett entfernen: leert Formular + Datenbank -> Karte verschwindet von der Startseite.
+  const handleClearPom = async () => {
+    if (!window.confirm('Spieler des Monats wirklich entfernen? Die Karte verschwindet dann von der Startseite.')) return;
+    try {
+      await apiFetch('/api/player-of-the-month', { method: 'DELETE' });
+      setPomName('');
+      setPomClub('');
+      setPomTeamId('');
+      setPomGoals(0);
+      setPomAssists(0);
+      setPomImage('');
+      setPomAutoNote('');
+      setPomSuccess(true);
+      setTimeout(() => setPomSuccess(false), 3000);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler beim Entfernen.');
     }
   };
 
@@ -939,6 +970,14 @@ export default function AdminPanel({
                   ✓ Erfolgreich aktualisiert!
                 </motion.span>
               )}
+              <button
+                type="button"
+                onClick={handleClearPom}
+                className="px-4 py-3 bg-transparent hover:bg-red-500/10 border border-red-500/30 hover:border-red-500/50 text-red-300 rounded-full text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Auszeichnung entfernen</span>
+              </button>
               <button
                 type="button"
                 onClick={handleSavePom}
