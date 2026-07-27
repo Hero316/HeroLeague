@@ -119,6 +119,7 @@ function normalizeEvent(body: unknown) {
     teams: Array.isArray(b.teams) ? b.teams.map((t) => str(t).trim()).filter(Boolean) : [],
     matches: matches.map((raw, i) => {
       const m = (raw ?? {}) as Record<string, unknown>;
+      const arr = (v: unknown) => (Array.isArray(v) ? v : []);
       return {
         id: str(m.id) || `m${i}`,
         block: Number.isFinite(Number(m.block)) ? Number(m.block) : 0,
@@ -129,6 +130,24 @@ function normalizeEvent(body: unknown) {
         away: str(m.away).trim(),
         homeScore: toScore(m.homeScore),
         awayScore: toScore(m.awayScore),
+        scorers: arr(m.scorers)
+          .map((s) => {
+            const o = (s ?? {}) as Record<string, unknown>;
+            return { player: str(o.player).trim(), team: str(o.team).trim(), assist: str(o.assist).trim() };
+          })
+          .filter((s) => s.player),
+        bestPlayers: arr(m.bestPlayers)
+          .map((s) => {
+            const o = (s ?? {}) as Record<string, unknown>;
+            return { player: str(o.player).trim(), team: str(o.team).trim() };
+          })
+          .filter((s) => s.player),
+        goalkeepers: arr(m.goalkeepers)
+          .map((s) => {
+            const o = (s ?? {}) as Record<string, unknown>;
+            return { player: str(o.player).trim(), team: str(o.team).trim() };
+          })
+          .filter((s) => s.player),
       };
     }),
   };

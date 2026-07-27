@@ -364,6 +364,7 @@ export default function AdminPanel({
   // Sonder-Event (Testspieltag)
   const [eventCfg, setEventCfg] = useState<EventConfig | null>(null);
   const [eventSuccess, setEventSuccess] = useState(false);
+  const [openEventMatch, setOpenEventMatch] = useState<string | null>(null);
 
   // Neue Saison starten
   const [seasonModalOpen, setSeasonModalOpen] = useState(false);
@@ -519,6 +520,27 @@ export default function AdminPanel({
   const patchEvent = (patch: Partial<EventConfig>) => setEventCfg((e) => (e ? { ...e, ...patch } : e));
   const patchEventMatch = (id: string, patch: Partial<EventConfig['matches'][number]>) =>
     setEventCfg((e) => (e ? { ...e, matches: e.matches.map((m) => (m.id === id ? { ...m, ...patch } : m)) } : e));
+
+  type EMatch = EventConfig['matches'][number];
+  const updateEventMatch = (id: string, updater: (m: EMatch) => EMatch) =>
+    setEventCfg((e) => (e ? { ...e, matches: e.matches.map((m) => (m.id === id ? updater(m) : m)) } : e));
+
+  // Torschützen je Spiel
+  const addScorer = (id: string, homeTeam: string) =>
+    updateEventMatch(id, (m) => ({ ...m, scorers: [...(m.scorers ?? []), { player: '', team: homeTeam, assist: '' }] }));
+  const updateScorer = (id: string, i: number, patch: Partial<{ player: string; team: string; assist: string }>) =>
+    updateEventMatch(id, (m) => ({ ...m, scorers: (m.scorers ?? []).map((s, idx) => (idx === i ? { ...s, ...patch } : s)) }));
+  const removeScorer = (id: string, i: number) =>
+    updateEventMatch(id, (m) => ({ ...m, scorers: (m.scorers ?? []).filter((_, idx) => idx !== i) }));
+
+  // Bester Spieler / Torwart je Team (max. einer pro Team)
+  const setAward = (id: string, key: 'bestPlayers' | 'goalkeepers', team: string, player: string) =>
+    updateEventMatch(id, (m) => {
+      const others = (m[key] ?? []).filter((a) => a.team !== team);
+      return { ...m, [key]: player.trim() ? [...others, { player: player.trim(), team }] : others };
+    });
+  const getAward = (m: EMatch, key: 'bestPlayers' | 'goalkeepers', team: string) =>
+    (m[key] ?? []).find((a) => a.team === team)?.player ?? '';
 
   const saveEventCfg = async (override?: EventConfig) => {
     const cfg = override ?? eventCfg;
@@ -1290,42 +1312,127 @@ export default function AdminPanel({
                 <div className="rounded-xl border border-white/10 divide-y divide-white/[.06]">
                   {[...eventCfg.matches]
                     .sort((a, b) => a.block - b.block || a.field - b.field)
-                    .map((m) => (
-                      <div key={m.id} className="flex items-center gap-2 px-3 py-2.5 text-sm">
-                        <span className="shrink-0 w-24 text-[10px] font-mono uppercase tracking-wider text-gray-500 leading-tight">
-                          B{m.block} · Feld {m.field}
-                          <br />
-                          <span className="text-[#ff7ac4]">{m.start}</span>
-                        </span>
-                        <input
-                          type="text"
-                          value={m.home}
-                          onChange={(e) => patchEventMatch(m.id, { home: e.target.value })}
-                          className="flex-1 min-w-0 bg-[#060E0F]/60 border border-white/10 rounded-md px-2 py-1.5 text-white text-xs focus:outline-none focus:border-[#E6238E] text-right"
-                        />
-                        <input
-                          type="number"
-                          min={0}
-                          value={m.homeScore ?? ''}
-                          onChange={(e) => patchEventMatch(m.id, { homeScore: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
-                          className="shrink-0 w-11 bg-[#060E0F]/80 border border-white/10 rounded-md px-1 py-1.5 text-white text-center text-sm focus:outline-none focus:border-[#E6238E]"
-                        />
-                        <span className="shrink-0 text-gray-600">:</span>
-                        <input
-                          type="number"
-                          min={0}
-                          value={m.awayScore ?? ''}
-                          onChange={(e) => patchEventMatch(m.id, { awayScore: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
-                          className="shrink-0 w-11 bg-[#060E0F]/80 border border-white/10 rounded-md px-1 py-1.5 text-white text-center text-sm focus:outline-none focus:border-[#E6238E]"
-                        />
-                        <input
-                          type="text"
-                          value={m.away}
-                          onChange={(e) => patchEventMatch(m.id, { away: e.target.value })}
-                          className="flex-1 min-w-0 bg-[#060E0F]/60 border border-white/10 rounded-md px-2 py-1.5 text-white text-xs focus:outline-none focus:border-[#E6238E]"
-                        />
-                      </div>
-                    ))}
+                    .map((m) => {
+                      const isOpen = openEventMatch === m.id;
+                      const scoreInput =
+                        'shrink-0 w-11 bg-[#060E0F]/80 border border-white/10 rounded-md px-1 py-1.5 text-white text-center text-sm focus:outline-none focus:border-[#E6238E]';
+                      const nameInput =
+                        'flex-1 min-w-0 bg-[#060E0F]/60 border border-white/10 rounded-md px-2 py-1.5 text-white text-xs focus:outline-none focus:border-[#E6238E]';
+                      const detailInput =
+                        'w-full bg-[#060E0F]/60 border border-white/10 rounded-md px-2 py-1.5 text-white text-xs focus:outline-none focus:border-[#E6238E]';
+                      return (
+                        <div key={m.id}>
+                          <div className="flex items-center gap-2 px-3 py-2.5 text-sm">
+                            <span className="shrink-0 w-20 text-[10px] font-mono uppercase tracking-wider text-gray-500 leading-tight">
+                              B{m.block} · F{m.field}
+                              <br />
+                              <span className="text-[#ff7ac4]">{m.start}</span>
+                            </span>
+                            <input type="text" value={m.home} onChange={(e) => patchEventMatch(m.id, { home: e.target.value })} className={`${nameInput} text-right`} />
+                            <input
+                              type="number"
+                              min={0}
+                              value={m.homeScore ?? ''}
+                              onChange={(e) => patchEventMatch(m.id, { homeScore: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
+                              className={scoreInput}
+                            />
+                            <span className="shrink-0 text-gray-600">:</span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={m.awayScore ?? ''}
+                              onChange={(e) => patchEventMatch(m.id, { awayScore: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
+                              className={scoreInput}
+                            />
+                            <input type="text" value={m.away} onChange={(e) => patchEventMatch(m.id, { away: e.target.value })} className={nameInput} />
+                            <button
+                              type="button"
+                              onClick={() => setOpenEventMatch(isOpen ? null : m.id)}
+                              className={`shrink-0 text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded-md border transition-colors cursor-pointer ${
+                                isOpen ? 'border-[#E6238E]/50 text-[#ff9ad4] bg-[rgba(230,35,142,.1)]' : 'border-white/10 text-gray-400 hover:text-white'
+                              }`}
+                              title="Torschützen, bester Spieler, Torwart"
+                            >
+                              Spieler
+                            </button>
+                          </div>
+
+                          {isOpen && (
+                            <div className="px-3 pb-4 pt-1 space-y-4 bg-[#060E0F]/30">
+                              {/* Torschützen */}
+                              <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400">Torschützen</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => addScorer(m.id, m.home)}
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-brand-accent-light hover:underline cursor-pointer"
+                                  >
+                                    <Plus className="w-3 h-3" /> Tor
+                                  </button>
+                                </div>
+                                <div className="space-y-1.5">
+                                  {(m.scorers ?? []).length === 0 && (
+                                    <p className="text-[11px] text-gray-600 font-sans">Noch keine Tore erfasst.</p>
+                                  )}
+                                  {(m.scorers ?? []).map((s, i) => (
+                                    <div key={i} className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-1.5 items-center">
+                                      <select
+                                        value={s.team}
+                                        onChange={(e) => updateScorer(m.id, i, { team: e.target.value })}
+                                        className={`${detailInput} cursor-pointer`}
+                                      >
+                                        <option value={m.home}>{m.home}</option>
+                                        <option value={m.away}>{m.away}</option>
+                                      </select>
+                                      <input type="text" value={s.player} placeholder="Torschütze" onChange={(e) => updateScorer(m.id, i, { player: e.target.value })} className={detailInput} />
+                                      <input type="text" value={s.assist ?? ''} placeholder="Vorlage (optional)" onChange={(e) => updateScorer(m.id, i, { assist: e.target.value })} className={detailInput} />
+                                      <button type="button" onClick={() => removeScorer(m.id, i)} className="p-1 text-gray-500 hover:text-rose-400 cursor-pointer" title="Entfernen">
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Bester Spieler & Torwart je Team */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                  <span className="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Bester Spieler</span>
+                                  <div className="space-y-1.5">
+                                    {[m.home, m.away].map((team) => (
+                                      <input
+                                        key={team}
+                                        type="text"
+                                        value={getAward(m, 'bestPlayers', team)}
+                                        placeholder={team}
+                                        onChange={(e) => setAward(m.id, 'bestPlayers', team, e.target.value)}
+                                        className={detailInput}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                                <div>
+                                  <span className="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Torwart (für „zu null")</span>
+                                  <div className="space-y-1.5">
+                                    {[m.home, m.away].map((team) => (
+                                      <input
+                                        key={team}
+                                        type="text"
+                                        value={getAward(m, 'goalkeepers', team)}
+                                        placeholder={team}
+                                        onChange={(e) => setAward(m.id, 'goalkeepers', team, e.target.value)}
+                                        className={detailInput}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                 </div>
                 <p className="mt-2 text-[11px] text-gray-500 font-sans">
                   Ergebnis-Feld leer lassen = noch nicht gespielt. Die Tabelle rechnet sich automatisch aus den Ergebnissen.

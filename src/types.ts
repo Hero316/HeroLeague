@@ -91,6 +91,17 @@ export interface SocialLinks {
 // Spontanes Sonder-Event (z.B. Testspieltag), unabhängig vom Liga-Betrieb.
 // Wird über einen Schalter im Admin ein-/ausgeblendet; ist `active` false,
 // bleibt die Website komplett normal.
+export interface EventScorer {
+  player: string;
+  team: string; // Teamname (home oder away des Spiels)
+  assist?: string;
+}
+
+export interface EventAward {
+  player: string;
+  team: string;
+}
+
 export interface EventMatch {
   id: string;
   block: number; // Zeitblock (1..n)
@@ -101,6 +112,9 @@ export interface EventMatch {
   away: string; // Teamname
   homeScore: number | null; // null = noch nicht gespielt
   awayScore: number | null;
+  scorers?: EventScorer[]; // Torschützen (mit optionaler Vorlage)
+  bestPlayers?: EventAward[]; // bester Spieler je Team (max. einer pro Team)
+  goalkeepers?: EventAward[]; // Torwart je Team (für „zu null")
 }
 
 export interface EventConfig {

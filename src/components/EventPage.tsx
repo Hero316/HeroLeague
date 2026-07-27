@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
-import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shield, Lock, Goal } from 'lucide-react';
+import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shield, Lock, Goal, Crown, Star, Hand, Handshake } from 'lucide-react';
 import { EventConfig, Team } from '../types';
 import { TeamCrest } from './ui';
-import { calculateEventStandings } from '../lib/eventStandings';
+import { calculateEventStandings, calculateEventAwards } from '../lib/eventStandings';
 
 interface EventPageProps {
   event: EventConfig;
@@ -49,6 +49,11 @@ export default function EventPage({ event, teams, onBack }: EventPageProps) {
 
     return { totalGoals, bestOffense, bestDefense, mostCleanSheets, topMatch, playedCount: playedMatches.length };
   }, [event.matches, standings]);
+
+  const awards = useMemo(() => calculateEventAwards(event.matches), [event.matches]);
+  const hasAwards = Boolean(
+    awards.topScorers.length || awards.topAssists.length || awards.bestPlayer || awards.bestKeeper
+  );
 
   // Spiele nach Block gruppieren (für die Blockdarstellung mit Zeitfenster).
   const blocks = useMemo(() => {
@@ -279,6 +284,72 @@ export default function EventPage({ event, teams, onBack }: EventPageProps) {
         ) : (
           <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,.02)] px-4 py-8 text-center text-sm text-hl-mute font-sans">
             Sobald die ersten Ergebnisse eingetragen sind, erscheinen hier die Bestwerte des Abends.
+          </div>
+        )}
+
+        {/* Spieler des Abends */}
+        {hasAwards && (
+          <div className="mt-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Star className="w-5 h-5 text-[#E9C46A]" />
+              <h3 className="font-display font-black text-lg uppercase tracking-tight text-white">Spieler des Abends</h3>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {awards.topScorers[0] && (
+                <StatTile
+                  icon={<Crown className="w-4 h-4" />}
+                  label="Torschützenkönig"
+                  value={awards.topScorers[0].player}
+                  sub={`${awards.topScorers[0].count} Tore · ${awards.topScorers[0].team}`}
+                  crest={crestFor(awards.topScorers[0].team)}
+                />
+              )}
+              {awards.topAssists[0] && (
+                <StatTile
+                  icon={<Handshake className="w-4 h-4" />}
+                  label="Meiste Vorlagen"
+                  value={awards.topAssists[0].player}
+                  sub={`${awards.topAssists[0].count} Vorlagen · ${awards.topAssists[0].team}`}
+                  crest={crestFor(awards.topAssists[0].team)}
+                />
+              )}
+              {awards.bestPlayer && (
+                <StatTile
+                  icon={<Star className="w-4 h-4" />}
+                  label="Bester Spieler"
+                  value={awards.bestPlayer.player}
+                  sub={awards.bestPlayer.team}
+                  crest={crestFor(awards.bestPlayer.team)}
+                />
+              )}
+              {awards.bestKeeper && (
+                <StatTile
+                  icon={<Hand className="w-4 h-4" />}
+                  label="Bester Torwart"
+                  value={awards.bestKeeper.player}
+                  sub={`${awards.bestKeeper.count}× zu Null · ${awards.bestKeeper.team}`}
+                  crest={crestFor(awards.bestKeeper.team)}
+                />
+              )}
+            </div>
+
+            {awards.topScorers.length > 1 && (
+              <div className="mt-4 rounded-2xl border border-white/10 bg-[rgba(255,255,255,.02)] overflow-hidden">
+                <div className="px-4 py-2 bg-white/[.03] border-b border-white/[.06] text-[10px] font-mono uppercase tracking-wider text-hl-mute">
+                  Torschützenliste
+                </div>
+                <div className="divide-y divide-white/[.06]">
+                  {awards.topScorers.slice(0, 8).map((s, i) => (
+                    <div key={`${s.team}-${s.player}`} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                      <span className="w-5 text-center font-display font-black text-hl-mute">{i + 1}</span>
+                      <span className="font-sans font-semibold text-white">{s.player}</span>
+                      <span className="text-xs text-hl-mute truncate">{s.team}</span>
+                      <span className="ml-auto font-display font-black text-white">{s.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
