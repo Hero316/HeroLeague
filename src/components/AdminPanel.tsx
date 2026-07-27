@@ -540,15 +540,6 @@ export default function AdminPanel({
         e.id === selectedEventId ? { ...e, matches: e.matches.map((m) => (m.id === id ? updater(m) : m)) } : e
       ),
     }));
-  const patchEventMatch = (id: string, patch: Partial<EMatch>) => updateEventMatch(id, (m) => ({ ...m, ...patch }));
-
-  // Torschützen je Spiel
-  const addScorer = (id: string, homeTeam: string) =>
-    updateEventMatch(id, (m) => ({ ...m, scorers: [...(m.scorers ?? []), { player: '', team: homeTeam, assist: '' }] }));
-  const updateScorer = (id: string, i: number, patch: Partial<{ player: string; team: string; assist: string }>) =>
-    updateEventMatch(id, (m) => ({ ...m, scorers: (m.scorers ?? []).map((s, idx) => (idx === i ? { ...s, ...patch } : s)) }));
-  const removeScorer = (id: string, i: number) =>
-    updateEventMatch(id, (m) => ({ ...m, scorers: (m.scorers ?? []).filter((_, idx) => idx !== i) }));
 
   // Bester Spieler / Torwart je Team (max. einer pro Team)
   const setAward = (id: string, key: 'bestPlayers' | 'goalkeepers', team: string, player: string) =>
@@ -558,15 +549,6 @@ export default function AdminPanel({
     });
   const getAward = (m: EMatch, key: 'bestPlayers' | 'goalkeepers', team: string) =>
     (m[key] ?? []).find((a) => a.team === team)?.player ?? '';
-
-  // Spielstatus (wie im Original): geplant / live / beendet
-  const setMatchStatus = (id: string, status: 'geplant' | 'live' | 'beendet') =>
-    updateEventMatch(id, (m) => ({
-      ...m,
-      status,
-      liveStartedAt:
-        status === 'live' ? m.liveStartedAt ?? new Date().toISOString() : status === 'geplant' ? null : m.liveStartedAt ?? null,
-    }));
 
   // Abwesende Kaderspieler je Team an-/abwählen
   const toggleAbsent = (id: string, team: string, player: string) =>
@@ -676,8 +658,64 @@ export default function AdminPanel({
     if (!selectedEvent) return;
     if (!window.confirm('Alle eingetragenen Ergebnisse dieses Events zurücksetzen?')) return;
     patchEvent({
-      matches: selectedEvent.matches.map((m) => ({ ...m, homeScore: null, awayScore: null, scorers: [], bestPlayers: [], goalkeepers: [] })),
+      matches: selectedEvent.matches.map((m) => ({ ...m, homeScore: null, awayScore: null, scorers: [], bestPlayers: [], goalkeepers: [], status: 'geplant', liveStartedAt: null })),
     });
+  };
+
+  // --- Verwalten-Popup (wie bei den echten Spielen) ---
+  const managedMatch = selectedEvent?.matches.find((m) => m.id === openEventMatch) ?? null;
+
+  // Änderung am Spiel updaten UND sofort speichern (persistiert direkt, kein Datenverlust).
+  const updateAndSaveMatch = (id: string, updater: (m: EMatch) => EMatch) => {
+    if (!eventArchive) return;
+    const next: EventArchive = {
+      ...eventArchive,
+      events: eventArchive.events.map((e) =>
+        e.id === selectedEventId ? { ...e, matches: e.matches.map((m) => (m.id === id ? updater(m) : m)) } : e
+      ),
+    };
+    setEventArchive(next);
+    saveEventArchive(next);
+  };
+
+  // Ergebnis setzen: passt die Anzahl der Torschützen-Felder automatisch an.
+  const setEventScore = (id: string, side: 'home' | 'away', val: string) =>
+    updateEventMatch(id, (m) => {
+      const n = val === '' ? null : Math.max(0, Math.floor(Number(val)) || 0);
+      const team = side === 'home' ? m.home : m.away;
+      let scorers = m.scorers ?? [];
+      if (n !== null) {
+        const mine = scorers.filter((s) => s.team === team).slice(0, n);
+        const others = scorers.filter((s) => s.team !== team);
+        scorers = [...others, ...mine];
+      }
+      return side === 'home' ? { ...m, homeScore: n, scorers } : { ...m, awayScore: n, scorers };
+    });
+
+  const teamScorers = (m: EMatch, team: string) => (m.scorers ?? []).filter((s) => s.team === team);
+  const scorerAt = (m: EMatch, team: string, index: number) => teamScorers(m, team)[index] ?? { player: '', team, assist: '' };
+  const setScorerAt = (id: string, team: string, index: number, patch: Partial<{ player: string; assist: string }>) =>
+    updateEventMatch(id, (m) => {
+      const mine = (m.scorers ?? []).filter((s) => s.team === team);
+      const others = (m.scorers ?? []).filter((s) => s.team !== team);
+      const copy = [...mine];
+      while (copy.length <= index) copy.push({ player: '', team, assist: '' });
+      copy[index] = { ...copy[index], ...patch, team };
+      return { ...m, scorers: [...others, ...copy] };
+    });
+
+  // Status setzen und sofort speichern (Live/Beendet bleibt auch nach Neuladen erhalten).
+  const setMatchStatusSaved = (id: string, status: 'geplant' | 'live' | 'beendet') =>
+    updateAndSaveMatch(id, (m) => ({
+      ...m,
+      status,
+      liveStartedAt: status === 'live' ? m.liveStartedAt ?? new Date().toISOString() : status === 'geplant' ? null : m.liveStartedAt ?? null,
+    }));
+
+  // Popup schließen und dabei alles sichern.
+  const closeManage = async () => {
+    await saveEventArchive();
+    setOpenEventMatch(null);
   };
 
   const handleSubmitTeam = async (e: React.FormEvent) => {
@@ -1467,197 +1505,40 @@ export default function AdminPanel({
                   {[...selectedEvent.matches]
                     .sort((a, b) => a.block - b.block || a.field - b.field)
                     .map((m) => {
-                      const isOpen = openEventMatch === m.id;
-                      const scoreInput =
-                        'shrink-0 w-11 bg-[#060E0F]/80 border border-white/10 rounded-md px-1 py-1.5 text-white text-center text-sm focus:outline-none focus:border-[#E6238E]';
-                      const nameInput =
-                        'flex-1 min-w-0 bg-[#060E0F]/60 border border-white/10 rounded-md px-2 py-1.5 text-white text-xs focus:outline-none focus:border-[#E6238E]';
                       return (
-                        <div key={m.id}>
-                          <div className="flex items-center gap-2 px-3 py-2.5 text-sm">
-                            <span className="shrink-0 w-20 text-[10px] font-mono uppercase tracking-wider text-gray-500 leading-tight">
-                              B{m.block} · F{m.field}
-                              <br />
-                              {m.status === 'live' ? (
-                                <span className="text-red-400 animate-pulse">● LIVE</span>
-                              ) : (
-                                <span className="text-[#ff7ac4]">{m.start}</span>
-                              )}
+                        <div key={m.id} className="flex items-center gap-3 px-3 py-2.5 text-sm">
+                          <span className="shrink-0 w-16 text-[10px] font-mono uppercase tracking-wider leading-tight text-gray-500">
+                            B{m.block} · F{m.field}
+                            <br />
+                            {m.status === 'live' ? (
+                              <span className="text-red-400 animate-pulse">● LIVE</span>
+                            ) : m.status === 'beendet' ? (
+                              <span className="text-emerald-400">Ende</span>
+                            ) : (
+                              <span className="text-[#ff7ac4]">{m.start}</span>
+                            )}
+                          </span>
+                          <div className="flex-1 min-w-0 flex items-center gap-2">
+                            <span className="flex-1 text-right font-sans font-semibold text-white truncate">{m.home}</span>
+                            <span className="shrink-0 px-2 font-display font-black text-white tabular-nums">
+                              {m.homeScore !== null && m.awayScore !== null ? `${m.homeScore}:${m.awayScore}` : '–:–'}
                             </span>
-                            <input type="text" value={m.home} onChange={(e) => patchEventMatch(m.id, { home: e.target.value })} className={`${nameInput} text-right`} />
-                            <input
-                              type="number"
-                              min={0}
-                              value={m.homeScore ?? ''}
-                              onChange={(e) => patchEventMatch(m.id, { homeScore: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
-                              className={scoreInput}
-                            />
-                            <span className="shrink-0 text-gray-600">:</span>
-                            <input
-                              type="number"
-                              min={0}
-                              value={m.awayScore ?? ''}
-                              onChange={(e) => patchEventMatch(m.id, { awayScore: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
-                              className={scoreInput}
-                            />
-                            <input type="text" value={m.away} onChange={(e) => patchEventMatch(m.id, { away: e.target.value })} className={nameInput} />
-                            <button
-                              type="button"
-                              onClick={() => setOpenEventMatch(isOpen ? null : m.id)}
-                              className={`shrink-0 text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded-md border transition-colors cursor-pointer ${
-                                isOpen ? 'border-[#E6238E]/50 text-[#ff9ad4] bg-[rgba(230,35,142,.1)]' : 'border-white/10 text-gray-400 hover:text-white'
-                              }`}
-                              title="Torschützen, bester Spieler, Torwart"
-                            >
-                              Spieler
-                            </button>
+                            <span className="flex-1 text-left font-sans font-semibold text-white truncate">{m.away}</span>
                           </div>
-
-                          {isOpen && (
-                            <div className="px-3 pb-4 pt-1 space-y-4 bg-[#060E0F]/30">
-                              {/* Status: geplant / live / beendet */}
-                              <div>
-                                <span className="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Status</span>
-                                <div className="inline-flex rounded-lg border border-white/10 overflow-hidden">
-                                  {([
-                                    ['geplant', 'Geplant'],
-                                    ['live', 'LIVE'],
-                                    ['beendet', 'Beendet'],
-                                  ] as const).map(([val, lbl]) => {
-                                    const cur = (m.status ?? 'geplant') === val;
-                                    const liveOn = val === 'live' && cur;
-                                    return (
-                                      <button
-                                        key={val}
-                                        type="button"
-                                        onClick={() => setMatchStatus(m.id, val)}
-                                        className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
-                                          cur
-                                            ? liveOn
-                                              ? 'bg-red-500/25 text-red-300'
-                                              : val === 'beendet'
-                                                ? 'bg-emerald-500/20 text-emerald-300'
-                                                : 'bg-white/10 text-white'
-                                            : 'text-gray-400 hover:text-white'
-                                        }`}
-                                      >
-                                        {val === 'live' && cur && <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 mr-1 align-middle animate-pulse" />}
-                                        {lbl}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                              {/* Torschützen */}
-                              <div>
-                                <div className="flex items-center justify-between mb-1.5">
-                                  <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400">Torschützen</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => addScorer(m.id, m.home)}
-                                    className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-brand-accent-light hover:underline cursor-pointer"
-                                  >
-                                    <Plus className="w-3 h-3" /> Tor
-                                  </button>
-                                </div>
-                                <div className="space-y-1.5">
-                                  {(m.scorers ?? []).length === 0 && (
-                                    <p className="text-[11px] text-gray-600 font-sans">Noch keine Tore erfasst.</p>
-                                  )}
-                                  {(m.scorers ?? []).map((s, i) => (
-                                    <div key={i} className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-1.5 items-center">
-                                      <select
-                                        value={s.team === m.away ? m.away : m.home}
-                                        onChange={(e) => updateScorer(m.id, i, { team: e.target.value, player: '', assist: '' })}
-                                        className={`${evFieldClass} cursor-pointer`}
-                                      >
-                                        <option value={m.home}>{m.home}</option>
-                                        <option value={m.away}>{m.away}</option>
-                                      </select>
-                                      {rosterField(s.team, s.player, (v) => updateScorer(m.id, i, { player: v }), 'Torschütze')}
-                                      {rosterField(s.team, s.assist ?? '', (v) => updateScorer(m.id, i, { assist: v }), 'Vorlage', s.player)}
-                                      <button type="button" onClick={() => removeScorer(m.id, i)} className="p-1 text-gray-500 hover:text-rose-400 cursor-pointer" title="Entfernen">
-                                        <X className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-
-                              {/* Bester Spieler & Torwart je Team */}
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div>
-                                  <span className="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Bester Spieler</span>
-                                  <div className="space-y-1.5">
-                                    {[m.home, m.away].map((team) => (
-                                      <div key={team}>
-                                        <span className="block text-[9px] font-sans text-gray-500 mb-0.5 truncate">{team}</span>
-                                        {rosterField(team, getAward(m, 'bestPlayers', team), (v) => setAward(m.id, 'bestPlayers', team, v), 'kein')}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                                <div>
-                                  <span className="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Torwart (für „zu null")</span>
-                                  <div className="space-y-1.5">
-                                    {[m.home, m.away].map((team) => (
-                                      <div key={team}>
-                                        <span className="block text-[9px] font-sans text-gray-500 mb-0.5 truncate">{team}</span>
-                                        {rosterField(team, getAward(m, 'goalkeepers', team), (v) => setAward(m.id, 'goalkeepers', team, v), 'kein')}
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Abwesende Spieler (aus dem echten Kader) */}
-                              <div>
-                                <span className="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">
-                                  Abwesende Spieler
-                                </span>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                  {[m.home, m.away].map((team) => {
-                                    const roster = rosterOf(team);
-                                    return (
-                                      <div key={team} className="rounded-lg border border-white/10 p-2.5">
-                                        <div className="text-[11px] font-sans font-bold text-gray-300 mb-1.5 truncate">{team}</div>
-                                        {roster.length === 0 ? (
-                                          <p className="text-[10px] text-gray-600 font-sans">Kein Kader hinterlegt.</p>
-                                        ) : (
-                                          <div className="flex flex-wrap gap-1.5">
-                                            {roster.map((p) => {
-                                              const absent = isAbsent(m, team, p.name);
-                                              return (
-                                                <button
-                                                  key={p.name}
-                                                  type="button"
-                                                  onClick={() => toggleAbsent(m.id, team, p.name)}
-                                                  className={`px-2 py-1 rounded-md text-[11px] font-sans border transition-colors cursor-pointer ${
-                                                    absent
-                                                      ? 'bg-rose-500/15 border-rose-500/40 text-rose-300 line-through'
-                                                      : 'bg-[#060E0F]/60 border-white/10 text-gray-300 hover:text-white hover:border-white/25'
-                                                  }`}
-                                                  title={absent ? 'Ist abwesend – klicken zum Zurücknehmen' : 'Als abwesend markieren'}
-                                                >
-                                                  {p.name}
-                                                </button>
-                                              );
-                                            })}
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            </div>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => setOpenEventMatch(m.id)}
+                            className="shrink-0 px-3 py-1.5 rounded-md border border-[#E6238E]/40 text-[#ff9ad4] bg-[rgba(230,35,142,.1)] hover:bg-[rgba(230,35,142,.2)] text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                          >
+                            Verwalten
+                          </button>
                         </div>
                       );
                     })}
                 </div>
                 <p className="mt-2 text-[11px] text-gray-500 font-sans">
-                  Ergebnis-Feld leer lassen = noch nicht gespielt. Die Tabelle rechnet sich automatisch aus den Ergebnissen.
+                  „Verwalten" öffnet das Spiel – dort Ergebnis, Torschützen, Torwart, bester Spieler, Abwesende und
+                  Live/Beendet eintragen. Änderungen werden beim Speichern/Schließen sofort gesichert.
                 </p>
               </div>
 
@@ -1697,6 +1578,186 @@ export default function AdminPanel({
             </div>
           )}
         </div>
+
+        {/* Verwalten-Popup (wie bei echten Spielen) */}
+        {managedMatch && (
+          <div
+            className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm overflow-y-auto"
+            onClick={closeManage}
+          >
+            <div
+              className="relative w-full max-w-lg my-6 rounded-2xl border border-[rgba(230,35,142,.4)] bg-[#0b0f0e] p-5 space-y-5 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-gray-500">
+                    Block {managedMatch.block} · Feld {managedMatch.field} · {managedMatch.start}
+                  </div>
+                  <h4 className="font-display font-black text-white text-lg leading-tight truncate">
+                    {managedMatch.home} <span className="text-gray-600">vs</span> {managedMatch.away}
+                  </h4>
+                </div>
+                <button type="button" onClick={closeManage} className="shrink-0 p-2 text-gray-400 hover:text-white cursor-pointer" title="Speichern & schließen">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Status */}
+              <div className="inline-flex rounded-lg border border-white/10 overflow-hidden">
+                {(['geplant', 'live', 'beendet'] as const).map((val) => {
+                  const cur = (managedMatch.status ?? 'geplant') === val;
+                  const lbl = val === 'geplant' ? 'Geplant' : val === 'live' ? 'LIVE' : 'Beendet';
+                  return (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setMatchStatusSaved(managedMatch.id, val)}
+                      className={`px-4 py-2 text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                        cur
+                          ? val === 'live'
+                            ? 'bg-red-500/25 text-red-300'
+                            : val === 'beendet'
+                              ? 'bg-emerald-500/20 text-emerald-300'
+                              : 'bg-white/10 text-white'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      {val === 'live' && cur && <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400 mr-1 align-middle animate-pulse" />}
+                      {lbl}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Ergebnis */}
+              <div>
+                <span className="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Ergebnis</span>
+                <div className="flex items-center gap-2">
+                  <span className="flex-1 text-right text-sm font-sans font-semibold text-white truncate">{managedMatch.home}</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={managedMatch.homeScore ?? ''}
+                    onChange={(e) => setEventScore(managedMatch.id, 'home', e.target.value)}
+                    className="w-12 bg-[#060E0F]/80 border border-white/10 rounded-md px-1 py-2 text-white text-center text-lg font-display font-black focus:outline-none focus:border-[#E6238E]"
+                  />
+                  <span className="text-gray-600">:</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={managedMatch.awayScore ?? ''}
+                    onChange={(e) => setEventScore(managedMatch.id, 'away', e.target.value)}
+                    className="w-12 bg-[#060E0F]/80 border border-white/10 rounded-md px-1 py-2 text-white text-center text-lg font-display font-black focus:outline-none focus:border-[#E6238E]"
+                  />
+                  <span className="flex-1 text-left text-sm font-sans font-semibold text-white truncate">{managedMatch.away}</span>
+                </div>
+              </div>
+
+              {/* Torschützen – Felder entstehen automatisch aus dem Ergebnis */}
+              {([
+                ['home', managedMatch.home, managedMatch.homeScore] as const,
+                ['away', managedMatch.away, managedMatch.awayScore] as const,
+              ]).map(([side, team, score]) => {
+                const count = score ?? 0;
+                if (count === 0) return null;
+                return (
+                  <div key={side}>
+                    <span className="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Tore · {team}</span>
+                    <div className="space-y-1.5">
+                      {Array.from({ length: count }).map((_, i) => {
+                        const s = scorerAt(managedMatch, team, i);
+                        return (
+                          <div key={i} className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] gap-1.5 items-center">
+                            <span className="text-xs w-4 text-center">⚽</span>
+                            {rosterField(team, s.player, (v) => setScorerAt(managedMatch.id, team, i, { player: v }), 'Torschütze')}
+                            {rosterField(team, s.assist ?? '', (v) => setScorerAt(managedMatch.id, team, i, { assist: v }), 'Vorlage', s.player)}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Bester Spieler & Torwart */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <span className="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Bester Spieler</span>
+                  <div className="space-y-1.5">
+                    {[managedMatch.home, managedMatch.away].map((team) => (
+                      <div key={team}>
+                        <span className="block text-[9px] font-sans text-gray-500 mb-0.5 truncate">{team}</span>
+                        {rosterField(team, getAward(managedMatch, 'bestPlayers', team), (v) => setAward(managedMatch.id, 'bestPlayers', team, v), 'kein')}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <span className="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Torwart (für „zu null")</span>
+                  <div className="space-y-1.5">
+                    {[managedMatch.home, managedMatch.away].map((team) => (
+                      <div key={team}>
+                        <span className="block text-[9px] font-sans text-gray-500 mb-0.5 truncate">{team}</span>
+                        {rosterField(team, getAward(managedMatch, 'goalkeepers', team), (v) => setAward(managedMatch.id, 'goalkeepers', team, v), 'kein')}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Abwesende Spieler */}
+              <div>
+                <span className="block text-[10px] font-mono uppercase tracking-wider text-gray-400 mb-1.5">Abwesende Spieler</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[managedMatch.home, managedMatch.away].map((team) => {
+                    const roster = rosterOf(team);
+                    return (
+                      <div key={team} className="rounded-lg border border-white/10 p-2.5">
+                        <div className="text-[11px] font-sans font-bold text-gray-300 mb-1.5 truncate">{team}</div>
+                        {roster.length === 0 ? (
+                          <p className="text-[10px] text-gray-600 font-sans">Kein Kader hinterlegt.</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5">
+                            {roster.map((p) => {
+                              const absent = isAbsent(managedMatch, team, p.name);
+                              return (
+                                <button
+                                  key={p.name}
+                                  type="button"
+                                  onClick={() => toggleAbsent(managedMatch.id, team, p.name)}
+                                  className={`px-2 py-1 rounded-md text-[11px] font-sans border transition-colors cursor-pointer ${
+                                    absent
+                                      ? 'bg-rose-500/15 border-rose-500/40 text-rose-300 line-through'
+                                      : 'bg-[#060E0F]/60 border-white/10 text-gray-300 hover:text-white hover:border-white/25'
+                                  }`}
+                                >
+                                  {p.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <span className="text-[10px] text-gray-500 font-sans">Wird beim Schließen gespeichert.</span>
+                <button
+                  type="button"
+                  onClick={closeManage}
+                  className="px-6 py-3 bg-brand-accent hover:bg-brand-accent/80 border border-brand-accent-light/30 rounded-full text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center gap-1.5 cursor-pointer shadow-lg shadow-brand-accent-light/10"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Speichern &amp; schließen</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </AccordionSection>
 
       {/* Saison verwalten (nur Super-Admin) */}
