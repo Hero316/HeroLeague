@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Menu, X, LogOut, LayoutDashboard, Instagram, Youtube } from 'lucide-react';
+import { Menu, X, LogOut, LayoutDashboard, Instagram, Youtube, Zap } from 'lucide-react';
 import { ActiveTab, SocialLinks } from '../types';
 import { numberWord } from '../lib/heroAward';
 import { apiFetch } from '../lib/api';
@@ -23,6 +23,9 @@ interface NavbarProps {
   seasonLabel?: string;
   seasonNumber?: number; // für den HERO-Award-Titel (HERO ONE/TWO …)
   hasLiveMatch?: boolean;
+  eventActive?: boolean; // Sonder-Event sichtbar? -> farbiger Menüpunkt
+  eventTitle?: string;
+  onOpenEvent?: () => void;
 }
 
 export default function Navbar({
@@ -34,6 +37,9 @@ export default function Navbar({
   seasonLabel,
   seasonNumber,
   hasLiveMatch,
+  eventActive,
+  eventTitle,
+  onOpenEvent,
 }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [social, setSocial] = useState<SocialLinks>({ instagram: '', tiktok: '', youtube: '' });
@@ -137,6 +143,17 @@ export default function Navbar({
               </button>
             );
           })}
+          {eventActive && onOpenEvent && (
+            <button
+              onClick={onOpenEvent}
+              className="relative py-1.5 inline-flex items-center gap-1.5 font-sans font-bold text-[13px] tracking-[1.5px] text-[#ff7ac4] hover:text-white transition-colors cursor-pointer"
+              title={eventTitle}
+            >
+              <Zap className="w-3.5 h-3.5" fill="currentColor" />
+              {(eventTitle || 'Testspiel').toUpperCase()}
+              <span className="absolute -top-1 -right-2 w-1.5 h-1.5 rounded-full bg-[#E6238E] hl-pulse" />
+            </button>
+          )}
         </nav>
 
         {/* Rechts: LIVE-Pille, Saison, Admin */}
@@ -190,6 +207,21 @@ export default function Navbar({
       {/* Mobile-Menü */}
       {isOpen && (
         <div className="lg:hidden border-t border-white/[.07] bg-[#080c0a] px-4 py-3 space-y-1">
+          {eventActive && onOpenEvent && (
+            <button
+              onClick={() => {
+                onOpenEvent();
+                setIsOpen(false);
+              }}
+              className="block w-full text-left px-4 py-3 rounded-xl mb-1 bg-[linear-gradient(100deg,rgba(230,35,142,.22),rgba(233,196,106,.12))] border border-[rgba(230,35,142,.5)] cursor-pointer"
+            >
+              <span className="flex items-center gap-2 font-sans font-black text-sm tracking-[1px] uppercase text-white">
+                <Zap className="w-4 h-4 text-[#ff7ac4]" fill="currentColor" />
+                {eventTitle || 'Testspiel'}
+                <span className="ml-auto w-2 h-2 rounded-full bg-[#E6238E] hl-pulse" />
+              </span>
+            </button>
+          )}
           {navItems.map((item) => {
             const isHero = item.value === 'heroone';
             return (

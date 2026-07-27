@@ -38,6 +38,21 @@ Projekt: **Hero League** — Fußballliga-Plattform (öffentliche Website + gesc
 
 ---
 
+## Spontane Events / Sonder-Events (Testspieltag & Co.)
+
+Für **zeitlich begrenzte Sonder-Aktionen** (z.B. Testspieltag) gibt es einen eigenen **Event-Modus** — bewusst getrennt vom Liga-Betrieb.
+
+- **Datenhaltung:** Alles steckt in **einem** Settings-Eintrag (`settings`-Tabelle, key `event`) und wird über den bestehenden Endpunkt `api/twitch.ts` via **`/api/twitch?resource=event`** (GET/POST) gelesen/geschrieben. **Keinen neuen `api/`-Endpunkt anlegen** — Vercel-Hobby erlaubt nur **12 Serverless-Funktionen** (aktuell genau 12 ausgeschöpft!). Neue Endpunkte immer in eine bestehende Datei per `?resource=...` einhängen.
+- **Isolation:** Das Event beeinflusst **niemals** die echte Liga (keine Kader, keine Liga-Tabelle, keine Liga-Statistiken). Event-Tabelle wird rein namensbasiert aus den Event-Ergebnissen berechnet (`src/lib/eventStandings.ts`).
+- **An/Aus:** Schalter im Admin unter „Testspiel / Event". `active:false` ⇒ Website ist komplett normal (kein Banner, kein Menüpunkt). Ergebnisse werden dort auch gepflegt (wie im Original).
+- **Anzeige:** `EventBanner` (Startseite, oben), farbiger Navbar-Menüpunkt, eigene Seite unter **`/testspiel`** (`EventPage`: Tabelle + Spielplan + Abend-Statistiken). Eigene Magenta/Gold-Farbwelt (`#E6238E`).
+- **Neues Event einrichten:** In `api/twitch.ts` `DEFAULT_EVENT` mit den neuen Daten füllen (Teams, Blöcke, Zeiten, Paarungen) — bzw. der Nutzer schickt PDF/Excel, daraus die `matches` bauen. Danach im Admin aktivieren.
+- **Komplett entfernen:** Auf Wunsch des Nutzers das Event-Feature wieder ausbauen (Banner/Menü/Route/Endpunkt-Zweig) — dann ist die Seite wieder wie zuvor.
+
+> Dieser Arbeitsbereich („dieser Chat") ist ausdrücklich **für solche spontanen Event-Aktionen** gedacht: schnell ein Event einbauen, aktivieren, nach dem Tag wieder ausschalten/entfernen.
+
+---
+
 ## Stack & lokale Entwicklung
 
 - **Frontend:** React + TypeScript + Vite + Tailwind CSS v4 (`src/`)
