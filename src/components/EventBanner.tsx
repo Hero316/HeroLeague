@@ -4,12 +4,13 @@ import { EventConfig } from '../types';
 
 interface EventBannerProps {
   event: EventConfig;
+  isLive?: boolean; // läuft gerade ein Spiel?
   onOpen: () => void;
 }
 
 // Auffälliges Banner ganz oben auf der Startseite, wenn ein Sonder-Event aktiv
 // ist. Eigene Magenta/Gold-Farbwelt + Animation, damit man sofort Bock hat.
-export default function EventBanner({ event, onOpen }: EventBannerProps) {
+export default function EventBanner({ event, isLive, onOpen }: EventBannerProps) {
   return (
     <button
       onClick={onOpen}
@@ -30,9 +31,16 @@ export default function EventBanner({ event, onOpen }: EventBannerProps) {
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="font-sans font-extrabold text-[10px] sm:text-[11px] tracking-[2.5px] uppercase text-[#ff7ac4]">
-              Jetzt live dabei
-            </span>
+            {isLive ? (
+              <span className="inline-flex items-center gap-1.5 font-sans font-extrabold text-[10px] sm:text-[11px] tracking-[2px] uppercase text-red-300">
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                Jetzt live · wird gespielt
+              </span>
+            ) : (
+              <span className="font-sans font-extrabold text-[10px] sm:text-[11px] tracking-[2.5px] uppercase text-[#ff7ac4]">
+                Jetzt live dabei
+              </span>
+            )}
           </div>
           <div className="font-display font-black text-xl sm:text-3xl uppercase tracking-tight text-white leading-none mt-0.5">
             {event.title}

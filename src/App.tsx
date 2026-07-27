@@ -54,6 +54,8 @@ export default function App() {
 
   // Aktuell sichtbares Event (per activeId). null = keins sichtbar.
   const activeEvent = eventArchive?.events?.find((e) => e.id === eventArchive.activeId) ?? null;
+  // Läuft gerade ein Spiel im aktiven Event?
+  const eventHasLive = !!activeEvent?.matches?.some((m) => m.status === 'live');
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const isAdmin = sessionUser !== null;
   const isSuperadmin = sessionUser?.role === 'superadmin';
@@ -189,6 +191,17 @@ export default function App() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [fetchData]);
+
+  // Event-Daten regelmäßig nachladen, damit Live-Ergebnisse/Status ohne
+  // Neuladen erscheinen (Tabelle, Torschützen, Live-Anzeige).
+  useEffect(() => {
+    const iv = setInterval(() => {
+      apiFetch<EventArchive>('/api/twitch?resource=event')
+        .then((data) => setEventArchive(data))
+        .catch(() => {});
+    }, 20000);
+    return () => clearInterval(iv);
+  }, []);
 
   // Merkt sich, ob innerhalb der App navigiert wurde (für „Zurück").
   const navigatedInApp = useRef(false);
@@ -606,7 +619,7 @@ export default function App() {
         onOpenEvent={() => navigateTo('/testspiel')}
       />
       {activeEvent && activeTab === 'home' && (
-        <EventBanner event={activeEvent} onOpen={() => navigateTo('/testspiel')} />
+        <EventBanner event={activeEvent} isLive={eventHasLive} onOpen={() => navigateTo('/testspiel')} />
       )}
       <LiveTicker matches={currentSeasonMatches} teams={visibleTeams} players={players} />
 
