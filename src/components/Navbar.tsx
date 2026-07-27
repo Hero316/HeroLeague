@@ -39,7 +39,7 @@ export default function Navbar({
   const [social, setSocial] = useState<SocialLinks>({ instagram: '', tiktok: '', youtube: '' });
 
   useEffect(() => {
-    apiFetch<SocialLinks>('/api/social')
+    apiFetch<SocialLinks>('/api/twitch?resource=social')
       .then((data) => setSocial({ instagram: data.instagram || '', tiktok: data.tiktok || '', youtube: data.youtube || '' }))
       .catch(() => {
         /* noch nicht konfiguriert – keine Symbole */

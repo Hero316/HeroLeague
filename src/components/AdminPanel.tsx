@@ -472,7 +472,7 @@ export default function AdminPanel({
 
   // Social-Media-Links laden
   useEffect(() => {
-    apiFetch<{ instagram: string; tiktok: string; youtube: string }>('/api/social')
+    apiFetch<{ instagram: string; tiktok: string; youtube: string }>('/api/twitch?resource=social')
       .then((data) => {
         setSocialInstagram(data.instagram || '');
         setSocialTiktok(data.tiktok || '');
@@ -485,7 +485,7 @@ export default function AdminPanel({
 
   const handleSaveSocial = async () => {
     try {
-      const saved = await apiFetch<{ instagram: string; tiktok: string; youtube: string }>('/api/social', {
+      const saved = await apiFetch<{ instagram: string; tiktok: string; youtube: string }>('/api/twitch?resource=social', {
         method: 'POST',
         body: JSON.stringify({
           instagram: socialInstagram.trim(),
