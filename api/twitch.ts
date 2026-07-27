@@ -5,6 +5,45 @@ import { requireAdmin } from './_lib/auth.js';
 const DEFAULT_TWITCH = { channel: '', isLive: false };
 const DEFAULT_SOCIAL = { instagram: '', tiktok: '', youtube: '' };
 
+// Vorbefülltes Sonder-Event (Testspieltag 02.08.2026), standardmäßig
+// AUSgeschaltet. Der Spielplan ist bereits hinterlegt – im Admin muss nur der
+// Schalter „aktiv" umgelegt und später die Ergebnisse eingetragen werden.
+const em = (
+  id: string,
+  block: number,
+  field: number,
+  start: string,
+  end: string,
+  home: string,
+  away: string
+) => ({ id, block, field, start, end, home, away, homeScore: null, awayScore: null });
+
+const DEFAULT_EVENT = {
+  active: false,
+  title: 'Testspieltag',
+  tagline: '6 Teams · jeder gegen jeden · ab 20:30 Uhr',
+  dateLabel: 'Sonntag, 2. August 2026',
+  location: 'Soccer Center Königsfeld',
+  teams: ['New Way F.C.', 'Süss FC', 'Phalanx United', 'Trossingen F.C.', 'FC Apex', 'FC Patchwork'],
+  matches: [
+    em('b1f1', 1, 1, '20:30', '20:38', 'New Way F.C.', 'Süss FC'),
+    em('b1f2', 1, 2, '20:30', '20:38', 'FC Apex', 'Trossingen F.C.'),
+    em('b2f1', 2, 1, '20:41', '20:49', 'FC Apex', 'FC Patchwork'),
+    em('b2f2', 2, 2, '20:41', '20:49', 'Phalanx United', 'Süss FC'),
+    em('b3f1', 3, 1, '20:52', '21:00', 'New Way F.C.', 'Phalanx United'),
+    em('b3f2', 3, 2, '20:52', '21:00', 'FC Patchwork', 'Trossingen F.C.'),
+    em('b4f1', 4, 1, '21:03', '21:11', 'New Way F.C.', 'Trossingen F.C.'),
+    em('b4f2', 4, 2, '21:03', '21:11', 'FC Apex', 'Süss FC'),
+    em('b5f2', 5, 2, '21:14', '21:22', 'FC Patchwork', 'Phalanx United'),
+    em('b6f1', 6, 1, '21:25', '21:33', 'Süss FC', 'Trossingen F.C.'),
+    em('b6f2', 6, 2, '21:25', '21:33', 'FC Apex', 'New Way F.C.'),
+    em('b7f1', 7, 1, '21:36', '21:44', 'FC Patchwork', 'Süss FC'),
+    em('b7f2', 7, 2, '21:36', '21:44', 'Phalanx United', 'Trossingen F.C.'),
+    em('b8f1', 8, 1, '21:47', '21:55', 'FC Apex', 'Phalanx United'),
+    em('b8f2', 8, 2, '21:47', '21:55', 'FC Patchwork', 'New Way F.C.'),
+  ],
+};
+
 // Kanalnamen aus einer evtl. eingefügten URL extrahieren
 function normalizeChannel(input: unknown): string {
   if (typeof input !== 'string') return '';
@@ -56,24 +95,78 @@ const saveSocial = requireAdmin(async (req: VercelRequest, res: VercelResponse) 
   return res.json(cfg);
 });
 
-// Ein Endpunkt für beide Website-Einstellungen (Twitch + Social Media), um
-// unter dem Serverless-Funktionslimit zu bleiben. Social wird über
-// ?resource=social angesprochen, Twitch ist die Vorgabe.
+// Ganzzahl-Score oder null
+function toScore(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : null;
+}
+
+function str(v: unknown, fallback = ''): string {
+  return typeof v === 'string' ? v : fallback;
+}
+
+// Eingehendes Event säubern (nur erwartete Felder übernehmen).
+function normalizeEvent(body: unknown) {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const matches = Array.isArray(b.matches) ? b.matches : [];
+  return {
+    active: Boolean(b.active),
+    title: str(b.title, 'Testspieltag').trim() || 'Testspieltag',
+    tagline: str(b.tagline).trim(),
+    dateLabel: str(b.dateLabel).trim(),
+    location: str(b.location).trim(),
+    teams: Array.isArray(b.teams) ? b.teams.map((t) => str(t).trim()).filter(Boolean) : [],
+    matches: matches.map((raw, i) => {
+      const m = (raw ?? {}) as Record<string, unknown>;
+      return {
+        id: str(m.id) || `m${i}`,
+        block: Number.isFinite(Number(m.block)) ? Number(m.block) : 0,
+        field: Number.isFinite(Number(m.field)) ? Number(m.field) : 0,
+        start: str(m.start),
+        end: str(m.end),
+        home: str(m.home).trim(),
+        away: str(m.away).trim(),
+        homeScore: toScore(m.homeScore),
+        awayScore: toScore(m.awayScore),
+      };
+    }),
+  };
+}
+
+const saveEvent = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
+  const cfg = normalizeEvent(req.body);
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('event', ${JSON.stringify(cfg)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+  return res.json(cfg);
+});
+
+// Ein Endpunkt für alle Website-Einstellungen (Twitch + Social Media + Event),
+// um unter dem Serverless-Funktionslimit (12) zu bleiben. Angesprochen über
+// ?resource=social bzw. ?resource=event; Twitch ist die Vorgabe.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-    const isSocial = req.query.resource === 'social';
+    const resource = req.query.resource;
 
     if (req.method === 'GET') {
       res.setHeader('Cache-Control', 'no-store');
-      if (isSocial) {
+      if (resource === 'social') {
         const rows = await sql`SELECT value FROM settings WHERE key = 'social'`;
         return res.json(rows[0]?.value ?? DEFAULT_SOCIAL);
+      }
+      if (resource === 'event') {
+        const rows = await sql`SELECT value FROM settings WHERE key = 'event'`;
+        return res.json(rows[0]?.value ?? DEFAULT_EVENT);
       }
       const rows = await sql`SELECT value FROM settings WHERE key = 'twitch'`;
       return res.json(rows[0]?.value ?? DEFAULT_TWITCH);
     }
     if (req.method === 'POST') {
-      return isSocial ? saveSocial(req, res) : saveTwitch(req, res);
+      if (resource === 'social') return saveSocial(req, res);
+      if (resource === 'event') return saveEvent(req, res);
+      return saveTwitch(req, res);
     }
     return res.status(405).json({ error: 'Nicht unterstützt' });
   } catch (err) {

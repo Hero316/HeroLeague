@@ -88,6 +88,31 @@ export interface SocialLinks {
   youtube: string;
 }
 
+// Spontanes Sonder-Event (z.B. Testspieltag), unabhängig vom Liga-Betrieb.
+// Wird über einen Schalter im Admin ein-/ausgeblendet; ist `active` false,
+// bleibt die Website komplett normal.
+export interface EventMatch {
+  id: string;
+  block: number; // Zeitblock (1..n)
+  field: number; // Feld/Platz (1 oder 2)
+  start: string; // 'HH:MM'
+  end: string; // 'HH:MM'
+  home: string; // Teamname
+  away: string; // Teamname
+  homeScore: number | null; // null = noch nicht gespielt
+  awayScore: number | null;
+}
+
+export interface EventConfig {
+  active: boolean; // Schalter: Event auf der Website sichtbar?
+  title: string; // z.B. "Testspieltag"
+  tagline: string; // kurzer Untertitel fürs Banner
+  dateLabel: string; // z.B. "Sonntag, 2. August 2026"
+  location: string; // z.B. "Soccer Center Königsfeld"
+  teams: string[]; // Teamnamen (für die Tabelle, auch ohne Ergebnisse)
+  matches: EventMatch[];
+}
+
 // Rollen: superadmin darf alles; match_admin darf nur Spiele/Live/Ticker pflegen.
 export type UserRole = 'superadmin' | 'match_admin';
 

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab } from './types';
+import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventConfig } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
 import { startPresence } from './lib/presence';
 import Navbar from './components/Navbar';
@@ -20,6 +20,8 @@ import LiveVisitors from './components/LiveVisitors';
 import InstallPrompt from './components/InstallPrompt';
 import Ergebniszettel from './components/Ergebniszettel';
 import LegalPage from './components/LegalPage';
+import EventPage from './components/EventPage';
+import EventBanner from './components/EventBanner';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
 import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer } from 'lucide-react';
 
@@ -47,6 +49,7 @@ export default function App() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [players, setPlayers] = useState<PlayerStat[]>([]);
+  const [event, setEvent] = useState<EventConfig | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const isAdmin = sessionUser !== null;
@@ -175,6 +178,9 @@ export default function App() {
     apiFetch<{ isAdmin: boolean; user: SessionUser | null }>('/api/auth/session')
       .then((data) => setSessionUser(data.user))
       .catch(() => setSessionUser(null));
+    apiFetch<EventConfig>('/api/twitch?resource=event')
+      .then((data) => setEvent(data))
+      .catch(() => setEvent(null));
 
     const handlePopState = () => setCurrentPath(window.location.pathname);
     window.addEventListener('popstate', handlePopState);
@@ -315,6 +321,9 @@ export default function App() {
           seasonLabel={selectedSeason?.label ?? ''}
           seasonNumber={currentSeasonNumber}
           hasLiveMatch={hasLiveMatch}
+          eventActive={!!event?.active}
+          eventTitle={event?.title}
+          onOpenEvent={() => navigateTo('/testspiel')}
         />
         <main className="flex-1">
           <LegalPage kind={kind} onBack={goBack} />
@@ -340,6 +349,9 @@ export default function App() {
           seasonLabel={selectedSeason?.label ?? ''}
           seasonNumber={currentSeasonNumber}
           hasLiveMatch={hasLiveMatch}
+          eventActive={!!event?.active}
+          eventTitle={event?.title}
+          onOpenEvent={() => navigateTo('/testspiel')}
         />
         <main className="flex-1">
           {team ? (
@@ -361,6 +373,56 @@ export default function App() {
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 Zurück zur Übersicht
+              </button>
+            </div>
+          )}
+        </main>
+        <Footer onNavigate={goToTab} onNavigatePath={navigateTo} />
+      </div>
+    );
+  }
+
+  // ROUTE: /testspiel – Sonder-Event-Seite (nur sichtbar, wenn aktiv; Admin darf vorab prüfen)
+  if (currentPath.startsWith('/testspiel')) {
+    const eventViewable = event && (event.active || isAdmin);
+    return (
+      <div className="min-h-screen bg-brand-dark text-hl-text font-sans flex flex-col">
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={goToTab}
+          isAdmin={isAdmin}
+          onLogout={handleLogout}
+          onOpenLogin={() => navigateTo('/admin')}
+          onOpenBackoffice={() => navigateTo('/admin')}
+          seasonLabel={currentSeason?.label ?? ''}
+          seasonNumber={currentSeasonNumber}
+          hasLiveMatch={hasLiveMatch}
+          eventActive={!!event?.active}
+          eventTitle={event?.title}
+          onOpenEvent={() => navigateTo('/testspiel')}
+        />
+        <main className="flex-1">
+          {eventViewable ? (
+            <>
+              {!event.active && isAdmin && (
+                <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pt-4">
+                  <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-2.5 text-xs font-sans text-yellow-200">
+                    Vorschau: Dieses Event ist noch <strong>nicht aktiv</strong> und für Besucher unsichtbar. Im Backoffice
+                    unter „Testspiel / Event" aktivieren.
+                  </div>
+                </div>
+              )}
+              <EventPage event={event} teams={visibleTeams} onBack={goBack} />
+            </>
+          ) : (
+            <div className="text-center py-24 space-y-4">
+              <p className="text-hl-mute font-sans">Aktuell ist kein Testspiel aktiv.</p>
+              <button
+                onClick={() => navigateTo('/')}
+                className="inline-flex items-center gap-1.5 text-xs font-sans font-bold uppercase tracking-wider text-brand-accent-light hover:underline cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Zur Startseite
               </button>
             </div>
           )}
@@ -533,7 +595,13 @@ export default function App() {
         seasonLabel={currentSeason?.label ?? ''}
         seasonNumber={currentSeasonNumber}
         hasLiveMatch={hasLiveMatch}
+        eventActive={!!event?.active}
+        eventTitle={event?.title}
+        onOpenEvent={() => navigateTo('/testspiel')}
       />
+      {event?.active && activeTab === 'home' && (
+        <EventBanner event={event} onOpen={() => navigateTo('/testspiel')} />
+      )}
       <LiveTicker matches={currentSeasonMatches} teams={visibleTeams} players={players} />
 
       <div key={activeTab} className="hl-fade">

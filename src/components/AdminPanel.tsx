@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2 } from 'lucide-react';
-import { Player, Team, Match } from '../types';
+import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap } from 'lucide-react';
+import { Player, Team, Match, EventConfig } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
 import { AccordionSection } from './ui';
@@ -361,6 +361,10 @@ export default function AdminPanel({
   const [socialYoutube, setSocialYoutube] = useState('');
   const [socialSuccess, setSocialSuccess] = useState(false);
 
+  // Sonder-Event (Testspieltag)
+  const [eventCfg, setEventCfg] = useState<EventConfig | null>(null);
+  const [eventSuccess, setEventSuccess] = useState(false);
+
   // Neue Saison starten
   const [seasonModalOpen, setSeasonModalOpen] = useState(false);
   const [newSeasonLabel, setNewSeasonLabel] = useState('');
@@ -501,6 +505,47 @@ export default function AdminPanel({
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
     }
+  };
+
+  // Sonder-Event laden
+  useEffect(() => {
+    apiFetch<EventConfig>('/api/twitch?resource=event')
+      .then((data) => setEventCfg(data))
+      .catch(() => {
+        /* noch nichts hinterlegt */
+      });
+  }, []);
+
+  const patchEvent = (patch: Partial<EventConfig>) => setEventCfg((e) => (e ? { ...e, ...patch } : e));
+  const patchEventMatch = (id: string, patch: Partial<EventConfig['matches'][number]>) =>
+    setEventCfg((e) => (e ? { ...e, matches: e.matches.map((m) => (m.id === id ? { ...m, ...patch } : m)) } : e));
+
+  const saveEventCfg = async (override?: EventConfig) => {
+    const cfg = override ?? eventCfg;
+    if (!cfg) return;
+    try {
+      const saved = await apiFetch<EventConfig>('/api/twitch?resource=event', {
+        method: 'POST',
+        body: JSON.stringify(cfg),
+      });
+      setEventCfg(saved);
+      setEventSuccess(true);
+      setTimeout(() => setEventSuccess(false), 3000);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
+    }
+  };
+
+  // Schalter an/aus – speichert sofort, damit es direkt live wirkt.
+  const toggleEventActive = () => {
+    if (!eventCfg) return;
+    saveEventCfg({ ...eventCfg, active: !eventCfg.active });
+  };
+
+  const clearEventResults = () => {
+    if (!eventCfg) return;
+    if (!window.confirm('Alle eingetragenen Ergebnisse dieses Events zurücksetzen?')) return;
+    setEventCfg({ ...eventCfg, matches: eventCfg.matches.map((m) => ({ ...m, homeScore: null, awayScore: null })) });
   };
 
   const handleSubmitTeam = async (e: React.FormEvent) => {
@@ -1162,6 +1207,152 @@ export default function AdminPanel({
               </button>
             </div>
           </div>
+        </div>
+      </AccordionSection>
+
+      {/* Testspiel / Sonder-Event */}
+      <AccordionSection
+        id="event"
+        title="Testspiel / Event"
+        subtitle="Spontanes Event ein-/ausblenden, Ergebnisse pflegen"
+        icon={<Zap className="w-5 h-5" />}
+        accent="#E6238E"
+      >
+        <div>
+          {!eventCfg ? (
+            <p className="text-xs text-gray-400 font-sans">Lädt…</p>
+          ) : (
+            <div className="space-y-6">
+              <p className="text-xs text-gray-400 font-sans">
+                Blende ein spontanes Event (z.B. Testspieltag) auf der Website ein. Ist der Schalter aus, ist die Seite
+                komplett normal – kein Banner, kein Menüpunkt.
+              </p>
+
+              {/* An/Aus-Schalter */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl border border-[rgba(230,35,142,.3)] bg-[rgba(230,35,142,.06)]">
+                <div className="flex-1">
+                  <div className="font-sans font-bold text-white text-sm">Event auf der Website anzeigen</div>
+                  <div className="text-xs text-gray-400 font-sans">
+                    Zeigt Banner auf der Startseite + farbigen Menüpunkt „{eventCfg.title}".
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleEventActive}
+                  className={`shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer border ${
+                    eventCfg.active
+                      ? 'bg-[rgba(230,35,142,.25)] text-[#ff9ad4] border-[rgba(230,35,142,.5)]'
+                      : 'bg-[#060E0F]/60 text-gray-400 border-white/10 hover:text-white hover:border-white/20'
+                  }`}
+                >
+                  <span className="relative flex h-2 w-2">
+                    {eventCfg.active && (
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#E6238E] opacity-75" />
+                    )}
+                    <span className={`relative inline-flex rounded-full h-2 w-2 ${eventCfg.active ? 'bg-[#E6238E]' : 'bg-gray-500'}`} />
+                  </span>
+                  {eventCfg.active ? 'AKTIV – sichtbar' : 'Aus (versteckt)'}
+                </button>
+              </div>
+
+              {/* Meta-Felder */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">TITEL</label>
+                  <input type="text" value={eventCfg.title} onChange={(e) => patchEvent({ title: e.target.value })} className={inputClass} />
+                </div>
+                <div>
+                  <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">UNTERTITEL</label>
+                  <input type="text" value={eventCfg.tagline} onChange={(e) => patchEvent({ tagline: e.target.value })} className={inputClass} />
+                </div>
+                <div>
+                  <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">DATUM (TEXT)</label>
+                  <input type="text" value={eventCfg.dateLabel} onChange={(e) => patchEvent({ dateLabel: e.target.value })} placeholder="z.B. Sonntag, 2. August 2026" className={inputClass} />
+                </div>
+                <div>
+                  <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">ORT</label>
+                  <input type="text" value={eventCfg.location} onChange={(e) => patchEvent({ location: e.target.value })} className={inputClass} />
+                </div>
+              </div>
+
+              {/* Ergebnisse / Spielplan */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-mono text-gray-400 uppercase tracking-wider">Spielplan & Ergebnisse</label>
+                  <button
+                    type="button"
+                    onClick={clearEventResults}
+                    className="text-[11px] font-sans font-bold uppercase tracking-wider text-gray-400 hover:text-rose-300 transition-colors cursor-pointer"
+                  >
+                    Ergebnisse leeren
+                  </button>
+                </div>
+                <div className="rounded-xl border border-white/10 divide-y divide-white/[.06]">
+                  {[...eventCfg.matches]
+                    .sort((a, b) => a.block - b.block || a.field - b.field)
+                    .map((m) => (
+                      <div key={m.id} className="flex items-center gap-2 px-3 py-2.5 text-sm">
+                        <span className="shrink-0 w-24 text-[10px] font-mono uppercase tracking-wider text-gray-500 leading-tight">
+                          B{m.block} · Feld {m.field}
+                          <br />
+                          <span className="text-[#ff7ac4]">{m.start}</span>
+                        </span>
+                        <input
+                          type="text"
+                          value={m.home}
+                          onChange={(e) => patchEventMatch(m.id, { home: e.target.value })}
+                          className="flex-1 min-w-0 bg-[#060E0F]/60 border border-white/10 rounded-md px-2 py-1.5 text-white text-xs focus:outline-none focus:border-[#E6238E] text-right"
+                        />
+                        <input
+                          type="number"
+                          min={0}
+                          value={m.homeScore ?? ''}
+                          onChange={(e) => patchEventMatch(m.id, { homeScore: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
+                          className="shrink-0 w-11 bg-[#060E0F]/80 border border-white/10 rounded-md px-1 py-1.5 text-white text-center text-sm focus:outline-none focus:border-[#E6238E]"
+                        />
+                        <span className="shrink-0 text-gray-600">:</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={m.awayScore ?? ''}
+                          onChange={(e) => patchEventMatch(m.id, { awayScore: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) })}
+                          className="shrink-0 w-11 bg-[#060E0F]/80 border border-white/10 rounded-md px-1 py-1.5 text-white text-center text-sm focus:outline-none focus:border-[#E6238E]"
+                        />
+                        <input
+                          type="text"
+                          value={m.away}
+                          onChange={(e) => patchEventMatch(m.id, { away: e.target.value })}
+                          className="flex-1 min-w-0 bg-[#060E0F]/60 border border-white/10 rounded-md px-2 py-1.5 text-white text-xs focus:outline-none focus:border-[#E6238E]"
+                        />
+                      </div>
+                    ))}
+                </div>
+                <p className="mt-2 text-[11px] text-gray-500 font-sans">
+                  Ergebnis-Feld leer lassen = noch nicht gespielt. Die Tabelle rechnet sich automatisch aus den Ergebnissen.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3">
+                {eventSuccess && (
+                  <motion.span
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="text-xs text-emerald-400 uppercase tracking-wider font-mono mr-2"
+                  >
+                    ✓ Gespeichert!
+                  </motion.span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => saveEventCfg()}
+                  className="px-6 py-3 bg-brand-accent hover:bg-brand-accent/80 border border-brand-accent-light/30 rounded-full text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center gap-1.5 cursor-pointer shadow-lg shadow-brand-accent-light/10"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Event speichern</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </AccordionSection>
 
