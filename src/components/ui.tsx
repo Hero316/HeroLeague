@@ -56,7 +56,7 @@ export function TeamCrest({ name, shortName, color, logoUrl, size = 'md', onSele
   const isLogo = Boolean(logoUrl);
 
   const inner = isLogo ? (
-    <img src={logoUrl} alt={name} className={`${s.img} object-contain`} referrerPolicy="no-referrer" />
+    <img src={logoUrl} alt={name} loading="lazy" decoding="async" className={`${s.img} object-contain`} referrerPolicy="no-referrer" />
   ) : (
     monogram(shortName || name)
   );
@@ -304,7 +304,7 @@ export function ImageZoom({
         title={`${alt} – vergrößern`}
         className="shrink-0 cursor-zoom-in transition-transform duration-150 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-brand-accent-light rounded-2xl"
       >
-        <img src={src} alt={alt} referrerPolicy="no-referrer" className={className} />
+        <img src={src} alt={alt} loading="lazy" decoding="async" referrerPolicy="no-referrer" className={className} />
       </button>
 
       {open &&

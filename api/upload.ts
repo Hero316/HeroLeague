@@ -36,6 +36,7 @@ export default requireAdmin(async function handler(req: VercelRequest, res: Verc
     const blob = await put(`uploads/${Date.now()}-${safeName}.${extension}`, buffer, {
       access: 'public',
       contentType: mimeType,
+      cacheControlMaxAge: 31536000, // 1 Jahr Browser-Cache – Dateinamen sind durch den Timestamp einmalig
     });
 
     return res.json({ url: blob.url });
