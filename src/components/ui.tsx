@@ -1,7 +1,8 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, X } from 'lucide-react';
+import { ChevronDown, X, Smartphone } from 'lucide-react';
 import { ActiveTab, Team } from '../types';
+import { useInstall } from './InstallProvider';
 
 // Gemeinsame Design-Bausteine des neuen Hero-League-Looks.
 
@@ -140,6 +141,9 @@ interface FooterProps {
 }
 
 export function Footer({ onNavigate, onNavigatePath }: FooterProps) {
+  // Dauerhafter „App installieren"-Zugang – auch wenn das Auto-Banner weggeklickt
+  // wurde. Bei bereits installierter App (Standalone) ausgeblendet.
+  const { isStandalone, openHelp } = useInstall();
   const links: { label: string; tab: ActiveTab }[] = [
     { label: 'SPIELPLAN', tab: 'spielplan' },
     { label: 'TABELLE', tab: 'tabelle' },
@@ -177,6 +181,15 @@ export function Footer({ onNavigate, onNavigatePath }: FooterProps) {
                 {l.label}
               </button>
             ))}
+          {!isStandalone && (
+            <button
+              onClick={openHelp}
+              className="inline-flex items-center gap-1.5 font-sans font-semibold text-xs tracking-wider text-brand-accent-light hover:text-white transition-colors cursor-pointer"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              APP INSTALLIEREN
+            </button>
+          )}
         </div>
       </div>
     </footer>
