@@ -62,6 +62,8 @@ export default function PlayerAvatar({ name, imageUrl, color = '#22DFC9', size =
         <img
           src={imageUrl}
           alt={name}
+          loading="lazy"
+          decoding="async"
           referrerPolicy="no-referrer"
           className={`${SIZES[size]} object-cover border`}
           style={{ borderColor: color }}

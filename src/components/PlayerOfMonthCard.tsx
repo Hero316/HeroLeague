@@ -62,6 +62,8 @@ export default function PlayerOfMonthCard({ pom, crest, points, onSelect }: Play
               src={crest.logoUrl}
               alt=""
               aria-hidden="true"
+              loading="lazy"
+              decoding="async"
               referrerPolicy="no-referrer"
               className="absolute left-1/2 top-[36%] -translate-x-1/2 -translate-y-1/2 w-[132%] max-w-none object-contain opacity-30 select-none pointer-events-none [mask-image:linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,0,0,.7)_50%,rgba(0,0,0,0)_82%)] [-webkit-mask-image:linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,0,0,.7)_50%,rgba(0,0,0,0)_82%)]"
             />
@@ -78,6 +80,8 @@ export default function PlayerOfMonthCard({ pom, crest, points, onSelect }: Play
             <img
               src={pom.image}
               alt={pom.name}
+              loading="lazy"
+              decoding="async"
               referrerPolicy="no-referrer"
               className="absolute inset-0 z-10 w-full h-full object-cover object-top"
             />

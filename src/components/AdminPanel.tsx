@@ -70,7 +70,7 @@ function ImageUploader({
           </div>
         ) : value ? (
           <div className="flex items-center gap-3 w-full">
-            <img src={value} alt="Vorschau" className="w-10 h-10 rounded object-contain bg-white/5 border border-white/10 shrink-0" referrerPolicy="no-referrer" />
+            <img src={value} alt="Vorschau" loading="lazy" decoding="async" className="w-10 h-10 rounded object-contain bg-white/5 border border-white/10 shrink-0" referrerPolicy="no-referrer" />
             <div className="flex-1 min-w-0">
               <span className="text-[10px] text-gray-400 font-mono block truncate">{value}</span>
               <span className="text-[9px] text-brand-accent-light hover:underline block mt-0.5">Anderes Bild wählen</span>
