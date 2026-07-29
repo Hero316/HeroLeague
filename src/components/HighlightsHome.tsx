@@ -1,16 +1,18 @@
 import { useMemo, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
-import type { HighlightsConfig } from '../types';
+import type { HighlightMedia, HighlightsConfig } from '../types';
 import { Reveal } from './anim';
 import HighlightsLightbox from './HighlightsLightbox';
-import HighlightsMosaic, { interleaveMedia } from './HighlightsMosaic';
+import HighlightsCarousel from './HighlightsCarousel';
 import HighlightsEditor from './HighlightsEditor';
 import { mediaListHandlers } from './highlightsEdit';
 
-const HOME_LIMIT = 6;
+// Videos zuerst, damit der erste Beitrag im Karussell ein Video ist.
+const videosFirst = (list: HighlightMedia[]) =>
+  [...list].sort((a, b) => (a.type === 'video' ? 0 : 1) - (b.type === 'video' ? 0 : 1));
 
-// Startseiten-Highlight-Bereich: gemischte Vorschau (Bilder + Videos).
-// Bearbeitet werden hier nur die losen Highlights (Ordner nur auf der Seite).
+// Startseiten-Highlight-Bereich: horizontales Hero-Karussell (großer Beitrag im
+// Fokus, seitlicher Peek, Swipe). Im Bearbeiten-Modus die losen Highlights pflegen.
 export default function HighlightsHome({
   highlights,
   editMode,
@@ -24,10 +26,7 @@ export default function HighlightsHome({
 }) {
   const items = highlights.items;
   const [lightbox, setLightbox] = useState<{ index: number | null; dir: number }>({ index: null, dir: 0 });
-  const display = useMemo(
-    () => (editMode ? items : interleaveMedia(items).slice(0, HOME_LIMIT)),
-    [items, editMode]
-  );
+  const display = useMemo(() => (editMode ? items : videosFirst(items)), [items, editMode]);
   const open = (i: number) => setLightbox({ index: i, dir: 0 });
   const handlers = mediaListHandlers(items, (next) => onSave({ ...highlights, items: next }));
 
@@ -47,7 +46,7 @@ export default function HighlightsHome({
           {items.length > 0 && (
             <button
               onClick={onOpenGallery}
-              className="hidden sm:inline-flex items-center gap-1.5 shrink-0 px-4 py-2 rounded-full border border-white/12 text-hl-soft hover:text-white hover:border-white/25 text-xs font-sans font-bold uppercase tracking-wider transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 shrink-0 px-4 py-2 rounded-full border border-white/12 text-hl-soft hover:text-white hover:border-white/25 text-xs font-sans font-bold uppercase tracking-wider transition-colors cursor-pointer"
             >
               Alle ansehen
               <ArrowRight className="w-4 h-4" />
@@ -58,19 +57,7 @@ export default function HighlightsHome({
         {editMode ? (
           <HighlightsEditor items={display} onOpen={open} {...handlers} />
         ) : (
-          <HighlightsMosaic items={display} onOpen={open} />
-        )}
-
-        {!editMode && items.length > HOME_LIMIT && (
-          <div className="mt-6 sm:hidden">
-            <button
-              onClick={onOpenGallery}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-white/12 text-hl-soft text-xs font-sans font-bold uppercase tracking-wider cursor-pointer"
-            >
-              Alle ansehen
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
+          <HighlightsCarousel items={display} onOpen={open} />
         )}
       </div>
 
