@@ -88,17 +88,18 @@ export interface SocialLinks {
   youtube: string;
 }
 
-// Highlights: ein Startseiten-Clip (YouTube/Twitch-Link, auch Shorts) und eine
-// Foto-Galerie mit den Kamera-Bildern (als öffentliche Blob-URLs).
-export interface HighlightImage {
+// Highlights: eine gemischte, geordnete Medien-Liste aus Kamera-Fotos
+// (öffentliche Blob-URLs) und Video-Links (YouTube/Twitch, auch Shorts).
+export interface HighlightMedia {
   id: string;
-  url: string;
+  type: 'image' | 'video';
+  url: string; // Bild: Blob-URL · Video: YouTube-/Twitch-Link
   caption?: string;
+  ratio?: number; // Breite/Höhe – nur Bilder (beim Upload erfasst), fürs Mosaik ohne Sprung
 }
 
 export interface HighlightsConfig {
-  clip: { url: string } | null;
-  images: HighlightImage[];
+  items: HighlightMedia[];
 }
 
 // Spontanes Sonder-Event (z.B. Testspieltag), unabhängig vom Liga-Betrieb.

@@ -54,7 +54,7 @@ export default function App() {
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [players, setPlayers] = useState<PlayerStat[]>([]);
   const [eventArchive, setEventArchive] = useState<EventArchive | null>(null);
-  const [highlights, setHighlights] = useState<HighlightsConfig>({ clip: null, images: [] });
+  const [highlights, setHighlights] = useState<HighlightsConfig>({ items: [] });
   // Inline-Bearbeiten der Highlights (nur für angemeldete Admins wirksam)
   const [editMode, setEditMode] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -194,7 +194,7 @@ export default function App() {
       .then((data) => setEventArchive(data))
       .catch(() => setEventArchive(null));
     apiFetch<HighlightsConfig>('/api/twitch?resource=highlights')
-      .then((data) => setHighlights({ clip: data?.clip ?? null, images: Array.isArray(data?.images) ? data.images : [] }))
+      .then((data) => setHighlights({ items: Array.isArray(data?.items) ? data.items : [] }))
       .catch(() => {
         /* noch nichts gepflegt – Bereich bleibt leer/unsichtbar */
       });
@@ -268,31 +268,30 @@ export default function App() {
         method: 'POST',
         body: JSON.stringify(next),
       });
-      setHighlights({ clip: saved?.clip ?? null, images: Array.isArray(saved?.images) ? saved.images : [] });
+      setHighlights({ items: Array.isArray(saved?.items) ? saved.items : [] });
     } catch (err) {
       setHighlights(previous);
       alert(err instanceof Error ? err.message : 'Fehler beim Speichern der Highlights.');
     }
   };
 
-  const genImageId = () => `img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const addHighlightImage = (url: string) =>
-    persistHighlights({ ...highlights, images: [...highlights.images, { id: genImageId(), url }] });
-  const deleteHighlightImage = (id: string) =>
-    persistHighlights({ ...highlights, images: highlights.images.filter((im) => im.id !== id) });
-  const setHighlightClip = (url: string) =>
-    persistHighlights({ ...highlights, clip: url.trim() ? { url: url.trim() } : null });
+  const genMediaId = () => `hl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const addHighlightImage = (url: string, ratio?: number) =>
+    persistHighlights({
+      items: [...highlights.items, { id: genMediaId(), type: 'image', url, ...(ratio ? { ratio } : {}) }],
+    });
+  const addHighlightVideo = (url: string) =>
+    persistHighlights({ items: [...highlights.items, { id: genMediaId(), type: 'video', url: url.trim() }] });
+  const deleteHighlightItem = (id: string) =>
+    persistHighlights({ items: highlights.items.filter((m) => m.id !== id) });
   const setHighlightCaption = (id: string, caption: string) =>
     persistHighlights({
-      ...highlights,
-      images: highlights.images.map((im) =>
-        im.id === id ? { ...im, caption: caption.trim() || undefined } : im
-      ),
+      items: highlights.items.map((m) => (m.id === id ? { ...m, caption: caption.trim() || undefined } : m)),
     });
 
-  // Menüpunkt „Highlights“ zeigen, sobald Bilder vorhanden sind – Admins sehen ihn
+  // Menüpunkt „Highlights“ zeigen, sobald Medien vorhanden sind – Admins sehen ihn
   // immer (auch leer), um die Galerie pflegen zu können.
-  const hasHighlights = highlights.images.length > 0 || isAdmin;
+  const hasHighlights = highlights.items.length > 0 || isAdmin;
 
   const handleUpdateMatchScore = (
     matchId: string,
@@ -709,12 +708,12 @@ export default function App() {
             onSelectTeam={openTeamDetail}
           />
           <HighlightsHome
-            highlights={highlights}
+            items={highlights.items}
             editMode={editMode && isAdmin}
             onOpenGallery={() => goToTab('highlights')}
             onAddImage={addHighlightImage}
-            onDeleteImage={deleteHighlightImage}
-            onSetClip={setHighlightClip}
+            onAddVideo={addHighlightVideo}
+            onDeleteItem={deleteHighlightItem}
             onSetCaption={setHighlightCaption}
           />
         </>
@@ -722,10 +721,11 @@ export default function App() {
 
       {activeTab === 'highlights' && (
         <HighlightsPage
-          images={highlights.images}
+          items={highlights.items}
           editMode={editMode && isAdmin}
           onAddImage={addHighlightImage}
-          onDeleteImage={deleteHighlightImage}
+          onAddVideo={addHighlightVideo}
+          onDeleteItem={deleteHighlightItem}
           onSetCaption={setHighlightCaption}
         />
       )}

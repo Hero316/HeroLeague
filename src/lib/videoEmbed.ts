@@ -84,6 +84,16 @@ function parseTwitch(url: URL): VideoEmbed | null {
   return null;
 }
 
+// Vorschaubild eines YouTube-Videos (für die Kachel in der Galerie).
+export function youtubeThumb(id: string): string {
+  return `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+}
+
+// Numerisches Seitenverhältnis (Breite/Höhe) eines Embeds – fürs Mosaik.
+export function embedRatio(embed: VideoEmbed): number {
+  return embed.aspect === 'portrait' ? 9 / 16 : 16 / 9;
+}
+
 // Öffentliche Funktion: Link -> einbettbare Quelle (oder null bei unbekanntem Format).
 export function toEmbed(rawUrl: string | null | undefined): VideoEmbed | null {
   if (!rawUrl) return null;

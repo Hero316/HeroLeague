@@ -5,10 +5,9 @@ import { requireAdmin } from './_lib/auth.js';
 const DEFAULT_TWITCH = { channel: '', isLive: false };
 const DEFAULT_SOCIAL = { instagram: '', tiktok: '', youtube: '' };
 
-// Highlights: ein Startseiten-Clip (YouTube/Twitch-Link) + eine Foto-Galerie.
-// Bilder liegen als öffentliche Blob-URLs vor (Upload über /api/upload).
-type HighlightImage = { id: string; url: string; caption?: string };
-const DEFAULT_HIGHLIGHTS = { clip: null as { url: string } | null, images: [] as HighlightImage[] };
+// Highlights: eine gemischte, geordnete Medien-Liste (Bilder + Video-Links).
+type HighlightMedia = { id: string; type: 'image' | 'video'; url: string; caption?: string; ratio?: number };
+const DEFAULT_HIGHLIGHTS = { items: [] as HighlightMedia[] };
 
 // Vorbefülltes Sonder-Event (Testspieltag 02.08.2026), standardmäßig
 // AUSgeschaltet. Der Spielplan ist bereits hinterlegt – im Admin muss nur der
@@ -200,27 +199,49 @@ const saveEvent = requireAdmin(async (req: VercelRequest, res: VercelResponse) =
   return res.json(archive);
 });
 
-// Highlights säubern: Clip-Link normalisieren, Bildliste auf gültige URLs
-// reduzieren und fehlende IDs vergeben (damit das Frontend stabil rendern kann).
+// Ein einzelnes Medien-Item säubern.
+function normalizeMediaItem(raw: unknown, i: number): HighlightMedia | null {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const url = normalizeUrl(o.url);
+  if (!url) return null;
+  const type = o.type === 'video' ? 'video' : 'image';
+  const caption = str(o.caption).trim();
+  const ratio = Number(o.ratio);
+  return {
+    id: str(o.id).trim() || `hl-${Date.now()}-${i}`,
+    type,
+    url,
+    ...(caption ? { caption } : {}),
+    ...(Number.isFinite(ratio) && ratio > 0 ? { ratio } : {}),
+  };
+}
+
+// Highlights säubern – inkl. Migration vom alten Format `{ clip, images }`
+// auf die gemischte `items`-Liste (analog `toArchive` beim Event).
 function normalizeHighlights(body: unknown) {
   const b = (body ?? {}) as Record<string, unknown>;
+
+  if (Array.isArray(b.items)) {
+    const items = b.items.map((raw, i) => normalizeMediaItem(raw, i)).filter((m): m is HighlightMedia => !!m);
+    return { items };
+  }
+
+  // Alt-Format: erst der Clip (als Video), dann die Bilder.
+  const items: HighlightMedia[] = [];
   const clipRaw = b.clip;
   const clipUrl = normalizeUrl(
     typeof clipRaw === 'string' ? clipRaw : (clipRaw as Record<string, unknown> | null | undefined)?.url
   );
+  if (clipUrl) items.push({ id: `hl-${Date.now()}-clip`, type: 'video', url: clipUrl });
   const rawImages = Array.isArray(b.images) ? b.images : [];
-  const images = rawImages
-    .map((raw, i): HighlightImage => {
-      const o = (raw ?? {}) as Record<string, unknown>;
-      const caption = str(o.caption).trim();
-      return {
-        id: str(o.id).trim() || `img-${Date.now()}-${i}`,
-        url: normalizeUrl(o.url),
-        ...(caption ? { caption } : {}),
-      };
-    })
-    .filter((im) => im.url);
-  return { clip: clipUrl ? { url: clipUrl } : null, images };
+  rawImages.forEach((raw, i) => {
+    const o = (raw ?? {}) as Record<string, unknown>;
+    const url = normalizeUrl(o.url);
+    if (!url) return;
+    const caption = str(o.caption).trim();
+    items.push({ id: str(o.id).trim() || `hl-${Date.now()}-${i}`, type: 'image', url, ...(caption ? { caption } : {}) });
+  });
+  return { items };
 }
 
 const saveHighlights = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
@@ -251,7 +272,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (resource === 'highlights') {
         const rows = await sql`SELECT value FROM settings WHERE key = 'highlights'`;
-        return res.json(rows[0]?.value ?? DEFAULT_HIGHLIGHTS);
+        // Migration vom alten {clip,images}-Format erfolgt in normalizeHighlights.
+        return res.json(rows[0]?.value ? normalizeHighlights(rows[0].value) : DEFAULT_HIGHLIGHTS);
       }
       const rows = await sql`SELECT value FROM settings WHERE key = 'twitch'`;
       return res.json(rows[0]?.value ?? DEFAULT_TWITCH);
