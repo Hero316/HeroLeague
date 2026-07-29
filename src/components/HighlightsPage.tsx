@@ -9,6 +9,26 @@ import HighlightsMosaic, { interleaveMedia } from './HighlightsMosaic';
 import HighlightsEditor from './HighlightsEditor';
 import { mediaListHandlers, genAlbumId } from './highlightsEdit';
 
+// Ordner-Titel bearbeiten: lokaler State (flüssiges Tippen), speichern erst beim
+// Verlassen des Feldes – kein Netzwerk-Aufruf pro Tastendruck.
+function AlbumTitleField({ title, onRename }: { title: string; onRename: (t: string) => void }) {
+  const [val, setVal] = useState(title);
+  return (
+    <input
+      value={val}
+      onChange={(e) => setVal(e.target.value)}
+      onBlur={() => {
+        const t = val.trim();
+        if (t && t !== title) onRename(t);
+        else if (!t) setVal(title);
+      }}
+      onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+      placeholder="Ordnername (z. B. Spieltag 1)"
+      className="block w-full max-w-xl bg-transparent border-b border-white/15 focus:border-brand-accent-light outline-none font-display font-black text-4xl sm:text-6xl uppercase tracking-tight text-white pb-1 placeholder:text-white/25"
+    />
+  );
+}
+
 function albumCover(album: HighlightAlbum): string | null {
   const first = album.items.find((m) => m.type === 'image') ?? album.items[0];
   if (!first) return null;
@@ -85,10 +105,10 @@ export default function HighlightsPage({
             <ArrowLeft className="w-4 h-4" /> Zurück zu Highlights
           </button>
           {editMode ? (
-            <input
-              value={openAlbum.title}
-              onChange={(e) => renameAlbum(openAlbum.id, e.target.value)}
-              className="block w-full max-w-xl bg-transparent border-b border-white/15 focus:border-brand-accent-light outline-none font-display font-black text-4xl sm:text-6xl uppercase tracking-tight text-white pb-1"
+            <AlbumTitleField
+              key={openAlbum.id}
+              title={openAlbum.title}
+              onRename={(t) => renameAlbum(openAlbum.id, t)}
             />
           ) : (
             <h1 className="font-display font-black text-4xl sm:text-6xl leading-[.9] tracking-tight uppercase text-white">

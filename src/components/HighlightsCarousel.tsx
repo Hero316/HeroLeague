@@ -16,6 +16,7 @@ export default function HighlightsCarousel({
 }) {
   const reduce = useReducedMotion();
   const wrapRef = useRef<HTMLDivElement>(null);
+  const didPan = useRef(false); // verhindert den Klick direkt nach einem Wisch
   const [w, setW] = useState(0);
   const [active, setActive] = useState(0);
 
@@ -46,12 +47,15 @@ export default function HighlightsCarousel({
       <div ref={wrapRef} className="relative overflow-hidden select-none">
         <motion.div
           className="flex items-center py-1"
-          drag={n > 1 ? 'x' : false}
-          dragConstraints={{ left: 0, right: 0 }}
-          dragElastic={0.12}
-          onDragEnd={(_, info) => {
-            if (info.offset.x < -60) go(1);
-            else if (info.offset.x > 60) go(-1);
+          // Pan-Geste erkennt das Wischen, ohne die Position selbst zu verschieben
+          // (die steuert `animate` über x=tx) – so gibt es kein Zurückspringen.
+          onPanEnd={(_, info) => {
+            if (n < 2) return;
+            if (Math.abs(info.offset.x) < 40 || Math.abs(info.offset.x) < Math.abs(info.offset.y)) return;
+            didPan.current = true;
+            setTimeout(() => (didPan.current = false), 60); // den Folge-Klick schlucken
+            if (info.offset.x < 0) go(1);
+            else go(-1);
           }}
           animate={{ x: tx }}
           transition={spring}
@@ -71,7 +75,11 @@ export default function HighlightsCarousel({
               >
                 <button
                   type="button"
-                  onClick={() => (isActive ? onOpen(i) : setActive(i))}
+                  onClick={() => {
+                    if (didPan.current) return; // gerade gewischt -> kein Klick
+                    if (isActive) onOpen(i);
+                    else setActive(i);
+                  }}
                   className="group relative block w-full aspect-video overflow-hidden rounded-2xl border border-white/[.08] bg-brand-dark shadow-2xl cursor-pointer"
                   aria-label={isActive ? (isVideo ? 'Video abspielen' : 'Bild ansehen') : 'Beitrag in den Fokus rücken'}
                 >
