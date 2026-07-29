@@ -693,6 +693,12 @@ export default function App() {
       {activeTab === 'home' && (
         <>
           <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeason?.label ?? ''} seasonNumber={currentSeasonNumber} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
+          <HighlightsHome
+            highlights={highlights}
+            editMode={editMode && isAdmin}
+            onOpenGallery={() => goToTab('highlights')}
+            onSave={persistHighlights}
+          />
           <HomeBody
             teams={visibleTeams}
             matches={currentSeasonMatches}
@@ -700,12 +706,6 @@ export default function App() {
             seasonLabel={currentSeason?.label ?? ''}
             onNavigate={goToTab}
             onSelectTeam={openTeamDetail}
-          />
-          <HighlightsHome
-            highlights={highlights}
-            editMode={editMode && isAdmin}
-            onOpenGallery={() => goToTab('highlights')}
-            onSave={persistHighlights}
           />
         </>
       )}
