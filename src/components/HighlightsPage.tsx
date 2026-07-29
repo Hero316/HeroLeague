@@ -5,6 +5,7 @@ import { PageHeader } from './ui';
 import { Reveal, RevealGroup, RevealItem } from './anim';
 import HighlightsLightbox from './HighlightsLightbox';
 import HighlightThumb from './HighlightThumb';
+import HighlightsGalleryFlow from './HighlightsGalleryFlow';
 import { useAddImage } from './highlightsEdit';
 
 // Öffentliche Highlights-Seite: Foto-Galerie mit Wisch-Lightbox. Im Bearbeiten-
@@ -42,37 +43,38 @@ export default function HighlightsPage({
             <ImageIcon className="w-10 h-10 text-hl-faint" />
             <p className="text-hl-mute font-sans">Noch keine Highlights vorhanden.</p>
           </div>
-        ) : (
+        ) : editMode ? (
+          // Bearbeiten-Modus: ruhiges, statisches Masonry – gut zum Hochladen/Beschriften.
           <RevealGroup className="columns-2 sm:columns-3 lg:columns-4 gap-3 sm:gap-4">
-            {editMode && (
-              <RevealItem className="break-inside-avoid mb-3 sm:mb-4">
-                <button
-                  type="button"
-                  onClick={pick}
-                  disabled={busy}
-                  className="aspect-[4/3] w-full rounded-2xl border-2 border-dashed border-brand-accent-light/40 bg-brand-accent/5 hover:bg-brand-accent/10 hover:border-brand-accent-light/70 transition-colors flex flex-col items-center justify-center gap-2 text-brand-accent-light cursor-pointer disabled:opacity-60"
-                >
-                  {busy ? <Loader2 className="w-7 h-7 animate-spin" /> : <Plus className="w-7 h-7" />}
-                  <span className="font-sans font-bold text-xs uppercase tracking-wider">
-                    {busy ? 'Lädt hoch…' : 'Bild hinzufügen'}
-                  </span>
-                </button>
-              </RevealItem>
-            )}
+            <RevealItem className="break-inside-avoid mb-3 sm:mb-4">
+              <button
+                type="button"
+                onClick={pick}
+                disabled={busy}
+                className="aspect-[4/3] w-full rounded-2xl border-2 border-dashed border-brand-accent-light/40 bg-brand-accent/5 hover:bg-brand-accent/10 hover:border-brand-accent-light/70 transition-colors flex flex-col items-center justify-center gap-2 text-brand-accent-light cursor-pointer disabled:opacity-60"
+              >
+                {busy ? <Loader2 className="w-7 h-7 animate-spin" /> : <Plus className="w-7 h-7" />}
+                <span className="font-sans font-bold text-xs uppercase tracking-wider">
+                  {busy ? 'Lädt hoch…' : 'Bild hinzufügen'}
+                </span>
+              </button>
+            </RevealItem>
 
             {images.map((img, i) => (
               <RevealItem key={img.id} className="break-inside-avoid mb-3 sm:mb-4">
-                {/* Masonry: jedes Bild in seinem echten Seitenverhältnis, komplett sichtbar */}
                 <HighlightThumb
                   image={img}
                   onOpen={() => open(i)}
-                  editMode={editMode}
+                  editMode
                   onDelete={() => onDeleteImage(img.id)}
                   onSetCaption={(caption) => onSetCaption(img.id, caption)}
                 />
               </RevealItem>
             ))}
           </RevealGroup>
+        ) : (
+          // Ansichts-Modus: fließende „Erlebnis“-Galerie mit Parallax & Feder-Animationen.
+          <HighlightsGalleryFlow images={images} onOpen={open} />
         )}
 
         {editMode && (

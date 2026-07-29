@@ -50,13 +50,16 @@ export default function HighlightsLightbox({
   const multiple = images.length > 1;
 
   const slide = {
-    enter: (dir: number) => ({ opacity: 0, x: reduce ? 0 : dir > 0 ? 60 : -60 }),
-    center: { opacity: 1, x: 0 },
-    exit: (dir: number) => ({ opacity: 0, x: reduce ? 0 : dir > 0 ? -60 : 60 }),
+    enter: (dir: number) => ({ opacity: 0, scale: 0.96, x: reduce ? 0 : dir > 0 ? 60 : -60 }),
+    center: { opacity: 1, scale: 1, x: 0 },
+    exit: (dir: number) => ({ opacity: 0, scale: 0.98, x: reduce ? 0 : dir > 0 ? -60 : 60 }),
   };
 
   return createPortal(
-    <div
+    <motion.div
+      initial={reduce ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.22 }}
       className="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 sm:p-8"
       onClick={onClose}
       role="dialog"
@@ -101,7 +104,7 @@ export default function HighlightsLightbox({
       )}
 
       <div className="relative w-full h-full flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-        <AnimatePresence custom={direction} initial={false} mode="wait">
+        <AnimatePresence custom={direction} mode="wait">
           <motion.img
             key={img.id}
             src={img.url}
@@ -141,7 +144,7 @@ export default function HighlightsLightbox({
           </span>
         )}
       </div>
-    </div>,
+    </motion.div>,
     document.body
   );
 }
