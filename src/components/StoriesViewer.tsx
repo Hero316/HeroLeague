@@ -158,10 +158,13 @@ export default function StoriesViewer({
       if (!d) return;
       const dx = e.clientX - d.x;
       const dy = e.clientY - d.y;
-      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
+      // Horizontal wischen = Ordner wechseln.
+      if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) {
         goAlbum(dx < 0 ? 1 : -1);
         return;
       }
+      // Sonstiges Ziehen (z. B. senkrecht) ignorieren – nur echtes Tippen wechselt das Bild.
+      if (Math.abs(dx) > 12 || Math.abs(dy) > 12) return;
       onTap();
     },
     onPointerCancel: () => {
@@ -207,9 +210,9 @@ export default function StoriesViewer({
       {/* Tipp-/Wisch-Zonen: links = zurück, rechts = weiter. Bei Video bleibt die
           Mitte frei (Player-Steuerung), bei Bildern volle Breite. */}
       <div className="absolute inset-0 z-20 flex">
-        <div className={isVideo ? 'w-[28%]' : 'w-1/3'} {...makeZone(prev)} />
+        <div className={`touch-none ${isVideo ? 'w-[28%]' : 'w-1/3'}`} {...makeZone(prev)} />
         {isVideo && <div className="flex-1 pointer-events-none" />}
-        <div className={isVideo ? 'w-[28%] ml-auto' : 'flex-1'} {...makeZone(next)} />
+        <div className={`touch-none ${isVideo ? 'w-[28%] ml-auto' : 'flex-1'}`} {...makeZone(next)} />
       </div>
 
       {/* Fortschrittsbalken oben */}
