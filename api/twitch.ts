@@ -5,6 +5,11 @@ import { requireAdmin } from './_lib/auth.js';
 const DEFAULT_TWITCH = { channel: '', isLive: false };
 const DEFAULT_SOCIAL = { instagram: '', tiktok: '', youtube: '' };
 
+// Highlights: ein Startseiten-Clip (YouTube/Twitch-Link) + eine Foto-Galerie.
+// Bilder liegen als öffentliche Blob-URLs vor (Upload über /api/upload).
+type HighlightImage = { id: string; url: string; caption?: string };
+const DEFAULT_HIGHLIGHTS = { clip: null as { url: string } | null, images: [] as HighlightImage[] };
+
 // Vorbefülltes Sonder-Event (Testspieltag 02.08.2026), standardmäßig
 // AUSgeschaltet. Der Spielplan ist bereits hinterlegt – im Admin muss nur der
 // Schalter „aktiv" umgelegt und später die Ergebnisse eingetragen werden.
@@ -195,9 +200,41 @@ const saveEvent = requireAdmin(async (req: VercelRequest, res: VercelResponse) =
   return res.json(archive);
 });
 
-// Ein Endpunkt für alle Website-Einstellungen (Twitch + Social Media + Event),
-// um unter dem Serverless-Funktionslimit (12) zu bleiben. Angesprochen über
-// ?resource=social bzw. ?resource=event; Twitch ist die Vorgabe.
+// Highlights säubern: Clip-Link normalisieren, Bildliste auf gültige URLs
+// reduzieren und fehlende IDs vergeben (damit das Frontend stabil rendern kann).
+function normalizeHighlights(body: unknown) {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const clipRaw = b.clip;
+  const clipUrl = normalizeUrl(
+    typeof clipRaw === 'string' ? clipRaw : (clipRaw as Record<string, unknown> | null | undefined)?.url
+  );
+  const rawImages = Array.isArray(b.images) ? b.images : [];
+  const images = rawImages
+    .map((raw, i): HighlightImage => {
+      const o = (raw ?? {}) as Record<string, unknown>;
+      const caption = str(o.caption).trim();
+      return {
+        id: str(o.id).trim() || `img-${Date.now()}-${i}`,
+        url: normalizeUrl(o.url),
+        ...(caption ? { caption } : {}),
+      };
+    })
+    .filter((im) => im.url);
+  return { clip: clipUrl ? { url: clipUrl } : null, images };
+}
+
+const saveHighlights = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
+  const cfg = normalizeHighlights(req.body);
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('highlights', ${JSON.stringify(cfg)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+  return res.json(cfg);
+});
+
+// Ein Endpunkt für alle Website-Einstellungen (Twitch + Social Media + Event +
+// Highlights), um unter dem Serverless-Funktionslimit (12) zu bleiben. Angesprochen
+// über ?resource=social | event | highlights; Twitch ist die Vorgabe.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const resource = req.query.resource;
@@ -212,12 +249,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const rows = await sql`SELECT value FROM settings WHERE key = 'event'`;
         return res.json(toArchive(rows[0]?.value));
       }
+      if (resource === 'highlights') {
+        const rows = await sql`SELECT value FROM settings WHERE key = 'highlights'`;
+        return res.json(rows[0]?.value ?? DEFAULT_HIGHLIGHTS);
+      }
       const rows = await sql`SELECT value FROM settings WHERE key = 'twitch'`;
       return res.json(rows[0]?.value ?? DEFAULT_TWITCH);
     }
     if (req.method === 'POST') {
       if (resource === 'social') return saveSocial(req, res);
       if (resource === 'event') return saveEvent(req, res);
+      if (resource === 'highlights') return saveHighlights(req, res);
       return saveTwitch(req, res);
     }
     return res.status(405).json({ error: 'Nicht unterstützt' });

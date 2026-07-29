@@ -26,6 +26,7 @@ interface NavbarProps {
   eventActive?: boolean; // Sonder-Event sichtbar? -> farbiger Menüpunkt
   eventTitle?: string;
   onOpenEvent?: () => void;
+  hasHighlights?: boolean; // Highlights vorhanden (oder Admin) -> Menüpunkt zeigen
 }
 
 export default function Navbar({
@@ -40,6 +41,7 @@ export default function Navbar({
   eventActive,
   eventTitle,
   onOpenEvent,
+  hasHighlights,
 }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [social, setSocial] = useState<SocialLinks>({ instagram: '', tiktok: '', youtube: '' });
@@ -83,6 +85,7 @@ export default function Navbar({
     { label: 'TABELLE', value: 'tabelle' },
     { label: 'HERO ONE', value: 'heroone' },
     { label: 'STATISTIKEN', value: 'statistiken' },
+    ...(hasHighlights ? [{ label: 'HIGHLIGHTS', value: 'highlights' as ActiveTab }] : []),
   ];
 
   // HERO-Award: „HERO" kräftig, Zahlwort golden leuchtend – hebt sich bewusst

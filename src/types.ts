@@ -88,6 +88,19 @@ export interface SocialLinks {
   youtube: string;
 }
 
+// Highlights: ein Startseiten-Clip (YouTube/Twitch-Link, auch Shorts) und eine
+// Foto-Galerie mit den Kamera-Bildern (als öffentliche Blob-URLs).
+export interface HighlightImage {
+  id: string;
+  url: string;
+  caption?: string;
+}
+
+export interface HighlightsConfig {
+  clip: { url: string } | null;
+  images: HighlightImage[];
+}
+
 // Spontanes Sonder-Event (z.B. Testspieltag), unabhängig vom Liga-Betrieb.
 // Wird über einen Schalter im Admin ein-/ausgeblendet; ist `active` false,
 // bleibt die Website komplett normal.
@@ -192,4 +205,4 @@ export interface PlayerStat {
   points: number; // Ballon-d'Or-Wertung (aus Toren, Vorlagen, MOTM, Team-Ergebnis, Torwart-zu-null)
 }
 
-export type ActiveTab = 'home' | 'spielplan' | 'tabelle' | 'heroone' | 'statistiken';
+export type ActiveTab = 'home' | 'spielplan' | 'tabelle' | 'heroone' | 'statistiken' | 'highlights';

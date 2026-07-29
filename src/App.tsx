@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive } from './types';
+import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
 import { startPresence } from './lib/presence';
 import Navbar from './components/Navbar';
@@ -23,8 +23,10 @@ import LegalPage from './components/LegalPage';
 import EventPage from './components/EventPage';
 import EventBanner from './components/EventBanner';
 import EventErgebniszettel from './components/EventErgebniszettel';
+import HighlightsHome from './components/HighlightsHome';
+import HighlightsPage from './components/HighlightsPage';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil } from 'lucide-react';
 
 // Öffentliche Tabs haben eigene URLs, damit man nach einem Reload dort bleibt, wo man war.
 const TAB_PATHS: Record<ActiveTab, string> = {
@@ -33,6 +35,7 @@ const TAB_PATHS: Record<ActiveTab, string> = {
   tabelle: '/tabelle',
   heroone: '/hero-one',
   statistiken: '/statistiken',
+  highlights: '/highlights',
 };
 
 const tabFromPath = (path: string): ActiveTab => {
@@ -51,6 +54,9 @@ export default function App() {
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [players, setPlayers] = useState<PlayerStat[]>([]);
   const [eventArchive, setEventArchive] = useState<EventArchive | null>(null);
+  const [highlights, setHighlights] = useState<HighlightsConfig>({ clip: null, images: [] });
+  // Inline-Bearbeiten der Highlights (nur für angemeldete Admins wirksam)
+  const [editMode, setEditMode] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Aktuell sichtbares Event (per activeId). null = keins sichtbar.
@@ -187,6 +193,11 @@ export default function App() {
     apiFetch<EventArchive>('/api/twitch?resource=event')
       .then((data) => setEventArchive(data))
       .catch(() => setEventArchive(null));
+    apiFetch<HighlightsConfig>('/api/twitch?resource=highlights')
+      .then((data) => setHighlights({ clip: data?.clip ?? null, images: Array.isArray(data?.images) ? data.images : [] }))
+      .catch(() => {
+        /* noch nichts gepflegt – Bereich bleibt leer/unsichtbar */
+      });
 
     const handlePopState = () => setCurrentPath(window.location.pathname);
     window.addEventListener('popstate', handlePopState);
@@ -241,6 +252,40 @@ export default function App() {
       return false;
     }
   };
+
+  // Bearbeiten-Modus nur für Admins – beim Abmelden automatisch verlassen.
+  useEffect(() => {
+    if (!isAdmin) setEditMode(false);
+  }, [isAdmin]);
+
+  // Highlights speichern (optimistisch): erst lokal setzen, dann serverseitig
+  // schützen lassen. Schlägt das Speichern fehl, wird zurückgerollt.
+  const persistHighlights = async (next: HighlightsConfig) => {
+    const previous = highlights;
+    setHighlights(next);
+    try {
+      const saved = await apiFetch<HighlightsConfig>('/api/twitch?resource=highlights', {
+        method: 'POST',
+        body: JSON.stringify(next),
+      });
+      setHighlights({ clip: saved?.clip ?? null, images: Array.isArray(saved?.images) ? saved.images : [] });
+    } catch (err) {
+      setHighlights(previous);
+      alert(err instanceof Error ? err.message : 'Fehler beim Speichern der Highlights.');
+    }
+  };
+
+  const genImageId = () => `img-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const addHighlightImage = (url: string) =>
+    persistHighlights({ ...highlights, images: [...highlights.images, { id: genImageId(), url }] });
+  const deleteHighlightImage = (id: string) =>
+    persistHighlights({ ...highlights, images: highlights.images.filter((im) => im.id !== id) });
+  const setHighlightClip = (url: string) =>
+    persistHighlights({ ...highlights, clip: url.trim() ? { url: url.trim() } : null });
+
+  // Menüpunkt „Highlights“ zeigen, sobald Bilder vorhanden sind – Admins sehen ihn
+  // immer (auch leer), um die Galerie pflegen zu können.
+  const hasHighlights = highlights.images.length > 0 || isAdmin;
 
   const handleUpdateMatchScore = (
     matchId: string,
@@ -341,6 +386,7 @@ export default function App() {
           eventActive={!!activeEvent}
           eventTitle={activeEvent?.title}
           onOpenEvent={() => navigateTo('/testspiel')}
+          hasHighlights={hasHighlights}
         />
         <main className="flex-1">
           <LegalPage kind={kind} onBack={goBack} />
@@ -369,6 +415,7 @@ export default function App() {
           eventActive={!!activeEvent}
           eventTitle={activeEvent?.title}
           onOpenEvent={() => navigateTo('/testspiel')}
+          hasHighlights={hasHighlights}
         />
         <main className="flex-1">
           {team ? (
@@ -429,6 +476,7 @@ export default function App() {
           eventActive={!!activeEvent}
           eventTitle={activeEvent?.title}
           onOpenEvent={() => navigateTo('/testspiel')}
+          hasHighlights={hasHighlights}
         />
         <main className="flex-1">
           {previewEvent ? (
@@ -652,7 +700,24 @@ export default function App() {
             onNavigate={goToTab}
             onSelectTeam={openTeamDetail}
           />
+          <HighlightsHome
+            highlights={highlights}
+            editMode={editMode && isAdmin}
+            onOpenGallery={() => goToTab('highlights')}
+            onAddImage={addHighlightImage}
+            onDeleteImage={deleteHighlightImage}
+            onSetClip={setHighlightClip}
+          />
         </>
+      )}
+
+      {activeTab === 'highlights' && (
+        <HighlightsPage
+          images={highlights.images}
+          editMode={editMode && isAdmin}
+          onAddImage={addHighlightImage}
+          onDeleteImage={deleteHighlightImage}
+        />
       )}
 
       {activeTab === 'spielplan' && (
@@ -749,6 +814,21 @@ export default function App() {
             </button>
           </div>
         </section>
+      )}
+
+      {isAdmin && (activeTab === 'home' || activeTab === 'highlights') && (
+        <button
+          onClick={() => setEditMode((v) => !v)}
+          title="Highlights direkt auf der Seite bearbeiten"
+          className={`fixed bottom-5 right-5 z-[80] inline-flex items-center gap-2 px-4 py-3 rounded-full shadow-xl font-sans font-bold text-xs uppercase tracking-wider transition-all cursor-pointer ${
+            editMode
+              ? 'bg-brand-accent-light text-brand-dark shadow-[0_0_24px_rgba(34,223,201,.5)]'
+              : 'bg-brand-dark/90 backdrop-blur border border-brand-accent-light/40 text-brand-accent-light hover:bg-brand-dark'
+          }`}
+        >
+          <Pencil className="w-4 h-4" />
+          {editMode ? 'Bearbeiten beenden' : 'Highlights bearbeiten'}
+        </button>
       )}
 
       <Footer onNavigate={goToTab} onNavigatePath={navigateTo} />

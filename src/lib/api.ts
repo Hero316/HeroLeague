@@ -34,17 +34,19 @@ export async function apiFetch<T = unknown>(path: string, options?: RequestInit)
 const MAX_UPLOAD_BYTES = 3 * 1024 * 1024; // Server-Limit für den fertigen Upload
 const MAX_SOURCE_BYTES = 15 * 1024 * 1024; // Originaldatei – wird vor dem Upload stark verkleinert
 const ALLOWED_UPLOAD_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
-const MAX_DIMENSION = 512; // längste Kante – reicht für Logos, Wappen und Spielerfotos
+const MAX_DIMENSION = 512; // längste Kante – Vorgabe für Logos, Wappen und Spielerfotos
+const GALLERY_MAX_DIMENSION = 1600; // größere Highlight-Fotos: scharf, aber weiterhin klein
 
 // Bild im Browser verkleinern und zu WebP wandeln, damit die Seite kleine Dateien
 // ausliefert (Blob-Transfervolumen). Fallback PNG erhält Transparenz, falls der
 // Browser kein WebP schreiben kann (älteres Safari). GIFs bleiben unangetastet,
-// damit Animationen erhalten bleiben.
-async function compressImage(file: File): Promise<File> {
+// damit Animationen erhalten bleiben. Über `maxDimension` lässt sich die längste
+// Kante steuern (Logos 512px, Highlight-Galerie 1600px).
+async function compressImage(file: File, maxDimension = MAX_DIMENSION): Promise<File> {
   if (file.type === 'image/gif') return file;
 
   const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
+  const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(bitmap.width * scale));
   canvas.height = Math.max(1, Math.round(bitmap.height * scale));
@@ -64,8 +66,9 @@ async function compressImage(file: File): Promise<File> {
   return new File([blob], `${baseName}.${extension}`, { type: blob.type });
 }
 
-// Bild hochladen (Vercel Blob) und öffentliche URL zurückgeben
-export async function uploadImage(file: File): Promise<string> {
+// Bild hochladen (Vercel Blob) und öffentliche URL zurückgeben. Über
+// `maxDimension` steuert der Aufrufer die Auflösung (Highlight-Galerie: 1600px).
+export async function uploadImage(file: File, opts?: { maxDimension?: number }): Promise<string> {
   if (!ALLOWED_UPLOAD_TYPES.includes(file.type)) {
     throw new Error('Nur PNG, JPEG, WebP oder GIF erlaubt.');
   }
@@ -75,7 +78,7 @@ export async function uploadImage(file: File): Promise<string> {
 
   let upload = file;
   try {
-    upload = await compressImage(file);
+    upload = await compressImage(file, opts?.maxDimension);
   } catch {
     // Komprimierung fehlgeschlagen (z.B. defekte Datei) – Original weiterverwenden
   }
