@@ -5,6 +5,11 @@ import { requireAdmin } from './_lib/auth.js';
 const DEFAULT_TWITCH = { channel: '', isLive: false };
 const DEFAULT_SOCIAL = { instagram: '', tiktok: '', youtube: '' };
 
+// Highlights: gemischte Medien-Liste (Bilder + Video-Links) + Ordner (Alben).
+type HighlightMedia = { id: string; type: 'image' | 'video'; url: string; caption?: string; ratio?: number };
+type HighlightAlbum = { id: string; title: string; items: HighlightMedia[]; cover?: string };
+const DEFAULT_HIGHLIGHTS = { items: [] as HighlightMedia[], albums: [] as HighlightAlbum[] };
+
 // Vorbefülltes Sonder-Event (Testspieltag 02.08.2026), standardmäßig
 // AUSgeschaltet. Der Spielplan ist bereits hinterlegt – im Admin muss nur der
 // Schalter „aktiv" umgelegt und später die Ergebnisse eingetragen werden.
@@ -195,9 +200,79 @@ const saveEvent = requireAdmin(async (req: VercelRequest, res: VercelResponse) =
   return res.json(archive);
 });
 
-// Ein Endpunkt für alle Website-Einstellungen (Twitch + Social Media + Event),
-// um unter dem Serverless-Funktionslimit (12) zu bleiben. Angesprochen über
-// ?resource=social bzw. ?resource=event; Twitch ist die Vorgabe.
+// Ein einzelnes Medien-Item säubern.
+function normalizeMediaItem(raw: unknown, i: number): HighlightMedia | null {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const url = normalizeUrl(o.url);
+  if (!url) return null;
+  const type = o.type === 'video' ? 'video' : 'image';
+  const caption = str(o.caption).trim();
+  const ratio = Number(o.ratio);
+  return {
+    id: str(o.id).trim() || `hl-${Date.now()}-${i}`,
+    type,
+    url,
+    ...(caption ? { caption } : {}),
+    ...(Number.isFinite(ratio) && ratio > 0 ? { ratio } : {}),
+  };
+}
+
+function normalizeMediaList(raw: unknown): HighlightMedia[] {
+  return (Array.isArray(raw) ? raw : [])
+    .map((r, i) => normalizeMediaItem(r, i))
+    .filter((m): m is HighlightMedia => !!m);
+}
+
+// Highlights säubern – inkl. Migration vom alten Format `{ clip, images }`
+// bzw. `{ items }` (ohne Alben) auf `{ items, albums }`.
+function normalizeHighlights(body: unknown) {
+  const b = (body ?? {}) as Record<string, unknown>;
+
+  if (Array.isArray(b.items) || Array.isArray(b.albums)) {
+    const items = normalizeMediaList(b.items);
+    const albums: HighlightAlbum[] = (Array.isArray(b.albums) ? b.albums : []).map((raw, i): HighlightAlbum => {
+      const a = (raw ?? {}) as Record<string, unknown>;
+      const cover = normalizeUrl(a.cover);
+      return {
+        id: str(a.id).trim() || `alb-${Date.now()}-${i}`,
+        title: str(a.title).trim() || `Ordner ${i + 1}`,
+        items: normalizeMediaList(a.items),
+        ...(cover ? { cover } : {}),
+      };
+    });
+    return { items, albums };
+  }
+
+  // Ur-Alt-Format: erst der Clip (als Video), dann die Bilder.
+  const items: HighlightMedia[] = [];
+  const clipRaw = b.clip;
+  const clipUrl = normalizeUrl(
+    typeof clipRaw === 'string' ? clipRaw : (clipRaw as Record<string, unknown> | null | undefined)?.url
+  );
+  if (clipUrl) items.push({ id: `hl-${Date.now()}-clip`, type: 'video', url: clipUrl });
+  const rawImages = Array.isArray(b.images) ? b.images : [];
+  rawImages.forEach((raw, i) => {
+    const o = (raw ?? {}) as Record<string, unknown>;
+    const url = normalizeUrl(o.url);
+    if (!url) return;
+    const caption = str(o.caption).trim();
+    items.push({ id: str(o.id).trim() || `hl-${Date.now()}-${i}`, type: 'image', url, ...(caption ? { caption } : {}) });
+  });
+  return { items, albums: [] as HighlightAlbum[] };
+}
+
+const saveHighlights = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
+  const cfg = normalizeHighlights(req.body);
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('highlights', ${JSON.stringify(cfg)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+  return res.json(cfg);
+});
+
+// Ein Endpunkt für alle Website-Einstellungen (Twitch + Social Media + Event +
+// Highlights), um unter dem Serverless-Funktionslimit (12) zu bleiben. Angesprochen
+// über ?resource=social | event | highlights; Twitch ist die Vorgabe.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const resource = req.query.resource;
@@ -212,12 +287,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const rows = await sql`SELECT value FROM settings WHERE key = 'event'`;
         return res.json(toArchive(rows[0]?.value));
       }
+      if (resource === 'highlights') {
+        const rows = await sql`SELECT value FROM settings WHERE key = 'highlights'`;
+        // Migration vom alten {clip,images}-Format erfolgt in normalizeHighlights.
+        return res.json(rows[0]?.value ? normalizeHighlights(rows[0].value) : DEFAULT_HIGHLIGHTS);
+      }
       const rows = await sql`SELECT value FROM settings WHERE key = 'twitch'`;
       return res.json(rows[0]?.value ?? DEFAULT_TWITCH);
     }
     if (req.method === 'POST') {
       if (resource === 'social') return saveSocial(req, res);
       if (resource === 'event') return saveEvent(req, res);
+      if (resource === 'highlights') return saveHighlights(req, res);
       return saveTwitch(req, res);
     }
     return res.status(405).json({ error: 'Nicht unterstützt' });

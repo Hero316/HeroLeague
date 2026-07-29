@@ -88,6 +88,29 @@ export interface SocialLinks {
   youtube: string;
 }
 
+// Highlights: eine gemischte, geordnete Medien-Liste aus Kamera-Fotos
+// (öffentliche Blob-URLs) und Video-Links (YouTube/Twitch, auch Shorts).
+export interface HighlightMedia {
+  id: string;
+  type: 'image' | 'video';
+  url: string; // Bild: Blob-URL · Video: YouTube-/Twitch-Link
+  caption?: string;
+  ratio?: number; // Breite/Höhe – nur Bilder (beim Upload erfasst), fürs Mosaik ohne Sprung
+}
+
+// Ordner/Album (z. B. je Spieltag): eigener Titel + eigene Medienliste.
+export interface HighlightAlbum {
+  id: string;
+  title: string;
+  items: HighlightMedia[];
+  cover?: string; // eigenes Cover (z. B. rundes Design, transparent) – wie ein Wappen
+}
+
+export interface HighlightsConfig {
+  items: HighlightMedia[]; // lose Highlights ganz oben
+  albums: HighlightAlbum[]; // Ordner darunter (je Spieltag o. Ä.)
+}
+
 // Spontanes Sonder-Event (z.B. Testspieltag), unabhängig vom Liga-Betrieb.
 // Wird über einen Schalter im Admin ein-/ausgeblendet; ist `active` false,
 // bleibt die Website komplett normal.
@@ -192,4 +215,4 @@ export interface PlayerStat {
   points: number; // Ballon-d'Or-Wertung (aus Toren, Vorlagen, MOTM, Team-Ergebnis, Torwart-zu-null)
 }
 
-export type ActiveTab = 'home' | 'spielplan' | 'tabelle' | 'heroone' | 'statistiken';
+export type ActiveTab = 'home' | 'spielplan' | 'tabelle' | 'heroone' | 'statistiken' | 'highlights';

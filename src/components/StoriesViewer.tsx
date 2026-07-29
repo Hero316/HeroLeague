@@ -1,0 +1,287 @@
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import type { HighlightAlbum } from '../types';
+import { toEmbed } from '../lib/videoEmbed';
+import HighlightClip from './HighlightClip';
+
+const IMAGE_MS = 10000; // 10 Sek. pro Bild
+const VIDEO_MAX_MS = 60000; // Sicherheits-Fallback, falls ein Video kein Ende meldet
+
+// Instagram-Story-Player für die Highlight-Ordner:
+// - Fortschrittsbalken oben, ~10 Sek./Bild, dann automatisch weiter
+// - Video läuft bis zum Ende, dann weiter
+// - rechts tippen = nächstes, links tippen = vorheriges (Bild/Video)
+// - wischen oder Pfeile außen = nächster/vorheriger Ordner
+// - gedrückt halten (Handy) / Leertaste (PC) = Pause
+export default function StoriesViewer({
+  albums,
+  initialAlbum,
+  onClose,
+}: {
+  albums: HighlightAlbum[];
+  initialAlbum: number;
+  onClose: () => void;
+}) {
+  const [ai, setAi] = useState(Math.min(Math.max(0, initialAlbum), Math.max(0, albums.length - 1)));
+  const [ii, setII] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  const album = albums[ai];
+  const items = album?.items ?? [];
+  const item = items[ii];
+  const isVideo = item?.type === 'video';
+  const embed = isVideo ? toEmbed(item.url) : null;
+
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
+  const progressRef = useRef(0);
+  progressRef.current = progress;
+  const down = useRef<{ x: number; y: number } | null>(null);
+  const holdTimer = useRef(0);
+
+  // ---- Navigation ----
+  const goItem = (target: number) => {
+    setProgress(0);
+    progressRef.current = 0;
+    setII(target);
+  };
+  const next = () => {
+    if (ii < items.length - 1) goItem(ii + 1);
+    else if (ai < albums.length - 1) {
+      setProgress(0);
+      progressRef.current = 0;
+      setAi(ai + 1);
+      setII(0);
+    } else onClose();
+  };
+  const prev = () => {
+    if (ii > 0) goItem(ii - 1);
+    else if (ai > 0) {
+      setProgress(0);
+      progressRef.current = 0;
+      setAi(ai - 1);
+      setII(0);
+    } else goItem(0);
+  };
+  const goAlbum = (delta: number) => {
+    const na = ai + delta;
+    if (na < 0) return;
+    if (na > albums.length - 1) return onClose();
+    setProgress(0);
+    progressRef.current = 0;
+    setAi(na);
+    setII(0);
+  };
+
+  // ---- Auto-Fortschritt ----
+  useEffect(() => {
+    if (!item) {
+      onClose();
+      return;
+    }
+    if (paused) return;
+
+    if (isVideo) {
+      // Video: kein Countdown – bis Ende (onEnded) bzw. Sicherheits-Timeout.
+      const t = window.setTimeout(next, VIDEO_MAX_MS);
+      return () => window.clearTimeout(t);
+    }
+
+    let raf = 0;
+    const start = performance.now() - progressRef.current * IMAGE_MS;
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - start) / IMAGE_MS);
+      setProgress(p);
+      progressRef.current = p;
+      if (p >= 1) {
+        next();
+        return;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ai, ii, paused, isVideo]);
+
+  // Tastatur (PC)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      else if (e.key === 'ArrowRight') next();
+      else if (e.key === 'ArrowLeft') prev();
+      else if (e.key === ' ') {
+        e.preventDefault();
+        setPaused((p) => !p);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ai, ii, items.length, albums.length]);
+
+  if (!album || !item) return null;
+
+  // ---- Zeiger-Handling (Tippen / Halten / Wischen) ----
+  const makeZone = (onTap: () => void) => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      down.current = { x: e.clientX, y: e.clientY };
+      holdTimer.current = window.setTimeout(() => setPaused(true), 220);
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      const d = down.current;
+      if (!d) return;
+      if ((Math.abs(e.clientX - d.x) > 8 || Math.abs(e.clientY - d.y) > 8) && holdTimer.current) {
+        window.clearTimeout(holdTimer.current);
+        holdTimer.current = 0;
+      }
+    },
+    onPointerUp: (e: React.PointerEvent) => {
+      if (holdTimer.current) {
+        window.clearTimeout(holdTimer.current);
+        holdTimer.current = 0;
+      }
+      const d = down.current;
+      down.current = null;
+      if (pausedRef.current) {
+        setPaused(false);
+        return;
+      }
+      if (!d) return;
+      const dx = e.clientX - d.x;
+      const dy = e.clientY - d.y;
+      // Horizontal wischen = Ordner wechseln.
+      if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) {
+        goAlbum(dx < 0 ? 1 : -1);
+        return;
+      }
+      // Sonstiges Ziehen (z. B. senkrecht) ignorieren – nur echtes Tippen wechselt das Bild.
+      if (Math.abs(dx) > 12 || Math.abs(dy) > 12) return;
+      onTap();
+    },
+    onPointerCancel: () => {
+      if (holdTimer.current) {
+        window.clearTimeout(holdTimer.current);
+        holdTimer.current = 0;
+      }
+      down.current = null;
+      if (pausedRef.current) setPaused(false);
+    },
+  });
+
+  const portrait = embed?.aspect === 'portrait';
+
+  return createPortal(
+    <div className="fixed inset-0 z-[130] bg-black flex items-center justify-center select-none">
+      {/* Medien-Bühne */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        {isVideo && embed ? (
+          <div className={`relative ${portrait ? 'h-[88%] aspect-[9/16]' : 'w-[94%] max-w-3xl aspect-video'}`}>
+            <HighlightClip key={item.id} embed={embed} autoplay onEnded={next} />
+          </div>
+        ) : isVideo ? (
+          <p className="text-white/70 font-sans">Video-Link nicht erkannt.</p>
+        ) : (
+          <div className="relative w-full h-full flex items-center justify-center">
+            <img
+              src={item.url}
+              alt=""
+              aria-hidden
+              className="absolute inset-0 h-full w-full object-cover scale-110 blur-2xl opacity-40"
+            />
+            <img
+              src={item.url}
+              alt={item.caption || 'Highlight'}
+              referrerPolicy="no-referrer"
+              className="relative max-h-full max-w-full object-contain"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Tipp-/Wisch-Zonen: links = zurück, rechts = weiter. Bei Video bleibt die
+          Mitte frei (Player-Steuerung), bei Bildern volle Breite. */}
+      <div className="absolute inset-0 z-20 flex">
+        <div className={`touch-none ${isVideo ? 'w-[28%]' : 'w-1/3'}`} {...makeZone(prev)} />
+        {isVideo && <div className="flex-1 pointer-events-none" />}
+        <div className={`touch-none ${isVideo ? 'w-[28%] ml-auto' : 'flex-1'}`} {...makeZone(next)} />
+      </div>
+
+      {/* Fortschrittsbalken oben */}
+      <div className="absolute top-0 left-0 right-0 z-30 px-3 pt-3 flex gap-1.5">
+        {items.map((m, idx) => (
+          <div key={m.id} className="h-[3px] flex-1 rounded-full bg-white/30 overflow-hidden">
+            <div
+              className={`h-full rounded-full bg-white ${idx === ii && isVideo ? 'animate-pulse' : ''}`}
+              style={{ width: idx < ii ? '100%' : idx > ii ? '0%' : isVideo ? '100%' : `${progress * 100}%` }}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Kopf: Ordnername + Schließen */}
+      <div className="absolute top-6 left-0 right-0 z-30 px-4 flex items-center justify-between gap-3">
+        <span className="font-display font-black text-white uppercase tracking-tight text-sm sm:text-base drop-shadow-[0_1px_6px_rgba(0,0,0,.8)] truncate">
+          {album.title}
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Schließen"
+          className="shrink-0 w-10 h-10 rounded-full bg-white/10 border border-white/20 text-white hover:bg-white/20 flex items-center justify-center cursor-pointer"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Album-Pfeile außen (Desktop) */}
+      {albums.length > 1 && (
+        <>
+          <button
+            type="button"
+            onClick={() => goAlbum(-1)}
+            disabled={ai === 0}
+            aria-label="Vorheriger Ordner"
+            className="hidden sm:flex absolute left-2 top-1/2 -translate-y-1/2 z-40 w-11 h-11 rounded-full bg-white/10 border border-white/20 text-white hover:bg-white/20 items-center justify-center cursor-pointer disabled:opacity-0"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <button
+            type="button"
+            onClick={() => goAlbum(1)}
+            aria-label="Nächster Ordner"
+            className="hidden sm:flex absolute right-2 top-1/2 -translate-y-1/2 z-40 w-11 h-11 rounded-full bg-white/10 border border-white/20 text-white hover:bg-white/20 items-center justify-center cursor-pointer"
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
+        </>
+      )}
+
+      {/* Bildunterschrift */}
+      {item.caption && (
+        <div className="absolute bottom-6 left-0 right-0 z-30 px-6 text-center pointer-events-none">
+          <div className="mx-auto mb-2 h-[3px] w-10 rounded bg-brand-accent-light shadow-[0_0_10px_rgba(34,223,201,.7)]" />
+          <p className="font-display font-black text-white text-base sm:text-2xl uppercase tracking-tight leading-tight drop-shadow-[0_2px_12px_rgba(0,0,0,.8)]">
+            {item.caption}
+          </p>
+        </div>
+      )}
+
+      {/* Pause-Hinweis */}
+      {paused && (
+        <div className="absolute bottom-2 left-0 right-0 z-30 text-center pointer-events-none">
+          <span className="text-[11px] font-mono uppercase tracking-wider text-white/50">Pause</span>
+        </div>
+      )}
+    </div>,
+    document.body
+  );
+}
