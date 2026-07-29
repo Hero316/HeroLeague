@@ -45,22 +45,28 @@ export default function HighlightsCarousel({
   return (
     <div className="relative">
       <div ref={wrapRef} className="relative overflow-hidden select-none">
-        <motion.div
-          className="flex items-center py-1"
-          // Pan-Geste erkennt das Wischen, ohne die Position selbst zu verschieben
-          // (die steuert `animate` über x=tx) – so gibt es kein Zurückspringen.
-          onPanEnd={(_, info) => {
-            if (n < 2) return;
-            if (Math.abs(info.offset.x) < 40 || Math.abs(info.offset.x) < Math.abs(info.offset.y)) return;
-            didPan.current = true;
-            setTimeout(() => (didPan.current = false), 60); // den Folge-Klick schlucken
-            if (info.offset.x < 0) go(1);
-            else go(-1);
-          }}
-          animate={{ x: tx }}
-          transition={spring}
-        >
-          {items.map((media, i) => {
+        {/* Aussen: Positionierung (animate x=tx). Innen: Wischen per drag='x'
+            – das setzt touch-action:pan-y, also horizontal wischen + vertikal
+            weiter scrollen. So getrennt gibt es keinen Konflikt/Rücksprung. */}
+        <motion.div className="flex items-center py-1" animate={{ x: tx }} transition={spring}>
+          <motion.div
+            className="flex items-center"
+            drag={n > 1 ? 'x' : false}
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.15}
+            dragMomentum={false}
+            onDragEnd={(_, info) => {
+              if (n < 2) return;
+              if (Math.abs(info.offset.x) < Math.abs(info.offset.y)) return;
+              const swipe = info.offset.x + info.velocity.x * 0.15;
+              if (swipe > -60 && swipe < 60) return;
+              didPan.current = true;
+              setTimeout(() => (didPan.current = false), 60); // den Folge-Klick schlucken
+              if (swipe < 0) go(1);
+              else go(-1);
+            }}
+          >
+            {items.map((media, i) => {
             const isActive = i === clampedActive;
             const isVideo = media.type === 'video';
             const embed = isVideo ? toEmbed(media.url) : null;
@@ -115,6 +121,7 @@ export default function HighlightsCarousel({
               </motion.div>
             );
           })}
+          </motion.div>
         </motion.div>
       </div>
 
