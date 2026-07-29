@@ -361,9 +361,8 @@ export default function App() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-brand-dark text-white flex flex-col items-center justify-center font-sans space-y-4">
-        <div className="w-12 h-12 border-4 border-brand-accent-light border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-sm font-sans font-semibold text-hl-mute uppercase tracking-wider animate-pulse">Lade Liga-Daten...</p>
+      <div className="min-h-screen bg-brand-dark text-white flex items-center justify-center font-sans">
+        <img src="/assets/hero-league-logo.png" alt="Hero League" className="h-24 w-auto" />
       </div>
     );
   }
