@@ -125,15 +125,18 @@ export default function HighlightsLightbox({
         </AnimatePresence>
       </div>
 
-      {/* Bildunterschrift + Zähler */}
-      <div className="absolute bottom-4 left-0 right-0 z-20 flex flex-col items-center gap-1 px-4 pointer-events-none">
+      {/* Bildunterschrift im Hero-League-Stil + Zähler */}
+      <div className="absolute bottom-5 left-0 right-0 z-20 flex flex-col items-center gap-2.5 px-6 pointer-events-none text-center">
         {img.caption && (
-          <span className="font-sans text-sm text-white/90 bg-black/40 rounded-full px-3 py-1 max-w-[90%] truncate">
-            {img.caption}
-          </span>
+          <div className="max-w-2xl">
+            <div className="mx-auto mb-2 h-[3px] w-10 rounded bg-brand-accent-light shadow-[0_0_10px_rgba(34,223,201,.7)]" />
+            <p className="font-display font-black text-white text-lg sm:text-2xl uppercase tracking-tight leading-tight drop-shadow-[0_2px_12px_rgba(0,0,0,.75)]">
+              {img.caption}
+            </p>
+          </div>
         )}
         {multiple && (
-          <span className="font-mono text-xs text-white/60">
+          <span className="font-mono text-xs text-white/55">
             {index + 1} / {images.length}
           </span>
         )}

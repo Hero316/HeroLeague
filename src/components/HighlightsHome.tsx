@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { ArrowRight, Plus, Trash2, Link2, Loader2, Film } from 'lucide-react';
+import { ArrowRight, Plus, Link2, Loader2, Film } from 'lucide-react';
 import type { HighlightsConfig } from '../types';
 import { toEmbed } from '../lib/videoEmbed';
 import { Reveal } from './anim';
 import HighlightClip from './HighlightClip';
 import HighlightsLightbox from './HighlightsLightbox';
+import HighlightThumb from './HighlightThumb';
 import { useAddImage } from './highlightsEdit';
 
 // Startseiten-Highlight-Bereich: ein Clip (YouTube/Twitch, auch Shorts hochkant)
@@ -16,6 +17,7 @@ export default function HighlightsHome({
   onAddImage,
   onDeleteImage,
   onSetClip,
+  onSetCaption,
 }: {
   highlights: HighlightsConfig;
   editMode: boolean;
@@ -23,6 +25,7 @@ export default function HighlightsHome({
   onAddImage: (url: string) => void;
   onDeleteImage: (id: string) => void;
   onSetClip: (url: string) => void;
+  onSetCaption: (id: string, caption: string) => void;
 }) {
   const images = highlights.images;
   const homeImages = images.slice(0, 4);
@@ -131,36 +134,15 @@ export default function HighlightsHome({
                 )}
 
                 {homeImages.map((img, i) => (
-                  <div
-                    key={img.id}
-                    className="group relative break-inside-avoid mb-3 rounded-xl overflow-hidden bg-white/[.03] border border-white/[.07]"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setLightbox({ index: i, dir: 0 })}
-                      className="block w-full cursor-zoom-in"
-                      aria-label="Bild vergrößern"
-                    >
-                      <img
-                        src={img.url}
-                        alt={img.caption || 'Highlight'}
-                        loading="lazy"
-                        decoding="async"
-                        referrerPolicy="no-referrer"
-                        className="block w-full h-auto transition-transform duration-500 group-hover:scale-[1.03]"
-                      />
-                    </button>
-                    {editMode && (
-                      <button
-                        type="button"
-                        onClick={() => onDeleteImage(img.id)}
-                        title="Bild löschen"
-                        aria-label="Bild löschen"
-                        className="absolute top-1.5 right-1.5 z-10 w-8 h-8 rounded-full bg-black/60 border border-white/20 text-white hover:bg-red-500/80 flex items-center justify-center cursor-pointer transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                  <div key={img.id} className="break-inside-avoid mb-3">
+                    <HighlightThumb
+                      image={img}
+                      onOpen={() => setLightbox({ index: i, dir: 0 })}
+                      editMode={editMode}
+                      onDelete={() => onDeleteImage(img.id)}
+                      onSetCaption={(caption) => onSetCaption(img.id, caption)}
+                      compact
+                    />
                   </div>
                 ))}
               </div>

@@ -1,23 +1,27 @@
 import { useState } from 'react';
-import { Plus, Trash2, ImageIcon, Loader2 } from 'lucide-react';
+import { Plus, ImageIcon, Loader2 } from 'lucide-react';
 import type { HighlightImage } from '../types';
 import { PageHeader } from './ui';
 import { Reveal, RevealGroup, RevealItem } from './anim';
 import HighlightsLightbox from './HighlightsLightbox';
+import HighlightThumb from './HighlightThumb';
 import { useAddImage } from './highlightsEdit';
 
 // Öffentliche Highlights-Seite: Foto-Galerie mit Wisch-Lightbox. Im Bearbeiten-
-// Modus (nur Admin) lassen sich Bilder direkt hier hochladen und löschen.
+// Modus (nur Admin) lassen sich Bilder direkt hier hochladen, löschen und
+// beschriften.
 export default function HighlightsPage({
   images,
   editMode,
   onAddImage,
   onDeleteImage,
+  onSetCaption,
 }: {
   images: HighlightImage[];
   editMode: boolean;
   onAddImage: (url: string) => void;
   onDeleteImage: (id: string) => void;
+  onSetCaption: (id: string, caption: string) => void;
 }) {
   const [lightbox, setLightbox] = useState<{ index: number | null; dir: number }>({ index: null, dir: 0 });
   const { busy, pick } = useAddImage(onAddImage);
@@ -59,37 +63,13 @@ export default function HighlightsPage({
             {images.map((img, i) => (
               <RevealItem key={img.id} className="break-inside-avoid mb-3 sm:mb-4">
                 {/* Masonry: jedes Bild in seinem echten Seitenverhältnis, komplett sichtbar */}
-                <div className="group relative rounded-2xl overflow-hidden bg-white/[.03] border border-white/[.07]">
-                  <button
-                    type="button"
-                    onClick={() => open(i)}
-                    className="block w-full cursor-zoom-in"
-                    aria-label="Bild vergrößern"
-                  >
-                    <img
-                      src={img.url}
-                      alt={img.caption || 'Highlight'}
-                      loading="lazy"
-                      decoding="async"
-                      referrerPolicy="no-referrer"
-                      className="block w-full h-auto transition-transform duration-500 group-hover:scale-[1.03]"
-                    />
-                  </button>
-                  {editMode && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteImage(img.id);
-                      }}
-                      title="Bild löschen"
-                      aria-label="Bild löschen"
-                      className="absolute top-2 right-2 z-10 w-9 h-9 rounded-full bg-black/60 border border-white/20 text-white hover:bg-red-500/80 flex items-center justify-center cursor-pointer transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
+                <HighlightThumb
+                  image={img}
+                  onOpen={() => open(i)}
+                  editMode={editMode}
+                  onDelete={() => onDeleteImage(img.id)}
+                  onSetCaption={(caption) => onSetCaption(img.id, caption)}
+                />
               </RevealItem>
             ))}
           </RevealGroup>

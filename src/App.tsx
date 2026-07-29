@@ -282,6 +282,13 @@ export default function App() {
     persistHighlights({ ...highlights, images: highlights.images.filter((im) => im.id !== id) });
   const setHighlightClip = (url: string) =>
     persistHighlights({ ...highlights, clip: url.trim() ? { url: url.trim() } : null });
+  const setHighlightCaption = (id: string, caption: string) =>
+    persistHighlights({
+      ...highlights,
+      images: highlights.images.map((im) =>
+        im.id === id ? { ...im, caption: caption.trim() || undefined } : im
+      ),
+    });
 
   // Menüpunkt „Highlights“ zeigen, sobald Bilder vorhanden sind – Admins sehen ihn
   // immer (auch leer), um die Galerie pflegen zu können.
@@ -682,6 +689,7 @@ export default function App() {
         eventActive={!!activeEvent}
         eventTitle={activeEvent?.title}
         onOpenEvent={() => navigateTo('/testspiel')}
+        hasHighlights={hasHighlights}
       />
       {activeEvent && activeTab === 'home' && (
         <EventBanner event={activeEvent} isLive={eventHasLive} onOpen={() => navigateTo('/testspiel')} />
@@ -707,6 +715,7 @@ export default function App() {
             onAddImage={addHighlightImage}
             onDeleteImage={deleteHighlightImage}
             onSetClip={setHighlightClip}
+            onSetCaption={setHighlightCaption}
           />
         </>
       )}
@@ -717,6 +726,7 @@ export default function App() {
           editMode={editMode && isAdmin}
           onAddImage={addHighlightImage}
           onDeleteImage={deleteHighlightImage}
+          onSetCaption={setHighlightCaption}
         />
       )}
 
