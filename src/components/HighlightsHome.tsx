@@ -117,16 +117,28 @@ export default function HighlightsHome({
           {/* Fotos (erste 4) */}
           {(homeImages.length > 0 || editMode) && (
             <Reveal>
-              <div className={`grid gap-3 ${embed ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'}`}>
+              <div className={`gap-3 ${embed ? 'columns-2' : 'columns-2 sm:columns-4'}`}>
+                {editMode && (
+                  <button
+                    type="button"
+                    onClick={pick}
+                    disabled={busy}
+                    className="break-inside-avoid mb-3 aspect-[4/3] w-full rounded-xl border-2 border-dashed border-brand-accent-light/40 bg-brand-accent/5 hover:bg-brand-accent/10 transition-colors flex flex-col items-center justify-center gap-1.5 text-brand-accent-light cursor-pointer disabled:opacity-60"
+                  >
+                    {busy ? <Loader2 className="w-6 h-6 animate-spin" /> : <Plus className="w-6 h-6" />}
+                    <span className="font-sans font-bold text-[10px] uppercase tracking-wider">Bild</span>
+                  </button>
+                )}
+
                 {homeImages.map((img, i) => (
                   <div
                     key={img.id}
-                    className="group relative aspect-square rounded-xl overflow-hidden bg-white/[.03] border border-white/[.07]"
+                    className="group relative break-inside-avoid mb-3 rounded-xl overflow-hidden bg-white/[.03] border border-white/[.07]"
                   >
                     <button
                       type="button"
                       onClick={() => setLightbox({ index: i, dir: 0 })}
-                      className="absolute inset-0 cursor-zoom-in"
+                      className="block w-full cursor-zoom-in"
                       aria-label="Bild vergrößern"
                     >
                       <img
@@ -135,7 +147,7 @@ export default function HighlightsHome({
                         loading="lazy"
                         decoding="async"
                         referrerPolicy="no-referrer"
-                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        className="block w-full h-auto transition-transform duration-500 group-hover:scale-[1.03]"
                       />
                     </button>
                     {editMode && (
@@ -151,18 +163,6 @@ export default function HighlightsHome({
                     )}
                   </div>
                 ))}
-
-                {editMode && (
-                  <button
-                    type="button"
-                    onClick={pick}
-                    disabled={busy}
-                    className="aspect-square rounded-xl border-2 border-dashed border-brand-accent-light/40 bg-brand-accent/5 hover:bg-brand-accent/10 transition-colors flex flex-col items-center justify-center gap-1.5 text-brand-accent-light cursor-pointer disabled:opacity-60"
-                  >
-                    {busy ? <Loader2 className="w-6 h-6 animate-spin" /> : <Plus className="w-6 h-6" />}
-                    <span className="font-sans font-bold text-[10px] uppercase tracking-wider">Bild</span>
-                  </button>
-                )}
               </div>
             </Reveal>
           )}

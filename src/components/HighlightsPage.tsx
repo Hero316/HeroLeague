@@ -39,14 +39,31 @@ export default function HighlightsPage({
             <p className="text-hl-mute font-sans">Noch keine Highlights vorhanden.</p>
           </div>
         ) : (
-          <RevealGroup className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+          <RevealGroup className="columns-2 sm:columns-3 lg:columns-4 gap-3 sm:gap-4">
+            {editMode && (
+              <RevealItem className="break-inside-avoid mb-3 sm:mb-4">
+                <button
+                  type="button"
+                  onClick={pick}
+                  disabled={busy}
+                  className="aspect-[4/3] w-full rounded-2xl border-2 border-dashed border-brand-accent-light/40 bg-brand-accent/5 hover:bg-brand-accent/10 hover:border-brand-accent-light/70 transition-colors flex flex-col items-center justify-center gap-2 text-brand-accent-light cursor-pointer disabled:opacity-60"
+                >
+                  {busy ? <Loader2 className="w-7 h-7 animate-spin" /> : <Plus className="w-7 h-7" />}
+                  <span className="font-sans font-bold text-xs uppercase tracking-wider">
+                    {busy ? 'Lädt hoch…' : 'Bild hinzufügen'}
+                  </span>
+                </button>
+              </RevealItem>
+            )}
+
             {images.map((img, i) => (
-              <RevealItem key={img.id}>
-                <div className="group relative aspect-square rounded-2xl overflow-hidden bg-white/[.03] border border-white/[.07]">
+              <RevealItem key={img.id} className="break-inside-avoid mb-3 sm:mb-4">
+                {/* Masonry: jedes Bild in seinem echten Seitenverhältnis, komplett sichtbar */}
+                <div className="group relative rounded-2xl overflow-hidden bg-white/[.03] border border-white/[.07]">
                   <button
                     type="button"
                     onClick={() => open(i)}
-                    className="absolute inset-0 cursor-zoom-in"
+                    className="block w-full cursor-zoom-in"
                     aria-label="Bild vergrößern"
                   >
                     <img
@@ -55,7 +72,7 @@ export default function HighlightsPage({
                       loading="lazy"
                       decoding="async"
                       referrerPolicy="no-referrer"
-                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      className="block w-full h-auto transition-transform duration-500 group-hover:scale-[1.03]"
                     />
                   </button>
                   {editMode && (
@@ -75,22 +92,6 @@ export default function HighlightsPage({
                 </div>
               </RevealItem>
             ))}
-
-            {editMode && (
-              <RevealItem>
-                <button
-                  type="button"
-                  onClick={pick}
-                  disabled={busy}
-                  className="aspect-square w-full rounded-2xl border-2 border-dashed border-brand-accent-light/40 bg-brand-accent/5 hover:bg-brand-accent/10 hover:border-brand-accent-light/70 transition-colors flex flex-col items-center justify-center gap-2 text-brand-accent-light cursor-pointer disabled:opacity-60"
-                >
-                  {busy ? <Loader2 className="w-7 h-7 animate-spin" /> : <Plus className="w-7 h-7" />}
-                  <span className="font-sans font-bold text-xs uppercase tracking-wider">
-                    {busy ? 'Lädt hoch…' : 'Bild hinzufügen'}
-                  </span>
-                </button>
-              </RevealItem>
-            )}
           </RevealGroup>
         )}
 
