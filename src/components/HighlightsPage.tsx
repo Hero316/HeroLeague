@@ -31,11 +31,7 @@ export default function HighlightsPage({
 
   return (
     <>
-      <PageHeader
-        kicker="HERO LEAGUE"
-        title="Highlights"
-        text="Die besten Momente der Liga — festgehalten mit unserer Kamera."
-      />
+      <PageHeader kicker="HERO LEAGUE" title="Highlights" />
 
       <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-16">
         {images.length === 0 && !editMode ? (
