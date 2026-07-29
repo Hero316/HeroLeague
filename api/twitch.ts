@@ -7,7 +7,7 @@ const DEFAULT_SOCIAL = { instagram: '', tiktok: '', youtube: '' };
 
 // Highlights: gemischte Medien-Liste (Bilder + Video-Links) + Ordner (Alben).
 type HighlightMedia = { id: string; type: 'image' | 'video'; url: string; caption?: string; ratio?: number };
-type HighlightAlbum = { id: string; title: string; items: HighlightMedia[] };
+type HighlightAlbum = { id: string; title: string; items: HighlightMedia[]; cover?: string };
 const DEFAULT_HIGHLIGHTS = { items: [] as HighlightMedia[], albums: [] as HighlightAlbum[] };
 
 // Vorbefülltes Sonder-Event (Testspieltag 02.08.2026), standardmäßig
@@ -232,10 +232,12 @@ function normalizeHighlights(body: unknown) {
     const items = normalizeMediaList(b.items);
     const albums: HighlightAlbum[] = (Array.isArray(b.albums) ? b.albums : []).map((raw, i): HighlightAlbum => {
       const a = (raw ?? {}) as Record<string, unknown>;
+      const cover = normalizeUrl(a.cover);
       return {
         id: str(a.id).trim() || `alb-${Date.now()}-${i}`,
         title: str(a.title).trim() || `Ordner ${i + 1}`,
         items: normalizeMediaList(a.items),
+        ...(cover ? { cover } : {}),
       };
     });
     return { items, albums };

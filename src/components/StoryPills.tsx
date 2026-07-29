@@ -1,17 +1,10 @@
 import { Images } from 'lucide-react';
 import type { HighlightAlbum } from '../types';
-import { toEmbed, youtubeThumb } from '../lib/videoEmbed';
-
-function cover(album: HighlightAlbum): string | null {
-  const first = album.items.find((m) => m.type === 'image') ?? album.items[0];
-  if (!first) return null;
-  if (first.type === 'image') return first.url;
-  const embed = toEmbed(first.url);
-  return embed?.youtubeId ? youtubeThumb(embed.youtubeId) : null;
-}
+import { albumCoverInfo } from './highlightsEdit';
 
 // Instagram-artige runde „Highlight“-Pillen: je Ordner ein Kreis mit Farbring +
-// Cover + Name. Klick öffnet den Story-Player beim jeweiligen Ordner.
+// Cover + Name. Eigenes Cover (transparentes Design) wird wie ein Wappen in
+// seiner Form gezeigt (object-contain), sonst füllt ein Foto den Kreis.
 export default function StoryPills({
   albums,
   onOpen,
@@ -22,7 +15,7 @@ export default function StoryPills({
   return (
     <div className="flex gap-4 sm:gap-5 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {albums.map((album, i) => {
-        const c = cover(album);
+        const c = albumCoverInfo(album);
         return (
           <button
             key={album.id}
@@ -35,12 +28,12 @@ export default function StoryPills({
                 <span className="block w-16 h-16 rounded-full overflow-hidden bg-white/[.05]">
                   {c ? (
                     <img
-                      src={c}
+                      src={c.url}
                       alt={album.title}
                       loading="lazy"
                       decoding="async"
                       referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover"
+                      className={`w-full h-full ${c.custom ? 'object-contain p-1.5' : 'object-cover'}`}
                     />
                   ) : (
                     <span className="w-full h-full grid place-items-center text-brand-accent-light">

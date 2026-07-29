@@ -1,13 +1,12 @@
 import { useMemo, useState } from 'react';
-import { ImageIcon, ArrowLeft, FolderPlus, Trash2, Images } from 'lucide-react';
-import type { HighlightsConfig, HighlightAlbum } from '../types';
+import { ImageIcon, ArrowLeft, FolderPlus, Trash2, Images, ImagePlus, Loader2 } from 'lucide-react';
+import type { HighlightsConfig } from '../types';
 import { PageHeader } from './ui';
 import { Reveal } from './anim';
-import { toEmbed, youtubeThumb } from '../lib/videoEmbed';
 import HighlightsLightbox from './HighlightsLightbox';
 import HighlightsMosaic, { interleaveMedia } from './HighlightsMosaic';
 import HighlightsEditor from './HighlightsEditor';
-import { mediaListHandlers, genAlbumId } from './highlightsEdit';
+import { mediaListHandlers, genAlbumId, useCoverUpload, albumCoverInfo } from './highlightsEdit';
 
 // Ordner-Titel bearbeiten: lokaler State (flüssiges Tippen), speichern erst beim
 // Verlassen des Feldes – kein Netzwerk-Aufruf pro Tastendruck.
@@ -29,12 +28,48 @@ function AlbumTitleField({ title, onRename }: { title: string; onRename: (t: str
   );
 }
 
-function albumCover(album: HighlightAlbum): string | null {
-  const first = album.items.find((m) => m.type === 'image') ?? album.items[0];
-  if (!first) return null;
-  if (first.type === 'image') return first.url;
-  const embed = toEmbed(first.url);
-  return embed?.youtubeId ? youtubeThumb(embed.youtubeId) : null;
+// Cover eines Ordners hochladen/ändern (wie ein Wappen: transparentes Design,
+// komprimiert). Ohne Cover greift automatisch das erste Bild/Video-Vorschau.
+function AlbumCoverControl({
+  cover,
+  onSet,
+  onClear,
+}: {
+  cover?: string;
+  onSet: (url: string) => void;
+  onClear: () => void;
+}) {
+  const { busy, pick } = useCoverUpload(onSet);
+  return (
+    <div className="flex items-center gap-3 mb-4 flex-wrap">
+      <span className="w-14 h-14 rounded-full overflow-hidden bg-white/[.05] border border-white/12 grid place-items-center shrink-0">
+        {cover ? (
+          <img src={cover} alt="Cover" referrerPolicy="no-referrer" className="w-full h-full object-contain p-1.5" />
+        ) : (
+          <ImagePlus className="w-5 h-5 text-hl-mute" />
+        )}
+      </span>
+      <button
+        onClick={pick}
+        disabled={busy}
+        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-white/12 text-hl-soft hover:text-white hover:border-white/25 text-xs font-sans font-bold uppercase tracking-wider transition cursor-pointer disabled:opacity-60"
+      >
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
+        {busy ? 'Lädt…' : cover ? 'Cover ändern' : 'Cover hochladen'}
+      </button>
+      {cover && (
+        <button
+          onClick={onClear}
+          className="px-3.5 py-2 rounded-lg border border-white/12 text-hl-mute hover:text-white text-xs font-sans font-bold uppercase tracking-wider transition cursor-pointer"
+        >
+          Entfernen
+        </button>
+      )}
+      <span className="text-[11px] text-hl-faint font-sans">
+        Rundes Design ohne Hintergrund (PNG) – wird wie ein Wappen gezeigt.
+      </span>
+    </div>
+  );
 }
 
 // Öffentliche Highlights-Seite: oben die losen Highlights (Mosaik), darunter
@@ -77,6 +112,8 @@ export default function HighlightsPage({
   };
   const renameAlbum = (id: string, title: string) =>
     onSave({ ...highlights, albums: albums.map((a) => (a.id === id ? { ...a, title: title.trim() || 'Ordner' } : a)) });
+  const setAlbumCover = (id: string, cover: string | undefined) =>
+    onSave({ ...highlights, albums: albums.map((a) => (a.id === id ? { ...a, cover: cover || undefined } : a)) });
   const deleteAlbum = (id: string) => {
     if (!confirm('Diesen Ordner mit allen Inhalten löschen?')) return;
     onSave({ ...highlights, albums: albums.filter((a) => a.id !== id) });
@@ -104,6 +141,14 @@ export default function HighlightsPage({
           >
             <ArrowLeft className="w-4 h-4" /> Zurück zu Highlights
           </button>
+          {editMode && (
+            <AlbumCoverControl
+              key={`cover-${openAlbum.id}`}
+              cover={openAlbum.cover}
+              onSet={(url) => setAlbumCover(openAlbum.id, url)}
+              onClear={() => setAlbumCover(openAlbum.id, undefined)}
+            />
+          )}
           {editMode ? (
             <AlbumTitleField
               key={openAlbum.id}
@@ -184,7 +229,7 @@ export default function HighlightsPage({
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                     {albums.map((album) => {
-                      const cover = albumCover(album);
+                      const c = albumCoverInfo(album);
                       return (
                         <Reveal key={album.id}>
                           <div className="group relative overflow-hidden rounded-2xl border border-white/[.08] bg-white/[.03] shadow-lg shadow-black/25">
@@ -194,18 +239,18 @@ export default function HighlightsPage({
                               className="block w-full cursor-pointer"
                               aria-label={`Ordner ${album.title} öffnen`}
                             >
-                              <div className="relative aspect-[4/3] bg-brand-dark">
-                                {cover ? (
+                              <div className="relative aspect-[4/3] bg-[linear-gradient(140deg,#0d1a19,#06100f)]">
+                                {c && (
                                   <img
-                                    src={cover}
+                                    src={c.url}
                                     alt={album.title}
                                     loading="lazy"
                                     decoding="async"
                                     referrerPolicy="no-referrer"
-                                    className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                    className={`absolute inset-0 h-full w-full transition-transform duration-500 group-hover:scale-105 ${
+                                      c.custom ? 'object-contain p-6' : 'object-cover'
+                                    }`}
                                   />
-                                ) : (
-                                  <div className="absolute inset-0 bg-[linear-gradient(140deg,#0d1a19,#06100f)]" />
                                 )}
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                                 {/* „Ordner“-Stapel-Optik */}

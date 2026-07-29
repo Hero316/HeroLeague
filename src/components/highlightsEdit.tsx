@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { uploadImage } from '../lib/api';
-import type { HighlightMedia } from '../types';
+import type { HighlightAlbum, HighlightMedia } from '../types';
+import { toEmbed, youtubeThumb } from '../lib/videoEmbed';
 
 export const genMediaId = () => `hl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 export const genAlbumId = () => `alb-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -52,4 +53,40 @@ export function useAddImage(onAdd: (url: string, ratio?: number) => void) {
   };
 
   return { busy, pick };
+}
+
+// Cover-Upload für einen Ordner: wie ein Wappen (512px, komprimiert, Transparenz
+// bleibt via WebP erhalten). Liefert die fertige URL.
+export function useCoverUpload(onUploaded: (url: string) => void) {
+  const [busy, setBusy] = useState(false);
+  const pick = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/webp,image/gif';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setBusy(true);
+      try {
+        onUploaded(await uploadImage(file, { maxDimension: 512 }));
+      } catch (err) {
+        alert(err instanceof Error ? err.message : 'Fehler beim Cover-Upload.');
+      } finally {
+        setBusy(false);
+      }
+    };
+    input.click();
+  };
+  return { busy, pick };
+}
+
+// Cover eines Ordners: eigenes Cover (Wappen-Stil, object-contain) bevorzugt,
+// sonst erstes Bild bzw. Video-Vorschau (object-cover). null = Platzhalter.
+export function albumCoverInfo(album: HighlightAlbum): { url: string; custom: boolean } | null {
+  if (album.cover) return { url: album.cover, custom: true };
+  const first = album.items.find((m) => m.type === 'image') ?? album.items[0];
+  if (!first) return null;
+  if (first.type === 'image') return { url: first.url, custom: false };
+  const embed = toEmbed(first.url);
+  return embed?.youtubeId ? { url: youtubeThumb(embed.youtubeId), custom: false } : null;
 }

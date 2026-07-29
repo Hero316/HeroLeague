@@ -103,6 +103,7 @@ export interface HighlightAlbum {
   id: string;
   title: string;
   items: HighlightMedia[];
+  cover?: string; // eigenes Cover (z. B. rundes Design, transparent) – wie ein Wappen
 }
 
 export interface HighlightsConfig {
