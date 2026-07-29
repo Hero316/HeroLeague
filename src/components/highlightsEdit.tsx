@@ -1,5 +1,22 @@
 import { useState } from 'react';
 import { uploadImage } from '../lib/api';
+import type { HighlightMedia } from '../types';
+
+export const genMediaId = () => `hl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+export const genAlbumId = () => `alb-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+// Baut die Standard-Handler (Bild/Video hinzufügen, löschen, beschriften) für
+// eine Medienliste – wiederverwendet für die losen Highlights und für jeden Ordner.
+export function mediaListHandlers(list: HighlightMedia[], setList: (next: HighlightMedia[]) => void) {
+  return {
+    onAddImage: (url: string, ratio?: number) =>
+      setList([...list, { id: genMediaId(), type: 'image' as const, url, ...(ratio ? { ratio } : {}) }]),
+    onAddVideo: (url: string) => setList([...list, { id: genMediaId(), type: 'video' as const, url: url.trim() }]),
+    onDeleteItem: (id: string) => setList(list.filter((m) => m.id !== id)),
+    onSetCaption: (id: string, caption: string) =>
+      setList(list.map((m) => (m.id === id ? { ...m, caption: caption.trim() || undefined } : m))),
+  };
+}
 
 // Datei-Auswahl + Upload für Highlight-Fotos. Nutzt die bestehende Browser-
 // Komprimierung (1600px, scharf aber klein) und erfasst vorab das Seitenverhältnis

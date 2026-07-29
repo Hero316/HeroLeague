@@ -5,9 +5,10 @@ import { requireAdmin } from './_lib/auth.js';
 const DEFAULT_TWITCH = { channel: '', isLive: false };
 const DEFAULT_SOCIAL = { instagram: '', tiktok: '', youtube: '' };
 
-// Highlights: eine gemischte, geordnete Medien-Liste (Bilder + Video-Links).
+// Highlights: gemischte Medien-Liste (Bilder + Video-Links) + Ordner (Alben).
 type HighlightMedia = { id: string; type: 'image' | 'video'; url: string; caption?: string; ratio?: number };
-const DEFAULT_HIGHLIGHTS = { items: [] as HighlightMedia[] };
+type HighlightAlbum = { id: string; title: string; items: HighlightMedia[] };
+const DEFAULT_HIGHLIGHTS = { items: [] as HighlightMedia[], albums: [] as HighlightAlbum[] };
 
 // Vorbefülltes Sonder-Event (Testspieltag 02.08.2026), standardmäßig
 // AUSgeschaltet. Der Spielplan ist bereits hinterlegt – im Admin muss nur der
@@ -216,17 +217,31 @@ function normalizeMediaItem(raw: unknown, i: number): HighlightMedia | null {
   };
 }
 
+function normalizeMediaList(raw: unknown): HighlightMedia[] {
+  return (Array.isArray(raw) ? raw : [])
+    .map((r, i) => normalizeMediaItem(r, i))
+    .filter((m): m is HighlightMedia => !!m);
+}
+
 // Highlights säubern – inkl. Migration vom alten Format `{ clip, images }`
-// auf die gemischte `items`-Liste (analog `toArchive` beim Event).
+// bzw. `{ items }` (ohne Alben) auf `{ items, albums }`.
 function normalizeHighlights(body: unknown) {
   const b = (body ?? {}) as Record<string, unknown>;
 
-  if (Array.isArray(b.items)) {
-    const items = b.items.map((raw, i) => normalizeMediaItem(raw, i)).filter((m): m is HighlightMedia => !!m);
-    return { items };
+  if (Array.isArray(b.items) || Array.isArray(b.albums)) {
+    const items = normalizeMediaList(b.items);
+    const albums: HighlightAlbum[] = (Array.isArray(b.albums) ? b.albums : []).map((raw, i): HighlightAlbum => {
+      const a = (raw ?? {}) as Record<string, unknown>;
+      return {
+        id: str(a.id).trim() || `alb-${Date.now()}-${i}`,
+        title: str(a.title).trim() || `Ordner ${i + 1}`,
+        items: normalizeMediaList(a.items),
+      };
+    });
+    return { items, albums };
   }
 
-  // Alt-Format: erst der Clip (als Video), dann die Bilder.
+  // Ur-Alt-Format: erst der Clip (als Video), dann die Bilder.
   const items: HighlightMedia[] = [];
   const clipRaw = b.clip;
   const clipUrl = normalizeUrl(
@@ -241,7 +256,7 @@ function normalizeHighlights(body: unknown) {
     const caption = str(o.caption).trim();
     items.push({ id: str(o.id).trim() || `hl-${Date.now()}-${i}`, type: 'image', url, ...(caption ? { caption } : {}) });
   });
-  return { items };
+  return { items, albums: [] as HighlightAlbum[] };
 }
 
 const saveHighlights = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {

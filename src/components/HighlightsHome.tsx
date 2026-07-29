@@ -1,41 +1,36 @@
 import { useMemo, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
-import type { HighlightMedia } from '../types';
+import type { HighlightsConfig } from '../types';
 import { Reveal } from './anim';
 import HighlightsLightbox from './HighlightsLightbox';
 import HighlightsMosaic, { interleaveMedia } from './HighlightsMosaic';
 import HighlightsEditor from './HighlightsEditor';
+import { mediaListHandlers } from './highlightsEdit';
 
-const HOME_LIMIT = 6; // Startseite zeigt nur die ersten paar Medien
+const HOME_LIMIT = 6;
 
-// Startseiten-Highlight-Bereich: gemischte Vorschau (Bilder + Videos) im Mosaik.
-// Im Bearbeiten-Modus (Admin) direkt verwaltbar. Kein separater großer Clip mehr.
+// Startseiten-Highlight-Bereich: gemischte Vorschau (Bilder + Videos).
+// Bearbeitet werden hier nur die losen Highlights (Ordner nur auf der Seite).
 export default function HighlightsHome({
-  items,
+  highlights,
   editMode,
   onOpenGallery,
-  onAddImage,
-  onAddVideo,
-  onDeleteItem,
-  onSetCaption,
+  onSave,
 }: {
-  items: HighlightMedia[];
+  highlights: HighlightsConfig;
   editMode: boolean;
   onOpenGallery: () => void;
-  onAddImage: (url: string, ratio?: number) => void;
-  onAddVideo: (url: string) => void;
-  onDeleteItem: (id: string) => void;
-  onSetCaption: (id: string, caption: string) => void;
+  onSave: (next: HighlightsConfig) => void;
 }) {
+  const items = highlights.items;
   const [lightbox, setLightbox] = useState<{ index: number | null; dir: number }>({ index: null, dir: 0 });
-  // Ansicht: gemischt + auf HOME_LIMIT gekürzt. Bearbeiten: alle in Speicherreihenfolge.
   const display = useMemo(
     () => (editMode ? items : interleaveMedia(items).slice(0, HOME_LIMIT)),
     [items, editMode]
   );
   const open = (i: number) => setLightbox({ index: i, dir: 0 });
+  const handlers = mediaListHandlers(items, (next) => onSave({ ...highlights, items: next }));
 
-  // Nichts gepflegt + nicht im Bearbeiten-Modus => Bereich bleibt unsichtbar.
   if (!editMode && items.length === 0) return null;
 
   return (
@@ -61,19 +56,11 @@ export default function HighlightsHome({
         </Reveal>
 
         {editMode ? (
-          <HighlightsEditor
-            items={display}
-            onOpen={open}
-            onAddImage={onAddImage}
-            onAddVideo={onAddVideo}
-            onDeleteItem={onDeleteItem}
-            onSetCaption={onSetCaption}
-          />
+          <HighlightsEditor items={display} onOpen={open} {...handlers} />
         ) : (
           <HighlightsMosaic items={display} onOpen={open} />
         )}
 
-        {/* „Alle ansehen“ auch mobil unter dem Mosaik */}
         {!editMode && items.length > HOME_LIMIT && (
           <div className="mt-6 sm:hidden">
             <button

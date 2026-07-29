@@ -54,7 +54,7 @@ export default function App() {
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [players, setPlayers] = useState<PlayerStat[]>([]);
   const [eventArchive, setEventArchive] = useState<EventArchive | null>(null);
-  const [highlights, setHighlights] = useState<HighlightsConfig>({ items: [] });
+  const [highlights, setHighlights] = useState<HighlightsConfig>({ items: [], albums: [] });
   // Inline-Bearbeiten der Highlights (nur für angemeldete Admins wirksam)
   const [editMode, setEditMode] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -194,7 +194,12 @@ export default function App() {
       .then((data) => setEventArchive(data))
       .catch(() => setEventArchive(null));
     apiFetch<HighlightsConfig>('/api/twitch?resource=highlights')
-      .then((data) => setHighlights({ items: Array.isArray(data?.items) ? data.items : [] }))
+      .then((data) =>
+        setHighlights({
+          items: Array.isArray(data?.items) ? data.items : [],
+          albums: Array.isArray(data?.albums) ? data.albums : [],
+        })
+      )
       .catch(() => {
         /* noch nichts gepflegt – Bereich bleibt leer/unsichtbar */
       });
@@ -268,30 +273,19 @@ export default function App() {
         method: 'POST',
         body: JSON.stringify(next),
       });
-      setHighlights({ items: Array.isArray(saved?.items) ? saved.items : [] });
+      setHighlights({
+        items: Array.isArray(saved?.items) ? saved.items : [],
+        albums: Array.isArray(saved?.albums) ? saved.albums : [],
+      });
     } catch (err) {
       setHighlights(previous);
       alert(err instanceof Error ? err.message : 'Fehler beim Speichern der Highlights.');
     }
   };
 
-  const genMediaId = () => `hl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const addHighlightImage = (url: string, ratio?: number) =>
-    persistHighlights({
-      items: [...highlights.items, { id: genMediaId(), type: 'image', url, ...(ratio ? { ratio } : {}) }],
-    });
-  const addHighlightVideo = (url: string) =>
-    persistHighlights({ items: [...highlights.items, { id: genMediaId(), type: 'video', url: url.trim() }] });
-  const deleteHighlightItem = (id: string) =>
-    persistHighlights({ items: highlights.items.filter((m) => m.id !== id) });
-  const setHighlightCaption = (id: string, caption: string) =>
-    persistHighlights({
-      items: highlights.items.map((m) => (m.id === id ? { ...m, caption: caption.trim() || undefined } : m)),
-    });
-
-  // Menüpunkt „Highlights“ zeigen, sobald Medien vorhanden sind – Admins sehen ihn
-  // immer (auch leer), um die Galerie pflegen zu können.
-  const hasHighlights = highlights.items.length > 0 || isAdmin;
+  // Menüpunkt „Highlights“ zeigen, sobald Medien/Ordner vorhanden sind – Admins
+  // sehen ihn immer (auch leer), um die Galerie pflegen zu können.
+  const hasHighlights = highlights.items.length > 0 || highlights.albums.length > 0 || isAdmin;
 
   const handleUpdateMatchScore = (
     matchId: string,
@@ -708,26 +702,16 @@ export default function App() {
             onSelectTeam={openTeamDetail}
           />
           <HighlightsHome
-            items={highlights.items}
+            highlights={highlights}
             editMode={editMode && isAdmin}
             onOpenGallery={() => goToTab('highlights')}
-            onAddImage={addHighlightImage}
-            onAddVideo={addHighlightVideo}
-            onDeleteItem={deleteHighlightItem}
-            onSetCaption={setHighlightCaption}
+            onSave={persistHighlights}
           />
         </>
       )}
 
       {activeTab === 'highlights' && (
-        <HighlightsPage
-          items={highlights.items}
-          editMode={editMode && isAdmin}
-          onAddImage={addHighlightImage}
-          onAddVideo={addHighlightVideo}
-          onDeleteItem={deleteHighlightItem}
-          onSetCaption={setHighlightCaption}
-        />
+        <HighlightsPage highlights={highlights} editMode={editMode && isAdmin} onSave={persistHighlights} />
       )}
 
       {activeTab === 'spielplan' && (

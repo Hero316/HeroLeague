@@ -98,8 +98,16 @@ export interface HighlightMedia {
   ratio?: number; // Breite/Höhe – nur Bilder (beim Upload erfasst), fürs Mosaik ohne Sprung
 }
 
-export interface HighlightsConfig {
+// Ordner/Album (z. B. je Spieltag): eigener Titel + eigene Medienliste.
+export interface HighlightAlbum {
+  id: string;
+  title: string;
   items: HighlightMedia[];
+}
+
+export interface HighlightsConfig {
+  items: HighlightMedia[]; // lose Highlights ganz oben
+  albums: HighlightAlbum[]; // Ordner darunter (je Spieltag o. Ä.)
 }
 
 // Spontanes Sonder-Event (z.B. Testspieltag), unabhängig vom Liga-Betrieb.
