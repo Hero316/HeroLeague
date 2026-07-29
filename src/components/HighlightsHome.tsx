@@ -5,14 +5,16 @@ import { Reveal } from './anim';
 import HighlightsLightbox from './HighlightsLightbox';
 import HighlightsCarousel from './HighlightsCarousel';
 import HighlightsEditor from './HighlightsEditor';
+import StoryPills from './StoryPills';
+import StoriesViewer from './StoriesViewer';
 import { mediaListHandlers } from './highlightsEdit';
 
 // Videos zuerst, damit der erste Beitrag im Karussell ein Video ist.
 const videosFirst = (list: HighlightMedia[]) =>
   [...list].sort((a, b) => (a.type === 'video' ? 0 : 1) - (b.type === 'video' ? 0 : 1));
 
-// Startseiten-Highlight-Bereich: horizontales Hero-Karussell (großer Beitrag im
-// Fokus, seitlicher Peek, Swipe). Im Bearbeiten-Modus die losen Highlights pflegen.
+// Startseiten-Highlight-Bereich: horizontales Hero-Karussell + darunter die
+// runden Story-Pillen (je Ordner). Im Bearbeiten-Modus die losen Highlights pflegen.
 export default function HighlightsHome({
   highlights,
   editMode,
@@ -25,12 +27,14 @@ export default function HighlightsHome({
   onSave: (next: HighlightsConfig) => void;
 }) {
   const items = highlights.items;
+  const albums = highlights.albums;
   const [lightbox, setLightbox] = useState<{ index: number | null; dir: number }>({ index: null, dir: 0 });
+  const [storyAlbum, setStoryAlbum] = useState<number | null>(null);
   const display = useMemo(() => (editMode ? items : videosFirst(items)), [items, editMode]);
   const open = (i: number) => setLightbox({ index: i, dir: 0 });
   const handlers = mediaListHandlers(items, (next) => onSave({ ...highlights, items: next }));
 
-  if (!editMode && items.length === 0) return null;
+  if (!editMode && items.length === 0 && albums.length === 0) return null;
 
   return (
     <section className="relative overflow-hidden border-t border-white/[.06]">
@@ -43,7 +47,7 @@ export default function HighlightsHome({
               Momente der Liga
             </h2>
           </div>
-          {items.length > 0 && (
+          {(items.length > 0 || albums.length > 0) && (
             <button
               onClick={onOpenGallery}
               className="inline-flex items-center gap-1.5 shrink-0 px-4 py-2 rounded-full border border-white/12 text-hl-soft hover:text-white hover:border-white/25 text-xs font-sans font-bold uppercase tracking-wider transition-colors cursor-pointer"
@@ -57,7 +61,14 @@ export default function HighlightsHome({
         {editMode ? (
           <HighlightsEditor items={display} onOpen={open} {...handlers} />
         ) : (
-          <HighlightsCarousel items={display} onOpen={open} />
+          <>
+            {display.length > 0 && <HighlightsCarousel items={display} onOpen={open} />}
+            {albums.length > 0 && (
+              <Reveal className="mt-9">
+                <StoryPills albums={albums} onOpen={setStoryAlbum} />
+              </Reveal>
+            )}
+          </>
         )}
       </div>
 
@@ -68,6 +79,10 @@ export default function HighlightsHome({
         onClose={() => setLightbox({ index: null, dir: 0 })}
         onNavigate={(next, dir) => setLightbox({ index: next, dir })}
       />
+
+      {storyAlbum !== null && (
+        <StoriesViewer albums={albums} initialAlbum={storyAlbum} onClose={() => setStoryAlbum(null)} />
+      )}
     </section>
   );
 }

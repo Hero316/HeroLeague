@@ -29,13 +29,23 @@ function loadYouTubeApi(): Promise<any> {
   return ytApiPromise;
 }
 
-// Startseiten-Highlight-Clip. Für YouTube wird die IFrame-API genutzt, um am Ende
-// des Videos NICHT die üblichen vorgeschlagenen Fremdvideos zu zeigen: Bei „ENDED“
-// wird zurückgespult und ein eigenes „Erneut abspielen“-Overlay eingeblendet.
-// Twitch (und der Fehlerfall) fallen auf ein einfaches iframe zurück.
-export default function HighlightClip({ embed }: { embed: VideoEmbed }) {
+// Highlight-Clip. Für YouTube via IFrame-API (unterdrückt End-Vorschläge).
+// `autoplay` startet das Video automatisch (z. B. im Story-Player), `onEnded`
+// meldet das Video-Ende (dann kein „Erneut abspielen“-Overlay, sondern der
+// Aufrufer entscheidet – z. B. weiterspringen). Twitch fällt aufs iframe zurück.
+export default function HighlightClip({
+  embed,
+  autoplay = false,
+  onEnded,
+}: {
+  embed: VideoEmbed;
+  autoplay?: boolean;
+  onEnded?: () => void;
+}) {
   const holderRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
+  const onEndedRef = useRef(onEnded);
+  onEndedRef.current = onEnded;
   const [ended, setEnded] = useState(false);
 
   const isApiClip = embed.provider === 'youtube' && !!embed.youtubeId;
@@ -54,10 +64,14 @@ export default function HighlightClip({ embed }: { embed: VideoEmbed }) {
           height: '100%',
           videoId: embed.youtubeId,
           host: 'https://www.youtube-nocookie.com',
-          playerVars: { rel: 0, modestbranding: 1, playsinline: 1 },
+          playerVars: { rel: 0, modestbranding: 1, playsinline: 1, autoplay: autoplay ? 1 : 0 },
           events: {
             onStateChange: (e: any) => {
               if (e.data === YT.PlayerState.ENDED) {
+                if (onEndedRef.current) {
+                  onEndedRef.current();
+                  return;
+                }
                 setEnded(true);
                 try {
                   playerRef.current?.pauseVideo();
@@ -86,7 +100,7 @@ export default function HighlightClip({ embed }: { embed: VideoEmbed }) {
       }
       playerRef.current = null;
     };
-  }, [isApiClip, embed.youtubeId]);
+  }, [isApiClip, embed.youtubeId, autoplay]);
 
   const replay = () => {
     setEnded(false);
@@ -122,9 +136,10 @@ export default function HighlightClip({ embed }: { embed: VideoEmbed }) {
   }
 
   // Twitch / Fallback: einfaches iframe
+  const src = autoplay ? embed.src.replace('autoplay=false', 'autoplay=true') : embed.src;
   return (
     <iframe
-      src={embed.src}
+      src={src}
       title="Highlight-Clip"
       className="absolute inset-0 h-full w-full"
       loading="lazy"
