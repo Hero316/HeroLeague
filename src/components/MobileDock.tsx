@@ -91,31 +91,26 @@ export default function MobileDock({
 
         {/* Glas-Pille mit den Icons – horizontal scrollbar.
             Bewusst vom unteren Rand abgehoben (über die Home-Indicator-Safe-Area
-            hinaus ~60px) – bequemer für den Daumen, angelehnt an die
+            hinaus ~76px) – bequemer für den Daumen, angelehnt an die
             freistehende iOS-26-„Liquid-Glass"-Tableiste. */}
-        <div className="relative px-3 pt-4 pb-[calc(env(safe-area-inset-bottom)+60px)] flex justify-center">
+        <div className="relative px-3 pt-4 pb-[calc(env(safe-area-inset-bottom)+76px)] flex justify-center">
           <div className="pointer-events-auto max-w-full overflow-x-auto no-scrollbar rounded-full border border-white/[.12] bg-[rgba(12,20,19,.55)] backdrop-blur-2xl backdrop-saturate-150 shadow-[inset_0_1px_0_rgba(255,255,255,.14),0_18px_44px_rgba(0,0,0,.5)]">
-            <div className="flex items-center gap-1 px-2 py-2 w-max mx-auto">
+            {/* Feste Icon-Größen -> konstante Breite, kein Zappeln/Scroll-Sprung.
+                Aktiver Punkt nur per Farbe/Glow hervorgehoben. */}
+            <div className="flex items-center gap-1 px-2 py-2 w-max">
               {items.map((it) => (
                 <button
                   key={it.key}
                   onClick={() => (it.onClick ? it.onClick() : it.tab && onNavigate(it.tab))}
                   aria-label={it.label}
+                  title={it.label}
                   aria-current={it.active ? 'page' : undefined}
-                  className={`shrink-0 flex items-center gap-0 rounded-full px-3.5 py-2.5 transition-[background-color,box-shadow,color,transform] duration-300 cursor-pointer active:scale-95 ${accentClasses(
+                  className={`shrink-0 grid place-items-center w-[52px] h-[46px] rounded-full transition-[background-color,box-shadow,color,transform] duration-300 cursor-pointer active:scale-90 ${accentClasses(
                     it.accent,
                     it.active
                   )} ${it.active ? '' : 'hover:text-hl-text'}`}
                 >
-                  <it.Icon className="w-[22px] h-[22px] shrink-0" />
-                  {/* Aktiver Punkt zeigt zusätzlich sein Label – schön hervorgehoben */}
-                  <span
-                    className={`overflow-hidden whitespace-nowrap font-sans font-bold text-[12px] tracking-wide transition-[max-width,opacity] duration-300 ${
-                      it.active ? 'max-w-[130px] opacity-100 ml-1.5' : 'max-w-0 opacity-0'
-                    }`}
-                  >
-                    {it.label}
-                  </span>
+                  <it.Icon className="w-[23px] h-[23px]" />
                 </button>
               ))}
             </div>

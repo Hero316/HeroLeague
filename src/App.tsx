@@ -755,7 +755,7 @@ export default function App() {
       )}
       <LiveTicker matches={currentSeasonMatches} teams={visibleTeams} players={players} />
 
-      <div key={activeTab} className={`hl-fade ${mobileMode ? 'pb-40 lg:pb-0' : ''}`}>
+      <div key={activeTab} className={`hl-fade ${mobileMode ? 'pb-44 lg:pb-0' : ''}`}>
       {activeTab === 'home' && (
         <>
           <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
