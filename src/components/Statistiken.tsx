@@ -229,7 +229,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
   return (
     <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
       {/* Liga-Kennzahlen */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 pt-2">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 pt-2 hl-cascade">
         {leagueTiles.map((tile) => (
           <div
             key={tile.label}
@@ -301,7 +301,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
               </div>
               <div className="relative rounded-[20px] overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] border border-white/10 backdrop-blur-lg shadow-[0_20px_50px_rgba(0,0,0,.35)]">
                 <div className="absolute top-0 right-0 w-[220px] h-[220px] pointer-events-none" style={{ background: GLOW.gold }} />
-                <div ref={scorer.ref} className="relative divide-y divide-white/[.06]">
+                <div ref={scorer.ref} className="relative divide-y divide-white/[.06] hl-cascade-soft">
                   {scorer.items.map((p, idx) => {
                     const rankColor =
                       idx === 0 ? 'text-hl-gold' : idx === 1 ? 'text-[#C7D0DA]' : idx === 2 ? 'text-[#E0A46B]' : 'text-hl-dim';
@@ -360,7 +360,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
               </div>
               <div className="relative rounded-[20px] overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] border border-white/10 backdrop-blur-lg shadow-[0_20px_50px_rgba(0,0,0,.35)]">
                 <div className="absolute top-0 right-0 w-[220px] h-[220px] pointer-events-none" style={{ background: GLOW.teal }} />
-                <div ref={glove.ref} className="relative divide-y divide-white/[.06]">
+                <div ref={glove.ref} className="relative divide-y divide-white/[.06] hl-cascade-soft">
                   {glove.items.map((p, idx) => {
                     const rankColor =
                       idx === 0 ? 'text-hl-gold' : idx === 1 ? 'text-[#C7D0DA]' : idx === 2 ? 'text-[#E0A46B]' : 'text-hl-dim';

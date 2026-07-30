@@ -977,7 +977,7 @@ export default function Spielplan({
           </div>
 
           {/* Match-Karten (kompakt) */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 hl-cascade">
             {matchdayMatches.map((match) => {
               const home = getTeam(match.homeTeamId);
               const away = getTeam(match.awayTeamId);

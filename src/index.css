@@ -167,6 +167,27 @@ body {
 .hl-cascade > *:nth-child(7) { animation-delay: 0.60s; }
 .hl-cascade > *:nth-child(8) { animation-delay: 0.69s; }
 
+/* Sanfte Kaskade OHNE transform (nur Opacity) – kollidiert nicht mit motion
+   layout (Tabellen-/Ranglisten-Zeilen, die selbst transform steuern). Läuft
+   einmal beim Einblenden; verträgt beliebig viele Zeilen. */
+@keyframes hlFadeSoft { from { opacity: 0; } to { opacity: 1; } }
+.hl-cascade-soft > * { animation: hlFadeSoft 0.55s ease both; }
+.hl-cascade-soft > *:nth-child(1) { animation-delay: 0.03s; }
+.hl-cascade-soft > *:nth-child(2) { animation-delay: 0.09s; }
+.hl-cascade-soft > *:nth-child(3) { animation-delay: 0.15s; }
+.hl-cascade-soft > *:nth-child(4) { animation-delay: 0.21s; }
+.hl-cascade-soft > *:nth-child(5) { animation-delay: 0.27s; }
+.hl-cascade-soft > *:nth-child(6) { animation-delay: 0.33s; }
+.hl-cascade-soft > *:nth-child(7) { animation-delay: 0.39s; }
+.hl-cascade-soft > *:nth-child(8) { animation-delay: 0.45s; }
+.hl-cascade-soft > *:nth-child(9) { animation-delay: 0.51s; }
+.hl-cascade-soft > *:nth-child(10) { animation-delay: 0.57s; }
+.hl-cascade-soft > *:nth-child(11) { animation-delay: 0.63s; }
+.hl-cascade-soft > *:nth-child(12) { animation-delay: 0.69s; }
+.hl-cascade-soft > *:nth-child(13) { animation-delay: 0.75s; }
+.hl-cascade-soft > *:nth-child(14) { animation-delay: 0.81s; }
+.hl-cascade-soft > *:nth-child(n + 15) { animation-delay: 0.87s; }
+
 /* HERO-ONE-Gold: leuchtender, schimmernder Goldverlauf auf Text.
    Fuer den Award-Titel (Tab + Sektion) – die hoechste Auszeichnung. */
 .hl-gold-text {
@@ -193,7 +214,8 @@ body {
     animation: none !important;
   }
   .hl-pop,
-  .hl-cascade > * {
+  .hl-cascade > *,
+  .hl-cascade-soft > * {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
