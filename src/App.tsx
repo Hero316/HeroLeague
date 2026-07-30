@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
 import { startPresence } from './lib/presence';
+import { seasonName } from './lib/heroAward';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import Tabelle from './components/Tabelle';
@@ -20,6 +21,7 @@ import LiveVisitors from './components/LiveVisitors';
 import InstallPrompt from './components/InstallPrompt';
 import Ergebniszettel from './components/Ergebniszettel';
 import LegalPage from './components/LegalPage';
+import PageBackground from './components/PageBackground';
 import EventPage from './components/EventPage';
 import EventBanner from './components/EventBanner';
 import EventErgebniszettel from './components/EventErgebniszettel';
@@ -114,6 +116,13 @@ export default function App() {
     const idx = currentSeason ? visibleSeasons.findIndex((s) => s.id === currentSeason.id) : -1;
     return idx >= 0 ? idx + 1 : visibleSeasons.length || 1;
   }, [currentSeason, visibleSeasons]);
+
+  // Anzeigename der Saison – „SEASON ONE/TWO …", abgeleitet aus der fortlaufenden
+  // Nummer (analog zum HERO-Award). Ersetzt überall das alte Datums-Label ("2026/27").
+  const selectedSeasonName = selectedSeason ? seasonName(selectedSeasonNumber) : '';
+  const currentSeasonName = currentSeason ? seasonName(currentSeasonNumber) : '';
+  // Name der nächsten (noch nicht angelegten) Saison – für den „Neue Saison"-Dialog.
+  const nextSeasonName = seasonName((visibleSeasons.length || 0) + 1);
 
   // Spiele der ausgewählten Saison – Basis für alle öffentlichen Ansichten
   const seasonMatches = useMemo(
@@ -371,7 +380,8 @@ export default function App() {
   if (currentPath === '/impressum' || currentPath === '/datenschutz') {
     const kind = currentPath === '/impressum' ? 'impressum' : 'datenschutz';
     return (
-      <div className="min-h-screen bg-brand-dark text-hl-text font-sans flex flex-col">
+      <div className="min-h-screen text-hl-text font-sans flex flex-col">
+        <PageBackground page="default" />
         <Navbar
           activeTab={activeTab}
           setActiveTab={goToTab}
@@ -379,7 +389,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')}
-          seasonLabel={selectedSeason?.label ?? ''}
+          seasonLabel={selectedSeasonName}
           seasonNumber={currentSeasonNumber}
           hasLiveMatch={hasLiveMatch}
           eventActive={!!activeEvent}
@@ -400,7 +410,8 @@ export default function App() {
     const teamId = decodeURIComponent(currentPath.slice('/verein/'.length).replace(/\/+$/, ''));
     const team = visibleTeams.find((t) => t.id === teamId);
     return (
-      <div className="min-h-screen bg-brand-dark text-hl-text font-sans flex flex-col">
+      <div className="min-h-screen text-hl-text font-sans flex flex-col">
+        <PageBackground page="tabelle" />
         <Navbar
           activeTab={activeTab}
           setActiveTab={goToTab}
@@ -408,7 +419,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')}
-          seasonLabel={selectedSeason?.label ?? ''}
+          seasonLabel={selectedSeasonName}
           seasonNumber={currentSeasonNumber}
           hasLiveMatch={hasLiveMatch}
           eventActive={!!activeEvent}
@@ -423,7 +434,7 @@ export default function App() {
               teams={visibleTeams}
               matches={seasonMatches}
               players={players}
-              seasonLabel={selectedSeason?.label ?? ''}
+              seasonLabel={selectedSeasonName}
               onBack={goBack}
               onSelectTeam={openTeamDetail}
             />
@@ -469,7 +480,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')}
-          seasonLabel={currentSeason?.label ?? ''}
+          seasonLabel={currentSeasonName}
           seasonNumber={currentSeasonNumber}
           hasLiveMatch={hasLiveMatch}
           eventActive={!!activeEvent}
@@ -518,7 +529,8 @@ export default function App() {
   // ROUTE: /admin – geschütztes Backoffice
   if (currentPath === '/admin') {
     return (
-      <div className="min-h-screen bg-brand-dark text-hl-text font-sans flex flex-col justify-between">
+      <div className="min-h-screen text-hl-text font-sans flex flex-col justify-between">
+        <PageBackground page="default" />
         <header className="border-b border-white/[.07] bg-[rgba(7,10,8,.72)] backdrop-blur-xl px-6 py-4">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -552,7 +564,7 @@ export default function App() {
                     </h2>
                     <p className="text-xs text-hl-green-soft font-sans mt-0.5">
                       {sessionUser?.name || sessionUser?.email ? `${sessionUser?.name || sessionUser?.email} · ` : ''}
-                      Aktive Saison: {currentSeason?.label ?? '–'}
+                      Aktive Saison: {currentSeasonName || '–'}
                     </p>
                   </div>
                 </div>
@@ -604,7 +616,8 @@ export default function App() {
                   <AdminPanel
                     teams={visibleTeams}
                     matches={currentSeasonMatches}
-                    currentSeasonLabel={currentSeason?.label ?? ''}
+                    currentSeasonLabel={currentSeasonName}
+                    nextSeasonLabel={nextSeasonName}
                     isSuperadmin={isSuperadmin}
                     onAddTeam={handleAddTeam}
                     onEditTeam={handleEditTeam}
@@ -655,9 +668,9 @@ export default function App() {
         onChange={(e) => setSelectedSeasonId(e.target.value)}
         className="bg-brand-dark border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white font-sans font-semibold focus:outline-none focus:border-brand-accent-light cursor-pointer"
       >
-        {visibleSeasons.map((s) => (
+        {visibleSeasons.map((s, i) => (
           <option key={s.id} value={s.id}>
-            {s.label}
+            {seasonName(i + 1)}
             {s.isCurrent ? ' (aktiv)' : ''}
           </option>
         ))}
@@ -666,7 +679,8 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen bg-brand-dark text-hl-text font-sans overflow-x-hidden">
+    <div className="min-h-screen text-hl-text font-sans overflow-x-hidden">
+      <PageBackground page={activeTab} />
       <LiveBanner />
       <Navbar
         activeTab={activeTab}
@@ -675,7 +689,7 @@ export default function App() {
         onLogout={handleLogout}
         onOpenLogin={() => navigateTo('/admin')}
         onOpenBackoffice={() => navigateTo('/admin')}
-        seasonLabel={currentSeason?.label ?? ''}
+        seasonLabel={currentSeasonName}
         seasonNumber={currentSeasonNumber}
         hasLiveMatch={hasLiveMatch}
         eventActive={!!activeEvent}
@@ -691,7 +705,7 @@ export default function App() {
       <div key={activeTab} className="hl-fade">
       {activeTab === 'home' && (
         <>
-          <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeason?.label ?? ''} seasonNumber={currentSeasonNumber} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
+          <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
           <HighlightsHome
             highlights={highlights}
             editMode={editMode && isAdmin}
@@ -702,7 +716,7 @@ export default function App() {
             teams={visibleTeams}
             matches={currentSeasonMatches}
             players={players}
-            seasonLabel={currentSeason?.label ?? ''}
+            seasonLabel={currentSeasonName}
             onNavigate={goToTab}
             onSelectTeam={openTeamDetail}
           />
@@ -716,9 +730,8 @@ export default function App() {
       {activeTab === 'spielplan' && (
         <>
           <PageHeader
-            kicker={selectedSeason?.label ? `SAISON ${selectedSeason.label}` : 'HERO LEAGUE'}
+            kicker={selectedSeasonName || 'HERO LEAGUE'}
             title="Spielplan"
-            text="Alle Ergebnisse und Anstoßzeiten der Hero League — Spieltag für Spieltag."
           />
           {seasonSwitcher}
           {isAdmin && (
@@ -748,16 +761,15 @@ export default function App() {
       {activeTab === 'tabelle' && (
         <>
           <PageHeader
-            kicker={selectedSeason?.label ? `SAISON ${selectedSeason.label}` : 'HERO LEAGUE'}
+            kicker={selectedSeasonName || 'HERO LEAGUE'}
             title="Ligatabelle"
-            text="Der komplette Tabellenstand der Hero League. Sortierung nach Punkten, Tordifferenz, direktem Vergleich und erzielten Toren."
           />
           {seasonSwitcher}
           <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
             <Tabelle
               teams={visibleTeams}
               matches={seasonMatches}
-              seasonLabel={selectedSeason?.label ?? ''}
+              seasonLabel={selectedSeasonName}
               onSelectTeam={openTeamDetail}
             />
           </div>
@@ -771,7 +783,7 @@ export default function App() {
             players={players}
             teams={visibleTeams}
             seasonNumber={selectedSeasonNumber}
-            seasonLabel={selectedSeason?.label ?? ''}
+            seasonLabel={selectedSeasonName}
             onSelectTeam={openTeamDetail}
           />
         </>
@@ -780,9 +792,8 @@ export default function App() {
       {activeTab === 'statistiken' && (
         <>
           <PageHeader
-            kicker={selectedSeason?.label ? `SAISON ${selectedSeason.label}` : 'HERO LEAGUE'}
+            kicker={selectedSeasonName || 'HERO LEAGUE'}
             title="Statistiken"
-            text="Die Bestwerte der Hero League — Spieler und Teams, die den Ton angeben."
           />
           {seasonSwitcher}
           <Statistiken players={players} matches={seasonMatches} teams={visibleTeams} onSelectTeam={openTeamDetail} />

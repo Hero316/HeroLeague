@@ -23,3 +23,9 @@ export function numberWord(n: number): string {
 export function heroAwardTitle(seasonNumber: number): string {
   return `HERO ${numberWord(seasonNumber)}`;
 }
+
+// Anzeigename einer Saison, z. B. „SEASON ONE". Analog zum HERO-Award zählt die
+// Nummer fortlaufend hoch (1. angelegte Saison = SEASON ONE, 2. = SEASON TWO …).
+export function seasonName(seasonNumber: number): string {
+  return `SEASON ${numberWord(seasonNumber)}`;
+}

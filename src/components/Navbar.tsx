@@ -98,8 +98,8 @@ export default function Navbar({
     </span>
   );
 
-  // Saison-Pille: "2026/27" -> "26/27"
-  const seasonShort = seasonLabel ? seasonLabel.replace(/^20(\d{2})\/(\d{2})$/, '$1/$2') : '';
+  // Saison-Pille: zeigt den Saison-Namen (z. B. „SEASON ONE").
+  const seasonShort = seasonLabel || '';
 
   return (
     <div className="sticky top-0 z-50 bg-[rgba(7,10,8,.72)] backdrop-blur-xl border-b border-white/[.07] pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
