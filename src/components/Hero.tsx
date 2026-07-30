@@ -461,10 +461,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
             pointerEvents: i === current ? 'auto' : 'none',
           }}
         >
-          {/* key wechselt beim Aktiv-Werden → Pop-/Kaskaden-Animation spielt erneut ab */}
-          <div key={i === current ? 'on' : 'off'} className="contents">
-            {renderSlide(kind)}
-          </div>
+          {renderSlide(kind)}
         </div>
       ))}
 
