@@ -727,7 +727,6 @@ export default function App() {
           <PageHeader
             kicker={selectedSeasonName || 'HERO LEAGUE'}
             title="Spielplan"
-            text="Alle Ergebnisse und Anstoßzeiten der Hero League — Spieltag für Spieltag."
           />
           {seasonSwitcher}
           {isAdmin && (
@@ -759,7 +758,6 @@ export default function App() {
           <PageHeader
             kicker={selectedSeasonName || 'HERO LEAGUE'}
             title="Ligatabelle"
-            text="Der komplette Tabellenstand der Hero League. Sortierung nach Punkten, Tordifferenz, direktem Vergleich und erzielten Toren."
           />
           {seasonSwitcher}
           <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
@@ -791,7 +789,6 @@ export default function App() {
           <PageHeader
             kicker={selectedSeasonName || 'HERO LEAGUE'}
             title="Statistiken"
-            text="Die Bestwerte der Hero League — Spieler und Teams, die den Ton angeben."
           />
           {seasonSwitcher}
           <Statistiken players={players} matches={seasonMatches} teams={visibleTeams} onSelectTeam={openTeamDetail} />
