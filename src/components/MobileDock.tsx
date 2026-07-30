@@ -1,6 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Home, CalendarDays, ListOrdered, Trophy, BarChart3, Images, Zap } from 'lucide-react';
 import { ActiveTab } from '../types';
+
+// Scroll-Position der Pille modulweit merken – überlebt so das Neu-Aufbauen
+// des Docks beim Routenwechsel (z. B. Tippen auf den Blitz -> Event-Seite).
+let dockScroll = 0;
 
 interface MobileDockProps {
   activeTab: ActiveTab;
@@ -36,6 +40,35 @@ export default function MobileDock({
 }: MobileDockProps) {
   const [visible, setVisible] = useState(true);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // Rand-Verläufe als Scroll-Hinweis: zeigen an, dass links/rechts mehr kommt.
+  const [edges, setEdges] = useState({ left: false, right: false });
+
+  const updateEdges = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    dockScroll = el.scrollLeft;
+    const left = el.scrollLeft > 4;
+    const right = el.scrollLeft < el.scrollWidth - el.clientWidth - 4;
+    setEdges((p) => (p.left === left && p.right === right ? p : { left, right }));
+  };
+
+  // Scroll-Position beim (Neu-)Einhängen wiederherstellen + Ränder berechnen.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollLeft = dockScroll;
+    updateEdges();
+    const onResize = () => updateEdges();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Ränder neu berechnen, wenn sich die Anzahl der Einträge ändert.
+  useEffect(() => {
+    updateEdges();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasHighlights, eventActive]);
 
   // Sichtbarkeit steuern: jede Berührung/Scroll zeigt das Dock und startet den
   // Ruhe-Timer neu; nach ~3,5 s ohne Interaktion fährt es nach unten raus.
@@ -94,26 +127,38 @@ export default function MobileDock({
             hinaus ~76px) – bequemer für den Daumen, angelehnt an die
             freistehende iOS-26-„Liquid-Glass"-Tableiste. */}
         <div className="relative px-3 pt-4 pb-[calc(env(safe-area-inset-bottom)+76px)] flex justify-center">
-          <div className="pointer-events-auto max-w-full overflow-x-auto no-scrollbar rounded-full border border-white/[.12] bg-[rgba(12,20,19,.55)] backdrop-blur-2xl backdrop-saturate-150 shadow-[inset_0_1px_0_rgba(255,255,255,.14),0_18px_44px_rgba(0,0,0,.5)]">
-            {/* Feste Icon-Größen -> konstante Breite, kein Zappeln/Scroll-Sprung.
-                Aktiver Punkt nur per Farbe/Glow hervorgehoben. */}
-            <div className="flex items-center gap-1 px-2 py-2 w-max">
-              {items.map((it) => (
-                <button
-                  key={it.key}
-                  onClick={() => (it.onClick ? it.onClick() : it.tab && onNavigate(it.tab))}
-                  aria-label={it.label}
-                  title={it.label}
-                  aria-current={it.active ? 'page' : undefined}
-                  className={`shrink-0 grid place-items-center w-[52px] h-[46px] rounded-full transition-[background-color,box-shadow,color,transform] duration-300 cursor-pointer active:scale-90 ${accentClasses(
-                    it.accent,
-                    it.active
-                  )} ${it.active ? '' : 'hover:text-hl-text'}`}
-                >
-                  <it.Icon className="w-[23px] h-[23px]" />
-                </button>
-              ))}
+          {/* Glas-Wrapper (Rand rund, überläuft nicht) trägt die Verläufe als
+              Scroll-Hinweis; die eigentliche Scroll-Fläche liegt darin. */}
+          <div className="pointer-events-auto relative max-w-full rounded-full overflow-hidden border border-white/[.12] bg-[rgba(12,20,19,.58)] backdrop-blur-2xl backdrop-saturate-150 shadow-[inset_0_1px_0_rgba(255,255,255,.14),0_18px_44px_rgba(0,0,0,.5)]">
+            <div ref={scrollRef} onScroll={updateEdges} className="overflow-x-auto no-scrollbar">
+              {/* Feste Icon-Größen -> konstante Breite, kein Zappeln/Scroll-Sprung. */}
+              <div className="flex items-center gap-1.5 px-3 py-2.5 w-max">
+                {items.map((it) => (
+                  <button
+                    key={it.key}
+                    onClick={() => (it.onClick ? it.onClick() : it.tab && onNavigate(it.tab))}
+                    aria-label={it.label}
+                    title={it.label}
+                    aria-current={it.active ? 'page' : undefined}
+                    className={`shrink-0 grid place-items-center w-[60px] h-[54px] rounded-full transition-[background-color,box-shadow,color,transform] duration-300 cursor-pointer active:scale-90 ${accentClasses(
+                      it.accent,
+                      it.active
+                    )} ${it.active ? '' : 'hover:text-hl-text'}`}
+                  >
+                    <it.Icon className="w-[27px] h-[27px]" />
+                  </button>
+                ))}
+              </div>
             </div>
+            {/* Rand-Verläufe: signalisieren „links/rechts kommt noch mehr" */}
+            <div
+              className={`pointer-events-none absolute inset-y-0 left-0 w-10 transition-opacity duration-200 ${edges.left ? 'opacity-100' : 'opacity-0'}`}
+              style={{ background: 'linear-gradient(to right, rgba(9,15,14,.95), transparent)' }}
+            />
+            <div
+              className={`pointer-events-none absolute inset-y-0 right-0 w-10 transition-opacity duration-200 ${edges.right ? 'opacity-100' : 'opacity-0'}`}
+              style={{ background: 'linear-gradient(to left, rgba(9,15,14,.95), transparent)' }}
+            />
           </div>
         </div>
       </div>
