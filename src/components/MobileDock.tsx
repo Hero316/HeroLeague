@@ -94,8 +94,11 @@ export default function MobileDock({
         {/* Leichter Gradient von unten – das Dock steht bewusst nicht komplett frei */}
         <div className="absolute inset-x-0 bottom-0 h-36 bg-[linear-gradient(to_top,#0A1415_18%,rgba(10,20,21,.6)_46%,transparent)] pointer-events-none" />
 
-        {/* Glas-Pille mit den Icons – horizontal scrollbar */}
-        <div className="relative px-3 pt-4 pb-[calc(env(safe-area-inset-bottom)+12px)] flex justify-center">
+        {/* Glas-Pille mit den Icons – horizontal scrollbar.
+            Bewusst vom unteren Rand abgehoben (über die Home-Indicator-Safe-Area
+            hinaus ~40px) – bequemer für den Daumen, angelehnt an die
+            freistehende iOS-26-„Liquid-Glass"-Tableiste. */}
+        <div className="relative px-3 pt-4 pb-[calc(env(safe-area-inset-bottom)+40px)] flex justify-center">
           <div className="pointer-events-auto max-w-full overflow-x-auto no-scrollbar rounded-full border border-white/[.12] bg-[rgba(12,20,19,.55)] backdrop-blur-2xl backdrop-saturate-150 shadow-[inset_0_1px_0_rgba(255,255,255,.14),0_18px_44px_rgba(0,0,0,.5)]">
             <div className="flex items-center gap-1 px-2 py-2 w-max mx-auto">
               {items.map((it) => (
