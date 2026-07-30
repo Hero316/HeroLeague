@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActiveTab, Match, PlayerOfMonth, PlayerStat, Team } from '../types';
+import { ActiveTab, HeroImages, Match, PlayerOfMonth, PlayerStat, Team } from '../types';
 import { apiFetch } from '../lib/api';
 import { MapPin } from 'lucide-react';
 import { calculateStandings } from '../lib/standings';
@@ -13,13 +13,14 @@ interface HeroProps {
   players: PlayerStat[];
   seasonLabel: string;
   seasonNumber?: number;
+  heroImages?: HeroImages;
   onNavigate: (tab: ActiveTab) => void;
   onSelectTeam?: (teamId: string) => void;
 }
 
 // Vollflächiges Hero-Carousel (Magenta-TV-Stil) mit drei Slides:
 // 1. Nächster Spieltag / Live-Spiel  2. Spieler des Monats  3. Tabellenführer
-export default function Hero({ teams, matches, players, seasonLabel, seasonNumber, onNavigate, onSelectTeam }: HeroProps) {
+export default function Hero({ teams, matches, players, seasonLabel, seasonNumber, heroImages, onNavigate, onSelectTeam }: HeroProps) {
   const [pom, setPom] = useState<PlayerOfMonth | null>(null);
   const [active, setActive] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -135,7 +136,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
       <>
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -inset-[5%] hl-zoom">
-            <img src="/assets/hero-stadium.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
+            <img src={heroImages?.match || '/assets/hero-stadium.png'} alt="" className="absolute inset-0 w-full h-full object-cover" />
           </div>
           <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_78%_30%,rgba(232,62,140,.22),transparent_55%)]" />
           <div className="absolute inset-0 bg-[linear-gradient(90deg,#0A1415_6%,rgba(6,14,15,.78)_34%,rgba(6,14,15,.2)_64%,transparent)]" />
@@ -274,14 +275,26 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
     )?.points;
     return (
       <>
-        {/* Eigener, gestalteter Hintergrund (kein Menschenfoto) – hebt die Karte hervor */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,#0c1a19,#0a1415_58%,#08110f)]" />
-          <div className="absolute inset-0 bg-[radial-gradient(58%_70%_at_72%_36%,rgba(34,223,201,.22),transparent_60%)]" />
-          <div className="absolute inset-0 bg-[radial-gradient(48%_60%_at_18%_18%,rgba(233,196,106,.10),transparent_55%)]" />
-          <div className="absolute -inset-[10%] opacity-70 bg-[repeating-linear-gradient(115deg,transparent_0,transparent_46px,rgba(255,255,255,.02)_46px,rgba(255,255,255,.02)_47px)]" />
-          <div className="absolute inset-0 bg-[linear-gradient(0deg,#08110f_2%,transparent_34%)]" />
-        </div>
+        {/* Hintergrund: eigenes Foto (falls hochgeladen) mit Overlays, sonst das
+            gestaltete Standard-Design – so bleiben Text und Karte gut lesbar. */}
+        {heroImages?.pom ? (
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute -inset-[5%] hl-zoom">
+              <img src={heroImages.pom} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            </div>
+            <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_78%_30%,rgba(233,196,106,.2),transparent_55%)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(90deg,#0A1415_6%,rgba(6,14,15,.78)_34%,rgba(6,14,15,.2)_64%,transparent)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(0deg,#08110f_2%,transparent_34%)]" />
+          </div>
+        ) : (
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,#0c1a19,#0a1415_58%,#08110f)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(58%_70%_at_72%_36%,rgba(34,223,201,.22),transparent_60%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(48%_60%_at_18%_18%,rgba(233,196,106,.10),transparent_55%)]" />
+            <div className="absolute -inset-[10%] opacity-70 bg-[repeating-linear-gradient(115deg,transparent_0,transparent_46px,rgba(255,255,255,.02)_46px,rgba(255,255,255,.02)_47px)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(0deg,#08110f_2%,transparent_34%)]" />
+          </div>
+        )}
         <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-8 pb-24 sm:pt-10 sm:pb-26 w-full flex items-center">
           <div className="w-full flex flex-col lg:flex-row items-center justify-between gap-6 lg:gap-11">
             {/* Textspalte */}
@@ -341,7 +354,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
       <>
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -inset-[5%] hl-zoom">
-            <img src="/assets/hero-crowd.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
+            <img src={heroImages?.table || '/assets/hero-crowd.png'} alt="" className="absolute inset-0 w-full h-full object-cover" />
           </div>
           <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_80%_30%,rgba(34,223,201,.2),transparent_55%)]" />
           <div className="absolute inset-0 bg-[linear-gradient(90deg,#0A1415_6%,rgba(6,14,15,.78)_34%,rgba(6,14,15,.2)_64%,transparent)]" />

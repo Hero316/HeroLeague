@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig } from './types';
+import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
 import { startPresence } from './lib/presence';
 import { seasonName } from './lib/heroAward';
@@ -57,6 +57,8 @@ export default function App() {
   const [players, setPlayers] = useState<PlayerStat[]>([]);
   const [eventArchive, setEventArchive] = useState<EventArchive | null>(null);
   const [highlights, setHighlights] = useState<HighlightsConfig>({ items: [], albums: [] });
+  // Eigene Hero-Hintergrundbilder (Startseite) – leer = Standard-Design
+  const [heroImages, setHeroImages] = useState<HeroImages>({ match: '', pom: '', table: '' });
   // Inline-Bearbeiten der Highlights (nur für angemeldete Admins wirksam)
   const [editMode, setEditMode] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -158,6 +160,15 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  // Eigene Hero-Hintergrundbilder laden (unkritisch – Fallback bleibt Standard)
+  useEffect(() => {
+    apiFetch<HeroImages>('/api/twitch?resource=hero')
+      .then((data) => setHeroImages({ match: data.match || '', pom: data.pom || '', table: data.table || '' }))
+      .catch(() => {
+        // Kein eigenes Bild gepflegt – Standard-Design bleibt
+      });
   }, []);
 
   // Spielerstatistiken hängen an der ausgewählten Saison
@@ -705,7 +716,7 @@ export default function App() {
       <div key={activeTab} className="hl-fade">
       {activeTab === 'home' && (
         <>
-          <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
+          <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
           <HighlightsHome
             highlights={highlights}
             editMode={editMode && isAdmin}

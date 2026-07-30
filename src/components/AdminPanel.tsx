@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap } from 'lucide-react';
+import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon } from 'lucide-react';
 import { Player, Team, Match, EventConfig, EventArchive } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
@@ -13,10 +13,12 @@ function ImageUploader({
   label,
   value,
   onChange,
+  maxDimension,
 }: {
   label: string;
   value: string;
   onChange: (url: string) => void;
+  maxDimension?: number;
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -24,7 +26,7 @@ function ImageUploader({
   const handleFile = async (file: File) => {
     setIsUploading(true);
     try {
-      onChange(await uploadImage(file));
+      onChange(await uploadImage(file, maxDimension ? { maxDimension } : undefined));
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Fehler beim Bild-Upload.');
     } finally {
@@ -358,6 +360,10 @@ export default function AdminPanel({
   const [socialYoutube, setSocialYoutube] = useState('');
   const [socialSuccess, setSocialSuccess] = useState(false);
 
+  // Eigene Hero-Hintergrundbilder (Startseite)
+  const [heroImages, setHeroImages] = useState({ match: '', pom: '', table: '' });
+  const [heroSuccess, setHeroSuccess] = useState(false);
+
   // Sonder-Events (Testspiel-Archiv)
   const [eventArchive, setEventArchive] = useState<EventArchive | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
@@ -501,6 +507,29 @@ export default function AdminPanel({
       setSocialYoutube(saved.youtube || '');
       setSocialSuccess(true);
       setTimeout(() => setSocialSuccess(false), 3000);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
+    }
+  };
+
+  // Hero-Hintergrundbilder laden
+  useEffect(() => {
+    apiFetch<{ match: string; pom: string; table: string }>('/api/twitch?resource=hero')
+      .then((data) => setHeroImages({ match: data.match || '', pom: data.pom || '', table: data.table || '' }))
+      .catch(() => {
+        /* noch nicht konfiguriert */
+      });
+  }, []);
+
+  const handleSaveHero = async () => {
+    try {
+      const saved = await apiFetch<{ match: string; pom: string; table: string }>('/api/twitch?resource=hero', {
+        method: 'POST',
+        body: JSON.stringify(heroImages),
+      });
+      setHeroImages({ match: saved.match || '', pom: saved.pom || '', table: saved.table || '' });
+      setHeroSuccess(true);
+      setTimeout(() => setHeroSuccess(false), 3000);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
     }
@@ -1248,6 +1277,64 @@ export default function AdminPanel({
                 <span>Spieler auszeichnen</span>
               </button>
             </div>
+          </div>
+        </div>
+      </AccordionSection>
+
+      {/* Startseite: eigene Hero-Hintergrundbilder */}
+      <AccordionSection
+        id="hero"
+        title="Startseite · Hero-Bilder"
+        subtitle="Eigene Hintergrundbilder für die drei Slides oben auf der Startseite"
+        icon={<ImageIcon className="w-5 h-5" />}
+        accent="#22DFC9"
+      >
+        <div>
+          <p className="text-xs text-gray-400 font-sans mb-6">
+            Lade für jeden der drei Hero-Slides ein eigenes Hintergrundbild hoch. Wird ein Bild entfernt, greift wieder
+            das eingebaute Standard-Design. Tipp: Querformat, mindestens ~1600px breit — die Motive werden links
+            abgedunkelt, damit Titel &amp; Karte gut lesbar bleiben.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <ImageUploader
+              label="Slide 1 · Spieltag"
+              value={heroImages.match}
+              onChange={(url) => setHeroImages((h) => ({ ...h, match: url }))}
+              maxDimension={1920}
+            />
+            <ImageUploader
+              label="Slide 2 · Spieler des Monats"
+              value={heroImages.pom}
+              onChange={(url) => setHeroImages((h) => ({ ...h, pom: url }))}
+              maxDimension={1920}
+            />
+            <ImageUploader
+              label="Slide 3 · Tabellenführer"
+              value={heroImages.table}
+              onChange={(url) => setHeroImages((h) => ({ ...h, table: url }))}
+              maxDimension={1920}
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 mt-5">
+            {heroSuccess && (
+              <motion.span
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-xs text-emerald-400 uppercase tracking-wider font-mono mr-2"
+              >
+                ✓ Gespeichert!
+              </motion.span>
+            )}
+            <button
+              type="button"
+              onClick={handleSaveHero}
+              className="px-6 py-3 bg-brand-accent hover:bg-brand-accent/80 border border-brand-accent-light/30 rounded-full text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center gap-1.5 cursor-pointer shadow-lg shadow-brand-accent-light/10"
+            >
+              <Check className="w-4 h-4" />
+              <span>Hero-Bilder speichern</span>
+            </button>
           </div>
         </div>
       </AccordionSection>
