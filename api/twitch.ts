@@ -7,6 +7,10 @@ const DEFAULT_SOCIAL = { instagram: '', tiktok: '', youtube: '' };
 // Eigene Hintergrundbilder der drei Hero-Slides auf der Startseite. Leer =
 // das eingebaute Standard-Design bleibt.
 const DEFAULT_HERO = { match: '', pom: '', table: '' };
+// Countdown auf der Startseite bis zum Anstoß. `target` ist eine lokale
+// datetime-local-Zeichenkette (z. B. "2026-10-04T19:00"). active=false ⇒
+// Startseite ist normal.
+const DEFAULT_COUNTDOWN = { active: false, target: '2026-10-04T19:00', title: 'Till Season begins' };
 
 // Highlights: gemischte Medien-Liste (Bilder + Video-Links) + Ordner (Alben).
 type HighlightMedia = { id: string; type: 'image' | 'video'; url: string; caption?: string; ratio?: number };
@@ -118,6 +122,24 @@ const saveHero = requireAdmin(async (req: VercelRequest, res: VercelResponse) =>
 
   await sql`
     INSERT INTO settings (key, value) VALUES ('hero', ${JSON.stringify(cfg)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+
+  return res.json(cfg);
+});
+
+// Countdown-Konfiguration speichern.
+const saveCountdown = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
+  const b = req.body ?? {};
+  const target = typeof b.target === 'string' && b.target.trim() ? b.target.trim().slice(0, 40) : DEFAULT_COUNTDOWN.target;
+  const cfg = {
+    active: Boolean(b.active),
+    target,
+    title: typeof b.title === 'string' ? b.title.trim().slice(0, 60) : DEFAULT_COUNTDOWN.title,
+  };
+
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('countdown', ${JSON.stringify(cfg)}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
   `;
 
@@ -316,6 +338,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const rows = await sql`SELECT value FROM settings WHERE key = 'hero'`;
         return res.json({ ...DEFAULT_HERO, ...(rows[0]?.value ?? {}) });
       }
+      if (resource === 'countdown') {
+        const rows = await sql`SELECT value FROM settings WHERE key = 'countdown'`;
+        return res.json({ ...DEFAULT_COUNTDOWN, ...(rows[0]?.value ?? {}) });
+      }
       const rows = await sql`SELECT value FROM settings WHERE key = 'twitch'`;
       return res.json(rows[0]?.value ?? DEFAULT_TWITCH);
     }
@@ -324,6 +350,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'event') return saveEvent(req, res);
       if (resource === 'highlights') return saveHighlights(req, res);
       if (resource === 'hero') return saveHero(req, res);
+      if (resource === 'countdown') return saveCountdown(req, res);
       return saveTwitch(req, res);
     }
     return res.status(405).json({ error: 'Nicht unterstützt' });
