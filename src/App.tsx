@@ -22,6 +22,7 @@ import InstallPrompt from './components/InstallPrompt';
 import Ergebniszettel from './components/Ergebniszettel';
 import LegalPage from './components/LegalPage';
 import PageBackground from './components/PageBackground';
+import MobileDock from './components/MobileDock';
 import EventPage from './components/EventPage';
 import EventBanner from './components/EventBanner';
 import EventErgebniszettel from './components/EventErgebniszettel';
@@ -59,6 +60,22 @@ export default function App() {
   const [highlights, setHighlights] = useState<HighlightsConfig>({ items: [], albums: [] });
   // Eigene Hero-Hintergrundbilder (Startseite) – leer = Standard-Design
   const [heroImages, setHeroImages] = useState<HeroImages>({ match: '', pom: '', table: '' });
+  // Handy-Modus: Bottom-Dock zur Daumen-Steuerung. Pro Gerät gespeichert.
+  const [mobileMode, setMobileMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('hl-mobile-mode') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleMobileMode = () => setMobileMode((v) => !v);
+  useEffect(() => {
+    try {
+      localStorage.setItem('hl-mobile-mode', mobileMode ? '1' : '0');
+    } catch {
+      /* localStorage nicht verfügbar – Modus bleibt für die Sitzung */
+    }
+  }, [mobileMode]);
   // Inline-Bearbeiten der Highlights (nur für angemeldete Admins wirksam)
   const [editMode, setEditMode] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -379,6 +396,20 @@ export default function App() {
     navigateTo(TAB_PATHS[tab]);
   };
 
+  // Bottom-Dock (Handy-Modus). onEventPage = gerade die Testspiel-Seite offen.
+  const renderMobileDock = (onEventPage = false) =>
+    mobileMode ? (
+      <MobileDock
+        activeTab={activeTab}
+        onNavigate={goToTab}
+        hasHighlights={hasHighlights}
+        eventActive={!!activeEvent}
+        eventTitle={activeEvent?.title}
+        onOpenEvent={() => navigateTo('/testspiel')}
+        onEventPage={onEventPage}
+      />
+    ) : null;
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-brand-dark text-white flex items-center justify-center font-sans">
@@ -407,6 +438,8 @@ export default function App() {
           eventTitle={activeEvent?.title}
           onOpenEvent={() => navigateTo('/testspiel')}
           hasHighlights={hasHighlights}
+          mobileMode={mobileMode}
+          onToggleMobileMode={toggleMobileMode}
         />
         <main className="flex-1">
           <LegalPage kind={kind} onBack={goBack} />
@@ -423,6 +456,7 @@ export default function App() {
     return (
       <div className="min-h-screen text-hl-text font-sans flex flex-col">
         <PageBackground page="tabelle" />
+        {renderMobileDock()}
         <Navbar
           activeTab={activeTab}
           setActiveTab={goToTab}
@@ -437,6 +471,8 @@ export default function App() {
           eventTitle={activeEvent?.title}
           onOpenEvent={() => navigateTo('/testspiel')}
           hasHighlights={hasHighlights}
+          mobileMode={mobileMode}
+          onToggleMobileMode={toggleMobileMode}
         />
         <main className="flex-1">
           {team ? (
@@ -484,6 +520,7 @@ export default function App() {
     const isPreviewOnly = !activeEvent && !!previewEvent;
     return (
       <div className="min-h-screen bg-brand-dark text-hl-text font-sans flex flex-col">
+        {renderMobileDock(true)}
         <Navbar
           activeTab={activeTab}
           setActiveTab={goToTab}
@@ -498,6 +535,8 @@ export default function App() {
           eventTitle={activeEvent?.title}
           onOpenEvent={() => navigateTo('/testspiel')}
           hasHighlights={hasHighlights}
+          mobileMode={mobileMode}
+          onToggleMobileMode={toggleMobileMode}
         />
         <main className="flex-1">
           {previewEvent ? (
@@ -692,6 +731,7 @@ export default function App() {
   return (
     <div className="min-h-screen text-hl-text font-sans overflow-x-hidden">
       <PageBackground page={activeTab} />
+      {renderMobileDock()}
       <LiveBanner />
       <Navbar
         activeTab={activeTab}
@@ -707,13 +747,15 @@ export default function App() {
         eventTitle={activeEvent?.title}
         onOpenEvent={() => navigateTo('/testspiel')}
         hasHighlights={hasHighlights}
+        mobileMode={mobileMode}
+        onToggleMobileMode={toggleMobileMode}
       />
       {activeEvent && activeTab === 'home' && (
         <EventBanner event={activeEvent} isLive={eventHasLive} onOpen={() => navigateTo('/testspiel')} />
       )}
       <LiveTicker matches={currentSeasonMatches} teams={visibleTeams} players={players} />
 
-      <div key={activeTab} className="hl-fade">
+      <div key={activeTab} className={`hl-fade ${mobileMode ? 'pb-24 lg:pb-0' : ''}`}>
       {activeTab === 'home' && (
         <>
           <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
