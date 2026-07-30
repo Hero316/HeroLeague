@@ -755,7 +755,7 @@ export default function App() {
       )}
       <LiveTicker matches={currentSeasonMatches} teams={visibleTeams} players={players} />
 
-      <div key={activeTab} className={`hl-fade ${mobileMode ? 'pb-48 lg:pb-0' : ''}`}>
+      <div key={activeTab} className={`hl-fade ${mobileMode ? 'pb-36 lg:pb-0' : ''}`}>
       {activeTab === 'home' && (
         <>
           <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
@@ -877,7 +877,9 @@ export default function App() {
         <button
           onClick={() => setEditMode((v) => !v)}
           title="Highlights direkt auf der Seite bearbeiten"
-          className={`fixed bottom-5 right-5 z-[80] inline-flex items-center gap-2 px-4 py-3 rounded-full shadow-xl font-sans font-bold text-xs uppercase tracking-wider transition-all cursor-pointer ${
+          className={`fixed right-5 z-[80] inline-flex items-center gap-2 px-4 py-3 rounded-full shadow-xl font-sans font-bold text-xs uppercase tracking-wider transition-all cursor-pointer ${
+            mobileMode ? 'bottom-[calc(env(safe-area-inset-bottom)+104px)] lg:bottom-5' : 'bottom-5'
+          } ${
             editMode
               ? 'bg-brand-accent-light text-brand-dark shadow-[0_0_24px_rgba(34,223,201,.5)]'
               : 'bg-brand-dark/90 backdrop-blur border border-brand-accent-light/40 text-brand-accent-light hover:bg-brand-dark'
