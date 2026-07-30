@@ -143,7 +143,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
         </div>
         <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-24 sm:pt-10 sm:pb-26 w-full flex items-center">
           <div className="w-full flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 sm:gap-8 lg:gap-11">
-            <div className="max-w-[600px] hl-fade">
+            <div className="max-w-[600px] hl-cascade">
               <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.3)]">
                 <span className="w-[7px] h-[7px] rounded-full bg-brand-accent-light shadow-[0_0_10px_#22DFC9] hl-pulse" />
                 <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-brand-accent-light">{kicker}</span>
@@ -180,9 +180,9 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
             </div>
 
             {featuredDay && first && (
-              <div className="flex-none w-full max-w-[368px] lg:max-w-[430px] relative rounded-[22px] overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,.5)]">
+              <div className="flex-none w-full max-w-[368px] lg:max-w-[430px] relative rounded-[22px] overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,.5)] hl-pop">
                 <div className="absolute inset-0 bg-[linear-gradient(140deg,rgba(34,223,201,.16),rgba(232,62,140,.1)_62%,rgba(255,255,255,.02))] pointer-events-none" />
-                <div className="relative bg-[rgba(11,17,17,.5)] border border-white/[.12] rounded-[22px] p-[22px] backdrop-blur-2xl">
+                <div className="relative bg-[rgba(11,17,17,.42)] border border-white/[.14] rounded-[22px] p-[22px] backdrop-blur-2xl backdrop-saturate-150 shadow-[inset_0_1px_0_rgba(255,255,255,.12)]">
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <span className="font-sans font-extrabold text-[10.5px] tracking-[2px] text-brand-accent-light uppercase">
                       {dateShortWd}
@@ -197,7 +197,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                       <span className="truncate">{venue}</span>
                     </div>
                   )}
-                  <div className="border-t border-white/[.08]">
+                  <div className="border-t border-white/[.08] hl-cascade">
                     {dayMatches.slice(0, 5).map((m) => {
                       const h = getTeam(m.homeTeamId);
                       const a = getTeam(m.awayTeamId);
@@ -285,7 +285,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
         <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-8 pb-24 sm:pt-10 sm:pb-26 w-full flex items-center">
           <div className="w-full flex flex-col lg:flex-row items-center justify-between gap-6 lg:gap-11">
             {/* Textspalte */}
-            <div className="max-w-[520px] hl-fade text-center lg:text-left">
+            <div className="max-w-[520px] hl-cascade text-center lg:text-left">
               <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(233,196,106,.12)] border border-[rgba(233,196,106,.34)]">
                 <span className="text-xs leading-none text-hl-gold">★</span>
                 <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-hl-gold">AUSZEICHNUNG</span>
@@ -309,7 +309,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
               </div>
             </div>
             {/* Karte */}
-            <div className="flex-none w-full max-w-[360px] hl-fade">
+            <div className="flex-none w-full max-w-[360px] hl-pop">
               <PlayerOfMonthCard
                 pom={pom}
                 crest={crest}
@@ -349,7 +349,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
         </div>
         <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-24 sm:pt-10 sm:pb-26 w-full flex items-center">
           <div className="w-full flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 sm:gap-8 lg:gap-11">
-            <div className="max-w-[560px] hl-fade">
+            <div className="max-w-[560px] hl-cascade">
               <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.3)]">
                 <span className="text-[11px] leading-none text-brand-accent-light">▲</span>
                 <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-brand-accent-light">TABELLENFÜHRER</span>
@@ -372,12 +372,13 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                 </button>
               </div>
             </div>
-            <div className="flex-none w-full max-w-[340px] lg:max-w-[390px] relative rounded-[22px] overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,.5)]">
+            <div className="flex-none w-full max-w-[340px] lg:max-w-[390px] relative rounded-[22px] overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,.5)] hl-pop">
               <div className="absolute inset-0 bg-[linear-gradient(140deg,rgba(34,223,201,.16),rgba(232,62,140,.08)_62%,rgba(255,255,255,.02))] pointer-events-none" />
-              <div className="relative bg-[rgba(11,17,17,.5)] border border-white/[.12] rounded-[22px] p-5 backdrop-blur-2xl">
+              <div className="relative bg-[rgba(11,17,17,.42)] border border-white/[.14] rounded-[22px] p-5 backdrop-blur-2xl backdrop-saturate-150 shadow-[inset_0_1px_0_rgba(255,255,255,.12)]">
                 <div className="font-sans font-extrabold text-[10.5px] tracking-[2px] text-brand-accent-light mb-3.5">
                   TOP 4 · LIGATABELLE
                 </div>
+                <div className="hl-cascade">
                 {top4.map((s, i) => {
                   const rank = i + 1;
                   return (
@@ -407,6 +408,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                     </div>
                   );
                 })}
+                </div>
               </div>
             </div>
             {/* Buttons auf dem Handy unter der Karte */}
@@ -446,7 +448,10 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
             pointerEvents: i === current ? 'auto' : 'none',
           }}
         >
-          {renderSlide(kind)}
+          {/* key wechselt beim Aktiv-Werden → Pop-/Kaskaden-Animation spielt erneut ab */}
+          <div key={i === current ? 'on' : 'off'} className="contents">
+            {renderSlide(kind)}
+          </div>
         </div>
       ))}
 
