@@ -121,8 +121,7 @@ interface PageHeaderProps {
 // Seitenkopf der Unterseiten (Spielplan, Tabelle, ...)
 export function PageHeader({ kicker, title, text }: PageHeaderProps) {
   return (
-    <div className="relative overflow-hidden">
-      <div className="absolute -top-40 -left-32 w-[560px] h-[560px] bg-[radial-gradient(circle,rgba(34,223,201,.12),transparent_66%)] pointer-events-none" />
+    <div className="relative">
       <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-10 sm:pt-13 pb-6">
         <div className="font-sans font-extrabold text-xs tracking-[3px] text-brand-accent-light uppercase hl-fade">{kicker}</div>
         <h1 className="mt-3 font-display font-black text-5xl sm:text-7xl leading-[.86] tracking-tight uppercase text-white hl-fade">

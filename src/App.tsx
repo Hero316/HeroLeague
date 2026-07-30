@@ -21,6 +21,7 @@ import LiveVisitors from './components/LiveVisitors';
 import InstallPrompt from './components/InstallPrompt';
 import Ergebniszettel from './components/Ergebniszettel';
 import LegalPage from './components/LegalPage';
+import PageBackground from './components/PageBackground';
 import EventPage from './components/EventPage';
 import EventBanner from './components/EventBanner';
 import EventErgebniszettel from './components/EventErgebniszettel';
@@ -379,7 +380,8 @@ export default function App() {
   if (currentPath === '/impressum' || currentPath === '/datenschutz') {
     const kind = currentPath === '/impressum' ? 'impressum' : 'datenschutz';
     return (
-      <div className="min-h-screen bg-brand-dark text-hl-text font-sans flex flex-col">
+      <div className="min-h-screen text-hl-text font-sans flex flex-col">
+        <PageBackground page="default" />
         <Navbar
           activeTab={activeTab}
           setActiveTab={goToTab}
@@ -408,7 +410,8 @@ export default function App() {
     const teamId = decodeURIComponent(currentPath.slice('/verein/'.length).replace(/\/+$/, ''));
     const team = visibleTeams.find((t) => t.id === teamId);
     return (
-      <div className="min-h-screen bg-brand-dark text-hl-text font-sans flex flex-col">
+      <div className="min-h-screen text-hl-text font-sans flex flex-col">
+        <PageBackground page="tabelle" />
         <Navbar
           activeTab={activeTab}
           setActiveTab={goToTab}
@@ -526,7 +529,8 @@ export default function App() {
   // ROUTE: /admin – geschütztes Backoffice
   if (currentPath === '/admin') {
     return (
-      <div className="min-h-screen bg-brand-dark text-hl-text font-sans flex flex-col justify-between">
+      <div className="min-h-screen text-hl-text font-sans flex flex-col justify-between">
+        <PageBackground page="default" />
         <header className="border-b border-white/[.07] bg-[rgba(7,10,8,.72)] backdrop-blur-xl px-6 py-4">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -675,7 +679,8 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen bg-brand-dark text-hl-text font-sans overflow-x-hidden">
+    <div className="min-h-screen text-hl-text font-sans overflow-x-hidden">
+      <PageBackground page={activeTab} />
       <LiveBanner />
       <Navbar
         activeTab={activeTab}

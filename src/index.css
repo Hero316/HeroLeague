@@ -104,6 +104,25 @@ body {
   }
 }
 
+/* Ambient-Hintergrund: große, weiche Farbverläufe driften langsam – gibt der
+   Seite Tiefe, ohne unruhig zu werden. Drei Ebenen mit versetztem Rhythmus. */
+@keyframes hlDriftA {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(5%, 4%, 0) scale(1.08); }
+}
+@keyframes hlDriftB {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-6%, -4%, 0) scale(1.06); }
+}
+@keyframes hlDriftC {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(4%, -5%, 0) scale(1.1); }
+}
+@keyframes hlBgIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .hl-fade {
   animation: hlFade 0.6s both;
 }
@@ -120,6 +139,11 @@ body {
 .hl-zoom {
   animation: hlZoom 24s ease-in-out infinite alternate;
 }
+
+.hl-drift-a { animation: hlDriftA 34s ease-in-out infinite; will-change: transform; }
+.hl-drift-b { animation: hlDriftB 42s ease-in-out infinite; will-change: transform; }
+.hl-drift-c { animation: hlDriftC 38s ease-in-out infinite; will-change: transform; }
+.hl-bg-in { animation: hlBgIn 1.2s ease both; }
 
 /* HERO-ONE-Gold: leuchtender, schimmernder Goldverlauf auf Text.
    Fuer den Award-Titel (Tab + Sektion) – die hoechste Auszeichnung. */
@@ -140,7 +164,10 @@ body {
   .hl-zoom,
   .hl-marquee,
   .hl-pulse,
-  .hl-gold-text {
+  .hl-gold-text,
+  .hl-drift-a,
+  .hl-drift-b,
+  .hl-drift-c {
     animation: none !important;
   }
   /* Ohne Animation trotzdem golden lesbar halten */
@@ -156,14 +183,19 @@ body {
   }
 }
 
-/* Glas-Karte: wiederkehrender Kartenstil des Designs */
+/* Glas-Karte: wiederkehrender Kartenstil des Designs. Etwas mehr Glas –
+   feiner Rand, oberer Licht-Schimmer, mehr Sättigung, damit der ambiente
+   Hintergrund dezent durchscheint. */
 .hl-card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.058), rgba(255, 255, 255, 0.014));
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 22px;
-  backdrop-filter: blur(20px) saturate(1.2);
-  -webkit-backdrop-filter: blur(20px) saturate(1.2);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 24px 60px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.11),
+    inset 0 0 40px rgba(255, 255, 255, 0.015),
+    0 24px 64px rgba(0, 0, 0, 0.42);
 }
 
 /* =====================================================================
