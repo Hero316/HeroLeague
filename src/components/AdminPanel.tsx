@@ -196,6 +196,7 @@ interface AdminPanelProps {
   teams: Team[];
   matches: Match[];
   currentSeasonLabel: string;
+  nextSeasonLabel: string;
   isSuperadmin: boolean;
   onAddTeam: (team: Omit<Team, 'id'>) => Promise<boolean>;
   onEditTeam: (teamId: string, updatedData: Partial<Team>) => Promise<boolean>;
@@ -269,18 +270,11 @@ function computeMonthPom(matches: Match[], teams: Team[]) {
   };
 }
 
-// Vorschlag für das Label der Folgesaison: "2026/27" -> "2027/28"
-function suggestNextSeasonLabel(current: string): string {
-  const match = current.match(/^(\d{4})\/(\d{2})$/);
-  if (!match) return '';
-  const startYear = parseInt(match[1], 10) + 1;
-  return `${startYear}/${String((startYear + 1) % 100).padStart(2, '0')}`;
-}
-
 export default function AdminPanel({
   teams,
   matches,
   currentSeasonLabel,
+  nextSeasonLabel,
   isSuperadmin,
   onAddTeam,
   onEditTeam,
@@ -813,13 +807,14 @@ export default function AdminPanel({
   };
 
   const openSeasonModal = () => {
-    setNewSeasonLabel(suggestNextSeasonLabel(currentSeasonLabel));
+    // Name der neuen Saison wird automatisch vergeben (SEASON ONE/TWO …).
+    setNewSeasonLabel(nextSeasonLabel);
     setSeasonModalOpen(true);
   };
 
   const handleStartSeason = async () => {
     if (!newSeasonLabel.trim()) {
-      alert('Bitte ein Saison-Label angeben (z.B. "2027/28").');
+      alert('Kein Saison-Name vorhanden.');
       return;
     }
     setIsStartingSeason(true);
@@ -864,15 +859,11 @@ export default function AdminPanel({
               </p>
 
               <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
-                Label der neuen Saison
+                Name der neuen Saison
               </label>
-              <input
-                type="text"
-                placeholder='z.B. "2027/28"'
-                value={newSeasonLabel}
-                onChange={(e) => setNewSeasonLabel(e.target.value)}
-                className={`${inputClass} font-mono mb-6`}
-              />
+              <div className="mb-6 px-4 py-3 rounded-xl bg-white/5 border border-white/10 font-display font-black text-lg uppercase tracking-wide text-white">
+                {newSeasonLabel || nextSeasonLabel}
+              </div>
 
               <div className="flex gap-3">
                 <button

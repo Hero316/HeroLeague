@@ -116,7 +116,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
     const games = cnt === 1 ? 'Begegnung' : 'Begegnungen';
 
     const kicker = !featuredDay
-      ? `SAISON ${seasonLabel || ''}`
+      ? seasonLabel || 'HERO LEAGUE'
       : featuredDay.kind === 'live'
       ? `JETZT LIVE · SPIELTAG ${featuredDay.day}`
       : featuredDay.kind === 'upcoming'

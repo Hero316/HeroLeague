@@ -24,7 +24,7 @@ const handleDemo = requireSuperadmin(async (req: VercelRequest, res: VercelRespo
 // Vereine/Kader bleiben, alte Saisons samt Spielen bleiben erhalten.
 const createSeason = requireSuperadmin(async (req: VercelRequest, res: VercelResponse) => {
   const { label } = req.body ?? {};
-  if (!isNonEmptyString(label)) return badRequest(res, 'Bitte ein Saison-Label angeben (z.B. "2027/28").');
+  if (!isNonEmptyString(label)) return badRequest(res, 'Bitte einen Saison-Namen angeben (z.B. "SEASON TWO").');
 
   const seasons = await getSeasons();
   const trimmed = label.trim();

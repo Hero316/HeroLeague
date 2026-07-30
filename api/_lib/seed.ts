@@ -4,7 +4,7 @@ import type { Match, PlayerOfMonth, Team } from '../../src/types';
 // Für den echten Ligabetrieb: Demo-Vereine im Admin-Panel löschen und eigene anlegen
 // (siehe README, Abschnitt "Demo-Daten entfernen").
 
-export const SEED_SEASON = { id: 'saison-2026-27', label: '2026/27' };
+export const SEED_SEASON = { id: 'saison-2026-27', label: 'SEASON ONE' };
 
 export const SEED_TEAMS: Team[] = [
   { id: 'apex', name: 'Apex München', shortName: 'APX', logoColor: '#3B82F6', logoIcon: '🛡️', logoUrl: '', spielerliste: [{ name: 'Harry Kane' }, { name: 'Leroy Sané' }, { name: 'Jamal Musiala' }, { name: 'Thomas Müller' }, { name: 'Joshua Kimmich' }] },

@@ -66,7 +66,7 @@ export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onS
             <span className="hl-gold-text text-6xl sm:text-8xl">{word}</span>
           </h1>
           <p className="mt-4 max-w-[620px] mx-auto font-sans text-sm sm:text-[15px] text-hl-mute leading-relaxed">
-            Der wertvollste Spieler der Saison{seasonLabel ? ` ${seasonLabel}` : ''} — ermittelt aus Toren, Vorlagen,
+            Der wertvollste Spieler {seasonLabel ? `der ${seasonLabel}` : 'der Saison'} — ermittelt aus Toren, Vorlagen,
             Auszeichnungen als bester Spieler, Team-Erfolg und Spielen zu null.
           </p>
         </div>

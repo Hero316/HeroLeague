@@ -60,7 +60,7 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
                 <div>
                   <div className="font-display font-black text-[23px] tracking-[.5px] uppercase text-white leading-tight">Ligatabelle</div>
                   <div className="font-sans font-semibold text-[11px] tracking-[1.5px] text-hl-dim mt-0.5 uppercase">
-                    {seasonLabel ? `SAISON ${seasonLabel}` : 'HERO LEAGUE'}
+                    {seasonLabel || 'HERO LEAGUE'}
                   </div>
                 </div>
               </div>
@@ -214,7 +214,7 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
         </div>
         <div className="relative max-w-[1000px] mx-auto px-4 sm:px-10 py-16 sm:py-[88px] text-center">
           <div className="font-sans font-extrabold text-xs tracking-[3px] text-brand-accent-light uppercase">
-            {seasonLabel ? `SAISON ${seasonLabel} · JETZT LIVE` : 'HERO LEAGUE · JETZT LIVE'}
+            {seasonLabel ? `${seasonLabel} · JETZT LIVE` : 'HERO LEAGUE · JETZT LIVE'}
           </div>
           <h2 className="mt-4 font-display font-black text-5xl sm:text-7xl xl:text-[84px] leading-[.86] tracking-tight uppercase text-white">
             SEI TEIL DER <span className="text-brand-accent-light [text-shadow:0_0_40px_rgba(34,223,201,.35)]">LEAGUE</span>

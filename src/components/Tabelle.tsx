@@ -177,7 +177,7 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
           )}
           <span className="sm:ml-auto">
             SORTIERUNG: 1. PUNKTE · 2. TORDIFFERENZ · 3. DIREKTER VERGLEICH · 4. ERZIELTE TORE
-            {seasonLabel ? ` · SAISON ${seasonLabel}` : ''}
+            {seasonLabel ? ` · ${seasonLabel}` : ''}
           </span>
         </div>
       )}
