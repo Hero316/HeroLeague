@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Menu, X, LogOut, LayoutDashboard, Instagram, Youtube, Zap } from 'lucide-react';
+import { Menu, X, LogOut, LayoutDashboard, Instagram, Youtube, Zap, Smartphone } from 'lucide-react';
 import { ActiveTab, SocialLinks } from '../types';
 import { numberWord } from '../lib/heroAward';
 import { apiFetch } from '../lib/api';
@@ -27,6 +27,8 @@ interface NavbarProps {
   eventTitle?: string;
   onOpenEvent?: () => void;
   hasHighlights?: boolean; // Highlights vorhanden (oder Admin) -> Menüpunkt zeigen
+  mobileMode?: boolean; // Handy-Modus (Bottom-Dock) aktiv?
+  onToggleMobileMode?: () => void;
 }
 
 export default function Navbar({
@@ -42,6 +44,8 @@ export default function Navbar({
   eventTitle,
   onOpenEvent,
   hasHighlights,
+  mobileMode,
+  onToggleMobileMode,
 }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [social, setSocial] = useState<SocialLinks>({ instagram: '', tiktok: '', youtube: '' });
@@ -250,6 +254,34 @@ export default function Navbar({
               </button>
             );
           })}
+
+          {/* Handy-Modus: Bottom-Dock zur Daumen-Steuerung an/aus (für jeden) */}
+          {onToggleMobileMode && (
+            <button
+              onClick={onToggleMobileMode}
+              className={`w-full flex items-center gap-2.5 mt-2 px-4 py-3 rounded-xl border transition-colors cursor-pointer ${
+                mobileMode
+                  ? 'bg-[rgba(34,223,201,.12)] border-[rgba(34,223,201,.3)] text-brand-accent-light'
+                  : 'bg-white/[.03] border-white/10 text-hl-mute hover:text-white'
+              }`}
+            >
+              <Smartphone className="w-4 h-4 shrink-0" />
+              <span className="font-sans font-bold text-sm tracking-[.5px] text-left">Handy-Modus</span>
+              {/* Schalter-Optik */}
+              <span
+                className={`ml-auto relative w-10 h-[22px] rounded-full transition-colors ${
+                  mobileMode ? 'bg-brand-accent-light' : 'bg-white/15'
+                }`}
+              >
+                <span
+                  className={`absolute top-[3px] w-4 h-4 rounded-full bg-white shadow transition-all ${
+                    mobileMode ? 'left-[21px]' : 'left-[3px]'
+                  }`}
+                />
+              </span>
+            </button>
+          )}
+
           {isAdmin && (
             <button
               onClick={() => {

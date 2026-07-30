@@ -68,6 +68,14 @@ export interface Season {
   isCurrent: boolean;
 }
 
+// Optionale eigene Hintergrundbilder der drei Hero-Slides (Startseite).
+// Leerer String = eingebautes Standard-Design.
+export interface HeroImages {
+  match: string;
+  pom: string;
+  table: string;
+}
+
 export interface PlayerOfMonth {
   name: string;
   club: string;

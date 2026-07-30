@@ -4,6 +4,9 @@ import { requireAdmin } from './_lib/auth.js';
 
 const DEFAULT_TWITCH = { channel: '', isLive: false };
 const DEFAULT_SOCIAL = { instagram: '', tiktok: '', youtube: '' };
+// Eigene Hintergrundbilder der drei Hero-Slides auf der Startseite. Leer =
+// das eingebaute Standard-Design bleibt.
+const DEFAULT_HERO = { match: '', pom: '', table: '' };
 
 // Highlights: gemischte Medien-Liste (Bilder + Video-Links) + Ordner (Alben).
 type HighlightMedia = { id: string; type: 'image' | 'video'; url: string; caption?: string; ratio?: number };
@@ -98,6 +101,23 @@ const saveSocial = requireAdmin(async (req: VercelRequest, res: VercelResponse) 
 
   await sql`
     INSERT INTO settings (key, value) VALUES ('social', ${JSON.stringify(cfg)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+
+  return res.json(cfg);
+});
+
+// Hero-Hintergrundbilder speichern (nur http(s)-URLs; leere Felder = Standard).
+const saveHero = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
+  const { match, pom, table } = req.body ?? {};
+  const pick = (v: unknown) => {
+    const url = normalizeUrl(v);
+    return /^https?:\/\//i.test(url) ? url : '';
+  };
+  const cfg = { match: pick(match), pom: pick(pom), table: pick(table) };
+
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('hero', ${JSON.stringify(cfg)}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
   `;
 
@@ -292,6 +312,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Migration vom alten {clip,images}-Format erfolgt in normalizeHighlights.
         return res.json(rows[0]?.value ? normalizeHighlights(rows[0].value) : DEFAULT_HIGHLIGHTS);
       }
+      if (resource === 'hero') {
+        const rows = await sql`SELECT value FROM settings WHERE key = 'hero'`;
+        return res.json({ ...DEFAULT_HERO, ...(rows[0]?.value ?? {}) });
+      }
       const rows = await sql`SELECT value FROM settings WHERE key = 'twitch'`;
       return res.json(rows[0]?.value ?? DEFAULT_TWITCH);
     }
@@ -299,6 +323,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'social') return saveSocial(req, res);
       if (resource === 'event') return saveEvent(req, res);
       if (resource === 'highlights') return saveHighlights(req, res);
+      if (resource === 'hero') return saveHero(req, res);
       return saveTwitch(req, res);
     }
     return res.status(405).json({ error: 'Nicht unterstützt' });

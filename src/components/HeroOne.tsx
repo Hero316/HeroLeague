@@ -121,7 +121,7 @@ export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onS
 
           {/* Verfolger (Platz 2+) */}
           {rest.length > 0 && (
-            <div className="hl-card mt-5 px-2 sm:px-4 pt-2 pb-3">
+            <div className="hl-card mt-5 px-2 sm:px-4 pt-2 pb-3 hl-cascade-soft">
               {rest.map((p, i) => {
                 const rank = i + 2;
                 const bd = breakdown(p);

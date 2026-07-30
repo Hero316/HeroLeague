@@ -47,7 +47,7 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
   }
 
   return (
-    <div ref={listRef} className={compact ? '' : 'hl-card px-2.5 sm:px-[22px] py-3 sm:pt-3 sm:pb-[18px]'}>
+    <div ref={listRef} className={compact ? '' : 'hl-card px-2.5 sm:px-[22px] py-3 sm:pt-3 sm:pb-[18px] hl-cascade-soft'}>
       {/* Kopfzeile */}
       <div
         className={`grid ${gridCols} gap-1.5 sm:gap-2 px-1.5 sm:px-2.5 pt-3 pb-3 border-b border-white/[.08] font-sans font-bold text-[10px] sm:text-[10.5px] tracking-wider text-hl-faint`}
