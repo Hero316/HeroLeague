@@ -76,6 +76,13 @@ export interface HeroImages {
   table: string;
 }
 
+// Countdown auf der Startseite bis zum Anstoß. active=false ⇒ normal.
+export interface CountdownConfig {
+  active: boolean;
+  target: string; // lokale datetime-local-Zeichenkette, z. B. "2026-10-04T19:00"
+  title: string; // dezenter Text dahinter, z. B. "Till Season begins"
+}
+
 export interface PlayerOfMonth {
   name: string;
   club: string;

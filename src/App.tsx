@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages } from './types';
+import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
 import { startPresence } from './lib/presence';
 import { seasonName } from './lib/heroAward';
@@ -23,6 +23,7 @@ import Ergebniszettel from './components/Ergebniszettel';
 import LegalPage from './components/LegalPage';
 import PageBackground from './components/PageBackground';
 import MobileDock from './components/MobileDock';
+import Countdown from './components/Countdown';
 import EventPage from './components/EventPage';
 import EventBanner from './components/EventBanner';
 import EventErgebniszettel from './components/EventErgebniszettel';
@@ -60,6 +61,8 @@ export default function App() {
   const [highlights, setHighlights] = useState<HighlightsConfig>({ items: [], albums: [] });
   // Eigene Hero-Hintergrundbilder (Startseite) – leer = Standard-Design
   const [heroImages, setHeroImages] = useState<HeroImages>({ match: '', pom: '', table: '' });
+  // Countdown bis zum Anstoß (Startseite). active=false ⇒ normal.
+  const [countdown, setCountdown] = useState<CountdownConfig>({ active: false, target: '2026-10-04T19:00', title: 'Till Season begins' });
   // Handy-Modus: Bottom-Dock zur Daumen-Steuerung. Pro Gerät gespeichert.
   const [mobileMode, setMobileMode] = useState<boolean>(() => {
     try {
@@ -185,6 +188,21 @@ export default function App() {
       .then((data) => setHeroImages({ match: data.match || '', pom: data.pom || '', table: data.table || '' }))
       .catch(() => {
         // Kein eigenes Bild gepflegt – Standard-Design bleibt
+      });
+  }, []);
+
+  // Countdown-Konfiguration laden (unkritisch – Fallback: aus)
+  useEffect(() => {
+    apiFetch<CountdownConfig>('/api/twitch?resource=countdown')
+      .then((data) =>
+        setCountdown({
+          active: !!data.active,
+          target: data.target || '2026-10-04T19:00',
+          title: typeof data.title === 'string' ? data.title : 'Till Season begins',
+        })
+      )
+      .catch(() => {
+        /* nicht konfiguriert – Countdown bleibt aus */
       });
   }, []);
 
@@ -758,6 +776,7 @@ export default function App() {
       <div key={activeTab} className={`hl-fade ${mobileMode ? 'pb-36 lg:pb-0' : ''}`}>
       {activeTab === 'home' && (
         <>
+          {countdown.active && <Countdown target={countdown.target} title={countdown.title} />}
           <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
           <HighlightsHome
             highlights={highlights}

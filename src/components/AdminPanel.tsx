@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon } from 'lucide-react';
+import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer } from 'lucide-react';
 import { Player, Team, Match, EventConfig, EventArchive } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
@@ -364,6 +364,12 @@ export default function AdminPanel({
   const [heroImages, setHeroImages] = useState({ match: '', pom: '', table: '' });
   const [heroSuccess, setHeroSuccess] = useState(false);
 
+  // Countdown (Startseite)
+  const [countdownActive, setCountdownActive] = useState(false);
+  const [countdownTarget, setCountdownTarget] = useState('2026-10-04T19:00');
+  const [countdownTitle, setCountdownTitle] = useState('Till Season begins');
+  const [countdownSuccess, setCountdownSuccess] = useState(false);
+
   // Sonder-Events (Testspiel-Archiv)
   const [eventArchive, setEventArchive] = useState<EventArchive | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
@@ -530,6 +536,36 @@ export default function AdminPanel({
       setHeroImages({ match: saved.match || '', pom: saved.pom || '', table: saved.table || '' });
       setHeroSuccess(true);
       setTimeout(() => setHeroSuccess(false), 3000);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
+    }
+  };
+
+  // Countdown laden
+  useEffect(() => {
+    apiFetch<{ active: boolean; target: string; title: string }>('/api/twitch?resource=countdown')
+      .then((data) => {
+        setCountdownActive(!!data.active);
+        setCountdownTarget(data.target || '2026-10-04T19:00');
+        setCountdownTitle(typeof data.title === 'string' ? data.title : 'Till Season begins');
+      })
+      .catch(() => {
+        /* noch nicht konfiguriert */
+      });
+  }, []);
+
+  // Countdown speichern (optional mit überschriebenem active-Wert für den Schalter)
+  const saveCountdown = async (nextActive = countdownActive) => {
+    try {
+      const saved = await apiFetch<{ active: boolean; target: string; title: string }>('/api/twitch?resource=countdown', {
+        method: 'POST',
+        body: JSON.stringify({ active: nextActive, target: countdownTarget.trim(), title: countdownTitle.trim() }),
+      });
+      setCountdownActive(!!saved.active);
+      setCountdownTarget(saved.target || '2026-10-04T19:00');
+      setCountdownTitle(typeof saved.title === 'string' ? saved.title : '');
+      setCountdownSuccess(true);
+      setTimeout(() => setCountdownSuccess(false), 3000);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
     }
@@ -1334,6 +1370,92 @@ export default function AdminPanel({
             >
               <Check className="w-4 h-4" />
               <span>Hero-Bilder speichern</span>
+            </button>
+          </div>
+        </div>
+      </AccordionSection>
+
+      {/* Countdown auf der Startseite */}
+      <AccordionSection
+        id="countdown"
+        title="Countdown (Startseite)"
+        subtitle="Großer Countdown bis zum Anstoß – an/aus schaltbar"
+        icon={<Timer className="w-5 h-5" />}
+        accent="#22DFC9"
+      >
+        <div>
+          <p className="text-xs text-gray-400 font-sans mb-6">
+            Zeigt oben auf der Startseite einen großen Countdown (Tage · Stunden · Minuten · Sekunden) bis zum
+            eingestellten Zeitpunkt. Läuft er ab, glüht er <span className="text-hl-red-soft font-semibold">rot</span> und
+            bleibt stehen, bis du ihn hier ausschaltest. Aus = die Startseite ist ganz normal. Der Countdown rechnet
+            immer live gegen den Zeitpunkt – du kannst ihn beliebig oft an- und ausschalten.
+          </p>
+
+          {/* An/Aus-Schalter – speichert sofort */}
+          <div className="flex items-center justify-between gap-4 mb-5 p-4 rounded-xl bg-white/[.03] border border-white/10">
+            <div className="min-w-0">
+              <div className="text-sm font-bold text-white font-sans">Countdown anzeigen</div>
+              <div className="text-xs text-gray-400 font-sans">Groß oben auf der Startseite</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => saveCountdown(!countdownActive)}
+              aria-pressed={countdownActive}
+              className={`relative w-12 h-[26px] rounded-full transition-colors shrink-0 cursor-pointer ${
+                countdownActive ? 'bg-brand-accent-light' : 'bg-white/15'
+              }`}
+            >
+              <span
+                className={`absolute top-[3px] w-5 h-5 rounded-full bg-white shadow transition-all ${
+                  countdownActive ? 'left-[25px]' : 'left-[3px]'
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
+                Anstoß / Zielzeitpunkt
+              </label>
+              <input
+                type="datetime-local"
+                value={countdownTarget}
+                onChange={(e) => setCountdownTarget(e.target.value)}
+                className={`${inputClass} font-mono`}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
+                Text dahinter (dezent)
+              </label>
+              <input
+                type="text"
+                value={countdownTitle}
+                onChange={(e) => setCountdownTitle(e.target.value)}
+                placeholder="z.B. Till Season begins"
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 mt-5">
+            {countdownSuccess && (
+              <motion.span
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-xs text-emerald-400 uppercase tracking-wider font-mono mr-2"
+              >
+                ✓ Gespeichert!
+              </motion.span>
+            )}
+            <button
+              type="button"
+              onClick={() => saveCountdown()}
+              className="px-6 py-3 bg-brand-accent hover:bg-brand-accent/80 border border-brand-accent-light/30 rounded-full text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center gap-1.5 cursor-pointer shadow-lg shadow-brand-accent-light/10"
+            >
+              <Check className="w-4 h-4" />
+              <span>Countdown speichern</span>
             </button>
           </div>
         </div>
