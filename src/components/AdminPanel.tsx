@@ -1320,8 +1320,8 @@ export default function AdminPanel({
       {/* Startseite: eigene Hero-Hintergrundbilder */}
       <AccordionSection
         id="hero"
-        title="Startseite · Hero-Bilder"
-        subtitle="Eigene Hintergrundbilder für die drei Slides oben auf der Startseite"
+        title="Startseite · Hero-Bilder & Countdown"
+        subtitle="Hintergrundbilder der drei Slides + Countdown bis zum Anstoß"
         icon={<ImageIcon className="w-5 h-5" />}
         accent="#22DFC9"
       >
@@ -1372,91 +1372,87 @@ export default function AdminPanel({
               <span>Hero-Bilder speichern</span>
             </button>
           </div>
-        </div>
-      </AccordionSection>
 
-      {/* Countdown auf der Startseite */}
-      <AccordionSection
-        id="countdown"
-        title="Countdown (Startseite)"
-        subtitle="Großer Countdown bis zum Anstoß – an/aus schaltbar"
-        icon={<Timer className="w-5 h-5" />}
-        accent="#22DFC9"
-      >
-        <div>
-          <p className="text-xs text-gray-400 font-sans mb-6">
-            Zeigt oben auf der Startseite einen großen Countdown (Tage · Stunden · Minuten · Sekunden) bis zum
-            eingestellten Zeitpunkt. Läuft er ab, glüht er <span className="text-hl-red-soft font-semibold">rot</span> und
-            bleibt stehen, bis du ihn hier ausschaltest. Aus = die Startseite ist ganz normal. Der Countdown rechnet
-            immer live gegen den Zeitpunkt – du kannst ihn beliebig oft an- und ausschalten.
-          </p>
-
-          {/* An/Aus-Schalter – speichert sofort */}
-          <div className="flex items-center justify-between gap-4 mb-5 p-4 rounded-xl bg-white/[.03] border border-white/10">
-            <div className="min-w-0">
-              <div className="text-sm font-bold text-white font-sans">Countdown anzeigen</div>
-              <div className="text-xs text-gray-400 font-sans">Groß oben auf der Startseite</div>
+          {/* Countdown-Steuerung – im selben Startseiten-Abschnitt */}
+          <div className="mt-8 pt-6 border-t border-white/10">
+            <div className="flex items-center gap-2 mb-1.5">
+              <Timer className="w-4 h-4 text-brand-accent-light" />
+              <h4 className="text-sm font-bold text-white font-sans">Countdown bis zum Anstoß</h4>
             </div>
-            <button
-              type="button"
-              onClick={() => saveCountdown(!countdownActive)}
-              aria-pressed={countdownActive}
-              className={`relative w-12 h-[26px] rounded-full transition-colors shrink-0 cursor-pointer ${
-                countdownActive ? 'bg-brand-accent-light' : 'bg-white/15'
-              }`}
-            >
-              <span
-                className={`absolute top-[3px] w-5 h-5 rounded-full bg-white shadow transition-all ${
-                  countdownActive ? 'left-[25px]' : 'left-[3px]'
+            <p className="text-xs text-gray-400 font-sans mb-5">
+              Zeigt oben auf der Startseite einen großen Countdown (Tage · Stunden · Minuten · Sekunden) bis zum
+              eingestellten Zeitpunkt. Läuft er ab, glüht er <span className="text-hl-red-soft font-semibold">rot</span> und
+              bleibt stehen, bis du ihn ausschaltest. Aus = die Startseite ist ganz normal. Der Countdown rechnet immer
+              live gegen den Zeitpunkt – beliebig oft an-/ausschaltbar.
+            </p>
+
+            {/* An/Aus-Schalter – speichert sofort */}
+            <div className="flex items-center justify-between gap-4 mb-5 p-4 rounded-xl bg-white/[.03] border border-white/10">
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-white font-sans">Countdown anzeigen</div>
+                <div className="text-xs text-gray-400 font-sans">Groß oben auf der Startseite</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => saveCountdown(!countdownActive)}
+                aria-pressed={countdownActive}
+                className={`relative w-12 h-[26px] rounded-full transition-colors shrink-0 cursor-pointer ${
+                  countdownActive ? 'bg-brand-accent-light' : 'bg-white/15'
                 }`}
-              />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
-                Anstoß / Zielzeitpunkt
-              </label>
-              <input
-                type="datetime-local"
-                value={countdownTarget}
-                onChange={(e) => setCountdownTarget(e.target.value)}
-                className={`${inputClass} font-mono`}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
-                Text dahinter (dezent)
-              </label>
-              <input
-                type="text"
-                value={countdownTitle}
-                onChange={(e) => setCountdownTitle(e.target.value)}
-                placeholder="z.B. Till Season begins"
-                className={inputClass}
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end gap-3 mt-5">
-            {countdownSuccess && (
-              <motion.span
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-xs text-emerald-400 uppercase tracking-wider font-mono mr-2"
               >
-                ✓ Gespeichert!
-              </motion.span>
-            )}
-            <button
-              type="button"
-              onClick={() => saveCountdown()}
-              className="px-6 py-3 bg-brand-accent hover:bg-brand-accent/80 border border-brand-accent-light/30 rounded-full text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center gap-1.5 cursor-pointer shadow-lg shadow-brand-accent-light/10"
-            >
-              <Check className="w-4 h-4" />
-              <span>Countdown speichern</span>
-            </button>
+                <span
+                  className={`absolute top-[3px] w-5 h-5 rounded-full bg-white shadow transition-all ${
+                    countdownActive ? 'left-[25px]' : 'left-[3px]'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
+                  Anstoß / Zielzeitpunkt
+                </label>
+                <input
+                  type="datetime-local"
+                  value={countdownTarget}
+                  onChange={(e) => setCountdownTarget(e.target.value)}
+                  className={`${inputClass} font-mono`}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
+                  Text dahinter (dezent)
+                </label>
+                <input
+                  type="text"
+                  value={countdownTitle}
+                  onChange={(e) => setCountdownTitle(e.target.value)}
+                  placeholder="z.B. Till Season begins"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 mt-5">
+              {countdownSuccess && (
+                <motion.span
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-xs text-emerald-400 uppercase tracking-wider font-mono mr-2"
+                >
+                  ✓ Gespeichert!
+                </motion.span>
+              )}
+              <button
+                type="button"
+                onClick={() => saveCountdown()}
+                className="px-6 py-3 bg-brand-accent hover:bg-brand-accent/80 border border-brand-accent-light/30 rounded-full text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center gap-1.5 cursor-pointer shadow-lg shadow-brand-accent-light/10"
+              >
+                <Check className="w-4 h-4" />
+                <span>Countdown speichern</span>
+              </button>
+            </div>
           </div>
         </div>
       </AccordionSection>
