@@ -36,7 +36,6 @@ export default function MobileDock({
 }: MobileDockProps) {
   const [visible, setVisible] = useState(true);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const activeRef = useRef<HTMLButtonElement>(null);
 
   // Sichtbarkeit steuern: jede Berührung/Scroll zeigt das Dock und startet den
   // Ruhe-Timer neu; nach ~3,5 s ohne Interaktion fährt es nach unten raus.
@@ -59,11 +58,6 @@ export default function MobileDock({
     };
   }, []);
 
-  // Aktives Icon bei Wechsel in die Mitte scrollen (falls das Dock überläuft).
-  useEffect(() => {
-    activeRef.current?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-  }, [activeTab, onEventPage]);
-
   const items: DockItem[] = [
     { key: 'home', label: 'Start', Icon: Home, tab: 'home', active: activeTab === 'home' && !onEventPage },
     { key: 'spielplan', label: 'Spielplan', Icon: CalendarDays, tab: 'spielplan', active: activeTab === 'spielplan' && !onEventPage },
@@ -79,7 +73,8 @@ export default function MobileDock({
   ];
 
   const accentClasses = (accent: DockItem['accent'], active: boolean) => {
-    if (!active) return 'text-hl-mute';
+    // Der HERO-ONE-Pokal bleibt auch inaktiv dezent golden hervorgehoben.
+    if (!active) return accent === 'gold' ? 'text-hl-gold/85' : 'text-hl-mute';
     if (accent === 'gold') return 'bg-[rgba(233,196,106,.16)] text-hl-gold shadow-[0_0_18px_rgba(233,196,106,.28)]';
     if (accent === 'magenta') return 'bg-[rgba(232,62,140,.18)] text-hl-magenta-soft shadow-[0_0_18px_rgba(232,62,140,.3)]';
     return 'bg-[rgba(34,223,201,.16)] text-brand-accent-light shadow-[0_0_18px_rgba(34,223,201,.28)]';
@@ -96,19 +91,18 @@ export default function MobileDock({
 
         {/* Glas-Pille mit den Icons – horizontal scrollbar.
             Bewusst vom unteren Rand abgehoben (über die Home-Indicator-Safe-Area
-            hinaus ~40px) – bequemer für den Daumen, angelehnt an die
+            hinaus ~60px) – bequemer für den Daumen, angelehnt an die
             freistehende iOS-26-„Liquid-Glass"-Tableiste. */}
-        <div className="relative px-3 pt-4 pb-[calc(env(safe-area-inset-bottom)+40px)] flex justify-center">
+        <div className="relative px-3 pt-4 pb-[calc(env(safe-area-inset-bottom)+60px)] flex justify-center">
           <div className="pointer-events-auto max-w-full overflow-x-auto no-scrollbar rounded-full border border-white/[.12] bg-[rgba(12,20,19,.55)] backdrop-blur-2xl backdrop-saturate-150 shadow-[inset_0_1px_0_rgba(255,255,255,.14),0_18px_44px_rgba(0,0,0,.5)]">
             <div className="flex items-center gap-1 px-2 py-2 w-max mx-auto">
               {items.map((it) => (
                 <button
                   key={it.key}
-                  ref={it.active ? activeRef : undefined}
                   onClick={() => (it.onClick ? it.onClick() : it.tab && onNavigate(it.tab))}
                   aria-label={it.label}
                   aria-current={it.active ? 'page' : undefined}
-                  className={`shrink-0 flex items-center gap-2 rounded-full px-3.5 py-2.5 transition-all duration-300 cursor-pointer active:scale-95 ${accentClasses(
+                  className={`shrink-0 flex items-center gap-0 rounded-full px-3.5 py-2.5 transition-[background-color,box-shadow,color,transform] duration-300 cursor-pointer active:scale-95 ${accentClasses(
                     it.accent,
                     it.active
                   )} ${it.active ? '' : 'hover:text-hl-text'}`}
@@ -116,8 +110,8 @@ export default function MobileDock({
                   <it.Icon className="w-[22px] h-[22px] shrink-0" />
                   {/* Aktiver Punkt zeigt zusätzlich sein Label – schön hervorgehoben */}
                   <span
-                    className={`overflow-hidden whitespace-nowrap font-sans font-bold text-[12px] tracking-wide transition-all duration-300 ${
-                      it.active ? 'max-w-[130px] opacity-100' : 'max-w-0 opacity-0'
+                    className={`overflow-hidden whitespace-nowrap font-sans font-bold text-[12px] tracking-wide transition-[max-width,opacity] duration-300 ${
+                      it.active ? 'max-w-[130px] opacity-100 ml-1.5' : 'max-w-0 opacity-0'
                     }`}
                   >
                     {it.label}
