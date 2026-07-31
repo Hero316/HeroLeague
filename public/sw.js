@@ -12,7 +12,7 @@
  *  - Nur statische, per Hash unveränderliche Assets werden dauerhaft gecacht.
  */
 
-const CACHE = 'hl-static-v1';
+const CACHE = 'hl-static-v2';
 
 // App-Shell für den Offline-Fallback. Bewusst minimal.
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/assets/icon-192.png'];
