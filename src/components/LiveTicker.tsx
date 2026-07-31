@@ -64,9 +64,9 @@ export default function LiveTicker({ news = [] }: LiveTickerProps) {
   return (
     <div className="border-b border-white/[.06] bg-white/[.015] overflow-hidden">
       <div className="flex items-center h-[42px]">
-        <div className="flex-none flex items-center gap-2 px-4 sm:pl-10 sm:pr-5 h-full bg-[#0b0f0b] relative z-[2] border-r border-white/[.06]">
-          <span className="w-[7px] h-[7px] rounded-full bg-brand-accent-light" />
-          <span className="font-sans font-extrabold text-[11px] tracking-[2px] text-hl-text whitespace-nowrap">NEWS</span>
+        <div className="flex-none flex items-center gap-1.5 px-3 sm:px-4 h-full bg-[#0b0f0b] relative z-[2] border-r border-white/[.06]">
+          <span className="w-[6px] h-[6px] rounded-full bg-brand-accent-light" />
+          <span className="font-sans font-extrabold text-[10px] tracking-[1.5px] text-hl-text whitespace-nowrap">NEWS</span>
         </div>
         <div
           ref={viewportRef}
