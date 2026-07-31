@@ -1000,6 +1000,7 @@ export default function AdminPanel({
       {isSuperadmin && (
       <AccordionSection
         id="clubs"
+        category="spiele"
         title="Klubs registrieren & bearbeiten"
         subtitle="Neue Vereine anlegen · Kader, Logos, Farben & Wappen pflegen"
         icon={<Shield className="w-5 h-5" />}
@@ -1247,6 +1248,7 @@ export default function AdminPanel({
       {/* Spieler des Monats */}
       <AccordionSection
         id="pom"
+        category="startseite"
         title="Spieler des Monats konfigurieren"
         subtitle="Auszeichnung, Verein, Leistungsdaten & Portraitfoto"
         icon={<Award className="w-5 h-5" />}
@@ -1363,6 +1365,7 @@ export default function AdminPanel({
       {/* Startseite: eigene Hero-Hintergrundbilder */}
       <AccordionSection
         id="hero"
+        category="startseite"
         title="Startseite · Hero-Bilder & Countdown"
         subtitle="Hintergrundbilder der drei Slides + Countdown bis zum Anstoß"
         icon={<ImageIcon className="w-5 h-5" />}
@@ -1503,6 +1506,7 @@ export default function AdminPanel({
       {/* News-Laufband (Ticker unter der Navigation) */}
       <AccordionSection
         id="news"
+        category="startseite"
         title="News-Laufband (Ticker)"
         subtitle="Eigene Kurz-Nachrichten für das Laufband oben auf der Seite"
         icon={<Megaphone className="w-5 h-5" />}
@@ -1585,6 +1589,7 @@ export default function AdminPanel({
       {/* Twitch-Livestream & Social Media */}
       <AccordionSection
         id="twitch"
+        category="kanaele"
         title="Twitch & Social Media"
         subtitle="Twitch-Kanal, Live-Banner & Social-Media-Links"
         icon={<Radio className="w-5 h-5" />}
@@ -1720,6 +1725,7 @@ export default function AdminPanel({
       {/* Testspiel / Sonder-Event */}
       <AccordionSection
         id="event"
+        category="kanaele"
         title="Testspiel / Event"
         subtitle="Spontanes Event ein-/ausblenden, Ergebnisse pflegen"
         icon={<Zap className="w-5 h-5" />}
@@ -2108,6 +2114,7 @@ export default function AdminPanel({
       {isSuperadmin && (
       <AccordionSection
         id="season"
+        category="spiele"
         title="Saison verwalten"
         subtitle="Neue Saison starten – Ergebnisse werden archiviert"
         icon={<CalendarPlus className="w-5 h-5" />}

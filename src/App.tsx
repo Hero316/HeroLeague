@@ -660,11 +660,19 @@ export default function App() {
               {/* Live-Besucher: ganz oben im Backoffice */}
               <LiveVisitors />
 
-              {/* Aufgeräumtes Backoffice: „dicke Tasten", immer nur eine offen */}
-              <AccordionGroup>
+              {/* Aufgeräumtes Backoffice: Reiter nach Rubrik, darunter „dicke Tasten" */}
+              <AccordionGroup
+                categories={[
+                  { id: 'spiele', label: 'Spiele & Liga' },
+                  { id: 'startseite', label: 'Startseite' },
+                  { id: 'kanaele', label: 'Kanäle & Event' },
+                  ...(isSuperadmin ? [{ id: 'zugaenge', label: 'Zugänge' }] : []),
+                ]}
+              >
                 <div className="space-y-4">
                   <AccordionSection
                     id="results"
+                    category="spiele"
                     title="Spielplan-Ergebnisse eintragen"
                     subtitle="Ergebnisse, Torschützen & Vorlagen zuweisen, Spiele LIVE stellen"
                     icon={<Sparkles className="w-5 h-5" />}
@@ -680,6 +688,7 @@ export default function App() {
 
                   <AccordionSection
                     id="schedule"
+                    category="spiele"
                     title="Spielplan verwalten"
                     subtitle="Spiele anlegen oder löschen"
                     icon={<CalendarPlus className="w-5 h-5" />}
@@ -709,6 +718,7 @@ export default function App() {
                   {isSuperadmin && (
                     <AccordionSection
                       id="users"
+                      category="zugaenge"
                       title="Benutzerverwaltung"
                       subtitle="Admin-Zugänge anlegen und verwalten"
                       icon={<Users className="w-5 h-5" />}
