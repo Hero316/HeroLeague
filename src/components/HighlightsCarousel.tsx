@@ -35,7 +35,7 @@ export default function HighlightsCarousel({
   const go = (delta: number) => setActive((a) => Math.min(n - 1, Math.max(0, a + delta)));
 
   // Auf Handy fast volle Breite (wenig Peek), auf Desktop schmaler (mehr Peek).
-  const slideFrac = w < 640 ? 0.86 : 0.7;
+  const slideFrac = w < 640 ? 0.9 : 0.72;
   const gap = w * 0.03;
   const slideW = w * slideFrac;
   const stride = slideW + gap;
@@ -104,8 +104,14 @@ export default function HighlightsCarousel({
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-transparent" />
 
                   {isVideo && (
-                    <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 grid place-items-center w-16 h-16 rounded-full bg-brand-accent-light/95 text-brand-dark shadow-[0_0_30px_rgba(34,223,201,.55)] transition-transform group-hover:scale-110">
-                      <Play className="w-7 h-7 translate-x-0.5" fill="currentColor" />
+                    <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 grid place-items-center">
+                      {/* pulsierender Ring lockt zum Klicken */}
+                      {isActive && !reduce && (
+                        <span className="absolute w-[72px] h-[72px] rounded-full bg-brand-accent-light/35 animate-ping" />
+                      )}
+                      <span className="relative grid place-items-center w-[72px] h-[72px] rounded-full bg-brand-accent-light/95 text-brand-dark shadow-[0_0_40px_rgba(34,223,201,.7)] transition-transform group-hover:scale-110">
+                        <Play className="w-8 h-8 translate-x-0.5" fill="currentColor" />
+                      </span>
                     </span>
                   )}
 
