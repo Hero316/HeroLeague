@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer } from 'lucide-react';
-import { Player, Team, Match, EventConfig, EventArchive } from '../types';
+import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone } from 'lucide-react';
+import { Player, Team, Match, EventConfig, EventArchive, NewsItem } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
 import { AccordionSection } from './ui';
@@ -370,6 +370,11 @@ export default function AdminPanel({
   const [countdownTitle, setCountdownTitle] = useState('Till Season begins');
   const [countdownSuccess, setCountdownSuccess] = useState(false);
 
+  // News-Laufband (Ticker unter der Navigation)
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [newsSuccess, setNewsSuccess] = useState(false);
+  const [newsSaving, setNewsSaving] = useState(false);
+
   // Sonder-Events (Testspiel-Archiv)
   const [eventArchive, setEventArchive] = useState<EventArchive | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string>('');
@@ -568,6 +573,44 @@ export default function AdminPanel({
       setTimeout(() => setCountdownSuccess(false), 3000);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
+    }
+  };
+
+  // News-Laufband laden
+  useEffect(() => {
+    apiFetch<{ items: NewsItem[] }>('/api/twitch?resource=news')
+      .then((data) => setNews(Array.isArray(data?.items) ? data.items : []))
+      .catch(() => {
+        /* noch keine News gepflegt */
+      });
+  }, []);
+
+  // Ein leeres News-Feld anhängen
+  const addNews = () =>
+    setNews((list) => [...list, { id: `news-${Date.now()}-${list.length}`, text: '' }]);
+
+  // Text eines News-Eintrags ändern
+  const updateNews = (id: string, text: string) =>
+    setNews((list) => list.map((n) => (n.id === id ? { ...n, text } : n)));
+
+  // Einen News-Eintrag entfernen
+  const removeNews = (id: string) => setNews((list) => list.filter((n) => n.id !== id));
+
+  // News speichern (leere Einträge werden serverseitig verworfen)
+  const saveNews = async () => {
+    setNewsSaving(true);
+    try {
+      const saved = await apiFetch<{ items: NewsItem[] }>('/api/twitch?resource=news', {
+        method: 'POST',
+        body: JSON.stringify({ items: news }),
+      });
+      setNews(Array.isArray(saved?.items) ? saved.items : []);
+      setNewsSuccess(true);
+      setTimeout(() => setNewsSuccess(false), 3000);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
+    } finally {
+      setNewsSaving(false);
     }
   };
 
@@ -1453,6 +1496,88 @@ export default function AdminPanel({
                 <span>Countdown speichern</span>
               </button>
             </div>
+          </div>
+        </div>
+      </AccordionSection>
+
+      {/* News-Laufband (Ticker unter der Navigation) */}
+      <AccordionSection
+        id="news"
+        title="News-Laufband (Ticker)"
+        subtitle="Eigene Kurz-Nachrichten für das Laufband oben auf der Seite"
+        icon={<Megaphone className="w-5 h-5" />}
+        accent="#F4A261"
+      >
+        <div>
+          <p className="text-xs text-gray-400 font-sans mb-6">
+            Hier pflegst du eigene Nachrichten fürs <strong className="text-white">Laufband</strong> (der Ticker direkt
+            unter dem Menü). Jede Nachricht bekommt ein eigenes Feld — mit <strong className="text-white">„Nachricht
+            hinzufügen"</strong> legst du Stück für Stück weitere an. Beim Speichern hängt die Website sie automatisch
+            hinten an die laufenden Einträge (Ergebnisse, Anstöße, Top-Torschütze) an. Leere Felder werden verworfen; ist
+            keine Nachricht übrig, läuft der Ticker wieder ganz normal.
+          </p>
+
+          <div className="space-y-3">
+            {news.length === 0 && (
+              <div className="text-xs text-gray-500 font-sans italic px-4 py-6 rounded-xl bg-white/[.02] border border-dashed border-white/10 text-center">
+                Noch keine Nachricht. Mit „Nachricht hinzufügen" die erste anlegen.
+              </div>
+            )}
+
+            {news.map((item, index) => (
+              <div key={item.id} className="flex items-start gap-2">
+                <span className="mt-2.5 shrink-0 w-6 h-6 rounded-full bg-white/5 border border-white/10 text-[11px] font-mono text-gray-400 flex items-center justify-center">
+                  {index + 1}
+                </span>
+                <textarea
+                  value={item.text}
+                  onChange={(e) => updateNews(item.id, e.target.value)}
+                  placeholder="z.B. Spielverlegung: Spieltag 5 startet erst um 20:00 Uhr"
+                  rows={2}
+                  maxLength={280}
+                  className={`${inputClass} resize-y min-h-[52px]`}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeNews(item.id)}
+                  title="Nachricht entfernen"
+                  aria-label="Nachricht entfernen"
+                  className="mt-1.5 shrink-0 p-2 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={addNews}
+            className="mt-4 inline-flex items-center gap-1.5 px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-xs font-bold uppercase tracking-wider text-gray-200 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Nachricht hinzufügen</span>
+          </button>
+
+          <div className="flex items-center justify-end gap-3 mt-5">
+            {newsSuccess && (
+              <motion.span
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-xs text-emerald-400 uppercase tracking-wider font-mono mr-2"
+              >
+                ✓ Gespeichert!
+              </motion.span>
+            )}
+            <button
+              type="button"
+              onClick={saveNews}
+              disabled={newsSaving}
+              className="px-6 py-3 bg-brand-accent hover:bg-brand-accent/80 disabled:opacity-40 border border-brand-accent-light/30 rounded-full text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center gap-1.5 cursor-pointer shadow-lg shadow-brand-accent-light/10"
+            >
+              <Check className="w-4 h-4" />
+              <span>{newsSaving ? 'Speichert…' : 'News speichern'}</span>
+            </button>
           </div>
         </div>
       </AccordionSection>

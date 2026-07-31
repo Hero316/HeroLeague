@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig } from './types';
+import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
 import { startPresence } from './lib/presence';
 import { seasonName } from './lib/heroAward';
@@ -63,6 +63,8 @@ export default function App() {
   const [heroImages, setHeroImages] = useState<HeroImages>({ match: '', pom: '', table: '' });
   // Countdown bis zum Anstoß (Startseite). active=false ⇒ normal.
   const [countdown, setCountdown] = useState<CountdownConfig>({ active: false, target: '2026-10-04T19:00', title: 'Till Season begins' });
+  // Freie News fürs Laufband (im Admin gepflegt) – leer = nur automatische Ticker-Einträge
+  const [news, setNews] = useState<NewsItem[]>([]);
   // Handy-Modus: Bottom-Dock zur Daumen-Steuerung. Pro Gerät gespeichert.
   const [mobileMode, setMobileMode] = useState<boolean>(() => {
     try {
@@ -203,6 +205,15 @@ export default function App() {
       )
       .catch(() => {
         /* nicht konfiguriert – Countdown bleibt aus */
+      });
+  }, []);
+
+  // Freie News fürs Laufband laden (unkritisch – Fallback: keine)
+  useEffect(() => {
+    apiFetch<{ items: NewsItem[] }>('/api/twitch?resource=news')
+      .then((data) => setNews(Array.isArray(data?.items) ? data.items : []))
+      .catch(() => {
+        /* noch keine News gepflegt – Ticker zeigt nur automatische Einträge */
       });
   }, []);
 
@@ -771,7 +782,7 @@ export default function App() {
       {activeEvent && activeTab === 'home' && (
         <EventBanner event={activeEvent} isLive={eventHasLive} onOpen={() => navigateTo('/testspiel')} />
       )}
-      <LiveTicker matches={currentSeasonMatches} teams={visibleTeams} players={players} />
+      <LiveTicker matches={currentSeasonMatches} teams={visibleTeams} players={players} news={news} />
 
       <div key={activeTab} className={`hl-fade ${mobileMode ? 'pb-36 lg:pb-0' : ''}`}>
       {activeTab === 'home' && (

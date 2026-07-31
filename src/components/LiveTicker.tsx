@@ -1,15 +1,17 @@
 import React, { useMemo } from 'react';
-import { Match, PlayerStat, Team } from '../types';
+import { Match, NewsItem, PlayerStat, Team } from '../types';
 import { shortDate } from './ui';
 
 interface LiveTickerProps {
   matches: Match[];
   teams: Team[];
   players: PlayerStat[];
+  news?: NewsItem[];
 }
 
-// Laufband unter der Navigation: echte Ergebnisse, Anstöße und der Top-Torschütze.
-export default function LiveTicker({ matches, teams, players }: LiveTickerProps) {
+// Laufband unter der Navigation: echte Ergebnisse, Anstöße, der Top-Torschütze
+// und – hinten angehängt – die frei im Admin gepflegten News.
+export default function LiveTicker({ matches, teams, players, news = [] }: LiveTickerProps) {
   const items = useMemo(() => {
     const short = (id: string) => teams.find((t) => t.id === id)?.shortName?.toUpperCase() || '???';
     const list: string[] = [];
@@ -41,8 +43,14 @@ export default function LiveTicker({ matches, teams, players }: LiveTickerProps)
       list.push(`${initial}. ${last} · ${top.goals} TORE · TOP-TORSCHÜTZE`);
     }
 
+    // Freie News hinten anhängen (im Admin gepflegt)
+    news.forEach((n) => {
+      const text = n.text.trim();
+      if (text) list.push(text);
+    });
+
     return list;
-  }, [matches, teams, players]);
+  }, [matches, teams, players, news]);
 
   if (items.length === 0) return null;
 
