@@ -792,7 +792,7 @@ export default function App() {
       {activeEvent && activeTab === 'home' && (
         <EventBanner event={activeEvent} isLive={eventHasLive} onOpen={() => navigateTo('/testspiel')} />
       )}
-      <LiveTicker matches={currentSeasonMatches} teams={visibleTeams} players={players} news={news} />
+      <LiveTicker news={news} />
 
       <div key={activeTab} className={`hl-fade ${mobileMode ? 'pb-36 lg:pb-0' : ''}`}>
       {activeTab === 'home' && (

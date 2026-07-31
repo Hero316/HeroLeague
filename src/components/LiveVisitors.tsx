@@ -25,19 +25,26 @@ function StatTile({ icon, label, value }: { icon: React.ReactNode; label: string
   );
 }
 
-// Mini-Balkenverlauf der letzten Tage (keine externe Chart-Library nötig)
+// Mini-Balkenverlauf der letzten Tage (keine externe Chart-Library nötig).
+// Über jeder Säule steht die Besucherzahl des Tages.
 function Sparkline({ data }: { data: { day: string; count: number }[] }) {
   if (data.length === 0) return null;
   const max = Math.max(1, ...data.map((d) => d.count));
+  const BAR_MAX = 72; // maximale Balkenhöhe in px – darüber bleibt Platz für die Zahl
   return (
-    <div className="flex items-end gap-[3px] h-10 mt-1">
+    <div className="flex items-end gap-[3px] mt-2" style={{ height: 92 }}>
       {data.map((d) => (
         <div
           key={d.day}
           title={`${d.day}: ${d.count}`}
-          className="flex-1 min-w-[3px] rounded-sm bg-hl-green/70"
-          style={{ height: `${Math.max(6, (d.count / max) * 100)}%` }}
-        />
+          className="flex-1 min-w-[3px] flex flex-col items-center justify-end gap-1"
+        >
+          <span className="text-[9px] font-mono tabular-nums text-hl-soft leading-none">{d.count}</span>
+          <div
+            className="w-full rounded-sm bg-hl-green/70"
+            style={{ height: Math.max(6, (d.count / max) * BAR_MAX) }}
+          />
+        </div>
       ))}
     </div>
   );
