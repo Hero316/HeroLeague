@@ -6,7 +6,7 @@ import { Reveal } from './anim';
 import HighlightsLightbox from './HighlightsLightbox';
 import HighlightsMosaic, { interleaveMedia } from './HighlightsMosaic';
 import HighlightsEditor from './HighlightsEditor';
-import { mediaListHandlers, genAlbumId, useCoverUpload, albumCoverInfo } from './highlightsEdit';
+import { mediaListHandlers, genAlbumId, useCoverUpload, albumCoverInfo, newestFirst } from './highlightsEdit';
 
 // Ordner-Titel bearbeiten: lokaler State (flüssiges Tippen), speichern erst beim
 // Verlassen des Feldes – kein Netzwerk-Aufruf pro Tastendruck.
@@ -89,7 +89,11 @@ export default function HighlightsPage({
 
   const openAlbum = albums.find((a) => a.id === openAlbumId) ?? null;
   const activeItems = openAlbum ? openAlbum.items : items;
-  const display = useMemo(() => (editMode ? activeItems : interleaveMedia(activeItems)), [activeItems, editMode]);
+  // Neueste zuerst; im View-Modus zusätzlich Videos gleichmäßig verteilt.
+  const display = useMemo(
+    () => (editMode ? newestFirst(activeItems) : interleaveMedia(newestFirst(activeItems))),
+    [activeItems, editMode]
+  );
   const open = (i: number) => setLightbox({ index: i, dir: 0 });
 
   // Medien-Handler für die gerade aktive Liste (lose Highlights ODER offener Ordner).
@@ -228,7 +232,7 @@ export default function HighlightsPage({
                   </p>
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-                    {albums.map((album) => {
+                    {newestFirst(albums).map((album) => {
                       const c = albumCoverInfo(album);
                       return (
                         <Reveal key={album.id}>

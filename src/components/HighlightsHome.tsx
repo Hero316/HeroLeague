@@ -1,17 +1,13 @@
 import { useMemo, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
-import type { HighlightMedia, HighlightsConfig } from '../types';
+import type { HighlightsConfig } from '../types';
 import { Reveal } from './anim';
 import HighlightsLightbox from './HighlightsLightbox';
 import HighlightsCarousel from './HighlightsCarousel';
 import HighlightsEditor from './HighlightsEditor';
 import StoryPills from './StoryPills';
 import StoriesViewer from './StoriesViewer';
-import { mediaListHandlers } from './highlightsEdit';
-
-// Videos zuerst, damit der erste Beitrag im Karussell ein Video ist.
-const videosFirst = (list: HighlightMedia[]) =>
-  [...list].sort((a, b) => (a.type === 'video' ? 0 : 1) - (b.type === 'video' ? 0 : 1));
+import { mediaListHandlers, newestFirst } from './highlightsEdit';
 
 // Startseiten-Highlight-Bereich: horizontales Hero-Karussell + darunter die
 // runden Story-Pillen (je Ordner). Im Bearbeiten-Modus die losen Highlights pflegen.
@@ -30,7 +26,8 @@ export default function HighlightsHome({
   const albums = highlights.albums;
   const [lightbox, setLightbox] = useState<{ index: number | null; dir: number }>({ index: null, dir: 0 });
   const [storyAlbum, setStoryAlbum] = useState<number | null>(null);
-  const display = useMemo(() => (editMode ? items : videosFirst(items)), [items, editMode]);
+  // Neueste zuerst – im Karussell und im Bearbeiten-Modus gleichermaßen.
+  const display = useMemo(() => newestFirst(items), [items]);
   const open = (i: number) => setLightbox({ index: i, dir: 0 });
   const handlers = mediaListHandlers(items, (next) => onSave({ ...highlights, items: next }));
 

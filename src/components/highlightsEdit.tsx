@@ -6,6 +6,11 @@ import { toEmbed, youtubeThumb } from '../lib/videoEmbed';
 export const genMediaId = () => `hl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 export const genAlbumId = () => `alb-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
+// Neueste zuerst: die Medien/Ordner werden chronologisch gespeichert (neu ans
+// Ende), für die Anzeige aber umgedreht – so steht der jüngste Beitrag immer
+// ganz vorne (Startseite + Galerie). Reine Anzeige, ändert die Speicherung nicht.
+export const newestFirst = <T,>(list: T[]): T[] => [...list].reverse();
+
 // Baut die Standard-Handler (Bild/Video hinzufügen, löschen, beschriften) für
 // eine Medienliste – wiederverwendet für die losen Highlights und für jeden Ordner.
 export function mediaListHandlers(list: HighlightMedia[], setList: (next: HighlightMedia[]) => void) {
