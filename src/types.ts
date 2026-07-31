@@ -83,6 +83,18 @@ export interface CountdownConfig {
   title: string; // dezenter Text dahinter, z. B. "Till Season begins"
 }
 
+// News-Laufband unter der Navigation. Jede Nachricht ist ein eigener Eintrag
+// (eigenes Textfeld im Admin) und wird im Ticker hinten an die automatischen
+// Einträge (Ergebnisse, Anstöße, Top-Torschütze) angehängt.
+export interface NewsItem {
+  id: string;
+  text: string;
+}
+
+export interface NewsConfig {
+  items: NewsItem[];
+}
+
 export interface PlayerOfMonth {
   name: string;
   club: string;

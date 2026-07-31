@@ -349,24 +349,67 @@ export function ImageZoom({
 interface AccordionContextValue {
   openId: string | null;
   toggle: (id: string) => void;
+  activeCategory: string | null;
 }
 
 const AccordionContext = React.createContext<AccordionContextValue | null>(null);
 
+// Eine Rubrik (Reiter) im Backoffice, z. B. „Startseite" oder „Spiele & Liga".
+export interface AccordionCategory {
+  id: string;
+  label: string;
+}
+
 // Gruppiert mehrere AccordionSection; sorgt dafür, dass immer nur eine offen ist.
-// Standardmäßig ist alles zugeklappt (defaultOpenId = null).
+// Standardmäßig ist alles zugeklappt (defaultOpenId = null). Werden `categories`
+// übergeben, erscheint oben eine Reiter-Leiste und es sind nur die Abschnitte der
+// aktiven Rubrik sichtbar – so bleibt das Backoffice übersichtlich.
 export function AccordionGroup({
   children,
   defaultOpenId = null,
+  categories,
 }: {
   children: React.ReactNode;
   defaultOpenId?: string | null;
+  categories?: AccordionCategory[];
 }) {
   const [openId, setOpenId] = React.useState<string | null>(defaultOpenId);
+  const [activeCategory, setActiveCategory] = React.useState<string | null>(categories?.[0]?.id ?? null);
   const toggle = React.useCallback((id: string) => {
     setOpenId((current) => (current === id ? null : id));
   }, []);
-  return <AccordionContext.Provider value={{ openId, toggle }}>{children}</AccordionContext.Provider>;
+  const selectCategory = (id: string) => {
+    setActiveCategory(id);
+    setOpenId(null); // Beim Reiter-Wechsel alles zuklappen – jeder Reiter startet frisch.
+  };
+
+  return (
+    <AccordionContext.Provider value={{ openId, toggle, activeCategory }}>
+      {categories && categories.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-5">
+          {categories.map((c) => {
+            const active = c.id === activeCategory;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => selectCategory(c.id)}
+                aria-pressed={active}
+                className={`px-4 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider font-sans transition-colors cursor-pointer border ${
+                  active
+                    ? 'bg-brand-accent-light text-brand-dark border-brand-accent-light shadow-lg shadow-brand-accent-light/10'
+                    : 'bg-white/[.03] text-hl-mute border-white/10 hover:text-white hover:border-white/25'
+                }`}
+              >
+                {c.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {children}
+    </AccordionContext.Provider>
+  );
 }
 
 // Eine „dicke Taste": Kopf mit Symbol + Titel + Pfeil; klappt den Inhalt sanft auf.
@@ -376,6 +419,7 @@ export function AccordionSection({
   icon,
   subtitle,
   accent = '#22DFC9',
+  category,
   children,
 }: {
   id: string;
@@ -383,9 +427,12 @@ export function AccordionSection({
   icon?: React.ReactNode;
   subtitle?: string;
   accent?: string; // Farbe des Symbol-Kästchens
+  category?: string; // Rubrik/Reiter – nur sichtbar, wenn dieser Reiter aktiv ist
   children: React.ReactNode;
 }) {
   const ctx = React.useContext(AccordionContext);
+  // Bei aktiver Reiter-Leiste nur die Abschnitte der gewählten Rubrik zeigen.
+  if (ctx?.activeCategory != null && category != null && category !== ctx.activeCategory) return null;
   const open = ctx?.openId === id;
   const panelId = `acc-panel-${id}`;
 

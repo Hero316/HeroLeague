@@ -12,6 +12,11 @@ const DEFAULT_HERO = { match: '', pom: '', table: '' };
 // Startseite ist normal.
 const DEFAULT_COUNTDOWN = { active: false, target: '2026-10-04T19:00', title: 'Till Season begins' };
 
+// News-Laufband unter der Navigation: freie Kurz-Nachrichten, die im Ticker
+// hinten an die automatischen Einträge angehängt werden. Leere Liste = normal.
+type NewsItem = { id: string; text: string };
+const DEFAULT_NEWS = { items: [] as NewsItem[] };
+
 // Highlights: gemischte Medien-Liste (Bilder + Video-Links) + Ordner (Alben).
 type HighlightMedia = { id: string; type: 'image' | 'video'; url: string; caption?: string; ratio?: number };
 type HighlightAlbum = { id: string; title: string; items: HighlightMedia[]; cover?: string };
@@ -143,6 +148,31 @@ const saveCountdown = requireAdmin(async (req: VercelRequest, res: VercelRespons
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
   `;
 
+  return res.json(cfg);
+});
+
+// News-Liste säubern: nur Einträge mit Text übernehmen, jeweils gekürzt.
+function normalizeNews(body: unknown) {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const raw = Array.isArray(b.items) ? b.items : [];
+  const items: NewsItem[] = raw
+    .map((r, i) => {
+      const o = (r ?? {}) as Record<string, unknown>;
+      const text = (typeof o.text === 'string' ? o.text : '').trim().slice(0, 280);
+      const id = typeof o.id === 'string' && o.id.trim() ? o.id.trim() : `news-${Date.now()}-${i}`;
+      return { id, text };
+    })
+    .filter((n) => n.text)
+    .slice(0, 30);
+  return { items };
+}
+
+const saveNews = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
+  const cfg = normalizeNews(req.body);
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('news', ${JSON.stringify(cfg)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
   return res.json(cfg);
 });
 
@@ -313,8 +343,9 @@ const saveHighlights = requireAdmin(async (req: VercelRequest, res: VercelRespon
 });
 
 // Ein Endpunkt für alle Website-Einstellungen (Twitch + Social Media + Event +
-// Highlights), um unter dem Serverless-Funktionslimit (12) zu bleiben. Angesprochen
-// über ?resource=social | event | highlights; Twitch ist die Vorgabe.
+// Highlights + News), um unter dem Serverless-Funktionslimit (12) zu bleiben.
+// Angesprochen über ?resource=social | event | highlights | hero | countdown |
+// news; Twitch ist die Vorgabe.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const resource = req.query.resource;
@@ -342,6 +373,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const rows = await sql`SELECT value FROM settings WHERE key = 'countdown'`;
         return res.json({ ...DEFAULT_COUNTDOWN, ...(rows[0]?.value ?? {}) });
       }
+      if (resource === 'news') {
+        const rows = await sql`SELECT value FROM settings WHERE key = 'news'`;
+        return res.json(rows[0]?.value ? normalizeNews(rows[0].value) : DEFAULT_NEWS);
+      }
       const rows = await sql`SELECT value FROM settings WHERE key = 'twitch'`;
       return res.json(rows[0]?.value ?? DEFAULT_TWITCH);
     }
@@ -351,6 +386,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'highlights') return saveHighlights(req, res);
       if (resource === 'hero') return saveHero(req, res);
       if (resource === 'countdown') return saveCountdown(req, res);
+      if (resource === 'news') return saveNews(req, res);
       return saveTwitch(req, res);
     }
     return res.status(405).json({ error: 'Nicht unterstützt' });
