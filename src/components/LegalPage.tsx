@@ -10,7 +10,7 @@ import { PageHeader } from './ui';
 // ====================================================================
 const BETREIBER = {
   name: 'Maik Schirling',
-  strasse: 'Achauerstraße 8',
+  strasse: 'Schulstraße 26',
   ort: '78647 Trossingen',
   email: 'maikyschirling@gmail.com',
   telefon: '0173 4756557',
