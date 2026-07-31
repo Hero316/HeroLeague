@@ -207,10 +207,12 @@ body {
 }
 
 /* Bewegung reduzieren: Endlos-Animationen ausschalten, Einblendungen sofort final.
-   Die JS-Animationen (motion) respektieren die Einstellung bereits ueber useReducedMotion. */
+   Die JS-Animationen (motion) respektieren die Einstellung bereits ueber useReducedMotion.
+   Ausnahme: das News-Laufband (.hl-marquee) laeuft bewusst weiter – wuerde es
+   einfrieren, blieben nur die ersten Woerter sichtbar und die restlichen News
+   waeren nie lesbar. Auf iPhones ist "Bewegung reduzieren" oft aktiv. */
 @media (prefers-reduced-motion: reduce) {
   .hl-zoom,
-  .hl-marquee,
   .hl-pulse,
   .hl-gold-text,
   .hl-drift-a,
