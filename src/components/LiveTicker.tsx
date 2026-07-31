@@ -81,7 +81,12 @@ export default function LiveTicker({ news = [] }: LiveTickerProps) {
             {renderItems('measure')}
           </div>
 
-          <div className="flex whitespace-nowrap hl-marquee" style={{ animationDuration: `${layout.duration}s` }}>
+          {/* width:max-content ist entscheidend: nur so entspricht die -50%-
+              Verschiebung exakt EINER Gruppe → nahtlos, ohne Sprung. */}
+          <div
+            className="flex whitespace-nowrap hl-marquee"
+            style={{ width: 'max-content', animationDuration: `${layout.duration}s` }}
+          >
             {group('g0')}
             {group('g1')}
           </div>
