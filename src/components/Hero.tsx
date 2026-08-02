@@ -206,12 +206,12 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                       const isL = m.status === 'live';
                       const isF = m.status === 'beendet';
                       return (
-                        <div key={m.id} className="flex items-center gap-2 py-2 border-b border-white/[.06] last:border-0">
-                          <div className="flex items-center gap-1.5 flex-1 min-w-0 justify-end">
-                            <span title={h.name} className="font-sans font-bold text-[12px] text-hl-text truncate">{h.shortName || h.name}</span>
+                        <div key={m.id} className="flex items-center gap-1.5 py-2 border-b border-white/[.06] last:border-0">
+                          <div className="flex items-center gap-1 flex-1 min-w-0 justify-end">
+                            <span title={h.name} className="font-sans font-bold text-[11px] text-hl-text truncate">{h.name}</span>
                             <TeamCrest name={h.name} shortName={h.shortName} color={h.logoColor} logoUrl={h.logoUrl} size="sm" onSelect={onSelectTeam ? () => onSelectTeam(h.id) : undefined} />
                           </div>
-                          <div className="w-[54px] shrink-0 flex flex-col items-center">
+                          <div className="w-[46px] shrink-0 flex flex-col items-center">
                             {isL || isF ? (
                               <span className={`font-display font-black text-[15px] leading-none ${isL ? 'text-brand-accent-light' : 'text-white'}`}>
                                 {m.homeScore ?? 0}:{m.awayScore ?? 0}
@@ -227,9 +227,9 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                               <span className="mt-1 text-[8.5px] font-sans font-semibold tracking-[.5px] text-hl-faint uppercase">Feld {m.field}</span>
                             ) : null}
                           </div>
-                          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                          <div className="flex items-center gap-1 flex-1 min-w-0">
                             <TeamCrest name={a.name} shortName={a.shortName} color={a.logoColor} logoUrl={a.logoUrl} size="sm" onSelect={onSelectTeam ? () => onSelectTeam(a.id) : undefined} />
-                            <span title={a.name} className="font-sans font-bold text-[12px] text-hl-text truncate">{a.shortName || a.name}</span>
+                            <span title={a.name} className="font-sans font-bold text-[11px] text-hl-text truncate">{a.name}</span>
                           </div>
                         </div>
                       );
