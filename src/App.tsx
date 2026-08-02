@@ -20,8 +20,6 @@ import HomeBody from './components/HomeBody';
 import LiveVisitors from './components/LiveVisitors';
 import InstallPrompt from './components/InstallPrompt';
 import Ergebniszettel from './components/Ergebniszettel';
-import ScheduleImport from './components/ScheduleImport';
-import type { ImportGame } from './components/ScheduleImport';
 import LegalPage from './components/LegalPage';
 import PageBackground from './components/PageBackground';
 import MobileDock from './components/MobileDock';
@@ -32,7 +30,7 @@ import EventErgebniszettel from './components/EventErgebniszettel';
 import HighlightsHome from './components/HighlightsHome';
 import HighlightsPage from './components/HighlightsPage';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Upload } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil } from 'lucide-react';
 
 // Öffentliche Tabs haben eigene URLs, damit man nach einem Reload dort bleibt, wo man war.
 const TAB_PATHS: Record<ActiveTab, string> = {
@@ -403,12 +401,6 @@ export default function App() {
   const handleDeleteMatch = (matchId: string) =>
     runAdminAction(() => apiFetch(`/api/matches/${matchId}`, { method: 'DELETE' }));
 
-  // Einmaliger Import: kompletten Spielplan der aktiven Saison durch die finale Planung ersetzen.
-  const handleImportSchedule = (games: ImportGame[], force: boolean) =>
-    runAdminAction(() =>
-      apiFetch('/api/matches', { method: 'POST', body: JSON.stringify({ games, force }) })
-    );
-
   const handleStartSeason = async (label: string) => {
     const ok = await runAdminAction(() =>
       apiFetch('/api/seasons', { method: 'POST', body: JSON.stringify({ label }) })
@@ -706,20 +698,6 @@ export default function App() {
                       matches={currentSeasonMatches}
                       onAddMatch={handleAddMatch}
                       onDeleteMatch={handleDeleteMatch}
-                    />
-                  </AccordionSection>
-
-                  <AccordionSection
-                    id="import"
-                    category="spiele"
-                    title="Neuen Spielplan einlesen"
-                    subtitle="Kompletten Spielplan der Saison durch die finale 5-Spieltage-Planung ersetzen"
-                    icon={<Upload className="w-5 h-5" />}
-                  >
-                    <ScheduleImport
-                      teams={visibleTeams}
-                      matches={currentSeasonMatches}
-                      onImport={handleImportSchedule}
                     />
                   </AccordionSection>
 
