@@ -68,6 +68,105 @@ const createMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse)
   return res.json(match);
 });
 
+// Einmaliger Spielplan-Import (Admin): ersetzt den kompletten Spielplan der aktiven Saison
+// atomar durch die übergebenen Begegnungen. Die Team-Zuordnung (Name -> Team-ID) passiert
+// bereits im Frontend anhand der geladenen Teams; hier kommen fertige Team-IDs an.
+// Als POST-Variante von /api/matches umgesetzt (hält das Vercel-12-Funktionen-Limit ein).
+interface IncomingGame {
+  importRef: string;
+  matchday: number;
+  date: string;
+  time: string;
+  field: number | null;
+  slot: number | null;
+  homeTeamId: string;
+  awayTeamId: string;
+}
+
+const importSchedule = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
+  const { games, force } = req.body ?? {};
+
+  if (!Array.isArray(games) || games.length === 0) return badRequest(res, 'Keine Spiele übergeben.');
+  if (games.length > 1000) return badRequest(res, 'Zu viele Spiele auf einmal.');
+
+  const refs = new Set<string>();
+  const referencedTeamIds = new Set<string>();
+  for (const g of games as IncomingGame[]) {
+    if (!g || typeof g !== 'object') return badRequest(res, 'Ungültiger Spiel-Eintrag.');
+    if (!isNonEmptyString(g.importRef)) return badRequest(res, 'Spiel ohne gültige Spiel-ID.');
+    if (refs.has(g.importRef)) return badRequest(res, `Doppelte Spiel-ID: ${g.importRef}.`);
+    refs.add(g.importRef);
+    if (!Number.isInteger(g.matchday) || g.matchday < 1 || g.matchday > 99) {
+      return badRequest(res, `Ungültiger Spieltag bei ${g.importRef}.`);
+    }
+    if (!isDateString(g.date)) return badRequest(res, `Ungültiges Datum bei ${g.importRef}.`);
+    if (!isTimeString(g.time)) return badRequest(res, `Ungültige Uhrzeit bei ${g.importRef}.`);
+    if (!isNonEmptyString(g.homeTeamId) || !isNonEmptyString(g.awayTeamId)) {
+      return badRequest(res, `Heim-/Auswärtsteam fehlt bei ${g.importRef}.`);
+    }
+    if (g.homeTeamId === g.awayTeamId) return badRequest(res, `Team spielt gegen sich selbst bei ${g.importRef}.`);
+    if (g.field != null && (!Number.isInteger(g.field) || g.field < 1 || g.field > 9)) {
+      return badRequest(res, `Ungültiges Feld bei ${g.importRef}.`);
+    }
+    if (g.slot != null && (!Number.isInteger(g.slot) || g.slot < 1 || g.slot > 99)) {
+      return badRequest(res, `Ungültiger Slot bei ${g.importRef}.`);
+    }
+    referencedTeamIds.add(g.homeTeamId);
+    referencedTeamIds.add(g.awayTeamId);
+  }
+
+  const season = await getCurrentSeason();
+  if (!season) return res.status(500).json({ error: 'Keine aktive Saison vorhanden.' });
+
+  // Alle referenzierten Teams müssen in der DB existieren.
+  const teamRows = (await sql`SELECT id FROM teams`) as { id: string }[];
+  const existingTeamIds = new Set(teamRows.map((r) => r.id));
+  const missing = [...referencedTeamIds].filter((id) => !existingTeamIds.has(id));
+  if (missing.length > 0) {
+    return badRequest(res, `Unbekannte Team-IDs: ${missing.slice(0, 8).join(', ')}${missing.length > 8 ? ' …' : ''}.`);
+  }
+
+  // Schutz vor Datenverlust: bereits eingetragene Ergebnisse nur mit force überschreiben.
+  const resultRows = (await sql`
+    SELECT count(*)::int AS n FROM matches
+    WHERE season_id = ${season.id} AND (home_score IS NOT NULL OR away_score IS NOT NULL OR status = 'beendet')
+  `) as { n: number }[];
+  const resultsCount = resultRows[0]?.n ?? 0;
+  if (resultsCount > 0 && force !== true) {
+    return res.status(409).json({
+      error: `Es sind bereits ${resultsCount} Spiele mit Ergebnis eingetragen – der Import würde sie löschen.`,
+      resultsCount,
+    });
+  }
+
+  // Bestehenden Spielort (gilt pro Abend) übernehmen, damit die Hallenangabe erhalten bleibt.
+  const venueRows = (await sql`
+    SELECT venue FROM matches WHERE season_id = ${season.id} AND venue IS NOT NULL AND venue <> '' LIMIT 1
+  `) as { venue: string }[];
+  const carriedVenue = venueRows[0]?.venue ?? null;
+
+  const countRows = (await sql`SELECT count(*)::int AS n FROM matches WHERE season_id = ${season.id}`) as { n: number }[];
+  const deletedCount = countRows[0]?.n ?? 0;
+
+  // Kompletten Spielplan der Saison atomar ersetzen (löschen + neu einfügen).
+  await sql.transaction((txn) => {
+    const q: unknown[] = [txn`DELETE FROM matches WHERE season_id = ${season.id}`];
+    for (const g of games as IncomingGame[]) {
+      q.push(txn`
+        INSERT INTO matches (id, season_id, matchday, home_team_id, away_team_id,
+                             home_score, away_score, status, date, time, venue, field, slot, import_ref,
+                             scorers, absentees, best_players, goalkeepers)
+        VALUES (${`imp-${season.id}-${g.importRef}`}, ${season.id}, ${g.matchday}, ${g.homeTeamId}, ${g.awayTeamId},
+                null, null, 'geplant', ${g.date}, ${g.time}, ${carriedVenue}, ${g.field}, ${g.slot}, ${g.importRef},
+                '[]'::jsonb, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb)
+      `);
+    }
+    return q as never;
+  });
+
+  return res.json({ ok: true, deleted: deletedCount, inserted: games.length, season: season.id });
+});
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method === 'GET') {
@@ -75,6 +174,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.json(await getMatches());
     }
     if (req.method === 'POST') {
+      // Import (ganzer Spielplan) vs. einzelnes Spiel anhand des Bodys unterscheiden.
+      if (Array.isArray(req.body?.games)) return importSchedule(req, res);
       return createMatch(req, res);
     }
     return res.status(405).json({ error: 'Nicht unterstützt' });
