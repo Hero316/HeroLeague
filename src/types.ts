@@ -63,6 +63,10 @@ export interface Match {
   // Spieldauer in Minuten für den Live-Countdown (vom Schiedsrichtermodus beim
   // Anpfiff gesetzt). null/undefined ⇒ klassische hochzählende Live-Minute.
   durationMinutes?: number | null;
+  // Zeitstempel, seit dem der Countdown pausiert ist (Schiedsrichter). Ist er
+  // gesetzt, friert der Timer ein; beim Fortsetzen wird `liveStartedAt` um die
+  // Pausendauer nach hinten verschoben, damit es nahtlos weiterläuft.
+  pausedAt?: string | null;
 }
 
 export interface Season {

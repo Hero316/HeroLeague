@@ -221,7 +221,11 @@ export function useLiveMinute(liveStartedAt?: string | null): number {
 // Restsekunden eines Countdowns aus Anpfiff-Zeitstempel + Spieldauer. Gibt null
 // zurück, wenn keine Dauer gesetzt ist (dann zählt die klassische Live-Minute).
 // Tickt sekündlich, damit die mm:ss-Anzeige flüssig läuft.
-export function useCountdown(liveStartedAt?: string | null, durationMinutes?: number | null): number | null {
+export function useCountdown(
+  liveStartedAt?: string | null,
+  durationMinutes?: number | null,
+  pausedAt?: string | null
+): number | null {
   const [remaining, setRemaining] = React.useState<number | null>(null);
 
   React.useEffect(() => {
@@ -230,14 +234,21 @@ export function useCountdown(liveStartedAt?: string | null, durationMinutes?: nu
       return;
     }
     const total = durationMinutes * 60;
+    const startMs = new Date(liveStartedAt).getTime();
+    // Pausiert: eingefrorener Reststand (Pausen-Zeitpunkt minus Anpfiff).
+    if (pausedAt) {
+      const elapsed = Math.floor((new Date(pausedAt).getTime() - startMs) / 1000);
+      setRemaining(Math.max(0, total - elapsed));
+      return;
+    }
     const compute = () => {
-      const elapsed = Math.floor((Date.now() - new Date(liveStartedAt).getTime()) / 1000);
+      const elapsed = Math.floor((Date.now() - startMs) / 1000);
       setRemaining(Math.max(0, total - elapsed));
     };
     compute();
     const id = setInterval(compute, 1000);
     return () => clearInterval(id);
-  }, [liveStartedAt, durationMinutes]);
+  }, [liveStartedAt, durationMinutes, pausedAt]);
 
   return remaining;
 }
@@ -254,14 +265,16 @@ export function formatClock(seconds: number): string {
 export function LiveBadge({
   liveStartedAt,
   durationMinutes,
+  pausedAt,
 }: {
   liveStartedAt?: string | null;
   durationMinutes?: number | null;
+  pausedAt?: string | null;
 }) {
   const minute = useLiveMinute(liveStartedAt);
-  const remaining = useCountdown(liveStartedAt, durationMinutes);
-  const label = remaining !== null ? formatClock(remaining) : minute ? `${minute}'` : undefined;
-  return <MatchStatusBadge status="live" liveLabel={label} />;
+  const remaining = useCountdown(liveStartedAt, durationMinutes, pausedAt);
+  const clock = remaining !== null ? `${pausedAt ? '⏸ ' : ''}${formatClock(remaining)}` : minute ? `${minute}'` : undefined;
+  return <MatchStatusBadge status="live" liveLabel={clock} />;
 }
 
 // Status-Badge für Match-Karten

@@ -33,7 +33,8 @@ export async function getMatches(): Promise<Match[]> {
            away_team_id AS "awayTeamId", home_score AS "homeScore", away_score AS "awayScore",
            status, date, time, venue, field, slot, import_ref AS "importRef",
            scorers, absentees, best_players AS "bestPlayers", goalkeepers,
-           live_started_at AS "liveStartedAt", duration_minutes AS "durationMinutes"
+           live_started_at AS "liveStartedAt", duration_minutes AS "durationMinutes",
+           paused_at AS "pausedAt"
     FROM matches ORDER BY matchday, date, time, id
   `;
   return rows as Match[];

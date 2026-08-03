@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Shield, ArrowLeft, LogOut, Plus, X, Play, Square, Users, Star, Check, RefreshCw } from 'lucide-react';
+import { Shield, ArrowLeft, LogOut, Plus, X, Play, Pause, Square, Users, Star, Check, RefreshCw } from 'lucide-react';
 import { EveningRoster, Match, RosterMap, SessionUser, Team } from '../types';
 import { useCountdown, formatClock } from './ui';
 
@@ -69,7 +69,9 @@ export default function RefereeMode({
       matches
         .filter((m) => m.matchday === matchday)
         .filter((m) => (fieldFilter === 'all' ? true : (m.field ?? 0) === fieldFilter))
-        .sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0) || a.time.localeCompare(b.time)),
+        // Streng chronologisch: erst Uhrzeit, dann Zeitblock, dann Feld –
+        // damit die beiden Felder nicht durcheinandergewürfelt sind.
+        .sort((a, b) => a.time.localeCompare(b.time) || (a.slot ?? 0) - (b.slot ?? 0) || (a.field ?? 0) - (b.field ?? 0)),
     [matches, matchday, fieldFilter]
   );
 
@@ -202,7 +204,7 @@ export default function RefereeMode({
 
 // Eine Spielkarte in der Übersicht (großflächig antippbar).
 function MatchRow({ match, teamName, onOpen }: { match: Match; teamName: (id: string) => string; onOpen: () => void }) {
-  const remaining = useCountdown(match.liveStartedAt, match.durationMinutes);
+  const remaining = useCountdown(match.liveStartedAt, match.durationMinutes, match.pausedAt);
   return (
     <button
       type="button"
@@ -212,9 +214,9 @@ function MatchRow({ match, teamName, onOpen }: { match: Match; teamName: (id: st
       <div className="flex items-center justify-between mb-2 text-[11px] font-semibold uppercase tracking-wider text-hl-dim">
         <span>{match.field ? `Feld ${match.field}` : match.time + ' Uhr'}</span>
         {match.status === 'live' ? (
-          <span className="flex items-center gap-1.5 text-hl-red-soft">
-            <span className="w-2 h-2 rounded-full bg-hl-red inline-block hl-pulse" />
-            LIVE {remaining !== null ? formatClock(remaining) : ''}
+          <span className={`flex items-center gap-1.5 ${match.pausedAt ? 'text-amber-400' : 'text-hl-red-soft'}`}>
+            <span className={`w-2 h-2 rounded-full inline-block ${match.pausedAt ? 'bg-amber-400' : 'bg-hl-red hl-pulse'}`} />
+            {match.pausedAt ? 'PAUSE' : 'LIVE'} {remaining !== null ? formatClock(remaining) : ''}
           </span>
         ) : match.status === 'beendet' ? (
           <span className="text-emerald-400">Beendet</span>
@@ -263,7 +265,8 @@ function MatchScreen({
   const awayScore = match.awayScore ?? 0;
   const scorers = match.scorers ?? [];
   const bestPlayers = match.bestPlayers ?? [];
-  const remaining = useCountdown(match.liveStartedAt, match.durationMinutes);
+  const isPaused = !!match.pausedAt;
+  const remaining = useCountdown(match.liveStartedAt, match.durationMinutes, match.pausedAt);
 
   const scorersOf = (teamId: string) =>
     scorers.map((s, i) => ({ ...s, i })).filter((s) => s.teamId === teamId);
@@ -279,10 +282,13 @@ function MatchScreen({
     save({
       status: 'live',
       durationMinutes: minutes,
+      pausedAt: null,
       homeScore: match.homeScore ?? 0,
       awayScore: match.awayScore ?? 0,
     });
 
+  const pause = () => save({ pausedAt: new Date().toISOString() });
+  const resume = () => save({ pausedAt: null });
   const finalize = () => save({ status: 'beendet' });
 
   // Tor hinzufügen (mit oder ohne Torschütze).
@@ -435,9 +441,10 @@ function MatchScreen({
           {/* Timer / Status */}
           <div className="text-center">
             {match.status === 'live' ? (
-              <div className="font-mono font-black text-3xl tabular-nums text-hl-red-soft">
+              <div className={`font-mono font-black text-3xl tabular-nums ${isPaused ? 'text-amber-400' : 'text-hl-red-soft'}`}>
                 {remaining !== null ? formatClock(remaining) : 'LIVE'}
-                {remaining === 0 && <div className="text-xs font-sans text-hl-dim mt-1">Zeit abgelaufen – Abpfiff wählen</div>}
+                {isPaused && <div className="text-xs font-sans uppercase tracking-wider mt-1">Pausiert</div>}
+                {!isPaused && remaining === 0 && <div className="text-xs font-sans text-hl-dim mt-1">Zeit abgelaufen – Abpfiff wählen</div>}
               </div>
             ) : match.status === 'beendet' ? (
               <div className="text-emerald-400 font-bold uppercase tracking-wider">Beendet</div>
@@ -447,7 +454,7 @@ function MatchScreen({
           </div>
         </div>
 
-        {/* Anpfiff / Abpfiff */}
+        {/* Anpfiff / Pause / Abpfiff */}
         {match.status !== 'live' ? (
           <button
             type="button"
@@ -458,14 +465,26 @@ function MatchScreen({
             <Play className="w-7 h-7" /> {match.status === 'beendet' ? 'Erneut anpfeifen' : 'Anpfiff'}
           </button>
         ) : (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={finalize}
-            className="w-full min-h-[64px] rounded-2xl bg-hl-red hover:brightness-110 active:scale-[.99] disabled:opacity-50 text-white font-extrabold text-xl flex items-center justify-center gap-2 transition-all"
-          >
-            <Square className="w-6 h-6" /> Abpfiff
-          </button>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={isPaused ? resume : pause}
+              className={`min-h-[64px] rounded-2xl active:scale-[.99] disabled:opacity-50 text-white font-extrabold text-lg flex items-center justify-center gap-2 transition-all ${
+                isPaused ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-amber-500 hover:bg-amber-400'
+              }`}
+            >
+              {isPaused ? <><Play className="w-6 h-6" /> Weiter</> : <><Pause className="w-6 h-6" /> Pause</>}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={finalize}
+              className="min-h-[64px] rounded-2xl bg-hl-red hover:brightness-110 active:scale-[.99] disabled:opacity-50 text-white font-extrabold text-lg flex items-center justify-center gap-2 transition-all"
+            >
+              <Square className="w-6 h-6" /> Abpfiff
+            </button>
+          </div>
         )}
 
         {/* Tore je Team */}

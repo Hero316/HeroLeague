@@ -7,18 +7,20 @@ import { TeamCrest, shortDate, useLiveMinute, useCountdown, formatClock } from '
 export function LiveTimer({
   liveStartedAt,
   durationMinutes,
+  pausedAt,
 }: {
   liveStartedAt?: string | null;
   durationMinutes?: number | null;
+  pausedAt?: string | null;
 }) {
   const minutes = useLiveMinute(liveStartedAt);
-  const remaining = useCountdown(liveStartedAt, durationMinutes);
+  const remaining = useCountdown(liveStartedAt, durationMinutes, pausedAt);
   const label = remaining !== null ? formatClock(remaining) : minutes ? `${minutes}'` : '';
 
   return (
     <span className="px-2.5 py-1 rounded-md font-sans font-extrabold text-[9.5px] tracking-[1.2px] bg-[rgba(255,84,66,.15)] text-hl-red-soft flex items-center gap-1.5 shrink-0">
-      <span className="w-[7px] h-[7px] bg-hl-red rounded-full inline-block hl-pulse" />
-      <span>LIVE{label ? ` ${label}` : ''}</span>
+      <span className={`w-[7px] h-[7px] bg-hl-red rounded-full inline-block ${pausedAt ? '' : 'hl-pulse'}`} />
+      <span>{pausedAt ? 'PAUSE' : 'LIVE'}{label ? ` ${label}` : ''}</span>
     </span>
   );
 }
@@ -634,7 +636,7 @@ export default function Spielplan({
                       <span>⚽</span> Ergebnis &amp; Torschützen
                     </h4>
                     {oLive ? (
-                      <LiveTimer liveStartedAt={openMatch.liveStartedAt ?? undefined} durationMinutes={openMatch.durationMinutes ?? undefined} />
+                      <LiveTimer liveStartedAt={openMatch.liveStartedAt ?? undefined} durationMinutes={openMatch.durationMinutes ?? undefined} pausedAt={openMatch.pausedAt ?? undefined} />
                     ) : oCompleted ? (
                       <span className="px-2.5 py-1 rounded-md font-sans font-extrabold text-[9.5px] tracking-[1.2px] bg-white/[.06] text-hl-mute">BEENDET</span>
                     ) : (
@@ -1010,7 +1012,7 @@ export default function Spielplan({
                       {shortDate(match.date)} · {match.time} Uhr
                     </span>
                     {isLive ? (
-                      <LiveTimer liveStartedAt={match.liveStartedAt ?? undefined} durationMinutes={match.durationMinutes ?? undefined} />
+                      <LiveTimer liveStartedAt={match.liveStartedAt ?? undefined} durationMinutes={match.durationMinutes ?? undefined} pausedAt={match.pausedAt ?? undefined} />
                     ) : isCompleted ? (
                       <span className="px-2.5 py-1 rounded-md font-sans font-extrabold text-[9.5px] tracking-[1.2px] bg-white/[.06] text-hl-mute">BEENDET</span>
                     ) : (

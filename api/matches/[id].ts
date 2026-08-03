@@ -16,7 +16,7 @@ import {
 
 const updateMatch = requireMatchWrite(async (req: VercelRequest, res: VercelResponse) => {
   const id = String(req.query.id);
-  const { homeScore, awayScore, status, scorers, absentees, bestPlayers, goalkeepers, matchday, date, time, homeTeamId, awayTeamId, venue, durationMinutes } =
+  const { homeScore, awayScore, status, scorers, absentees, bestPlayers, goalkeepers, matchday, date, time, homeTeamId, awayTeamId, venue, durationMinutes, pausedAt } =
     req.body ?? {};
 
   if (homeScore !== undefined && !isOptionalScore(homeScore)) return badRequest(res, 'Ungültiges Heim-Ergebnis.');
@@ -41,12 +41,16 @@ const updateMatch = requireMatchWrite(async (req: VercelRequest, res: VercelResp
   ) {
     return badRequest(res, 'Ungültige Spieldauer (1–120 Minuten).');
   }
+  if (pausedAt !== undefined && pausedAt !== null && (typeof pausedAt !== 'string' || Number.isNaN(Date.parse(pausedAt)))) {
+    return badRequest(res, 'Ungültiger Pause-Zeitstempel.');
+  }
 
   const rows = await sql`
     SELECT id, season_id AS "seasonId", matchday, home_team_id AS "homeTeamId",
            away_team_id AS "awayTeamId", home_score AS "homeScore", away_score AS "awayScore",
            status, date, time, venue, scorers, absentees, best_players AS "bestPlayers",
-           goalkeepers, live_started_at AS "liveStartedAt", duration_minutes AS "durationMinutes"
+           goalkeepers, live_started_at AS "liveStartedAt", duration_minutes AS "durationMinutes",
+           paused_at AS "pausedAt"
     FROM matches WHERE id = ${id}
   `;
   if (rows.length === 0) return res.status(404).json({ error: 'Spiel nicht gefunden.' });
@@ -109,9 +113,24 @@ const updateMatch = requireMatchWrite(async (req: VercelRequest, res: VercelResp
       if (!match.liveStartedAt) match.liveStartedAt = new Date().toISOString();
     } else {
       match.liveStartedAt = null;
+      match.pausedAt = null; // ein beendetes/geplantes Spiel ist nie pausiert
     }
   }
   if (durationMinutes !== undefined) match.durationMinutes = durationMinutes;
+  // Pausieren / Fortsetzen des Countdowns.
+  if (pausedAt !== undefined) {
+    if (pausedAt === null) {
+      // Fortsetzen: Anpfiff-Zeitstempel um die Pausendauer nach hinten schieben,
+      // damit der Countdown nahtlos weiterläuft.
+      if (match.pausedAt && match.liveStartedAt) {
+        const shift = Date.now() - new Date(match.pausedAt).getTime();
+        match.liveStartedAt = new Date(new Date(match.liveStartedAt).getTime() + shift).toISOString();
+      }
+      match.pausedAt = null;
+    } else {
+      match.pausedAt = pausedAt;
+    }
+  }
   if (matchday !== undefined) match.matchday = matchday;
   if (date !== undefined) match.date = date;
   if (time !== undefined) match.time = time;
@@ -135,6 +154,7 @@ const updateMatch = requireMatchWrite(async (req: VercelRequest, res: VercelResp
         best_players = ${JSON.stringify(match.bestPlayers ?? [])}::jsonb,
         goalkeepers = ${JSON.stringify(match.goalkeepers ?? [])}::jsonb,
         live_started_at = ${match.liveStartedAt}, duration_minutes = ${match.durationMinutes ?? null},
+        paused_at = ${match.pausedAt ?? null},
         matchday = ${match.matchday}, date = ${match.date}, time = ${match.time}, venue = ${match.venue ?? null},
         home_team_id = ${match.homeTeamId}, away_team_id = ${match.awayTeamId}
     WHERE id = ${id}

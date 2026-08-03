@@ -162,7 +162,7 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
                       <span className="font-sans font-semibold text-[11px] tracking-[.8px] text-hl-dim">
                         {shortDate(m.date)} · {m.time} Uhr
                       </span>
-                      {isLive ? <LiveBadge liveStartedAt={m.liveStartedAt} durationMinutes={m.durationMinutes} /> : <MatchStatusBadge status={m.status} />}
+                      {isLive ? <LiveBadge liveStartedAt={m.liveStartedAt} durationMinutes={m.durationMinutes} pausedAt={m.pausedAt} /> : <MatchStatusBadge status={m.status} />}
                     </div>
                     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2.5">
                       <div className="flex items-center gap-2 min-w-0">

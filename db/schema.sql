@@ -55,6 +55,9 @@ CREATE TABLE matches (
   -- Spieldauer in Minuten für den Live-Countdown (vom Schiedsrichtermodus beim
   -- Anpfiff gesetzt). NULL ⇒ klassische hochzählende Live-Minute.
   duration_minutes INTEGER,
+  -- Zeitstempel, seit dem der Countdown pausiert ist (Schiedsrichter). NULL ⇒
+  -- läuft. Beim Fortsetzen wird live_started_at um die Pausendauer verschoben.
+  paused_at       TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
