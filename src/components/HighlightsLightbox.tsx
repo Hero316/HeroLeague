@@ -1,10 +1,20 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import type { HighlightMedia } from '../types';
 import { toEmbed } from '../lib/videoEmbed';
+import { downloadImage } from '../lib/download';
 import HighlightClip from './HighlightClip';
+import ZoomableImage from './ZoomableImage';
+
+// Dateiname fürs Herunterladen: aus der Bildunterschrift (falls vorhanden) + echter
+// Endung der Blob-URL, sonst ein neutraler Name.
+function downloadName(media: HighlightMedia): string {
+  const ext = media.url.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+  const base = media.caption ? media.caption.trim().replace(/[^\w-]+/g, '_').slice(0, 40) : 'hero-league';
+  return `${base || 'hero-league'}.${ext.length <= 4 ? ext : 'jpg'}`;
+}
 
 // Vollbild-Ansicht mit Wisch-Navigation für gemischte Medien (Bild + Video).
 // Wird von der Highlights-Seite und dem Startseiten-Bereich geteilt.
@@ -24,6 +34,11 @@ export default function HighlightsLightbox({
 }) {
   const reduce = useReducedMotion();
   const open = index !== null && !!items[index];
+  const [zoomed, setZoomed] = useState(false);
+
+  // Beim Bildwechsel den Zoom-Zustand zurücksetzen (das Bild selbst wird über den
+  // key neu aufgebaut und startet wieder unzoomt).
+  useEffect(() => setZoomed(false), [index]);
 
   const go = (delta: number) => {
     if (index === null || items.length === 0) return;
@@ -80,7 +95,7 @@ export default function HighlightsLightbox({
         <X className="w-5 h-5" />
       </button>
 
-      {multiple && (
+      {multiple && !zoomed && (
         <>
           <button
             type="button"
@@ -117,13 +132,6 @@ export default function HighlightsLightbox({
             animate="center"
             exit="exit"
             transition={{ duration: 0.28, ease: [0.22, 0.61, 0.36, 1] }}
-            drag={!isVideo && multiple ? 'x' : false}
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.18}
-            onDragEnd={(_, info) => {
-              if (info.offset.x < -80) go(1);
-              else if (info.offset.x > 80) go(-1);
-            }}
             className="flex items-center justify-center"
           >
             {isVideo && embed ? (
@@ -137,20 +145,24 @@ export default function HighlightsLightbox({
             ) : isVideo ? (
               <p className="text-white/70 font-sans">Video-Link nicht erkannt.</p>
             ) : (
-              <img
-                src={media.url}
-                alt={media.caption || 'Highlight'}
-                referrerPolicy="no-referrer"
-                className="max-w-full max-h-[82vh] object-contain rounded-xl shadow-2xl select-none touch-pan-y"
-              />
+              <div className="relative w-[90vw] max-w-5xl h-[82vh]">
+                <ZoomableImage
+                  key={media.id}
+                  src={media.url}
+                  alt={media.caption || 'Highlight'}
+                  className="max-h-full max-w-full object-contain rounded-xl shadow-2xl select-none"
+                  onSwipe={(d) => multiple && go(d)}
+                  onZoomChange={setZoomed}
+                />
+              </div>
             )}
           </motion.div>
         </AnimatePresence>
       </div>
 
-      {/* Bildunterschrift im Hero-League-Stil + Zähler */}
-      <div className="absolute bottom-5 left-0 right-0 z-20 flex flex-col items-center gap-2.5 px-6 pointer-events-none text-center">
-        {media.caption && (
+      {/* Bildunterschrift + Zähler + feiner Glas-Download-Button (nur Bilder) */}
+      <div className="absolute bottom-[calc(env(safe-area-inset-bottom)+1.25rem)] left-0 right-0 z-30 flex flex-col items-center gap-3 px-6 pointer-events-none text-center">
+        {media.caption && !zoomed && (
           <div className="max-w-2xl">
             <div className="mx-auto mb-2 h-[3px] w-10 rounded bg-brand-accent-light shadow-[0_0_10px_rgba(34,223,201,.7)]" />
             <p className="font-display font-black text-white text-lg sm:text-2xl uppercase tracking-tight leading-tight drop-shadow-[0_2px_12px_rgba(0,0,0,.75)]">
@@ -158,7 +170,20 @@ export default function HighlightsLightbox({
             </p>
           </div>
         )}
-        {multiple && <span className="font-mono text-xs text-white/55">{index + 1} / {items.length}</span>}
+        {multiple && !zoomed && <span className="font-mono text-xs text-white/55">{index + 1} / {items.length}</span>}
+        {!isVideo && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              downloadImage(media.url, downloadName(media));
+            }}
+            className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 backdrop-blur-md px-4 py-2 text-xs font-sans font-bold uppercase tracking-wider text-white hover:bg-white/20 active:scale-95 transition shadow-lg cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            Bild speichern
+          </button>
+        )}
       </div>
     </motion.div>,
     document.body
