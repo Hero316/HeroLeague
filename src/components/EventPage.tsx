@@ -104,7 +104,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
   };
 
   return (
-    <div className="relative">
+    <div className="relative overflow-x-clip">
       {/* Kopf mit eigener Farbwelt */}
       <div className="relative overflow-hidden border-b border-[rgba(230,35,142,.25)] bg-[radial-gradient(120%_140%_at_50%_-10%,rgba(230,35,142,.28),transparent_60%)]">
         <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-10 sm:py-14">
@@ -157,7 +157,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
 
       <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-8 sm:py-12 grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] gap-8 lg:gap-12">
         {/* Tabelle */}
-        <section>
+        <section className="min-w-0">
           <div className="flex items-center gap-2 mb-4">
             <Trophy className="w-5 h-5 text-[#E9C46A]" />
             <h2 className="font-display font-black text-xl uppercase tracking-tight text-white">Tabelle</h2>
@@ -193,7 +193,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                             size="sm"
                             onSelect={crestClick(row.team)}
                           />
-                          <span className="font-sans font-semibold text-white truncate">{row.team}</span>
+                          <span className="font-sans font-semibold text-white truncate min-w-0">{row.team}</span>
                         </div>
                       </td>
                       <td className="py-2.5 px-2 text-center text-hl-soft">{row.played}</td>
@@ -219,7 +219,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
         </section>
 
         {/* Spielplan */}
-        <section>
+        <section className="min-w-0">
           <div className="flex items-center gap-2 mb-4">
             <Clock className="w-5 h-5 text-[#E6238E]" />
             <h2 className="font-display font-black text-xl uppercase tracking-tight text-white">Spielplan</h2>
