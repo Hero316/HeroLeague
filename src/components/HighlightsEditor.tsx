@@ -11,7 +11,7 @@ import { useAddImage } from './highlightsEdit';
 export default function HighlightsEditor({
   items,
   onOpen,
-  onAddImage,
+  onAddImages,
   onAddVideo,
   onAddExisting,
   onDeleteItem,
@@ -21,7 +21,7 @@ export default function HighlightsEditor({
 }: {
   items: HighlightMedia[];
   onOpen: (index: number) => void;
-  onAddImage: (url: string, ratio?: number) => void;
+  onAddImages: (images: { url: string; ratio?: number }[]) => void;
   onAddVideo: (url: string) => void;
   onAddExisting?: (media: HighlightMedia[]) => void;
   onDeleteItem: (id: string) => void;
@@ -29,7 +29,7 @@ export default function HighlightsEditor({
   onToggleFeatured?: (id: string) => void;
   highlights?: HighlightsConfig; // für die Mediathek-Auswahl (bereits hochgeladene Bilder)
 }) {
-  const { busy, pick, progress } = useAddImage(onAddImage);
+  const { busy, pick, progress } = useAddImage(onAddImages);
   const [videoInput, setVideoInput] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
 
