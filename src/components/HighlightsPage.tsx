@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ImageIcon, ArrowLeft, FolderPlus, Trash2, Images, ImagePlus, Loader2 } from 'lucide-react';
 import type { HighlightsConfig } from '../types';
 import { PageHeader } from './ui';
@@ -78,13 +78,27 @@ export default function HighlightsPage({
   highlights,
   editMode,
   onSave,
+  initialAlbumId = null,
+  onInitialAlbumConsumed,
 }: {
   highlights: HighlightsConfig;
   editMode: boolean;
   onSave: (next: HighlightsConfig) => void;
+  initialAlbumId?: string | null; // aus der Story-Ansicht: diesen Ordner direkt öffnen
+  onInitialAlbumConsumed?: () => void;
 }) {
   const { items, albums } = highlights;
-  const [openAlbumId, setOpenAlbumId] = useState<string | null>(null);
+  // Direkt aufgeklappt starten, wenn aus der Story-Ansicht ein Ordner geöffnet wurde.
+  const [openAlbumId, setOpenAlbumId] = useState<string | null>(
+    initialAlbumId && albums.some((a) => a.id === initialAlbumId) ? initialAlbumId : null
+  );
+
+  // Den „Start-Ordner“ nur einmal verwenden, damit ein späterer Aufruf der
+  // Galerie über das Menü wieder auf der Übersicht landet.
+  useEffect(() => {
+    if (initialAlbumId) onInitialAlbumConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [lightbox, setLightbox] = useState<{ index: number | null; dir: number }>({ index: null, dir: 0 });
 
   const openAlbum = albums.find((a) => a.id === openAlbumId) ?? null;

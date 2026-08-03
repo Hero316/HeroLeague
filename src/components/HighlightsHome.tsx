@@ -16,11 +16,13 @@ export default function HighlightsHome({
   highlights,
   editMode,
   onOpenGallery,
+  onOpenAlbum,
   onSave,
 }: {
   highlights: HighlightsConfig;
   editMode: boolean;
   onOpenGallery: () => void;
+  onOpenAlbum?: (albumId: string) => void; // aus der Story-Ansicht in den ganzen Ordner springen
   onSave: (next: HighlightsConfig) => void;
 }) {
   const items = highlights.items;
@@ -106,7 +108,12 @@ export default function HighlightsHome({
       />
 
       {storyAlbum !== null && (
-        <StoriesViewer albums={albums} initialAlbum={storyAlbum} onClose={() => setStoryAlbum(null)} />
+        <StoriesViewer
+          albums={albums}
+          initialAlbum={storyAlbum}
+          onClose={() => setStoryAlbum(null)}
+          onOpenAlbum={onOpenAlbum}
+        />
       )}
     </section>
   );

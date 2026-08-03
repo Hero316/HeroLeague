@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Images } from 'lucide-react';
 import type { HighlightAlbum } from '../types';
 import { toEmbed } from '../lib/videoEmbed';
+import { albumCoverInfo } from './highlightsEdit';
 import HighlightClip from './HighlightClip';
 
 const IMAGE_MS = 10000; // 10 Sek. pro Bild
@@ -18,10 +19,12 @@ export default function StoriesViewer({
   albums,
   initialAlbum,
   onClose,
+  onOpenAlbum,
 }: {
   albums: HighlightAlbum[];
   initialAlbum: number;
   onClose: () => void;
+  onOpenAlbum?: (albumId: string) => void; // Kopf antippen ⇒ ganzen Ordner (Galerie) öffnen
 }) {
   const [ai, setAi] = useState(Math.min(Math.max(0, initialAlbum), Math.max(0, albums.length - 1)));
   const [ii, setII] = useState(0);
@@ -178,6 +181,7 @@ export default function StoriesViewer({
   });
 
   const portrait = embed?.aspect === 'portrait';
+  const cover = albumCoverInfo(album);
 
   return createPortal(
     <div className="fixed inset-0 z-[130] bg-black flex items-center justify-center select-none">
@@ -215,10 +219,14 @@ export default function StoriesViewer({
         <div className={`touch-none ${isVideo ? 'w-[28%] ml-auto' : 'flex-1'}`} {...makeZone(next)} />
       </div>
 
-      {/* Fortschrittsbalken oben */}
-      <div className="absolute top-0 left-0 right-0 z-30 px-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] flex gap-1.5">
+      {/* Fortschrittsbalken oben (Instagram-Stil): ein Segment je Bild. Bei vielen
+          Bildern werden die Abstände kleiner, damit alle Striche sichtbar bleiben. */}
+      <div
+        className="absolute top-0 left-0 right-0 z-30 px-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] flex"
+        style={{ gap: items.length > 30 ? 2 : items.length > 15 ? 3 : 4 }}
+      >
         {items.map((m, idx) => (
-          <div key={m.id} className="h-[3px] flex-1 rounded-full bg-white/30 overflow-hidden">
+          <div key={m.id} className="h-[3px] flex-1 min-w-0 rounded-full bg-white/30 overflow-hidden">
             <div
               className={`h-full rounded-full bg-white ${idx === ii && isVideo ? 'animate-pulse' : ''}`}
               style={{ width: idx < ii ? '100%' : idx > ii ? '0%' : isVideo ? '100%' : `${progress * 100}%` }}
@@ -227,11 +235,35 @@ export default function StoriesViewer({
         ))}
       </div>
 
-      {/* Kopf: Ordnername + Schließen */}
+      {/* Kopf: Ordner (Cover + Name, antippbar ⇒ ganzer Ordner) + Schließen */}
       <div className="absolute top-[calc(env(safe-area-inset-top)+1.75rem)] left-0 right-0 z-30 px-4 flex items-center justify-between gap-3">
-        <span className="font-display font-black text-white uppercase tracking-tight text-sm sm:text-base drop-shadow-[0_1px_6px_rgba(0,0,0,.8)] truncate">
-          {album.title}
-        </span>
+        <button
+          type="button"
+          onClick={() => onOpenAlbum?.(album.id)}
+          disabled={!onOpenAlbum}
+          aria-label={onOpenAlbum ? `Ordner ${album.title} öffnen` : album.title}
+          className="group flex items-center gap-2.5 min-w-0 cursor-pointer disabled:cursor-default text-left"
+        >
+          <span className="shrink-0 w-9 h-9 rounded-full overflow-hidden bg-white/10 border border-white/30 grid place-items-center">
+            {cover ? (
+              <img
+                src={cover.url}
+                alt=""
+                referrerPolicy="no-referrer"
+                className={`h-full w-full ${cover.custom ? 'object-contain p-1' : 'object-cover'}`}
+              />
+            ) : (
+              <Images className="w-4 h-4 text-white/70" />
+            )}
+          </span>
+          <span
+            className={`font-display font-black text-white uppercase tracking-tight text-sm sm:text-base drop-shadow-[0_1px_6px_rgba(0,0,0,.8)] truncate min-w-0 ${
+              onOpenAlbum ? 'group-hover:underline' : ''
+            }`}
+          >
+            {album.title}
+          </span>
+        </button>
         <button
           type="button"
           onClick={onClose}
