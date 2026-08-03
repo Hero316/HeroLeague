@@ -91,15 +91,39 @@ export default function HighlightsCarousel({
                 >
                   {isVideo && !thumb ? (
                     <div className="absolute inset-0 bg-[linear-gradient(140deg,#0d1a19,#06100f)]" />
-                  ) : (
+                  ) : isVideo ? (
                     <img
-                      src={isVideo ? (thumb as string) : media.url}
+                      src={thumb as string}
                       alt={media.caption || 'Highlight'}
                       loading="lazy"
                       decoding="async"
                       referrerPolicy="no-referrer"
                       className="absolute inset-0 h-full w-full object-cover transition-transform duration-[700ms] ease-out group-hover:scale-[1.03]"
                     />
+                  ) : (
+                    <>
+                      {/* Weicher, unscharfer Fuell-Hintergrund aus demselben Bild:
+                          fuellt die 16:9-Kachel, ohne dass am eigentlichen Bild etwas
+                          abgeschnitten wird (kein harter Crop, keine leeren Balken). */}
+                      <img
+                        src={media.url}
+                        alt=""
+                        aria-hidden
+                        loading="lazy"
+                        decoding="async"
+                        referrerPolicy="no-referrer"
+                        className="absolute inset-0 h-full w-full object-cover scale-125 blur-2xl opacity-45"
+                      />
+                      {/* Das vollstaendige Bild – nichts wird abgeschnitten. */}
+                      <img
+                        src={media.url}
+                        alt={media.caption || 'Highlight'}
+                        loading="lazy"
+                        decoding="async"
+                        referrerPolicy="no-referrer"
+                        className="absolute inset-0 h-full w-full object-contain transition-transform duration-[700ms] ease-out group-hover:scale-[1.02]"
+                      />
+                    </>
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-transparent" />
 

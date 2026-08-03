@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trash2, Maximize2, Play } from 'lucide-react';
+import { Trash2, Maximize2, Play, Star } from 'lucide-react';
 import type { HighlightMedia } from '../types';
 import { toEmbed, youtubeThumb } from '../lib/videoEmbed';
 
@@ -14,6 +14,7 @@ export default function HighlightThumb({
   editMode,
   onDelete,
   onSetCaption,
+  onToggleFeatured,
   compact = false,
 }: {
   media: HighlightMedia;
@@ -21,6 +22,7 @@ export default function HighlightThumb({
   editMode: boolean;
   onDelete: () => void;
   onSetCaption: (caption: string) => void;
+  onToggleFeatured?: () => void;
   compact?: boolean;
 }) {
   const [caption, setCaption] = useState(media.caption ?? '');
@@ -106,6 +108,29 @@ export default function HighlightThumb({
             }`}
           >
             <Trash2 className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} />
+          </button>
+        )}
+
+        {/* Stern: markiert den Beitrag fürs Startseiten-Karussell */}
+        {editMode && onToggleFeatured && (
+          <button
+            type="button"
+            onClick={onToggleFeatured}
+            title={media.featured ? 'Vom Startseiten-Karussell entfernen' : 'Auf der Startseite zeigen'}
+            aria-label={media.featured ? 'Vom Startseiten-Karussell entfernen' : 'Auf der Startseite zeigen'}
+            aria-pressed={!!media.featured}
+            className={`absolute top-2 left-2 z-10 rounded-full border flex items-center justify-center cursor-pointer transition-colors ${
+              compact ? 'w-8 h-8' : 'w-9 h-9'
+            } ${
+              media.featured
+                ? 'bg-brand-accent-light text-brand-dark border-brand-accent-light shadow-[0_0_16px_rgba(34,223,201,.6)]'
+                : 'bg-black/60 text-white border-white/20 hover:bg-black/80'
+            }`}
+          >
+            <Star
+              className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'}
+              fill={media.featured ? 'currentColor' : 'none'}
+            />
           </button>
         )}
       </div>

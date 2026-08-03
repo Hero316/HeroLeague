@@ -8,7 +8,7 @@ import HighlightsCarousel from './HighlightsCarousel';
 import HighlightsEditor from './HighlightsEditor';
 import StoryPills from './StoryPills';
 import StoriesViewer from './StoriesViewer';
-import { mediaListHandlers, newestFirst } from './highlightsEdit';
+import { mediaListHandlers, newestFirst, collectFeatured } from './highlightsEdit';
 
 // Startseiten-Highlight-Bereich: horizontales Hero-Karussell + darunter die
 // runden Story-Pillen (je Ordner). Im Bearbeiten-Modus die losen Highlights pflegen.
@@ -27,9 +27,15 @@ export default function HighlightsHome({
   const albums = highlights.albums;
   const [lightbox, setLightbox] = useState<{ index: number | null; dir: number }>({ index: null, dir: 0 });
   const [storyAlbum, setStoryAlbum] = useState<number | null>(null);
-  // Neueste zuerst – im Karussell und im Bearbeiten-Modus gleichermaßen.
-  const display = useMemo(() => newestFirst(items), [items]);
+  // Karussell zeigt nur die mit Stern markierten Medien (aus allen Ordnern + losen
+  // Highlights). Ist noch nichts markiert, greifen die losen Highlights als Vorgabe
+  // – so bleibt die Startseite auch ohne Auswahl gefüllt. Neueste zuerst.
+  const featured = useMemo(() => collectFeatured(items, albums), [items, albums]);
+  const carouselItems = featured.length > 0 ? featured : items;
+  const display = useMemo(() => newestFirst(carouselItems), [carouselItems]);
   const open = (i: number) => setLightbox({ index: i, dir: 0 });
+  // Im Bearbeiten-Modus werden die losen Highlights gepflegt.
+  const editItems = useMemo(() => newestFirst(items), [items]);
   const handlers = mediaListHandlers(items, (next) => onSave({ ...highlights, items: next }));
 
   if (!editMode && items.length === 0 && albums.length === 0) return null;
@@ -78,7 +84,7 @@ export default function HighlightsHome({
         </Reveal>
 
         {editMode ? (
-          <HighlightsEditor items={display} onOpen={open} {...handlers} />
+          <HighlightsEditor items={editItems} onOpen={open} highlights={highlights} {...handlers} />
         ) : (
           <>
             {display.length > 0 && <HighlightsCarousel items={display} onOpen={open} />}
@@ -92,7 +98,7 @@ export default function HighlightsHome({
       </div>
 
       <HighlightsLightbox
-        items={display}
+        items={editMode ? editItems : display}
         index={lightbox.index}
         direction={lightbox.dir}
         onClose={() => setLightbox({ index: null, dir: 0 })}

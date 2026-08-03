@@ -11,53 +11,80 @@ export const genAlbumId = () => `alb-${Date.now()}-${Math.random().toString(36).
 // ganz vorne (Startseite + Galerie). Reine Anzeige, ändert die Speicherung nicht.
 export const newestFirst = <T,>(list: T[]): T[] => [...list].reverse();
 
-// Baut die Standard-Handler (Bild/Video hinzufügen, löschen, beschriften) für
-// eine Medienliste – wiederverwendet für die losen Highlights und für jeden Ordner.
+// Baut die Standard-Handler (Bild/Video hinzufügen, löschen, beschriften,
+// Stern setzen) für eine Medienliste – wiederverwendet für die losen Highlights
+// und für jeden Ordner.
 export function mediaListHandlers(list: HighlightMedia[], setList: (next: HighlightMedia[]) => void) {
   return {
     onAddImage: (url: string, ratio?: number) =>
       setList([...list, { id: genMediaId(), type: 'image' as const, url, ...(ratio ? { ratio } : {}) }]),
     onAddVideo: (url: string) => setList([...list, { id: genMediaId(), type: 'video' as const, url: url.trim() }]),
+    // Bereits hochgeladene Medien (aus Mediathek) übernehmen – neue IDs, gleiche
+    // URL. So muss ein Foto nie doppelt hochgeladen werden.
+    onAddExisting: (media: HighlightMedia[]) =>
+      setList([...list, ...media.map((m) => ({ ...m, id: genMediaId(), featured: undefined }))]),
     onDeleteItem: (id: string) => setList(list.filter((m) => m.id !== id)),
     onSetCaption: (id: string, caption: string) =>
       setList(list.map((m) => (m.id === id ? { ...m, caption: caption.trim() || undefined } : m))),
+    onToggleFeatured: (id: string) =>
+      setList(list.map((m) => (m.id === id ? { ...m, featured: !m.featured || undefined } : m))),
   };
 }
 
-// Datei-Auswahl + Upload für Highlight-Fotos. Nutzt die bestehende Browser-
+// Alle mit Stern markierten Medien einer Konfiguration einsammeln (lose
+// Highlights + alle Ordner). Reihenfolge: erst lose, dann je Ordner – so bleibt
+// die Auswahl stabil. Grundlage für das Startseiten-Karussell.
+export function collectFeatured(items: HighlightMedia[], albums: HighlightAlbum[]): HighlightMedia[] {
+  const featured: HighlightMedia[] = items.filter((m) => m.featured);
+  for (const album of albums) featured.push(...album.items.filter((m) => m.featured));
+  return featured;
+}
+
+// Datei-Auswahl + Upload für Highlight-Fotos. Erlaubt die Mehrfach-Auswahl –
+// jedes Bild wird nacheinander hochgeladen. Nutzt die bestehende Browser-
 // Komprimierung (1600px, scharf aber klein) und erfasst vorab das Seitenverhältnis
 // (Breite/Höhe) fürs Mosaik – so springt das Layout beim Laden nicht.
 export function useAddImage(onAdd: (url: string, ratio?: number) => void) {
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
   const pick = () => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/png,image/jpeg,image/webp,image/gif';
+    input.multiple = true;
     input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
+      const files = Array.from(input.files ?? []);
+      if (files.length === 0) return;
       setBusy(true);
-      try {
-        let ratio: number | undefined;
+      setProgress({ done: 0, total: files.length });
+      const errors: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
         try {
-          const bmp = await createImageBitmap(file);
-          if (bmp.width > 0 && bmp.height > 0) ratio = bmp.width / bmp.height;
-          bmp.close();
-        } catch {
-          /* Seitenverhältnis optional – Mosaik misst sonst per onLoad */
+          let ratio: number | undefined;
+          try {
+            const bmp = await createImageBitmap(file);
+            if (bmp.width > 0 && bmp.height > 0) ratio = bmp.width / bmp.height;
+            bmp.close();
+          } catch {
+            /* Seitenverhältnis optional – Mosaik misst sonst per onLoad */
+          }
+          onAdd(await uploadImage(file, { maxDimension: 1600 }), ratio);
+        } catch (err) {
+          errors.push(`${file.name}: ${err instanceof Error ? err.message : 'Fehler'}`);
+        } finally {
+          setProgress({ done: i + 1, total: files.length });
         }
-        onAdd(await uploadImage(file, { maxDimension: 1600 }), ratio);
-      } catch (err) {
-        alert(err instanceof Error ? err.message : 'Fehler beim Bild-Upload.');
-      } finally {
-        setBusy(false);
       }
+      setBusy(false);
+      setProgress(null);
+      if (errors.length > 0) alert(`Einige Bilder konnten nicht hochgeladen werden:\n${errors.join('\n')}`);
     };
     input.click();
   };
 
-  return { busy, pick };
+  return { busy, pick, progress };
 }
 
 // Cover-Upload für einen Ordner: wie ein Wappen (512px, komprimiert, Transparenz
