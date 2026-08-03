@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ChevronLeft, ChevronRight, Images } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Images, Download } from 'lucide-react';
 import type { HighlightAlbum } from '../types';
 import { toEmbed } from '../lib/videoEmbed';
 import { albumCoverInfo } from './highlightsEdit';
+import { downloadImage } from '../lib/download';
 import HighlightClip from './HighlightClip';
+import ZoomableImage from './ZoomableImage';
 
 const IMAGE_MS = 10000; // 10 Sek. pro Bild
 const VIDEO_MAX_MS = 60000; // Sicherheits-Fallback, falls ein Video kein Ende meldet
@@ -30,6 +32,7 @@ export default function StoriesViewer({
   const [ii, setII] = useState(0);
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [zoomed, setZoomed] = useState(false);
 
   const album = albums[ai];
   const items = album?.items ?? [];
@@ -84,7 +87,7 @@ export default function StoriesViewer({
       onClose();
       return;
     }
-    if (paused) return;
+    if (paused || zoomed) return;
 
     if (isVideo) {
       // Video: kein Countdown – bis Ende (onEnded) bzw. Sicherheits-Timeout.
@@ -107,7 +110,10 @@ export default function StoriesViewer({
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ai, ii, paused, isVideo]);
+  }, [ai, ii, paused, isVideo, zoomed]);
+
+  // Beim Wechsel von Bild/Ordner den Zoom zurücksetzen.
+  useEffect(() => setZoomed(false), [ai, ii]);
 
   // Tastatur (PC)
   useEffect(() => {
@@ -194,30 +200,37 @@ export default function StoriesViewer({
         ) : isVideo ? (
           <p className="text-white/70 font-sans">Video-Link nicht erkannt.</p>
         ) : (
-          <div className="relative w-full h-full flex items-center justify-center">
+          <div className="relative w-full h-full">
             <img
               src={item.url}
               alt=""
               aria-hidden
               className="absolute inset-0 h-full w-full object-cover scale-110 blur-2xl opacity-40"
             />
-            <img
+            {/* Bild ist zoombar (Pinch/Maus); Tippen blättert, Halten pausiert,
+                Wischen wechselt den Ordner. */}
+            <ZoomableImage
+              key={item.id}
               src={item.url}
               alt={item.caption || 'Highlight'}
-              referrerPolicy="no-referrer"
-              className="relative max-h-full max-w-full object-contain"
+              onTapZone={(zone) => (zone === 'left' ? prev() : next())}
+              onSwipe={(dir) => goAlbum(dir)}
+              onHoldChange={setPaused}
+              onZoomChange={setZoomed}
             />
           </div>
         )}
       </div>
 
-      {/* Tipp-/Wisch-Zonen: links = zurück, rechts = weiter. Bei Video bleibt die
-          Mitte frei (Player-Steuerung), bei Bildern volle Breite. */}
-      <div className="absolute inset-0 z-20 flex">
-        <div className={`touch-none ${isVideo ? 'w-[28%]' : 'w-1/3'}`} {...makeZone(prev)} />
-        {isVideo && <div className="flex-1 pointer-events-none" />}
-        <div className={`touch-none ${isVideo ? 'w-[28%] ml-auto' : 'flex-1'}`} {...makeZone(next)} />
-      </div>
+      {/* Tipp-/Wisch-Zonen nur für Video (Bilder steuert ZoomableImage selbst).
+          Bei Video bleibt die Mitte frei für die Player-Steuerung. */}
+      {isVideo && (
+        <div className="absolute inset-0 z-20 flex">
+          <div className="touch-none w-[28%]" {...makeZone(prev)} />
+          <div className="flex-1 pointer-events-none" />
+          <div className="touch-none w-[28%] ml-auto" {...makeZone(next)} />
+        </div>
+      )}
 
       {/* Fortschrittsbalken oben (Instagram-Stil): ein Segment je Bild. Bei vielen
           Bildern werden die Abstände kleiner, damit alle Striche sichtbar bleiben. */}
@@ -297,15 +310,32 @@ export default function StoriesViewer({
         </>
       )}
 
-      {/* Bildunterschrift */}
-      {item.caption && (
-        <div className="absolute bottom-6 left-0 right-0 z-30 px-6 text-center pointer-events-none">
-          <div className="mx-auto mb-2 h-[3px] w-10 rounded bg-brand-accent-light shadow-[0_0_10px_rgba(34,223,201,.7)]" />
-          <p className="font-display font-black text-white text-base sm:text-2xl uppercase tracking-tight leading-tight drop-shadow-[0_2px_12px_rgba(0,0,0,.8)]">
-            {item.caption}
-          </p>
-        </div>
-      )}
+      {/* Bildunterschrift + feiner Glas-Download-Button (nur Bilder) */}
+      <div className="absolute bottom-[calc(env(safe-area-inset-bottom)+1.5rem)] left-0 right-0 z-30 px-6 flex flex-col items-center gap-3 pointer-events-none text-center">
+        {item.caption && !zoomed && (
+          <div className="max-w-2xl">
+            <div className="mx-auto mb-2 h-[3px] w-10 rounded bg-brand-accent-light shadow-[0_0_10px_rgba(34,223,201,.7)]" />
+            <p className="font-display font-black text-white text-base sm:text-2xl uppercase tracking-tight leading-tight drop-shadow-[0_2px_12px_rgba(0,0,0,.8)]">
+              {item.caption}
+            </p>
+          </div>
+        )}
+        {!isVideo && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              const ext = item.url.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+              const base = (item.caption || album.title || 'hero-league').trim().replace(/[^\w-]+/g, '_').slice(0, 40);
+              downloadImage(item.url, `${base || 'hero-league'}.${ext.length <= 4 ? ext : 'jpg'}`);
+            }}
+            className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 backdrop-blur-md px-4 py-2 text-xs font-sans font-bold uppercase tracking-wider text-white hover:bg-white/20 active:scale-95 transition shadow-lg cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            Bild speichern
+          </button>
+        )}
+      </div>
 
       {/* Pause-Hinweis */}
       {paused && (
