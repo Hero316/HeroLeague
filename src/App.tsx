@@ -59,6 +59,9 @@ export default function App() {
   const [players, setPlayers] = useState<PlayerStat[]>([]);
   const [eventArchive, setEventArchive] = useState<EventArchive | null>(null);
   const [highlights, setHighlights] = useState<HighlightsConfig>({ items: [], albums: [] });
+  // Wenn aus der Story-Ansicht ein Ordner geöffnet wird: der Galerie-Seite mitgeben,
+  // welcher Ordner direkt aufgeklappt starten soll. Wird nach dem Öffnen geleert.
+  const [highlightsAlbumId, setHighlightsAlbumId] = useState<string | null>(null);
   // Eigene Hero-Hintergrundbilder (Startseite) – leer = Standard-Design
   const [heroImages, setHeroImages] = useState<HeroImages>({ match: '', pom: '', table: '' });
   // Countdown bis zum Anstoß (Startseite). active=false ⇒ normal.
@@ -423,6 +426,12 @@ export default function App() {
 
   const goToTab = (tab: ActiveTab) => {
     navigateTo(TAB_PATHS[tab]);
+  };
+
+  // Aus der Story-Ansicht heraus direkt in den ganzen Ordner (Galerie) springen.
+  const openHighlightsAlbum = (albumId: string) => {
+    setHighlightsAlbumId(albumId);
+    goToTab('highlights');
   };
 
   // Bottom-Dock (Handy-Modus). onEventPage = gerade die Testspiel-Seite offen.
@@ -803,6 +812,7 @@ export default function App() {
             highlights={highlights}
             editMode={editMode && isAdmin}
             onOpenGallery={() => goToTab('highlights')}
+            onOpenAlbum={openHighlightsAlbum}
             onSave={persistHighlights}
           />
           <HomeBody
@@ -817,7 +827,13 @@ export default function App() {
       )}
 
       {activeTab === 'highlights' && (
-        <HighlightsPage highlights={highlights} editMode={editMode && isAdmin} onSave={persistHighlights} />
+        <HighlightsPage
+          highlights={highlights}
+          editMode={editMode && isAdmin}
+          onSave={persistHighlights}
+          initialAlbumId={highlightsAlbumId}
+          onInitialAlbumConsumed={() => setHighlightsAlbumId(null)}
+        />
       )}
 
       {activeTab === 'spielplan' && (
