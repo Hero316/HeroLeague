@@ -88,15 +88,17 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
     const crest = crestFor(name);
     return (
       <div className={`flex items-center gap-2 min-w-0 ${align === 'right' ? 'flex-row-reverse text-right' : ''}`}>
-        <TeamCrest
-          name={name}
-          shortName={crest?.shortName ?? name.slice(0, 3).toUpperCase()}
-          color={crest?.logoColor ?? '#E6238E'}
-          logoUrl={crest?.logoUrl}
-          size="sm"
-          onSelect={crestClick(name)}
-        />
-        <span className="font-sans font-semibold text-sm text-white truncate">{name}</span>
+        <span className="shrink-0">
+          <TeamCrest
+            name={name}
+            shortName={crest?.shortName ?? name.slice(0, 3).toUpperCase()}
+            color={crest?.logoColor ?? '#E6238E'}
+            logoUrl={crest?.logoUrl}
+            size="sm"
+            onSelect={crestClick(name)}
+          />
+        </span>
+        <span className="font-sans font-semibold text-sm text-white truncate min-w-0">{name}</span>
       </div>
     );
   };
@@ -250,7 +252,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                                 <span className="text-hl-mute">Feld {m.field}</span>
                               )}
                             </span>
-                            <div className="flex-1 grid grid-cols-[1fr_auto_1fr] items-center gap-2 min-w-0">
+                            <div className="flex-1 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 min-w-0">
                               {renderTeam(m.home, 'left')}
                               <span
                                 className={`px-2.5 py-1 rounded-md font-display font-black text-sm tabular-nums ${
@@ -271,7 +273,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                                   .map((s, i) => (
                                     <div key={i} className="flex items-center gap-1 text-[11px] font-sans text-hl-soft">
                                       <span className="text-[#ff7ac4]">⚽</span>
-                                      <span className="truncate">
+                                      <span className="truncate min-w-0">
                                         {s.player}
                                         {s.assist ? <span className="text-hl-mute"> · Vorlage {s.assist}</span> : null}
                                       </span>
@@ -285,7 +287,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                                   .map((s, i) => (
                                     <div key={i} className="flex flex-row-reverse items-center gap-1 text-[11px] font-sans text-hl-soft">
                                       <span className="text-[#ff7ac4]">⚽</span>
-                                      <span className="truncate">
+                                      <span className="truncate min-w-0">
                                         {s.player}
                                         {s.assist ? <span className="text-hl-mute"> · Vorlage {s.assist}</span> : null}
                                       </span>
@@ -415,10 +417,10 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                 <div className="divide-y divide-white/[.06]">
                   {awards.topScorers.slice(0, 8).map((s, i) => (
                     <div key={`${s.team}-${s.player}`} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                      <span className="w-5 text-center font-display font-black text-hl-mute">{i + 1}</span>
-                      <span className="font-sans font-semibold text-white">{s.player}</span>
-                      <span className="text-xs text-hl-mute truncate">{s.team}</span>
-                      <span className="ml-auto font-display font-black text-white">{s.count}</span>
+                      <span className="w-5 shrink-0 text-center font-display font-black text-hl-mute">{i + 1}</span>
+                      <span className="font-sans font-semibold text-white truncate min-w-0">{s.player}</span>
+                      <span className="text-xs text-hl-mute truncate min-w-0">{s.team}</span>
+                      <span className="ml-auto shrink-0 font-display font-black text-white">{s.count}</span>
                     </div>
                   ))}
                 </div>
@@ -455,9 +457,11 @@ function StatTile({
       </div>
       <div className="flex items-center gap-2 min-w-0">
         {crest && (
-          <TeamCrest name={crest.name} shortName={crest.shortName} color={crest.logoColor} logoUrl={crest.logoUrl} size="sm" onSelect={onSelect} />
+          <span className="shrink-0">
+            <TeamCrest name={crest.name} shortName={crest.shortName} color={crest.logoColor} logoUrl={crest.logoUrl} size="sm" onSelect={onSelect} />
+          </span>
         )}
-        <span className="font-display font-black text-white text-lg leading-tight truncate">{value}</span>
+        <span className="font-display font-black text-white text-lg leading-tight truncate min-w-0">{value}</span>
       </div>
       <div className="mt-1 text-xs font-sans text-hl-soft">{sub}</div>
     </div>
