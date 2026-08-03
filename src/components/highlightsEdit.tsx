@@ -18,6 +18,19 @@ export function mediaListHandlers(list: HighlightMedia[], setList: (next: Highli
   return {
     onAddImage: (url: string, ratio?: number) =>
       setList([...list, { id: genMediaId(), type: 'image' as const, url, ...(ratio ? { ratio } : {}) }]),
+    // Mehrere frisch hochgeladene Bilder auf einmal anhängen – EIN State-Update,
+    // EIN Speichern. Verhindert, dass sich parallele Einzel-Speicherungen beim
+    // Mehrfach-Upload gegenseitig überschreiben (Race) oder die Galerie springt.
+    onAddImages: (images: { url: string; ratio?: number }[]) =>
+      setList([
+        ...list,
+        ...images.map((im) => ({
+          id: genMediaId(),
+          type: 'image' as const,
+          url: im.url,
+          ...(im.ratio ? { ratio: im.ratio } : {}),
+        })),
+      ]),
     onAddVideo: (url: string) => setList([...list, { id: genMediaId(), type: 'video' as const, url: url.trim() }]),
     // Bereits hochgeladene Medien (aus Mediathek) übernehmen – neue IDs, gleiche
     // URL. So muss ein Foto nie doppelt hochgeladen werden.
@@ -40,11 +53,14 @@ export function collectFeatured(items: HighlightMedia[], albums: HighlightAlbum[
   return featured;
 }
 
-// Datei-Auswahl + Upload für Highlight-Fotos. Erlaubt die Mehrfach-Auswahl –
-// jedes Bild wird nacheinander hochgeladen. Nutzt die bestehende Browser-
+// Datei-Auswahl + Upload für Highlight-Fotos. Erlaubt die Mehrfach-Auswahl:
+// alle Bilder werden nacheinander hochgeladen (mit Zähler), aber erst ganz am
+// Ende gemeinsam über `onAddMany` in die Liste geschrieben – EIN State-Update,
+// EIN Speichern. So springt die Galerie während des Uploads nicht und es geht
+// kein Bild durch parallele Speicherungen verloren. Nutzt die bestehende Browser-
 // Komprimierung (1600px, scharf aber klein) und erfasst vorab das Seitenverhältnis
 // (Breite/Höhe) fürs Mosaik – so springt das Layout beim Laden nicht.
-export function useAddImage(onAdd: (url: string, ratio?: number) => void) {
+export function useAddImage(onAddMany: (images: { url: string; ratio?: number }[]) => void) {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
@@ -58,6 +74,7 @@ export function useAddImage(onAdd: (url: string, ratio?: number) => void) {
       if (files.length === 0) return;
       setBusy(true);
       setProgress({ done: 0, total: files.length });
+      const uploaded: { url: string; ratio?: number }[] = [];
       const errors: string[] = [];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -70,13 +87,15 @@ export function useAddImage(onAdd: (url: string, ratio?: number) => void) {
           } catch {
             /* Seitenverhältnis optional – Mosaik misst sonst per onLoad */
           }
-          onAdd(await uploadImage(file, { maxDimension: 1600 }), ratio);
+          const url = await uploadImage(file, { maxDimension: 1600 });
+          uploaded.push({ url, ...(ratio ? { ratio } : {}) });
         } catch (err) {
           errors.push(`${file.name}: ${err instanceof Error ? err.message : 'Fehler'}`);
         } finally {
           setProgress({ done: i + 1, total: files.length });
         }
       }
+      if (uploaded.length > 0) onAddMany(uploaded);
       setBusy(false);
       setProgress(null);
       if (errors.length > 0) alert(`Einige Bilder konnten nicht hochgeladen werden:\n${errors.join('\n')}`);
