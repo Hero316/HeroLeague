@@ -216,7 +216,7 @@ export default function StoriesViewer({
       </div>
 
       {/* Fortschrittsbalken oben */}
-      <div className="absolute top-0 left-0 right-0 z-30 px-3 pt-3 flex gap-1.5">
+      <div className="absolute top-0 left-0 right-0 z-30 px-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] flex gap-1.5">
         {items.map((m, idx) => (
           <div key={m.id} className="h-[3px] flex-1 rounded-full bg-white/30 overflow-hidden">
             <div
@@ -228,7 +228,7 @@ export default function StoriesViewer({
       </div>
 
       {/* Kopf: Ordnername + Schließen */}
-      <div className="absolute top-6 left-0 right-0 z-30 px-4 flex items-center justify-between gap-3">
+      <div className="absolute top-[calc(env(safe-area-inset-top)+1.75rem)] left-0 right-0 z-30 px-4 flex items-center justify-between gap-3">
         <span className="font-display font-black text-white uppercase tracking-tight text-sm sm:text-base drop-shadow-[0_1px_6px_rgba(0,0,0,.8)] truncate">
           {album.title}
         </span>
