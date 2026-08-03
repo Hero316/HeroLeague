@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { sql } from './_lib/db.js';
-import { requireAdmin } from './_lib/auth.js';
+import { sql, getTeams } from './_lib/db.js';
+import { requireStaff, requireMatchWrite } from './_lib/auth.js';
 
 const DEFAULT_TWITCH = { channel: '', isLive: false };
 const DEFAULT_SOCIAL = { instagram: '', tiktok: '', youtube: '' };
@@ -85,7 +85,7 @@ function normalizeUrl(input: unknown): string {
   return `https://${t}`;
 }
 
-const saveTwitch = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
+const saveTwitch = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
   const { channel, isLive } = req.body ?? {};
   const cfg = {
     channel: normalizeChannel(channel),
@@ -100,7 +100,7 @@ const saveTwitch = requireAdmin(async (req: VercelRequest, res: VercelResponse) 
   return res.json(cfg);
 });
 
-const saveSocial = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
+const saveSocial = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
   const { instagram, tiktok, youtube } = req.body ?? {};
   const cfg = {
     instagram: normalizeUrl(instagram),
@@ -117,7 +117,7 @@ const saveSocial = requireAdmin(async (req: VercelRequest, res: VercelResponse) 
 });
 
 // Hero-Hintergrundbilder speichern (nur http(s)-URLs; leere Felder = Standard).
-const saveHero = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
+const saveHero = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
   const { match, pom, table } = req.body ?? {};
   const pick = (v: unknown) => {
     const url = normalizeUrl(v);
@@ -134,7 +134,7 @@ const saveHero = requireAdmin(async (req: VercelRequest, res: VercelResponse) =>
 });
 
 // Countdown-Konfiguration speichern.
-const saveCountdown = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
+const saveCountdown = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
   const b = req.body ?? {};
   const target = typeof b.target === 'string' && b.target.trim() ? b.target.trim().slice(0, 40) : DEFAULT_COUNTDOWN.target;
   const cfg = {
@@ -167,7 +167,7 @@ function normalizeNews(body: unknown) {
   return { items };
 }
 
-const saveNews = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
+const saveNews = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
   const cfg = normalizeNews(req.body);
   await sql`
     INSERT INTO settings (key, value) VALUES ('news', ${JSON.stringify(cfg)}::jsonb)
@@ -263,7 +263,7 @@ function toArchive(stored: unknown) {
   return { activeId: s.active ? single.id : null, events: [single] };
 }
 
-const saveEvent = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
+const saveEvent = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
   const archive = normalizeArchive(req.body);
   await sql`
     INSERT INTO settings (key, value) VALUES ('event', ${JSON.stringify(archive)}::jsonb)
@@ -334,7 +334,7 @@ function normalizeHighlights(body: unknown) {
   return { items, albums: [] as HighlightAlbum[] };
 }
 
-const saveHighlights = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
+const saveHighlights = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
   const cfg = normalizeHighlights(req.body);
   await sql`
     INSERT INTO settings (key, value) VALUES ('highlights', ${JSON.stringify(cfg)}::jsonb)
@@ -343,10 +343,93 @@ const saveHighlights = requireAdmin(async (req: VercelRequest, res: VercelRespon
   return res.json(cfg);
 });
 
+// --- Abend-Aufstellung (Schiedsrichtermodus) -------------------------------
+// Pro Spieltag-Abend wird je Team festgelegt, wer anwesend ist und wer im Tor
+// steht, plus die Spieldauer (Countdown). Alles liegt in EINEM settings-Eintrag
+// (key 'roster'), Schlüssel `${seasonId}:${matchday}`. Beim Speichern wird die
+// Aufstellung zusätzlich auf die Einzelspiele übertragen (Abwesende = Kader
+// minus anwesend, Torwart je Team), damit Tabelle/Statistik/Punkte stimmen.
+type RosterEntry = { playerName: string; teamId: string };
+type RosterTeamIn = { present: string[]; goalkeeper?: string };
+
+function normalizeRosterPayload(body: unknown) {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const teamsRaw = (b.teams ?? {}) as Record<string, unknown>;
+  const teams: Record<string, RosterTeamIn> = {};
+  for (const [teamId, val] of Object.entries(teamsRaw)) {
+    const o = (val ?? {}) as Record<string, unknown>;
+    const present = Array.isArray(o.present) ? o.present.map((p) => str(p).trim()).filter(Boolean) : [];
+    const goalkeeper = str(o.goalkeeper).trim();
+    teams[teamId] = goalkeeper ? { present, goalkeeper } : { present };
+  }
+  const matchdayNum = Number(b.matchday);
+  const minutesNum = Number(b.minutes);
+  return {
+    seasonId: str(b.seasonId).trim(),
+    matchday: Number.isInteger(matchdayNum) ? matchdayNum : NaN,
+    minutes: Number.isFinite(minutesNum) ? Math.min(120, Math.max(1, Math.floor(minutesNum))) : 7,
+    teams,
+  };
+}
+
+const saveRoster = requireMatchWrite(async (req: VercelRequest, res: VercelResponse) => {
+  const { seasonId, matchday, minutes, teams } = normalizeRosterPayload(req.body);
+  if (!seasonId || !Number.isInteger(matchday) || matchday < 1 || matchday > 99) {
+    return res.status(400).json({ error: 'Ungültige Saison/Spieltag-Angabe.' });
+  }
+
+  // 1) Aufstellung im settings-Speicher ablegen (Schlüssel season:matchday).
+  const rows = await sql`SELECT value FROM settings WHERE key = 'roster'`;
+  const stored = rows[0]?.value;
+  const map = (stored && typeof stored === 'object' ? stored : {}) as Record<string, unknown>;
+  map[`${seasonId}:${matchday}`] = { minutes, teams };
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('roster', ${JSON.stringify(map)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+
+  // 2) Auf die Einzelspiele übertragen (nur die Teams aus der Aufstellung; der
+  //    Gegner und bereits erfasste Torschützen/beste Spieler bleiben unberührt).
+  const allTeams = await getTeams();
+  const kaderOf = (teamId: string) =>
+    (allTeams.find((t) => t.id === teamId)?.spielerliste ?? []).map((p) => p.name);
+  const matchRows = (await sql`
+    SELECT id, home_team_id AS "homeTeamId", away_team_id AS "awayTeamId", absentees, goalkeepers
+    FROM matches WHERE season_id = ${seasonId} AND matchday = ${matchday}
+  `) as { id: string; homeTeamId: string; awayTeamId: string; absentees: RosterEntry[]; goalkeepers: RosterEntry[] }[];
+
+  for (const m of matchRows) {
+    let absentees: RosterEntry[] = Array.isArray(m.absentees) ? m.absentees : [];
+    let goalkeepers: RosterEntry[] = Array.isArray(m.goalkeepers) ? m.goalkeepers : [];
+    for (const teamId of [m.homeTeamId, m.awayTeamId]) {
+      const roster = teams[teamId];
+      if (!roster) continue;
+      const present = new Set(roster.present);
+      const teamAbsent = kaderOf(teamId)
+        .filter((n) => !present.has(n))
+        .map((n) => ({ playerName: n, teamId }));
+      absentees = absentees.filter((a) => a.teamId !== teamId).concat(teamAbsent);
+      goalkeepers = goalkeepers.filter((g) => g.teamId !== teamId);
+      if (roster.goalkeeper && present.has(roster.goalkeeper)) {
+        goalkeepers.push({ playerName: roster.goalkeeper, teamId });
+      }
+    }
+    await sql`
+      UPDATE matches
+      SET absentees = ${JSON.stringify(absentees)}::jsonb,
+          goalkeepers = ${JSON.stringify(goalkeepers)}::jsonb,
+          duration_minutes = ${minutes}
+      WHERE id = ${m.id}
+    `;
+  }
+
+  return res.json({ ok: true, minutes, teams });
+});
+
 // Ein Endpunkt für alle Website-Einstellungen (Twitch + Social Media + Event +
 // Highlights + News), um unter dem Serverless-Funktionslimit (12) zu bleiben.
 // Angesprochen über ?resource=social | event | highlights | hero | countdown |
-// news; Twitch ist die Vorgabe.
+// news | roster; Twitch ist die Vorgabe.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const resource = req.query.resource;
@@ -378,6 +461,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const rows = await sql`SELECT value FROM settings WHERE key = 'news'`;
         return res.json(rows[0]?.value ? normalizeNews(rows[0].value) : DEFAULT_NEWS);
       }
+      if (resource === 'roster') {
+        const rows = await sql`SELECT value FROM settings WHERE key = 'roster'`;
+        return res.json(rows[0]?.value ?? {});
+      }
       const rows = await sql`SELECT value FROM settings WHERE key = 'twitch'`;
       return res.json(rows[0]?.value ?? DEFAULT_TWITCH);
     }
@@ -388,6 +475,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'hero') return saveHero(req, res);
       if (resource === 'countdown') return saveCountdown(req, res);
       if (resource === 'news') return saveNews(req, res);
+      if (resource === 'roster') return saveRoster(req, res);
       return saveTwitch(req, res);
     }
     return res.status(405).json({ error: 'Nicht unterstützt' });

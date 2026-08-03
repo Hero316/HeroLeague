@@ -60,6 +60,13 @@ export interface Match {
   bestPlayers?: BestPlayer[]; // Bester Spieler je Team (max. einer pro Team)
   goalkeepers?: Goalkeeper[]; // Torwart je Team (max. einer pro Team)
   liveStartedAt?: string | null;
+  // Spieldauer in Minuten für den Live-Countdown (vom Schiedsrichtermodus beim
+  // Anpfiff gesetzt). null/undefined ⇒ klassische hochzählende Live-Minute.
+  durationMinutes?: number | null;
+  // Zeitstempel, seit dem der Countdown pausiert ist (Schiedsrichter). Ist er
+  // gesetzt, friert der Timer ein; beim Fortsetzen wird `liveStartedAt` um die
+  // Pausendauer nach hinten verschoben, damit es nahtlos weiterläuft.
+  pausedAt?: string | null;
 }
 
 export interface Season {
@@ -190,8 +197,10 @@ export interface EventArchive {
   events: EventConfig[];
 }
 
-// Rollen: superadmin darf alles; match_admin darf nur Spiele/Live/Ticker pflegen.
-export type UserRole = 'superadmin' | 'match_admin';
+// Rollen: superadmin darf alles; match_admin darf Spiele/Live/Ticker pflegen;
+// referee (Schiedsrichter) darf ausschließlich im Schiedsrichtermodus Spiele
+// pfeifen und die Abend-Aufstellung setzen – sonst nichts.
+export type UserRole = 'superadmin' | 'match_admin' | 'referee';
 
 export interface AppUser {
   id: string;
@@ -207,6 +216,23 @@ export interface SessionUser {
   name: string;
   role: UserRole;
 }
+
+// Abend-Aufstellung (Schiedsrichtermodus): pro Team wird EINMAL für den ganzen
+// Spieltag-Abend festgelegt, wer anwesend ist und wer im Tor steht. Daraus
+// werden je Einzelspiel die Abwesenden (Kader minus anwesend) und der Torwart
+// abgeleitet, damit die Statistik/Punkte weiterhin stimmen.
+export interface RosterTeam {
+  present: string[]; // anwesende Spielernamen (aus dem Kader)
+  goalkeeper?: string; // Torwart des Abends (Spielername), optional
+}
+
+export interface EveningRoster {
+  minutes: number; // Spieldauer in Minuten (Countdown), Standard 7
+  teams: Record<string, RosterTeam>; // teamId -> Aufstellung
+}
+
+// Gesamter Aufstellungs-Speicher, Schlüssel `${seasonId}:${matchday}`.
+export type RosterMap = Record<string, EveningRoster>;
 
 export interface Standing {
   teamId: string;

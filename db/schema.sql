@@ -52,6 +52,12 @@ CREATE TABLE matches (
   -- Je Spiel gespeichert; bei „zu null" Punkte für den Goldenen Handschuh.
   goalkeepers     JSONB NOT NULL DEFAULT '[]',
   live_started_at TEXT,
+  -- Spieldauer in Minuten für den Live-Countdown (vom Schiedsrichtermodus beim
+  -- Anpfiff gesetzt). NULL ⇒ klassische hochzählende Live-Minute.
+  duration_minutes INTEGER,
+  -- Zeitstempel, seit dem der Countdown pausiert ist (Schiedsrichter). NULL ⇒
+  -- läuft. Beim Fortsetzen wird live_started_at um die Pausendauer verschoben.
+  paused_at       TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -78,12 +84,13 @@ CREATE TABLE visits (
 CREATE INDEX idx_visits_last_seen ON visits(last_seen);
 
 -- Backoffice-Benutzer (passwortloser Login per E-Mail-Code).
--- superadmin: darf alles · match_admin: nur Spiele/Live/Ticker pflegen.
+-- superadmin: darf alles · match_admin: Spiele/Live/Ticker pflegen ·
+-- referee: nur Schiedsrichtermodus (Spiele pfeifen + Abend-Aufstellung).
 CREATE TABLE users (
   id         TEXT PRIMARY KEY,
   email      TEXT NOT NULL UNIQUE,
   name       TEXT NOT NULL DEFAULT '',
-  role       TEXT NOT NULL DEFAULT 'match_admin' CHECK (role IN ('superadmin', 'match_admin')),
+  role       TEXT NOT NULL DEFAULT 'match_admin' CHECK (role IN ('superadmin', 'match_admin', 'referee')),
   is_active  BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getCurrentSeason, getMatches, sql } from '../_lib/db.js';
-import { requireAdmin } from '../_lib/auth.js';
+import { requireStaff } from '../_lib/auth.js';
 import { badRequest, isDateString, isNonEmptyString, isTimeString } from '../_lib/validate.js';
 
-const createMatch = requireAdmin(async (req: VercelRequest, res: VercelResponse) => {
+const createMatch = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
   const { matchday, homeTeamId, awayTeamId, date, time, venue } = req.body ?? {};
 
   if (typeof matchday !== 'number' || !Number.isInteger(matchday) || matchday < 1 || matchday > 99) {

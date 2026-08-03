@@ -67,7 +67,8 @@ export async function getSession(req: VercelRequest): Promise<SessionPayload | n
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, getSecret());
-    const role: UserRole = payload.role === 'match_admin' ? 'match_admin' : 'superadmin';
+    const role: UserRole =
+      payload.role === 'match_admin' ? 'match_admin' : payload.role === 'referee' ? 'referee' : 'superadmin';
     return {
       userId: typeof payload.userId === 'string' ? payload.userId : 'bootstrap',
       email: typeof payload.email === 'string' ? payload.email : '',
@@ -95,15 +96,26 @@ export function requireAuth(handler: Handler): Handler {
   };
 }
 
-// Wrapper: nur Super-Admins (Vereine, Saisons, Benutzerverwaltung)
-export function requireSuperadmin(handler: Handler): Handler {
-  return async (req, res) => {
+// Wrapper: nur bestimmte Rollen dürfen die Aktion ausführen.
+export function requireRoles(roles: UserRole[]): (handler: Handler) => Handler {
+  return (handler) => async (req, res) => {
     const session = await getSession(req);
     if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
-    if (session.role !== 'superadmin') return res.status(403).json({ error: 'Keine Berechtigung für diese Aktion.' });
+    if (!roles.includes(session.role)) return res.status(403).json({ error: 'Keine Berechtigung für diese Aktion.' });
     return handler(req, res);
   };
 }
 
-// Rückwärtskompatibler Alias – schützt Spiel-/Ticker-Endpunkte (jeder eingeloggte Nutzer)
+// Wrapper: nur Super-Admins (Vereine, Saisons, Benutzerverwaltung)
+export const requireSuperadmin = requireRoles(['superadmin']);
+
+// Wrapper: Redaktionelle Pflege (Ticker, Highlights, Hero, Event, Uploads …).
+// Super-Admin und Spiel-Admin – aber NICHT der Schiedsrichter.
+export const requireStaff = requireRoles(['superadmin', 'match_admin']);
+
+// Wrapper: Spiele + Abend-Aufstellung schreiben. Zusätzlich zum Staff darf hier
+// auch der Schiedsrichter (referee) ran – das ist sein einziger Schreibzugriff.
+export const requireMatchWrite = requireRoles(['superadmin', 'match_admin', 'referee']);
+
+// Rückwärtskompatibler Alias für reine Lese-Endpunkte hinter Login (jede Rolle).
 export const requireAdmin = requireAuth;
