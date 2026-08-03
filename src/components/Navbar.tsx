@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Menu, X, LogOut, LayoutDashboard, Instagram, Youtube, Zap, Smartphone } from 'lucide-react';
+import { Menu, X, LogOut, LayoutDashboard, Instagram, Youtube, Zap, Smartphone, Shield } from 'lucide-react';
 import { ActiveTab, SocialLinks } from '../types';
 import { numberWord } from '../lib/heroAward';
 import { apiFetch } from '../lib/api';
@@ -20,6 +20,7 @@ interface NavbarProps {
   onLogout: () => void;
   onOpenLogin: () => void;
   onOpenBackoffice: () => void;
+  onOpenReferee?: () => void; // Admin: direkt in den Schiedsrichtermodus wechseln
   seasonLabel?: string;
   seasonNumber?: number; // für den HERO-Award-Titel (HERO ONE/TWO …)
   hasLiveMatch?: boolean;
@@ -37,6 +38,7 @@ export default function Navbar({
   isAdmin,
   onLogout,
   onOpenBackoffice,
+  onOpenReferee,
   seasonLabel,
   seasonNumber,
   hasLiveMatch,
@@ -186,6 +188,16 @@ export default function Navbar({
               Backoffice
             </button>
           )}
+          {isAdmin && onOpenReferee && (
+            <button
+              onClick={onOpenReferee}
+              className="hidden lg:flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white/[.06] border border-white/15 text-white font-sans font-bold text-[11px] tracking-wider uppercase hover:bg-white/[.12] transition-colors cursor-pointer"
+              title="Schiedsrichtermodus öffnen"
+            >
+              <Shield className="w-3.5 h-3.5 text-brand-accent-light" />
+              Schiri
+            </button>
+          )}
           {isAdmin && (
             <button
               onClick={onLogout}
@@ -292,6 +304,18 @@ export default function Navbar({
             >
               <LayoutDashboard className="w-4 h-4" />
               Backoffice öffnen
+            </button>
+          )}
+          {isAdmin && onOpenReferee && (
+            <button
+              onClick={() => {
+                onOpenReferee();
+                setIsOpen(false);
+              }}
+              className="w-full flex items-center justify-center gap-1.5 mt-2 bg-white/[.06] border border-white/15 text-white py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer hover:bg-white/[.1]"
+            >
+              <Shield className="w-4 h-4 text-brand-accent-light" />
+              Schiedsrichtermodus
             </button>
           )}
           {isAdmin && (

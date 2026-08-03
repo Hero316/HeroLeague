@@ -14,6 +14,7 @@ interface RefereeModeProps {
   onSaveRoster: (seasonId: string, matchday: number, minutes: number, teams: EveningRoster['teams']) => Promise<boolean>;
   onRefresh: () => Promise<unknown> | void;
   onLogout: () => void;
+  onExit?: () => void; // nur für Admins: Schiedsrichtermodus verlassen (zurück zur Seite)
 }
 
 const DEFAULT_MINUTES = 7;
@@ -28,6 +29,7 @@ export default function RefereeMode({
   onSaveRoster,
   onRefresh,
   onLogout,
+  onExit,
 }: RefereeModeProps) {
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
   const teamName = (id: string) => teamById.get(id)?.name ?? id;
@@ -122,13 +124,23 @@ export default function RefereeMode({
             <div className="text-[11px] text-hl-dim truncate">{user.name || user.email}</div>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onLogout}
-          className="flex items-center gap-1.5 text-xs font-semibold text-hl-dim hover:text-white bg-white/5 hover:bg-white/10 rounded-lg px-3 py-2 transition-colors"
-        >
-          <LogOut className="w-4 h-4" /> Abmelden
-        </button>
+        {onExit ? (
+          <button
+            type="button"
+            onClick={onExit}
+            className="flex items-center gap-1.5 text-xs font-semibold text-hl-dim hover:text-white bg-white/5 hover:bg-white/10 rounded-lg px-3 py-2 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" /> Zurück zum Backoffice
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onLogout}
+            className="flex items-center gap-1.5 text-xs font-semibold text-hl-dim hover:text-white bg-white/5 hover:bg-white/10 rounded-lg px-3 py-2 transition-colors"
+          >
+            <LogOut className="w-4 h-4" /> Abmelden
+          </button>
+        )}
       </header>
 
       <main className="flex-1 px-4 py-4 space-y-4 max-w-2xl w-full mx-auto pb-24">

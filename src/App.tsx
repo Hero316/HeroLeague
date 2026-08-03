@@ -97,6 +97,8 @@ export default function App() {
   const isAdmin = sessionUser !== null;
   const isSuperadmin = sessionUser?.role === 'superadmin';
   const isReferee = sessionUser?.role === 'referee';
+  // Admin hat den Schiedsrichtermodus manuell geöffnet (per Navbar-Schnellzugang).
+  const [refereeView, setRefereeView] = useState(false);
   // Abend-Aufstellungen (Schiedsrichtermodus), Schlüssel `${seasonId}:${matchday}`.
   const [roster, setRoster] = useState<RosterMap>({});
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
@@ -489,9 +491,10 @@ export default function App() {
     );
   }
 
-  // ROUTE (Rolle): Schiedsrichter sehen ausschließlich den Schiedsrichtermodus –
-  // keine öffentliche Seite, kein Backoffice. Alles andere ist für sie gesperrt.
-  if (isReferee && sessionUser) {
+  // Schiedsrichtermodus: für die Rolle „Schiedsrichter" der einzige Bildschirm
+  // (alles andere gesperrt); für Admins optional über den Navbar-Schnellzugang.
+  // Admins können ihn wieder verlassen (onExit) – Schiedsrichter nicht.
+  if (sessionUser && (isReferee || refereeView)) {
     return (
       <RefereeMode
         user={sessionUser}
@@ -503,6 +506,7 @@ export default function App() {
         onSaveRoster={handleSaveRoster}
         onRefresh={fetchData}
         onLogout={handleLogout}
+        onExit={isReferee ? undefined : () => setRefereeView(false)}
       />
     );
   }
@@ -520,6 +524,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')}
+          onOpenReferee={() => setRefereeView(true)}
           seasonLabel={selectedSeasonName}
           seasonNumber={currentSeasonNumber}
           hasLiveMatch={hasLiveMatch}
@@ -553,6 +558,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')}
+          onOpenReferee={() => setRefereeView(true)}
           seasonLabel={selectedSeasonName}
           seasonNumber={currentSeasonNumber}
           hasLiveMatch={hasLiveMatch}
@@ -617,6 +623,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')}
+          onOpenReferee={() => setRefereeView(true)}
           seasonLabel={currentSeasonName}
           seasonNumber={currentSeasonNumber}
           hasLiveMatch={hasLiveMatch}
@@ -839,6 +846,7 @@ export default function App() {
         onLogout={handleLogout}
         onOpenLogin={() => navigateTo('/admin')}
         onOpenBackoffice={() => navigateTo('/admin')}
+        onOpenReferee={() => setRefereeView(true)}
         seasonLabel={currentSeasonName}
         seasonNumber={currentSeasonNumber}
         hasLiveMatch={hasLiveMatch}
