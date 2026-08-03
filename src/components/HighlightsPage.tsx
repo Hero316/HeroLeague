@@ -173,7 +173,7 @@ export default function HighlightsPage({
               <p className="text-hl-mute font-sans">Dieser Ordner ist noch leer.</p>
             </div>
           ) : editMode ? (
-            <HighlightsEditor items={display} onOpen={open} {...handlers} />
+            <HighlightsEditor items={display} onOpen={open} highlights={highlights} {...handlers} />
           ) : (
             <HighlightsMosaic items={display} onOpen={open} />
           )}
@@ -202,7 +202,7 @@ export default function HighlightsPage({
             {(items.length > 0 || editMode) && (
               <section>
                 {editMode ? (
-                  <HighlightsEditor items={display} onOpen={open} {...handlers} />
+                  <HighlightsEditor items={display} onOpen={open} highlights={highlights} {...handlers} />
                 ) : (
                   <HighlightsMosaic items={display} onOpen={open} />
                 )}

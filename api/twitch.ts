@@ -18,7 +18,7 @@ type NewsItem = { id: string; text: string };
 const DEFAULT_NEWS = { items: [] as NewsItem[] };
 
 // Highlights: gemischte Medien-Liste (Bilder + Video-Links) + Ordner (Alben).
-type HighlightMedia = { id: string; type: 'image' | 'video'; url: string; caption?: string; ratio?: number };
+type HighlightMedia = { id: string; type: 'image' | 'video'; url: string; caption?: string; ratio?: number; featured?: boolean };
 type HighlightAlbum = { id: string; title: string; items: HighlightMedia[]; cover?: string };
 const DEFAULT_HIGHLIGHTS = { items: [] as HighlightMedia[], albums: [] as HighlightAlbum[] };
 
@@ -286,6 +286,7 @@ function normalizeMediaItem(raw: unknown, i: number): HighlightMedia | null {
     url,
     ...(caption ? { caption } : {}),
     ...(Number.isFinite(ratio) && ratio > 0 ? { ratio } : {}),
+    ...(o.featured === true ? { featured: true } : {}),
   };
 }
 

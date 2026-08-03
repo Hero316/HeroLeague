@@ -123,6 +123,7 @@ export interface HighlightMedia {
   url: string; // Bild: Blob-URL · Video: YouTube-/Twitch-Link
   caption?: string;
   ratio?: number; // Breite/Höhe – nur Bilder (beim Upload erfasst), fürs Mosaik ohne Sprung
+  featured?: boolean; // vom Admin mit Stern markiert ⇒ erscheint im Startseiten-Karussell
 }
 
 // Ordner/Album (z. B. je Spieltag): eigener Titel + eigene Medienliste.
