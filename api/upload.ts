@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { put } from '@vercel/blob';
-import { requireAdmin } from './_lib/auth.js';
+import { requireStaff } from './_lib/auth.js';
 import { badRequest } from './_lib/validate.js';
 
 // Erlaubte Bildformate (kein SVG – Skript-Injektionsrisiko)
@@ -13,7 +13,7 @@ const ALLOWED_TYPES: Record<string, string> = {
 
 const MAX_BYTES = 3 * 1024 * 1024; // 3 MB (Vercel-Request-Limit: 4,5 MB inkl. Base64-Overhead)
 
-export default requireAdmin(async function handler(req: VercelRequest, res: VercelResponse) {
+export default requireStaff(async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
 

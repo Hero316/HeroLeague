@@ -10,6 +10,7 @@ const inputClass =
 const ROLE_LABEL: Record<UserRole, string> = {
   superadmin: 'Super-Admin',
   match_admin: 'Spiel-Admin',
+  referee: 'Schiedsrichter',
 };
 
 export default function UserManager() {
@@ -93,7 +94,8 @@ export default function UserManager() {
       </h3>
       <p className="text-xs text-gray-400 font-sans mb-6">
         Lege Zugänge an und vergib Rollen. <strong className="text-hl-soft">Super-Admins</strong> dürfen alles,{' '}
-        <strong className="text-hl-soft">Spiel-Admins</strong> nur Ergebnisse, Live-Ticker und Spielplan pflegen.
+        <strong className="text-hl-soft">Spiel-Admins</strong> nur Ergebnisse, Live-Ticker und Spielplan pflegen,{' '}
+        <strong className="text-hl-soft">Schiedsrichter</strong> ausschließlich den Schiedsrichtermodus (Spiele pfeifen).
         Angemeldet wird passwortlos per Code an die hinterlegte E-Mail.
       </p>
 
@@ -125,6 +127,7 @@ export default function UserManager() {
         <div>
           <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">Rolle</label>
           <select value={newRole} onChange={(e) => setNewRole(e.target.value as UserRole)} className={`${inputClass} cursor-pointer`}>
+            <option value="referee">Schiedsrichter</option>
             <option value="match_admin">Spiel-Admin</option>
             <option value="superadmin">Super-Admin</option>
           </select>
@@ -193,6 +196,7 @@ export default function UserManager() {
                   className="bg-brand-dark border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-brand-accent-light cursor-pointer disabled:opacity-50"
                   title="Rolle ändern"
                 >
+                  <option value="referee">Schiedsrichter</option>
                   <option value="match_admin">Spiel-Admin</option>
                   <option value="superadmin">Super-Admin</option>
                 </select>

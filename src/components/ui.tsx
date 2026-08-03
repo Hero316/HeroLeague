@@ -218,18 +218,67 @@ export function useLiveMinute(liveStartedAt?: string | null): number {
   return minute;
 }
 
-// Live-Badge inkl. mitlaufender Minute – für Match-Karten auf der Startseite.
-export function LiveBadge({ liveStartedAt }: { liveStartedAt?: string | null }) {
+// Restsekunden eines Countdowns aus Anpfiff-Zeitstempel + Spieldauer. Gibt null
+// zurück, wenn keine Dauer gesetzt ist (dann zählt die klassische Live-Minute).
+// Tickt sekündlich, damit die mm:ss-Anzeige flüssig läuft.
+export function useCountdown(liveStartedAt?: string | null, durationMinutes?: number | null): number | null {
+  const [remaining, setRemaining] = React.useState<number | null>(null);
+
+  React.useEffect(() => {
+    if (!liveStartedAt || !durationMinutes) {
+      setRemaining(null);
+      return;
+    }
+    const total = durationMinutes * 60;
+    const compute = () => {
+      const elapsed = Math.floor((Date.now() - new Date(liveStartedAt).getTime()) / 1000);
+      setRemaining(Math.max(0, total - elapsed));
+    };
+    compute();
+    const id = setInterval(compute, 1000);
+    return () => clearInterval(id);
+  }, [liveStartedAt, durationMinutes]);
+
+  return remaining;
+}
+
+// Sekunden als m:ss darstellen (z. B. 7:00, 0:09).
+export function formatClock(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+// Live-Badge – zeigt den Countdown (m:ss), sobald eine Spieldauer gesetzt ist,
+// sonst die klassische hochzählende Live-Minute. Für Match-Karten (Startseite).
+export function LiveBadge({
+  liveStartedAt,
+  durationMinutes,
+}: {
+  liveStartedAt?: string | null;
+  durationMinutes?: number | null;
+}) {
   const minute = useLiveMinute(liveStartedAt);
-  return <MatchStatusBadge status="live" liveMinute={minute || undefined} />;
+  const remaining = useCountdown(liveStartedAt, durationMinutes);
+  const label = remaining !== null ? formatClock(remaining) : minute ? `${minute}'` : undefined;
+  return <MatchStatusBadge status="live" liveLabel={label} />;
 }
 
 // Status-Badge für Match-Karten
-export function MatchStatusBadge({ status, liveMinute }: { status: 'geplant' | 'live' | 'beendet'; liveMinute?: number }) {
+export function MatchStatusBadge({
+  status,
+  liveMinute,
+  liveLabel,
+}: {
+  status: 'geplant' | 'live' | 'beendet';
+  liveMinute?: number;
+  liveLabel?: string;
+}) {
   if (status === 'live') {
+    const text = liveLabel ?? (liveMinute ? `${liveMinute}'` : '');
     return (
       <span className="px-2.5 py-1 rounded-md font-sans font-extrabold text-[9.5px] tracking-[1.2px] bg-[rgba(255,84,66,.15)] text-hl-red-soft">
-        ● LIVE{liveMinute ? ` ${liveMinute}'` : ''}
+        ● LIVE{text ? ` ${text}` : ''}
       </span>
     );
   }

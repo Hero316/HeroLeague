@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem } from './types';
+import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
 import { startPresence } from './lib/presence';
 import { seasonName } from './lib/heroAward';
@@ -13,6 +13,7 @@ import AdminPanel from './components/AdminPanel';
 import AdminLogin from './components/AdminLogin';
 import UserManager from './components/UserManager';
 import MatchManager from './components/MatchManager';
+import RefereeMode from './components/RefereeMode';
 import TeamDetail from './components/TeamDetail';
 import LiveBanner from './components/LiveBanner';
 import LiveTicker from './components/LiveTicker';
@@ -95,6 +96,9 @@ export default function App() {
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const isAdmin = sessionUser !== null;
   const isSuperadmin = sessionUser?.role === 'superadmin';
+  const isReferee = sessionUser?.role === 'referee';
+  // Abend-Aufstellungen (Schiedsrichtermodus), Schlüssel `${seasonId}:${matchday}`.
+  const [roster, setRoster] = useState<RosterMap>({});
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
   // Demo-Modus: komplette Zufalls-Kopie (eigene Teams + Saison). Echte Daten bleiben unberührt.
   const [demo, setDemo] = useState<{ active: boolean; seasonId: string; teamIds: string[] }>({
@@ -327,10 +331,24 @@ export default function App() {
     }
   };
 
+  // Abend-Aufstellungen laden (Schiedsrichtermodus).
+  const fetchRoster = useCallback(async () => {
+    try {
+      setRoster(await apiFetch<RosterMap>('/api/twitch?resource=roster'));
+    } catch {
+      /* Aufstellung ist optional – Bereich bleibt leer */
+    }
+  }, []);
+
   // Bearbeiten-Modus nur für Admins – beim Abmelden automatisch verlassen.
   useEffect(() => {
     if (!isAdmin) setEditMode(false);
   }, [isAdmin]);
+
+  // Aufstellungen laden, sobald jemand angemeldet ist (für den Schiedsrichtermodus).
+  useEffect(() => {
+    if (sessionUser) fetchRoster();
+  }, [sessionUser, fetchRoster]);
 
   // Highlights speichern (optimistisch): erst lokal setzen, dann serverseitig
   // schützen lassen. Schlägt das Speichern fehl, wird zurückgerollt.
@@ -380,6 +398,21 @@ export default function App() {
     runAdminAction(() =>
       apiFetch(`/api/matches/${matchId}`, { method: 'PUT', body: JSON.stringify(data) })
     );
+
+  // Aufstellung (Anwesende + Torwart + Spieldauer) für einen Spieltag speichern.
+  const handleSaveRoster = (seasonId: string, matchday: number, minutes: number, teams: EveningRoster['teams']) =>
+    runAdminAction(async () => {
+      await apiFetch('/api/twitch?resource=roster', {
+        method: 'POST',
+        body: JSON.stringify({ seasonId, matchday, minutes, teams }),
+      });
+      await fetchRoster();
+    });
+
+  // Generisches Spiel-Update für den Schiedsrichtermodus (Ergebnis, Status,
+  // Torschützen, Torwart, bester Spieler, Spieldauer). Speichert sofort.
+  const handleRefereeUpdateMatch = (matchId: string, patch: Partial<Match>) =>
+    runAdminAction(() => apiFetch(`/api/matches/${matchId}`, { method: 'PUT', body: JSON.stringify(patch) }));
 
   const handleAddTeam = (newTeam: Omit<Team, 'id'>) =>
     runAdminAction(() => apiFetch('/api/teams', { method: 'POST', body: JSON.stringify(newTeam) }));
@@ -453,6 +486,24 @@ export default function App() {
       <div className="min-h-screen bg-brand-dark text-white flex items-center justify-center font-sans">
         <img src="/assets/hero-league-logo.png" alt="Hero League" className="h-24 w-auto" />
       </div>
+    );
+  }
+
+  // ROUTE (Rolle): Schiedsrichter sehen ausschließlich den Schiedsrichtermodus –
+  // keine öffentliche Seite, kein Backoffice. Alles andere ist für sie gesperrt.
+  if (isReferee && sessionUser) {
+    return (
+      <RefereeMode
+        user={sessionUser}
+        teams={visibleTeams}
+        matches={currentSeasonMatches}
+        seasonId={currentSeason?.id ?? ''}
+        roster={roster}
+        onUpdateMatch={handleRefereeUpdateMatch}
+        onSaveRoster={handleSaveRoster}
+        onRefresh={fetchData}
+        onLogout={handleLogout}
+      />
     );
   }
 
