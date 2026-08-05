@@ -402,11 +402,17 @@ export default function App() {
     );
 
   // Aufstellung (Anwesende + Torwart + Spieldauer) für einen Spieltag speichern.
-  const handleSaveRoster = (seasonId: string, matchday: number, minutes: number, teams: EveningRoster['teams']) =>
+  const handleSaveRoster = (
+    seasonId: string,
+    matchday: number,
+    minutes: number,
+    teams: EveningRoster['teams'],
+    numbers?: Record<string, Record<string, number | null>>
+  ) =>
     runAdminAction(async () => {
       await apiFetch('/api/twitch?resource=roster', {
         method: 'POST',
-        body: JSON.stringify({ seasonId, matchday, minutes, teams }),
+        body: JSON.stringify({ seasonId, matchday, minutes, teams, numbers }),
       });
       await fetchRoster();
     });
@@ -467,6 +473,13 @@ export default function App() {
   const openHighlightsAlbum = (albumId: string) => {
     setHighlightsAlbumId(albumId);
     goToTab('highlights');
+  };
+
+  // Aus der Suche zu einem bestimmten Spieltag im Spielplan springen.
+  const [spielplanMatchday, setSpielplanMatchday] = useState<number | null>(null);
+  const goToMatchday = (matchday: number) => {
+    setSpielplanMatchday(matchday);
+    goToTab('spielplan');
   };
 
   // Bottom-Dock (Handy-Modus). onEventPage = gerade die Testspiel-Seite offen.
@@ -534,6 +547,10 @@ export default function App() {
           hasHighlights={hasHighlights}
           mobileMode={mobileMode}
           onToggleMobileMode={toggleMobileMode}
+          teams={visibleTeams}
+          matches={currentSeasonMatches}
+          onSelectTeam={openTeamDetail}
+          onGoToMatchday={goToMatchday}
         />
         <main className="flex-1">
           <LegalPage kind={kind} onBack={goBack} />
@@ -568,6 +585,10 @@ export default function App() {
           hasHighlights={hasHighlights}
           mobileMode={mobileMode}
           onToggleMobileMode={toggleMobileMode}
+          teams={visibleTeams}
+          matches={currentSeasonMatches}
+          onSelectTeam={openTeamDetail}
+          onGoToMatchday={goToMatchday}
         />
         <main className="flex-1">
           {team ? (
@@ -633,6 +654,10 @@ export default function App() {
           hasHighlights={hasHighlights}
           mobileMode={mobileMode}
           onToggleMobileMode={toggleMobileMode}
+          teams={visibleTeams}
+          matches={currentSeasonMatches}
+          onSelectTeam={openTeamDetail}
+          onGoToMatchday={goToMatchday}
         />
         <main className="flex-1">
           {previewEvent ? (
@@ -921,6 +946,8 @@ export default function App() {
               onUpdateMatchScore={handleUpdateMatchScore}
               onUpdateMatchMeta={handleUpdateMatchMeta}
               onSelectTeam={openTeamDetail}
+              initialMatchday={spielplanMatchday}
+              onInitialMatchdayConsumed={() => setSpielplanMatchday(null)}
             />
           </div>
         </>

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Play, Check, RotateCcw, Plus, Minus, Pencil, Save, AlertTriangle, Users, X, Star, Hand } from 'lucide-react';
 import { Absence, BestPlayer, Goalkeeper, Match, Scorer, Team } from '../types';
 import { TeamCrest, shortDate, useLiveMinute, useCountdown, formatClock } from './ui';
+import { FadeIn } from './anim';
 
 export function LiveTimer({
   liveStartedAt,
@@ -44,6 +45,8 @@ interface SpielplanProps {
     data: { matchday: number; date: string; time: string; homeTeamId: string; awayTeamId: string; venue: string }
   ) => void | Promise<unknown>;
   onSelectTeam?: (teamId: string) => void;
+  initialMatchday?: number | null; // aus der Suche: diesen Spieltag direkt zeigen
+  onInitialMatchdayConsumed?: () => void;
 }
 
 export default function Spielplan({
@@ -53,6 +56,8 @@ export default function Spielplan({
   onUpdateMatchScore,
   onUpdateMatchMeta,
   onSelectTeam,
+  initialMatchday,
+  onInitialMatchdayConsumed,
 }: SpielplanProps) {
   const [activeMatchday, setActiveMatchday] = useState<number>(1);
   const [editingScores, setEditingScores] = useState<{
@@ -68,6 +73,14 @@ export default function Spielplan({
       setActiveMatchday(matchdays[0]);
     }
   }, [matchdays, activeMatchday]);
+
+  // Aus der Suche vorgegebenen Spieltag anzeigen (einmalig übernehmen).
+  useEffect(() => {
+    if (initialMatchday == null) return;
+    if (matchdays.includes(initialMatchday)) setActiveMatchday(initialMatchday);
+    onInitialMatchdayConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMatchday]);
 
   useEffect(() => {
     if (scrollContainerRef.current) {
@@ -987,8 +1000,8 @@ export default function Spielplan({
           </div>
 
           {/* Match-Karten (kompakt) */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 hl-cascade">
-            {matchdayMatches.map((match) => {
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+            {matchdayMatches.map((match, mIdx) => {
               const home = getTeam(match.homeTeamId);
               const away = getTeam(match.awayTeamId);
               if (!home || !away) return null;
@@ -998,9 +1011,9 @@ export default function Spielplan({
               const isUpcoming = match.status === 'geplant' && match.homeScore === null;
 
               return (
+                <FadeIn key={match.id} className="h-full" delay={Math.min(mIdx, 5) * 0.05}>
                 <div
-                  key={match.id}
-                  className={`rounded-2xl px-5 py-[17px] transition-all flex flex-col ${
+                  className={`h-full rounded-2xl px-5 py-[17px] transition-all flex flex-col ${
                     isLive
                       ? 'bg-[linear-gradient(135deg,rgba(34,223,201,.08),rgba(255,255,255,.02))] border border-[rgba(34,223,201,.3)] shadow-[0_0_30px_rgba(34,223,201,.08)]'
                       : 'bg-[linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012))] border border-white/[.09] backdrop-blur-md'
@@ -1103,6 +1116,7 @@ export default function Spielplan({
                     </button>
                   )}
                 </div>
+                </FadeIn>
               );
             })}
           </div>
