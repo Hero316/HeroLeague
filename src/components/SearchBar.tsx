@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Search, X, Shield, User, CalendarDays, Compass } from 'lucide-react';
 import { ActiveTab, Match, Team } from '../types';
@@ -44,8 +45,12 @@ export default function SearchBar({
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [active, setActive] = useState(0);
+  // Position des Dropdowns: direkt unter dem Lupe-Button gemessen (robust – egal
+  // wie hoch die Navbar durch Notch/Live-Banner gerade ist).
+  const [panelTop, setPanelTop] = useState(72);
   const inputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const teamName = (id: string) => teams.find((t) => t.id === id)?.name ?? '';
 
@@ -124,16 +129,28 @@ export default function SearchBar({
 
   useEffect(() => setActive(0), [q]);
 
-  // Fokus setzen, sobald geöffnet.
+  // Fokus setzen + Dropdown-Position unter dem Button messen, sobald geöffnet.
   useEffect(() => {
-    if (open) inputRef.current?.focus();
+    if (!open) return;
+    inputRef.current?.focus();
+    const measure = () => {
+      const r = rootRef.current?.getBoundingClientRect();
+      if (r) setPanelTop(Math.round(r.bottom + 8));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
   }, [open]);
 
-  // Außerhalb klicken / Escape schließt.
+  // Außerhalb klicken / Escape schließt. Das Panel liegt per Portal außerhalb von
+  // rootRef – deshalb zusätzlich panelRef ausnehmen, sonst würde ein Klick ins
+  // Panel es sofort schließen.
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) close();
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      close();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') close();
@@ -173,95 +190,107 @@ export default function SearchBar({
   };
 
   return (
-    <div ref={rootRef} className="relative flex items-center justify-end">
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            key="field"
-            initial={reduce ? { opacity: 0 } : { width: 0, opacity: 0 }}
-            animate={reduce ? { opacity: 1 } : { width: 'min(58vw, 260px)', opacity: 1 }}
-            exit={reduce ? { opacity: 0 } : { width: 0, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-            className="overflow-hidden"
-          >
-            <input
-              ref={inputRef}
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder="Spieler, Verein, Datum…"
-              enterKeyHint="search"
-              autoComplete="off"
-              aria-label="Suche"
-              className="w-full bg-white/[.07] border border-white/15 focus:border-brand-accent-light rounded-full h-9 pl-4 pr-2 text-sm text-white placeholder:text-hl-faint focus:outline-none font-sans"
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
+    <div ref={rootRef} className="relative flex items-center">
       <button
         onClick={() => (open ? close() : setOpen(true))}
         aria-label={open ? 'Suche schließen' : 'Suchen'}
-        className="shrink-0 ml-1 p-2 rounded-lg text-hl-soft hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+        className="shrink-0 p-2 rounded-lg text-hl-soft hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
       >
         {open ? <X className="w-5 h-5" /> : <Search className="w-5 h-5" />}
       </button>
 
-      {/* Ergebnis-Panel: absolut, stört das Navbar-Layout nicht */}
-      <AnimatePresence>
-        {open && q.trim().length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.16 }}
-            className="absolute top-[calc(100%+10px)] right-0 w-[min(92vw,380px)] max-h-[70vh] overflow-y-auto rounded-2xl border border-white/12 bg-[#0c1413]/98 backdrop-blur-xl shadow-2xl p-1.5 z-[60]"
-          >
-            {results.length === 0 ? (
-              <div className="px-3 py-6 text-center text-sm text-hl-dim font-sans">Nichts gefunden.</div>
-            ) : (
-              results.map((r, i) => (
+      {/* Dropdown per Portal am <body>: viewport-fixiert, damit es weder in der
+          engen Navbar quetscht noch (auf iPhone) über den Bildschirmrand läuft.
+          Handy: bildschirmbreit mit Rand · PC: rechtsbündiges Panel. */}
+      {createPortal(
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              ref={panelRef}
+              key="search-panel"
+              initial={reduce ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
+              animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+              exit={reduce ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+              style={{ top: panelTop, transformOrigin: 'top right' }}
+              className="fixed z-[95] left-3 right-3 sm:left-auto sm:right-6 sm:w-[380px] rounded-2xl border border-white/12 bg-[#0c1413]/98 backdrop-blur-xl shadow-2xl p-2"
+            >
+              {/* Eingabe */}
+              <div className="flex items-center gap-2">
+                <Search className="w-4 h-4 text-hl-mute shrink-0 ml-1" />
+                <input
+                  ref={inputRef}
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  onKeyDown={onKeyDown}
+                  placeholder="Spieler, Verein, Seite, Datum…"
+                  enterKeyHint="search"
+                  autoComplete="off"
+                  aria-label="Suche"
+                  className="flex-1 min-w-0 bg-transparent h-9 text-sm text-white placeholder:text-hl-faint focus:outline-none font-sans"
+                />
                 <button
-                  key={r.key}
-                  onClick={() => choose(r)}
-                  onMouseEnter={() => setActive(i)}
-                  className={`w-full flex items-center gap-3 text-left px-2.5 py-2 rounded-xl transition-colors cursor-pointer ${
-                    i === active ? 'bg-white/[.08]' : 'hover:bg-white/[.05]'
-                  }`}
+                  type="button"
+                  onClick={close}
+                  aria-label="Schließen"
+                  className="shrink-0 p-1.5 rounded-lg text-hl-mute hover:text-white hover:bg-white/10 cursor-pointer"
                 >
-                  {r.kind === 'team' && (
-                    <span className="shrink-0 w-8 h-8 rounded-lg bg-[rgba(34,223,201,.12)] grid place-items-center text-brand-accent-light">
-                      <Shield className="w-4 h-4" />
-                    </span>
-                  )}
-                  {r.kind === 'player' && (
-                    <span
-                      className="shrink-0 w-8 h-8 rounded-lg grid place-items-center font-display font-black text-sm tabular-nums text-white"
-                      style={{ background: `${r.color}22`, color: r.color }}
-                    >
-                      {typeof r.number === 'number' ? r.number : <User className="w-4 h-4" />}
-                    </span>
-                  )}
-                  {r.kind === 'match' && (
-                    <span className="shrink-0 w-8 h-8 rounded-lg bg-[rgba(67,229,160,.12)] grid place-items-center text-hl-green">
-                      <CalendarDays className="w-4 h-4" />
-                    </span>
-                  )}
-                  {r.kind === 'page' && (
-                    <span className="shrink-0 w-8 h-8 rounded-lg bg-white/[.06] grid place-items-center text-hl-soft">
-                      <Compass className="w-4 h-4" />
-                    </span>
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-sans font-semibold text-sm text-white truncate">{r.label}</span>
-                    <span className="block text-[11px] text-hl-dim font-sans truncate">{r.sub}</span>
-                  </span>
+                  <X className="w-4 h-4" />
                 </button>
-              ))
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+              </div>
+
+              {/* Ergebnisse */}
+              {q.trim().length > 0 && (
+                <div className="mt-1.5 border-t border-white/10 pt-1.5 max-h-[60vh] overflow-y-auto">
+                  {results.length === 0 ? (
+                    <div className="px-3 py-6 text-center text-sm text-hl-dim font-sans">Nichts gefunden.</div>
+                  ) : (
+                    results.map((r, i) => (
+                      <button
+                        key={r.key}
+                        onClick={() => choose(r)}
+                        onMouseEnter={() => setActive(i)}
+                        className={`w-full flex items-center gap-3 text-left px-2.5 py-2 rounded-xl transition-colors cursor-pointer ${
+                          i === active ? 'bg-white/[.08]' : 'hover:bg-white/[.05]'
+                        }`}
+                      >
+                        {r.kind === 'team' && (
+                          <span className="shrink-0 w-8 h-8 rounded-lg bg-[rgba(34,223,201,.12)] grid place-items-center text-brand-accent-light">
+                            <Shield className="w-4 h-4" />
+                          </span>
+                        )}
+                        {r.kind === 'player' && (
+                          <span
+                            className="shrink-0 w-8 h-8 rounded-lg grid place-items-center font-display font-black text-sm tabular-nums text-white"
+                            style={{ background: `${r.color}22`, color: r.color }}
+                          >
+                            {typeof r.number === 'number' ? r.number : <User className="w-4 h-4" />}
+                          </span>
+                        )}
+                        {r.kind === 'match' && (
+                          <span className="shrink-0 w-8 h-8 rounded-lg bg-[rgba(67,229,160,.12)] grid place-items-center text-hl-green">
+                            <CalendarDays className="w-4 h-4" />
+                          </span>
+                        )}
+                        {r.kind === 'page' && (
+                          <span className="shrink-0 w-8 h-8 rounded-lg bg-white/[.06] grid place-items-center text-hl-soft">
+                            <Compass className="w-4 h-4" />
+                          </span>
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-sans font-semibold text-sm text-white truncate">{r.label}</span>
+                          <span className="block text-[11px] text-hl-dim font-sans truncate">{r.sub}</span>
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 }
