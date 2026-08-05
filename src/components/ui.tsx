@@ -1,6 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, X, Smartphone } from 'lucide-react';
+import { ChevronDown, X, Smartphone, Search } from 'lucide-react';
 import { ActiveTab, Team } from '../types';
 import { useInstall } from './InstallProvider';
 
@@ -408,10 +408,27 @@ export function ImageZoom({
 // Wird im Backoffice genutzt, damit man nicht endlos scrollen muss.
 // ---------------------------------------------------------------------------
 
+// Metadaten eines Abschnitts – dienen der Admin-Suche (selbst-registrierend).
+interface AccordionSectionMeta {
+  id: string;
+  title: string;
+  subtitle?: string;
+  category?: string;
+}
+
 interface AccordionContextValue {
   openId: string | null;
   toggle: (id: string) => void;
   activeCategory: string | null;
+  // Selbst-Registrierung der Abschnitte, damit die Admin-Suche immer alle
+  // vorhandenen Menüpunkte kennt (auch neu hinzugefügte).
+  register: (m: AccordionSectionMeta) => void;
+  unregister: (id: string) => void;
+  // Direkt zu einem Abschnitt springen: passende Rubrik aktivieren, aufklappen,
+  // hinscrollen.
+  openSection: (id: string, category?: string | null) => void;
+  scrollTargetId: string | null;
+  clearScrollTarget: () => void;
 }
 
 const AccordionContext = React.createContext<AccordionContextValue | null>(null);
@@ -430,23 +447,55 @@ export function AccordionGroup({
   children,
   defaultOpenId = null,
   categories,
+  searchable = false,
+  searchPlaceholder = 'Was möchtest du tun? (z. B. „Tore eintragen“, „Kader“, „Highlights“)',
 }: {
   children: React.ReactNode;
   defaultOpenId?: string | null;
   categories?: AccordionCategory[];
+  searchable?: boolean; // zeigt oben ein Suchfeld, das direkt zum Menüpunkt springt
+  searchPlaceholder?: string;
 }) {
   const [openId, setOpenId] = React.useState<string | null>(defaultOpenId);
   const [activeCategory, setActiveCategory] = React.useState<string | null>(categories?.[0]?.id ?? null);
+  const [sections, setSections] = React.useState<AccordionSectionMeta[]>([]);
+  const [scrollTargetId, setScrollTargetId] = React.useState<string | null>(null);
+
   const toggle = React.useCallback((id: string) => {
     setOpenId((current) => (current === id ? null : id));
   }, []);
+  const register = React.useCallback((m: AccordionSectionMeta) => {
+    setSections((prev) => [...prev.filter((s) => s.id !== m.id), m]);
+  }, []);
+  const unregister = React.useCallback((id: string) => {
+    setSections((prev) => prev.filter((s) => s.id !== id));
+  }, []);
+  const openSection = React.useCallback((id: string, category?: string | null) => {
+    if (category != null) setActiveCategory(category);
+    setOpenId(id);
+    setScrollTargetId(id);
+  }, []);
+  const clearScrollTarget = React.useCallback(() => setScrollTargetId(null), []);
+
   const selectCategory = (id: string) => {
     setActiveCategory(id);
     setOpenId(null); // Beim Reiter-Wechsel alles zuklappen – jeder Reiter startet frisch.
   };
 
+  const categoryLabel = (id?: string) => categories?.find((c) => c.id === id)?.label ?? '';
+
   return (
-    <AccordionContext.Provider value={{ openId, toggle, activeCategory }}>
+    <AccordionContext.Provider
+      value={{ openId, toggle, activeCategory, register, unregister, openSection, scrollTargetId, clearScrollTarget }}
+    >
+      {searchable && (
+        <AdminSectionSearch
+          sections={sections}
+          categoryLabel={categoryLabel}
+          onPick={openSection}
+          placeholder={searchPlaceholder}
+        />
+      )}
       {categories && categories.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-5">
           {categories.map((c) => {
@@ -474,6 +523,91 @@ export function AccordionGroup({
   );
 }
 
+// Admin-Schnellsuche: tippen, was man tun will → passenden Menüpunkt finden und
+// direkt dorthin springen (Rubrik aktivieren, aufklappen, hinscrollen). Die Liste
+// kommt aus den selbst-registrierten Abschnitten, erweitert sich also von allein.
+function AdminSectionSearch({
+  sections,
+  categoryLabel,
+  onPick,
+  placeholder,
+}: {
+  sections: AccordionSectionMeta[];
+  categoryLabel: (id?: string) => string;
+  onPick: (id: string, category?: string | null) => void;
+  placeholder: string;
+}) {
+  const [q, setQ] = React.useState('');
+  const [focused, setFocused] = React.useState(false);
+  const norm = (s: string) => s.toLowerCase();
+  const nq = norm(q.trim());
+
+  const matches = React.useMemo(() => {
+    if (nq.length < 1) return [];
+    return sections
+      .filter((s) => norm(`${s.title} ${s.subtitle ?? ''} ${categoryLabel(s.category)}`).includes(nq))
+      .slice(0, 8);
+  }, [sections, nq, categoryLabel]);
+
+  return (
+    <div className="relative mb-5">
+      <div className="flex items-center gap-2 rounded-xl border border-white/12 bg-white/[.04] px-3 focus-within:border-brand-accent-light/50">
+        <Search className="w-4 h-4 text-hl-mute shrink-0" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setTimeout(() => setFocused(false), 120)}
+          placeholder={placeholder}
+          aria-label="Menüpunkt suchen"
+          className="flex-1 min-w-0 bg-transparent h-11 text-sm text-white placeholder:text-hl-faint focus:outline-none font-sans"
+        />
+        {q && (
+          <button
+            type="button"
+            onClick={() => setQ('')}
+            aria-label="Leeren"
+            className="shrink-0 p-1 text-hl-mute hover:text-white cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {focused && nq.length > 0 && (
+        <div className="absolute z-30 left-0 right-0 mt-2 rounded-xl border border-white/12 bg-[#0c1413] shadow-2xl p-1.5 max-h-[60vh] overflow-y-auto">
+          {matches.length === 0 ? (
+            <div className="px-3 py-5 text-center text-sm text-hl-dim font-sans">Kein passender Menüpunkt.</div>
+          ) : (
+            matches.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onPick(s.id, s.category);
+                  setQ('');
+                }}
+                className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-white/[.06] transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-sans font-semibold text-sm text-white truncate">{s.title}</span>
+                  {s.category && (
+                    <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-brand-accent-light bg-[rgba(34,223,201,.1)] rounded px-1.5 py-0.5">
+                      {categoryLabel(s.category)}
+                    </span>
+                  )}
+                </div>
+                {s.subtitle && <div className="text-[11px] text-hl-dim font-sans truncate mt-0.5">{s.subtitle}</div>}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Eine „dicke Taste": Kopf mit Symbol + Titel + Pfeil; klappt den Inhalt sanft auf.
 export function AccordionSection({
   id,
@@ -493,14 +627,36 @@ export function AccordionSection({
   children: React.ReactNode;
 }) {
   const ctx = React.useContext(AccordionContext);
+  const ref = React.useRef<HTMLDivElement>(null);
+  const open = ctx?.openId === id;
+
+  // Selbst bei der Gruppe registrieren, damit die Admin-Suche diesen Menüpunkt
+  // kennt (register/unregister sind stabil → kein erneutes Auslösen).
+  const register = ctx?.register;
+  const unregister = ctx?.unregister;
+  React.useEffect(() => {
+    register?.({ id, title, subtitle, category });
+    return () => unregister?.(id);
+  }, [id, title, subtitle, category, register, unregister]);
+
+  // Wenn dieser Abschnitt per Suche geöffnet wurde: sanft dorthin scrollen.
+  const scrollTargetId = ctx?.scrollTargetId;
+  const clearScrollTarget = ctx?.clearScrollTarget;
+  React.useEffect(() => {
+    if (open && scrollTargetId === id) {
+      ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      clearScrollTarget?.();
+    }
+  }, [open, scrollTargetId, id, clearScrollTarget]);
+
   // Bei aktiver Reiter-Leiste nur die Abschnitte der gewählten Rubrik zeigen.
   if (ctx?.activeCategory != null && category != null && category !== ctx.activeCategory) return null;
-  const open = ctx?.openId === id;
   const panelId = `acc-panel-${id}`;
 
   return (
     <div
-      className={`hl-card overflow-hidden transition-colors ${
+      ref={ref}
+      className={`hl-card overflow-hidden transition-colors scroll-mt-4 ${
         open ? 'border-brand-accent-light/25' : ''
       }`}
     >
