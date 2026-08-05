@@ -26,7 +26,13 @@ export function isRoster(value: unknown): value is Player[] {
         p !== null &&
         typeof p === 'object' &&
         isNonEmptyString((p as Player).name) &&
-        ((p as Player).imageUrl === undefined || typeof (p as Player).imageUrl === 'string')
+        ((p as Player).imageUrl === undefined || typeof (p as Player).imageUrl === 'string') &&
+        // Trikotnummer optional: fehlt oder ganze Zahl 0–999
+        ((p as Player).number === undefined ||
+          (typeof (p as Player).number === 'number' &&
+            Number.isInteger((p as Player).number as number) &&
+            ((p as Player).number as number) >= 0 &&
+            ((p as Player).number as number) <= 999))
     )
   );
 }

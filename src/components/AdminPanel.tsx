@@ -143,6 +143,21 @@ function RosterEditor({
         <div key={index} className="flex items-center gap-2 bg-[#060E0F]/60 border border-white/5 rounded-lg px-2.5 py-2">
           <PlayerAvatar name={player.name || '?'} imageUrl={player.imageUrl} color={teamColor} size="sm" />
           <input
+            type="number"
+            min={0}
+            max={999}
+            inputMode="numeric"
+            value={player.number ?? ''}
+            placeholder="#"
+            title="Trikotnummer"
+            onChange={(e) => {
+              const raw = e.target.value.trim();
+              const n = raw === '' ? undefined : Math.max(0, Math.min(999, parseInt(raw, 10) || 0));
+              updatePlayer(index, { number: n });
+            }}
+            className="w-12 shrink-0 bg-transparent border-b border-white/10 focus:border-brand-accent-light px-1 py-1 text-sm text-center font-mono text-brand-accent-light focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+          <input
             type="text"
             value={player.name}
             placeholder="Spielername"

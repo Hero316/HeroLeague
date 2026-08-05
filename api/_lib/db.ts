@@ -11,7 +11,12 @@ export function normalizeRoster(roster: unknown): Player[] {
       if (typeof entry === 'string') return { name: entry };
       if (entry && typeof entry === 'object' && typeof (entry as Player).name === 'string') {
         const p = entry as Player;
-        return { name: p.name, ...(p.imageUrl ? { imageUrl: p.imageUrl } : {}) };
+        const num = typeof p.number === 'number' && Number.isFinite(p.number) ? Math.trunc(p.number) : undefined;
+        return {
+          name: p.name,
+          ...(p.imageUrl ? { imageUrl: p.imageUrl } : {}),
+          ...(num !== undefined && num >= 0 ? { number: num } : {}),
+        };
       }
       return null;
     })

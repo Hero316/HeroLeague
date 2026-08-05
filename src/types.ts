@@ -1,6 +1,7 @@
 export interface Player {
   name: string;
   imageUrl?: string;
+  number?: number; // feste Trikotnummer (ab Saisonstart), optional
 }
 
 export interface Team {

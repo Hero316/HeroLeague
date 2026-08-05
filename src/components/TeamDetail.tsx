@@ -178,6 +178,14 @@ export default function TeamDetail({
                   key={player.name}
                   className="flex items-center gap-3 px-3.5 py-[11px] rounded-[13px] bg-[linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012))] border border-white/[.08] backdrop-blur-sm transition-colors hover:border-[rgba(34,223,201,.3)]"
                 >
+                  {typeof player.number === 'number' && (
+                    <span
+                      className="flex-none w-7 text-center font-display font-black text-base text-brand-accent-light tabular-nums"
+                      title={`Trikotnummer ${player.number}`}
+                    >
+                      {player.number}
+                    </span>
+                  )}
                   <PlayerAvatar name={player.name} imageUrl={player.imageUrl} color={team.logoColor} size="md" />
                   <div className="min-w-0 flex-1">
                     <div className="font-sans font-semibold text-sm text-hl-text truncate">{player.name}</div>

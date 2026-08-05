@@ -69,6 +69,39 @@ export function RevealItem({ children, className }: { children: React.ReactNode;
   );
 }
 
+// ---------- FadeIn: reines Opacity-Auftauchen beim Reinscrollen ----------
+// Bewusst OHNE transform (kein scale/translate): Glas-Karten mit
+// `backdrop-filter` verlieren auf Safari/macOS die Unschärfe, solange ein
+// Transform animiert wird, und „springen" am Ende in die endgültige Optik.
+// Nur Opacity zu animieren hält das Glas über die ganze Animation stabil –
+// identisch zum Handy. Jede Karte triggert einzeln `whileInView`, damit auch
+// Karten weiter unten auftauchen (nicht nur die ersten paar).
+export function FadeIn({
+  children,
+  className,
+  delay = 0,
+  duration = 0.5,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  delay?: number;
+  duration?: number;
+}) {
+  const reduce = useReducedMotion();
+  if (reduce) return <div className={className}>{children}</div>;
+  return (
+    <motion.div
+      className={className}
+      initial={{ opacity: 0 }}
+      whileInView={{ opacity: 1 }}
+      viewport={{ once: true, margin: '-8% 0px -8% 0px' }}
+      transition={{ duration, ease: EASE, delay }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
 // ---------- CountUp: Zahl zaehlt beim Sichtbarwerden von 0 hoch ----------
 interface CountUpProps {
   value: number;

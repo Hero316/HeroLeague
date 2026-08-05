@@ -362,6 +362,23 @@ function normalizeRosterPayload(body: unknown) {
     const goalkeeper = str(o.goalkeeper).trim();
     teams[teamId] = goalkeeper ? { present, goalkeeper } : { present };
   }
+  // Optionale Trikotnummern-Änderungen: teamId → Spielername → Nummer|null.
+  const numbersRaw = (b.numbers ?? {}) as Record<string, unknown>;
+  const numbers: Record<string, Record<string, number | null>> = {};
+  for (const [teamId, val] of Object.entries(numbersRaw)) {
+    const o = (val ?? {}) as Record<string, unknown>;
+    const map: Record<string, number | null> = {};
+    for (const [name, num] of Object.entries(o)) {
+      const nm = str(name).trim();
+      if (!nm) continue;
+      if (num === null) map[nm] = null;
+      else {
+        const n = Number(num);
+        if (Number.isFinite(n)) map[nm] = Math.min(999, Math.max(0, Math.floor(n)));
+      }
+    }
+    if (Object.keys(map).length) numbers[teamId] = map;
+  }
   const matchdayNum = Number(b.matchday);
   const minutesNum = Number(b.minutes);
   return {
@@ -369,11 +386,12 @@ function normalizeRosterPayload(body: unknown) {
     matchday: Number.isInteger(matchdayNum) ? matchdayNum : NaN,
     minutes: Number.isFinite(minutesNum) ? Math.min(120, Math.max(1, Math.floor(minutesNum))) : 7,
     teams,
+    numbers,
   };
 }
 
 const saveRoster = requireMatchWrite(async (req: VercelRequest, res: VercelResponse) => {
-  const { seasonId, matchday, minutes, teams } = normalizeRosterPayload(req.body);
+  const { seasonId, matchday, minutes, teams, numbers } = normalizeRosterPayload(req.body);
   if (!seasonId || !Number.isInteger(matchday) || matchday < 1 || matchday > 99) {
     return res.status(400).json({ error: 'Ungültige Saison/Spieltag-Angabe.' });
   }
@@ -421,6 +439,27 @@ const saveRoster = requireMatchWrite(async (req: VercelRequest, res: VercelRespo
           duration_minutes = ${minutes}
       WHERE id = ${m.id}
     `;
+  }
+
+  // 3) Optional: Trikotnummern anpassen (nur übergebene Teams/Spieler). Nummer|null
+  //    ⇒ setzen bzw. entfernen. Übrige Kaderdaten (Name, Foto) bleiben unberührt.
+  for (const [teamId, map] of Object.entries(numbers)) {
+    const team = allTeams.find((t) => t.id === teamId);
+    if (!team) continue;
+    let changed = false;
+    const roster = (team.spielerliste ?? []).map((p) => {
+      if (!Object.prototype.hasOwnProperty.call(map, p.name)) return p;
+      const next = map[p.name] === null ? undefined : (map[p.name] as number);
+      if (next === p.number) return p;
+      changed = true;
+      const base: { name: string; imageUrl?: string; number?: number } = { name: p.name };
+      if (p.imageUrl) base.imageUrl = p.imageUrl;
+      if (next !== undefined) base.number = next;
+      return base;
+    });
+    if (changed) {
+      await sql`UPDATE teams SET spielerliste = ${JSON.stringify(roster)}::jsonb WHERE id = ${teamId}`;
+    }
   }
 
   return res.json({ ok: true, minutes, teams });

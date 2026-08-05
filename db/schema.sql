@@ -15,7 +15,8 @@ CREATE TABLE teams (
   logo_color   TEXT NOT NULL DEFAULT '#3B82F6',
   logo_icon    TEXT NOT NULL DEFAULT '⚽',
   logo_url     TEXT NOT NULL DEFAULT '',
-  -- Kader: Array von { "name": string, "imageUrl": string? }
+  -- Kader: Array von { "name": string, "imageUrl": string?, "number": number? }
+  -- number = feste Trikotnummer (optional). JSONB → keine Schema-Migration nötig.
   spielerliste JSONB NOT NULL DEFAULT '[]',
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );

@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Menu, X, LogOut, LayoutDashboard, Instagram, Youtube, Zap, Smartphone, Shield } from 'lucide-react';
-import { ActiveTab, SocialLinks } from '../types';
+import { ActiveTab, Match, SocialLinks, Team } from '../types';
 import { numberWord } from '../lib/heroAward';
 import { apiFetch } from '../lib/api';
+import SearchBar from './SearchBar';
 
 // TikTok-Symbol – lucide hat kein Marken-Icon, daher als schlankes Inline-SVG.
 function TikTokIcon({ className }: { className?: string }) {
@@ -30,6 +31,11 @@ interface NavbarProps {
   hasHighlights?: boolean; // Highlights vorhanden (oder Admin) -> Menüpunkt zeigen
   mobileMode?: boolean; // Handy-Modus (Bottom-Dock) aktiv?
   onToggleMobileMode?: () => void;
+  // Globale Suche (Lupe): Datenquellen + Navigation
+  teams?: Team[];
+  matches?: Match[];
+  onSelectTeam?: (teamId: string) => void;
+  onGoToMatchday?: (matchday: number) => void;
 }
 
 export default function Navbar({
@@ -48,6 +54,10 @@ export default function Navbar({
   hasHighlights,
   mobileMode,
   onToggleMobileMode,
+  teams,
+  matches,
+  onSelectTeam,
+  onGoToMatchday,
 }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [social, setSocial] = useState<SocialLinks>({ instagram: '', tiktok: '', youtube: '' });
@@ -165,8 +175,11 @@ export default function Navbar({
           )}
         </nav>
 
-        {/* Rechts: LIVE-Pille, Saison, Admin */}
+        {/* Rechts: Suche, LIVE-Pille, Saison, Admin */}
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
+          {teams && matches && onSelectTeam && onGoToMatchday && (
+            <SearchBar teams={teams} matches={matches} onSelectTeam={onSelectTeam} onGoToMatchday={onGoToMatchday} />
+          )}
           {hasLiveMatch && (
             <div className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-[rgba(255,84,66,.12)] border border-[rgba(255,84,66,.3)]">
               <span className="w-2 h-2 rounded-full bg-hl-red hl-pulse" />

@@ -11,13 +11,22 @@ interface RefereeModeProps {
   seasonId: string;
   roster: RosterMap;
   onUpdateMatch: (matchId: string, patch: Partial<Match>) => Promise<boolean>;
-  onSaveRoster: (seasonId: string, matchday: number, minutes: number, teams: EveningRoster['teams']) => Promise<boolean>;
+  onSaveRoster: (
+    seasonId: string,
+    matchday: number,
+    minutes: number,
+    teams: EveningRoster['teams'],
+    numbers?: Record<string, Record<string, number | null>>
+  ) => Promise<boolean>;
   onRefresh: () => Promise<unknown> | void;
   onLogout: () => void;
   onExit?: () => void; // nur für Admins: Schiedsrichtermodus verlassen (zurück zur Seite)
 }
 
 const DEFAULT_MINUTES = 7;
+
+// Auswahl-Eintrag im Spieler-Picker: Name + optionale Trikotnummer.
+type PickPlayer = { name: string; number?: number };
 
 export default function RefereeMode({
   user,
@@ -66,6 +75,13 @@ export default function RefereeMode({
     return (teamById.get(teamId)?.spielerliste ?? []).map((p) => p.name);
   };
 
+  // Anwesende Spieler samt Trikotnummer (für die großen Auswahl-Tasten: Nummer
+  // groß, Name klein daneben – so geht das Eintragen schnell).
+  const presentPlayersFor = (teamId: string): PickPlayer[] => {
+    const numByName = new Map((teamById.get(teamId)?.spielerliste ?? []).map((p) => [p.name, p.number]));
+    return presentFor(teamId).map((name) => ({ name, number: numByName.get(name) }));
+  };
+
   const dayMatches = useMemo(
     () =>
       matches
@@ -90,7 +106,7 @@ export default function RefereeMode({
       <MatchScreen
         match={openMatch}
         teamName={teamName}
-        presentFor={presentFor}
+        presentPlayers={presentPlayersFor}
         minutes={minutesFor}
         onBack={() => setOpenMatchId(null)}
         onUpdateMatch={onUpdateMatch}
@@ -253,21 +269,25 @@ function MatchRow({ match, teamName, onOpen }: { match: Match; teamName: (id: st
 function MatchScreen({
   match,
   teamName,
-  presentFor,
+  presentPlayers,
   minutes,
   onBack,
   onUpdateMatch,
 }: {
   match: Match;
   teamName: (id: string) => string;
-  presentFor: (teamId: string) => string[];
+  presentPlayers: (teamId: string) => PickPlayer[];
   minutes: number;
   onBack: () => void;
   onUpdateMatch: (matchId: string, patch: Partial<Match>) => Promise<boolean>;
 }) {
   const [busy, setBusy] = useState(false);
-  // Torschützen-Popup: welches Team, optional welcher Tor-Index (Bearbeiten).
-  const [picker, setPicker] = useState<{ teamId: string; editIndex: number | null } | null>(null);
+  // Tor-Popup: welches Team, optional welcher Tor-Index (Bearbeiten), und in
+  // welchem Schritt (erst Torschütze, dann Vorlage). `scorer` merkt sich den
+  // gewählten Torschützen zwischen den beiden Schritten.
+  const [picker, setPicker] = useState<
+    { teamId: string; editIndex: number | null; stage: 'scorer' | 'assist'; scorer?: string } | null
+  >(null);
   // Popup für „Spieler des Spiels".
   const [motmTeam, setMotmTeam] = useState<string | null>(null);
 
@@ -303,9 +323,11 @@ function MatchScreen({
   const resume = () => save({ pausedAt: null });
   const finalize = () => save({ status: 'beendet' });
 
-  // Tor hinzufügen (mit oder ohne Torschütze).
-  const addGoal = (teamId: string, playerName: string | null) => {
-    const nextScorers = playerName ? [...scorers, { playerName, teamId }] : scorers;
+  // Tor hinzufügen (mit oder ohne Torschütze; optional mit Vorlage).
+  const addGoal = (teamId: string, playerName: string | null, assistName?: string | null) => {
+    const nextScorers = playerName
+      ? [...scorers, { playerName, teamId, ...(assistName ? { assistName } : {}) }]
+      : scorers;
     save({
       status: match.status === 'geplant' ? 'live' : match.status,
       durationMinutes: match.durationMinutes ?? minutes,
@@ -349,11 +371,26 @@ function MatchScreen({
 
   const onPick = (playerName: string | null) => {
     if (!picker) return;
+    // Bestehendes Tor bearbeiten: nur den Torschützen ändern (Vorlage bleibt).
     if (picker.editIndex !== null) {
       if (playerName) changeScorer(picker.editIndex, playerName);
-    } else {
-      addGoal(picker.teamId, playerName);
+      setPicker(null);
+      return;
     }
+    // Neues Tor, Schritt 1 – Torschütze.
+    if (picker.stage === 'scorer') {
+      if (!playerName) {
+        // Tor ohne Torschütze: direkt buchen, kein Vorlage-Schritt.
+        addGoal(picker.teamId, null);
+        setPicker(null);
+        return;
+      }
+      // Weiter zu Schritt 2 – Vorlage (Assist).
+      setPicker({ ...picker, stage: 'assist', scorer: playerName });
+      return;
+    }
+    // Neues Tor, Schritt 2 – Vorlage (playerName = Vorlagengeber oder null).
+    addGoal(picker.teamId, picker.scorer ?? null, playerName);
     setPicker(null);
   };
 
@@ -367,7 +404,7 @@ function MatchScreen({
       <button
         type="button"
         disabled={busy}
-        onClick={() => setPicker({ teamId, editIndex: null })}
+        onClick={() => setPicker({ teamId, editIndex: null, stage: 'scorer' })}
         className="w-full min-h-[72px] rounded-2xl bg-brand-accent hover:bg-brand-accent-light active:scale-[.99] disabled:opacity-50 text-white font-extrabold text-xl flex flex-col items-center justify-center gap-1 transition-all"
       >
         <Plus className="w-7 h-7" />
@@ -378,11 +415,16 @@ function MatchScreen({
       <div className="space-y-1.5">
         {scorersOf(teamId).map((s) => (
           <div key={s.i} className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2">
-            <span className="flex-1 font-semibold truncate">{s.playerName || 'Unbekannt'}</span>
+            <div className="flex-1 min-w-0">
+              <span className="block font-semibold truncate">{s.playerName || 'Unbekannt'}</span>
+              {s.assistName && (
+                <span className="block text-[11px] text-hl-dim truncate">Vorlage: {s.assistName}</span>
+              )}
+            </div>
             <button
               type="button"
               disabled={busy}
-              onClick={() => setPicker({ teamId, editIndex: s.i })}
+              onClick={() => setPicker({ teamId, editIndex: s.i, stage: 'scorer' })}
               className="text-[11px] font-semibold text-brand-accent-light px-2 py-1 rounded-lg hover:bg-white/10 disabled:opacity-50"
             >
               Ändern
@@ -506,14 +548,31 @@ function MatchScreen({
         </div>
       </main>
 
-      {/* Torschützen-Popup */}
+      {/* Tor-Popup: Schritt 1 Torschütze, Schritt 2 Vorlage (Assist) */}
       <AnimatePresence>
         {picker && (
           <PlayerPicker
-            title={picker.editIndex !== null ? 'Torschütze ändern' : 'Wer hat getroffen?'}
+            title={
+              picker.editIndex !== null
+                ? 'Torschütze ändern'
+                : picker.stage === 'assist'
+                ? 'Vorlage (Assist)?'
+                : 'Wer hat getroffen?'
+            }
+            subtitle={picker.stage === 'assist' && picker.scorer ? `Tor: ${picker.scorer}` : undefined}
             teamLabel={teamName(picker.teamId)}
-            players={presentFor(picker.teamId)}
-            allowNone={picker.editIndex === null}
+            players={
+              picker.stage === 'assist'
+                ? presentPlayers(picker.teamId).filter((p) => p.name !== picker.scorer)
+                : presentPlayers(picker.teamId)
+            }
+            noneLabel={
+              picker.stage === 'assist'
+                ? 'Ohne Vorlage'
+                : picker.editIndex === null
+                ? 'Tor ohne Torschütze'
+                : undefined
+            }
             onPick={onPick}
             onClose={() => setPicker(null)}
           />
@@ -526,9 +585,9 @@ function MatchScreen({
           <PlayerPicker
             title="Spieler des Spiels"
             teamLabel={teamName(motmTeam)}
-            players={presentFor(motmTeam)}
+            players={presentPlayers(motmTeam)}
             current={bestOf(motmTeam)}
-            allowClear
+            noneLabel={bestOf(motmTeam) ? 'Auswahl entfernen' : undefined}
             onPick={(name) => {
               setBestPlayer(motmTeam, name);
               setMotmTeam(null);
@@ -546,20 +605,21 @@ function MatchScreen({
 // --------------------------------------------------------------------------
 function PlayerPicker({
   title,
+  subtitle,
   teamLabel,
   players,
   current,
-  allowNone,
-  allowClear,
+  noneLabel,
   onPick,
   onClose,
 }: {
   title: string;
+  subtitle?: string;
   teamLabel: string;
-  players: string[];
+  players: PickPlayer[];
   current?: string | null;
-  allowNone?: boolean;
-  allowClear?: boolean;
+  /** Text der neutralen Taste ganz unten (z. B. „Ohne Vorlage"). Fehlt sie, wird keine gezeigt. */
+  noneLabel?: string;
   onPick: (name: string | null) => void;
   onClose: () => void;
 }) {
@@ -579,9 +639,12 @@ function PlayerPicker({
         transition={{ type: 'spring', damping: 30, stiffness: 300 }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="font-display font-bold text-xl uppercase tracking-tight">{title}</h3>
-          <button type="button" onClick={onClose} className="p-2 text-hl-dim hover:text-white">
+        <div className="flex items-start justify-between mb-1">
+          <div className="min-w-0">
+            <h3 className="font-display font-bold text-xl uppercase tracking-tight">{title}</h3>
+            {subtitle && <p className="text-xs text-hl-dim font-semibold mt-0.5 truncate">{subtitle}</p>}
+          </div>
+          <button type="button" onClick={onClose} className="p-2 text-hl-dim hover:text-white shrink-0">
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -591,36 +654,37 @@ function PlayerPicker({
           {players.length === 0 && (
             <p className="text-hl-dim text-center py-4">Keine Spieler hinterlegt. Bitte Aufstellung/Kader pflegen.</p>
           )}
-          {players.map((name) => (
+          {players.map((p) => (
             <button
-              key={name}
+              key={p.name}
               type="button"
-              onClick={() => onPick(name)}
-              className={`w-full min-h-[60px] rounded-2xl px-4 text-lg font-bold flex items-center justify-between transition-colors ${
-                current === name ? 'bg-brand-accent text-white' : 'bg-white/[.06] hover:bg-white/[.12] text-white'
+              onClick={() => onPick(p.name)}
+              className={`w-full min-h-[60px] rounded-2xl pl-2 pr-4 py-2 flex items-center justify-between gap-2 transition-colors ${
+                current === p.name ? 'bg-brand-accent text-white' : 'bg-white/[.06] hover:bg-white/[.12] text-white'
               }`}
             >
-              <span className="truncate">{name}</span>
-              {current === name && <Check className="w-6 h-6 shrink-0" />}
+              <span className="flex items-center gap-3 min-w-0">
+                {/* Trikotnummer groß, Name klein daneben – schnelles Eintragen */}
+                <span
+                  className={`w-12 shrink-0 text-center font-display font-black text-3xl leading-none tabular-nums ${
+                    current === p.name ? 'text-white' : 'text-brand-accent-light'
+                  } ${typeof p.number === 'number' ? '' : 'opacity-30'}`}
+                >
+                  {typeof p.number === 'number' ? p.number : '–'}
+                </span>
+                <span className="truncate text-base font-bold text-left">{p.name}</span>
+              </span>
+              {current === p.name && <Check className="w-6 h-6 shrink-0" />}
             </button>
           ))}
 
-          {allowNone && (
+          {noneLabel && (
             <button
               type="button"
               onClick={() => onPick(null)}
               className="w-full min-h-[52px] rounded-2xl px-4 text-base font-semibold bg-white/[.03] border border-white/10 text-hl-dim hover:text-white hover:bg-white/[.07]"
             >
-              Tor ohne Torschütze
-            </button>
-          )}
-          {allowClear && current && (
-            <button
-              type="button"
-              onClick={() => onPick(null)}
-              className="w-full min-h-[52px] rounded-2xl px-4 text-base font-semibold bg-white/[.03] border border-white/10 text-hl-dim hover:text-white hover:bg-white/[.07]"
-            >
-              Auswahl entfernen
+              {noneLabel}
             </button>
           )}
         </div>
@@ -647,7 +711,13 @@ function RosterEditor({
   teams: Team[];
   eveningRoster: EveningRoster | undefined;
   onBack: () => void;
-  onSave: (seasonId: string, matchday: number, minutes: number, teams: EveningRoster['teams']) => Promise<boolean>;
+  onSave: (
+    seasonId: string,
+    matchday: number,
+    minutes: number,
+    teams: EveningRoster['teams'],
+    numbers?: Record<string, Record<string, number | null>>
+  ) => Promise<boolean>;
 }) {
   // Teams, die an diesem Spieltag spielen.
   const teamIds = useMemo(() => {
@@ -677,6 +747,25 @@ function RosterEditor({
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  // Trikotnummern (optional, „notfalls" hier änderbar). Eingabe als String je
+  // teamId → Spielername; leer = keine Nummer.
+  const [numbers, setNumbers] = useState<Record<string, Record<string, string>>>(() => {
+    const init: Record<string, Record<string, string>> = {};
+    teamIds.forEach((id) => {
+      const map: Record<string, string> = {};
+      (teamById.get(id)?.spielerliste ?? []).forEach((p) => {
+        map[p.name] = typeof p.number === 'number' ? String(p.number) : '';
+      });
+      init[id] = map;
+    });
+    return init;
+  });
+  const setNumber = (teamId: string, name: string, val: string) =>
+    setNumbers((prev) => ({
+      ...prev,
+      [teamId]: { ...prev[teamId], [name]: val.replace(/[^0-9]/g, '').slice(0, 3) },
+    }));
+
   const togglePresent = (teamId: string, name: string) =>
     setState((prev) => {
       const cur = prev[teamId];
@@ -697,7 +786,22 @@ function RosterEditor({
     teamIds.forEach((id) => {
       payload[id] = { present: [...state[id].present], goalkeeper: state[id].goalkeeper || undefined };
     });
-    const ok = await onSave(seasonId, matchday, Math.max(1, Math.min(120, minutes || DEFAULT_MINUTES)), payload);
+    // Trikotnummern-Änderungen (optional): je Team eine Karte Name → Nummer|null.
+    const numbersPayload: Record<string, Record<string, number | null>> = {};
+    teamIds.forEach((id) => {
+      const map: Record<string, number | null> = {};
+      Object.entries(numbers[id] ?? {}).forEach(([name, val]) => {
+        map[name] = val.trim() === '' ? null : Math.max(0, Math.min(999, parseInt(val, 10) || 0));
+      });
+      if (Object.keys(map).length) numbersPayload[id] = map;
+    });
+    const ok = await onSave(
+      seasonId,
+      matchday,
+      Math.max(1, Math.min(120, minutes || DEFAULT_MINUTES)),
+      payload,
+      numbersPayload
+    );
     setBusy(false);
     if (ok) {
       setSaved(true);
@@ -778,6 +882,31 @@ function RosterEditor({
                     ))}
                     {cur.present.size === 0 && <span className="text-sm text-hl-dim">Erst Anwesende wählen.</span>}
                   </div>
+
+                  {/* Trikotnummern – nur im Notfall hier ändern (sonst im Backoffice-Kader) */}
+                  <details className="pt-1">
+                    <summary className="text-xs font-semibold uppercase tracking-wider text-hl-dim cursor-pointer select-none list-none marker:hidden hover:text-white">
+                      Trikotnummern anpassen (optional)
+                    </summary>
+                    <div className="grid grid-cols-2 gap-2 pt-2">
+                      {kader.map((name) => (
+                        <div key={name} className="flex items-center gap-2 bg-white/[.03] rounded-xl px-2.5 py-1.5">
+                          <input
+                            type="number"
+                            min={0}
+                            max={999}
+                            inputMode="numeric"
+                            value={numbers[teamId]?.[name] ?? ''}
+                            onChange={(e) => setNumber(teamId, name, e.target.value)}
+                            placeholder="#"
+                            aria-label={`Trikotnummer ${name}`}
+                            className="w-12 shrink-0 bg-brand-dark border border-white/10 rounded-lg px-1 py-1 text-center font-mono text-brand-accent-light text-sm focus:outline-none focus:border-brand-accent-light [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
+                          <span className="text-sm text-white truncate">{name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
                 </>
               )}
             </div>

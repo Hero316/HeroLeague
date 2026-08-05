@@ -69,6 +69,9 @@ export default function HighlightThumb({
               loading="lazy"
               decoding="async"
               referrerPolicy="no-referrer"
+              // Platz vorab reservieren (gespeichertes Seitenverhältnis): so springt
+              // das Mosaik beim Nachladen der Bilder nicht mehr, sondern steht sofort.
+              style={media.ratio && media.ratio > 0 ? { aspectRatio: String(media.ratio) } : undefined}
               className="block w-full h-auto transition-transform duration-[600ms] ease-out group-hover:scale-[1.04]"
             />
           )}
