@@ -881,6 +881,10 @@ export default function App() {
         hasHighlights={hasHighlights}
         mobileMode={mobileMode}
         onToggleMobileMode={toggleMobileMode}
+        teams={visibleTeams}
+        matches={currentSeasonMatches}
+        onSelectTeam={openTeamDetail}
+        onGoToMatchday={goToMatchday}
       />
       {activeEvent && activeTab === 'home' && (
         <EventBanner event={activeEvent} isLive={eventHasLive} onOpen={() => navigateTo('/testspiel')} />

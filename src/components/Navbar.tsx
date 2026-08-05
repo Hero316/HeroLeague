@@ -5,6 +5,10 @@ import { numberWord } from '../lib/heroAward';
 import { apiFetch } from '../lib/api';
 import SearchBar from './SearchBar';
 
+// Modulweiter Cache der Social-Links: nur einmal je Seitenaufruf laden, danach
+// zeigen alle Navbar-Instanzen die Symbole sofort (kein Flackern beim Wechsel).
+let socialCache: SocialLinks | null = null;
+
 // TikTok-Symbol – lucide hat kein Marken-Icon, daher als schlankes Inline-SVG.
 function TikTokIcon({ className }: { className?: string }) {
   return (
@@ -60,11 +64,18 @@ export default function Navbar({
   onGoToMatchday,
 }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [social, setSocial] = useState<SocialLinks>({ instagram: '', tiktok: '', youtube: '' });
+  // Social-Links werden modulweit gecacht: einmal geladen, danach zeigt jede
+  // (neu gemountete) Navbar die Symbole sofort – kein verzögertes „Auftauchen"
+  // und kein erneutes Flackern beim Seitenwechsel.
+  const [social, setSocial] = useState<SocialLinks>(socialCache ?? { instagram: '', tiktok: '', youtube: '' });
 
   useEffect(() => {
+    if (socialCache) return; // schon geladen – nicht erneut abrufen
     apiFetch<SocialLinks>('/api/twitch?resource=social')
-      .then((data) => setSocial({ instagram: data.instagram || '', tiktok: data.tiktok || '', youtube: data.youtube || '' }))
+      .then((data) => {
+        socialCache = { instagram: data.instagram || '', tiktok: data.tiktok || '', youtube: data.youtube || '' };
+        setSocial(socialCache);
+      })
       .catch(() => {
         /* noch nicht konfiguriert – keine Symbole */
       });
