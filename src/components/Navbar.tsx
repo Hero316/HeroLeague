@@ -189,7 +189,17 @@ export default function Navbar({
         {/* Rechts: Suche, LIVE-Pille, Saison, Admin */}
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
           {teams && matches && onSelectTeam && onGoToMatchday && (
-            <SearchBar teams={teams} matches={matches} onSelectTeam={onSelectTeam} onGoToMatchday={onGoToMatchday} />
+            <SearchBar
+              teams={teams}
+              matches={matches}
+              onSelectTeam={onSelectTeam}
+              onGoToMatchday={onGoToMatchday}
+              onNavigate={setActiveTab}
+              hasHighlights={hasHighlights}
+              eventActive={eventActive}
+              eventTitle={eventTitle}
+              onOpenEvent={onOpenEvent}
+            />
           )}
           {hasLiveMatch && (
             <div className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-[rgba(255,84,66,.12)] border border-[rgba(255,84,66,.3)]">

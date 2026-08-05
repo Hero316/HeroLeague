@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { Search, X, Shield, User, CalendarDays } from 'lucide-react';
-import { Match, Team } from '../types';
+import { Search, X, Shield, User, CalendarDays, Compass } from 'lucide-react';
+import { ActiveTab, Match, Team } from '../types';
 import { shortDate } from './ui';
 
 // Diakritika entfernen + Kleinschreibung → toleranter Vergleich (ä=a, ö=o …).
@@ -11,19 +11,35 @@ const norm = (s: string) =>
 type Result =
   | { kind: 'team'; key: string; teamId: string; label: string; sub: string }
   | { kind: 'player'; key: string; teamId: string; label: string; sub: string; number?: number; color: string }
-  | { kind: 'match'; key: string; matchday: number; label: string; sub: string; home?: Team; away?: Team };
+  | { kind: 'match'; key: string; matchday: number; label: string; sub: string; home?: Team; away?: Team }
+  | { kind: 'page'; key: string; label: string; sub: string; go: () => void };
 
 interface SearchBarProps {
   teams: Team[];
   matches: Match[];
   onSelectTeam: (teamId: string) => void;
   onGoToMatchday: (matchday: number) => void;
+  onNavigate?: (tab: ActiveTab) => void;
+  hasHighlights?: boolean;
+  eventActive?: boolean;
+  eventTitle?: string;
+  onOpenEvent?: () => void;
 }
 
 // Globale Suche: Lupe oben, fährt smooth zu einer Suchleiste aus. Findet Vereine,
 // Spieler (→ Vereinsseite) und Spiele nach Datum (→ Spieltag). Funktioniert auf
 // Handy (Android/iOS) und PC; das Ergebnis-Panel liegt absolut, stört das Layout nie.
-export default function SearchBar({ teams, matches, onSelectTeam, onGoToMatchday }: SearchBarProps) {
+export default function SearchBar({
+  teams,
+  matches,
+  onSelectTeam,
+  onGoToMatchday,
+  onNavigate,
+  hasHighlights,
+  eventActive,
+  eventTitle,
+  onOpenEvent,
+}: SearchBarProps) {
   const reduce = useReducedMotion();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
@@ -82,9 +98,29 @@ export default function SearchBar({ teams, matches, onSelectTeam, onGoToMatchday
       }
     }
 
+    // 4) Seiten / Bereiche der Website (Menüpunkte)
+    const pages: { label: string; kw: string; go: () => void }[] = [
+      { label: 'Startseite', kw: 'startseite home start', go: () => onNavigate?.('home') },
+      { label: 'Spielplan', kw: 'spielplan spiele fixtures termine ergebnisse', go: () => onNavigate?.('spielplan') },
+      { label: 'Tabelle', kw: 'tabelle ligatabelle standings platzierung', go: () => onNavigate?.('tabelle') },
+      { label: 'HERO ONE', kw: 'hero one heroone award auszeichnung ballon dor', go: () => onNavigate?.('heroone') },
+      { label: 'Statistiken', kw: 'statistiken stats zahlen torschützen', go: () => onNavigate?.('statistiken') },
+      ...(hasHighlights
+        ? [{ label: 'Highlights', kw: 'highlights bilder fotos videos galerie clips', go: () => onNavigate?.('highlights') }]
+        : []),
+      ...(eventActive && onOpenEvent
+        ? [{ label: eventTitle || 'Testspiel', kw: 'testspiel event sonderspieltag', go: () => onOpenEvent() }]
+        : []),
+    ];
+    for (const p of pages) {
+      if (norm(p.label).includes(nq) || norm(p.kw).includes(nq)) {
+        out.push({ kind: 'page', key: `pg-${p.label}`, label: p.label, sub: 'Seite', go: p.go });
+      }
+    }
+
     return out.slice(0, 8);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, teams, matches]);
+  }, [q, teams, matches, hasHighlights, eventActive, eventTitle, onNavigate, onOpenEvent]);
 
   useEffect(() => setActive(0), [q]);
 
@@ -118,7 +154,8 @@ export default function SearchBar({ teams, matches, onSelectTeam, onGoToMatchday
 
   const choose = (r: Result) => {
     if (r.kind === 'team' || r.kind === 'player') onSelectTeam(r.teamId);
-    else onGoToMatchday(r.matchday);
+    else if (r.kind === 'match') onGoToMatchday(r.matchday);
+    else r.go();
     close();
   };
 
@@ -208,6 +245,11 @@ export default function SearchBar({ teams, matches, onSelectTeam, onGoToMatchday
                   {r.kind === 'match' && (
                     <span className="shrink-0 w-8 h-8 rounded-lg bg-[rgba(67,229,160,.12)] grid place-items-center text-hl-green">
                       <CalendarDays className="w-4 h-4" />
+                    </span>
+                  )}
+                  {r.kind === 'page' && (
+                    <span className="shrink-0 w-8 h-8 rounded-lg bg-white/[.06] grid place-items-center text-hl-soft">
+                      <Compass className="w-4 h-4" />
                     </span>
                   )}
                   <span className="min-w-0 flex-1">

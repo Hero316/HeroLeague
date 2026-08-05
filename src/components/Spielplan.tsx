@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Play, Check, RotateCcw, Plus, Minus, Pencil, Save, AlertTriangle, Users, X, Star, Hand } from 'lucide-react';
 import { Absence, BestPlayer, Goalkeeper, Match, Scorer, Team } from '../types';
@@ -476,6 +477,7 @@ export default function Spielplan({
   return (
     <div>
       {/* Bestätigungs-Popup: beendetes Spiel zurücksetzen */}
+      {createPortal(
       <AnimatePresence>
         {resetTarget && (
           <motion.div
@@ -528,9 +530,12 @@ export default function Spielplan({
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+        document.body
+      )}
 
       {/* Verwalten-Popup für ein einzelnes Spiel */}
+      {createPortal(
       <AnimatePresence>
         {openMatch && oHome && oAway && (
           <motion.div
@@ -954,7 +959,9 @@ export default function Spielplan({
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+        document.body
+      )}
 
       {matches.length === 0 ? (
         <div className="hl-card text-center py-12 text-hl-mute font-sans text-sm">
