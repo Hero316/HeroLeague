@@ -189,20 +189,20 @@ body {
 .hl-cascade-soft > *:nth-child(14) { animation-delay: 0.81s; }
 .hl-cascade-soft > *:nth-child(n + 15) { animation-delay: 0.87s; }
 
-/* Eingangs-Animationen GLOBAL nur einblenden (kein Skalieren). Das Scale-Pop
-   (Start bei scale .92) verursacht auf Safari/macOS + Touch zwei Artefakte:
-   1) Glas-Karten mit backdrop-filter „kippen“ während der Transform-Animation
-      um – erst glasig, danach matt.
-   2) Der Hero wirkt, als würde er „kleiner starten und größer springen“.
-   Nur der Keyframe-Name wird getauscht (steht NACH den Basisregeln, gewinnt
-   also); Dauer, Easing, fill-mode und die gestaffelten Delays bleiben erhalten. */
+/* Die „auftauchende Welle“ (gestaffeltes Scale-Pop) BLEIBT auf Listen/Zeilen
+   (hl-cascade / hl-cascade-soft: Tabelle, Hero-Spielliste, Statistiken) – die
+   haben kein eigenes backdrop-filter, also kein Glas-Sprung.
+
+   NUR die großen Glas-Karten (hl-pop, mit backdrop-filter) tauchen ohne
+   Skalieren auf: Safari/macOS „kippt“ backdrop-filter während einer Transform-
+   Animation (erst glasig, danach matt). Ohne Transform bleibt das Glas stabil.
+   Nur der Keyframe-Name wird getauscht (steht NACH der Basisregel → gewinnt);
+   Dauer, Easing und fill-mode bleiben erhalten. */
 @keyframes hlFadeOnly {
   from { opacity: 0; }
   to { opacity: 1; }
 }
-.hl-pop,
-.hl-cascade > *,
-.hl-cascade-soft > * {
+.hl-pop {
   animation-name: hlFadeOnly;
 }
 /* Hintergrundbild am Handy nicht langsam zoomen ⇒ keine Größenänderung. */
