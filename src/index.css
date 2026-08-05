@@ -189,22 +189,24 @@ body {
 .hl-cascade-soft > *:nth-child(14) { animation-delay: 0.81s; }
 .hl-cascade-soft > *:nth-child(n + 15) { animation-delay: 0.87s; }
 
-/* Auf dem Handy: Eingangs-Animationen NUR einblenden (kein Skalieren). Auf
-   Touch-Geräten liest sich das Scale-Pop (start bei scale .92) als „startet
-   minimal kleiner und springt dann größer" – vor allem am Hero-Hintergrundbild
-   und an Glas-Karten mit backdrop-filter. Nur der Name der Keyframes wird
-   getauscht: Dauer, Easing, fill-mode und die gestaffelten Delays bleiben. */
+/* Eingangs-Animationen GLOBAL nur einblenden (kein Skalieren). Das Scale-Pop
+   (Start bei scale .92) verursacht auf Safari/macOS + Touch zwei Artefakte:
+   1) Glas-Karten mit backdrop-filter „kippen“ während der Transform-Animation
+      um – erst glasig, danach matt.
+   2) Der Hero wirkt, als würde er „kleiner starten und größer springen“.
+   Nur der Keyframe-Name wird getauscht (steht NACH den Basisregeln, gewinnt
+   also); Dauer, Easing, fill-mode und die gestaffelten Delays bleiben erhalten. */
 @keyframes hlFadeOnly {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+.hl-pop,
+.hl-cascade > *,
+.hl-cascade-soft > * {
+  animation-name: hlFadeOnly;
+}
+/* Hintergrundbild am Handy nicht langsam zoomen ⇒ keine Größenänderung. */
 @media (max-width: 640px) {
-  .hl-pop,
-  .hl-cascade > *,
-  .hl-cascade-soft > * {
-    animation-name: hlFadeOnly;
-  }
-  /* Hintergrundbild nicht mehr langsam zoomen ⇒ keine Größenänderung am Handy */
   .hl-zoom {
     animation: none;
   }
