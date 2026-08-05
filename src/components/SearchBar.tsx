@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { Search, X, Shield, User, CalendarDays, Compass } from 'lucide-react';
-import { ActiveTab, Match, Team } from '../types';
+import { Search, X, Shield, User, CalendarDays, Compass, Images } from 'lucide-react';
+import { ActiveTab, HighlightAlbum, Match, Team } from '../types';
 import { shortDate } from './ui';
 
 // Diakritika entfernen + Kleinschreibung → toleranter Vergleich (ä=a, ö=o …).
@@ -13,6 +13,7 @@ type Result =
   | { kind: 'team'; key: string; teamId: string; label: string; sub: string }
   | { kind: 'player'; key: string; teamId: string; label: string; sub: string; number?: number; color: string }
   | { kind: 'match'; key: string; matchday: number; label: string; sub: string; home?: Team; away?: Team }
+  | { kind: 'album'; key: string; label: string; sub: string; go: () => void }
   | { kind: 'page'; key: string; label: string; sub: string; go: () => void };
 
 interface SearchBarProps {
@@ -25,6 +26,8 @@ interface SearchBarProps {
   eventActive?: boolean;
   eventTitle?: string;
   onOpenEvent?: () => void;
+  albums?: HighlightAlbum[];
+  onOpenAlbum?: (albumId: string) => void;
 }
 
 // Globale Suche: Lupe oben, fährt smooth zu einer Suchleiste aus. Findet Vereine,
@@ -40,6 +43,8 @@ export default function SearchBar({
   eventActive,
   eventTitle,
   onOpenEvent,
+  albums,
+  onOpenAlbum,
 }: SearchBarProps) {
   const reduce = useReducedMotion();
   const [open, setOpen] = useState(false);
@@ -103,15 +108,38 @@ export default function SearchBar({
       }
     }
 
-    // 4) Seiten / Bereiche der Website (Menüpunkte)
+    // 3b) Highlights-Ordner (Alben) → öffnen den Ordner direkt.
+    for (const a of albums ?? []) {
+      if (norm(a.title).includes(nq)) {
+        out.push({
+          kind: 'album',
+          key: `al-${a.id}`,
+          label: a.title,
+          sub: `Ordner · ${a.items.length} Medien`,
+          go: () => onOpenAlbum?.(a.id),
+        });
+      }
+    }
+
+    // 3c) „Spieltag N" → direkt zum passenden Spieltag im Spielplan.
+    const sd = nq.match(/spielt\w*\s*(\d{1,2})/);
+    if (sd) {
+      const day = parseInt(sd[1], 10);
+      if (matches.some((m) => m.matchday === day)) {
+        out.push({ kind: 'page', key: `sd-${day}`, label: `${day}. Spieltag`, sub: 'Spielplan', go: () => onGoToMatchday(day) });
+      }
+    }
+
+    // 4) Seiten / Bereiche der Website (Menüpunkte + Auszeichnungen)
     const pages: { label: string; kw: string; go: () => void }[] = [
       { label: 'Startseite', kw: 'startseite home start', go: () => onNavigate?.('home') },
-      { label: 'Spielplan', kw: 'spielplan spiele fixtures termine ergebnisse', go: () => onNavigate?.('spielplan') },
-      { label: 'Tabelle', kw: 'tabelle ligatabelle standings platzierung', go: () => onNavigate?.('tabelle') },
-      { label: 'HERO ONE', kw: 'hero one heroone award auszeichnung ballon dor', go: () => onNavigate?.('heroone') },
-      { label: 'Statistiken', kw: 'statistiken stats zahlen torschützen', go: () => onNavigate?.('statistiken') },
+      { label: 'Spielplan', kw: 'spielplan spiele fixtures termine ergebnisse anstoss', go: () => onNavigate?.('spielplan') },
+      { label: 'Tabelle', kw: 'tabelle ligatabelle standings platzierung rang', go: () => onNavigate?.('tabelle') },
+      { label: 'HERO ONE', kw: 'hero one heroone award auszeichnung ballon dor bester spieler', go: () => onNavigate?.('heroone') },
+      { label: 'Statistiken', kw: 'statistiken stats zahlen torschützen torschützenkrone goldener handschuh torwart assists vorlagen', go: () => onNavigate?.('statistiken') },
+      { label: 'Spieler des Monats', kw: 'spieler des monats mvp startseite', go: () => onNavigate?.('home') },
       ...(hasHighlights
-        ? [{ label: 'Highlights', kw: 'highlights bilder fotos videos galerie clips', go: () => onNavigate?.('highlights') }]
+        ? [{ label: 'Highlights', kw: 'highlights bilder fotos videos galerie clips ordner', go: () => onNavigate?.('highlights') }]
         : []),
       ...(eventActive && onOpenEvent
         ? [{ label: eventTitle || 'Testspiel', kw: 'testspiel event sonderspieltag', go: () => onOpenEvent() }]
@@ -125,7 +153,7 @@ export default function SearchBar({
 
     return out.slice(0, 8);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, teams, matches, hasHighlights, eventActive, eventTitle, onNavigate, onOpenEvent]);
+  }, [q, teams, matches, albums, hasHighlights, eventActive, eventTitle, onNavigate, onOpenEvent, onOpenAlbum]);
 
   useEffect(() => setActive(0), [q]);
 
@@ -270,6 +298,11 @@ export default function SearchBar({
                         {r.kind === 'match' && (
                           <span className="shrink-0 w-8 h-8 rounded-lg bg-[rgba(67,229,160,.12)] grid place-items-center text-hl-green">
                             <CalendarDays className="w-4 h-4" />
+                          </span>
+                        )}
+                        {r.kind === 'album' && (
+                          <span className="shrink-0 w-8 h-8 rounded-lg bg-[rgba(232,62,140,.14)] grid place-items-center text-hl-magenta-soft">
+                            <Images className="w-4 h-4" />
                           </span>
                         )}
                         {r.kind === 'page' && (

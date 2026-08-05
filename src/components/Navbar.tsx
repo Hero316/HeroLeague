@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Menu, X, LogOut, LayoutDashboard, Instagram, Youtube, Zap, Smartphone, Shield } from 'lucide-react';
-import { ActiveTab, Match, SocialLinks, Team } from '../types';
+import { ActiveTab, HighlightAlbum, Match, SocialLinks, Team } from '../types';
 import { numberWord } from '../lib/heroAward';
 import { apiFetch } from '../lib/api';
 import SearchBar from './SearchBar';
@@ -40,6 +40,8 @@ interface NavbarProps {
   matches?: Match[];
   onSelectTeam?: (teamId: string) => void;
   onGoToMatchday?: (matchday: number) => void;
+  albums?: HighlightAlbum[];
+  onOpenAlbum?: (albumId: string) => void;
 }
 
 export default function Navbar({
@@ -62,6 +64,8 @@ export default function Navbar({
   matches,
   onSelectTeam,
   onGoToMatchday,
+  albums,
+  onOpenAlbum,
 }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
   // Social-Links werden modulweit gecacht: einmal geladen, danach zeigt jede
@@ -199,6 +203,8 @@ export default function Navbar({
               eventActive={eventActive}
               eventTitle={eventTitle}
               onOpenEvent={onOpenEvent}
+              albums={albums}
+              onOpenAlbum={onOpenAlbum}
             />
           )}
           {hasLiveMatch && (

@@ -551,6 +551,8 @@ export default function App() {
           matches={currentSeasonMatches}
           onSelectTeam={openTeamDetail}
           onGoToMatchday={goToMatchday}
+          albums={highlights.albums}
+          onOpenAlbum={openHighlightsAlbum}
         />
         <main className="flex-1">
           <LegalPage kind={kind} onBack={goBack} />
@@ -589,6 +591,8 @@ export default function App() {
           matches={currentSeasonMatches}
           onSelectTeam={openTeamDetail}
           onGoToMatchday={goToMatchday}
+          albums={highlights.albums}
+          onOpenAlbum={openHighlightsAlbum}
         />
         <main className="flex-1">
           {team ? (
@@ -658,6 +662,8 @@ export default function App() {
           matches={currentSeasonMatches}
           onSelectTeam={openTeamDetail}
           onGoToMatchday={goToMatchday}
+          albums={highlights.albums}
+          onOpenAlbum={openHighlightsAlbum}
         />
         <main className="flex-1">
           {previewEvent ? (
@@ -754,6 +760,7 @@ export default function App() {
 
               {/* Aufgeräumtes Backoffice: Reiter nach Rubrik, darunter „dicke Tasten" */}
               <AccordionGroup
+                searchable
                 categories={[
                   { id: 'spiele', label: 'Spiele & Liga' },
                   { id: 'startseite', label: 'Startseite' },
@@ -885,6 +892,8 @@ export default function App() {
         matches={currentSeasonMatches}
         onSelectTeam={openTeamDetail}
         onGoToMatchday={goToMatchday}
+        albums={highlights.albums}
+        onOpenAlbum={openHighlightsAlbum}
       />
       {activeEvent && activeTab === 'home' && (
         <EventBanner event={activeEvent} isLive={eventHasLive} onOpen={() => navigateTo('/testspiel')} />
