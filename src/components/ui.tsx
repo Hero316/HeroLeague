@@ -148,7 +148,7 @@ function PartnerLogo({ partner, heightClass, maxWClass }: { partner: Partner; he
       loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"
-      className={`${heightClass} ${maxWClass} w-auto object-contain brightness-0 opacity-90 transition duration-300 ease-out hover:brightness-100 hover:opacity-100 hover:scale-105`}
+      className={`${heightClass} ${maxWClass} w-auto object-contain grayscale brightness-[.45] contrast-[1.1] opacity-90 transition duration-300 ease-out hover:grayscale-0 hover:brightness-100 hover:contrast-100 hover:opacity-100 hover:scale-105`}
     />
   );
   return partner.linkUrl ? (
@@ -192,7 +192,7 @@ export function PartnerSection() {
   const rest = withLogo.filter((p) => !isBigPartner(p));
 
   return (
-    <section className="bg-[linear-gradient(180deg,#ffffff_0%,#eef1fb_100%)] text-[#0b0b0f]">
+    <section className="bg-[linear-gradient(180deg,#eef1fb_0%,#e3e9f9_100%)] text-[#0b0b0f]">
       <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-14 sm:py-20">
         <h2 className="hl-partner-text text-center font-sans font-black italic text-3xl sm:text-4xl tracking-tight mb-12 sm:mb-16">
           Partner
