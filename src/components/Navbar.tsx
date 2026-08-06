@@ -111,7 +111,7 @@ export default function Navbar({
   );
 
   const navItems: { label: string; value: ActiveTab }[] = [
-    { label: 'HOME', value: 'home' },
+    { label: 'START', value: 'home' },
     { label: 'SPIELPLAN', value: 'spielplan' },
     { label: 'TABELLE', value: 'tabelle' },
     { label: 'HERO ONE', value: 'heroone' },
@@ -214,7 +214,7 @@ export default function Navbar({
             </div>
           )}
           {seasonShort && (
-            <div className="hidden sm:block px-[15px] py-[9px] rounded-full border border-white/[.12] font-sans font-bold text-xs tracking-wider text-hl-soft">
+            <div className="hidden sm:block px-4 py-2.5 rounded-full border border-white/[.12] font-sans font-bold text-xs tracking-wider text-hl-soft">
               {seasonShort}
             </div>
           )}
