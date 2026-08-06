@@ -140,7 +140,7 @@ let partnersCache: PartnersConfig | null = null;
 
 // Ein einzelnes Partner-Logo: farbig hochgeladen, per CSS grau dargestellt und
 // erst beim Hovern farbig. Mit Link ⇒ anklickbar (neuer Tab), sonst reines Bild.
-function PartnerLogo({ partner, heightClass }: { partner: Partner; heightClass: string }) {
+function PartnerLogo({ partner, heightClass, maxWClass }: { partner: Partner; heightClass: string; maxWClass: string }) {
   const img = (
     <img
       src={partner.logoUrl}
@@ -148,7 +148,7 @@ function PartnerLogo({ partner, heightClass }: { partner: Partner; heightClass: 
       loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"
-      className={`${heightClass} w-auto max-w-[160px] object-contain grayscale opacity-70 transition duration-300 hover:grayscale-0 hover:opacity-100`}
+      className={`${heightClass} ${maxWClass} w-auto object-contain grayscale opacity-70 transition duration-300 hover:grayscale-0 hover:opacity-100`}
     />
   );
   return partner.linkUrl ? (
@@ -162,9 +162,15 @@ function PartnerLogo({ partner, heightClass }: { partner: Partner; heightClass: 
   );
 }
 
+// Große Partner (Hauptpartner/Bankpartner) auch aus Altdaten erkennen, die noch
+// `main:true` statt `tier` gespeichert haben.
+function isBigPartner(p: Partner): boolean {
+  return p.tier === 'main' || p.tier === 'bank' || (p as unknown as { main?: boolean }).main === true;
+}
+
 // Partner-/Sponsoren-Sektion ganz unten auf jeder öffentlichen Seite. Hauptpartner
-// stehen oben in einer eigenen, größeren Reihe (mit optionalem Label), darunter das
-// normale Raster. Leere Liste ⇒ die Sektion wird gar nicht gerendert.
+// und Bankpartner stehen groß oben nebeneinander – jeweils mit eigener Überschrift
+// darüber. Darunter das normale Raster. Leere Liste ⇒ die Sektion wird nicht gerendert.
 export function PartnerSection() {
   const [partners, setPartners] = React.useState<Partner[]>(partnersCache?.items ?? []);
 
@@ -182,33 +188,33 @@ export function PartnerSection() {
 
   const withLogo = partners.filter((p) => p.logoUrl);
   if (withLogo.length === 0) return null;
-  const mains = withLogo.filter((p) => p.main);
-  const rest = withLogo.filter((p) => !p.main);
+  const bigs = withLogo.filter(isBigPartner);
+  const rest = withLogo.filter((p) => !isBigPartner(p));
 
   return (
     <section className="bg-[#f3f1f6] text-[#0b0b0f]">
       <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-12 sm:py-16">
         <h2 className="text-center font-sans font-black italic text-2xl sm:text-3xl mb-10 sm:mb-12">Partner</h2>
 
-        {mains.length > 0 && (
-          <div className="flex flex-wrap items-start justify-center gap-x-12 gap-y-8 mb-10 sm:mb-14">
-            {mains.map((p) => (
-              <div key={p.id} className="flex flex-col items-center gap-2">
-                <PartnerLogo partner={p} heightClass="h-16 sm:h-20" />
+        {bigs.length > 0 && (
+          <div className="flex flex-wrap items-end justify-center gap-x-14 sm:gap-x-20 gap-y-10 mb-12 sm:mb-16">
+            {bigs.map((p) => (
+              <div key={p.id} className="flex flex-col items-center gap-3">
                 {p.label && (
-                  <span className="font-sans text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#0b0b0f]/60">
+                  <span className="font-sans text-[11px] sm:text-xs font-bold uppercase tracking-[0.12em] text-[#0b0b0f]/55">
                     {p.label}
                   </span>
                 )}
+                <PartnerLogo partner={p} heightClass="h-16 sm:h-20" maxWClass="max-w-[240px]" />
               </div>
             ))}
           </div>
         )}
 
         {rest.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-x-10 sm:gap-x-14 gap-y-8">
+          <div className="flex flex-wrap items-center justify-center gap-x-12 sm:gap-x-16 gap-y-10">
             {rest.map((p) => (
-              <PartnerLogo key={p.id} partner={p} heightClass="h-9 sm:h-11" />
+              <PartnerLogo key={p.id} partner={p} heightClass="h-12 sm:h-14" maxWClass="max-w-[190px]" />
             ))}
           </div>
         )}

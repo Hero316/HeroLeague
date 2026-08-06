@@ -7,7 +7,8 @@ const DEFAULT_SOCIAL = { instagram: '', tiktok: '', youtube: '' };
 
 // Partner / Sponsoren-Logos (Sektion unten auf jeder Seite). Leere Liste =
 // die Sektion erscheint gar nicht.
-type Partner = { id: string; name: string; logoUrl: string; linkUrl: string; main: boolean; label: string };
+type PartnerTier = 'main' | 'bank' | 'normal';
+type Partner = { id: string; name: string; logoUrl: string; linkUrl: string; tier: PartnerTier; label: string };
 const DEFAULT_PARTNERS = { items: [] as Partner[] };
 // Eigene Hintergrundbilder der drei Hero-Slides auf der Startseite. Leer =
 // das eingebaute Standard-Design bleibt.
@@ -135,13 +136,19 @@ const savePartners = requireSuperadmin(async (req: VercelRequest, res: VercelRes
     .map((p: unknown, i: number) => {
       const o = (p ?? {}) as Record<string, unknown>;
       const id = typeof o.id === 'string' && o.id ? o.id : `partner-${Date.now()}-${i}`;
+      // Stufe übernehmen; alte Datensätze mit `main:true` zu 'main' migrieren.
+      const tier: PartnerTier =
+        o.tier === 'main' || o.tier === 'bank' ? o.tier : o.main ? 'main' : 'normal';
+      let label = typeof o.label === 'string' ? o.label.trim().slice(0, 60) : '';
+      // Bankpartner ohne eigene Überschrift bekommen eine sinnvolle Vorgabe.
+      if (tier === 'bank' && !label) label = 'Offizieller Bankpartner';
       return {
         id,
         name: typeof o.name === 'string' ? o.name.trim().slice(0, 80) : '',
         logoUrl: safeImageUrl(o.logoUrl),
         linkUrl: normalizeUrl(o.linkUrl),
-        main: Boolean(o.main),
-        label: typeof o.label === 'string' ? o.label.trim().slice(0, 60) : '',
+        tier,
+        label,
       };
     })
     // Ohne Logo ergibt ein Partner keinen Sinn – solche Einträge verwerfen.

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone, Handshake, ChevronUp, ChevronDown, Star } from 'lucide-react';
+import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone, Handshake, ChevronUp, ChevronDown, Star, Landmark } from 'lucide-react';
 import { Player, Team, Match, EventConfig, EventArchive, NewsItem, Partner } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
@@ -543,11 +543,19 @@ export default function AdminPanel({
     }
   };
 
-  // Partner laden (nur relevant für Super-Admin, schadet sonst aber nicht)
+  // Partner laden (nur relevant für Super-Admin, schadet sonst aber nicht).
+  // Altdaten mit `main:true` (statt `tier`) werden auf die neue Stufe migriert.
   useEffect(() => {
     if (!isSuperadmin) return;
     apiFetch<{ items: Partner[] }>('/api/twitch?resource=partners')
-      .then((data) => setPartners(Array.isArray(data.items) ? data.items : []))
+      .then((data) => {
+        const items = (Array.isArray(data.items) ? data.items : []).map((p) => ({
+          ...p,
+          tier: p.tier ?? ((p as unknown as { main?: boolean }).main ? 'main' : 'normal'),
+          label: p.label ?? '',
+        }));
+        setPartners(items);
+      })
       .catch(() => {
         /* noch nicht konfiguriert */
       });
@@ -556,7 +564,7 @@ export default function AdminPanel({
   const addPartner = () => {
     setPartners((prev) => [
       ...prev,
-      { id: `p-${Date.now()}`, name: '', logoUrl: '', linkUrl: '', main: false, label: '' },
+      { id: `p-${Date.now()}`, name: '', logoUrl: '', linkUrl: '', tier: 'normal', label: '' },
     ]);
   };
 
@@ -1814,8 +1822,11 @@ export default function AdminPanel({
             <p className="text-xs text-gray-500 font-sans mb-6">
               Logo bitte <strong className="text-gray-300">farbig</strong> und mit{' '}
               <strong className="text-gray-300">transparentem Hintergrund</strong> (PNG/WebP) hochladen — kein zweites
-              Schwarz-Weiß-Bild nötig. Mit dem Schalter „Hauptpartner" wird ein Logo oben in einer eigenen, größeren
-              Reihe angezeigt (z. B. „Offizieller Bankpartner"). Reihenfolge über die Pfeile.
+              Schwarz-Weiß-Bild nötig. Über die <strong className="text-gray-300">Anzeige-Stufe</strong> bestimmst du die
+              Größe: <strong className="text-gray-300">Hauptpartner</strong> und{' '}
+              <strong className="text-gray-300">Bankpartner</strong> erscheinen groß nebeneinander ganz oben — jeweils mit
+              eigener Überschrift darüber (z. B. „Offizieller Bankpartner"). <strong className="text-gray-300">Normal</strong>{' '}
+              landet im kleinen Raster darunter. Reihenfolge über die Pfeile.
             </p>
 
             <div className="space-y-4">
@@ -1893,27 +1904,53 @@ export default function AdminPanel({
                     </button>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-white/5 flex flex-col sm:flex-row sm:items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => updatePartner(p.id, { main: !p.main })}
-                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer border ${
-                        p.main
-                          ? 'bg-[#E6238E]/20 text-[#F49CC9] border-[#E6238E]/40'
-                          : 'bg-[#060E0F]/60 text-gray-400 border-white/10 hover:text-white hover:border-white/20'
-                      }`}
-                    >
-                      <Star className={`w-3.5 h-3.5 ${p.main ? 'fill-current' : ''}`} />
-                      {p.main ? 'Hauptpartner' : 'Als Hauptpartner'}
-                    </button>
-                    {p.main && (
-                      <input
-                        type="text"
-                        value={p.label}
-                        onChange={(e) => updatePartner(p.id, { label: e.target.value })}
-                        placeholder="Label, z.B. Offizieller Bankpartner"
-                        className={`${inputClass} flex-1`}
-                      />
+                  <div className="mt-4 pt-3 border-t border-white/5 space-y-3">
+                    <div>
+                      <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
+                        Anzeige-Stufe
+                      </label>
+                      <div className="inline-flex flex-wrap gap-2">
+                        {([
+                          { key: 'normal', label: 'Normal (klein)', icon: null },
+                          { key: 'main', label: 'Hauptpartner', icon: <Star className="w-3.5 h-3.5" /> },
+                          { key: 'bank', label: 'Bankpartner', icon: <Landmark className="w-3.5 h-3.5" /> },
+                        ] as const).map((opt) => {
+                          const active = (p.tier ?? 'normal') === opt.key;
+                          return (
+                            <button
+                              key={opt.key}
+                              type="button"
+                              onClick={() =>
+                                opt.key === 'bank'
+                                  ? updatePartner(p.id, { tier: 'bank', label: p.label || 'Offizieller Bankpartner' })
+                                  : updatePartner(p.id, { tier: opt.key })
+                              }
+                              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer border ${
+                                active
+                                  ? 'bg-[#E6238E]/20 text-[#F49CC9] border-[#E6238E]/40'
+                                  : 'bg-[#060E0F]/60 text-gray-400 border-white/10 hover:text-white hover:border-white/20'
+                              }`}
+                            >
+                              {opt.icon}
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {(p.tier === 'main' || p.tier === 'bank') && (
+                      <div>
+                        <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
+                          Überschrift (über dem Logo)
+                        </label>
+                        <input
+                          type="text"
+                          value={p.label}
+                          onChange={(e) => updatePartner(p.id, { label: e.target.value })}
+                          placeholder={p.tier === 'bank' ? 'z.B. Offizieller Bankpartner' : 'z.B. Hauptpartner'}
+                          className={inputClass}
+                        />
+                      </div>
                     )}
                   </div>
                 </div>
