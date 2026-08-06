@@ -972,7 +972,7 @@ export default function AdminPanel({
   }, [isSuperadmin]);
 
   const addTeamSponsor = () => {
-    setEditTeamSponsors((prev) => [...prev, { id: `s-${Date.now()}`, name: '', logoUrl: '', linkUrl: '' }]);
+    setEditTeamSponsors((prev) => [...prev, { id: `s-${Date.now()}`, name: '', logoUrl: '', linkUrl: '', bg: '#ffffff' }]);
   };
   const updateTeamSponsor = (id: string, patch: Partial<TeamSponsor>) => {
     setEditTeamSponsors((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
@@ -1375,6 +1375,35 @@ export default function AdminPanel({
                                     placeholder="z.B. volksbank.de"
                                     className={inputClass}
                                   />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
+                                    Hintergrund der Kachel
+                                  </label>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <input
+                                      type="color"
+                                      value={s.bg || '#ffffff'}
+                                      onChange={(e) => updateTeamSponsor(s.id, { bg: e.target.value })}
+                                      className="w-9 h-9 bg-transparent border-0 cursor-pointer rounded-lg overflow-hidden shrink-0"
+                                      title="Eigene Farbe"
+                                    />
+                                    {['#ffffff', '#f3f4f6', '#111111', '#0A1415'].map((c) => (
+                                      <button
+                                        key={c}
+                                        type="button"
+                                        onClick={() => updateTeamSponsor(s.id, { bg: c })}
+                                        className={`w-7 h-7 rounded-md cursor-pointer transition-all ${
+                                          (s.bg || '#ffffff').toLowerCase() === c.toLowerCase()
+                                            ? 'ring-2 ring-brand-accent-light scale-110'
+                                            : 'ring-1 ring-white/20'
+                                        }`}
+                                        style={{ background: c }}
+                                        title={c}
+                                      />
+                                    ))}
+                                    <span className="text-[10px] text-gray-500 font-sans">helles Logo → dunklen Hintergrund wählen</span>
+                                  </div>
                                 </div>
                               </div>
                             </div>

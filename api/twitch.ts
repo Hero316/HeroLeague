@@ -12,8 +12,15 @@ type Partner = { id: string; name: string; logoUrl: string; linkUrl: string; tie
 const DEFAULT_PARTNERS = { items: [] as Partner[] };
 
 // Team-/Trikot-Sponsoren je Verein: Zuordnung Team-ID → Liste. Leerer Standard.
-type TeamSponsor = { id: string; name: string; logoUrl: string; linkUrl: string };
+type TeamSponsor = { id: string; name: string; logoUrl: string; linkUrl: string; bg: string };
 const DEFAULT_TEAM_SPONSORS: Record<string, TeamSponsor[]> = {};
+
+// Hex-Farbe (#rgb oder #rrggbb) zulassen, sonst Vorgabe (Weiß).
+function safeHexColor(input: unknown, fallback = '#ffffff'): string {
+  if (typeof input !== 'string') return fallback;
+  const t = input.trim();
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(t) ? t : fallback;
+}
 // Eigene Hintergrundbilder der drei Hero-Slides auf der Startseite. Leer =
 // das eingebaute Standard-Design bleibt.
 const DEFAULT_HERO = { match: '', pom: '', table: '' };
@@ -183,6 +190,7 @@ const saveTeamSponsors = requireSuperadmin(async (req: VercelRequest, res: Verce
           name: typeof o.name === 'string' ? o.name.trim().slice(0, 80) : '',
           logoUrl: safeImageUrl(o.logoUrl),
           linkUrl: normalizeUrl(o.linkUrl),
+          bg: safeHexColor(o.bg),
         };
       })
       .filter((s: TeamSponsor) => s.logoUrl);

@@ -351,17 +351,18 @@ export default function TeamDetail({
                       loading="lazy"
                       decoding="async"
                       referrerPolicy="no-referrer"
-                      className="h-9 w-auto max-w-[120px] object-contain"
+                      className="h-11 w-auto max-w-[140px] object-contain"
                     />
                   );
                   const cls =
-                    'flex items-center justify-center rounded-xl bg-white px-4 py-3 shadow-[0_2px_10px_rgba(0,0,0,.25)] transition-transform hover:scale-[1.03]';
+                    'flex items-center justify-center rounded-xl px-4 py-3 ring-1 ring-black/5 shadow-[0_2px_10px_rgba(0,0,0,.25)] transition-transform hover:scale-[1.03]';
+                  const style = { background: s.bg || '#ffffff' };
                   return s.linkUrl ? (
-                    <a key={s.id} href={s.linkUrl} target="_blank" rel="noopener noreferrer" title={s.name} className={cls}>
+                    <a key={s.id} href={s.linkUrl} target="_blank" rel="noopener noreferrer" title={s.name} className={cls} style={style}>
                       {tile}
                     </a>
                   ) : (
-                    <span key={s.id} title={s.name} className={cls}>
+                    <span key={s.id} title={s.name} className={cls} style={style}>
                       {tile}
                     </span>
                   );

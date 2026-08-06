@@ -152,6 +152,7 @@ export interface TeamSponsor {
   name: string; // interne Bezeichnung / Alt-Text
   logoUrl: string; // Logo (transparent), Blob-URL
   linkUrl: string; // Ziel-Link (leer = nicht klickbar)
+  bg?: string; // Hintergrundfarbe der Logo-Kachel (Hex), Standard Weiß – für helle Logos änderbar
 }
 
 // Zuordnung Team-ID → Sponsoren dieses Teams.
