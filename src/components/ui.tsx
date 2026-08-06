@@ -192,9 +192,9 @@ export function PartnerSection() {
   const rest = withLogo.filter((p) => !isBigPartner(p));
 
   return (
-    <section className="bg-[linear-gradient(180deg,#eef1fb_0%,#e3e9f9_100%)] text-[#0b0b0f]">
+    <section className="bg-[linear-gradient(180deg,#e2e8fb_0%,#ccd6f2_100%)] text-[#0b0b0f]">
       <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-14 sm:py-20">
-        <h2 className="hl-partner-text text-center font-sans font-black italic text-3xl sm:text-4xl tracking-tight mb-12 sm:mb-16">
+        <h2 className="hl-partner-title text-center font-sans font-black italic text-4xl sm:text-5xl tracking-tight mb-12 sm:mb-16">
           Partner
         </h2>
 
@@ -203,7 +203,9 @@ export function PartnerSection() {
             {bigs.map((p) => (
               <div key={p.id} className="flex flex-col items-center gap-3">
                 {p.label && (
-                  <span className="hl-partner-text font-sans text-[11px] sm:text-[13px] font-extrabold uppercase tracking-[0.16em]">
+                  <span
+                    className={`${p.tier === 'bank' ? 'hl-partner-bank' : 'hl-partner-main'} font-sans text-[13px] sm:text-base font-extrabold uppercase tracking-[0.16em]`}
+                  >
                     {p.label}
                   </span>
                 )}
