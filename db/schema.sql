@@ -69,8 +69,9 @@ CREATE UNIQUE INDEX idx_matches_import_ref ON matches(season_id, import_ref) WHE
 
 -- Generische Key/Value-Ablage für Website-Einstellungen (JSONB-Blob je key).
 -- Bekannte keys: twitch, social, hero, countdown, news, event, highlights,
--- roster, partners (Partner-/Sponsoren-Logos). Wird beim ersten Speichern über
--- api/twitch.ts?resource=... automatisch per Upsert angelegt.
+-- roster, partners (globale Partner-/Sponsoren-Logos), team-sponsors
+-- (Trikot-Sponsoren je Team: { teamId: Sponsor[] }). Wird beim ersten Speichern
+-- über api/twitch.ts?resource=... automatisch per Upsert angelegt.
 CREATE TABLE settings (
   key   TEXT PRIMARY KEY,
   value JSONB NOT NULL

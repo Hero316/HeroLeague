@@ -144,6 +144,19 @@ export interface PartnersConfig {
   items: Partner[];
 }
 
+// Team-/Trikot-Sponsoren pro Verein. Werden auf der jeweiligen Teamseite als
+// schlichte Logo-Liste angezeigt („Partner von <Team>"). Ein Team kann mehrere
+// haben. Kein Haupt-/Normal-Konzept – einfach eine Liste.
+export interface TeamSponsor {
+  id: string;
+  name: string; // interne Bezeichnung / Alt-Text
+  logoUrl: string; // Logo (transparent), Blob-URL
+  linkUrl: string; // Ziel-Link (leer = nicht klickbar)
+}
+
+// Zuordnung Team-ID → Sponsoren dieses Teams.
+export type TeamSponsorsMap = Record<string, TeamSponsor[]>;
+
 // Highlights: eine gemischte, geordnete Medien-Liste aus Kamera-Fotos
 // (öffentliche Blob-URLs) und Video-Links (YouTube/Twitch, auch Shorts).
 export interface HighlightMedia {

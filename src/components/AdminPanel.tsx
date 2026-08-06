@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone, Handshake, ChevronUp, ChevronDown, Star, Landmark } from 'lucide-react';
-import { Player, Team, Match, EventConfig, EventArchive, NewsItem, Partner } from '../types';
+import { Player, Team, Match, EventConfig, EventArchive, NewsItem, Partner, TeamSponsor, TeamSponsorsMap } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
 import { AccordionSection } from './ui';
@@ -330,6 +330,10 @@ export default function AdminPanel({
   const [editTeamLogoUrl, setEditTeamLogoUrl] = useState('');
   const [editTeamRoster, setEditTeamRoster] = useState<Player[]>([]);
   const [editSuccess, setEditSuccess] = useState(false);
+  // Team-/Trikot-Sponsoren: globale Map (einmal geladen) + Sponsoren des aktuell
+  // bearbeiteten Teams.
+  const [teamSponsorsMap, setTeamSponsorsMap] = useState<TeamSponsorsMap>({});
+  const [editTeamSponsors, setEditTeamSponsors] = useState<TeamSponsor[]>([]);
 
   // Spieler des Monats
   const [pomName, setPomName] = useState('');
@@ -954,6 +958,27 @@ export default function AdminPanel({
     setEditTeamEmoji(team?.logoIcon ?? '🛡️');
     setEditTeamLogoUrl(team?.logoUrl ?? '');
     setEditTeamRoster(team?.spielerliste ? [...team.spielerliste] : []);
+    setEditTeamSponsors(teamSponsorsMap[teamId] ? teamSponsorsMap[teamId].map((s) => ({ ...s })) : []);
+  };
+
+  // Team-Sponsoren einmal laden (nur Super-Admin sieht die Klub-Sektion).
+  useEffect(() => {
+    if (!isSuperadmin) return;
+    apiFetch<TeamSponsorsMap>('/api/twitch?resource=team-sponsors')
+      .then((data) => setTeamSponsorsMap(data && typeof data === 'object' ? data : {}))
+      .catch(() => {
+        /* noch nicht konfiguriert */
+      });
+  }, [isSuperadmin]);
+
+  const addTeamSponsor = () => {
+    setEditTeamSponsors((prev) => [...prev, { id: `s-${Date.now()}`, name: '', logoUrl: '', linkUrl: '' }]);
+  };
+  const updateTeamSponsor = (id: string, patch: Partial<TeamSponsor>) => {
+    setEditTeamSponsors((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  };
+  const removeTeamSponsor = (id: string) => {
+    setEditTeamSponsors((prev) => prev.filter((s) => s.id !== id));
   };
 
   const handleSaveTeamEdit = async () => {
@@ -977,6 +1002,23 @@ export default function AdminPanel({
 
     if (ok) {
       setEditTeamRoster(roster);
+      // Sponsoren des Teams in der globalen Map speichern (nur Einträge mit Logo).
+      const cleanedSponsors = editTeamSponsors
+        .map((s) => ({ ...s, name: s.name.trim(), linkUrl: s.linkUrl.trim() }))
+        .filter((s) => s.logoUrl);
+      const nextMap: TeamSponsorsMap = { ...teamSponsorsMap };
+      if (cleanedSponsors.length) nextMap[selectedEditTeamId] = cleanedSponsors;
+      else delete nextMap[selectedEditTeamId];
+      try {
+        const saved = await apiFetch<TeamSponsorsMap>('/api/twitch?resource=team-sponsors', {
+          method: 'POST',
+          body: JSON.stringify(nextMap),
+        });
+        setTeamSponsorsMap(saved && typeof saved === 'object' ? saved : nextMap);
+        setEditTeamSponsors(saved?.[selectedEditTeamId] ? saved[selectedEditTeamId].map((s) => ({ ...s })) : cleanedSponsors);
+      } catch (err) {
+        alert(err instanceof Error ? err.message : 'Sponsoren konnten nicht gespeichert werden.');
+      }
       setEditSuccess(true);
       setTimeout(() => setEditSuccess(false), 3000);
     }
@@ -1285,6 +1327,80 @@ export default function AdminPanel({
                   <p className="text-[10px] text-gray-400 font-sans mt-1.5">
                     Diese Spieler stehen im Spielplan zur Torschützen- und Vorlagen-Zuweisung bereit.
                   </p>
+                </div>
+
+                {/* Team-/Trikot-Sponsoren dieses Vereins */}
+                <div className="md:col-span-2">
+                  <div className="pt-5 border-t border-white/10">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Handshake className="w-4 h-4 text-brand-accent-light" />
+                      <h4 className="text-sm font-bold text-white font-sans">Sponsoren / Partner dieses Teams</h4>
+                    </div>
+                    <p className="text-[11px] text-gray-400 font-sans mb-4">
+                      Erscheinen auf der Teamseite unter „Partner von {editTeamName || 'diesem Team'}". Logo bitte{' '}
+                      <strong className="text-gray-300">farbig &amp; ohne Hintergrund</strong> (PNG/WebP). Mehrere möglich.
+                      Werden mit „Änderungen speichern" gesichert.
+                    </p>
+
+                    <div className="space-y-3">
+                      {editTeamSponsors.length === 0 && (
+                        <p className="text-[11px] text-gray-500 font-mono italic">Noch keine Sponsoren für dieses Team.</p>
+                      )}
+                      {editTeamSponsors.map((s) => (
+                        <div key={s.id} className="rounded-xl border border-white/10 bg-[#060E0F]/40 p-3">
+                          <div className="flex items-start gap-3">
+                            <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <ImageUploader
+                                label="Logo (farbig, transparent)"
+                                value={s.logoUrl}
+                                onChange={(url) => updateTeamSponsor(s.id, { logoUrl: url })}
+                              />
+                              <div className="space-y-2.5">
+                                <div>
+                                  <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">Name</label>
+                                  <input
+                                    type="text"
+                                    value={s.name}
+                                    onChange={(e) => updateTeamSponsor(s.id, { name: e.target.value })}
+                                    placeholder="z.B. Volksbank"
+                                    className={inputClass}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">Link (optional)</label>
+                                  <input
+                                    type="text"
+                                    value={s.linkUrl}
+                                    onChange={(e) => updateTeamSponsor(s.id, { linkUrl: e.target.value })}
+                                    placeholder="z.B. volksbank.de"
+                                    className={inputClass}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeTeamSponsor(s.id)}
+                              title="Sponsor entfernen"
+                              aria-label="Sponsor entfernen"
+                              className="shrink-0 p-2 rounded-md text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={addTeamSponsor}
+                      className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider text-brand-accent-light border border-brand-accent-light/30 bg-brand-accent/10 hover:bg-brand-accent/20 transition-all cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Sponsor hinzufügen
+                    </button>
+                  </div>
                 </div>
 
                 <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-3 mt-2">

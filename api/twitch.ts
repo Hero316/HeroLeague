@@ -10,6 +10,10 @@ const DEFAULT_SOCIAL = { instagram: '', tiktok: '', youtube: '' };
 type PartnerTier = 'main' | 'bank' | 'normal';
 type Partner = { id: string; name: string; logoUrl: string; linkUrl: string; tier: PartnerTier; label: string };
 const DEFAULT_PARTNERS = { items: [] as Partner[] };
+
+// Team-/Trikot-Sponsoren je Verein: Zuordnung Team-ID → Liste. Leerer Standard.
+type TeamSponsor = { id: string; name: string; logoUrl: string; linkUrl: string };
+const DEFAULT_TEAM_SPONSORS: Record<string, TeamSponsor[]> = {};
 // Eigene Hintergrundbilder der drei Hero-Slides auf der Startseite. Leer =
 // das eingebaute Standard-Design bleibt.
 const DEFAULT_HERO = { match: '', pom: '', table: '' };
@@ -161,6 +165,36 @@ const savePartners = requireSuperadmin(async (req: VercelRequest, res: VercelRes
   `;
 
   return res.json(cfg);
+});
+
+// Team-/Trikot-Sponsoren speichern. NUR Super-Admin (wie die Klub-/Kaderpflege).
+// Body: { [teamId]: TeamSponsor[] }. Sponsoren ohne Logo werden verworfen,
+// leere Team-Listen fallen weg.
+const saveTeamSponsors = requireSuperadmin(async (req: VercelRequest, res: VercelResponse) => {
+  const raw = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? (req.body as Record<string, unknown>) : {};
+  const out: Record<string, TeamSponsor[]> = {};
+  for (const [teamId, list] of Object.entries(raw)) {
+    if (typeof teamId !== 'string' || !Array.isArray(list)) continue;
+    const cleaned: TeamSponsor[] = list
+      .map((s: unknown, i: number) => {
+        const o = (s ?? {}) as Record<string, unknown>;
+        return {
+          id: typeof o.id === 'string' && o.id ? o.id : `s-${Date.now()}-${i}`,
+          name: typeof o.name === 'string' ? o.name.trim().slice(0, 80) : '',
+          logoUrl: safeImageUrl(o.logoUrl),
+          linkUrl: normalizeUrl(o.linkUrl),
+        };
+      })
+      .filter((s: TeamSponsor) => s.logoUrl);
+    if (cleaned.length) out[teamId] = cleaned;
+  }
+
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('team-sponsors', ${JSON.stringify(out)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+
+  return res.json(out);
 });
 
 // Hero-Hintergrundbilder speichern (nur http(s)-URLs; leere Felder = Standard).
@@ -530,6 +564,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const rows = await sql`SELECT value FROM settings WHERE key = 'partners'`;
         return res.json(rows[0]?.value ?? DEFAULT_PARTNERS);
       }
+      if (resource === 'team-sponsors') {
+        const rows = await sql`SELECT value FROM settings WHERE key = 'team-sponsors'`;
+        return res.json(rows[0]?.value ?? DEFAULT_TEAM_SPONSORS);
+      }
       if (resource === 'event') {
         const rows = await sql`SELECT value FROM settings WHERE key = 'event'`;
         return res.json(toArchive(rows[0]?.value));
@@ -561,6 +599,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'POST') {
       if (resource === 'social') return saveSocial(req, res);
       if (resource === 'partners') return savePartners(req, res);
+      if (resource === 'team-sponsors') return saveTeamSponsors(req, res);
       if (resource === 'event') return saveEvent(req, res);
       if (resource === 'highlights') return saveHighlights(req, res);
       if (resource === 'hero') return saveHero(req, res);
