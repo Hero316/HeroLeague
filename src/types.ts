@@ -123,6 +123,27 @@ export interface SocialLinks {
   youtube: string;
 }
 
+// Partner / Sponsoren-Logos für die Sektion ganz unten auf jeder Seite.
+// Logos werden farbig (mit transparentem Hintergrund) hochgeladen; die
+// Schwarz-Weiß-Darstellung macht die Website per CSS-Filter, Farbe erst beim
+// Hovern. Hauptpartner stehen in einer eigenen, größeren Reihe oben.
+// Stufe eines Partners: 'main' = Hauptpartner, 'bank' = Bankpartner (beide groß
+// oben, mit Überschrift darüber), 'normal' = kleines Raster darunter.
+export type PartnerTier = 'main' | 'bank' | 'normal';
+
+export interface Partner {
+  id: string;
+  name: string; // interne Bezeichnung / Alt-Text fürs Logo
+  logoUrl: string; // farbiges Logo (Blob-URL), leer = wird nicht angezeigt
+  linkUrl: string; // Ziel-Link (leer = Logo nicht klickbar)
+  tier: PartnerTier; // Hauptpartner / Bankpartner (groß, oben) oder normal (klein)
+  label: string; // Überschrift über dem großen Logo, z. B. "Offizieller Bankpartner" (leer = keine)
+}
+
+export interface PartnersConfig {
+  items: Partner[];
+}
+
 // Highlights: eine gemischte, geordnete Medien-Liste aus Kamera-Fotos
 // (öffentliche Blob-URLs) und Video-Links (YouTube/Twitch, auch Shorts).
 export interface HighlightMedia {

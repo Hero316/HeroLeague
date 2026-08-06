@@ -12,7 +12,10 @@
  *  - Nur statische, per Hash unveränderliche Assets werden dauerhaft gecacht.
  */
 
-const CACHE = 'hl-static-v2';
+// Version bei Bedarf erhöhen: beim Aktivieren löscht der SW alle Caches mit
+// abweichendem Namen → ein hängengebliebener/kaputter Asset-Cache (z. B. schwarze
+// Seite nach einem Deploy) wird beim nächsten Laden automatisch bereinigt.
+const CACHE = 'hl-static-v3';
 
 // App-Shell für den Offline-Fallback. Bewusst minimal.
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/assets/icon-192.png'];

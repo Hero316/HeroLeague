@@ -1,7 +1,8 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, X, Smartphone, Search } from 'lucide-react';
-import { ActiveTab, Team } from '../types';
+import { ActiveTab, Partner, PartnersConfig, Team } from '../types';
+import { apiFetch } from '../lib/api';
 import { useInstall } from './InstallProvider';
 
 // Gemeinsame Design-Bausteine des neuen Hero-League-Looks.
@@ -133,6 +134,99 @@ export function PageHeader({ kicker, title, text }: PageHeaderProps) {
   );
 }
 
+// Modulweiter Cache der Partner: nur einmal je Seitenaufruf laden, danach zeigen
+// alle Footer-Instanzen die Logos sofort (der Footer wird pro Route neu gemountet).
+let partnersCache: PartnersConfig | null = null;
+
+// Ein einzelnes Partner-Logo: farbig hochgeladen, per CSS grau dargestellt und
+// erst beim Hovern farbig. Mit Link ⇒ anklickbar (neuer Tab), sonst reines Bild.
+function PartnerLogo({ partner, heightClass, maxWClass }: { partner: Partner; heightClass: string; maxWClass: string }) {
+  const img = (
+    <img
+      src={partner.logoUrl}
+      alt={partner.name || 'Partner'}
+      loading="lazy"
+      decoding="async"
+      referrerPolicy="no-referrer"
+      className={`hl-partner-logo ${heightClass} ${maxWClass} w-auto object-contain grayscale brightness-[.45] contrast-[1.1] opacity-90 transition duration-300 ease-out hover:grayscale-0 hover:brightness-100 hover:contrast-100 hover:opacity-100 hover:scale-105`}
+    />
+  );
+  return partner.linkUrl ? (
+    <a href={partner.linkUrl} target="_blank" rel="noopener noreferrer" title={partner.name} className="inline-flex items-center justify-center">
+      {img}
+    </a>
+  ) : (
+    <span title={partner.name} className="inline-flex items-center justify-center">
+      {img}
+    </span>
+  );
+}
+
+// Große Partner (Hauptpartner/Bankpartner) auch aus Altdaten erkennen, die noch
+// `main:true` statt `tier` gespeichert haben.
+function isBigPartner(p: Partner): boolean {
+  return p.tier === 'main' || p.tier === 'bank' || (p as unknown as { main?: boolean }).main === true;
+}
+
+// Partner-/Sponsoren-Sektion ganz unten auf jeder öffentlichen Seite. Hauptpartner
+// und Bankpartner stehen groß oben nebeneinander – jeweils mit eigener Überschrift
+// darüber. Darunter das normale Raster. Leere Liste ⇒ die Sektion wird nicht gerendert.
+export function PartnerSection() {
+  const [partners, setPartners] = React.useState<Partner[]>(partnersCache?.items ?? []);
+
+  React.useEffect(() => {
+    if (partnersCache) return; // schon geladen
+    apiFetch<PartnersConfig>('/api/twitch?resource=partners')
+      .then((data) => {
+        partnersCache = { items: Array.isArray(data.items) ? data.items : [] };
+        setPartners(partnersCache.items);
+      })
+      .catch(() => {
+        /* noch nicht konfiguriert – keine Sektion */
+      });
+  }, []);
+
+  const withLogo = partners.filter((p) => p.logoUrl);
+  if (withLogo.length === 0) return null;
+  const bigs = withLogo.filter(isBigPartner);
+  const rest = withLogo.filter((p) => !isBigPartner(p));
+
+  return (
+    <section className="bg-[linear-gradient(180deg,#e2e8fb_0%,#ccd6f2_100%)] text-[#0b0b0f]">
+      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-14 sm:py-20">
+        <h2 className="hl-partner-title text-center font-sans font-black italic text-4xl sm:text-5xl tracking-tight mb-12 sm:mb-16">
+          Partner
+        </h2>
+
+        {bigs.length > 0 && (
+          <div className="flex flex-wrap items-end justify-center gap-x-14 sm:gap-x-20 gap-y-10 mb-12 sm:mb-16">
+            {bigs.map((p) => (
+              <div key={p.id} className="flex flex-col items-center gap-3">
+                {p.label && (
+                  <span
+                    className={`${p.tier === 'bank' ? 'hl-partner-bank' : 'hl-partner-main'} font-sans text-[13px] sm:text-base font-extrabold uppercase tracking-[0.16em]`}
+                  >
+                    {p.label}
+                  </span>
+                )}
+                <PartnerLogo partner={p} heightClass="h-16 sm:h-20" maxWClass="max-w-[240px]" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {rest.length > 0 && (
+          <div className="flex flex-wrap items-center justify-center gap-x-12 sm:gap-x-16 gap-y-10">
+            {rest.map((p) => (
+              <PartnerLogo key={p.id} partner={p} heightClass="h-12 sm:h-14" maxWClass="max-w-[190px]" />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 interface FooterProps {
   onNavigate: (tab: ActiveTab) => void;
   // Navigation zu Nicht-Tab-Seiten (Impressum/Datenschutz) über den rohen Pfad.
@@ -154,8 +248,10 @@ export function Footer({ onNavigate, onNavigatePath }: FooterProps) {
     { label: 'DATENSCHUTZ', path: '/datenschutz' },
   ];
   return (
-    <footer className="border-t border-white/[.07] bg-[#080b09]">
-      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-7 flex items-center justify-between gap-6 flex-wrap">
+    <>
+      <PartnerSection />
+      <footer className="border-t border-white/[.07] bg-[#080b09]">
+        <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-7 flex items-center justify-between gap-6 flex-wrap">
         <div className="flex items-center gap-3">
           <img src="/assets/hero-league-logo.png" alt="Hero League" className="h-7 w-auto opacity-90" />
           <span className="font-sans font-semibold text-xs text-hl-faint">© 2026 HERO LEAGUE · ALLE RECHTE VORBEHALTEN</span>
@@ -190,8 +286,9 @@ export function Footer({ onNavigate, onNavigatePath }: FooterProps) {
             </button>
           )}
         </div>
-      </div>
-    </footer>
+        </div>
+      </footer>
+    </>
   );
 }
 

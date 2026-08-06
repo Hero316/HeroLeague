@@ -229,6 +229,44 @@ body {
   filter: drop-shadow(0 0 10px rgba(233, 196, 106, 0.45));
 }
 
+/* Partner-Sektion: kühl-schimmernde Verläufe mit Glow – gleiche Mechanik wie der
+   HERO-ONE-Gold-Schimmer. Drei harmonierende, aber unterscheidbare Farbwelten:
+   Titel = Violett, Hauptpartner = Teal (Marke), Bankpartner = Blau. Jeweils
+   eigene Glow-Farbe und leicht andere Schimmer-Geschwindigkeit. */
+.hl-partner-title,
+.hl-partner-main,
+.hl-partner-bank {
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: hlGoldShimmer 5s linear infinite;
+}
+.hl-partner-title {
+  background-image: linear-gradient(100deg, #4F46E5 0%, #7C3AED 30%, #A78BFA 50%, #7C3AED 70%, #4F46E5 100%);
+  filter: drop-shadow(0 0 14px rgba(124, 58, 237, 0.42));
+}
+.hl-partner-main {
+  background-image: linear-gradient(100deg, #0D9488 0%, #14B8A6 30%, #5EEAD4 50%, #14B8A6 70%, #0D9488 100%);
+  filter: drop-shadow(0 0 12px rgba(20, 184, 166, 0.5));
+  animation-duration: 4s;
+}
+.hl-partner-bank {
+  background-image: linear-gradient(100deg, #1D4ED8 0%, #2563EB 28%, #38BDF8 50%, #2563EB 72%, #1D4ED8 100%);
+  filter: drop-shadow(0 0 12px rgba(37, 99, 235, 0.5));
+  animation-duration: 6s;
+}
+
+/* Touch-Geräte (Handy/Tablet) haben kein Hover -> Partner-Logos direkt farbig
+   zeigen, statt dauerhaft grau. Auf Desktop bleibt der Grau→Farbe-Hover. */
+@media (hover: none) {
+  .hl-partner-logo {
+    filter: none;
+    opacity: 1;
+  }
+}
+
 /* Bewegung reduzieren: Endlos-Animationen ausschalten, Einblendungen sofort final.
    Die JS-Animationen (motion) respektieren die Einstellung bereits ueber useReducedMotion.
    Ausnahme: das News-Laufband (.hl-marquee) laeuft bewusst weiter – wuerde es

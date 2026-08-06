@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActiveTab, Match, PlayerStat, Team } from '../types';
 import Tabelle from './Tabelle';
 import { TeamCrest, MatchStatusBadge, LiveBadge, shortDate } from './ui';
@@ -39,16 +39,27 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
     .filter((m) => m.matchday === activeMatchday)
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
 
-  // Sichtbares Tab-Fenster (max. 2 Pills wie im Design)
-  const windowStart = Math.max(0, Math.min(activeIndex, matchdays.length - 2));
-  const visibleTabs = matchdays.slice(windowStart, windowStart + 2);
+  // Horizontal scrollbare Spieltag-Leiste: aktiven Spieltag mittig einblenden.
+  // WICHTIG: nur den Streifen selbst scrollen (scrollBy am Container), NICHT
+  // scrollIntoView – das würde die ganze Startseite nach unten springen lassen.
+  const matchdayBarRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = matchdayBarRef.current;
+    if (!el) return;
+    const active = el.querySelector<HTMLElement>('[data-active="true"]');
+    if (!active) return;
+    const cRect = el.getBoundingClientRect();
+    const aRect = active.getBoundingClientRect();
+    const delta = aRect.left - cRect.left - (el.clientWidth - active.clientWidth) / 2;
+    el.scrollBy({ left: delta, behavior: 'smooth' });
+  }, [activeMatchday]);
 
   return (
     <>
       {/* ===== Tabelle + Spielplan ===== */}
       <Reveal className="max-w-[1320px] mx-auto px-4 sm:px-10 pt-6 pb-8 grid grid-cols-1 xl:grid-cols-[1.5fr_1fr] gap-6 items-stretch">
         {/* Tabellen-Karte */}
-        <div className="h-full">
+        <div className="h-full min-w-0">
           <div className="hl-card p-4 pb-4 sm:p-6 sm:pb-5 h-full">
             <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
               <div className="flex items-center gap-3">
@@ -76,7 +87,7 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
         </div>
 
         {/* Spielplan-Karte */}
-        <div className="hl-card p-6 pb-[22px] flex flex-col h-full">
+        <div className="hl-card p-6 pb-[22px] flex flex-col h-full min-w-0">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-3">
               <span className="w-[34px] h-[34px] rounded-[10px] bg-[rgba(67,229,160,.14)] border border-[rgba(67,229,160,.25)] relative flex items-center justify-center">
@@ -100,7 +111,7 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
             <div className="py-10 text-center text-hl-mute font-sans text-sm">Noch keine Spiele angesetzt.</div>
           ) : (
             <>
-              {/* Spieltag-Auswahl */}
+              {/* Spieltag-Auswahl: horizontal scroll-/wischbar durch alle Spieltage */}
               <div className="flex items-center gap-2 mb-[18px]">
                 <button
                   onClick={() => activeIndex > 0 && setActiveMatchday(matchdays[activeIndex - 1])}
@@ -110,23 +121,26 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
                 >
                   ‹
                 </button>
-                {visibleTabs.map((day) => (
-                  <button
-                    key={day}
-                    onClick={() => setActiveMatchday(day)}
-                    className={`px-[15px] py-[9px] rounded-[10px] font-sans text-xs tracking-[.8px] cursor-pointer whitespace-nowrap ${
-                      day === activeMatchday
-                        ? 'bg-brand-accent-light text-[#08120a] font-extrabold'
-                        : 'bg-white/[.04] border border-white/10 text-hl-mute font-bold'
-                    }`}
-                  >
-                    {day}. SPIELTAG
-                  </button>
-                ))}
+                <div ref={matchdayBarRef} className="flex-1 min-w-0 flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth py-0.5">
+                  {matchdays.map((day) => (
+                    <button
+                      key={day}
+                      data-active={day === activeMatchday}
+                      onClick={() => setActiveMatchday(day)}
+                      className={`flex-none px-[15px] py-[9px] rounded-[10px] font-sans text-xs tracking-[.8px] cursor-pointer whitespace-nowrap ${
+                        day === activeMatchday
+                          ? 'bg-brand-accent-light text-[#08120a] font-extrabold'
+                          : 'bg-white/[.04] border border-white/10 text-hl-mute font-bold hover:text-hl-text'
+                      }`}
+                    >
+                      {day}. SPIELTAG
+                    </button>
+                  ))}
+                </div>
                 <button
                   onClick={() => activeIndex < matchdays.length - 1 && setActiveMatchday(matchdays[activeIndex + 1])}
                   disabled={activeIndex >= matchdays.length - 1}
-                  className="w-[34px] h-[34px] flex-none rounded-[9px] bg-white/[.04] border border-white/10 text-hl-soft text-base cursor-pointer ml-auto transition-colors hover:bg-white/[.09] disabled:opacity-25 disabled:pointer-events-none"
+                  className="w-[34px] h-[34px] flex-none rounded-[9px] bg-white/[.04] border border-white/10 text-hl-soft text-base cursor-pointer transition-colors hover:bg-white/[.09] disabled:opacity-25 disabled:pointer-events-none"
                   aria-label="Nächster Spieltag"
                 >
                   ›
@@ -212,6 +226,10 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute -bottom-[260px] left-1/2 -translate-x-1/2 w-[900px] h-[520px] bg-[radial-gradient(circle,rgba(34,223,201,.16),transparent_65%)]" />
         </div>
+        {/* Unten sauber in den Seiten-Hintergrund ausblenden, damit der Teal-Glow
+            keinen grünen Saum an der Partner-Sektion bildet. Liegt hinter dem
+            Inhalt (Button/Text bleiben unberührt). */}
+        <div aria-hidden className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#0A1415] to-transparent pointer-events-none" />
         <div className="relative max-w-[1000px] mx-auto px-4 sm:px-10 py-16 sm:py-[88px] text-center">
           <div className="font-sans font-extrabold text-xs tracking-[3px] text-brand-accent-light uppercase">
             {seasonLabel ? `${seasonLabel} · JETZT LIVE` : 'HERO LEAGUE · JETZT LIVE'}

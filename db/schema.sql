@@ -67,6 +67,10 @@ CREATE INDEX idx_matches_matchday ON matches(matchday);
 -- Ein Import-Spiel (Spiel-ID) darf je Saison nur einmal existieren – Basis für den Upsert.
 CREATE UNIQUE INDEX idx_matches_import_ref ON matches(season_id, import_ref) WHERE import_ref IS NOT NULL;
 
+-- Generische Key/Value-Ablage für Website-Einstellungen (JSONB-Blob je key).
+-- Bekannte keys: twitch, social, hero, countdown, news, event, highlights,
+-- roster, partners (Partner-/Sponsoren-Logos). Wird beim ersten Speichern über
+-- api/twitch.ts?resource=... automatisch per Upsert angelegt.
 CREATE TABLE settings (
   key   TEXT PRIMARY KEY,
   value JSONB NOT NULL

@@ -43,7 +43,7 @@ export default function HighlightsHome({
   if (!editMode && items.length === 0 && albums.length === 0) return null;
 
   return (
-    <section className="relative overflow-hidden border-y border-brand-accent-light/10">
+    <section className="relative overflow-hidden">
       {/* Animierter Farb-Hintergrund: taucht beim Reinscrollen auf und hebt den
           Bereich deutlich vom schwarzen Rest ab. */}
       <motion.div
@@ -54,14 +54,15 @@ export default function HighlightsHome({
         viewport={{ once: true, margin: '-18% 0px' }}
         transition={{ duration: 1, ease: 'easeOut' }}
       >
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,#060d0c_0%,#082220_46%,#06110f_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,#0A1415_0%,#082220_48%,#0A1415_100%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(95%_75%_at_50%_-8%,rgba(34,223,201,.22),transparent_62%)]" />
         <div className="hl-drift-a absolute -top-28 -left-16 w-[440px] h-[440px] rounded-full bg-[radial-gradient(circle,rgba(34,223,201,.20),transparent_66%)]" />
-        <div className="hl-drift-b absolute -bottom-28 -right-12 w-[480px] h-[480px] rounded-full bg-[radial-gradient(circle,rgba(88,240,205,.13),transparent_66%)]" />
+        <div className="hl-drift-b absolute -bottom-44 -right-12 w-[480px] h-[480px] rounded-full bg-[radial-gradient(circle,rgba(88,240,205,.09),transparent_66%)]" />
       </motion.div>
-      {/* Weiche Kanten, damit der farbige Bereich sanft in das Schwarz übergeht */}
-      <div aria-hidden className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/75 to-transparent pointer-events-none" />
-      <div aria-hidden className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/75 to-transparent pointer-events-none" />
+      {/* Weiche Kanten: der farbige Bereich geht oben und unten sanft in den
+          Seiten-Hintergrund (#0A1415) über – kein dunkler Saum, kein harter Schnitt. */}
+      <div aria-hidden className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-[#0A1415] to-transparent pointer-events-none" />
+      <div aria-hidden className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-[#0A1415] via-[rgba(10,20,21,0.85)] to-transparent pointer-events-none" />
 
       <div className="relative z-[1] max-w-[1320px] mx-auto px-4 sm:px-10 py-14 sm:py-20">
         <Reveal className="flex items-end justify-between gap-4 mb-8">
