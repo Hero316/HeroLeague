@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone } from 'lucide-react';
-import { Player, Team, Match, EventConfig, EventArchive, NewsItem } from '../types';
+import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone, Handshake, ChevronUp, ChevronDown, Star } from 'lucide-react';
+import { Player, Team, Match, EventConfig, EventArchive, NewsItem, Partner } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
 import { AccordionSection } from './ui';
@@ -375,6 +375,11 @@ export default function AdminPanel({
   const [socialYoutube, setSocialYoutube] = useState('');
   const [socialSuccess, setSocialSuccess] = useState(false);
 
+  // Partner / Sponsoren-Logos (Sektion unten auf jeder Seite) – nur Super-Admin
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const [partnersSuccess, setPartnersSuccess] = useState(false);
+  const [partnersSaving, setPartnersSaving] = useState(false);
+
   // Eigene Hero-Hintergrundbilder (Startseite)
   const [heroImages, setHeroImages] = useState({ match: '', pom: '', table: '' });
   const [heroSuccess, setHeroSuccess] = useState(false);
@@ -535,6 +540,59 @@ export default function AdminPanel({
       setTimeout(() => setSocialSuccess(false), 3000);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
+    }
+  };
+
+  // Partner laden (nur relevant für Super-Admin, schadet sonst aber nicht)
+  useEffect(() => {
+    if (!isSuperadmin) return;
+    apiFetch<{ items: Partner[] }>('/api/twitch?resource=partners')
+      .then((data) => setPartners(Array.isArray(data.items) ? data.items : []))
+      .catch(() => {
+        /* noch nicht konfiguriert */
+      });
+  }, [isSuperadmin]);
+
+  const addPartner = () => {
+    setPartners((prev) => [
+      ...prev,
+      { id: `p-${Date.now()}`, name: '', logoUrl: '', linkUrl: '', main: false, label: '' },
+    ]);
+  };
+
+  const updatePartner = (id: string, patch: Partial<Partner>) => {
+    setPartners((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  };
+
+  const removePartner = (id: string) => {
+    setPartners((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  // Reihenfolge per Hoch/Runter tauschen (bestimmt die Anzeige-Reihenfolge)
+  const movePartner = (index: number, dir: -1 | 1) => {
+    setPartners((prev) => {
+      const next = [...prev];
+      const target = index + dir;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
+  const handleSavePartners = async () => {
+    setPartnersSaving(true);
+    try {
+      const saved = await apiFetch<{ items: Partner[] }>('/api/twitch?resource=partners', {
+        method: 'POST',
+        body: JSON.stringify({ items: partners }),
+      });
+      setPartners(Array.isArray(saved.items) ? saved.items : []);
+      setPartnersSuccess(true);
+      setTimeout(() => setPartnersSuccess(false), 3000);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
+    } finally {
+      setPartnersSaving(false);
     }
   };
 
@@ -1736,6 +1794,164 @@ export default function AdminPanel({
           </div>
         </div>
       </AccordionSection>
+
+      {/* Partner / Sponsoren-Logos – nur Super-Admin */}
+      {isSuperadmin && (
+        <AccordionSection
+          id="partners"
+          category="startseite"
+          title="Partner & Sponsoren"
+          subtitle="Logo-Leiste ganz unten auf jeder Seite"
+          icon={<Handshake className="w-5 h-5" />}
+          accent="#E6238E"
+        >
+          <div>
+            <p className="text-xs text-gray-400 font-sans mb-2">
+              Diese Logos erscheinen ganz unten auf jeder öffentlichen Seite. Sie werden automatisch{' '}
+              <strong className="text-gray-200">schwarz-weiß</strong> dargestellt und bekommen{' '}
+              <strong className="text-gray-200">beim Hovern mit der Maus ihre Farbe</strong>.
+            </p>
+            <p className="text-xs text-gray-500 font-sans mb-6">
+              Logo bitte <strong className="text-gray-300">farbig</strong> und mit{' '}
+              <strong className="text-gray-300">transparentem Hintergrund</strong> (PNG/WebP) hochladen — kein zweites
+              Schwarz-Weiß-Bild nötig. Mit dem Schalter „Hauptpartner" wird ein Logo oben in einer eigenen, größeren
+              Reihe angezeigt (z. B. „Offizieller Bankpartner"). Reihenfolge über die Pfeile.
+            </p>
+
+            <div className="space-y-4">
+              {partners.length === 0 && (
+                <p className="text-xs text-gray-500 font-mono italic">Noch keine Partner angelegt.</p>
+              )}
+              {partners.map((p, index) => (
+                <div key={p.id} className="rounded-xl border border-white/10 bg-[#060E0F]/40 p-4">
+                  <div className="flex items-start gap-4">
+                    <div className="flex flex-col gap-1 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => movePartner(index, -1)}
+                        disabled={index === 0}
+                        title="Nach oben"
+                        aria-label="Nach oben"
+                        className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                      >
+                        <ChevronUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => movePartner(index, 1)}
+                        disabled={index === partners.length - 1}
+                        title="Nach unten"
+                        aria-label="Nach unten"
+                        className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                      >
+                        <ChevronDown className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <ImageUploader
+                        label="Logo (farbig, transparent)"
+                        value={p.logoUrl}
+                        onChange={(url) => updatePartner(p.id, { logoUrl: url })}
+                      />
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
+                            Name (intern / Alt-Text)
+                          </label>
+                          <input
+                            type="text"
+                            value={p.name}
+                            onChange={(e) => updatePartner(p.id, { name: e.target.value })}
+                            placeholder="z.B. Coca-Cola"
+                            className={inputClass}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
+                            Link (optional)
+                          </label>
+                          <input
+                            type="text"
+                            value={p.linkUrl}
+                            onChange={(e) => updatePartner(p.id, { linkUrl: e.target.value })}
+                            placeholder="z.B. coca-cola.de"
+                            className={inputClass}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => removePartner(p.id)}
+                      title="Partner entfernen"
+                      aria-label="Partner entfernen"
+                      className="shrink-0 p-2 rounded-md text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-white/5 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => updatePartner(p.id, { main: !p.main })}
+                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer border ${
+                        p.main
+                          ? 'bg-[#E6238E]/20 text-[#F49CC9] border-[#E6238E]/40'
+                          : 'bg-[#060E0F]/60 text-gray-400 border-white/10 hover:text-white hover:border-white/20'
+                      }`}
+                    >
+                      <Star className={`w-3.5 h-3.5 ${p.main ? 'fill-current' : ''}`} />
+                      {p.main ? 'Hauptpartner' : 'Als Hauptpartner'}
+                    </button>
+                    {p.main && (
+                      <input
+                        type="text"
+                        value={p.label}
+                        onChange={(e) => updatePartner(p.id, { label: e.target.value })}
+                        placeholder="Label, z.B. Offizieller Bankpartner"
+                        className={`${inputClass} flex-1`}
+                      />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={addPartner}
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider text-brand-accent-light border border-brand-accent-light/30 bg-brand-accent/10 hover:bg-brand-accent/20 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Partner hinzufügen
+            </button>
+
+            <div className="flex items-center justify-end gap-3 mt-6">
+              {partnersSuccess && (
+                <motion.span
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-xs text-emerald-400 uppercase tracking-wider font-mono mr-2"
+                >
+                  ✓ Gespeichert!
+                </motion.span>
+              )}
+              <button
+                type="button"
+                onClick={handleSavePartners}
+                disabled={partnersSaving}
+                className="px-6 py-3 bg-brand-accent hover:bg-brand-accent/80 border border-brand-accent-light/30 rounded-full text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center gap-1.5 cursor-pointer shadow-lg shadow-brand-accent-light/10 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Check className="w-4 h-4" />
+                <span>{partnersSaving ? 'Speichert…' : 'Partner speichern'}</span>
+              </button>
+            </div>
+          </div>
+        </AccordionSection>
+      )}
 
       {/* Testspiel / Sonder-Event */}
       <AccordionSection

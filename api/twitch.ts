@@ -1,9 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql, getTeams } from './_lib/db.js';
-import { requireStaff, requireMatchWrite } from './_lib/auth.js';
+import { requireStaff, requireMatchWrite, requireSuperadmin } from './_lib/auth.js';
 
 const DEFAULT_TWITCH = { channel: '', isLive: false };
 const DEFAULT_SOCIAL = { instagram: '', tiktok: '', youtube: '' };
+
+// Partner / Sponsoren-Logos (Sektion unten auf jeder Seite). Leere Liste =
+// die Sektion erscheint gar nicht.
+type Partner = { id: string; name: string; logoUrl: string; linkUrl: string; main: boolean; label: string };
+const DEFAULT_PARTNERS = { items: [] as Partner[] };
 // Eigene Hintergrundbilder der drei Hero-Slides auf der Startseite. Leer =
 // das eingebaute Standard-Design bleibt.
 const DEFAULT_HERO = { match: '', pom: '', table: '' };
@@ -110,6 +115,41 @@ const saveSocial = requireStaff(async (req: VercelRequest, res: VercelResponse) 
 
   await sql`
     INSERT INTO settings (key, value) VALUES ('social', ${JSON.stringify(cfg)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+
+  return res.json(cfg);
+});
+
+// Nur echte http(s)-Bild-URLs zulassen (kein javascript:/data: o. Ä.).
+function safeImageUrl(input: unknown): string {
+  if (typeof input !== 'string') return '';
+  const t = input.trim();
+  return /^https?:\/\//i.test(t) ? t : '';
+}
+
+// Partner-Logos speichern. NUR Super-Admin (nicht der Spiel-Admin).
+const savePartners = requireSuperadmin(async (req: VercelRequest, res: VercelResponse) => {
+  const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];
+  const items: Partner[] = rawItems
+    .map((p: unknown, i: number) => {
+      const o = (p ?? {}) as Record<string, unknown>;
+      const id = typeof o.id === 'string' && o.id ? o.id : `partner-${Date.now()}-${i}`;
+      return {
+        id,
+        name: typeof o.name === 'string' ? o.name.trim().slice(0, 80) : '',
+        logoUrl: safeImageUrl(o.logoUrl),
+        linkUrl: normalizeUrl(o.linkUrl),
+        main: Boolean(o.main),
+        label: typeof o.label === 'string' ? o.label.trim().slice(0, 60) : '',
+      };
+    })
+    // Ohne Logo ergibt ein Partner keinen Sinn – solche Einträge verwerfen.
+    .filter((p: Partner) => p.logoUrl);
+  const cfg = { items };
+
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('partners', ${JSON.stringify(cfg)}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
   `;
 
@@ -479,6 +519,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const rows = await sql`SELECT value FROM settings WHERE key = 'social'`;
         return res.json(rows[0]?.value ?? DEFAULT_SOCIAL);
       }
+      if (resource === 'partners') {
+        const rows = await sql`SELECT value FROM settings WHERE key = 'partners'`;
+        return res.json(rows[0]?.value ?? DEFAULT_PARTNERS);
+      }
       if (resource === 'event') {
         const rows = await sql`SELECT value FROM settings WHERE key = 'event'`;
         return res.json(toArchive(rows[0]?.value));
@@ -509,6 +553,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (req.method === 'POST') {
       if (resource === 'social') return saveSocial(req, res);
+      if (resource === 'partners') return savePartners(req, res);
       if (resource === 'event') return saveEvent(req, res);
       if (resource === 'highlights') return saveHighlights(req, res);
       if (resource === 'hero') return saveHero(req, res);
