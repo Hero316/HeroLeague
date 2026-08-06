@@ -54,7 +54,7 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
       {/* ===== Tabelle + Spielplan ===== */}
       <Reveal className="max-w-[1320px] mx-auto px-4 sm:px-10 pt-6 pb-8 grid grid-cols-1 xl:grid-cols-[1.5fr_1fr] gap-6 items-stretch">
         {/* Tabellen-Karte */}
-        <div className="h-full">
+        <div className="h-full min-w-0">
           <div className="hl-card p-4 pb-4 sm:p-6 sm:pb-5 h-full">
             <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
               <div className="flex items-center gap-3">
@@ -82,7 +82,7 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
         </div>
 
         {/* Spielplan-Karte */}
-        <div className="hl-card p-6 pb-[22px] flex flex-col h-full">
+        <div className="hl-card p-6 pb-[22px] flex flex-col h-full min-w-0">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-3">
               <span className="w-[34px] h-[34px] rounded-[10px] bg-[rgba(67,229,160,.14)] border border-[rgba(67,229,160,.25)] relative flex items-center justify-center">
@@ -116,7 +116,7 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
                 >
                   ‹
                 </button>
-                <div ref={matchdayBarRef} className="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth py-0.5">
+                <div ref={matchdayBarRef} className="flex-1 min-w-0 flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth py-0.5">
                   {matchdays.map((day) => (
                     <button
                       key={day}
