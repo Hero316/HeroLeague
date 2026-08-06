@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActiveTab, Match, PlayerStat, Team } from '../types';
 import Tabelle from './Tabelle';
 import { TeamCrest, MatchStatusBadge, LiveBadge, shortDate } from './ui';
@@ -39,9 +39,15 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
     .filter((m) => m.matchday === activeMatchday)
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
 
-  // Sichtbares Tab-Fenster (max. 2 Pills wie im Design)
-  const windowStart = Math.max(0, Math.min(activeIndex, matchdays.length - 2));
-  const visibleTabs = matchdays.slice(windowStart, windowStart + 2);
+  // Horizontal scrollbare Spieltag-Leiste: aktiven Spieltag mittig einblenden
+  // (wie auf der vollen Spielplan-Seite).
+  const matchdayBarRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = matchdayBarRef.current;
+    if (!el) return;
+    const active = el.querySelector('[data-active="true"]');
+    if (active) active.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [activeMatchday]);
 
   return (
     <>
@@ -100,7 +106,7 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
             <div className="py-10 text-center text-hl-mute font-sans text-sm">Noch keine Spiele angesetzt.</div>
           ) : (
             <>
-              {/* Spieltag-Auswahl */}
+              {/* Spieltag-Auswahl: horizontal scroll-/wischbar durch alle Spieltage */}
               <div className="flex items-center gap-2 mb-[18px]">
                 <button
                   onClick={() => activeIndex > 0 && setActiveMatchday(matchdays[activeIndex - 1])}
@@ -110,23 +116,26 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
                 >
                   ‹
                 </button>
-                {visibleTabs.map((day) => (
-                  <button
-                    key={day}
-                    onClick={() => setActiveMatchday(day)}
-                    className={`px-[15px] py-[9px] rounded-[10px] font-sans text-xs tracking-[.8px] cursor-pointer whitespace-nowrap ${
-                      day === activeMatchday
-                        ? 'bg-brand-accent-light text-[#08120a] font-extrabold'
-                        : 'bg-white/[.04] border border-white/10 text-hl-mute font-bold'
-                    }`}
-                  >
-                    {day}. SPIELTAG
-                  </button>
-                ))}
+                <div ref={matchdayBarRef} className="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth py-0.5">
+                  {matchdays.map((day) => (
+                    <button
+                      key={day}
+                      data-active={day === activeMatchday}
+                      onClick={() => setActiveMatchday(day)}
+                      className={`flex-none px-[15px] py-[9px] rounded-[10px] font-sans text-xs tracking-[.8px] cursor-pointer whitespace-nowrap ${
+                        day === activeMatchday
+                          ? 'bg-brand-accent-light text-[#08120a] font-extrabold'
+                          : 'bg-white/[.04] border border-white/10 text-hl-mute font-bold hover:text-hl-text'
+                      }`}
+                    >
+                      {day}. SPIELTAG
+                    </button>
+                  ))}
+                </div>
                 <button
                   onClick={() => activeIndex < matchdays.length - 1 && setActiveMatchday(matchdays[activeIndex + 1])}
                   disabled={activeIndex >= matchdays.length - 1}
-                  className="w-[34px] h-[34px] flex-none rounded-[9px] bg-white/[.04] border border-white/10 text-hl-soft text-base cursor-pointer ml-auto transition-colors hover:bg-white/[.09] disabled:opacity-25 disabled:pointer-events-none"
+                  className="w-[34px] h-[34px] flex-none rounded-[9px] bg-white/[.04] border border-white/10 text-hl-soft text-base cursor-pointer transition-colors hover:bg-white/[.09] disabled:opacity-25 disabled:pointer-events-none"
                   aria-label="Nächster Spieltag"
                 >
                   ›
