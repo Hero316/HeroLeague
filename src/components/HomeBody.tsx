@@ -39,14 +39,19 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
     .filter((m) => m.matchday === activeMatchday)
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
 
-  // Horizontal scrollbare Spieltag-Leiste: aktiven Spieltag mittig einblenden
-  // (wie auf der vollen Spielplan-Seite).
+  // Horizontal scrollbare Spieltag-Leiste: aktiven Spieltag mittig einblenden.
+  // WICHTIG: nur den Streifen selbst scrollen (scrollBy am Container), NICHT
+  // scrollIntoView – das würde die ganze Startseite nach unten springen lassen.
   const matchdayBarRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = matchdayBarRef.current;
     if (!el) return;
-    const active = el.querySelector('[data-active="true"]');
-    if (active) active.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    const active = el.querySelector<HTMLElement>('[data-active="true"]');
+    if (!active) return;
+    const cRect = el.getBoundingClientRect();
+    const aRect = active.getBoundingClientRect();
+    const delta = aRect.left - cRect.left - (el.clientWidth - active.clientWidth) / 2;
+    el.scrollBy({ left: delta, behavior: 'smooth' });
   }, [activeMatchday]);
 
   return (
@@ -221,6 +226,10 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute -bottom-[260px] left-1/2 -translate-x-1/2 w-[900px] h-[520px] bg-[radial-gradient(circle,rgba(34,223,201,.16),transparent_65%)]" />
         </div>
+        {/* Unten sauber in den Seiten-Hintergrund ausblenden, damit der Teal-Glow
+            keinen grünen Saum an der Partner-Sektion bildet. Liegt hinter dem
+            Inhalt (Button/Text bleiben unberührt). */}
+        <div aria-hidden className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#0A1415] to-transparent pointer-events-none" />
         <div className="relative max-w-[1000px] mx-auto px-4 sm:px-10 py-16 sm:py-[88px] text-center">
           <div className="font-sans font-extrabold text-xs tracking-[3px] text-brand-accent-light uppercase">
             {seasonLabel ? `${seasonLabel} · JETZT LIVE` : 'HERO LEAGUE · JETZT LIVE'}
