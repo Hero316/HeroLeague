@@ -133,7 +133,7 @@ export default function Navbar({
   const seasonShort = seasonLabel || '';
 
   return (
-    <div className="sticky top-0 z-50 bg-[rgba(7,10,8,.72)] backdrop-blur-xl border-b border-white/[.07] pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+    <div className="hl-glass-nav sticky top-0 z-50 bg-[rgba(7,10,8,.72)] backdrop-blur-xl pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       <div className="max-w-[1320px] mx-auto px-4 sm:px-10 h-[68px] sm:h-[76px] flex items-center gap-5 lg:gap-9">
         {/* Logo + Claim */}
         <button
@@ -156,7 +156,7 @@ export default function Navbar({
               <button
                 key={item.value}
                 onClick={() => setActiveTab(item.value)}
-                className={`relative py-1.5 transition-colors cursor-pointer ${
+                className={`relative py-1.5 transition-[color,transform] duration-150 ease-out active:scale-[.97] cursor-pointer ${
                   isHero
                     ? ''
                     : `font-sans text-[13px] tracking-[1.5px] ${
@@ -180,7 +180,7 @@ export default function Navbar({
           {eventActive && onOpenEvent && (
             <button
               onClick={onOpenEvent}
-              className="relative py-1.5 inline-flex items-center gap-1.5 font-sans font-bold text-[13px] tracking-[1.5px] text-[#ff7ac4] hover:text-white transition-colors cursor-pointer"
+              className="relative py-1.5 inline-flex items-center gap-1.5 font-sans font-bold text-[13px] tracking-[1.5px] text-[#ff7ac4] hover:text-white transition-[color,transform] duration-150 ease-out active:scale-[.97] cursor-pointer"
               title={eventTitle}
             >
               <Zap className="w-3.5 h-3.5" fill="currentColor" />
@@ -272,7 +272,7 @@ export default function Navbar({
                 onOpenEvent();
                 setIsOpen(false);
               }}
-              className="block w-full text-left px-4 py-3 rounded-xl mb-1 bg-[linear-gradient(100deg,rgba(230,35,142,.22),rgba(233,196,106,.12))] border border-[rgba(230,35,142,.5)] cursor-pointer"
+              className="block w-full text-left px-4 py-3 rounded-xl mb-1 bg-[linear-gradient(100deg,rgba(230,35,142,.22),rgba(233,196,106,.12))] border border-[rgba(230,35,142,.5)] transition-transform duration-150 ease-out active:scale-[.98] cursor-pointer"
             >
               <span className="flex items-center gap-2 font-sans font-black text-sm tracking-[1px] uppercase text-white">
                 <Zap className="w-4 h-4 text-[#ff7ac4]" fill="currentColor" />
@@ -290,7 +290,7 @@ export default function Navbar({
                   setActiveTab(item.value);
                   setIsOpen(false);
                 }}
-                className={`block w-full text-left px-4 py-2.5 rounded-xl transition-colors cursor-pointer ${
+                className={`block w-full text-left px-4 py-2.5 rounded-xl transition-[color,background-color,border-color,transform] duration-150 ease-out active:scale-[.98] cursor-pointer ${
                   isHero
                     ? activeTab === item.value
                       ? 'bg-[rgba(233,196,106,.12)] border border-[rgba(233,196,106,.35)]'
@@ -372,6 +372,12 @@ export default function Navbar({
           )}
         </div>
       )}
+
+      {/* Weiche Scroll-Kante statt harter 1px-Linie: Inhalt taucht sanft unter
+          die schwebende Leiste, wo er sie überlappt (§12 „scroll edge effects,
+          not hard dividers"). Liegt am Unterrand der gesamten Chrome-Fläche –
+          also unter der Leiste bzw. unter dem geöffneten Mobile-Menü. */}
+      <div className="pointer-events-none absolute inset-x-0 top-full h-6 bg-[linear-gradient(to_bottom,rgba(7,10,8,.5),transparent)]" />
     </div>
   );
 }

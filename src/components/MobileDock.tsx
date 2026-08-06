@@ -116,7 +116,7 @@ export default function MobileDock({
   return (
     <div aria-hidden={!visible} className="lg:hidden fixed inset-x-0 bottom-0 z-40 pointer-events-none">
       <div
-        className="will-change-transform transition-[transform,opacity] duration-500 [transition-timing-function:cubic-bezier(0.34,1.28,0.64,1)]"
+        className="will-change-transform transition-[transform,opacity] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]"
         style={{ transform: visible ? 'translateY(0)' : 'translateY(160%)', opacity: visible ? 1 : 0 }}
       >
         {/* Leichter Gradient von unten – das Dock steht bewusst nicht komplett frei */}
@@ -128,7 +128,7 @@ export default function MobileDock({
         <div className="relative px-3 pt-4 pb-[calc(env(safe-area-inset-bottom)+10px)] flex justify-center">
           {/* Glas-Wrapper (Rand rund, überläuft nicht) trägt die Verläufe als
               Scroll-Hinweis; die eigentliche Scroll-Fläche liegt darin. */}
-          <div className="pointer-events-auto relative max-w-full rounded-full overflow-hidden border border-white/[.12] bg-[rgba(12,20,19,.58)] backdrop-blur-2xl backdrop-saturate-150 shadow-[inset_0_1px_0_rgba(255,255,255,.14),0_18px_44px_rgba(0,0,0,.5)]">
+          <div className="hl-glass-dock pointer-events-auto relative max-w-full rounded-full overflow-hidden border border-white/[.12] bg-[rgba(12,20,19,.58)] backdrop-blur-2xl backdrop-saturate-150 shadow-[inset_0_1px_0_rgba(255,255,255,.14),0_18px_44px_rgba(0,0,0,.5)]">
             <div ref={scrollRef} onScroll={updateEdges} className="overflow-x-auto no-scrollbar">
               {/* Feste Icon-Größen -> konstante Breite, kein Zappeln/Scroll-Sprung. */}
               <div className="flex items-center gap-1.5 px-3 py-2.5 w-max">
@@ -139,7 +139,7 @@ export default function MobileDock({
                     aria-label={it.label}
                     title={it.label}
                     aria-current={it.active ? 'page' : undefined}
-                    className={`shrink-0 grid place-items-center w-[60px] h-[54px] rounded-full transition-[background-color,box-shadow,color,transform] duration-300 cursor-pointer active:scale-90 ${accentClasses(
+                    className={`shrink-0 grid place-items-center w-[60px] h-[54px] rounded-full transition-[background-color,box-shadow,color,transform] [transition-duration:300ms,300ms,300ms,100ms] ease-out cursor-pointer active:scale-90 ${accentClasses(
                       it.accent,
                       it.active
                     )} ${it.active ? '' : 'hover:text-hl-text'}`}

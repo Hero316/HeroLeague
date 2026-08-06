@@ -96,9 +96,9 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
   };
 
   const primaryBtn =
-    'inline-flex items-center gap-2 px-4 py-2.5 sm:gap-2.5 sm:px-6 sm:py-[15px] rounded-[11px] sm:rounded-[13px] bg-brand-accent-light text-[#062018] font-sans font-extrabold text-xs sm:text-sm tracking-wider shadow-[0_10px_30px_rgba(34,223,201,.28)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_42px_rgba(34,223,201,.42)] cursor-pointer';
+    'inline-flex items-center gap-2 px-4 py-2.5 sm:gap-2.5 sm:px-6 sm:py-[15px] rounded-[11px] sm:rounded-[13px] bg-brand-accent-light text-[#062018] font-sans font-extrabold text-xs sm:text-sm tracking-wider shadow-[0_10px_30px_rgba(34,223,201,.28)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_42px_rgba(34,223,201,.42)] active:scale-[.97] cursor-pointer';
   const secondaryBtn =
-    'inline-flex items-center gap-2 px-4 py-2.5 sm:gap-2.5 sm:px-6 sm:py-[15px] rounded-[11px] sm:rounded-[13px] bg-white/5 border border-white/[.16] text-hl-text font-sans font-bold text-xs sm:text-sm tracking-wider transition-colors hover:border-brand-accent-light hover:bg-[rgba(34,223,201,.06)] cursor-pointer';
+    'inline-flex items-center gap-2 px-4 py-2.5 sm:gap-2.5 sm:px-6 sm:py-[15px] rounded-[11px] sm:rounded-[13px] bg-white/5 border border-white/[.16] text-hl-text font-sans font-bold text-xs sm:text-sm tracking-wider transition-[color,border-color,background-color,transform] duration-150 ease-out hover:border-brand-accent-light hover:bg-[rgba(34,223,201,.06)] active:scale-[.97] cursor-pointer';
 
   const dotLabels: Record<string, string> = { match: 'SPIELTAG', pom: 'SPIELER DES MONATS', table: 'TABELLE' };
 
@@ -471,14 +471,14 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
           <button
             onClick={() => goTo(current - 1)}
             aria-label="Vorheriges"
-            className="absolute right-[94px] bottom-8 z-[7] w-11 h-11 rounded-full bg-[rgba(11,17,17,.5)] border border-white/[.16] text-white text-xl cursor-pointer backdrop-blur-md transition-colors hover:bg-[rgba(34,223,201,.2)]"
+            className="absolute right-[94px] bottom-8 z-[7] w-11 h-11 rounded-full bg-[rgba(11,17,17,.5)] border border-white/[.16] text-white text-xl cursor-pointer backdrop-blur-md transition-[color,background-color,transform] duration-150 ease-out hover:bg-[rgba(34,223,201,.2)] active:scale-[.97]"
           >
             ‹
           </button>
           <button
             onClick={() => goTo(current + 1)}
             aria-label="Nächstes"
-            className="absolute right-10 bottom-8 z-[7] w-11 h-11 rounded-full bg-[rgba(11,17,17,.5)] border border-white/[.16] text-white text-xl cursor-pointer backdrop-blur-md transition-colors hover:bg-[rgba(34,223,201,.2)]"
+            className="absolute right-10 bottom-8 z-[7] w-11 h-11 rounded-full bg-[rgba(11,17,17,.5)] border border-white/[.16] text-white text-xl cursor-pointer backdrop-blur-md transition-[color,background-color,transform] duration-150 ease-out hover:bg-[rgba(34,223,201,.2)] active:scale-[.97]"
           >
             ›
           </button>
@@ -492,7 +492,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
             <button
               key={kind}
               onClick={() => goTo(i)}
-              className={`pointer-events-auto flex items-center gap-2 px-3.5 py-2 rounded-full border cursor-pointer transition-all ${
+              className={`pointer-events-auto flex items-center gap-2 px-3.5 py-2 rounded-full border cursor-pointer transition-all active:scale-[.97] ${
                 i === current
                   ? 'border-[rgba(34,223,201,.4)] bg-[rgba(34,223,201,.12)]'
                   : 'border-white/[.12] bg-white/[.03]'
