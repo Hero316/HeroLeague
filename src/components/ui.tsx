@@ -148,7 +148,7 @@ function PartnerLogo({ partner, heightClass, maxWClass }: { partner: Partner; he
       loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"
-      className={`${heightClass} ${maxWClass} w-auto object-contain grayscale opacity-70 transition duration-300 hover:grayscale-0 hover:opacity-100`}
+      className={`${heightClass} ${maxWClass} w-auto object-contain brightness-0 opacity-90 transition duration-300 ease-out hover:brightness-100 hover:opacity-100 hover:scale-105`}
     />
   );
   return partner.linkUrl ? (
@@ -192,16 +192,18 @@ export function PartnerSection() {
   const rest = withLogo.filter((p) => !isBigPartner(p));
 
   return (
-    <section className="bg-[#f3f1f6] text-[#0b0b0f]">
-      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-12 sm:py-16">
-        <h2 className="text-center font-sans font-black italic text-2xl sm:text-3xl mb-10 sm:mb-12">Partner</h2>
+    <section className="bg-[linear-gradient(180deg,#ffffff_0%,#eef1fb_100%)] text-[#0b0b0f]">
+      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-14 sm:py-20">
+        <h2 className="hl-partner-text text-center font-sans font-black italic text-3xl sm:text-4xl tracking-tight mb-12 sm:mb-16">
+          Partner
+        </h2>
 
         {bigs.length > 0 && (
           <div className="flex flex-wrap items-end justify-center gap-x-14 sm:gap-x-20 gap-y-10 mb-12 sm:mb-16">
             {bigs.map((p) => (
               <div key={p.id} className="flex flex-col items-center gap-3">
                 {p.label && (
-                  <span className="font-sans text-[11px] sm:text-xs font-bold uppercase tracking-[0.12em] text-[#0b0b0f]/55">
+                  <span className="hl-partner-text font-sans text-[11px] sm:text-[13px] font-extrabold uppercase tracking-[0.16em]">
                     {p.label}
                   </span>
                 )}

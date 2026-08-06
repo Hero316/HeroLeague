@@ -229,6 +229,29 @@ body {
   filter: drop-shadow(0 0 10px rgba(233, 196, 106, 0.45));
 }
 
+/* Partner-Sektion: kühl-schimmernder Verlauf (Indigo → Blau → Cyan) mit Glow –
+   gleiche Mechanik wie der HERO-ONE-Gold-Schimmer, nur eigene Farbwelt. Liest
+   sich auf dem hellen Sektions-Hintergrund und wirkt modern/edel. */
+.hl-partner-text {
+  background: linear-gradient(
+    100deg,
+    #4338CA 0%,
+    #4F46E5 18%,
+    #2563EB 38%,
+    #06B6D4 52%,
+    #2563EB 68%,
+    #4F46E5 82%,
+    #4338CA 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: hlGoldShimmer 5s linear infinite;
+  filter: drop-shadow(0 0 12px rgba(79, 70, 229, 0.35));
+}
+
 /* Bewegung reduzieren: Endlos-Animationen ausschalten, Einblendungen sofort final.
    Die JS-Animationen (motion) respektieren die Einstellung bereits ueber useReducedMotion.
    Ausnahme: das News-Laufband (.hl-marquee) laeuft bewusst weiter – wuerde es
