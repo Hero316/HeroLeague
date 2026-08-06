@@ -1,9 +1,13 @@
-import React, { useMemo } from 'react';
-import { ArrowLeft } from 'lucide-react';
-import { Match, PlayerStat, Team } from '../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, ChevronDown } from 'lucide-react';
+import { Match, PlayerStat, Team, TeamSponsorsMap } from '../types';
 import { calculateStandings } from '../lib/standings';
+import { apiFetch } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
 import { TeamCrest, FormPill, MatchStatusBadge, shortDate, shade, monogram, ImageZoom } from './ui';
+
+// Modulweiter Cache der Team-Sponsoren: einmal je Seitenaufruf laden.
+let teamSponsorsCache: TeamSponsorsMap | null = null;
 
 interface TeamDetailProps {
   team: Team;
@@ -65,6 +69,24 @@ export default function TeamDetail({
     const list = players.filter((p) => p.teamId === team.id && (p.goals > 0 || p.assists > 0));
     return [...list].sort((a, b) => b.goals - a.goals || b.assists - a.assists)[0] ?? null;
   }, [players, team.id]);
+
+  // Lange „Spiele"-Liste standardmäßig eingeklappt (weniger Scrollen).
+  const [showAllMatches, setShowAllMatches] = useState(false);
+
+  // Team-/Trikot-Sponsoren dieses Vereins laden (modulweit gecacht).
+  const [sponsorsMap, setSponsorsMap] = useState<TeamSponsorsMap>(teamSponsorsCache ?? {});
+  useEffect(() => {
+    if (teamSponsorsCache) return;
+    apiFetch<TeamSponsorsMap>('/api/twitch?resource=team-sponsors')
+      .then((data) => {
+        teamSponsorsCache = data && typeof data === 'object' ? data : {};
+        setSponsorsMap(teamSponsorsCache);
+      })
+      .catch(() => {
+        /* noch nicht konfiguriert */
+      });
+  }, []);
+  const sponsors = (sponsorsMap[team.id] || []).filter((s) => s.logoUrl);
 
   const opponent = (m: Match) => teams.find((t) => t.id === (m.homeTeamId === team.id ? m.awayTeamId : m.homeTeamId));
 
@@ -203,11 +225,25 @@ export default function TeamDetail({
             </div>
           )}
 
-          {/* Spiele */}
-          <div className="font-display font-black text-2xl uppercase text-white mb-4 mt-8">Spiele</div>
+          {/* Spiele – standardmäßig eingeklappt, per Klick alle anzeigen */}
+          <button
+            type="button"
+            onClick={() => setShowAllMatches((v) => !v)}
+            disabled={teamMatches.length === 0}
+            className="w-full flex items-center justify-between gap-3 mb-4 mt-8 cursor-pointer disabled:cursor-default group"
+            aria-expanded={showAllMatches}
+          >
+            <span className="font-display font-black text-2xl uppercase text-white">Spiele</span>
+            {teamMatches.length > 0 && (
+              <span className="inline-flex items-center gap-1.5 font-sans font-bold text-xs tracking-wider uppercase text-hl-dim group-hover:text-brand-accent-light transition-colors">
+                {showAllMatches ? 'Einklappen' : `Alle ${teamMatches.length} anzeigen`}
+                <ChevronDown className={`w-4 h-4 transition-transform ${showAllMatches ? 'rotate-180' : ''}`} />
+              </span>
+            )}
+          </button>
           {teamMatches.length === 0 ? (
             <div className="hl-card p-8 text-center text-hl-mute font-sans text-sm">Noch keine Spiele in dieser Saison.</div>
-          ) : (
+          ) : showAllMatches ? (
             <div className="space-y-2">
               {teamMatches.map((m) => {
                 const opp = opponent(m);
@@ -257,6 +293,14 @@ export default function TeamDetail({
                 );
               })}
             </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowAllMatches(true)}
+              className="w-full hl-card p-4 text-center text-hl-mute hover:text-white font-sans text-sm transition-colors cursor-pointer"
+            >
+              {teamMatches.length} Spiele der Saison anzeigen
+            </button>
           )}
         </div>
 
@@ -291,6 +335,41 @@ export default function TeamDetail({
               </div>
             );
           })()}
+
+          {/* Partner / Trikot-Sponsoren dieses Teams */}
+          {sponsors.length > 0 && (
+            <div className="hl-card rounded-[20px] p-[22px]">
+              <div className="font-sans font-extrabold text-[11px] tracking-[2px] text-brand-accent-light mb-4">
+                PARTNER VON {team.name.toUpperCase()}
+              </div>
+              <div className="flex flex-wrap gap-2.5">
+                {sponsors.map((s) => {
+                  const tile = (
+                    <img
+                      src={s.logoUrl}
+                      alt={s.name || 'Sponsor'}
+                      loading="lazy"
+                      decoding="async"
+                      referrerPolicy="no-referrer"
+                      className="h-11 w-auto max-w-[140px] object-contain"
+                    />
+                  );
+                  const cls =
+                    'flex items-center justify-center rounded-xl px-4 py-3 ring-1 ring-black/5 shadow-[0_2px_10px_rgba(0,0,0,.25)] transition-transform hover:scale-[1.03]';
+                  const style = { background: s.bg || '#ffffff' };
+                  return s.linkUrl ? (
+                    <a key={s.id} href={s.linkUrl} target="_blank" rel="noopener noreferrer" title={s.name} className={cls} style={style}>
+                      {tile}
+                    </a>
+                  ) : (
+                    <span key={s.id} title={s.name} className={cls} style={style}>
+                      {tile}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Star des Teams */}
           {star && (
