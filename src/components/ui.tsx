@@ -148,7 +148,7 @@ function PartnerLogo({ partner, heightClass, maxWClass }: { partner: Partner; he
       loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"
-      className={`${heightClass} ${maxWClass} w-auto object-contain grayscale brightness-[.45] contrast-[1.1] opacity-90 transition duration-300 ease-out hover:grayscale-0 hover:brightness-100 hover:contrast-100 hover:opacity-100 hover:scale-105`}
+      className={`hl-partner-logo ${heightClass} ${maxWClass} w-auto object-contain grayscale brightness-[.45] contrast-[1.1] opacity-90 transition duration-300 ease-out hover:grayscale-0 hover:brightness-100 hover:contrast-100 hover:opacity-100 hover:scale-105`}
     />
   );
   return partner.linkUrl ? (

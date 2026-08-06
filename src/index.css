@@ -258,6 +258,15 @@ body {
   animation-duration: 6s;
 }
 
+/* Touch-Geräte (Handy/Tablet) haben kein Hover -> Partner-Logos direkt farbig
+   zeigen, statt dauerhaft grau. Auf Desktop bleibt der Grau→Farbe-Hover. */
+@media (hover: none) {
+  .hl-partner-logo {
+    filter: none;
+    opacity: 1;
+  }
+}
+
 /* Bewegung reduzieren: Endlos-Animationen ausschalten, Einblendungen sofort final.
    Die JS-Animationen (motion) respektieren die Einstellung bereits ueber useReducedMotion.
    Ausnahme: das News-Laufband (.hl-marquee) laeuft bewusst weiter – wuerde es
