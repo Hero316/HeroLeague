@@ -17,7 +17,6 @@ import RefereeMode from './components/RefereeMode';
 import TeamDetail from './components/TeamDetail';
 import LiveBanner from './components/LiveBanner';
 import LiveTicker from './components/LiveTicker';
-import HomeBody from './components/HomeBody';
 import LiveVisitors from './components/LiveVisitors';
 import InstallPrompt from './components/InstallPrompt';
 import Ergebniszettel from './components/Ergebniszettel';
@@ -911,14 +910,6 @@ export default function App() {
             onOpenGallery={() => goToTab('highlights')}
             onOpenAlbum={openHighlightsAlbum}
             onSave={persistHighlights}
-          />
-          <HomeBody
-            teams={visibleTeams}
-            matches={currentSeasonMatches}
-            players={players}
-            seasonLabel={currentSeasonName}
-            onNavigate={goToTab}
-            onSelectTeam={openTeamDetail}
           />
         </>
       )}

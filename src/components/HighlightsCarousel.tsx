@@ -32,7 +32,16 @@ export default function HighlightsCarousel({
 
   const n = items.length;
   const clampedActive = Math.min(active, Math.max(0, n - 1));
-  const go = (delta: number) => setActive((a) => Math.min(n - 1, Math.max(0, a + delta)));
+  // Release-Velocity des letzten Wischens – wird an die Positions-Feder
+  // uebergeben, damit Drag und Animation nahtlos ineinander uebergehen (§5).
+  const releaseVel = useRef(0);
+  const go = (delta: number) => {
+    releaseVel.current = 0; // Pfeil/Punkt: kein Schwung -> ruhig einrasten
+    setActive((a) => Math.min(n - 1, Math.max(0, a + delta)));
+  };
+
+  // Momentum-Projektion wie Scroll-Deceleration: wohin traegt der Flick? (§6)
+  const project = (v: number, decel = 0.998) => ((v / 1000) * decel) / (1 - decel);
 
   // Auf Handy fast volle Breite (wenig Peek), auf Desktop schmaler (mehr Peek).
   const slideFrac = w < 640 ? 0.9 : 0.72;
@@ -41,6 +50,10 @@ export default function HighlightsCarousel({
   const stride = slideW + gap;
   const tx = w / 2 - (clampedActive * stride + slideW / 2);
   const spring = reduce ? { duration: 0 } : { type: 'spring' as const, stiffness: 260, damping: 34, mass: 0.9 };
+  // Positions-Feder mit Velocity-Handoff (nur der x-Container, nicht die Skalierung).
+  const posTransition = reduce
+    ? { duration: 0 }
+    : { type: 'spring' as const, stiffness: 260, damping: 34, mass: 0.9, velocity: releaseVel.current };
 
   return (
     <div className="relative">
@@ -48,7 +61,7 @@ export default function HighlightsCarousel({
         {/* Aussen: Positionierung (animate x=tx). Innen: Wischen per drag='x'
             – das setzt touch-action:pan-y, also horizontal wischen + vertikal
             weiter scrollen. So getrennt gibt es keinen Konflikt/Rücksprung. */}
-        <motion.div className="flex items-center py-1" animate={{ x: tx }} transition={spring}>
+        <motion.div className="flex items-center py-1" animate={{ x: tx }} transition={posTransition}>
           <motion.div
             className="flex items-center"
             drag={n > 1 ? 'x' : false}
@@ -58,12 +71,16 @@ export default function HighlightsCarousel({
             onDragEnd={(_, info) => {
               if (n < 2) return;
               if (Math.abs(info.offset.x) < Math.abs(info.offset.y)) return;
-              const swipe = info.offset.x + info.velocity.x * 0.15;
-              if (swipe > -60 && swipe < 60) return;
+              // Projizierter Wurf = zurueckgelegte Strecke + Momentum (§6). Ein
+              // harter Flick darf mehrere Slides ueberspringen.
+              const projected = info.offset.x + project(info.velocity.x);
+              if (projected > -40 && projected < 40) return; // zu klein -> zurueckschnappen
+              const steps = Math.max(-2, Math.min(2, Math.round(-projected / stride)));
+              if (steps === 0) return;
               didPan.current = true;
               setTimeout(() => (didPan.current = false), 60); // den Folge-Klick schlucken
-              if (swipe < 0) go(1);
-              else go(-1);
+              releaseVel.current = info.velocity.x; // Velocity-Handoff an die Feder (§5)
+              setActive((a) => Math.min(n - 1, Math.max(0, a + steps)));
             }}
           >
             {items.map((media, i) => {
@@ -186,7 +203,10 @@ export default function HighlightsCarousel({
             <button
               key={m.id}
               type="button"
-              onClick={() => setActive(i)}
+              onClick={() => {
+                releaseVel.current = 0;
+                setActive(i);
+              }}
               aria-label={`Zu Beitrag ${i + 1}`}
               className={`h-2 rounded-full transition-all cursor-pointer ${
                 i === clampedActive ? 'w-6 bg-brand-accent-light' : 'w-2 bg-white/25 hover:bg-white/40'

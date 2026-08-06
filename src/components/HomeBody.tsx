@@ -234,7 +234,7 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
           <div className="font-sans font-extrabold text-xs tracking-[3px] text-brand-accent-light uppercase">
             {seasonLabel ? `${seasonLabel} · JETZT LIVE` : 'HERO LEAGUE · JETZT LIVE'}
           </div>
-          <h2 className="mt-4 font-display font-black text-5xl sm:text-7xl xl:text-[84px] leading-[.86] tracking-tight uppercase text-white">
+          <h2 className="mt-4 font-display font-black text-5xl sm:text-7xl xl:text-[84px] leading-[.86] tracking-tight sm:tracking-[-0.03em] xl:tracking-[-0.04em] uppercase text-white">
             SEI TEIL DER <span className="text-brand-accent-light [text-shadow:0_0_40px_rgba(34,223,201,.35)]">LEAGUE</span>
           </h2>
           <p className="mt-5 mx-auto max-w-[520px] text-base leading-relaxed text-hl-mute">

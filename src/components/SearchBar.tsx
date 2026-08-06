@@ -241,7 +241,7 @@ export default function SearchBar({
               exit={reduce ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
               transition={{ type: 'spring', stiffness: 420, damping: 34 }}
               style={{ top: panelTop, transformOrigin: 'top right' }}
-              className="fixed z-[95] left-3 right-3 sm:left-auto sm:right-6 sm:w-[380px] rounded-2xl border border-white/12 bg-[#0c1413]/98 backdrop-blur-xl shadow-2xl p-2"
+              className="hl-glass-panel fixed z-[95] left-3 right-3 sm:left-auto sm:right-6 sm:w-[380px] rounded-2xl border border-white/12 bg-[#0c1413]/98 backdrop-blur-xl shadow-2xl p-2"
             >
               {/* Eingabe */}
               <div className="flex items-center gap-2">
@@ -278,7 +278,7 @@ export default function SearchBar({
                         key={r.key}
                         onClick={() => choose(r)}
                         onMouseEnter={() => setActive(i)}
-                        className={`w-full flex items-center gap-3 text-left px-2.5 py-2 rounded-xl transition-colors cursor-pointer ${
+                        className={`w-full flex items-center gap-3 text-left px-2.5 py-2 rounded-xl transition-[background-color,transform] duration-150 ease-out active:scale-[.98] cursor-pointer ${
                           i === active ? 'bg-white/[.08]' : 'hover:bg-white/[.05]'
                         }`}
                       >

@@ -123,7 +123,7 @@ export default function HighlightsLightbox({
       )}
 
       <div className="relative w-full h-full flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-        <AnimatePresence custom={direction} mode="wait">
+        <AnimatePresence custom={direction} mode="popLayout">
           <motion.div
             key={media.id}
             custom={direction}
@@ -131,7 +131,7 @@ export default function HighlightsLightbox({
             initial="enter"
             animate="center"
             exit="exit"
-            transition={{ duration: 0.28, ease: [0.22, 0.61, 0.36, 1] }}
+            transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
             className="flex items-center justify-center"
           >
             {isVideo && embed ? (

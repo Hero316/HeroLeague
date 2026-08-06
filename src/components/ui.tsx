@@ -261,7 +261,7 @@ export function Footer({ onNavigate, onNavigatePath }: FooterProps) {
             <button
               key={l.tab}
               onClick={() => onNavigate(l.tab)}
-              className="font-sans font-semibold text-xs tracking-wider text-hl-dim hover:text-hl-text transition-colors cursor-pointer"
+              className="font-sans font-semibold text-xs tracking-wider text-hl-dim hover:text-hl-text transition-[color,transform] duration-150 ease-out active:scale-[.97] cursor-pointer"
             >
               {l.label}
             </button>
@@ -271,7 +271,7 @@ export function Footer({ onNavigate, onNavigatePath }: FooterProps) {
               <button
                 key={l.path}
                 onClick={() => onNavigatePath(l.path)}
-                className="font-sans font-semibold text-xs tracking-wider text-hl-faint hover:text-hl-text transition-colors cursor-pointer"
+                className="font-sans font-semibold text-xs tracking-wider text-hl-faint hover:text-hl-text transition-[color,transform] duration-150 ease-out active:scale-[.97] cursor-pointer"
               >
                 {l.label}
               </button>
@@ -279,7 +279,7 @@ export function Footer({ onNavigate, onNavigatePath }: FooterProps) {
           {!isStandalone && (
             <button
               onClick={openHelp}
-              className="inline-flex items-center gap-1.5 font-sans font-semibold text-xs tracking-wider text-brand-accent-light hover:text-white transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 font-sans font-semibold text-xs tracking-wider text-brand-accent-light hover:text-white transition-[color,transform] duration-150 ease-out active:scale-[.97] cursor-pointer"
             >
               <Smartphone className="w-3.5 h-3.5" />
               APP INSTALLIEREN

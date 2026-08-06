@@ -96,9 +96,9 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
   };
 
   const primaryBtn =
-    'inline-flex items-center gap-2 px-4 py-2.5 sm:gap-2.5 sm:px-6 sm:py-[15px] rounded-[11px] sm:rounded-[13px] bg-brand-accent-light text-[#062018] font-sans font-extrabold text-xs sm:text-sm tracking-wider shadow-[0_10px_30px_rgba(34,223,201,.28)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_42px_rgba(34,223,201,.42)] cursor-pointer';
+    'inline-flex items-center gap-2 px-4 py-2.5 sm:gap-2.5 sm:px-6 sm:py-[15px] rounded-[11px] sm:rounded-[13px] bg-brand-accent-light text-[#062018] font-sans font-extrabold text-xs sm:text-sm tracking-wider shadow-[0_10px_30px_rgba(34,223,201,.28)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_42px_rgba(34,223,201,.42)] active:scale-[.97] cursor-pointer';
   const secondaryBtn =
-    'inline-flex items-center gap-2 px-4 py-2.5 sm:gap-2.5 sm:px-6 sm:py-[15px] rounded-[11px] sm:rounded-[13px] bg-white/5 border border-white/[.16] text-hl-text font-sans font-bold text-xs sm:text-sm tracking-wider transition-colors hover:border-brand-accent-light hover:bg-[rgba(34,223,201,.06)] cursor-pointer';
+    'inline-flex items-center gap-2 px-4 py-2.5 sm:gap-2.5 sm:px-6 sm:py-[15px] rounded-[11px] sm:rounded-[13px] bg-white/5 border border-white/[.16] text-hl-text font-sans font-bold text-xs sm:text-sm tracking-wider transition-[color,border-color,background-color,transform] duration-150 ease-out hover:border-brand-accent-light hover:bg-[rgba(34,223,201,.06)] active:scale-[.97] cursor-pointer';
 
   const dotLabels: Record<string, string> = { match: 'SPIELTAG', pom: 'SPIELER DES MONATS', table: 'TABELLE' };
 
@@ -145,13 +145,13 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
         <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-24 sm:pt-10 sm:pb-26 w-full flex items-center">
           <div className="w-full flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 sm:gap-8 lg:gap-11">
             <div className="max-w-[600px] hl-cascade">
-              <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.3)]">
+              <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.3)]">
                 <span className="w-[7px] h-[7px] rounded-full bg-brand-accent-light shadow-[0_0_10px_#22DFC9] hl-pulse" />
                 <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-brand-accent-light">{kicker}</span>
               </div>
               {featuredDay ? (
                 <>
-                  <h1 className="mt-5 font-display font-black text-[30px] sm:text-7xl xl:text-[92px] leading-[.85] tracking-tight uppercase text-white">
+                  <h1 className="mt-5 font-display font-black text-[30px] sm:text-7xl xl:text-[92px] leading-[.85] tracking-tight sm:tracking-[-0.03em] xl:tracking-[-0.04em] uppercase text-white">
                     {featuredDay.day}.
                     <br />
                     <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">Spieltag</span>
@@ -160,7 +160,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                 </>
               ) : (
                 <>
-                  <h1 className="mt-5 font-display font-black text-[30px] sm:text-7xl xl:text-[92px] leading-[.85] tracking-tight uppercase text-white">
+                  <h1 className="mt-5 font-display font-black text-[30px] sm:text-7xl xl:text-[92px] leading-[.85] tracking-tight sm:tracking-[-0.03em] xl:tracking-[-0.04em] uppercase text-white">
                     Hero
                     <br />
                     <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">League</span>
@@ -299,11 +299,11 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
           <div className="w-full flex flex-col lg:flex-row items-center justify-between gap-6 lg:gap-11">
             {/* Textspalte */}
             <div className="max-w-[520px] hl-cascade text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(233,196,106,.12)] border border-[rgba(233,196,106,.34)]">
+              <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-[rgba(233,196,106,.12)] border border-[rgba(233,196,106,.34)]">
                 <span className="text-xs leading-none text-hl-gold">★</span>
                 <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-hl-gold">AUSZEICHNUNG</span>
               </div>
-              <h1 className="mt-5 font-display font-black text-[30px] sm:text-7xl xl:text-[88px] leading-[.85] tracking-tight uppercase text-white">
+              <h1 className="mt-5 font-display font-black text-[30px] sm:text-7xl xl:text-[88px] leading-[.85] tracking-tight sm:tracking-[-0.03em] xl:tracking-[-0.04em] uppercase text-white">
                 Spieler des
                 <br />
                 <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">Monats</span>
@@ -363,11 +363,11 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
         <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-7 pb-24 sm:pt-10 sm:pb-26 w-full flex items-center">
           <div className="w-full flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 sm:gap-8 lg:gap-11">
             <div className="max-w-[560px] hl-cascade">
-              <div className="inline-flex items-center gap-2 px-3.5 py-[7px] rounded-full bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.3)]">
+              <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.3)]">
                 <span className="text-[11px] leading-none text-brand-accent-light">▲</span>
                 <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-brand-accent-light">TABELLENFÜHRER</span>
               </div>
-              <h1 className="mt-5 font-display font-black text-[30px] sm:text-7xl xl:text-[96px] leading-[.85] tracking-tight uppercase text-white">
+              <h1 className="mt-5 font-display font-black text-[30px] sm:text-7xl xl:text-[96px] leading-[.85] tracking-tight sm:tracking-[-0.03em] xl:tracking-[-0.04em] uppercase text-white">
                 An der
                 <br />
                 <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">Spitze</span>
@@ -397,7 +397,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                   return (
                     <div
                       key={s.teamId}
-                      className={`flex items-center gap-3 px-3 py-[11px] rounded-xl mb-2 last:mb-0 ${
+                      className={`flex items-center gap-3 px-3 py-3 rounded-xl mb-2 last:mb-0 ${
                         rank === 1
                           ? 'bg-[rgba(34,223,201,.08)] border border-[rgba(34,223,201,.2)]'
                           : 'bg-white/[.025] border border-white/[.06]'
@@ -471,14 +471,14 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
           <button
             onClick={() => goTo(current - 1)}
             aria-label="Vorheriges"
-            className="absolute right-[94px] bottom-8 z-[7] w-11 h-11 rounded-full bg-[rgba(11,17,17,.5)] border border-white/[.16] text-white text-xl cursor-pointer backdrop-blur-md transition-colors hover:bg-[rgba(34,223,201,.2)]"
+            className="absolute right-[94px] bottom-8 z-[7] w-11 h-11 rounded-full bg-[rgba(11,17,17,.5)] border border-white/[.16] text-white text-xl cursor-pointer backdrop-blur-md transition-[color,background-color,transform] duration-150 ease-out hover:bg-[rgba(34,223,201,.2)] active:scale-[.97]"
           >
             ‹
           </button>
           <button
             onClick={() => goTo(current + 1)}
             aria-label="Nächstes"
-            className="absolute right-10 bottom-8 z-[7] w-11 h-11 rounded-full bg-[rgba(11,17,17,.5)] border border-white/[.16] text-white text-xl cursor-pointer backdrop-blur-md transition-colors hover:bg-[rgba(34,223,201,.2)]"
+            className="absolute right-10 bottom-8 z-[7] w-11 h-11 rounded-full bg-[rgba(11,17,17,.5)] border border-white/[.16] text-white text-xl cursor-pointer backdrop-blur-md transition-[color,background-color,transform] duration-150 ease-out hover:bg-[rgba(34,223,201,.2)] active:scale-[.97]"
           >
             ›
           </button>
@@ -492,7 +492,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
             <button
               key={kind}
               onClick={() => goTo(i)}
-              className={`pointer-events-auto flex items-center gap-2 px-3.5 py-2 rounded-full border cursor-pointer transition-all ${
+              className={`pointer-events-auto flex items-center gap-2 px-3.5 py-2 rounded-full border cursor-pointer transition-all active:scale-[.97] ${
                 i === current
                   ? 'border-[rgba(34,223,201,.4)] bg-[rgba(34,223,201,.12)]'
                   : 'border-white/[.12] bg-white/[.03]'
