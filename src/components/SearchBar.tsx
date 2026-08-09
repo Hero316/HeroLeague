@@ -1,17 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { Search, X, Shield, User, CalendarDays, Compass, Images } from 'lucide-react';
+import { Search, X, User, CalendarDays, Compass, Images } from 'lucide-react';
 import { ActiveTab, HighlightAlbum, Match, Team } from '../types';
-import { shortDate } from './ui';
+import { shortDate, TeamCrest, shade } from './ui';
 
 // Diakritika entfernen + Kleinschreibung → toleranter Vergleich (ä=a, ö=o …).
 const norm = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 type Result =
-  | { kind: 'team'; key: string; teamId: string; label: string; sub: string }
-  | { kind: 'player'; key: string; teamId: string; label: string; sub: string; number?: number; color: string }
+  | { kind: 'team'; key: string; teamId: string; label: string; sub: string; shortName: string; color: string; logoUrl?: string }
+  | { kind: 'player'; key: string; teamId: string; label: string; sub: string; number?: number; color: string; imageUrl?: string }
   | { kind: 'match'; key: string; matchday: number; label: string; sub: string; home?: Team; away?: Team }
   | { kind: 'album'; key: string; label: string; sub: string; go: () => void }
   | { kind: 'page'; key: string; label: string; sub: string; go: () => void };
@@ -68,7 +68,7 @@ export default function SearchBar({
     // 1) Vereine
     for (const t of teams) {
       if (norm(t.name).includes(nq) || norm(t.shortName).includes(nq)) {
-        out.push({ kind: 'team', key: `t-${t.id}`, teamId: t.id, label: t.name, sub: 'Verein' });
+        out.push({ kind: 'team', key: `t-${t.id}`, teamId: t.id, label: t.name, sub: 'Verein', shortName: t.shortName, color: t.logoColor, logoUrl: t.logoUrl });
       }
     }
 
@@ -84,6 +84,7 @@ export default function SearchBar({
             sub: t.name,
             number: p.number,
             color: t.logoColor,
+            imageUrl: p.imageUrl,
           });
         }
       }
@@ -285,18 +286,29 @@ export default function SearchBar({
                         }`}
                       >
                         {r.kind === 'team' && (
-                          <span className="shrink-0 w-8 h-8 rounded-lg bg-[rgba(34,223,201,.12)] grid place-items-center text-brand-accent-light">
-                            <Shield className="w-4 h-4" />
+                          <span className="shrink-0">
+                            <TeamCrest name={r.label} shortName={r.shortName} color={r.color} logoUrl={r.logoUrl} size="md" />
                           </span>
                         )}
-                        {r.kind === 'player' && (
-                          <span
-                            className="shrink-0 w-8 h-8 rounded-lg grid place-items-center font-display font-black text-sm tabular-nums text-white"
-                            style={{ background: `${r.color}22`, color: r.color }}
-                          >
-                            {typeof r.number === 'number' ? r.number : <User className="w-4 h-4" />}
-                          </span>
-                        )}
+                        {r.kind === 'player' &&
+                          (r.imageUrl ? (
+                            <img
+                              src={r.imageUrl}
+                              alt={r.label}
+                              loading="lazy"
+                              decoding="async"
+                              referrerPolicy="no-referrer"
+                              className="shrink-0 w-8 h-8 rounded-lg object-cover border"
+                              style={{ borderColor: r.color }}
+                            />
+                          ) : (
+                            <span
+                              className="shrink-0 w-8 h-8 rounded-lg grid place-items-center font-display font-black text-white text-sm tabular-nums"
+                              style={{ background: `linear-gradient(140deg, ${r.color}, ${shade(r.color, 0.45)})` }}
+                            >
+                              {typeof r.number === 'number' ? r.number : <User className="w-4 h-4" />}
+                            </span>
+                          ))}
                         {r.kind === 'match' && (
                           <span className="shrink-0 w-8 h-8 rounded-lg bg-[rgba(67,229,160,.12)] grid place-items-center text-hl-green">
                             <CalendarDays className="w-4 h-4" />
