@@ -462,7 +462,13 @@ export default function App() {
     return ok;
   };
 
-  const openTeamDetail = (teamId: string) => navigateTo(`/verein/${encodeURIComponent(teamId)}`);
+  // Vereinsseite öffnen; mit playerName direkt das Spieler-Detail (teilbare URL).
+  const openTeamDetail = (teamId: string, playerName?: string) =>
+    navigateTo(
+      playerName
+        ? `/verein/${encodeURIComponent(teamId)}/spieler/${encodeURIComponent(playerName)}`
+        : `/verein/${encodeURIComponent(teamId)}`
+    );
 
   const goToTab = (tab: ActiveTab) => {
     navigateTo(TAB_PATHS[tab]);
@@ -563,11 +569,15 @@ export default function App() {
 
   // ROUTE: /verein/:id – öffentliche Vereins-Detailseite
   if (currentPath.startsWith('/verein/')) {
-    const teamId = decodeURIComponent(currentPath.slice('/verein/'.length).replace(/\/+$/, ''));
+    // Pfad: /verein/<id>  oder  /verein/<id>/spieler/<name> (Spieler direkt geöffnet)
+    const rest = currentPath.slice('/verein/'.length).replace(/\/+$/, '');
+    const sepIdx = rest.indexOf('/spieler/');
+    const teamId = decodeURIComponent(sepIdx >= 0 ? rest.slice(0, sepIdx) : rest);
+    const initialPlayer = sepIdx >= 0 ? decodeURIComponent(rest.slice(sepIdx + '/spieler/'.length)) : undefined;
     const team = visibleTeams.find((t) => t.id === teamId);
     return (
       <div className="min-h-screen text-hl-text font-sans flex flex-col">
-        <PageBackground page="tabelle" />
+        <PageBackground page="tabelle" teamColor={team?.logoColor} teamLogoUrl={team?.logoUrl} />
         {renderMobileDock()}
         <Navbar
           activeTab={activeTab}
@@ -601,6 +611,7 @@ export default function App() {
               matches={seasonMatches}
               players={players}
               seasonLabel={selectedSeasonName}
+              initialPlayer={initialPlayer}
               onBack={goBack}
               onSelectTeam={openTeamDetail}
             />

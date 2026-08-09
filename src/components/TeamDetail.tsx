@@ -18,6 +18,7 @@ interface TeamDetailProps {
   matches: Match[]; // Spiele der ausgewählten Saison
   players: PlayerStat[];
   seasonLabel: string;
+  initialPlayer?: string; // aus der URL/Suche vorausgewählter Spieler (Detail direkt offen)
   onBack: () => void;
   onSelectTeam: (teamId: string) => void;
 }
@@ -41,6 +42,7 @@ export default function TeamDetail({
   matches,
   players,
   seasonLabel,
+  initialPlayer,
   onBack,
   onSelectTeam,
 }: TeamDetailProps) {
@@ -104,13 +106,13 @@ export default function TeamDetail({
   }, [players, team.id]);
 
   // Ausgewählter Spieler für die animierte Detail-Umblendung im Kopf.
-  const [selectedPlayerName, setSelectedPlayerName] = useState<string | null>(null);
+  const [selectedPlayerName, setSelectedPlayerName] = useState<string | null>(initialPlayer ?? null);
   const selected = useMemo(
     () => roster.find((p) => p.name === selectedPlayerName) ?? null,
     [roster, selectedPlayerName]
   );
-  // Beim Teamwechsel Auswahl zurücksetzen.
-  useEffect(() => setSelectedPlayerName(null), [team.id]);
+  // Beim Teamwechsel bzw. neuer Vorauswahl (Suche) das Detail passend setzen.
+  useEffect(() => setSelectedPlayerName(initialPlayer ?? null), [team.id, initialPlayer]);
   const selectPlayer = (name: string) => {
     setSelectedPlayerName(name);
     // Zum Kopf scrollen, damit die Umblendung sichtbar ist.

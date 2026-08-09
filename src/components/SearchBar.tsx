@@ -19,7 +19,8 @@ type Result =
 interface SearchBarProps {
   teams: Team[];
   matches: Match[];
-  onSelectTeam: (teamId: string) => void;
+  // playerName gesetzt = Vereinsseite mit direkt geöffnetem Spieler-Detail
+  onSelectTeam: (teamId: string, playerName?: string) => void;
   onGoToMatchday: (matchday: number) => void;
   onNavigate?: (tab: ActiveTab) => void;
   hasHighlights?: boolean;
@@ -198,7 +199,8 @@ export default function SearchBar({
   };
 
   const choose = (r: Result) => {
-    if (r.kind === 'team' || r.kind === 'player') onSelectTeam(r.teamId);
+    if (r.kind === 'player') onSelectTeam(r.teamId, r.label);
+    else if (r.kind === 'team') onSelectTeam(r.teamId);
     else if (r.kind === 'match') onGoToMatchday(r.matchday);
     else r.go();
     close();
