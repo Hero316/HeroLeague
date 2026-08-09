@@ -170,12 +170,16 @@ export default function TeamDetail({
         Zurück zur Übersicht
       </button>
 
-      {/* Kopf: blendet zwischen Team-Ansicht und Spieler-Detail um */}
-      <div className="relative overflow-hidden mt-4 min-h-[188px]">
-        <div
-          className="absolute -top-40 -left-32 w-[560px] h-[560px] pointer-events-none opacity-60 transition-colors"
-          style={{ background: `radial-gradient(circle, ${color}22, transparent 66%)` }}
-        />
+      {/* Kopf: blendet zwischen Team-Ansicht und Spieler-Detail um.
+          Kein overflow-hidden am Container, damit das Spielerbild beim Hover sanft
+          über die Kante ragen darf – der Farb-Glow wird separat geklemmt. */}
+      <div className="relative mt-4 min-h-[188px]">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div
+            className="absolute -top-40 -left-32 w-[560px] h-[560px] opacity-60 transition-colors"
+            style={{ background: `radial-gradient(circle, ${color}22, transparent 66%)` }}
+          />
+        </div>
 
         <AnimatePresence mode="wait" initial={false}>
           {selected ? (

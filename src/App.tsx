@@ -576,7 +576,7 @@ export default function App() {
     const initialPlayer = sepIdx >= 0 ? decodeURIComponent(rest.slice(sepIdx + '/spieler/'.length)) : undefined;
     const team = visibleTeams.find((t) => t.id === teamId);
     return (
-      <div className="min-h-screen text-hl-text font-sans flex flex-col">
+      <div className="min-h-screen text-hl-text font-sans flex flex-col overflow-x-clip">
         <PageBackground page="tabelle" teamColor={team?.logoColor} teamLogoUrl={team?.logoUrl} />
         {renderMobileDock()}
         <Navbar
