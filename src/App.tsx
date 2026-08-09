@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster } from './types';
+import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster, PlayerOfMonth } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
 import { startPresence } from './lib/presence';
 import { seasonName } from './lib/heroAward';
@@ -57,6 +57,9 @@ export default function App() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [players, setPlayers] = useState<PlayerStat[]>([]);
+  // Spieler des Monats schon beim Laden holen, damit der Hero direkt mit finaler
+  // Höhe erscheint (sonst kommt der Slide asynchron dazu und der Hero „springt").
+  const [pom, setPom] = useState<PlayerOfMonth | null>(null);
   const [eventArchive, setEventArchive] = useState<EventArchive | null>(null);
   const [highlights, setHighlights] = useState<HighlightsConfig>({ items: [], albums: [] });
   // Wenn aus der Story-Ansicht ein Ordner geöffnet wird: der Galerie-Seite mitgeben,
@@ -171,7 +174,7 @@ export default function App() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [dataTeams, dataMatches, dataSeasons, dataDemo] = await Promise.all([
+      const [dataTeams, dataMatches, dataSeasons, dataDemo, dataPom] = await Promise.all([
         apiFetch<Team[]>('/api/teams'),
         apiFetch<Match[]>('/api/matches'),
         apiFetch<Season[]>('/api/seasons'),
@@ -180,11 +183,13 @@ export default function App() {
           seasonId: '',
           teamIds: [],
         })),
+        apiFetch<PlayerOfMonth>('/api/player-of-the-month').catch(() => null),
       ]);
       setTeams(dataTeams);
       setMatches(dataMatches);
       setSeasons(dataSeasons);
       setDemo(dataDemo);
+      setPom(dataPom && dataPom.name ? dataPom : null);
     } catch (err) {
       console.error('Fehler beim Laden der Liga-Daten', err);
     } finally {
@@ -914,7 +919,7 @@ export default function App() {
       {activeTab === 'home' && (
         <>
           {countdown.active && <Countdown target={countdown.target} title={countdown.title} />}
-          <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
+          <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
           <HighlightsHome
             highlights={highlights}
             editMode={editMode && isAdmin}

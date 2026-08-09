@@ -14,26 +14,30 @@ interface HeroProps {
   seasonLabel: string;
   seasonNumber?: number;
   heroImages?: HeroImages;
+  pom?: PlayerOfMonth | null; // von oben vorgeladen (verhindert nachträglichen Slide → kein „Springen")
   onNavigate: (tab: ActiveTab) => void;
   onSelectTeam?: (teamId: string) => void;
 }
 
 // Vollflächiges Hero-Carousel (Magenta-TV-Stil) mit drei Slides:
 // 1. Nächster Spieltag / Live-Spiel  2. Spieler des Monats  3. Tabellenführer
-export default function Hero({ teams, matches, players, seasonLabel, seasonNumber, heroImages, onNavigate, onSelectTeam }: HeroProps) {
-  const [pom, setPom] = useState<PlayerOfMonth | null>(null);
+export default function Hero({ teams, matches, players, seasonLabel, seasonNumber, heroImages, pom: pomProp, onNavigate, onSelectTeam }: HeroProps) {
+  // pom kommt bevorzugt von oben (vorgeladen); nur ohne Prop selbst nachladen.
+  const [pomState, setPomState] = useState<PlayerOfMonth | null>(null);
+  const pom = pomProp !== undefined ? pomProp : pomState;
   const [active, setActive] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
+    if (pomProp !== undefined) return; // bereits von oben geliefert
     apiFetch<PlayerOfMonth>('/api/player-of-the-month')
       .then((data) => {
-        if (data && data.name) setPom(data);
+        if (data && data.name) setPomState(data);
       })
       .catch(() => {
         // Noch kein Spieler des Monats gepflegt
       });
-  }, []);
+  }, [pomProp]);
 
   const getTeam = (id: string) => teams.find((t) => t.id === id);
 
