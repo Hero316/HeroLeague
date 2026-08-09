@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Player, Team } from '../types';
+import { Team } from '../types';
 import { LineupStat } from '../lib/lineups';
 import { shade } from './ui';
 
@@ -36,6 +36,53 @@ function initials(name: string): string {
     .join('');
 }
 
+// Spieler-Chip auf dem Feld. WICHTIG: auf Modulebene definiert + memoisiert, damit
+// die Einblende-Animation nur EINMAL beim Laden läuft und nicht bei jedem Re-Render
+// (Daten-Refresh, Klicks) erneut startet. Props sind bewusst primitiv → stabile Vergleiche.
+const Chip = React.memo(function Chip({
+  name,
+  imageUrl,
+  color,
+  index,
+}: {
+  name: string;
+  imageUrl?: string;
+  color: string;
+  index: number;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.6, y: 8 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ delay: 0.05 * index, type: 'spring', stiffness: 260, damping: 20 }}
+      className="flex flex-col items-center gap-1 w-[62px]"
+      title={name}
+    >
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          alt={name}
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          className="w-11 h-11 rounded-full object-cover border-2 shadow-[0_4px_12px_rgba(0,0,0,.45)]"
+          style={{ borderColor: color }}
+        />
+      ) : (
+        <span
+          className="grid place-items-center w-11 h-11 rounded-full font-display font-black text-white text-sm border-2 shadow-[0_4px_12px_rgba(0,0,0,.45)]"
+          style={{ borderColor: color, background: `linear-gradient(140deg, ${color}, ${shade(color, 0.45)})` }}
+        >
+          {initials(name) || '?'}
+        </span>
+      )}
+      <span className="font-sans font-semibold text-[10px] leading-tight text-white text-center truncate max-w-full drop-shadow-[0_1px_2px_rgba(0,0,0,.9)]">
+        {name.split(/\s+/)[0]}
+      </span>
+    </motion.div>
+  );
+});
+
 export default function BestLineup({ lineup, team }: BestLineupProps) {
   const color = team.logoColor || '#22DFC9';
   const byName = new Map((team.spielerliste || []).map((p) => [p.name, p] as const));
@@ -54,45 +101,9 @@ export default function BestLineup({ lineup, team }: BestLineupProps) {
   // Für die Anzeige oben (Sturm) → unten (Abwehr): Reihenfolge umkehren.
   const displayRows = [...rowPlayers].reverse();
 
-  const Chip = ({ name, index }: { name: string; index: number }) => {
-    const p: Player | undefined = byName.get(name);
-    return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.6, y: 8 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ delay: 0.05 * index, type: 'spring', stiffness: 260, damping: 20 }}
-        className="flex flex-col items-center gap-1 w-[62px]"
-        title={name}
-      >
-        {p?.imageUrl ? (
-          <img
-            src={p.imageUrl}
-            alt={name}
-            loading="lazy"
-            decoding="async"
-            referrerPolicy="no-referrer"
-            className="w-11 h-11 rounded-full object-cover border-2 shadow-[0_4px_12px_rgba(0,0,0,.45)]"
-            style={{ borderColor: color }}
-          />
-        ) : (
-          <span
-            className="grid place-items-center w-11 h-11 rounded-full font-display font-black text-white text-sm border-2 shadow-[0_4px_12px_rgba(0,0,0,.45)]"
-            style={{
-              borderColor: color,
-              background: `linear-gradient(140deg, ${color}, ${shade(color, 0.45)})`,
-            }}
-          >
-            {initials(name) || '?'}
-          </span>
-        )}
-        <span className="font-sans font-semibold text-[10px] leading-tight text-white text-center truncate max-w-full drop-shadow-[0_1px_2px_rgba(0,0,0,.9)]">
-          {name.split(/\s+/)[0]}
-        </span>
-      </motion.div>
-    );
-  };
-
-  let chipIndex = 0;
+  // Stabile Stagger-Indizes vorab bestimmen (Reihenfolge wie gerendert: Sturm→Abwehr→Torwart).
+  const order = [...displayRows.flat(), ...(gkName ? [gkName] : [])];
+  const staggerOf = (name: string) => order.indexOf(name);
 
   return (
     <div className="hl-card rounded-[20px] p-[22px]">
@@ -130,9 +141,7 @@ export default function BestLineup({ lineup, team }: BestLineupProps) {
       {/* Fußballfeld */}
       <div
         className="relative rounded-2xl overflow-hidden border border-white/10 px-2 py-4"
-        style={{
-          background: `linear-gradient(180deg, ${shade(color, 0.5)}, ${shade(color, 0.22)})`,
-        }}
+        style={{ background: `linear-gradient(180deg, ${shade(color, 0.5)}, ${shade(color, 0.22)})` }}
       >
         {/* Feldmarkierungen */}
         <div className="pointer-events-none absolute inset-0 opacity-40">
@@ -146,14 +155,14 @@ export default function BestLineup({ lineup, team }: BestLineupProps) {
           {displayRows.map((row, r) => (
             <div key={r} className="flex justify-center gap-2 flex-wrap">
               {row.map((name) => (
-                <Chip key={name} name={name} index={chipIndex++} />
+                <Chip key={name} name={name} imageUrl={byName.get(name)?.imageUrl} color={color} index={staggerOf(name)} />
               ))}
             </div>
           ))}
           {gkName && (
             <div className="flex justify-center pt-1">
               <div className="flex flex-col items-center gap-1">
-                <Chip name={gkName} index={chipIndex++} />
+                <Chip name={gkName} imageUrl={byName.get(gkName)?.imageUrl} color={color} index={staggerOf(gkName)} />
                 <span className="font-sans font-bold text-[8px] tracking-[1.5px] text-white/70 uppercase">Torwart</span>
               </div>
             </div>
