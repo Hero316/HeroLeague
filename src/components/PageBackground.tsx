@@ -83,18 +83,22 @@ export default function PageBackground({
           {/* sanfter Farbschleier über der ganzen Fläche */}
           <div className="absolute inset-0" style={{ background: `linear-gradient(160deg, rgba(${r},${g},${b},0.10), transparent 45%, rgba(${r},${g},${b},0.06))` }} />
         </div>
-        {/* Vereinslogo – groß, extrem dezent, mittig im Hintergrund.
-            Nur ab sm: auf dem Handy wirkt das fixierte, große Logo beim Scrollen
-            wie ein störender Parallax – dort bleiben nur die Farb-Gradients. */}
+        {/* Vereinslogo – groß, extrem dezent, mittig im Hintergrund (Desktop UND Handy).
+            Weiche radiale Maske blendet die Ränder aus, damit kein hartes „Viereck"
+            entsteht, sondern das Logo sanft in den Hintergrund übergeht. */}
         {teamLogoUrl && (
-          <div className="absolute inset-0 hidden sm:flex items-center justify-center">
+          <div className="absolute inset-0 flex items-center justify-center">
             <img
               src={teamLogoUrl}
               alt=""
               aria-hidden
               decoding="async"
               referrerPolicy="no-referrer"
-              className="w-[min(720px,72vw)] max-h-[78vh] object-contain opacity-[.05] blur-[1px] select-none"
+              className="w-[min(720px,80vw)] max-h-[72vh] object-contain opacity-[.05] blur-[1px] select-none"
+              style={{
+                WebkitMaskImage: 'radial-gradient(circle, #000 46%, transparent 72%)',
+                maskImage: 'radial-gradient(circle, #000 46%, transparent 72%)',
+              }}
             />
           </div>
         )}

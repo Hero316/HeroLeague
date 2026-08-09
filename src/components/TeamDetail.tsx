@@ -225,7 +225,7 @@ export default function TeamDetail({
                 )}
               </div>
 
-              <div className="flex-1 min-w-[260px]">
+              <div className="flex-1 w-full sm:w-auto min-w-0 sm:min-w-[260px]">
                 <button
                   onClick={() => setSelectedPlayerName(null)}
                   className="inline-flex items-center gap-1.5 font-sans font-bold text-[11px] tracking-wider uppercase text-hl-dim hover:text-white transition-colors cursor-pointer mb-2"
@@ -283,7 +283,7 @@ export default function TeamDetail({
                   {monogram(team.shortName || team.name)}
                 </span>
               )}
-              <div className="flex-1 min-w-[260px]">
+              <div className="flex-1 w-full sm:w-auto min-w-0 sm:min-w-[260px]">
                 <div className="font-sans font-extrabold text-xs tracking-[2.5px] uppercase" style={{ color: accentSoft }}>
                   HERO LEAGUE{rank > 0 ? ` · TABELLENPLATZ ${rank}` : ''}
                 </div>
