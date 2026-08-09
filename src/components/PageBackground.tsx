@@ -83,9 +83,11 @@ export default function PageBackground({
           {/* sanfter Farbschleier über der ganzen Fläche */}
           <div className="absolute inset-0" style={{ background: `linear-gradient(160deg, rgba(${r},${g},${b},0.10), transparent 45%, rgba(${r},${g},${b},0.06))` }} />
         </div>
-        {/* Vereinslogo – groß, extrem dezent, mittig im Hintergrund */}
+        {/* Vereinslogo – groß, extrem dezent, mittig im Hintergrund.
+            Nur ab sm: auf dem Handy wirkt das fixierte, große Logo beim Scrollen
+            wie ein störender Parallax – dort bleiben nur die Farb-Gradients. */}
         {teamLogoUrl && (
-          <div className="absolute inset-0 flex items-center justify-center">
+          <div className="absolute inset-0 hidden sm:flex items-center justify-center">
             <img
               src={teamLogoUrl}
               alt=""
