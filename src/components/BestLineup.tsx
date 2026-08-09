@@ -12,6 +12,7 @@ import { shade } from './ui';
 interface BestLineupProps {
   lineup: LineupStat;
   team: Team;
+  onSelectPlayer?: (name: string) => void; // Klick auf einen Feldspieler → Spieler-Detail
 }
 
 // Feldspieler möglichst gleichmäßig auf Reihen verteilen (Abwehr unten … Sturm oben).
@@ -44,19 +45,25 @@ const Chip = React.memo(function Chip({
   imageUrl,
   color,
   index,
+  onSelect,
 }: {
   name: string;
   imageUrl?: string;
   color: string;
   index: number;
+  onSelect?: (name: string) => void;
 }) {
   return (
-    <motion.div
+    <motion.button
+      type="button"
+      onClick={onSelect ? () => onSelect(name) : undefined}
       initial={{ opacity: 0, scale: 0.6, y: 8 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       transition={{ delay: 0.05 * index, type: 'spring', stiffness: 260, damping: 20 }}
-      className="flex flex-col items-center gap-1 w-[62px]"
-      title={name}
+      whileHover={onSelect ? { scale: 1.09, y: -2 } : undefined}
+      whileTap={onSelect ? { scale: 0.96 } : undefined}
+      className={`flex flex-col items-center gap-1 w-[62px] focus:outline-none ${onSelect ? 'cursor-pointer' : 'cursor-default'}`}
+      title={onSelect ? `${name} – Details anzeigen` : name}
     >
       {imageUrl ? (
         <img
@@ -79,11 +86,11 @@ const Chip = React.memo(function Chip({
       <span className="font-sans font-semibold text-[10px] leading-tight text-white text-center truncate max-w-full drop-shadow-[0_1px_2px_rgba(0,0,0,.9)]">
         {name.split(/\s+/)[0]}
       </span>
-    </motion.div>
+    </motion.button>
   );
 });
 
-export default function BestLineup({ lineup, team }: BestLineupProps) {
+export default function BestLineup({ lineup, team, onSelectPlayer }: BestLineupProps) {
   const color = team.logoColor || '#22DFC9';
   const byName = new Map((team.spielerliste || []).map((p) => [p.name, p] as const));
 
@@ -155,14 +162,21 @@ export default function BestLineup({ lineup, team }: BestLineupProps) {
           {displayRows.map((row, r) => (
             <div key={r} className="flex justify-center gap-2 flex-wrap">
               {row.map((name) => (
-                <Chip key={name} name={name} imageUrl={byName.get(name)?.imageUrl} color={color} index={staggerOf(name)} />
+                <Chip
+                  key={name}
+                  name={name}
+                  imageUrl={byName.get(name)?.imageUrl}
+                  color={color}
+                  index={staggerOf(name)}
+                  onSelect={byName.has(name) ? onSelectPlayer : undefined}
+                />
               ))}
             </div>
           ))}
           {gkName && (
             <div className="flex justify-center pt-1">
               <div className="flex flex-col items-center gap-1">
-                <Chip name={gkName} imageUrl={byName.get(gkName)?.imageUrl} color={color} index={staggerOf(gkName)} />
+                <Chip name={gkName} imageUrl={byName.get(gkName)?.imageUrl} color={color} index={staggerOf(gkName)} onSelect={byName.has(gkName) ? onSelectPlayer : undefined} />
                 <span className="font-sans font-bold text-[8px] tracking-[1.5px] text-white/70 uppercase">Torwart</span>
               </div>
             </div>

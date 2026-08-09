@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronDown } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Match, Player, PlayerStat, Team, TeamSponsorsMap } from '../types';
@@ -113,11 +113,11 @@ export default function TeamDetail({
   );
   // Beim Teamwechsel bzw. neuer Vorauswahl (Suche) das Detail passend setzen.
   useEffect(() => setSelectedPlayerName(initialPlayer ?? null), [team.id, initialPlayer]);
-  const selectPlayer = (name: string) => {
+  const selectPlayer = useCallback((name: string) => {
     setSelectedPlayerName(name);
     // Zum Kopf scrollen, damit die Umblendung sichtbar ist.
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  }, []);
   const positionLabel = (p: RosterEntry) =>
     p.gamesInGoal > 0 && p.gamesInGoal * 2 >= p.matchesPlayed ? 'Torwart' : 'Feldspieler';
 
@@ -376,7 +376,7 @@ export default function TeamDetail({
                     key={player.name}
                     type="button"
                     onClick={() => selectPlayer(player.name)}
-                    className="group flex items-center gap-3 px-3.5 py-[11px] rounded-[13px] bg-[linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012))] border text-left cursor-pointer transition-all"
+                    className="group flex items-center gap-3 px-3.5 py-[11px] rounded-[13px] bg-[linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012))] border text-left cursor-pointer transition-transform duration-150 will-change-transform hover:scale-[1.025] hover:-translate-y-[1px] active:scale-[.99]"
                     style={{
                       borderColor: isSelected ? color : 'rgba(255,255,255,.08)',
                       boxShadow: isSelected ? `0 0 0 1px ${color}` : undefined,
@@ -554,7 +554,7 @@ export default function TeamDetail({
           })()}
 
           {/* Beste Aufstellung (aus den Ergebnissen berechnet) */}
-          {topLineup && <BestLineup lineup={topLineup} team={team} />}
+          {topLineup && <BestLineup lineup={topLineup} team={team} onSelectPlayer={selectPlayer} />}
 
           {/* Partner / Trikot-Sponsoren dieses Teams */}
           {sponsors.length > 0 && (
@@ -598,7 +598,7 @@ export default function TeamDetail({
               <button
                 type="button"
                 onClick={() => selectPlayer(star.name)}
-                className="flex items-center gap-3.5 mt-3 w-full text-left cursor-pointer group"
+                className="flex items-center gap-3.5 mt-3 w-full text-left cursor-pointer group transition-transform duration-150 will-change-transform hover:scale-[1.015] active:scale-[.99]"
                 title={`${star.name} – Details anzeigen`}
               >
                 {star.imageUrl ? (
