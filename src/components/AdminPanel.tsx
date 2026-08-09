@@ -118,6 +118,11 @@ function RosterEditor({
     onChange(roster.map((p, i) => (i === index ? { ...p, ...patch } : p)));
   };
 
+  // Kapitän setzen/entfernen – höchstens einer pro Team.
+  const toggleCaptain = (index: number) => {
+    onChange(roster.map((p, i) => ({ ...p, captain: i === index ? !p.captain : false })));
+  };
+
   const handlePhoto = (index: number) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -164,6 +169,18 @@ function RosterEditor({
             onChange={(e) => updatePlayer(index, { name: e.target.value })}
             className="flex-1 min-w-0 bg-transparent border-b border-white/10 focus:border-brand-accent-light px-1 py-1 text-sm text-white focus:outline-none"
           />
+          <button
+            type="button"
+            onClick={() => toggleCaptain(index)}
+            title={player.captain ? 'Kapitän entfernen' : 'Als Kapitän festlegen'}
+            className={`shrink-0 grid place-items-center w-7 h-7 rounded-md text-xs font-display font-black transition-colors cursor-pointer ${
+              player.captain
+                ? 'bg-brand-accent-light text-[#0b0f10]'
+                : 'text-gray-500 hover:text-brand-accent-light hover:bg-white/5'
+            }`}
+          >
+            C
+          </button>
           <button
             type="button"
             onClick={() => handlePhoto(index)}
