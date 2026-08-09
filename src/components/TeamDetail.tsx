@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronDown } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { motion } from 'motion/react';
 import { Match, Player, PlayerStat, Team, TeamSponsorsMap } from '../types';
 import { calculateStandings } from '../lib/standings';
 import { bestLineup } from '../lib/lineups';
@@ -121,6 +121,11 @@ export default function TeamDetail({
   const positionLabel = (p: RosterEntry) =>
     p.gamesInGoal > 0 && p.gamesInGoal * 2 >= p.matchesPlayed ? 'Torwart' : 'Feldspieler';
 
+  // Spieler-Panel bleibt IMMER gemountet (auch verdeckt), damit der Kopf konstant
+  // hoch bleibt und beim Umschalten nichts springt. Ohne Auswahl dient der erste
+  // Kaderspieler nur zum Reservieren der Höhe (unsichtbar).
+  const sizingPlayer = selected ?? roster[0] ?? null;
+
   // Lange „Spiele"-Liste standardmäßig eingeklappt (weniger Scrollen).
   const [showAllMatches, setShowAllMatches] = useState(false);
 
@@ -151,12 +156,14 @@ export default function TeamDetail({
   };
 
   // Eine Statistik-Kachel für die Spieler-Detailansicht.
+  // Mobil teilen sich die Kacheln die Breite (eine Reihe, kein Umbruch), ab sm
+  // wieder natürliche Breite.
   const StatTile = ({ value, label, accent }: { value: React.ReactNode; label: string; accent?: boolean }) => (
-    <div className="bg-white/[.04] border border-white/[.08] rounded-xl px-3 py-2.5 text-center min-w-[70px]">
-      <div className="font-display font-black text-[26px] leading-none" style={accent ? { color: accentSoft } : { color: '#fff' }}>
+    <div className="flex-1 min-w-0 sm:flex-none sm:min-w-[70px] bg-white/[.04] border border-white/[.08] rounded-xl px-1.5 sm:px-3 py-2.5 text-center">
+      <div className="font-display font-black text-[19px] sm:text-[26px] leading-none" style={accent ? { color: accentSoft } : { color: '#fff' }}>
         {value}
       </div>
-      <div className="font-sans font-bold text-[9px] tracking-[1.5px] text-hl-dim mt-1.5">{label}</div>
+      <div className="font-sans font-bold text-[8px] sm:text-[9px] tracking-[1px] sm:tracking-[1.5px] text-hl-dim mt-1.5">{label}</div>
     </div>
   );
 
@@ -176,7 +183,7 @@ export default function TeamDetail({
           Partner-/Footer-Bereich bleibt an Ort und Stelle). Kein overflow-hidden am
           Container, damit das Spielerbild beim Hover sanft über die Kante ragen darf –
           der Farb-Glow wird separat geklemmt. */}
-      <div className="relative mt-4 grid items-center min-h-[260px] sm:min-h-[256px]">
+      <div className="relative mt-4 grid">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div
             className="absolute -top-40 -left-32 w-[560px] h-[560px] opacity-60 transition-colors"
@@ -184,16 +191,15 @@ export default function TeamDetail({
           />
         </div>
 
-        <AnimatePresence mode="wait" initial={false}>
-          {selected ? (
-            /* ---------- Spieler-Detail ---------- */
+        {/* Spieler-Panel – immer gemountet (auch verdeckt), damit die Kopf-Höhe
+            konstant bleibt und beim Umschalten nichts springt. */}
+        {sizingPlayer && (
             <motion.div
-              key={`player-${selected.name}`}
-              initial={{ opacity: 0, x: 24 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -24 }}
+              aria-hidden={!selected}
+              initial={false}
+              animate={{ opacity: selected ? 1 : 0, x: selected ? 0 : 18 }}
               transition={{ duration: 0.32, ease: [0.22, 0.61, 0.36, 1] }}
-              className="relative flex flex-col sm:flex-row items-start sm:items-center gap-6 flex-wrap py-6"
+              className={`[grid-area:1/1] self-center relative flex flex-col sm:flex-row items-start sm:items-center gap-6 flex-wrap py-6 ${selected ? '' : 'pointer-events-none'}`}
             >
               {/* Spielerbild */}
               <div className="relative shrink-0">
@@ -201,10 +207,10 @@ export default function TeamDetail({
                   className="absolute -inset-3 rounded-[34px] blur-xl opacity-50"
                   style={{ background: `radial-gradient(circle, ${color}, transparent 70%)` }}
                 />
-                {selected.imageUrl ? (
+                {sizingPlayer.imageUrl ? (
                   <ImageZoom
-                    src={selected.imageUrl}
-                    alt={selected.name}
+                    src={sizingPlayer.imageUrl}
+                    alt={sizingPlayer.name}
                     className="relative w-[118px] h-[118px] object-cover rounded-[32px] border-2"
                     style={{ borderColor: color }}
                     zoomClassName="w-72 sm:w-96 max-w-[85vw] max-h-[80vh] object-contain"
@@ -214,7 +220,7 @@ export default function TeamDetail({
                     className="relative grid place-items-center w-[118px] h-[118px] rounded-[32px] font-display font-black text-5xl text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.18)]"
                     style={{ background: `linear-gradient(140deg, ${color}, ${shade(color, 0.45)})` }}
                   >
-                    {monogram(selected.name)}
+                    {monogram(sizingPlayer.name)}
                   </span>
                 )}
               </div>
@@ -228,40 +234,40 @@ export default function TeamDetail({
                   Zurück zu {team.name}
                 </button>
                 <div className="font-sans font-extrabold text-xs tracking-[2.5px] uppercase" style={{ color: accentSoft }}>
-                  {positionLabel(selected)}
-                  {typeof selected.number === 'number' ? ` · #${selected.number}` : ''}
-                  {selected.captain ? ' · KAPITÄN' : ''}
+                  {positionLabel(sizingPlayer)}
+                  {typeof sizingPlayer.number === 'number' ? ` · #${sizingPlayer.number}` : ''}
+                  {sizingPlayer.captain ? ' · KAPITÄN' : ''}
                 </div>
                 <h1 className="mt-2 font-display font-black text-4xl sm:text-6xl leading-[.85] tracking-tight uppercase text-white">
-                  {selected.name}
+                  {sizingPlayer.name}
                 </h1>
-                <div className="flex gap-2 mt-4 flex-wrap">
-                  <StatTile value={selected.matchesPlayed} label="SPIELE" />
-                  <StatTile value={selected.goals} label="TORE" accent />
-                  <StatTile value={selected.assists} label="VORLAGEN" accent />
-                  <StatTile value={selected.winRate === null ? '–' : `${selected.winRate}%`} label="SIEGQUOTE" accent />
-                  {selected.motmCount > 0 && <StatTile value={selected.motmCount} label="MVP" />}
+                <div className="flex gap-1.5 sm:gap-2 mt-4 flex-nowrap sm:flex-wrap">
+                  <StatTile value={sizingPlayer.matchesPlayed} label="SPIELE" />
+                  <StatTile value={sizingPlayer.goals} label="TORE" accent />
+                  <StatTile value={sizingPlayer.assists} label="VORLAGEN" accent />
+                  <StatTile value={sizingPlayer.winRate === null ? '–' : `${sizingPlayer.winRate}%`} label="SIEGQUOTE" accent />
+                  {sizingPlayer.motmCount > 0 && <StatTile value={sizingPlayer.motmCount} label="MVP" />}
                 </div>
-                {selected.matchesPlayed > 0 && (
+                {sizingPlayer.matchesPlayed > 0 && (
                   <div className="font-sans text-[11px] text-hl-dim mt-3">
-                    Bilanz mit {selected.name.split(/\s+/)[0]} auf dem Feld:{' '}
-                    <span className="text-hl-green-soft font-bold">{selected.wins}S</span> ·{' '}
-                    <span className="text-[#F0CE77] font-bold">{selected.draws}U</span> ·{' '}
-                    <span className="text-hl-red-soft font-bold">{selected.losses}N</span>
+                    Bilanz mit {sizingPlayer.name.split(/\s+/)[0]} auf dem Feld:{' '}
+                    <span className="text-hl-green-soft font-bold">{sizingPlayer.wins}S</span> ·{' '}
+                    <span className="text-[#F0CE77] font-bold">{sizingPlayer.draws}U</span> ·{' '}
+                    <span className="text-hl-red-soft font-bold">{sizingPlayer.losses}N</span>
                   </div>
                 )}
               </div>
             </motion.div>
-          ) : (
-            /* ---------- Team-Ansicht ---------- */
-            <motion.div
-              key="team"
-              initial={{ opacity: 0, x: -24 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 24 }}
-              transition={{ duration: 0.32, ease: [0.22, 0.61, 0.36, 1] }}
-              className="relative flex flex-col sm:flex-row items-start sm:items-center gap-6 flex-wrap py-6"
-            >
+        )}
+
+        {/* Team-Panel – immer gemountet */}
+        <motion.div
+          aria-hidden={!!selected}
+          initial={false}
+          animate={{ opacity: selected ? 0 : 1, x: selected ? -18 : 0 }}
+          transition={{ duration: 0.32, ease: [0.22, 0.61, 0.36, 1] }}
+          className={`[grid-area:1/1] self-center relative flex flex-col sm:flex-row items-start sm:items-center gap-6 flex-wrap py-6 ${selected ? 'pointer-events-none' : ''}`}
+        >
               {team.logoUrl ? (
                 <ImageZoom
                   src={team.logoUrl}
@@ -359,8 +365,6 @@ export default function TeamDetail({
                 </button>
               )}
             </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       {/* Body: Kader + Sidebar */}
