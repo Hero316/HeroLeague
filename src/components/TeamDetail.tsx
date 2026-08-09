@@ -367,10 +367,11 @@ export default function TeamDetail({
             </motion.div>
       </div>
 
-      {/* Body: Kader + Sidebar */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1.55fr_1fr] gap-6 items-start mt-6">
+      {/* Body: Kader · Sidebar · Spiele. Auf dem Handy per order: Kader → Sidebar → Spiele
+          (die lange Spiele-Liste ganz nach unten). Auf Desktop: links Kader + Spiele, rechts Sidebar. */}
+      <div className="mt-6 flex flex-col gap-6 lg:grid lg:grid-cols-[1.55fr_1fr] lg:gap-6 lg:items-start">
         {/* Kader */}
-        <div>
+        <div className="order-1 lg:col-start-1 lg:row-start-1">
           <div className="font-display font-black text-2xl uppercase text-white mb-4">Kader</div>
           {roster.length === 0 ? (
             <div className="hl-card p-8 text-center text-hl-mute font-sans text-sm">Noch keine Spieler hinterlegt.</div>
@@ -448,13 +449,16 @@ export default function TeamDetail({
               })}
             </div>
           )}
+        </div>
 
+        {/* Spiele – auf dem Handy ganz unten (order-3), auf Desktop unter dem Kader */}
+        <div className="order-3 lg:col-start-1 lg:row-start-2">
           {/* Spiele – standardmäßig eingeklappt, per Klick alle anzeigen */}
           <button
             type="button"
             onClick={() => setShowAllMatches((v) => !v)}
             disabled={teamMatches.length === 0}
-            className="w-full flex items-center justify-between gap-3 mb-4 mt-8 cursor-pointer disabled:cursor-default group"
+            className="w-full flex items-center justify-between gap-3 mb-4 cursor-pointer disabled:cursor-default group"
             aria-expanded={showAllMatches}
           >
             <span className="font-display font-black text-2xl uppercase text-white">Spiele</span>
@@ -529,7 +533,7 @@ export default function TeamDetail({
         </div>
 
         {/* Sidebar */}
-        <div className="flex flex-col gap-[18px]">
+        <div className="order-2 lg:col-start-2 lg:row-start-1 lg:row-span-2 flex flex-col gap-[18px]">
           {/* Nächstes Spiel */}
           {nextMatch && (() => {
             const home = teams.find((t) => t.id === nextMatch.homeTeamId);
