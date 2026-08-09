@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Home, CalendarDays, ListOrdered, Trophy, BarChart3, Images, Zap } from 'lucide-react';
 import { ActiveTab } from '../types';
 
@@ -113,7 +114,11 @@ export default function MobileDock({
     return 'bg-[rgba(34,223,201,.16)] text-brand-accent-light shadow-[0_0_18px_rgba(34,223,201,.28)]';
   };
 
-  return (
+  // Per Portal direkt an <body>: so ist der fixierte Balken garantiert am
+  // Viewport-Boden verankert und kann von keinem Vorfahren (overflow/transform/
+  // backdrop-filter) „gekapert" werden – behebt das mittige Hängen auf iOS.
+  if (typeof document === 'undefined') return null;
+  return createPortal(
     <div aria-hidden={!visible} className="lg:hidden fixed inset-x-0 bottom-0 z-40 pointer-events-none">
       <div
         className="will-change-transform transition-[transform,opacity] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]"
@@ -161,6 +166,7 @@ export default function MobileDock({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
