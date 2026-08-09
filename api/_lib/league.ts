@@ -32,6 +32,9 @@ export function calculatePlayers(teams: Team[], matches: Match[]): PlayerStat[] 
         goals: 0,
         assists: 0,
         matchesPlayed: 0,
+        wins: 0,
+        draws: 0,
+        losses: 0,
         motmCount: 0,
         cleanSheets: 0, // Spiele als Torwart ohne Gegentor („zu null")
         gamesInGoal: 0, // Spiele, in denen der Spieler im Tor stand
@@ -113,16 +116,24 @@ export function calculatePlayers(teams: Team[], matches: Match[]): PlayerStat[] 
       if (s.assistName) contributed.add(`${s.teamId}::${s.assistName}`);
     });
 
+    // Ergebnis eines Spiels aus Team-Sicht: 'win' | 'draw' | 'loss' | null (offen)
+    const teamResult = (side: 'home' | 'away'): 'win' | 'draw' | 'loss' | null => {
+      if (m.homeScore === null || m.awayScore === null) return null;
+      if (m.homeScore === m.awayScore) return 'draw';
+      const homeWon = m.homeScore > m.awayScore;
+      return (side === 'home' ? homeWon : !homeWon) ? 'win' : 'loss';
+    };
+
     // Team-Ergebnis in Zehntel-Punkte übersetzen (Sieg 0,3 · Remis 0,1 · Niederlage 0)
     const resultPoints = (side: 'home' | 'away'): number => {
-      if (m.homeScore === null || m.awayScore === null) return 0;
-      if (m.homeScore === m.awayScore) return PTS_DRAW;
-      const homeWon = m.homeScore > m.awayScore;
-      return (side === 'home' ? homeWon : !homeWon) ? PTS_WIN : 0;
+      const r = teamResult(side);
+      if (r === 'draw') return PTS_DRAW;
+      return r === 'win' ? PTS_WIN : 0;
     };
 
     ([[homeTeam, 'home'], [awayTeam, 'away']] as const).forEach(([team, side]) => {
       if (!team) return;
+      const result = teamResult(side);
       (team.spielerliste || []).forEach((player) => {
         const stat = playerMap[keyOf(team.id, player.name)];
         if (!stat) return;
@@ -131,6 +142,10 @@ export function calculatePlayers(teams: Team[], matches: Match[]): PlayerStat[] 
         if (!isAbsent) {
           stat.matchesPlayed += 1;
           stat.points += resultPoints(side);
+          // Siegesquote: nur echte Einsätze in eindeutig entschiedenen Spielen zählen
+          if (result === 'win') stat.wins += 1;
+          else if (result === 'draw') stat.draws += 1;
+          else if (result === 'loss') stat.losses += 1;
         }
       });
     });

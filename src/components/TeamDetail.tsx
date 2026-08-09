@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronDown } from 'lucide-react';
-import { Match, PlayerStat, Team, TeamSponsorsMap } from '../types';
+import { AnimatePresence, motion } from 'motion/react';
+import { Match, Player, PlayerStat, Team, TeamSponsorsMap } from '../types';
 import { calculateStandings } from '../lib/standings';
+import { bestLineup } from '../lib/lineups';
 import { apiFetch } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
+import BestLineup from './BestLineup';
 import { TeamCrest, FormPill, MatchStatusBadge, shortDate, shade, monogram, ImageZoom } from './ui';
 
 // Modulweiter Cache der Team-Sponsoren: einmal je Seitenaufruf laden.
@@ -19,6 +22,19 @@ interface TeamDetailProps {
   onSelectTeam: (teamId: string) => void;
 }
 
+// Ein Kaderspieler mit den aus den Spieldaten berechneten Werten.
+interface RosterEntry extends Player {
+  goals: number;
+  assists: number;
+  matchesPlayed: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  winRate: number | null; // null = noch kein Einsatz
+  motmCount: number;
+  gamesInGoal: number;
+}
+
 export default function TeamDetail({
   team,
   teams,
@@ -28,6 +44,9 @@ export default function TeamDetail({
   onBack,
   onSelectTeam,
 }: TeamDetailProps) {
+  const color = team.logoColor || '#22DFC9';
+  const accentSoft = shade(color, 1.25); // hellere Variante für Text auf dunklem Grund
+
   const standings = useMemo(() => calculateStandings(teams, matches), [teams, matches]);
   const rank = standings.findIndex((s) => s.teamId === team.id) + 1;
   const standing = standings.find((s) => s.teamId === team.id);
@@ -50,25 +69,55 @@ export default function TeamDetail({
   }, [teamMatches]);
 
   // Kader mit Statistiken aus den Spieldaten verknüpfen
-  const roster = useMemo(
+  const roster: RosterEntry[] = useMemo(
     () =>
       (team.spielerliste || []).map((player) => {
         const stats = players.find((p) => p.teamId === team.id && p.name === player.name);
+        const matchesPlayed = stats?.matchesPlayed ?? 0;
+        const wins = stats?.wins ?? 0;
         return {
           ...player,
           goals: stats?.goals ?? 0,
           assists: stats?.assists ?? 0,
-          matchesPlayed: stats?.matchesPlayed ?? 0,
+          matchesPlayed,
+          wins,
+          draws: stats?.draws ?? 0,
+          losses: stats?.losses ?? 0,
+          winRate: matchesPlayed > 0 ? Math.round((wins / matchesPlayed) * 100) : null,
+          motmCount: stats?.motmCount ?? 0,
+          gamesInGoal: stats?.gamesInGoal ?? 0,
         };
       }),
-    [team.spielerliste, players]
+    [team.spielerliste, players, team.id]
   );
+
+  // Captain (max. einer pro Team, im Admin gesetzt)
+  const captain = useMemo(() => roster.find((p) => p.captain) ?? null, [roster]);
+
+  // Beste Aufstellung des Teams (aus den Ergebnissen berechnet)
+  const topLineup = useMemo(() => bestLineup(team, matches), [team, matches]);
 
   // Star des Teams: bester Torschütze/Vorlagengeber des Kaders
   const star = useMemo(() => {
     const list = players.filter((p) => p.teamId === team.id && (p.goals > 0 || p.assists > 0));
     return [...list].sort((a, b) => b.goals - a.goals || b.assists - a.assists)[0] ?? null;
   }, [players, team.id]);
+
+  // Ausgewählter Spieler für die animierte Detail-Umblendung im Kopf.
+  const [selectedPlayerName, setSelectedPlayerName] = useState<string | null>(null);
+  const selected = useMemo(
+    () => roster.find((p) => p.name === selectedPlayerName) ?? null,
+    [roster, selectedPlayerName]
+  );
+  // Beim Teamwechsel Auswahl zurücksetzen.
+  useEffect(() => setSelectedPlayerName(null), [team.id]);
+  const selectPlayer = (name: string) => {
+    setSelectedPlayerName(name);
+    // Zum Kopf scrollen, damit die Umblendung sichtbar ist.
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const positionLabel = (p: RosterEntry) =>
+    p.gamesInGoal > 0 && p.gamesInGoal * 2 >= p.matchesPlayed ? 'Torwart' : 'Feldspieler';
 
   // Lange „Spiele"-Liste standardmäßig eingeklappt (weniger Scrollen).
   const [showAllMatches, setShowAllMatches] = useState(false);
@@ -99,6 +148,16 @@ export default function TeamDetail({
     return { ch: 'U', cls: 'bg-[rgba(233,196,106,.16)] text-[#F0CE77]' };
   };
 
+  // Eine Statistik-Kachel für die Spieler-Detailansicht.
+  const StatTile = ({ value, label, accent }: { value: React.ReactNode; label: string; accent?: boolean }) => (
+    <div className="bg-white/[.04] border border-white/[.08] rounded-xl px-3 py-2.5 text-center min-w-[70px]">
+      <div className="font-display font-black text-[26px] leading-none" style={accent ? { color: accentSoft } : { color: '#fff' }}>
+        {value}
+      </div>
+      <div className="font-sans font-bold text-[9px] tracking-[1.5px] text-hl-dim mt-1.5">{label}</div>
+    </div>
+  );
+
   return (
     <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-11">
       <button
@@ -109,81 +168,190 @@ export default function TeamDetail({
         Zurück zur Übersicht
       </button>
 
-      {/* Vereinskopf */}
-      <div className="relative overflow-hidden mt-4">
+      {/* Kopf: blendet zwischen Team-Ansicht und Spieler-Detail um */}
+      <div className="relative overflow-hidden mt-4 min-h-[188px]">
         <div
-          className="absolute -top-40 -left-32 w-[560px] h-[560px] pointer-events-none opacity-60"
-          style={{ background: `radial-gradient(circle, ${team.logoColor}22, transparent 66%)` }}
+          className="absolute -top-40 -left-32 w-[560px] h-[560px] pointer-events-none opacity-60 transition-colors"
+          style={{ background: `radial-gradient(circle, ${color}22, transparent 66%)` }}
         />
-        <div className="relative flex flex-col sm:flex-row items-start sm:items-center gap-6 flex-wrap py-6">
-          {team.logoUrl ? (
-            <ImageZoom
-              src={team.logoUrl}
-              alt={team.name}
-              className="w-[118px] h-[118px] object-contain"
-              zoomClassName="w-72 sm:w-96 max-w-[85vw] max-h-[80vh] object-contain"
-            />
-          ) : (
-            <span
-              className="grid place-items-center w-[118px] h-[118px] shrink-0 rounded-[32px] font-display font-black text-5xl text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.18),0_18px_40px_rgba(0,0,0,.4)]"
-              style={{ background: `linear-gradient(140deg, ${team.logoColor}, ${shade(team.logoColor, 0.45)})` }}
+
+        <AnimatePresence mode="wait" initial={false}>
+          {selected ? (
+            /* ---------- Spieler-Detail ---------- */
+            <motion.div
+              key={`player-${selected.name}`}
+              initial={{ opacity: 0, x: 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -24 }}
+              transition={{ duration: 0.32, ease: [0.22, 0.61, 0.36, 1] }}
+              className="relative flex flex-col sm:flex-row items-start sm:items-center gap-6 flex-wrap py-6"
             >
-              {monogram(team.shortName || team.name)}
-            </span>
-          )}
-          <div className="flex-1 min-w-[260px]">
-            <div className="font-sans font-extrabold text-xs tracking-[2.5px] text-brand-accent-light uppercase">
-              HERO LEAGUE{rank > 0 ? ` · TABELLENPLATZ ${rank}` : ''}
-            </div>
-            <h1 className="mt-2 font-display font-black text-5xl sm:text-7xl leading-[.85] tracking-tight uppercase text-white">
-              {team.name}
-            </h1>
-            <div className="flex gap-2.5 mt-4 flex-wrap">
-              <div className="flex flex-col gap-[3px] px-4 py-[11px] rounded-xl bg-white/[.04] border border-white/10">
-                <span className="font-sans font-bold text-[9.5px] tracking-[1.5px] text-hl-dim">KÜRZEL</span>
-                <span className="font-sans font-bold text-sm text-hl-text">{team.shortName}</span>
-              </div>
-              {seasonLabel && (
-                <div className="flex flex-col gap-[3px] px-4 py-[11px] rounded-xl bg-white/[.04] border border-white/10">
-                  <span className="font-sans font-bold text-[9.5px] tracking-[1.5px] text-hl-dim">SAISON</span>
-                  <span className="font-sans font-bold text-sm text-hl-text">{seasonLabel}</span>
-                </div>
-              )}
-              {standing && (
-                <div className="flex flex-col gap-[3px] px-4 py-[11px] rounded-xl bg-white/[.04] border border-white/10">
-                  <span className="font-sans font-bold text-[9.5px] tracking-[1.5px] text-hl-dim">BILANZ</span>
-                  <span className="font-sans font-bold text-sm text-hl-text">
-                    {standing.won}S · {standing.drawn}U · {standing.lost}N
+              {/* Spielerbild */}
+              <div className="relative shrink-0">
+                <div
+                  className="absolute -inset-3 rounded-[34px] blur-xl opacity-50"
+                  style={{ background: `radial-gradient(circle, ${color}, transparent 70%)` }}
+                />
+                {selected.imageUrl ? (
+                  <ImageZoom
+                    src={selected.imageUrl}
+                    alt={selected.name}
+                    className="relative w-[118px] h-[118px] object-cover rounded-[32px] border-2"
+                    style={{ borderColor: color }}
+                    zoomClassName="w-72 sm:w-96 max-w-[85vw] max-h-[80vh] object-contain"
+                  />
+                ) : (
+                  <span
+                    className="relative grid place-items-center w-[118px] h-[118px] rounded-[32px] font-display font-black text-5xl text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.18)]"
+                    style={{ background: `linear-gradient(140deg, ${color}, ${shade(color, 0.45)})` }}
+                  >
+                    {monogram(selected.name)}
                   </span>
+                )}
+              </div>
+
+              <div className="flex-1 min-w-[260px]">
+                <button
+                  onClick={() => setSelectedPlayerName(null)}
+                  className="inline-flex items-center gap-1.5 font-sans font-bold text-[11px] tracking-wider uppercase text-hl-dim hover:text-white transition-colors cursor-pointer mb-2"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  Zurück zu {team.name}
+                </button>
+                <div className="font-sans font-extrabold text-xs tracking-[2.5px] uppercase" style={{ color: accentSoft }}>
+                  {positionLabel(selected)}
+                  {typeof selected.number === 'number' ? ` · #${selected.number}` : ''}
+                  {selected.captain ? ' · KAPITÄN' : ''}
                 </div>
+                <h1 className="mt-2 font-display font-black text-4xl sm:text-6xl leading-[.85] tracking-tight uppercase text-white">
+                  {selected.name}
+                </h1>
+                <div className="flex gap-2 mt-4 flex-wrap">
+                  <StatTile value={selected.matchesPlayed} label="SPIELE" />
+                  <StatTile value={selected.goals} label="TORE" accent />
+                  <StatTile value={selected.assists} label="VORLAGEN" accent />
+                  <StatTile value={selected.winRate === null ? '–' : `${selected.winRate}%`} label="SIEGQUOTE" accent />
+                  {selected.motmCount > 0 && <StatTile value={selected.motmCount} label="MVP" />}
+                </div>
+                {selected.matchesPlayed > 0 && (
+                  <div className="font-sans text-[11px] text-hl-dim mt-3">
+                    Bilanz mit {selected.name.split(/\s+/)[0]} auf dem Feld:{' '}
+                    <span className="text-hl-green-soft font-bold">{selected.wins}S</span> ·{' '}
+                    <span className="text-[#F0CE77] font-bold">{selected.draws}U</span> ·{' '}
+                    <span className="text-hl-red-soft font-bold">{selected.losses}N</span>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          ) : (
+            /* ---------- Team-Ansicht ---------- */
+            <motion.div
+              key="team"
+              initial={{ opacity: 0, x: -24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 24 }}
+              transition={{ duration: 0.32, ease: [0.22, 0.61, 0.36, 1] }}
+              className="relative flex flex-col sm:flex-row items-start sm:items-center gap-6 flex-wrap py-6"
+            >
+              {team.logoUrl ? (
+                <ImageZoom
+                  src={team.logoUrl}
+                  alt={team.name}
+                  className="w-[118px] h-[118px] object-contain"
+                  zoomClassName="w-72 sm:w-96 max-w-[85vw] max-h-[80vh] object-contain"
+                />
+              ) : (
+                <span
+                  className="grid place-items-center w-[118px] h-[118px] shrink-0 rounded-[32px] font-display font-black text-5xl text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.18),0_18px_40px_rgba(0,0,0,.4)]"
+                  style={{ background: `linear-gradient(140deg, ${color}, ${shade(color, 0.45)})` }}
+                >
+                  {monogram(team.shortName || team.name)}
+                </span>
               )}
-            </div>
-          </div>
-          {standing && (
-            <div className="flex gap-5 flex-none">
-              <div className="text-center">
-                <div className="font-display font-black text-[44px] leading-[.9] text-brand-accent-light">{standing.points}</div>
-                <div className="font-sans font-bold text-[10px] tracking-[1.5px] text-hl-dim mt-1">PUNKTE</div>
-              </div>
-              <div className="w-px bg-white/10" />
-              <div className="text-center">
-                <div className="font-display font-black text-[44px] leading-[.9] text-white">{standing.goalsFor}</div>
-                <div className="font-sans font-bold text-[10px] tracking-[1.5px] text-hl-dim mt-1">TORE</div>
-              </div>
-              <div className="w-px bg-white/10" />
-              <div className="text-center flex flex-col items-center">
-                <div className="flex gap-1 pt-3">
-                  {standing.form.length === 0 ? (
-                    <span className="text-xs text-hl-faint font-sans uppercase">–</span>
-                  ) : (
-                    standing.form.map((res, idx) => <FormPill key={idx} result={res} />)
+              <div className="flex-1 min-w-[260px]">
+                <div className="font-sans font-extrabold text-xs tracking-[2.5px] uppercase" style={{ color: accentSoft }}>
+                  HERO LEAGUE{rank > 0 ? ` · TABELLENPLATZ ${rank}` : ''}
+                </div>
+                <h1 className="mt-2 font-display font-black text-5xl sm:text-7xl leading-[.85] tracking-tight uppercase text-white">
+                  {team.name}
+                </h1>
+                <div className="flex gap-2.5 mt-4 flex-wrap">
+                  <div className="flex flex-col gap-[3px] px-4 py-[11px] rounded-xl bg-white/[.04] border border-white/10">
+                    <span className="font-sans font-bold text-[9.5px] tracking-[1.5px] text-hl-dim">KÜRZEL</span>
+                    <span className="font-sans font-bold text-sm text-hl-text">{team.shortName}</span>
+                  </div>
+                  {seasonLabel && (
+                    <div className="flex flex-col gap-[3px] px-4 py-[11px] rounded-xl bg-white/[.04] border border-white/10">
+                      <span className="font-sans font-bold text-[9.5px] tracking-[1.5px] text-hl-dim">SAISON</span>
+                      <span className="font-sans font-bold text-sm text-hl-text">{seasonLabel}</span>
+                    </div>
+                  )}
+                  {standing && (
+                    <div className="flex flex-col gap-[3px] px-4 py-[11px] rounded-xl bg-white/[.04] border border-white/10">
+                      <span className="font-sans font-bold text-[9.5px] tracking-[1.5px] text-hl-dim">BILANZ</span>
+                      <span className="font-sans font-bold text-sm text-hl-text">
+                        {standing.won}S · {standing.drawn}U · {standing.lost}N
+                      </span>
+                    </div>
                   )}
                 </div>
-                <div className="font-sans font-bold text-[10px] tracking-[1.5px] text-hl-dim mt-2">FORM</div>
               </div>
-            </div>
+              {standing && (
+                <div className="flex gap-5 flex-none">
+                  <div className="text-center">
+                    <div className="font-display font-black text-[44px] leading-[.9]" style={{ color: accentSoft }}>{standing.points}</div>
+                    <div className="font-sans font-bold text-[10px] tracking-[1.5px] text-hl-dim mt-1">PUNKTE</div>
+                  </div>
+                  <div className="w-px bg-white/10" />
+                  <div className="text-center">
+                    <div className="font-display font-black text-[44px] leading-[.9] text-white">{standing.goalsFor}</div>
+                    <div className="font-sans font-bold text-[10px] tracking-[1.5px] text-hl-dim mt-1">TORE</div>
+                  </div>
+                  <div className="w-px bg-white/10" />
+                  <div className="text-center flex flex-col items-center">
+                    <div className="flex gap-1 pt-3">
+                      {standing.form.length === 0 ? (
+                        <span className="text-xs text-hl-faint font-sans uppercase">–</span>
+                      ) : (
+                        standing.form.map((res, idx) => <FormPill key={idx} result={res} />)
+                      )}
+                    </div>
+                    <div className="font-sans font-bold text-[10px] tracking-[1.5px] text-hl-dim mt-2">FORM</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Captain – wie bei der ICON League rechts neben dem Team, ohne Hintergrund */}
+              {captain && (
+                <button
+                  type="button"
+                  onClick={() => selectPlayer(captain.name)}
+                  className="flex-none flex flex-col items-center gap-1.5 pl-2 group cursor-pointer"
+                  title={`${captain.name} – Kapitän`}
+                >
+                  {captain.imageUrl ? (
+                    <img
+                      src={captain.imageUrl}
+                      alt={captain.name}
+                      loading="lazy"
+                      decoding="async"
+                      referrerPolicy="no-referrer"
+                      className="w-[110px] h-[130px] object-contain object-bottom drop-shadow-[0_10px_24px_rgba(0,0,0,.55)] transition-transform duration-200 group-hover:scale-[1.04]"
+                    />
+                  ) : (
+                    <PlayerAvatar name={captain.name} color={color} size="xl" />
+                  )}
+                  <span
+                    className="font-sans font-extrabold text-[9px] tracking-[2px] uppercase px-2 py-0.5 rounded-full"
+                    style={{ color: '#0b0f10', background: accentSoft }}
+                  >
+                    Kapitän
+                  </span>
+                </button>
+              )}
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
       </div>
 
       {/* Body: Kader + Sidebar */}
@@ -195,33 +363,76 @@ export default function TeamDetail({
             <div className="hl-card p-8 text-center text-hl-mute font-sans text-sm">Noch keine Spieler hinterlegt.</div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-[9px]">
-              {roster.map((player) => (
-                <div
-                  key={player.name}
-                  className="flex items-center gap-3 px-3.5 py-[11px] rounded-[13px] bg-[linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012))] border border-white/[.08] backdrop-blur-sm transition-colors hover:border-[rgba(34,223,201,.3)]"
-                >
-                  {typeof player.number === 'number' && (
-                    <span
-                      className="flex-none w-7 text-center font-display font-black text-base text-brand-accent-light tabular-nums"
-                      title={`Trikotnummer ${player.number}`}
-                    >
-                      {player.number}
-                    </span>
-                  )}
-                  <PlayerAvatar name={player.name} imageUrl={player.imageUrl} color={team.logoColor} size="md" />
-                  <div className="min-w-0 flex-1">
-                    <div className="font-sans font-semibold text-sm text-hl-text truncate">{player.name}</div>
-                    <div className="font-sans text-[11px] text-hl-dim">
-                      {player.matchesPlayed} Sp. · {player.assists} Assists
+              {roster.map((player) => {
+                const isSelected = player.name === selectedPlayerName;
+                return (
+                  <button
+                    key={player.name}
+                    type="button"
+                    onClick={() => selectPlayer(player.name)}
+                    className="group flex items-center gap-3 px-3.5 py-[11px] rounded-[13px] bg-[linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012))] border text-left cursor-pointer transition-all"
+                    style={{
+                      borderColor: isSelected ? color : 'rgba(255,255,255,.08)',
+                      boxShadow: isSelected ? `0 0 0 1px ${color}` : undefined,
+                    }}
+                    title={`${player.name} – Details anzeigen`}
+                  >
+                    {typeof player.number === 'number' && (
+                      <span
+                        className="flex-none w-7 text-center font-display font-black text-base tabular-nums"
+                        style={{ color: accentSoft }}
+                        title={`Trikotnummer ${player.number}`}
+                      >
+                        {player.number}
+                      </span>
+                    )}
+                    {player.imageUrl ? (
+                      <img
+                        src={player.imageUrl}
+                        alt={player.name}
+                        loading="lazy"
+                        decoding="async"
+                        referrerPolicy="no-referrer"
+                        className="w-11 h-11 rounded-[13px] object-cover border shrink-0"
+                        style={{ borderColor: color }}
+                      />
+                    ) : (
+                      <span
+                        className="grid place-items-center w-11 h-11 rounded-[13px] font-display font-black text-white shrink-0 text-base shadow-[inset_0_0_0_1px_rgba(255,255,255,.18)]"
+                        style={{ background: `linear-gradient(140deg, ${color}, ${shade(color, 0.45)})` }}
+                      >
+                        {monogram(player.name)}
+                      </span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-sans font-semibold text-sm text-hl-text truncate">{player.name}</span>
+                        {player.captain && (
+                          <span
+                            className="flex-none font-sans font-black text-[8px] tracking-wider px-1 py-[1px] rounded"
+                            style={{ color: '#0b0f10', background: accentSoft }}
+                            title="Kapitän"
+                          >
+                            C
+                          </span>
+                        )}
+                      </div>
+                      <div className="font-sans text-[11px] text-hl-dim">
+                        {player.matchesPlayed} Sp. · {player.assists} Assists
+                        {player.winRate !== null ? ` · ${player.winRate}% Siege` : ''}
+                      </div>
                     </div>
-                  </div>
-                  {player.goals > 0 && (
-                    <span className="flex-none font-sans font-extrabold text-[11px] text-brand-accent-light px-2 py-[3px] rounded-md bg-[rgba(34,223,201,.12)]">
-                      {player.goals} ⚽
-                    </span>
-                  )}
-                </div>
-              ))}
+                    {player.goals > 0 && (
+                      <span
+                        className="flex-none font-sans font-extrabold text-[11px] px-2 py-[3px] rounded-md"
+                        style={{ color: accentSoft, background: `${color}22` }}
+                      >
+                        {player.goals} ⚽
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
 
@@ -235,7 +446,7 @@ export default function TeamDetail({
           >
             <span className="font-display font-black text-2xl uppercase text-white">Spiele</span>
             {teamMatches.length > 0 && (
-              <span className="inline-flex items-center gap-1.5 font-sans font-bold text-xs tracking-wider uppercase text-hl-dim group-hover:text-brand-accent-light transition-colors">
+              <span className="inline-flex items-center gap-1.5 font-sans font-bold text-xs tracking-wider uppercase text-hl-dim group-hover:text-white transition-colors">
                 {showAllMatches ? 'Einklappen' : `Alle ${teamMatches.length} anzeigen`}
                 <ChevronDown className={`w-4 h-4 transition-transform ${showAllMatches ? 'rotate-180' : ''}`} />
               </span>
@@ -261,7 +472,7 @@ export default function TeamDetail({
                         {opp ? (
                           <button
                             onClick={() => onSelectTeam(opp.id)}
-                            className="font-sans font-semibold text-hl-text truncate hover:text-brand-accent-light transition-colors cursor-pointer"
+                            className="font-sans font-semibold text-hl-text truncate hover:text-white transition-colors cursor-pointer"
                             title={`${opp.name} – Vereinsseite öffnen`}
                           >
                             {opp.name}
@@ -281,7 +492,7 @@ export default function TeamDetail({
                           {isHome ? `${m.homeScore}:${m.awayScore}` : `${m.awayScore}:${m.homeScore}`}
                         </span>
                       ) : m.status !== 'live' ? (
-                        <span className="text-[10px] font-sans font-bold text-brand-accent-light uppercase tracking-wider">Geplant</span>
+                        <span className="text-[10px] font-sans font-bold uppercase tracking-wider" style={{ color: accentSoft }}>Geplant</span>
                       ) : null}
                       {badge && (
                         <span className={`grid place-items-center w-[22px] h-[22px] rounded-md font-sans font-extrabold text-[11px] ${badge.cls}`}>
@@ -313,7 +524,7 @@ export default function TeamDetail({
             if (!home || !away) return null;
             return (
               <div className="hl-card rounded-[20px] p-[22px]">
-                <div className="font-sans font-extrabold text-[11px] tracking-[2px] text-brand-accent-light mb-4">
+                <div className="font-sans font-extrabold text-[11px] tracking-[2px] mb-4" style={{ color: accentSoft }}>
                   {nextMatch.status === 'live' ? 'JETZT LIVE' : 'NÄCHSTES SPIEL'}
                 </div>
                 <div className="font-sans font-semibold text-[11px] tracking-wider text-hl-dim mb-3.5 uppercase">
@@ -324,7 +535,7 @@ export default function TeamDetail({
                     <TeamCrest name={home.name} shortName={home.shortName} color={home.logoColor} logoUrl={home.logoUrl} size="lg" onSelect={() => onSelectTeam(home.id)} />
                     <span className="font-sans font-semibold text-xs text-hl-text text-center">{home.name}</span>
                   </div>
-                  <span className="font-display font-black text-xl text-brand-accent-light">
+                  <span className="font-display font-black text-xl" style={{ color: accentSoft }}>
                     {nextMatch.status === 'live' ? `${nextMatch.homeScore ?? 0}:${nextMatch.awayScore ?? 0}` : 'VS'}
                   </span>
                   <div className="flex flex-col items-center gap-2">
@@ -336,10 +547,13 @@ export default function TeamDetail({
             );
           })()}
 
+          {/* Beste Aufstellung (aus den Ergebnissen berechnet) */}
+          {topLineup && <BestLineup lineup={topLineup} team={team} />}
+
           {/* Partner / Trikot-Sponsoren dieses Teams */}
           {sponsors.length > 0 && (
             <div className="hl-card rounded-[20px] p-[22px]">
-              <div className="font-sans font-extrabold text-[11px] tracking-[2px] text-brand-accent-light mb-4">
+              <div className="font-sans font-extrabold text-[11px] tracking-[2px] mb-4" style={{ color: accentSoft }}>
                 PARTNER VON {team.name.toUpperCase()}
               </div>
               <div className="flex flex-wrap gap-2.5">
@@ -374,17 +588,39 @@ export default function TeamDetail({
           {/* Star des Teams */}
           {star && (
             <div className="hl-card rounded-[20px] p-[22px]">
-              <div className="font-sans font-extrabold text-[11px] tracking-[2px] text-brand-accent-light mb-1.5">STAR DES TEAMS</div>
-              <div className="flex items-center gap-3.5 mt-3">
-                <PlayerAvatar name={star.name} imageUrl={star.imageUrl} color={team.logoColor} size="lg" />
+              <div className="font-sans font-extrabold text-[11px] tracking-[2px] mb-1.5" style={{ color: accentSoft }}>STAR DES TEAMS</div>
+              <button
+                type="button"
+                onClick={() => selectPlayer(star.name)}
+                className="flex items-center gap-3.5 mt-3 w-full text-left cursor-pointer group"
+                title={`${star.name} – Details anzeigen`}
+              >
+                {star.imageUrl ? (
+                  <img
+                    src={star.imageUrl}
+                    alt={star.name}
+                    loading="lazy"
+                    decoding="async"
+                    referrerPolicy="no-referrer"
+                    className="w-[58px] h-[58px] rounded-[16px] object-cover border shrink-0"
+                    style={{ borderColor: color }}
+                  />
+                ) : (
+                  <span
+                    className="grid place-items-center w-[58px] h-[58px] rounded-[16px] font-display font-black text-white shrink-0 text-xl shadow-[inset_0_0_0_1px_rgba(255,255,255,.18)]"
+                    style={{ background: `linear-gradient(140deg, ${color}, ${shade(color, 0.45)})` }}
+                  >
+                    {monogram(star.name)}
+                  </span>
+                )}
                 <div>
-                  <div className="font-display font-black text-[22px] uppercase text-white leading-[.95]">{star.name}</div>
+                  <div className="font-display font-black text-[22px] uppercase text-white leading-[.95] group-hover:opacity-90">{star.name}</div>
                   <div className="font-sans font-semibold text-xs text-hl-mute mt-1">{star.matchesPlayed} Einsätze</div>
                 </div>
-              </div>
+              </button>
               <div className="grid grid-cols-2 gap-2.5 mt-4">
                 <div className="bg-white/[.03] border border-white/[.07] rounded-xl p-3 text-center">
-                  <div className="font-display font-black text-[26px] text-brand-accent-light">{star.goals}</div>
+                  <div className="font-display font-black text-[26px]" style={{ color: accentSoft }}>{star.goals}</div>
                   <div className="font-sans font-bold text-[9px] tracking-[1.5px] text-hl-dim mt-[3px]">TORE</div>
                 </div>
                 <div className="bg-white/[.03] border border-white/[.07] rounded-xl p-3 text-center">
