@@ -171,9 +171,12 @@ export default function TeamDetail({
       </button>
 
       {/* Kopf: blendet zwischen Team-Ansicht und Spieler-Detail um.
-          Kein overflow-hidden am Container, damit das Spielerbild beim Hover sanft
-          über die Kante ragen darf – der Farb-Glow wird separat geklemmt. */}
-      <div className="relative mt-4 min-h-[188px]">
+          Feste Mindesthöhe + vertikale Zentrierung, damit Team- und Spieler-Ansicht
+          exakt gleich hoch sind – so springt beim Umschalten nichts (auch der weiße
+          Partner-/Footer-Bereich bleibt an Ort und Stelle). Kein overflow-hidden am
+          Container, damit das Spielerbild beim Hover sanft über die Kante ragen darf –
+          der Farb-Glow wird separat geklemmt. */}
+      <div className="relative mt-4 grid items-center min-h-[260px] sm:min-h-[256px]">
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div
             className="absolute -top-40 -left-32 w-[560px] h-[560px] opacity-60 transition-colors"
