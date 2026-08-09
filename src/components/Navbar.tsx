@@ -38,7 +38,7 @@ interface NavbarProps {
   // Globale Suche (Lupe): Datenquellen + Navigation
   teams?: Team[];
   matches?: Match[];
-  onSelectTeam?: (teamId: string) => void;
+  onSelectTeam?: (teamId: string, playerName?: string) => void;
   onGoToMatchday?: (matchday: number) => void;
   albums?: HighlightAlbum[];
   onOpenAlbum?: (albumId: string) => void;
