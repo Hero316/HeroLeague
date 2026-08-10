@@ -130,6 +130,13 @@ body {
   100% { opacity: 1; transform: scale(1); }
 }
 
+/* Sanft pulsierender Neon-Glow für große Section-Titel (z. B. „Momente der
+   Liga"): atmet dezent auf und ab – lebendig, aber nicht kitschig. */
+@keyframes hlTitleGlow {
+  0%, 100% { text-shadow: 0 0 20px rgba(34, 223, 201, 0.25), 0 0 4px rgba(34, 223, 201, 0.15); }
+  50% { text-shadow: 0 0 48px rgba(34, 223, 201, 0.55), 0 0 12px rgba(34, 223, 201, 0.35); }
+}
+
 .hl-fade {
   animation: hlFade 0.6s both;
 }
@@ -154,6 +161,9 @@ body {
 
 /* Einzel-Pop (z. B. eine Karte) – smooth mit sanftem Nachschwingen. */
 .hl-pop { animation: hlPop 0.9s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Pulsierender Titel-Glow. */
+.hl-title-glow { animation: hlTitleGlow 3.8s ease-in-out infinite; }
 
 /* Kaskade: direkte Kinder poppen weich verzögert nacheinander auf
    („die Daten nacheinander"). Läuft einmal beim Einblenden.
@@ -276,6 +286,7 @@ body {
   .hl-zoom,
   .hl-pulse,
   .hl-gold-text,
+  .hl-title-glow,
   .hl-drift-a,
   .hl-drift-b,
   .hl-drift-c {

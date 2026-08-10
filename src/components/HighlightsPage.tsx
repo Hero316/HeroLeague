@@ -4,7 +4,7 @@ import type { HighlightsConfig } from '../types';
 import { PageHeader } from './ui';
 import { Reveal } from './anim';
 import HighlightsLightbox from './HighlightsLightbox';
-import HighlightsMosaic, { interleaveMedia } from './HighlightsMosaic';
+import HighlightsMosaic from './HighlightsMosaic';
 import HighlightsEditor from './HighlightsEditor';
 import { mediaListHandlers, genAlbumId, useCoverUpload, albumCoverInfo, newestFirst } from './highlightsEdit';
 
@@ -103,11 +103,9 @@ export default function HighlightsPage({
 
   const openAlbum = albums.find((a) => a.id === openAlbumId) ?? null;
   const activeItems = openAlbum ? openAlbum.items : items;
-  // Neueste zuerst; im View-Modus zusätzlich Videos gleichmäßig verteilt.
-  const display = useMemo(
-    () => (editMode ? newestFirst(activeItems) : interleaveMedia(newestFirst(activeItems))),
-    [activeItems, editMode]
-  );
+  // Strikt neueste zuerst – egal ob Bild oder Video. Kein Umsortieren nach
+  // Medientyp mehr, damit ein frisch hinzugefügter Beitrag immer ganz vorne steht.
+  const display = useMemo(() => newestFirst(activeItems), [activeItems]);
   const open = (i: number) => setLightbox({ index: i, dir: 0 });
 
   // Medien-Handler für die gerade aktive Liste (lose Highlights ODER offener Ordner).

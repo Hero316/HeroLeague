@@ -143,6 +143,8 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
             <img src={heroImages?.match || '/assets/hero-stadium.png'} alt="" className="absolute inset-0 w-full h-full object-cover" />
           </div>
           <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_78%_30%,rgba(232,62,140,.22),transparent_55%)]" />
+          {/* warmer Gold-Schein unten links – bricht das Einerlei, mehr Wärme */}
+          <div className="absolute inset-0 bg-[radial-gradient(85%_85%_at_10%_92%,rgba(233,196,106,.16),transparent_55%)]" />
           <div className="absolute inset-0 bg-[linear-gradient(90deg,#0A1415_6%,rgba(6,14,15,.78)_34%,rgba(6,14,15,.2)_64%,transparent)]" />
           <div className="absolute inset-0 bg-[linear-gradient(0deg,#0A1415_2%,transparent_34%)]" />
         </div>
@@ -361,6 +363,8 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
             <img src={heroImages?.table || '/assets/hero-crowd.png'} alt="" className="absolute inset-0 w-full h-full object-cover" />
           </div>
           <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_80%_30%,rgba(34,223,201,.2),transparent_55%)]" />
+          {/* warmer Gold-Schein unten links – etwas mehr Wärme im Hero */}
+          <div className="absolute inset-0 bg-[radial-gradient(85%_85%_at_10%_92%,rgba(233,196,106,.14),transparent_55%)]" />
           <div className="absolute inset-0 bg-[linear-gradient(90deg,#0A1415_6%,rgba(6,14,15,.78)_34%,rgba(6,14,15,.2)_64%,transparent)]" />
           <div className="absolute inset-0 bg-[linear-gradient(0deg,#0A1415_2%,transparent_34%)]" />
         </div>
