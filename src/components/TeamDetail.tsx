@@ -437,6 +437,26 @@ export default function TeamDetail({
                   >
                     Kapitän
                   </span>
+                  {/* Name + Kurzdaten – nutzt den Platz und macht klar, wer der Kapitän ist. */}
+                  <div className="font-display font-black text-lg leading-tight text-white text-center max-w-[190px]">
+                    {captain.name}
+                  </div>
+                  {captain.matchesPlayed > 0 && (
+                    <div className="flex items-stretch gap-1.5">
+                      <div className="text-center px-2.5 py-1.5 rounded-lg bg-white/[.04] border border-white/10">
+                        <div className="font-display font-black text-base leading-none text-white">{captain.matchesPlayed}</div>
+                        <div className="font-sans font-bold text-[8px] tracking-[1px] text-hl-dim mt-1">SPIELE</div>
+                      </div>
+                      <div className="text-center px-2.5 py-1.5 rounded-lg bg-white/[.04] border border-white/10">
+                        <div className="font-display font-black text-base leading-none" style={{ color: accentSoft }}>{captain.goals}</div>
+                        <div className="font-sans font-bold text-[8px] tracking-[1px] text-hl-dim mt-1">TORE</div>
+                      </div>
+                      <div className="text-center px-2.5 py-1.5 rounded-lg bg-white/[.04] border border-white/10">
+                        <div className="font-display font-black text-base leading-none text-white">{captain.assists}</div>
+                        <div className="font-sans font-bold text-[8px] tracking-[1px] text-hl-dim mt-1">VORLAGEN</div>
+                      </div>
+                    </div>
+                  )}
                 </button>
               )}
             </motion.div>
