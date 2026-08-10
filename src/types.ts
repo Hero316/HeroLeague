@@ -2,6 +2,7 @@ export interface Player {
   name: string;
   imageUrl?: string;
   number?: number; // feste Trikotnummer (ab Saisonstart), optional
+  captain?: boolean; // Mannschaftskapitän (max. einer pro Team, vom Superadmin gesetzt)
 }
 
 export interface Team {
@@ -298,6 +299,9 @@ export interface PlayerStat {
   goals: number;
   assists: number;
   matchesPlayed: number;
+  wins: number; // Siege in Spielen, in denen der Spieler eingesetzt war
+  draws: number; // Unentschieden mit dem Spieler auf dem Feld
+  losses: number; // Niederlagen mit dem Spieler auf dem Feld
   motmCount: number; // Anzahl „bester Spieler des Spiels"-Auszeichnungen
   cleanSheets: number; // Spiele als Torwart ohne Gegentor („zu null")
   gamesInGoal: number; // Spiele, in denen der Spieler im Tor stand

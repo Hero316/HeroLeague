@@ -9,7 +9,7 @@ interface HeroOneProps {
   teams: Team[];
   seasonNumber?: number;
   seasonLabel?: string;
-  onSelectTeam?: (teamId: string) => void;
+  onSelectTeam?: (teamId: string, playerName?: string) => void;
 }
 
 // HERO ONE – die höchste Auszeichnung der Liga (früher „Ballon d'Or").
@@ -41,9 +41,10 @@ export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onS
       p.cleanSheets > 0 ? `${p.cleanSheets}× 🧤` : null,
     ].filter(Boolean);
 
-  const goTeam = (p: PlayerStat) => {
+  // Klick auf den Spielernamen öffnet direkt das Spieler-Detail.
+  const goPlayer = (p: PlayerStat) => {
     const t = teamOf(p);
-    if (t && onSelectTeam) onSelectTeam(t.id);
+    if (t && onSelectTeam) onSelectTeam(t.id, p.name);
   };
 
   const leader = ranking[0] ?? null;
@@ -98,8 +99,8 @@ export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onS
                       Aktueller Spitzenreiter
                     </div>
                     <button
-                      onClick={() => goTeam(leader)}
-                      title={teamOf(leader) ? `${leader.teamName} – Vereinsseite öffnen` : undefined}
+                      onClick={() => goPlayer(leader)}
+                      title={teamOf(leader) ? `${leader.name} – Spieler anzeigen` : undefined}
                       className={`block max-w-full font-display font-black text-4xl sm:text-6xl uppercase text-white leading-[.9] truncate text-center sm:text-left ${teamOf(leader) && onSelectTeam ? 'cursor-pointer hover:text-hl-gold transition-colors' : 'cursor-default'}`}
                     >
                       {leader.name}
@@ -139,8 +140,8 @@ export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onS
                     </div>
                     <div className="min-w-0 flex-1">
                       <button
-                        onClick={() => goTeam(p)}
-                        title={teamOf(p) ? `${p.teamName} – Vereinsseite öffnen` : undefined}
+                        onClick={() => goPlayer(p)}
+                        title={teamOf(p) ? `${p.name} – Spieler anzeigen` : undefined}
                         className={`block max-w-full text-left font-sans font-bold text-[15px] text-white truncate ${canClick ? 'cursor-pointer hover:text-hl-gold transition-colors' : 'cursor-default'}`}
                       >
                         {p.name}

@@ -28,6 +28,7 @@ interface NavbarProps {
   onOpenReferee?: () => void; // Admin: direkt in den Schiedsrichtermodus wechseln
   seasonLabel?: string;
   seasonNumber?: number; // für den HERO-Award-Titel (HERO ONE/TWO …)
+  demoActive?: boolean; // Demo-Modus aktiv? -> rot pulsierende Warnleiste ganz oben
   hasLiveMatch?: boolean;
   eventActive?: boolean; // Sonder-Event sichtbar? -> farbiger Menüpunkt
   eventTitle?: string;
@@ -38,7 +39,7 @@ interface NavbarProps {
   // Globale Suche (Lupe): Datenquellen + Navigation
   teams?: Team[];
   matches?: Match[];
-  onSelectTeam?: (teamId: string) => void;
+  onSelectTeam?: (teamId: string, playerName?: string) => void;
   onGoToMatchday?: (matchday: number) => void;
   albums?: HighlightAlbum[];
   onOpenAlbum?: (albumId: string) => void;
@@ -53,6 +54,7 @@ export default function Navbar({
   onOpenReferee,
   seasonLabel,
   seasonNumber,
+  demoActive,
   hasLiveMatch,
   eventActive,
   eventTitle,
@@ -134,6 +136,22 @@ export default function Navbar({
 
   return (
     <div className="hl-glass-nav sticky top-0 z-50 bg-[rgba(7,10,8,.72)] backdrop-blur-xl pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+      {/* Demo-Warnleiste: erscheint auf JEDER Seite ganz oben, solange der Demo-Modus
+          läuft – rot, leuchtend, leicht pulsierend, damit klar ist: keine echten Daten. */}
+      {demoActive && (
+        <div className="w-full border-b border-[rgba(255,84,66,.45)] bg-[linear-gradient(90deg,rgba(255,84,66,.1),rgba(255,84,66,.22),rgba(255,84,66,.1))]">
+          <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-[6px] flex items-center justify-center gap-2.5 text-center">
+            <span className="w-2 h-2 rounded-full bg-hl-red hl-pulse shrink-0" />
+            <span className="font-sans font-black text-[11px] sm:text-xs tracking-[2.5px] uppercase text-hl-red-soft [text-shadow:0_0_14px_rgba(255,84,66,.75)] animate-pulse">
+              Demo aktiv
+            </span>
+            <span className="font-sans font-bold text-[9.5px] sm:text-[11px] tracking-[1px] uppercase text-hl-red-soft/80 hidden sm:inline">
+              · Vorschau, keine echten Statistiken
+            </span>
+            <span className="w-2 h-2 rounded-full bg-hl-red hl-pulse shrink-0" />
+          </div>
+        </div>
+      )}
       <div className="max-w-[1320px] mx-auto px-4 sm:px-10 h-[68px] sm:h-[76px] flex items-center gap-5 lg:gap-9">
         {/* Logo + Claim */}
         <button

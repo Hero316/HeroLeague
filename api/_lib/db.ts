@@ -16,6 +16,7 @@ export function normalizeRoster(roster: unknown): Player[] {
           name: p.name,
           ...(p.imageUrl ? { imageUrl: p.imageUrl } : {}),
           ...(num !== undefined && num >= 0 ? { number: num } : {}),
+          ...(p.captain === true ? { captain: true } : {}),
         };
       }
       return null;

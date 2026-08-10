@@ -52,7 +52,62 @@ const PAGE_GLOWS: Record<string, Glow[]> = {
 };
 PAGE_GLOWS.default = PAGE_GLOWS.home;
 
-export default function PageBackground({ page }: { page: string }) {
+// Hex → {r,g,b}; fällt bei Unsinn auf den Teal-Kern zurück.
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const c = (hex || '').replace('#', '');
+  const full = c.length === 3 ? c.split('').map((x) => x + x).join('') : c;
+  const n = parseInt(full, 16);
+  if (Number.isNaN(n)) return { r: 34, g: 223, b: 201 };
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+export default function PageBackground({
+  page,
+  teamColor,
+  teamLogoUrl,
+}: {
+  page: string;
+  teamColor?: string; // gesetzt = team-farbiger Hintergrund (Vereinsseite)
+  teamLogoUrl?: string; // optionales, ganz dezentes Logo im Hintergrund
+}) {
+  // Vereinsseite: kompletter Hintergrund in Teamfarbe + hauchzartes Wappen.
+  if (teamColor) {
+    const { r, g, b } = hexToRgb(teamColor);
+    const c = (a: number) => `radial-gradient(circle, rgba(${r},${g},${b},${a}), transparent 70%)`;
+    return (
+      <div aria-hidden className="fixed inset-0 -z-10 overflow-hidden pointer-events-none" style={{ background: '#0A1415' }}>
+        <div key={teamColor} className="hl-bg-in absolute inset-0">
+          <div className="absolute rounded-full blur-[80px] hl-drift-a" style={{ top: '-18%', left: '-12%', width: '66vw', height: '66vw', background: c(0.22) }} />
+          <div className="absolute rounded-full blur-[80px] hl-drift-b" style={{ bottom: '-24%', right: '-14%', width: '60vw', height: '60vw', background: c(0.16) }} />
+          <div className="absolute rounded-full blur-[70px] hl-drift-c" style={{ top: '30%', right: '18%', width: '42vw', height: '42vw', background: c(0.10) }} />
+          {/* sanfter Farbschleier über der ganzen Fläche */}
+          <div className="absolute inset-0" style={{ background: `linear-gradient(160deg, rgba(${r},${g},${b},0.10), transparent 45%, rgba(${r},${g},${b},0.06))` }} />
+        </div>
+        {/* Vereinslogo – groß, extrem dezent, mittig im Hintergrund (Desktop UND Handy).
+            Weiche radiale Maske blendet die Ränder aus, damit kein hartes „Viereck"
+            entsteht, sondern das Logo sanft in den Hintergrund übergeht. */}
+        {teamLogoUrl && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <img
+              src={teamLogoUrl}
+              alt=""
+              aria-hidden
+              decoding="async"
+              referrerPolicy="no-referrer"
+              className="w-[min(720px,80vw)] max-h-[72vh] object-contain opacity-[.05] blur-[1px] select-none"
+              style={{
+                WebkitMaskImage: 'radial-gradient(circle, #000 46%, transparent 72%)',
+                maskImage: 'radial-gradient(circle, #000 46%, transparent 72%)',
+              }}
+            />
+          </div>
+        )}
+        {/* Vignette: Ränder etwas dunkler, Kern ruhig */}
+        <div className="absolute inset-0" style={{ background: 'radial-gradient(120% 85% at 50% 0%, transparent 52%, rgba(6,12,11,0.6) 100%)' }} />
+      </div>
+    );
+  }
+
   const glows = PAGE_GLOWS[page] ?? PAGE_GLOWS.default;
   return (
     <div aria-hidden className="fixed inset-0 -z-10 overflow-hidden pointer-events-none" style={{ background: '#0A1415' }}>

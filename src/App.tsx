@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster } from './types';
+import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster, PlayerOfMonth } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
 import { startPresence } from './lib/presence';
 import { seasonName } from './lib/heroAward';
@@ -57,6 +57,9 @@ export default function App() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [players, setPlayers] = useState<PlayerStat[]>([]);
+  // Spieler des Monats schon beim Laden holen, damit der Hero direkt mit finaler
+  // Höhe erscheint (sonst kommt der Slide asynchron dazu und der Hero „springt").
+  const [pom, setPom] = useState<PlayerOfMonth | null>(null);
   const [eventArchive, setEventArchive] = useState<EventArchive | null>(null);
   const [highlights, setHighlights] = useState<HighlightsConfig>({ items: [], albums: [] });
   // Wenn aus der Story-Ansicht ein Ordner geöffnet wird: der Galerie-Seite mitgeben,
@@ -171,7 +174,7 @@ export default function App() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [dataTeams, dataMatches, dataSeasons, dataDemo] = await Promise.all([
+      const [dataTeams, dataMatches, dataSeasons, dataDemo, dataPom] = await Promise.all([
         apiFetch<Team[]>('/api/teams'),
         apiFetch<Match[]>('/api/matches'),
         apiFetch<Season[]>('/api/seasons'),
@@ -180,11 +183,13 @@ export default function App() {
           seasonId: '',
           teamIds: [],
         })),
+        apiFetch<PlayerOfMonth>('/api/player-of-the-month').catch(() => null),
       ]);
       setTeams(dataTeams);
       setMatches(dataMatches);
       setSeasons(dataSeasons);
       setDemo(dataDemo);
+      setPom(dataPom && dataPom.name ? dataPom : null);
     } catch (err) {
       console.error('Fehler beim Laden der Liga-Daten', err);
     } finally {
@@ -462,7 +467,13 @@ export default function App() {
     return ok;
   };
 
-  const openTeamDetail = (teamId: string) => navigateTo(`/verein/${encodeURIComponent(teamId)}`);
+  // Vereinsseite öffnen; mit playerName direkt das Spieler-Detail (teilbare URL).
+  const openTeamDetail = (teamId: string, playerName?: string) =>
+    navigateTo(
+      playerName
+        ? `/verein/${encodeURIComponent(teamId)}/spieler/${encodeURIComponent(playerName)}`
+        : `/verein/${encodeURIComponent(teamId)}`
+    );
 
   const goToTab = (tab: ActiveTab) => {
     navigateTo(TAB_PATHS[tab]);
@@ -537,6 +548,7 @@ export default function App() {
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')}
           onOpenReferee={() => setRefereeView(true)}
+          demoActive={demo.active}
           seasonLabel={selectedSeasonName}
           seasonNumber={currentSeasonNumber}
           hasLiveMatch={hasLiveMatch}
@@ -563,11 +575,15 @@ export default function App() {
 
   // ROUTE: /verein/:id – öffentliche Vereins-Detailseite
   if (currentPath.startsWith('/verein/')) {
-    const teamId = decodeURIComponent(currentPath.slice('/verein/'.length).replace(/\/+$/, ''));
+    // Pfad: /verein/<id>  oder  /verein/<id>/spieler/<name> (Spieler direkt geöffnet)
+    const rest = currentPath.slice('/verein/'.length).replace(/\/+$/, '');
+    const sepIdx = rest.indexOf('/spieler/');
+    const teamId = decodeURIComponent(sepIdx >= 0 ? rest.slice(0, sepIdx) : rest);
+    const initialPlayer = sepIdx >= 0 ? decodeURIComponent(rest.slice(sepIdx + '/spieler/'.length)) : undefined;
     const team = visibleTeams.find((t) => t.id === teamId);
     return (
-      <div className="min-h-screen text-hl-text font-sans flex flex-col">
-        <PageBackground page="tabelle" />
+      <div className="min-h-screen text-hl-text font-sans flex flex-col overflow-x-clip">
+        <PageBackground page="tabelle" teamColor={team?.logoColor} teamLogoUrl={team?.logoUrl} />
         {renderMobileDock()}
         <Navbar
           activeTab={activeTab}
@@ -577,6 +593,7 @@ export default function App() {
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')}
           onOpenReferee={() => setRefereeView(true)}
+          demoActive={demo.active}
           seasonLabel={selectedSeasonName}
           seasonNumber={currentSeasonNumber}
           hasLiveMatch={hasLiveMatch}
@@ -601,6 +618,7 @@ export default function App() {
               matches={seasonMatches}
               players={players}
               seasonLabel={selectedSeasonName}
+              initialPlayer={initialPlayer}
               onBack={goBack}
               onSelectTeam={openTeamDetail}
             />
@@ -648,6 +666,7 @@ export default function App() {
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')}
           onOpenReferee={() => setRefereeView(true)}
+          demoActive={demo.active}
           seasonLabel={currentSeasonName}
           seasonNumber={currentSeasonNumber}
           hasLiveMatch={hasLiveMatch}
@@ -878,6 +897,7 @@ export default function App() {
         onOpenLogin={() => navigateTo('/admin')}
         onOpenBackoffice={() => navigateTo('/admin')}
         onOpenReferee={() => setRefereeView(true)}
+        demoActive={demo.active}
         seasonLabel={currentSeasonName}
         seasonNumber={currentSeasonNumber}
         hasLiveMatch={hasLiveMatch}
@@ -903,7 +923,7 @@ export default function App() {
       {activeTab === 'home' && (
         <>
           {countdown.active && <Countdown target={countdown.target} title={countdown.title} />}
-          <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
+          <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
           <HighlightsHome
             highlights={highlights}
             editMode={editMode && isAdmin}

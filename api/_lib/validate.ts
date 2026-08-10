@@ -27,6 +27,8 @@ export function isRoster(value: unknown): value is Player[] {
         typeof p === 'object' &&
         isNonEmptyString((p as Player).name) &&
         ((p as Player).imageUrl === undefined || typeof (p as Player).imageUrl === 'string') &&
+        // Kapitäns-Flag optional: fehlt oder boolean
+        ((p as Player).captain === undefined || typeof (p as Player).captain === 'boolean') &&
         // Trikotnummer optional: fehlt oder ganze Zahl 0–999
         ((p as Player).number === undefined ||
           (typeof (p as Player).number === 'number' &&

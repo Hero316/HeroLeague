@@ -13,9 +13,11 @@ export function shade(hex: string, factor: number): string {
   const full = clean.length === 3 ? clean.split('').map((c) => c + c).join('') : clean;
   const num = parseInt(full, 16);
   if (Number.isNaN(num)) return '#0c1413';
-  const r = Math.round(((num >> 16) & 255) * factor);
-  const g = Math.round(((num >> 8) & 255) * factor);
-  const b = Math.round((num & 255) * factor);
+  // Faktor < 1 dunkelt ab, > 1 hellt auf; Werte sicher auf 0–255 begrenzen.
+  const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+  const r = clamp(((num >> 16) & 255) * factor);
+  const g = clamp(((num >> 8) & 255) * factor);
+  const b = clamp((num & 255) * factor);
   return `rgb(${r}, ${g}, ${b})`;
 }
 
@@ -434,11 +436,13 @@ export function ImageZoom({
   alt,
   className,
   zoomClassName,
+  style,
 }: {
   src: string;
   alt: string;
   className?: string; // Darstellung im normalen Fluss
   zoomClassName?: string; // Darstellung in der Lightbox
+  style?: React.CSSProperties; // z.B. Team-Farbe am Rand
 }) {
   const [open, setOpen] = React.useState(false);
 
@@ -462,7 +466,7 @@ export function ImageZoom({
         title={`${alt} – vergrößern`}
         className="shrink-0 cursor-zoom-in transition-transform duration-150 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-brand-accent-light rounded-2xl"
       >
-        <img src={src} alt={alt} loading="lazy" decoding="async" referrerPolicy="no-referrer" className={className} />
+        <img src={src} alt={alt} loading="lazy" decoding="async" referrerPolicy="no-referrer" className={className} style={style} />
       </button>
 
       {open &&

@@ -92,6 +92,45 @@ export async function activateDemo(): Promise<DemoState> {
 
   // 4) Spiele der echten Saison als Demo-Spiele mit Zufallsergebnis nachbauen
   const demoTeamById = new Map(demoTeams.map((t) => [t.id, t] as const));
+
+  // --- Realistische Anwesenheit: pro Spieltag-Abend ist nur ein Teil des Kaders da ---
+  // Ziel: ca. 6 Spieler pro Abend, ein fester Torwart, Rest rotiert. Dadurch ändern
+  // sich Siegquoten je Spieler und die „beste Aufstellung" hat echte Aussagekraft.
+  const TARGET_PRESENT = 6;
+
+  // k zufällige, verschiedene Namen ziehen (Fisher-Yates auf einer Kopie).
+  const sample = (arr: string[], k: number): string[] => {
+    const copy = [...arr];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy.slice(0, Math.max(0, Math.min(k, copy.length)));
+  };
+
+  // Fester Stamm-Torwart je Team (einmal gewählt, an jedem Abend dabei).
+  const teamKeeper = new Map<string, string>();
+  for (const t of demoTeams) teamKeeper.set(t.id, pick(rosterNames(t)));
+
+  // Anwesenheit je (Team, Spieltag) – für alle Spiele desselben Abends identisch.
+  const attendance = new Map<string, string[]>();
+  const presentFor = (teamId: string, matchday: number, names: string[]): string[] => {
+    const key = `${teamId}:${matchday}`;
+    const cached = attendance.get(key);
+    if (cached) return cached;
+    const keeper = teamKeeper.get(teamId);
+    const target = Math.min(names.length, rand(5, 7)); // „ungefähr sechs"
+    let present: string[];
+    if (names.length <= target || !keeper) {
+      present = [...names];
+    } else {
+      const others = names.filter((n) => n !== keeper);
+      present = [keeper, ...sample(others, target - 1)];
+    }
+    attendance.set(key, present);
+    return present;
+  };
+
   const demoMatches = realFixtures
     .map((m, i) => {
       const homeId = idMap.get(m.homeTeamId);
@@ -99,16 +138,27 @@ export async function activateDemo(): Promise<DemoState> {
       if (!homeId || !awayId) return null;
       const homeNames = rosterNames(demoTeamById.get(homeId)!);
       const awayNames = rosterNames(demoTeamById.get(awayId)!);
+      const homePresent = presentFor(homeId, m.matchday, homeNames);
+      const awayPresent = presentFor(awayId, m.matchday, awayNames);
+      // Abwesende = Kader minus Anwesende (so entstehen unterschiedliche Aufstellungen)
+      const absentees = [
+        ...homeNames.filter((n) => !homePresent.includes(n)).map((playerName) => ({ playerName, teamId: homeId })),
+        ...awayNames.filter((n) => !awayPresent.includes(n)).map((playerName) => ({ playerName, teamId: awayId })),
+      ];
       const homeScore = pick(SCORE_POOL);
       const awayScore = pick(SCORE_POOL);
-      const scorers = [...makeScorers(homeScore, homeId, homeNames), ...makeScorers(awayScore, awayId, awayNames)];
+      // Torschützen nur aus den Anwesenden des Abends.
+      const scorers = [...makeScorers(homeScore, homeId, homePresent), ...makeScorers(awayScore, awayId, awayPresent)];
       const bestPlayers = [
-        { playerName: pick(homeNames), teamId: homeId },
-        { playerName: pick(awayNames), teamId: awayId },
+        { playerName: pick(homePresent), teamId: homeId },
+        { playerName: pick(awayPresent), teamId: awayId },
       ];
+      // Torwart = fester Stamm-Torwart (ist immer anwesend), sonst irgendwer Anwesendes.
+      const homeGk = teamKeeper.get(homeId) && homePresent.includes(teamKeeper.get(homeId)!) ? teamKeeper.get(homeId)! : pick(homePresent);
+      const awayGk = teamKeeper.get(awayId) && awayPresent.includes(teamKeeper.get(awayId)!) ? teamKeeper.get(awayId)! : pick(awayPresent);
       const goalkeepers = [
-        { playerName: pick(homeNames), teamId: homeId },
-        { playerName: pick(awayNames), teamId: awayId },
+        { playerName: homeGk, teamId: homeId },
+        { playerName: awayGk, teamId: awayId },
       ];
       return {
         id: `demo-m-${stamp}-${i}`,
@@ -123,6 +173,7 @@ export async function activateDemo(): Promise<DemoState> {
         field: m.field ?? null,
         slot: m.slot ?? null,
         scorers,
+        absentees,
         bestPlayers,
         goalkeepers,
       };
@@ -146,7 +197,7 @@ export async function activateDemo(): Promise<DemoState> {
             (id, season_id, matchday, home_team_id, away_team_id, home_score, away_score, status, date, time, venue, field, slot, scorers, absentees, best_players, goalkeepers)
           VALUES
             (${m.id}, ${demoSeasonId}, ${m.matchday}, ${m.homeTeamId}, ${m.awayTeamId}, ${m.homeScore}, ${m.awayScore}, 'beendet', ${m.date}, ${m.time}, ${m.venue}, ${m.field}, ${m.slot},
-             ${JSON.stringify(m.scorers)}::jsonb, '[]'::jsonb, ${JSON.stringify(m.bestPlayers)}::jsonb, ${JSON.stringify(m.goalkeepers)}::jsonb)`
+             ${JSON.stringify(m.scorers)}::jsonb, ${JSON.stringify(m.absentees)}::jsonb, ${JSON.stringify(m.bestPlayers)}::jsonb, ${JSON.stringify(m.goalkeepers)}::jsonb)`
     );
   }
   const state: DemoState = { active: true, seasonId: demoSeasonId, teamIds: demoTeams.map((t) => t.id) };
