@@ -3,6 +3,7 @@ export interface Player {
   imageUrl?: string;
   number?: number; // feste Trikotnummer (ab Saisonstart), optional
   captain?: boolean; // Mannschaftskapitän (max. einer pro Team, vom Superadmin gesetzt)
+  goalkeeper?: boolean; // fester Torwart (max. einer pro Team) – nur Vorauswahl für die Abend-Aufstellung, dort weiter änderbar
 }
 
 export interface Team {

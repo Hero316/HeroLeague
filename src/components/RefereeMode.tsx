@@ -740,7 +740,13 @@ function RosterEditor({
       const stored = eveningRoster?.teams?.[id];
       const kader = kaderOf(id);
       const present = stored?.present && stored.present.length ? stored.present : kader;
-      init[id] = { present: new Set(present), goalkeeper: stored?.goalkeeper ?? '' };
+      const presentSet = new Set(present);
+      // Fester Torwart aus dem Kader als Vorauswahl, solange für diesen Abend noch
+      // keiner gesetzt wurde. Bleibt änderbar (kann jederzeit überschrieben werden).
+      const fixedGk = (teamById.get(id)?.spielerliste ?? []).find((p) => p.goalkeeper)?.name;
+      const goalkeeper =
+        stored?.goalkeeper ?? (fixedGk && presentSet.has(fixedGk) ? fixedGk : '');
+      init[id] = { present: presentSet, goalkeeper };
     });
     return init;
   });
