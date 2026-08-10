@@ -258,7 +258,7 @@ export default function SearchBar({
                   enterKeyHint="search"
                   autoComplete="off"
                   aria-label="Suche"
-                  className="flex-1 min-w-0 bg-transparent h-9 text-sm text-white placeholder:text-hl-faint focus:outline-none font-sans"
+                  className="flex-1 min-w-0 bg-transparent h-9 text-[16px] sm:text-sm text-white placeholder:text-hl-faint focus:outline-none font-sans"
                 />
                 <button
                   type="button"
