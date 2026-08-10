@@ -268,21 +268,57 @@ export default function TeamDetail({
           transition={{ duration: 0.32, ease: [0.22, 0.61, 0.36, 1] }}
           className={`[grid-area:1/1] self-center relative flex flex-col sm:flex-row items-start sm:items-center gap-6 flex-wrap py-6 ${selected ? 'pointer-events-none' : ''}`}
         >
-              {team.logoUrl ? (
-                <ImageZoom
-                  src={team.logoUrl}
-                  alt={team.name}
-                  className="w-[118px] h-[118px] object-contain"
-                  zoomClassName="w-72 sm:w-96 max-w-[85vw] max-h-[80vh] object-contain"
-                />
-              ) : (
-                <span
-                  className="grid place-items-center w-[118px] h-[118px] shrink-0 rounded-[32px] font-display font-black text-5xl text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.18),0_18px_40px_rgba(0,0,0,.4)]"
-                  style={{ background: `linear-gradient(140deg, ${color}, ${shade(color, 0.45)})` }}
-                >
-                  {monogram(team.shortName || team.name)}
-                </span>
-              )}
+              {/* Logo + (nur auf dem Handy) kleiner Captain rechts daneben – wie bei der
+                  ICON League. sm:contents ⇒ auf Desktop fließt das Logo wieder als
+                  normales Flex-Element und der Captain steht wie gehabt ganz rechts. */}
+              <div className="flex w-full items-start justify-between gap-4 sm:contents">
+                {team.logoUrl ? (
+                  <ImageZoom
+                    src={team.logoUrl}
+                    alt={team.name}
+                    className="w-[118px] h-[118px] object-contain"
+                    zoomClassName="w-72 sm:w-96 max-w-[85vw] max-h-[80vh] object-contain"
+                  />
+                ) : (
+                  <span
+                    className="grid place-items-center w-[118px] h-[118px] shrink-0 rounded-[32px] font-display font-black text-5xl text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.18),0_18px_40px_rgba(0,0,0,.4)]"
+                    style={{ background: `linear-gradient(140deg, ${color}, ${shade(color, 0.45)})` }}
+                  >
+                    {monogram(team.shortName || team.name)}
+                  </span>
+                )}
+                {/* Captain klein – nur Handy, oben rechts, Name darunter */}
+                {captain && (
+                  <button
+                    type="button"
+                    onClick={() => selectPlayer(captain.name)}
+                    className="flex sm:hidden flex-col items-center gap-1 shrink-0 max-w-[108px] cursor-pointer group"
+                    title={`${captain.name} – Kapitän`}
+                  >
+                    {captain.imageUrl ? (
+                      <img
+                        src={captain.imageUrl}
+                        alt={captain.name}
+                        loading="lazy"
+                        decoding="async"
+                        referrerPolicy="no-referrer"
+                        className="w-[86px] h-[98px] object-contain object-bottom drop-shadow-[0_8px_20px_rgba(0,0,0,.5)] group-active:scale-95 transition-transform"
+                      />
+                    ) : (
+                      <PlayerAvatar name={captain.name} color={color} size="lg" />
+                    )}
+                    <span
+                      className="font-sans font-extrabold text-[8px] tracking-[1.5px] uppercase px-2 py-0.5 rounded-full"
+                      style={{ color: '#0b0f10', background: accentSoft }}
+                    >
+                      Kapitän
+                    </span>
+                    <span className="font-sans font-semibold text-[10.5px] text-white text-center leading-tight truncate max-w-full">
+                      {captain.name}
+                    </span>
+                  </button>
+                )}
+              </div>
               <div className="flex-1 w-full sm:w-auto min-w-0 sm:min-w-[260px]">
                 <div className="font-sans font-extrabold text-xs tracking-[2.5px] uppercase" style={{ color: accentSoft }}>
                   HERO LEAGUE{rank > 0 ? ` · TABELLENPLATZ ${rank}` : ''}
@@ -336,12 +372,13 @@ export default function TeamDetail({
                 </div>
               )}
 
-              {/* Captain – wie bei der ICON League rechts neben dem Team, ohne Hintergrund */}
+              {/* Captain (Desktop) – groß rechts neben dem Team, ohne Hintergrund.
+                  Auf dem Handy versteckt (dort steht er klein oben rechts neben dem Logo). */}
               {captain && (
                 <button
                   type="button"
                   onClick={() => selectPlayer(captain.name)}
-                  className="flex-none flex flex-col items-center gap-1.5 pl-2 group cursor-pointer"
+                  className="flex-none hidden sm:flex flex-col items-center gap-1.5 pl-2 group cursor-pointer"
                   title={`${captain.name} – Kapitän`}
                 >
                   {captain.imageUrl ? (
