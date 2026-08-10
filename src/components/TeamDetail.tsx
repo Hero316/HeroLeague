@@ -464,15 +464,6 @@ export default function TeamDetail({
                     }}
                     title={`${player.name} – Details anzeigen`}
                   >
-                    {typeof player.number === 'number' && (
-                      <span
-                        className="flex-none w-7 text-center font-display font-black text-base tabular-nums"
-                        style={{ color: accentSoft }}
-                        title={`Trikotnummer ${player.number}`}
-                      >
-                        {player.number}
-                      </span>
-                    )}
                     {player.imageUrl ? (
                       <img
                         src={player.imageUrl}
@@ -494,6 +485,14 @@ export default function TeamDetail({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <span className="font-sans font-semibold text-sm text-hl-text truncate">{player.name}</span>
+                        {typeof player.number === 'number' && (
+                          <span
+                            className="flex-none font-sans font-bold text-[9.5px] px-1 py-[1px] rounded bg-white/[.06] text-hl-mute tabular-nums"
+                            title={`Trikotnummer ${player.number}`}
+                          >
+                            #{player.number}
+                          </span>
+                        )}
                         {player.captain && (
                           <span
                             className="flex-none font-sans font-black text-[8px] tracking-wider px-1 py-[1px] rounded"
