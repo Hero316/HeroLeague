@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useSpring, useMotionValueEvent, useReducedMotion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Play } from 'lucide-react';
 import type { HighlightMedia } from '../types';
@@ -38,10 +38,37 @@ export default function HighlightsCarousel({
   // Ziel-Index (unbeschränkt – erlaubt die Endlos-Schleife in beide Richtungen)
   // und die weich hinterherfedernde Ist-Position. Aus der Feder-Position werden
   // pro Frame die 3D-Transformationen aller sichtbaren Kacheln berechnet.
+  // Start leicht „vor-gedreht": beim ersten Sichtbarwerden dreht der Ring kurz
+  // durch und rastet smooth beim neuesten Beitrag (Index 0) ein.
+  const spinStart = reduce || n < 2 ? 0 : Math.min(3.4, n - 0.5);
   const [activeInt, setActiveInt] = useState(0);
-  const pos = useSpring(0, reduce ? { duration: 0 } : { stiffness: 190, damping: 28, mass: 0.9 });
-  const [posV, setPosV] = useState(0);
+  const pos = useSpring(spinStart, reduce ? { duration: 0 } : { stiffness: 150, damping: 26, mass: 1 });
+  const [posV, setPosV] = useState(spinStart);
   useMotionValueEvent(pos, 'change', (v) => setPosV(v));
+
+  // Einflug-Animation: sobald das Karussell in den sichtbaren Bereich scrollt,
+  // aus der vor-gedrehten Position weich auf den neuesten Beitrag einrasten.
+  const entered = useRef(false);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el || spinStart === 0) {
+      entered.current = true;
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entered.current && entries.some((e) => e.isIntersecting)) {
+          entered.current = true;
+          pos.set(0);
+          io.disconnect();
+        }
+      },
+      { threshold: 0.3 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Maße: aktive Kachel groß, Nachbarn überlappen leicht. Auf dem Handy breiter.
   const slideW = w === 0 ? 0 : w < 640 ? w * 0.8 : Math.min(w * 0.56, 720);
@@ -52,6 +79,7 @@ export default function HighlightsCarousel({
   const depth = Math.min(3, Math.floor((n - 1) / 2)) || 1;
 
   const goTo = (target: number) => {
+    entered.current = true; // eine Nutzer-Aktion beendet den Einflug
     setActiveInt(target);
     if (reduce) pos.jump(target);
     else pos.set(target);
@@ -68,16 +96,23 @@ export default function HighlightsCarousel({
   };
 
   // Wischen: die Position folgt live dem Finger, beim Loslassen rastet der
-  // nächste Beitrag ein (Wisch-Strecke + etwas Schwung).
-  const drag = useRef<{ startX: number; startActive: number; moved: boolean } | null>(null);
+  // nächste Beitrag ein – aus Wisch-Strecke UND Schwung. Ein kräftiger Flick
+  // überspringt ein bis zwei Beiträge (wie zuvor), ein sanfter genau einen.
+  const drag = useRef<{ startX: number; startActive: number; moved: boolean; lastX: number; lastT: number; vx: number } | null>(null);
   const didPan = useRef(false);
   const onPointerDown = (e: React.PointerEvent) => {
     if (n < 2) return;
-    drag.current = { startX: e.clientX, startActive: activeInt, moved: false };
+    entered.current = true;
+    drag.current = { startX: e.clientX, startActive: activeInt, moved: false, lastX: e.clientX, lastT: performance.now(), vx: 0 };
   };
   const onPointerMove = (e: React.PointerEvent) => {
     const d = drag.current;
     if (!d || !spacing) return;
+    const now = performance.now();
+    const dt = now - d.lastT;
+    if (dt > 0) d.vx = ((e.clientX - d.lastX) / dt) * 1000; // px/s (für den Schwung)
+    d.lastX = e.clientX;
+    d.lastT = now;
     const dx = e.clientX - d.startX;
     if (Math.abs(dx) > 5) {
       d.moved = true;
@@ -94,7 +129,11 @@ export default function HighlightsCarousel({
     if (!d || !spacing) return;
     drag.current = null;
     const dx = e.clientX - d.startX;
-    const steps = Math.max(-3, Math.min(3, Math.round(-dx / spacing)));
+    // Projizierte Strecke = zurückgelegt + Schwung. Ein Schritt entspricht knapp
+    // einer Kachelbreite; Ergebnis auf max. ±3 begrenzt (also 1–2 übersprungen).
+    const stridePx = slideW * 0.62 || 1;
+    const projectedPx = dx + d.vx * 0.13;
+    const steps = Math.max(-3, Math.min(3, -Math.round(projectedPx / stridePx)));
     if (d.moved) {
       didPan.current = true;
       setTimeout(() => (didPan.current = false), 60); // den Folge-Klick schlucken
