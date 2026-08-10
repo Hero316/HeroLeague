@@ -1,31 +1,27 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Team } from '../types';
-import { LineupStat } from '../lib/lineups';
 import { shade } from './ui';
 
-// Kleines, team-farbiges Fußballfeld, das die erfolgreichste Aufstellung eines
-// Teams zeigt (aus den Spieldaten berechnet, siehe src/lib/lineups.ts). Da wir
-// keine echten Positionen erfassen, verteilen wir die Feldspieler gleichmäßig auf
-// Reihen; der Torwart steht unten im Tor.
+// Beste Aufstellung als team-farbiges Mini-Fußballfeld – NICHT die historische
+// Anwesenheits-Kombination, sondern die individuell besten Spieler nach Siegquote:
+// fester Torwart unten, die 4 besten Feldspieler auf dem Platz (2-2, beste oben),
+// der 5. und 6. beste als Auswechselbank rechts daneben.
 
-interface BestLineupProps {
-  lineup: LineupStat;
-  team: Team;
-  onSelectPlayer?: (name: string) => void; // Klick auf einen Feldspieler → Spieler-Detail
+export interface XIEntry {
+  name: string;
+  firstName: string;
+  imageUrl?: string;
+  winRate: number | null; // Siegquote in % (null = noch kein Einsatz)
+  matchesPlayed: number;
 }
 
-// Feldspieler möglichst gleichmäßig auf Reihen verteilen (Abwehr unten … Sturm oben).
-function rows(count: number): number[] {
-  if (count <= 0) return [];
-  if (count <= 3) return [count];
-  const rowCount = count <= 6 ? 2 : 3;
-  const base = Math.floor(count / rowCount);
-  const rem = count % rowCount;
-  // Rest auf die vorderen (oberen) Reihen legen, damit der Sturm nicht zu dünn wirkt.
-  const out: number[] = [];
-  for (let i = 0; i < rowCount; i++) out.push(base + (rowCount - 1 - i < rem ? 1 : 0));
-  return out; // Index 0 = unterste Reihe (Abwehr)
+interface BestLineupProps {
+  goalkeeper: XIEntry | null;
+  field: XIEntry[]; // bis zu 4, bereits nach Siegquote sortiert (best zuerst)
+  bench: XIEntry[]; // bis zu 2 (5./6. bester)
+  team: Team;
+  onSelectPlayer?: (name: string) => void;
 }
 
 function initials(name: string): string {
@@ -37,22 +33,32 @@ function initials(name: string): string {
     .join('');
 }
 
-// Spieler-Chip auf dem Feld. WICHTIG: auf Modulebene definiert + memoisiert, damit
-// die Einblende-Animation nur EINMAL beim Laden läuft und nicht bei jedem Re-Render
-// (Daten-Refresh, Klicks) erneut startet. Props sind bewusst primitiv → stabile Vergleiche.
+// Spieler-Chip. Auf Modulebene + memoisiert, damit die Einblend-Animation nur EINMAL
+// beim Laden läuft (nicht bei jedem Re-Render). Props bewusst primitiv.
 const Chip = React.memo(function Chip({
   name,
+  firstName,
   imageUrl,
+  winRate,
   color,
+  accent,
   index,
+  size = 'field',
+  badge,
   onSelect,
 }: {
   name: string;
+  firstName: string;
   imageUrl?: string;
+  winRate: number | null;
   color: string;
+  accent: string;
   index: number;
+  size?: 'field' | 'bench';
+  badge?: string; // z. B. "TW" oder Rang
   onSelect?: (name: string) => void;
 }) {
+  const av = size === 'bench' ? 'w-9 h-9' : 'w-11 h-11';
   return (
     <motion.button
       type="button"
@@ -62,126 +68,133 @@ const Chip = React.memo(function Chip({
       transition={{ delay: 0.05 * index, type: 'spring', stiffness: 260, damping: 20 }}
       whileHover={onSelect ? { scale: 1.09, y: -2 } : undefined}
       whileTap={onSelect ? { scale: 0.96 } : undefined}
-      className={`flex flex-col items-center gap-1 w-[62px] focus:outline-none ${onSelect ? 'cursor-pointer' : 'cursor-default'}`}
+      className={`relative flex flex-col items-center gap-0.5 ${size === 'bench' ? 'w-[54px]' : 'w-[64px]'} focus:outline-none ${onSelect ? 'cursor-pointer' : 'cursor-default'}`}
       title={onSelect ? `${name} – Details anzeigen` : name}
     >
-      {imageUrl ? (
-        <img
-          src={imageUrl}
-          alt={name}
-          loading="lazy"
-          decoding="async"
-          referrerPolicy="no-referrer"
-          className="w-11 h-11 rounded-full object-cover border-2 shadow-[0_4px_12px_rgba(0,0,0,.45)]"
-          style={{ borderColor: color }}
-        />
-      ) : (
-        <span
-          className="grid place-items-center w-11 h-11 rounded-full font-display font-black text-white text-sm border-2 shadow-[0_4px_12px_rgba(0,0,0,.45)]"
-          style={{ borderColor: color, background: `linear-gradient(140deg, ${color}, ${shade(color, 0.45)})` }}
-        >
-          {initials(name) || '?'}
-        </span>
-      )}
+      <div className="relative">
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={name}
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            className={`${av} rounded-full object-cover border-2 shadow-[0_4px_12px_rgba(0,0,0,.45)]`}
+            style={{ borderColor: color }}
+          />
+        ) : (
+          <span
+            className={`grid place-items-center ${av} rounded-full font-display font-black text-white text-sm border-2 shadow-[0_4px_12px_rgba(0,0,0,.45)]`}
+            style={{ borderColor: color, background: `linear-gradient(140deg, ${color}, ${shade(color, 0.45)})` }}
+          >
+            {initials(name) || '?'}
+          </span>
+        )}
+        {badge && (
+          <span
+            className="absolute -top-1 -left-1 grid place-items-center min-w-[15px] h-[15px] px-[3px] rounded-full font-display font-black text-[8px] text-[#0b0f10]"
+            style={{ background: accent }}
+          >
+            {badge}
+          </span>
+        )}
+      </div>
       <span className="font-sans font-semibold text-[10px] leading-tight text-white text-center truncate max-w-full drop-shadow-[0_1px_2px_rgba(0,0,0,.9)]">
-        {name.split(/\s+/)[0]}
+        {firstName}
+      </span>
+      <span className="font-display font-black text-[10px] leading-none" style={{ color: accent }}>
+        {winRate === null ? '–' : `${winRate}%`}
       </span>
     </motion.button>
   );
 });
 
-export default function BestLineup({ lineup, team, onSelectPlayer }: BestLineupProps) {
+export default function BestLineup({ goalkeeper, field, bench, team, onSelectPlayer }: BestLineupProps) {
   const color = team.logoColor || '#22DFC9';
-  const byName = new Map((team.spielerliste || []).map((p) => [p.name, p] as const));
+  const accent = shade(color, 1.15);
 
-  const gkName = lineup.goalkeeper && lineup.players.includes(lineup.goalkeeper) ? lineup.goalkeeper : null;
-  const outfield = lineup.players.filter((n) => n !== gkName);
-  const rowSizes = rows(outfield.length);
-
-  // Feldspieler den Reihen zuordnen (von unten nach oben füllen).
-  const rowPlayers: string[][] = [];
+  // Feld in 2 Reihen (oben = beste): [0,1] oben, [2,3] unten.
+  const topRow = field.slice(0, 2);
+  const bottomRow = field.slice(2, 4);
   let idx = 0;
-  for (const size of rowSizes) {
-    rowPlayers.push(outfield.slice(idx, idx + size));
-    idx += size;
-  }
-  // Für die Anzeige oben (Sturm) → unten (Abwehr): Reihenfolge umkehren.
-  const displayRows = [...rowPlayers].reverse();
-
-  // Stabile Stagger-Indizes vorab bestimmen (Reihenfolge wie gerendert: Sturm→Abwehr→Torwart).
-  const order = [...displayRows.flat(), ...(gkName ? [gkName] : [])];
-  const staggerOf = (name: string) => order.indexOf(name);
 
   return (
     <div className="hl-card rounded-[20px] p-[22px]">
-      <div className="font-sans font-extrabold text-[11px] tracking-[2px] mb-1.5" style={{ color: shade(color, 1.15) }}>
+      <div className="font-sans font-extrabold text-[11px] tracking-[2px] mb-1.5" style={{ color: accent }}>
         BESTE AUFSTELLUNG
       </div>
       <p className="font-sans text-[11px] text-hl-dim mb-4">
-        Meiste Erfolge – automatisch aus den Ergebnissen berechnet.
+        Beste Spieler nach Siegquote · fester Torwart – automatisch aus den Ergebnissen.
       </p>
 
-      {/* Bilanz-Kacheln */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        <div className="bg-white/[.03] border border-white/[.07] rounded-xl py-2.5 text-center">
-          <div className="font-display font-black text-[22px]" style={{ color: shade(color, 1.15) }}>
-            {lineup.winRate}%
+      <div className="flex gap-2 items-stretch">
+        {/* Fußballfeld */}
+        <div
+          className="relative flex-1 min-w-0 rounded-2xl overflow-hidden border border-white/10 px-2 py-4"
+          style={{ background: `linear-gradient(180deg, ${shade(color, 0.5)}, ${shade(color, 0.22)})` }}
+        >
+          {/* Feldmarkierungen */}
+          <div className="pointer-events-none absolute inset-0 opacity-40">
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full border-2 border-white/50" />
+            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-px bg-white/50" />
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-0 w-24 h-9 border-2 border-b-0 border-white/50 rounded-t-md" />
+            <div className="absolute left-1/2 -translate-x-1/2 top-0 w-24 h-9 border-2 border-t-0 border-white/50 rounded-b-md" />
           </div>
-          <div className="font-sans font-bold text-[8.5px] tracking-[1.2px] text-hl-dim mt-0.5">SIEGQUOTE</div>
-        </div>
-        <div className="bg-white/[.03] border border-white/[.07] rounded-xl py-2.5 text-center">
-          <div className="font-display font-black text-[22px] text-white">{lineup.games}</div>
-          <div className="font-sans font-bold text-[8.5px] tracking-[1.2px] text-hl-dim mt-0.5">SPIELE</div>
-        </div>
-        <div className="bg-white/[.03] border border-white/[.07] rounded-xl py-2.5 text-center">
-          <div className="font-display font-black text-[15px] text-white mt-1.5">
-            <span className="text-hl-green-soft">{lineup.wins}</span>
-            <span className="text-hl-faint">·</span>
-            <span className="text-[#F0CE77]">{lineup.draws}</span>
-            <span className="text-hl-faint">·</span>
-            <span className="text-hl-red-soft">{lineup.losses}</span>
-          </div>
-          <div className="font-sans font-bold text-[8.5px] tracking-[1.2px] text-hl-dim mt-0.5">S · U · N</div>
-        </div>
-      </div>
 
-      {/* Fußballfeld */}
-      <div
-        className="relative rounded-2xl overflow-hidden border border-white/10 px-2 py-4"
-        style={{ background: `linear-gradient(180deg, ${shade(color, 0.5)}, ${shade(color, 0.22)})` }}
-      >
-        {/* Feldmarkierungen */}
-        <div className="pointer-events-none absolute inset-0 opacity-40">
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 rounded-full border-2 border-white/50" />
-          <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-px bg-white/50" />
-          <div className="absolute left-1/2 -translate-x-1/2 bottom-0 w-24 h-9 border-2 border-b-0 border-white/50 rounded-t-md" />
-          <div className="absolute left-1/2 -translate-x-1/2 top-0 w-24 h-9 border-2 border-t-0 border-white/50 rounded-b-md" />
-        </div>
-
-        <div className="relative flex flex-col gap-4">
-          {displayRows.map((row, r) => (
-            <div key={r} className="flex justify-center gap-2 flex-wrap">
-              {row.map((name) => (
-                <Chip
-                  key={name}
-                  name={name}
-                  imageUrl={byName.get(name)?.imageUrl}
-                  color={color}
-                  index={staggerOf(name)}
-                  onSelect={byName.has(name) ? onSelectPlayer : undefined}
-                />
-              ))}
-            </div>
-          ))}
-          {gkName && (
-            <div className="flex justify-center pt-1">
-              <div className="flex flex-col items-center gap-1">
-                <Chip name={gkName} imageUrl={byName.get(gkName)?.imageUrl} color={color} index={staggerOf(gkName)} onSelect={byName.has(gkName) ? onSelectPlayer : undefined} />
-                <span className="font-sans font-bold text-[8px] tracking-[1.5px] text-white/70 uppercase">Torwart</span>
+          <div className="relative flex flex-col gap-5">
+            {topRow.length > 0 && (
+              <div className="flex justify-around gap-2">
+                {topRow.map((p) => (
+                  <Chip key={p.name} name={p.name} firstName={p.firstName} imageUrl={p.imageUrl} winRate={p.winRate} color={color} accent={accent} index={idx++} onSelect={onSelectPlayer} />
+                ))}
               </div>
-            </div>
-          )}
+            )}
+            {bottomRow.length > 0 && (
+              <div className="flex justify-around gap-2">
+                {bottomRow.map((p) => (
+                  <Chip key={p.name} name={p.name} firstName={p.firstName} imageUrl={p.imageUrl} winRate={p.winRate} color={color} accent={accent} index={idx++} onSelect={onSelectPlayer} />
+                ))}
+              </div>
+            )}
+            {goalkeeper && (
+              <div className="flex justify-center pt-1">
+                <Chip
+                  name={goalkeeper.name}
+                  firstName={goalkeeper.firstName}
+                  imageUrl={goalkeeper.imageUrl}
+                  winRate={goalkeeper.winRate}
+                  color={color}
+                  accent={accent}
+                  index={idx++}
+                  badge="TW"
+                  onSelect={onSelectPlayer}
+                />
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* Auswechselbank (5./6. bester) – seitlich am Feld */}
+        {bench.length > 0 && (
+          <div className="w-[70px] shrink-0 rounded-2xl border border-white/10 bg-white/[.03] flex flex-col items-center gap-3 py-3 px-1">
+            <span className="font-sans font-bold text-[8px] tracking-[1.5px] text-hl-dim uppercase">Bank</span>
+            {bench.map((p, i) => (
+              <Chip
+                key={p.name}
+                name={p.name}
+                firstName={p.firstName}
+                imageUrl={p.imageUrl}
+                winRate={p.winRate}
+                color={color}
+                accent={accent}
+                index={idx++}
+                size="bench"
+                badge={`${i + 5}`}
+                onSelect={onSelectPlayer}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
