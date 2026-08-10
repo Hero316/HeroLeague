@@ -548,6 +548,7 @@ export default function App() {
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')}
           onOpenReferee={() => setRefereeView(true)}
+          demoActive={demo.active}
           seasonLabel={selectedSeasonName}
           seasonNumber={currentSeasonNumber}
           hasLiveMatch={hasLiveMatch}
@@ -592,6 +593,7 @@ export default function App() {
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')}
           onOpenReferee={() => setRefereeView(true)}
+          demoActive={demo.active}
           seasonLabel={selectedSeasonName}
           seasonNumber={currentSeasonNumber}
           hasLiveMatch={hasLiveMatch}
@@ -664,6 +666,7 @@ export default function App() {
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')}
           onOpenReferee={() => setRefereeView(true)}
+          demoActive={demo.active}
           seasonLabel={currentSeasonName}
           seasonNumber={currentSeasonNumber}
           hasLiveMatch={hasLiveMatch}
@@ -894,6 +897,7 @@ export default function App() {
         onOpenLogin={() => navigateTo('/admin')}
         onOpenBackoffice={() => navigateTo('/admin')}
         onOpenReferee={() => setRefereeView(true)}
+        demoActive={demo.active}
         seasonLabel={currentSeasonName}
         seasonNumber={currentSeasonNumber}
         hasLiveMatch={hasLiveMatch}
