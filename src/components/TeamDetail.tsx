@@ -3,7 +3,6 @@ import { ArrowLeft, ChevronDown } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Match, Player, PlayerStat, Team, TeamSponsorsMap } from '../types';
 import { calculateStandings } from '../lib/standings';
-import { bestLineup } from '../lib/lineups';
 import { apiFetch } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
 import BestLineup from './BestLineup';
@@ -96,8 +95,45 @@ export default function TeamDetail({
   // Captain (max. einer pro Team, im Admin gesetzt)
   const captain = useMemo(() => roster.find((p) => p.captain) ?? null, [roster]);
 
-  // Beste Aufstellung des Teams (aus den Ergebnissen berechnet)
-  const topLineup = useMemo(() => bestLineup(team, matches), [team, matches]);
+  // Beste Aufstellung = individuell beste Spieler nach Siegquote.
+  // Fester Torwart (häufigster Keeper) unten, 4 beste Feldspieler aufs Feld,
+  // 5./6. bester auf die Bank. Mindest-Einsätze verhindern, dass jemand mit
+  // 1 Spiel/100 % oben landet.
+  const bestXI = useMemo(() => {
+    const played = roster.filter((p) => p.matchesPlayed > 0);
+    if (played.length === 0) return null;
+    const maxPlayed = played.reduce((m, p) => Math.max(m, p.matchesPlayed), 0);
+    const minGames = Math.max(2, Math.ceil(maxPlayed * 0.3));
+    const gk =
+      [...played]
+        .filter((p) => p.gamesInGoal > 0)
+        .sort((a, b) => b.gamesInGoal - a.gamesInGoal || b.matchesPlayed - a.matchesPlayed)[0] ?? null;
+    const outfield = played.filter((p) => p.name !== gk?.name);
+    const rank = (list: RosterEntry[]) =>
+      [...list].sort(
+        (a, b) =>
+          (b.winRate ?? -1) - (a.winRate ?? -1) ||
+          b.matchesPlayed - a.matchesPlayed ||
+          b.wins - a.wins ||
+          a.name.localeCompare(b.name)
+      );
+    // Erst Spieler mit genug Einsätzen (belastbare Quote), dann der Rest.
+    const ordered = [
+      ...rank(outfield.filter((p) => p.matchesPlayed >= minGames)),
+      ...rank(outfield.filter((p) => p.matchesPlayed < minGames)),
+    ];
+    const toXI = (p: RosterEntry) => ({
+      name: p.name,
+      firstName: p.name.split(/\s+/)[0],
+      imageUrl: p.imageUrl,
+      winRate: p.winRate,
+      matchesPlayed: p.matchesPlayed,
+    });
+    const field = ordered.slice(0, 4).map(toXI);
+    const bench = ordered.slice(4, 6).map(toXI);
+    if (!gk && field.length === 0) return null;
+    return { goalkeeper: gk ? toXI(gk) : null, field, bench };
+  }, [roster]);
 
   // Star des Teams: bester Torschütze/Vorlagengeber des Kaders
   const star = useMemo(() => {
@@ -601,8 +637,16 @@ export default function TeamDetail({
             );
           })()}
 
-          {/* Beste Aufstellung (aus den Ergebnissen berechnet) */}
-          {topLineup && <BestLineup lineup={topLineup} team={team} onSelectPlayer={selectPlayer} />}
+          {/* Beste Aufstellung – beste Spieler nach Siegquote (Torwart + 4 Feld + 2 Bank) */}
+          {bestXI && (
+            <BestLineup
+              goalkeeper={bestXI.goalkeeper}
+              field={bestXI.field}
+              bench={bestXI.bench}
+              team={team}
+              onSelectPlayer={selectPlayer}
+            />
+          )}
 
           {/* Partner / Trikot-Sponsoren dieses Teams */}
           {sponsors.length > 0 && (
