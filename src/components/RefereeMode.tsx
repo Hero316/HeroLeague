@@ -43,15 +43,17 @@ export default function RefereeMode({
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
   const teamName = (id: string) => teamById.get(id)?.name ?? id;
 
-  // Vorhandene Spieltage, neuester zuerst.
+  // Vorhandene Spieltage aufsteigend (1 → n), damit die Leiste von links nach
+  // rechts ansteigt. Vorausgewählt bleibt der neueste (höchste) Spieltag.
   const matchdays = useMemo(
-    () => [...new Set(matches.map((m) => m.matchday))].sort((a, b) => b - a),
+    () => [...new Set(matches.map((m) => m.matchday))].sort((a, b) => a - b),
     [matches]
   );
-  const [matchday, setMatchday] = useState<number>(matchdays[0] ?? 1);
+  const latestMatchday = matchdays[matchdays.length - 1] ?? 1;
+  const [matchday, setMatchday] = useState<number>(latestMatchday);
   useEffect(() => {
-    if (matchdays.length && !matchdays.includes(matchday)) setMatchday(matchdays[0]);
-  }, [matchdays, matchday]);
+    if (matchdays.length && !matchdays.includes(matchday)) setMatchday(latestMatchday);
+  }, [matchdays, matchday, latestMatchday]);
 
   const [fieldFilter, setFieldFilter] = useState<number | 'all'>('all');
   const [openMatchId, setOpenMatchId] = useState<string | null>(null);

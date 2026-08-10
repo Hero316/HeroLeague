@@ -148,14 +148,16 @@ export default function HighlightsCarousel({
       <div
         ref={wrapRef}
         className="relative overflow-hidden select-none touch-pan-y"
-        style={{ height: cardH || undefined, perspective: 1600 }}
+        style={{ height: cardH || undefined }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
         onPointerLeave={(e) => drag.current && endDrag(e)}
       >
-        <div className="absolute inset-0" style={{ transformStyle: 'preserve-3d' }}>
+        {/* Perspektive auf einem eigenen Element OHNE overflow – sonst „flacht"
+            iOS/Safari die 3D-Szene ab (overflow:hidden + 3D auf demselben Element). */}
+        <div className="absolute inset-0" style={{ perspective: 1600, WebkitPerspective: 1600 }}>
           {w > 0 &&
             items.map((media, i) => {
               // Vorzeichenbehafteter kürzester Abstand zur Ist-Position auf dem
@@ -184,7 +186,6 @@ export default function HighlightsCarousel({
                     width: slideW,
                     height: cardH,
                     transform: `translate(-50%, -50%) translateX(${translateX}px) translateZ(${translateZ}px) rotateY(${rotateY}deg) scale(${scale})`,
-                    transformStyle: 'preserve-3d',
                     zIndex: 100 - Math.round(abs * 10),
                     opacity,
                     pointerEvents: opacity < 0.12 ? 'none' : 'auto',
