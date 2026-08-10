@@ -101,7 +101,9 @@ CREATE TABLE users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Einmal-Login-Codes (gehasht, mit Ablauf und Fehlversuchszähler)
+-- Einmal-Login-Codes (gehasht, mit Ablauf und Fehlversuchszähler).
+-- Der reservierte "email"-Wert 'master-2fa' hält den zweiten Faktor des
+-- Master-Passwort-Logins (siehe api/auth/[action].ts).
 CREATE TABLE login_codes (
   email      TEXT NOT NULL,
   code_hash  TEXT NOT NULL,
@@ -110,3 +112,13 @@ CREATE TABLE login_codes (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_login_codes_email ON login_codes(email);
+
+-- Brute-Force-Schutz fürs Master-Passwort: Fehlversuche je IP mit Sperrzeit.
+-- Wird von api/auth/[action].ts bei Bedarf automatisch angelegt
+-- (CREATE TABLE IF NOT EXISTS) – kein manueller Neon-Schritt nötig.
+CREATE TABLE login_attempts (
+  ip            TEXT PRIMARY KEY,
+  fail_count    INTEGER NOT NULL DEFAULT 0,
+  first_fail_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  locked_until  TIMESTAMPTZ
+);

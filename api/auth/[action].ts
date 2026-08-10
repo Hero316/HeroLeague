@@ -15,6 +15,16 @@ const CODE_TTL_MIN = 10; // Gültigkeit des Login-Codes in Minuten
 const MAX_ATTEMPTS = 5; // erlaubte Fehlversuche pro Code
 const RESEND_THROTTLE_SEC = 20; // frühestens nach X Sekunden neuen Code erzeugen
 
+// Brute-Force-Schutz fürs Master-Passwort: nach MASTER_MAX_FAILS falschen
+// Versuchen innerhalb von MASTER_WINDOW_MIN wird die IP für MASTER_LOCK_MIN gesperrt.
+const MASTER_MAX_FAILS = 5;
+const MASTER_LOCK_MIN = 15;
+const MASTER_WINDOW_MIN = 15;
+// Reservierter „E-Mail"-Schlüssel für den zweiten Faktor des Master-Logins in
+// der login_codes-Tabelle. Enthält kein „@" und kollidiert daher nie mit echten
+// Benutzer-E-Mails.
+const MASTER_2FA_KEY = 'master-2fa';
+
 function isEmail(value: unknown): value is string {
   return typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
@@ -36,6 +46,71 @@ function passwordsMatch(input: string, expected: string): boolean {
   const a = createHash('sha256').update(input).digest();
   const b = createHash('sha256').update(expected).digest();
   return timingSafeEqual(a, b);
+}
+
+// Client-IP aus den Proxy-Headern (Vercel setzt x-forwarded-for zuverlässig).
+function clientIp(req: VercelRequest): string {
+  const fwd = req.headers['x-forwarded-for'];
+  const firstFwd = (Array.isArray(fwd) ? fwd[0] : fwd ?? '').split(',')[0].trim();
+  if (firstFwd) return firstFwd;
+  const real = req.headers['x-real-ip'];
+  const realIp = (Array.isArray(real) ? real[0] : real ?? '').trim();
+  return realIp || 'unknown';
+}
+
+// Betriebstabelle für Fehlversuche – wie die visits-Tabelle bei Bedarf selbst
+// angelegt (kein manueller Neon-Schritt nötig).
+async function ensureAttemptsTable(): Promise<void> {
+  await sql`
+    CREATE TABLE IF NOT EXISTS login_attempts (
+      ip            TEXT PRIMARY KEY,
+      fail_count    INTEGER NOT NULL DEFAULT 0,
+      first_fail_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      locked_until  TIMESTAMPTZ
+    )
+  `;
+}
+
+async function isLocked(ip: string): Promise<boolean> {
+  await ensureAttemptsTable();
+  const rows = await sql`
+    SELECT 1 FROM login_attempts
+    WHERE ip = ${ip} AND locked_until IS NOT NULL AND locked_until > now()
+    LIMIT 1
+  `;
+  return rows.length > 0;
+}
+
+// Fehlversuch verbuchen. Zähler rollt nach Ablauf des Fensters zurück; ab der
+// Schwelle wird locked_until gesetzt.
+async function registerFail(ip: string): Promise<void> {
+  await ensureAttemptsTable();
+  const window = `${MASTER_WINDOW_MIN} minutes`;
+  const lock = `${MASTER_LOCK_MIN} minutes`;
+  await sql`
+    INSERT INTO login_attempts (ip, fail_count, first_fail_at, locked_until)
+    VALUES (${ip}, 1, now(), NULL)
+    ON CONFLICT (ip) DO UPDATE SET
+      fail_count = CASE
+        WHEN login_attempts.first_fail_at < now() - ${window}::interval THEN 1
+        ELSE login_attempts.fail_count + 1
+      END,
+      first_fail_at = CASE
+        WHEN login_attempts.first_fail_at < now() - ${window}::interval THEN now()
+        ELSE login_attempts.first_fail_at
+      END,
+      locked_until = CASE
+        WHEN login_attempts.first_fail_at >= now() - ${window}::interval
+             AND login_attempts.fail_count + 1 >= ${MASTER_MAX_FAILS}
+        THEN now() + ${lock}::interval
+        ELSE NULL
+      END
+  `;
+}
+
+async function clearFails(ip: string): Promise<void> {
+  await ensureAttemptsTable();
+  await sql`DELETE FROM login_attempts WHERE ip = ${ip}`;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -143,17 +218,94 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.json({ ok: true, user: { email: user.email, name: user.name, role: user.role } });
     }
 
-    // --- Notzugang per Master-Passwort (immer Super-Admin) --------------------
+    // --- Notzugang per Master-Passwort (mit Sperre + optional 2-Faktor) -------
     if (action === 'login' && req.method === 'POST') {
       const adminPassword = process.env.ADMIN_PASSWORD;
       if (!adminPassword) {
         return res.status(500).json({ error: 'ADMIN_PASSWORD ist nicht konfiguriert' });
       }
+
+      // Brute-Force-Sperre: gesperrte IP früh abweisen (E-Mail-Code bleibt als Ausweichweg).
+      const ip = clientIp(req);
+      if (await isLocked(ip)) {
+        return res.status(429).json({
+          error: `Zu viele Fehlversuche. Bitte in ${MASTER_LOCK_MIN} Minuten erneut versuchen oder per E-Mail-Code anmelden.`,
+        });
+      }
+
       const { password } = req.body ?? {};
       if (typeof password !== 'string' || !passwordsMatch(password, adminPassword)) {
+        await registerFail(ip);
         await sleep(500);
         return res.status(401).json({ error: 'Falsches Passwort' });
       }
+
+      // Passwort korrekt → Fehlversuchszähler dieser IP zurücksetzen.
+      await clearFails(ip);
+
+      // Zweiter Faktor per E-Mail – nur wenn ADMIN_2FA_EMAIL gesetzt ist.
+      const twoFactorEmail = process.env.ADMIN_2FA_EMAIL?.trim().toLowerCase();
+      if (twoFactorEmail) {
+        const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+        await sql.transaction((txn) => [
+          txn`DELETE FROM login_codes WHERE email = ${MASTER_2FA_KEY}`,
+          txn`INSERT INTO login_codes (email, code_hash, expires_at, attempts)
+              VALUES (${MASTER_2FA_KEY}, ${hashCode(code)}, now() + ${`${CODE_TTL_MIN} minutes`}::interval, 0)`,
+        ]);
+
+        try {
+          await sendLoginCode(twoFactorEmail, code);
+        } catch (err) {
+          console.error('2FA-Code konnte nicht gesendet werden:', err);
+        }
+
+        // Ohne konfigurierten Mailversand außerhalb der Produktion den Code direkt zurückgeben.
+        const exposeDevCode = !isMailConfigured() && process.env.VERCEL_ENV !== 'production';
+        return res.json(exposeDevCode ? { ok: true, twoFactor: true, devCode: code } : { ok: true, twoFactor: true });
+      }
+
+      // Kein zweiter Faktor konfiguriert → direkt anmelden (wie bisher).
+      const token = await createSessionToken({
+        userId: 'bootstrap',
+        email: '',
+        name: 'Super-Admin',
+        role: 'superadmin',
+      });
+      res.setHeader('Set-Cookie', sessionCookie(token));
+      return res.json({ ok: true, user: { email: '', name: 'Super-Admin', role: 'superadmin' } });
+    }
+
+    // --- Master-Passwort: zweiten Faktor (E-Mail-Code) prüfen & anmelden ------
+    if (action === 'verify-login' && req.method === 'POST') {
+      const { code } = req.body ?? {};
+      if (typeof code !== 'string' || !/^\d{6}$/.test(code.trim())) {
+        return res.status(400).json({ error: '6-stelliger Code erforderlich.' });
+      }
+
+      const rows = await sql`
+        SELECT code_hash AS "codeHash", attempts
+        FROM login_codes
+        WHERE email = ${MASTER_2FA_KEY} AND expires_at > now()
+        ORDER BY created_at DESC LIMIT 1
+      `;
+      if (rows.length === 0) {
+        await sleep(400);
+        return res.status(401).json({ error: 'Code ungültig oder abgelaufen. Bitte erneut mit dem Passwort anmelden.' });
+      }
+
+      const row = rows[0] as { codeHash: string; attempts: number };
+      if (row.attempts >= MAX_ATTEMPTS) {
+        await sql`DELETE FROM login_codes WHERE email = ${MASTER_2FA_KEY}`;
+        return res.status(401).json({ error: 'Zu viele Fehlversuche. Bitte erneut mit dem Passwort anmelden.' });
+      }
+
+      if (!timingSafeEqualHex(hashCode(code.trim()), row.codeHash)) {
+        await sql`UPDATE login_codes SET attempts = attempts + 1 WHERE email = ${MASTER_2FA_KEY}`;
+        await sleep(400);
+        return res.status(401).json({ error: 'Code ungültig oder abgelaufen.' });
+      }
+
+      await sql`DELETE FROM login_codes WHERE email = ${MASTER_2FA_KEY}`;
       const token = await createSessionToken({
         userId: 'bootstrap',
         email: '',
