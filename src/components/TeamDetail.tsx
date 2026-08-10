@@ -382,31 +382,33 @@ export default function TeamDetail({
                     </div>
                   )}
                 </div>
-              </div>
-              {standing && (
-                <div className="flex gap-5 flex-none">
-                  <div className="text-center">
-                    <div className="font-display font-black text-[44px] leading-[.9]" style={{ color: accentSoft }}>{standing.points}</div>
-                    <div className="font-sans font-bold text-[10px] tracking-[1.5px] text-hl-dim mt-1">PUNKTE</div>
-                  </div>
-                  <div className="w-px bg-white/10" />
-                  <div className="text-center">
-                    <div className="font-display font-black text-[44px] leading-[.9] text-white">{standing.goalsFor}</div>
-                    <div className="font-sans font-bold text-[10px] tracking-[1.5px] text-hl-dim mt-1">TORE</div>
-                  </div>
-                  <div className="w-px bg-white/10" />
-                  <div className="text-center flex flex-col items-center">
-                    <div className="flex gap-1 pt-3">
-                      {standing.form.length === 0 ? (
-                        <span className="text-xs text-hl-faint font-sans uppercase">–</span>
-                      ) : (
-                        standing.form.map((res, idx) => <FormPill key={idx} result={res} />)
-                      )}
+                {/* Club-Kennzahlen – gehören zum Verein, darum direkt unter Name & Bilanz
+                    (nicht neben dem Kapitän, wo sie fälschlich zu ihm zu gehören schienen). */}
+                {standing && (
+                  <div className="flex gap-6 mt-5 flex-wrap items-start">
+                    <div>
+                      <div className="font-display font-black text-[44px] leading-[.9]" style={{ color: accentSoft }}>{standing.points}</div>
+                      <div className="font-sans font-bold text-[10px] tracking-[1.5px] text-hl-dim mt-1">PUNKTE</div>
                     </div>
-                    <div className="font-sans font-bold text-[10px] tracking-[1.5px] text-hl-dim mt-2">FORM</div>
+                    <div className="w-px self-stretch bg-white/10" />
+                    <div>
+                      <div className="font-display font-black text-[44px] leading-[.9] text-white">{standing.goalsFor}</div>
+                      <div className="font-sans font-bold text-[10px] tracking-[1.5px] text-hl-dim mt-1">TORE</div>
+                    </div>
+                    <div className="w-px self-stretch bg-white/10" />
+                    <div>
+                      <div className="flex gap-1 pt-3">
+                        {standing.form.length === 0 ? (
+                          <span className="text-xs text-hl-faint font-sans uppercase">–</span>
+                        ) : (
+                          standing.form.map((res, idx) => <FormPill key={idx} result={res} />)
+                        )}
+                      </div>
+                      <div className="font-sans font-bold text-[10px] tracking-[1.5px] text-hl-dim mt-2">FORM</div>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Captain (Desktop) – groß rechts neben dem Team, ohne Hintergrund.
                   Auf dem Handy versteckt (dort steht er klein oben rechts neben dem Logo). */}
@@ -414,7 +416,7 @@ export default function TeamDetail({
                 <button
                   type="button"
                   onClick={() => selectPlayer(captain.name)}
-                  className="flex-none hidden sm:flex flex-col items-center gap-1.5 pl-2 group cursor-pointer"
+                  className="flex-none hidden sm:flex flex-col items-center gap-2 pl-2 ml-auto group cursor-pointer"
                   title={`${captain.name} – Kapitän`}
                 >
                   {captain.imageUrl ? (
@@ -424,13 +426,13 @@ export default function TeamDetail({
                       loading="lazy"
                       decoding="async"
                       referrerPolicy="no-referrer"
-                      className="w-[110px] h-[130px] object-contain object-bottom drop-shadow-[0_10px_24px_rgba(0,0,0,.55)] transition-transform duration-200 group-hover:scale-[1.04]"
+                      className="w-[168px] h-[198px] object-contain object-bottom drop-shadow-[0_12px_28px_rgba(0,0,0,.6)] transition-transform duration-200 group-hover:scale-[1.04]"
                     />
                   ) : (
                     <PlayerAvatar name={captain.name} color={color} size="xl" />
                   )}
                   <span
-                    className="font-sans font-extrabold text-[9px] tracking-[2px] uppercase px-2 py-0.5 rounded-full"
+                    className="font-sans font-extrabold text-[10px] tracking-[2px] uppercase px-2.5 py-1 rounded-full"
                     style={{ color: '#0b0f10', background: accentSoft }}
                   >
                     Kapitän

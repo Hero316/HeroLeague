@@ -123,6 +123,12 @@ function RosterEditor({
     onChange(roster.map((p, i) => ({ ...p, captain: i === index ? !p.captain : false })));
   };
 
+  // Festen Torwart setzen/entfernen – höchstens einer pro Team. Unabhängig vom
+  // Kapitän. Ist nur eine Vorauswahl; im Schiedsrichtermodus je Spieltag änderbar.
+  const toggleGoalkeeper = (index: number) => {
+    onChange(roster.map((p, i) => ({ ...p, goalkeeper: i === index ? !p.goalkeeper : false })));
+  };
+
   const handlePhoto = (index: number) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -180,6 +186,18 @@ function RosterEditor({
             }`}
           >
             C
+          </button>
+          <button
+            type="button"
+            onClick={() => toggleGoalkeeper(index)}
+            title={player.goalkeeper ? 'Torwart entfernen' : 'Als festen Torwart festlegen'}
+            className={`shrink-0 grid place-items-center w-7 h-7 rounded-md text-xs font-display font-black transition-colors cursor-pointer ${
+              player.goalkeeper
+                ? 'bg-amber-500 text-[#0b0f10]'
+                : 'text-gray-500 hover:text-amber-400 hover:bg-white/5'
+            }`}
+          >
+            T
           </button>
           <button
             type="button"
