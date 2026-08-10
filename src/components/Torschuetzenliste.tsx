@@ -8,7 +8,7 @@ import { CountUp, Reveal, useSettledList } from './anim';
 interface TorschuetzenlisteProps {
   players: PlayerStat[];
   teams: Team[];
-  onSelectTeam?: (teamId: string) => void;
+  onSelectTeam?: (teamId: string, playerName?: string) => void;
 }
 
 // Torjägerliste: Podium für die Top 3, darunter die restliche Rangliste.
@@ -23,6 +23,26 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
   const restList = useSettledList(rest, (p) => p.name);
 
   const teamOf = (p: PlayerStat) => teams.find((t) => t.id === p.teamId);
+
+  // Klick auf den Spielernamen öffnet direkt das Spieler-Detail auf der Vereinsseite.
+  const goPlayer = (p: PlayerStat) => {
+    const t = teamOf(p);
+    if (t && onSelectTeam) onSelectTeam(t.id, p.name);
+  };
+  // Spielername als klickbares Element (Fallback: reiner Text ohne Team/Handler).
+  const playerName = (p: PlayerStat, cls: string) =>
+    teamOf(p) && onSelectTeam ? (
+      <button
+        type="button"
+        onClick={() => goPlayer(p)}
+        className={`${cls} cursor-pointer hover:opacity-80 transition-opacity`}
+        title={`${p.name} – Spieler anzeigen`}
+      >
+        {p.name}
+      </button>
+    ) : (
+      <div className={cls}>{p.name}</div>
+    );
 
   const rankColors: Record<number, string> = { 1: '#E9C46A', 2: '#C9D1CC', 3: '#C98A5A' };
 
@@ -109,7 +129,7 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
                 {rank}
               </span>
               <PlayerAvatar name={p.name} imageUrl={p.imageUrl} color={p.teamLogoColor} size={lead ? 'lg' : 'md'} />
-              <div className="font-display font-black text-2xl leading-tight uppercase text-white mt-3.5 text-center">{p.name}</div>
+              {playerName(p, 'block max-w-full font-display font-black text-2xl leading-tight uppercase text-white mt-3.5 text-center truncate')}
               <div className="mt-2">{clubChip(p)}</div>
               <div className="flex items-baseline gap-1.5 mt-3.5">
                 <span
@@ -150,7 +170,7 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
               {playerOrTeamAvatar(p)}
               {/* Name + gespielte Spiele */}
               <div className="min-w-0 flex-1">
-                <div className="font-sans font-semibold text-[15px] text-hl-text truncate">{p.name}</div>
+                {playerName(p, 'block max-w-full text-left font-sans font-semibold text-[15px] text-hl-text truncate')}
                 <div className="font-sans text-[11.5px] text-hl-mute">{p.matchesPlayed} Spiele</div>
               </div>
               {/* Tore (groß) */}

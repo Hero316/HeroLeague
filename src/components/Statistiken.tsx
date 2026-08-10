@@ -10,7 +10,7 @@ interface StatistikenProps {
   players: PlayerStat[];
   matches: Match[];
   teams: Team[];
-  onSelectTeam?: (teamId: string) => void;
+  onSelectTeam?: (teamId: string, playerName?: string) => void;
 }
 
 type Accent = 'teal' | 'gold' | 'magenta';
@@ -101,11 +101,11 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
   const scorer = useSettledList(scorerRanking, (p) => p.name);
   const glove = useSettledList(gloveRanking, (p) => p.name);
 
-  // Klick auf den Spielernamen führt zur Vereinsseite (Team ist am Wappen erkennbar).
+  // Klick auf den Spielernamen öffnet direkt das Spieler-Detail auf der Vereinsseite.
   const teamOf = (p: PlayerStat) => teams.find((t) => t.id === p.teamId);
-  const goTeam = (p: PlayerStat) => {
+  const goPlayer = (p: PlayerStat) => {
     const t = teamOf(p);
-    if (t && onSelectTeam) onSelectTeam(t.id);
+    if (t && onSelectTeam) onSelectTeam(t.id, p.name);
   };
 
   interface LeaderCard {
@@ -118,6 +118,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
     name: string;
     sub: string;
     avatar: React.ReactNode;
+    onClick?: () => void; // Namensklick: Spieler → Spielerdetail, Team → Teamseite
   }
 
   const cards: LeaderCard[] = [];
@@ -126,6 +127,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
     cards.push({
       kind: 'SPIELER',
       category: 'MEISTE TORE',
+      onClick: onSelectTeam ? () => onSelectTeam(topScorer.teamId, topScorer.name) : undefined,
       accent: 'gold',
       value: topScorer.goals,
       unit: 'Tore',
@@ -138,6 +140,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
     cards.push({
       kind: 'SPIELER',
       category: 'MEISTE ASSISTS',
+      onClick: onSelectTeam ? () => onSelectTeam(topAssist.teamId, topAssist.name) : undefined,
       accent: 'teal',
       value: topAssist.assists,
       unit: 'Vorlagen',
@@ -150,6 +153,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
     cards.push({
       kind: 'SPIELER',
       category: 'BESTE QUOTE',
+      onClick: onSelectTeam ? () => onSelectTeam(bestRatio.teamId, bestRatio.name) : undefined,
       accent: 'magenta',
       value: bestRatio.goals / bestRatio.matchesPlayed,
       decimals: 1,
@@ -164,6 +168,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
     cards.push({
       kind: 'TEAM',
       category: 'BESTE OFFENSIVE',
+      onClick: onSelectTeam ? () => onSelectTeam(t.id) : undefined,
       accent: 'teal',
       value: clubStats.bestAttack.goalsFor,
       unit: 'Tore',
@@ -186,6 +191,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
     cards.push({
       kind: 'TEAM',
       category: 'BESTE DEFENSIVE',
+      onClick: onSelectTeam ? () => onSelectTeam(t.id) : undefined,
       accent: 'teal',
       value: clubStats.bestDefense.goalsAgainst,
       unit: clubStats.bestDefense.goalsAgainst === 1 ? 'Gegentor' : 'Gegentore',
@@ -208,6 +214,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
     cards.push({
       kind: 'TEAM',
       category: 'MEISTE WEISSE WESTEN',
+      onClick: onSelectTeam ? () => onSelectTeam(t.id) : undefined,
       accent: 'gold',
       value: clubStats.mostCleanSheets.cleanSheets,
       unit: clubStats.mostCleanSheets.cleanSheets === 1 ? 'Spiel' : 'Spiele',
@@ -257,20 +264,25 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
             >
               <div className="absolute top-0 right-0 w-[180px] h-[180px] pointer-events-none" style={{ background: GLOW[c.accent] }} />
               <div className="relative">
-                <span
-                  className={`inline-block px-[11px] py-[5px] rounded-[7px] font-sans font-extrabold text-[10px] tracking-[1.5px] ${
-                    c.kind === 'SPIELER'
-                      ? 'bg-[rgba(34,223,201,.12)] text-brand-accent-light'
-                      : 'bg-[rgba(232,62,140,.12)] text-hl-magenta-soft'
-                  }`}
-                >
-                  {c.kind}
-                </span>
-                <div className="font-sans font-extrabold text-xs tracking-[2px] text-hl-dim mt-4">{c.category}</div>
-                <div className="flex items-center gap-3.5 mt-3.5">
+                {/* Große, klare Überschrift der Auszeichnung (kein „SPIELER"-Label mehr). */}
+                <div className={`font-display font-black text-xl sm:text-2xl uppercase tracking-tight leading-none ${VALUE_COLOR[c.accent]}`}>
+                  {c.category}
+                </div>
+                <div className="flex items-center gap-3.5 mt-4">
                   {c.avatar}
                   <div className="min-w-0">
-                    <div className="font-display font-black text-[26px] leading-[.95] uppercase text-white truncate">{c.name}</div>
+                    {c.onClick ? (
+                      <button
+                        type="button"
+                        onClick={c.onClick}
+                        className="block max-w-full text-left font-display font-black text-[26px] leading-[.95] uppercase text-white truncate cursor-pointer hover:opacity-80 transition-opacity"
+                        title={`${c.name} – ${c.kind === 'SPIELER' ? 'Spieler anzeigen' : 'Verein anzeigen'}`}
+                      >
+                        {c.name}
+                      </button>
+                    ) : (
+                      <div className="font-display font-black text-[26px] leading-[.95] uppercase text-white truncate">{c.name}</div>
+                    )}
                     <div className="font-sans text-[12.5px] text-hl-mute mt-1 truncate">{c.sub}</div>
                   </div>
                 </div>
@@ -326,7 +338,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
                         </div>
                         <div className="min-w-0 flex-1">
                           <button
-                            onClick={() => goTeam(p)}
+                            onClick={() => goPlayer(p)}
                             title={teamOf(p) ? `${p.teamName} – Vereinsseite öffnen` : undefined}
                             className={`block max-w-full text-left font-sans font-bold text-sm sm:text-[15px] text-white truncate ${teamOf(p) && onSelectTeam ? 'cursor-pointer hover:text-hl-gold transition-colors' : 'cursor-default'}`}
                           >
@@ -387,7 +399,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
                         </div>
                         <div className="min-w-0 flex-1">
                           <button
-                            onClick={() => goTeam(p)}
+                            onClick={() => goPlayer(p)}
                             title={teamOf(p) ? `${p.teamName} – Vereinsseite öffnen` : undefined}
                             className={`block max-w-full text-left font-sans font-bold text-sm sm:text-[15px] text-white truncate ${teamOf(p) && onSelectTeam ? 'cursor-pointer hover:text-hl-gold transition-colors' : 'cursor-default'}`}
                           >

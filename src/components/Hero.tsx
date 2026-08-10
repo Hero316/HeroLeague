@@ -16,7 +16,7 @@ interface HeroProps {
   heroImages?: HeroImages;
   pom?: PlayerOfMonth | null; // von oben vorgeladen (verhindert nachträglichen Slide → kein „Springen")
   onNavigate: (tab: ActiveTab) => void;
-  onSelectTeam?: (teamId: string) => void;
+  onSelectTeam?: (teamId: string, playerName?: string) => void;
 }
 
 // Vollflächiges Hero-Carousel (Magenta-TV-Stil) mit drei Slides:
@@ -331,7 +331,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                 pom={pom}
                 crest={crest}
                 points={pomPoints}
-                onSelect={pomTeam && onSelectTeam ? () => onSelectTeam(pomTeam.id) : undefined}
+                onSelect={pomTeam && onSelectTeam ? () => onSelectTeam(pomTeam.id, pom.name) : undefined}
               />
             </div>
             {/* Buttons auf dem Handy unter der Karte */}
