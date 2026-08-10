@@ -15,7 +15,7 @@ interface PlayerOfMonthCardProps {
   pom: PlayerOfMonth;
   crest?: CrestInfo;
   points?: number; // Ballon-d'Or-Wertung, falls zum Spieler gefunden
-  onSelect?: () => void; // Klick führt zur Team-Seite (falls Team bekannt)
+  onSelect?: () => void; // Klick öffnet das Spieler-Detail (falls Team bekannt)
 }
 
 // Schild-Silhouette in Anlehnung an eine FIFA-Ultimate-Team-Karte:
@@ -35,7 +35,7 @@ export default function PlayerOfMonthCard({ pom, crest, points, onSelect }: Play
       className={`relative w-full max-w-[330px] mx-auto ${onSelect ? 'cursor-pointer' : ''}`}
       onClick={onSelect}
       role={onSelect ? 'button' : undefined}
-      title={onSelect && crest ? `${crest.name} – Vereinsseite öffnen` : undefined}
+      title={onSelect ? `${pom.name} – Spieler anzeigen` : undefined}
     >
       <div
         className={`relative w-full aspect-[0.72] transition-transform duration-300 [filter:drop-shadow(0_30px_54px_rgba(0,0,0,.6))] ${
