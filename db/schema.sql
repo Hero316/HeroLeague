@@ -101,6 +101,9 @@ CREATE TABLE users (
   name        TEXT NOT NULL DEFAULT '',
   role        TEXT NOT NULL DEFAULT 'match_admin' CHECK (role IN ('superadmin', 'match_admin', 'referee', 'ticket_manager')),
   permissions JSONB NOT NULL DEFAULT '[]',
+  -- Profil: Avatar-Blob-URL (leer = Initialen) und Präsenz-Status.
+  avatar_url  TEXT NOT NULL DEFAULT '',
+  status      TEXT NOT NULL DEFAULT 'online',
   is_active   BOOLEAN NOT NULL DEFAULT true,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );

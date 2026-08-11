@@ -249,12 +249,25 @@ export const ALL_ADMIN_PERMISSIONS: { id: AdminPermission; label: string }[] = [
   { id: 'manage_tickets', label: 'Tickets bearbeiten' },
 ];
 
+// Präsenz-Status (Slack-artig) mit Emoji + Farbe. Erweiterbar.
+export type UserStatus = 'online' | 'away' | 'busy' | 'vacation' | 'out';
+export const USER_STATUS: Record<UserStatus, { emoji: string; label: string; dot: string }> = {
+  online: { emoji: '🟢', label: 'Online', dot: 'bg-emerald-400' },
+  away: { emoji: '🌙', label: 'Abwesend', dot: 'bg-amber-400' },
+  busy: { emoji: '⛔', label: 'Beschäftigt', dot: 'bg-rose-500' },
+  vacation: { emoji: '🌴', label: 'Urlaub', dot: 'bg-sky-400' },
+  out: { emoji: '🏠', label: 'Außer Haus', dot: 'bg-slate-400' },
+};
+export const USER_STATUS_LIST = Object.keys(USER_STATUS) as UserStatus[];
+
 export interface AppUser {
   id: string;
   email: string;
   name: string;
   role: UserRole;
   permissions: AdminPermission[];
+  avatarUrl: string;
+  status: UserStatus;
   isActive: boolean;
 }
 
@@ -265,6 +278,8 @@ export interface SessionUser {
   name: string;
   role: UserRole;
   permissions: AdminPermission[];
+  avatarUrl: string;
+  status: UserStatus;
 }
 
 // Abend-Aufstellung (Schiedsrichtermodus): pro Team wird EINMAL für den ganzen
@@ -332,6 +347,8 @@ export interface TeamMember {
   id: string;
   name: string; // Anzeigename (fällt auf E-Mail zurück, falls kein Name)
   role: UserRole;
+  avatarUrl: string;
+  status: UserStatus;
 }
 
 export type TicketPriority = 'niedrig' | 'mittel' | 'hoch' | 'dringend';

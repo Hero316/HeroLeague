@@ -49,7 +49,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.json({
         isAdmin: Boolean(session),
         user: session
-          ? { id: session.userId, email: session.email, name: session.name, role: session.role, permissions: session.permissions }
+          ? {
+              id: session.userId,
+              email: session.email,
+              name: session.name,
+              role: session.role,
+              permissions: session.permissions,
+              avatarUrl: session.avatarUrl,
+              status: session.status,
+            }
           : null,
       });
     }
@@ -141,11 +149,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         name: user.name,
         role: user.role,
         permissions: user.permissions,
+        avatarUrl: user.avatarUrl,
+        status: user.status,
       });
       res.setHeader('Set-Cookie', sessionCookie(token));
       return res.json({
         ok: true,
-        user: { id: user.id, email: user.email, name: user.name, role: user.role, permissions: user.permissions },
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          permissions: user.permissions,
+          avatarUrl: user.avatarUrl,
+          status: user.status,
+        },
       });
     }
 
@@ -166,9 +184,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         name: 'Super-Admin',
         role: 'superadmin',
         permissions: [],
+        avatarUrl: '',
+        status: 'online',
       });
       res.setHeader('Set-Cookie', sessionCookie(token));
-      return res.json({ ok: true, user: { id: 'bootstrap', email: '', name: 'Super-Admin', role: 'superadmin', permissions: [] } });
+      return res.json({
+        ok: true,
+        user: { id: 'bootstrap', email: '', name: 'Super-Admin', role: 'superadmin', permissions: [], avatarUrl: '', status: 'online' },
+      });
     }
 
     // --- Abmelden -------------------------------------------------------------

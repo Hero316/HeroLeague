@@ -32,9 +32,11 @@ import HighlightsPage from './components/HighlightsPage';
 import TicketSystem from './components/TicketSystem';
 import TaskBoard from './components/TaskBoard';
 import ChatSystem from './components/ChatSystem';
+import ProfileEditor from './components/ProfileEditor';
+import Avatar from './components/Avatar';
 import NotificationBell from './components/NotificationBell';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, CalendarDays, MessageSquare } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, CalendarDays, MessageSquare, UserCircle } from 'lucide-react';
 
 // Öffentliche Tabs haben eigene URLs, damit man nach einem Reload dort bleibt, wo man war.
 const TAB_PATHS: Record<ActiveTab, string> = {
@@ -759,9 +761,13 @@ export default function App() {
             <div className="w-full max-w-7xl mx-auto space-y-8 py-4">
               <div className="hl-card p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-full bg-[rgba(67,229,160,.1)] flex items-center justify-center text-hl-green border border-[rgba(67,229,160,.2)]">
-                    <Shield className="w-5 h-5" />
-                  </div>
+                  {sessionUser ? (
+                    <Avatar name={sessionUser.name || sessionUser.email || 'Admin'} url={sessionUser.avatarUrl} status={sessionUser.status} size={40} showStatus ring="#0b1210" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-[rgba(67,229,160,.1)] flex items-center justify-center text-hl-green border border-[rgba(67,229,160,.2)]">
+                      <Shield className="w-5 h-5" />
+                    </div>
+                  )}
                   <div>
                     <h2 className="font-display font-black text-lg text-white uppercase tracking-tight">
                       {isSuperadmin
@@ -858,7 +864,20 @@ export default function App() {
                     </>
                   )}
 
-                  {/* Team-Zusammenarbeit: Tickets + Aufgaben-Board (für jeden eingeloggten Nutzer) */}
+                  {/* Team-Zusammenarbeit: Profil, Tickets, Aufgaben, Chat (für jeden eingeloggten Nutzer) */}
+                  <AccordionSection
+                    id="profil"
+                    category="team"
+                    title="Mein Profil"
+                    subtitle="Name, Profilbild & Status (online, Urlaub, außer Haus …)"
+                    icon={<UserCircle className="w-5 h-5" />}
+                    accent="#22DFC9"
+                  >
+                    {sessionUser && (
+                      <ProfileEditor user={sessionUser} onSaved={(p) => setSessionUser((u) => (u ? { ...u, ...p } : u))} />
+                    )}
+                  </AccordionSection>
+
                   <AccordionSection
                     id="tickets"
                     category="team"

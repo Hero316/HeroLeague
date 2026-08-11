@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql, getUsers } from './db.js';
-import { getSession } from './auth.js';
+import { getSession, normalizeStatus } from './auth.js';
 import type { SessionPayload } from './auth.js';
 import {
   badRequest,
@@ -77,8 +77,41 @@ export async function teamMembers(req: VercelRequest, res: VercelResponse) {
   const users = await getUsers();
   const members = users
     .filter((u) => u.isActive)
-    .map((u) => ({ id: u.id, name: u.name && u.name.trim() ? u.name : u.email, role: u.role }));
+    .map((u) => ({
+      id: u.id,
+      name: u.name && u.name.trim() ? u.name : u.email,
+      role: u.role,
+      avatarUrl: u.avatarUrl ?? '',
+      status: u.status ?? 'online',
+    }));
   return res.json(members);
+}
+
+// Eigenes Profil bearbeiten (Name, Avatar, Status). Jeder eingeloggte Nutzer –
+// aber nur die EIGENE Zeile. Der Master-Passwort-Zugang (bootstrap) hat keine
+// Nutzerzeile und wird abgewiesen (bitte mit echtem Account anmelden).
+export async function updateProfile(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
+  if (session.userId === 'bootstrap') {
+    return badRequest(res, 'Bitte mit einem echten Account (E-Mail-Login) anmelden, um dein Profil zu bearbeiten.');
+  }
+  const b = req.body ?? {};
+  const rows = await sql`SELECT name, COALESCE(avatar_url,'') AS "avatarUrl", COALESCE(status,'online') AS status FROM users WHERE id = ${session.userId}`;
+  if (rows.length === 0) return res.status(404).json({ error: 'Profil nicht gefunden.' });
+  const cur = rows[0] as { name: string; avatarUrl: string; status: string };
+
+  const name = isNonEmptyString(b.name) ? b.name.trim().slice(0, 80) : cur.name;
+  let avatarUrl = cur.avatarUrl;
+  if (b.avatarUrl !== undefined) {
+    const u = typeof b.avatarUrl === 'string' ? b.avatarUrl.trim() : '';
+    avatarUrl = u === '' || /^https?:\/\//i.test(u) ? u : cur.avatarUrl;
+  }
+  const status = normalizeStatus(b.status ?? cur.status);
+
+  await sql`UPDATE users SET name = ${name}, avatar_url = ${avatarUrl}, status = ${status} WHERE id = ${session.userId}`;
+  return res.json({ id: session.userId, name, avatarUrl, status, role: session.role });
 }
 
 // --- Tickets ----------------------------------------------------------------

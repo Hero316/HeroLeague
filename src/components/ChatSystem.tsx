@@ -26,8 +26,9 @@ import {
   sendMessage,
   conversationTitle,
 } from '../lib/chat';
-import { fetchTeam, fetchTickets, fetchAllTasks } from '../lib/collab';
+import { fetchTeam, fetchTickets, fetchAllTasks, memberMap } from '../lib/collab';
 import { uploadFile } from '../lib/api';
+import Avatar from './Avatar';
 
 const inputClass =
   'w-full bg-[#060E0F] border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent-light';
@@ -396,17 +397,23 @@ function MessageRow({
   m,
   mine,
   showAuthor,
+  displayName,
+  avatarUrl,
   onOpenThread,
 }: {
   m: ChatMessage;
   mine: boolean;
   showAuthor: boolean;
+  displayName?: string;
+  avatarUrl?: string;
   onOpenThread?: (m: ChatMessage) => void;
 }) {
+  const name = displayName || m.authorName;
   return (
-    <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-      <div className={`max-w-[80%] ${mine ? 'items-end' : 'items-start'} flex flex-col`}>
-        {showAuthor && !mine && <span className="text-[10px] font-mono text-hl-dim mb-0.5 px-1">{m.authorName}</span>}
+    <div className={`flex gap-2 ${mine ? 'justify-end' : 'justify-start'}`}>
+      {!mine && <div className="w-7 shrink-0 self-end">{showAuthor && <Avatar name={name} url={avatarUrl} size={28} />}</div>}
+      <div className={`max-w-[78%] ${mine ? 'items-end' : 'items-start'} flex flex-col`}>
+        {showAuthor && !mine && <span className="text-[10px] font-mono text-hl-dim mb-0.5 px-1">{name}</span>}
         <div
           className={`rounded-2xl px-3 py-2 ${
             mine ? 'bg-brand-accent-light/90 text-white rounded-br-sm' : 'bg-[#0f1614] border border-white/5 text-hl-soft rounded-bl-sm'
@@ -693,6 +700,7 @@ export default function ChatSystem({ currentUserId }: { currentUserId: string })
   }, [messages]);
 
   const active = useMemo(() => convs.find((c) => c.id === activeId) ?? null, [convs, activeId]);
+  const members = useMemo(() => memberMap(team), [team]);
   const openConversation = (id: string) => {
     setActiveId(id);
     // Ungelesen-Zähler nach dem Öffnen aktualisieren.
@@ -725,6 +733,8 @@ export default function ChatSystem({ currentUserId }: { currentUserId: string })
           ) : (
             convs.map((c) => {
               const name = conversationTitle(c, currentUserId);
+              const otherId = c.kind === 'dm' ? c.members.find((m) => m.userId !== currentUserId)?.userId : undefined;
+              const otherMem = otherId ? members.get(otherId) : undefined;
               return (
                 <button
                   key={c.id}
@@ -734,9 +744,13 @@ export default function ChatSystem({ currentUserId }: { currentUserId: string })
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-full bg-brand-accent/20 border border-brand-accent-light/30 flex items-center justify-center text-brand-accent-light shrink-0">
-                      {c.kind === 'group' ? <Hash className="w-4 h-4" /> : <span className="text-[11px] font-bold">{initials(name)}</span>}
-                    </div>
+                    {c.kind === 'group' ? (
+                      <div className="w-9 h-9 rounded-full bg-brand-accent/20 border border-brand-accent-light/30 flex items-center justify-center text-brand-accent-light shrink-0">
+                        <Hash className="w-4 h-4" />
+                      </div>
+                    ) : (
+                      <Avatar name={name} url={otherMem?.avatarUrl} status={otherMem?.status} size={36} showStatus />
+                    )}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-sans font-semibold text-sm text-white truncate">{name}</span>
@@ -773,9 +787,16 @@ export default function ChatSystem({ currentUserId }: { currentUserId: string })
               <button onClick={() => setActiveId(null)} className="md:hidden p-1 text-hl-mute hover:text-white cursor-pointer">
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <div className="w-8 h-8 rounded-full bg-brand-accent/20 border border-brand-accent-light/30 flex items-center justify-center text-brand-accent-light shrink-0">
-                {active.kind === 'group' ? <Hash className="w-4 h-4" /> : <UserIcon className="w-4 h-4" />}
-              </div>
+              {active.kind === 'group' ? (
+                <div className="w-8 h-8 rounded-full bg-brand-accent/20 border border-brand-accent-light/30 flex items-center justify-center text-brand-accent-light shrink-0">
+                  <Hash className="w-4 h-4" />
+                </div>
+              ) : (
+                (() => {
+                  const other = members.get(active.members.find((m) => m.userId !== currentUserId)?.userId ?? '');
+                  return <Avatar name={conversationTitle(active, currentUserId)} url={other?.avatarUrl} status={other?.status} size={34} showStatus />;
+                })()
+              )}
               <div className="min-w-0">
                 <div className="font-display font-bold text-white text-sm truncate">{conversationTitle(active, currentUserId)}</div>
                 <div className="text-[10px] font-mono text-hl-dim flex items-center gap-1">
@@ -792,15 +813,20 @@ export default function ChatSystem({ currentUserId }: { currentUserId: string })
               ) : messages.length === 0 ? (
                 <p className="text-center text-sm text-hl-mute font-sans py-8">Noch keine Nachrichten. Schreib die erste!</p>
               ) : (
-                messages.map((m, i) => (
-                  <MessageRow
-                    key={m.id}
-                    m={m}
-                    mine={m.authorId === currentUserId}
-                    showAuthor={active.kind === 'group' && (i === 0 || messages[i - 1].authorId !== m.authorId)}
-                    onOpenThread={setThread}
-                  />
-                ))
+                messages.map((m, i) => {
+                  const mem = members.get(m.authorId);
+                  return (
+                    <MessageRow
+                      key={m.id}
+                      m={m}
+                      mine={m.authorId === currentUserId}
+                      showAuthor={active.kind === 'group' && (i === 0 || messages[i - 1].authorId !== m.authorId)}
+                      displayName={mem?.name}
+                      avatarUrl={mem?.avatarUrl}
+                      onOpenThread={setThread}
+                    />
+                  );
+                })
               )}
               <div ref={bottomRef} />
             </div>

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus,
@@ -21,7 +21,9 @@ import {
   deleteTicket,
   addTicketComment,
   fetchTeam,
+  memberMap,
 } from '../lib/collab';
+import Avatar from './Avatar';
 
 const inputClass =
   'w-full bg-[#060E0F] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent-light';
@@ -500,6 +502,7 @@ export default function TicketSystem({ canManage }: { currentUserId: string; can
   const [showNew, setShowNew] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'offen' | 'abgeschlossen' | 'alle'>('offen');
+  const members = useMemo(() => memberMap(team), [team]);
 
   const load = useCallback(async () => {
     try {
@@ -586,9 +589,12 @@ export default function TicketSystem({ canManage }: { currentUserId: string; can
                     {t.category && <span className="text-[10px] font-mono text-hl-dim">{t.category}</span>}
                   </div>
                   <div className="font-sans font-semibold text-sm text-white mt-1.5 truncate">{t.title}</div>
-                  <div className="text-[11px] font-mono text-hl-dim mt-0.5 truncate">
-                    {t.createdByName}
-                    {t.assignedToName ? ` → ${t.assignedToName}` : ''} · {fmtDate(t.createdAt)}
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <Avatar name={t.createdByName} url={members.get(t.createdBy)?.avatarUrl} size={18} />
+                    <span className="text-[11px] font-mono text-hl-dim truncate">
+                      {t.createdByName}
+                      {t.assignedToName ? ` → ${t.assignedToName}` : ''} · {fmtDate(t.createdAt)}
+                    </span>
                   </div>
                 </div>
                 {!!t.commentCount && (

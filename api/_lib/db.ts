@@ -61,20 +61,20 @@ export async function getCurrentSeason(): Promise<Season | null> {
   return (rows[0] as Season) ?? null;
 }
 
+const USER_COLS = `id, email, name, role, COALESCE(permissions, '[]'::jsonb) AS permissions,
+  COALESCE(avatar_url, '') AS "avatarUrl", COALESCE(status, 'online') AS status, is_active AS "isActive"`;
+
+function mapUser(r: Record<string, unknown>): AppUser {
+  return { ...r, permissions: Array.isArray(r.permissions) ? r.permissions : [] } as AppUser;
+}
+
 export async function getUsers(): Promise<AppUser[]> {
-  const rows = await sql`
-    SELECT id, email, name, role, COALESCE(permissions, '[]'::jsonb) AS permissions, is_active AS "isActive"
-    FROM users ORDER BY created_at
-  `;
-  return rows.map((r) => ({ ...r, permissions: Array.isArray(r.permissions) ? r.permissions : [] })) as AppUser[];
+  const rows = await sql.query(`SELECT ${USER_COLS} FROM users ORDER BY created_at`);
+  return (rows as Record<string, unknown>[]).map(mapUser);
 }
 
 export async function getUserByEmail(email: string): Promise<AppUser | null> {
-  const rows = await sql`
-    SELECT id, email, name, role, COALESCE(permissions, '[]'::jsonb) AS permissions, is_active AS "isActive"
-    FROM users WHERE email = ${email.trim().toLowerCase()} LIMIT 1
-  `;
-  if (!rows[0]) return null;
-  const r = rows[0];
-  return { ...r, permissions: Array.isArray(r.permissions) ? r.permissions : [] } as AppUser;
+  const rows = await sql.query(`SELECT ${USER_COLS} FROM users WHERE email = $1 LIMIT 1`, [email.trim().toLowerCase()]);
+  const list = rows as Record<string, unknown>[];
+  return list[0] ? mapUser(list[0]) : null;
 }

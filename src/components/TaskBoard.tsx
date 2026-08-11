@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquare, Users, CalendarDays, LayoutGrid } from 'lucide-react';
 import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember } from '../types';
-import { fetchTasksRange, fetchTask, createTask, updateTask, deleteTask, addTaskComment, fetchTeam } from '../lib/collab';
+import { fetchTasksRange, fetchTask, createTask, updateTask, deleteTask, addTaskComment, fetchTeam, memberMap } from '../lib/collab';
+import Avatar from './Avatar';
 
 const inputClass =
   'w-full bg-[#060E0F] border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent-light';
@@ -89,22 +90,28 @@ function initials(name: string): string {
 }
 const TODAY = ymd(new Date());
 
-function AssigneeChips({ assignees, size = 6 }: { assignees: { userId: string; userName: string }[]; size?: number }) {
+function AssigneeChips({
+  assignees,
+  urlFor,
+  px = 24,
+}: {
+  assignees: { userId: string; userName: string }[];
+  urlFor?: (id: string) => string | undefined;
+  px?: number;
+}) {
   if (assignees.length === 0) return null;
-  const cls = size === 5 ? 'w-5 h-5 text-[8px]' : 'w-6 h-6 text-[9px]';
   return (
     <div className="flex -space-x-1.5">
       {assignees.slice(0, 4).map((a) => (
-        <span
-          key={a.userId}
-          title={a.userName}
-          className={`${cls} rounded-full bg-brand-accent/25 border border-brand-accent-light/40 font-bold text-brand-accent-light flex items-center justify-center`}
-        >
-          {initials(a.userName)}
+        <span key={a.userId} title={a.userName} className="inline-flex rounded-full ring-2 ring-[#0a1110]">
+          <Avatar name={a.userName} url={urlFor?.(a.userId)} size={px} />
         </span>
       ))}
       {assignees.length > 4 && (
-        <span className={`${cls} rounded-full bg-white/10 border border-white/20 font-bold text-hl-soft flex items-center justify-center`}>
+        <span
+          className="rounded-full bg-white/10 border border-white/20 font-bold text-hl-soft flex items-center justify-center ring-2 ring-[#0a1110]"
+          style={{ width: px, height: px, fontSize: Math.round(px * 0.4) }}
+        >
           +{assignees.length - 4}
         </span>
       )}
@@ -417,6 +424,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
     load();
   }, [load]);
 
+  const members = useMemo(() => memberMap(team), [team]);
   const tasksByDay = useMemo(() => {
     const map: Record<string, Task[]> = {};
     for (const t of tasks) {
@@ -568,7 +576,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
                         </span>
                       </div>
                       <div className="flex items-center justify-between mt-1.5">
-                        <AssigneeChips assignees={t.assignees} size={5} />
+                        <AssigneeChips assignees={t.assignees} urlFor={(id) => members.get(id)?.avatarUrl} px={22} />
                         {!!t.commentCount && (
                           <span className="flex items-center gap-1 text-[10px] text-hl-mute font-mono">
                             <MessageSquare className="w-3 h-3" /> {t.commentCount}

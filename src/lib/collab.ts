@@ -10,10 +10,23 @@ import type {
   TaskStatus,
   TeamMember,
   AppNotification,
+  UserStatus,
+  UserRole,
 } from '../types';
 
-// --- Team-Mitglieder --------------------------------------------------------
+// --- Team-Mitglieder & eigenes Profil ---------------------------------------
 export const fetchTeam = () => apiFetch<TeamMember[]>('/api/team');
+
+export const updateOwnProfile = (input: { name?: string; avatarUrl?: string; status?: UserStatus }) =>
+  apiFetch<{ id: string; name: string; avatarUrl: string; status: UserStatus; role: UserRole }>(
+    '/api/team?resource=profile',
+    { method: 'POST', body: JSON.stringify(input) }
+  );
+
+// Schnelle Nachschlagekarte id -> Mitglied (für Avatare/Namen überall).
+export function memberMap(team: TeamMember[]): Map<string, TeamMember> {
+  return new Map(team.map((m) => [m.id, m]));
+}
 
 // --- Tickets ----------------------------------------------------------------
 export const fetchTickets = () => apiFetch<Ticket[]>('/api/tickets');

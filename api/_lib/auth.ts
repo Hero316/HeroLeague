@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { SignJWT, jwtVerify } from 'jose';
-import type { UserRole, AdminPermission } from '../../src/types';
+import type { UserRole, AdminPermission, UserStatus } from '../../src/types';
 
 const COOKIE_NAME = 'hl_session';
 const SESSION_DAYS = 7;
@@ -12,6 +12,13 @@ export interface SessionPayload {
   name: string;
   role: UserRole;
   permissions: AdminPermission[]; // zusätzliche, frei kombinierbare Rechte
+  avatarUrl: string;
+  status: UserStatus;
+}
+
+const KNOWN_STATUS: UserStatus[] = ['online', 'away', 'busy', 'vacation', 'out'];
+export function normalizeStatus(value: unknown): UserStatus {
+  return KNOWN_STATUS.includes(value as UserStatus) ? (value as UserStatus) : 'online';
 }
 
 const KNOWN_PERMISSIONS: AdminPermission[] = ['manage_tickets'];
@@ -39,6 +46,8 @@ export async function createSessionToken(user: SessionPayload): Promise<string> 
     name: user.name,
     role: user.role,
     permissions: normalizePermissions(user.permissions),
+    avatarUrl: typeof user.avatarUrl === 'string' ? user.avatarUrl : '',
+    status: normalizeStatus(user.status),
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
@@ -98,6 +107,8 @@ export async function getSession(req: VercelRequest): Promise<SessionPayload | n
       name: typeof payload.name === 'string' ? payload.name : '',
       role,
       permissions: normalizePermissions(payload.permissions),
+      avatarUrl: typeof payload.avatarUrl === 'string' ? payload.avatarUrl : '',
+      status: normalizeStatus(payload.status),
     };
   } catch {
     return null;
