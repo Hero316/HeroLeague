@@ -224,14 +224,14 @@ export function TicketDetail({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center p-0 sm:p-6 overflow-y-auto"
+      className="fixed inset-0 z-[60] bg-black/80 flex items-start sm:items-center justify-center p-0 sm:p-6 overflow-y-auto"
       {...backdrop}
     >
       <motion.div
         initial={{ scale: 0.97, y: 10 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.97, y: 10 }}
-        className="hl-card w-full max-w-2xl my-0 sm:my-8 p-5 sm:p-6"
+        className="hl-card hl-modal-card w-full max-w-2xl my-0 sm:my-8 p-5 sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         {loading || !ticket ? (

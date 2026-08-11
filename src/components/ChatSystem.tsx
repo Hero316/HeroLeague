@@ -177,13 +177,13 @@ function AttachPicker({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4"
       {...backdrop}
     >
       <motion.div
         initial={{ scale: 0.97 }}
         animate={{ scale: 1 }}
-        className="hl-card w-full max-w-md p-5 max-h-[80vh] flex flex-col"
+        className="hl-card hl-modal-card w-full max-w-md p-5 max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3">
@@ -537,7 +537,7 @@ function ThreadModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[65] bg-black/70 backdrop-blur-sm flex items-stretch justify-end"
+      className="fixed inset-0 z-[65] bg-black/80 flex items-stretch justify-end"
       {...backdrop}
     >
       <motion.div
@@ -635,10 +635,10 @@ function NewConversationModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[65] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      className="fixed inset-0 z-[65] bg-black/80 flex items-center justify-center p-4"
       {...backdrop}
     >
-      <motion.div initial={{ scale: 0.97 }} animate={{ scale: 1 }} className="hl-card w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+      <motion.div initial={{ scale: 0.97 }} animate={{ scale: 1 }} className="hl-card hl-modal-card w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h4 className="font-display font-bold text-white uppercase tracking-tight">Neue Unterhaltung</h4>
           <button onClick={onClose} className="p-1 text-hl-mute hover:text-white cursor-pointer">
@@ -762,8 +762,8 @@ function ConversationInfo({
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[65] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" {...backdrop}>
-      <motion.div initial={{ scale: 0.97 }} animate={{ scale: 1 }} className="hl-card w-full max-w-sm p-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[65] bg-black/80 flex items-center justify-center p-4" {...backdrop}>
+      <motion.div initial={{ scale: 0.97 }} animate={{ scale: 1 }} className="hl-card hl-modal-card w-full max-w-sm p-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h4 className="font-display font-bold text-white uppercase tracking-tight">Infos</h4>
           <button onClick={onClose} className="p-1 text-hl-mute hover:text-white cursor-pointer">
