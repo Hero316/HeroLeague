@@ -37,6 +37,14 @@ export const sendMessage = (input: {
 export const markConversationRead = (conversationId: string) =>
   apiFetch('/api/chat?resource=read', { method: 'POST', body: JSON.stringify({ conversationId }) });
 
+// Gruppe verwalten (nur Super-Admin)
+export const updateGroup = (conversationId: string, patch: { title?: string; avatarUrl?: string }) =>
+  apiFetch('/api/chat?resource=group', { method: 'POST', body: JSON.stringify({ conversationId, ...patch }) });
+export const addGroupMember = (conversationId: string, userId: string) =>
+  apiFetch('/api/chat?resource=member', { method: 'POST', body: JSON.stringify({ conversationId, userId, op: 'add' }) });
+export const removeGroupMember = (conversationId: string, userId: string) =>
+  apiFetch('/api/chat?resource=member', { method: 'POST', body: JSON.stringify({ conversationId, userId, op: 'remove' }) });
+
 export interface ChatSearchHit {
   id: string;
   conversationId: string;

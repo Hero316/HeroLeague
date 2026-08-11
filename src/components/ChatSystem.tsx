@@ -18,6 +18,10 @@ import {
   ArrowLeft,
   Search,
   Info,
+  Camera,
+  Trash2,
+  UserPlus,
+  Check,
 } from 'lucide-react';
 import type { Conversation, ChatMessage, TeamMember, Ticket, Task, UserStatus } from '../types';
 import { USER_STATUS } from '../types';
@@ -29,10 +33,13 @@ import {
   sendMessage,
   conversationTitle,
   searchChat,
+  updateGroup,
+  addGroupMember,
+  removeGroupMember,
   type ChatSearchHit,
 } from '../lib/chat';
 import { fetchTeam, fetchTickets, fetchAllTasks, fetchTask, memberMap } from '../lib/collab';
-import { uploadFile } from '../lib/api';
+import { uploadFile, uploadImage } from '../lib/api';
 import Avatar from './Avatar';
 import { TicketDetail } from './TicketSystem';
 import { TaskDetail } from './TaskBoard';
@@ -701,26 +708,57 @@ function NewConversationModal({
   );
 }
 
-// --- Info-Fenster: Gruppen-Mitglieder bzw. DM-Profil ------------------------
+// --- Info-Fenster: Gruppe (Superadmin: Name/Bild/Mitglieder) bzw. DM-Profil --
 function ConversationInfo({
   conversation,
   members,
+  team,
   currentUserId,
+  isSuperadmin,
   onClose,
+  onChanged,
 }: {
   conversation: Conversation;
   members: Map<string, TeamMember>;
+  team: TeamMember[];
   currentUserId: string;
+  isSuperadmin: boolean;
   onClose: () => void;
+  onChanged: () => void;
 }) {
   const isGroup = conversation.kind === 'group';
+  const canEdit = isGroup && isSuperadmin;
+  const [title, setTitle] = useState(conversation.title);
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const otherId = !isGroup ? conversation.members.find((m) => m.userId !== currentUserId)?.userId : undefined;
   const other = otherId ? members.get(otherId) : undefined;
   const statusLine = (s?: UserStatus | null) => (s ? `${USER_STATUS[s].emoji} ${USER_STATUS[s].label}` : '');
+  const memberIds = new Set(conversation.members.map((m) => m.userId));
+  const addable = team.filter((m) => !memberIds.has(m.id));
+
+  const act = async (fn: () => Promise<unknown>) => {
+    setBusy(true);
+    try {
+      await fn();
+      onChanged();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Aktion fehlgeschlagen.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const onAvatar = (file?: File) => {
+    if (!file) return;
+    void act(async () => {
+      const url = await uploadImage(file, { maxDimension: 512 });
+      await updateGroup(conversation.id, { avatarUrl: url });
+    });
+  };
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[65] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
-      <motion.div initial={{ scale: 0.97 }} animate={{ scale: 1 }} className="hl-card w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+      <motion.div initial={{ scale: 0.97 }} animate={{ scale: 1 }} className="hl-card w-full max-w-sm p-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h4 className="font-display font-bold text-white uppercase tracking-tight">Infos</h4>
           <button onClick={onClose} className="p-1 text-hl-mute hover:text-white cursor-pointer">
@@ -730,29 +768,74 @@ function ConversationInfo({
         {isGroup ? (
           <>
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-full bg-brand-accent/20 border border-brand-accent-light/30 flex items-center justify-center text-brand-accent-light shrink-0">
-                <Hash className="w-6 h-6" />
+              <div className="relative shrink-0">
+                {conversation.avatarUrl ? (
+                  <Avatar name={conversation.title || 'Gruppe'} url={conversation.avatarUrl} size={56} />
+                ) : (
+                  <div className="w-14 h-14 rounded-full bg-brand-accent/20 border border-brand-accent-light/30 flex items-center justify-center text-brand-accent-light">
+                    <Hash className="w-7 h-7" />
+                  </div>
+                )}
+                {canEdit && (
+                  <>
+                    <button onClick={() => fileRef.current?.click()} disabled={busy} title="Gruppenbild ändern" className="absolute -bottom-1 -right-1 p-1.5 rounded-full bg-brand-accent-light text-white border-2 border-[#0b1210] cursor-pointer disabled:opacity-50">
+                      {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Camera className="w-3 h-3" />}
+                    </button>
+                    <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { onAvatar(e.target.files?.[0]); e.target.value = ''; }} />
+                  </>
+                )}
               </div>
-              <div className="min-w-0">
-                <div className="font-display font-black text-white text-lg truncate">{conversation.title || 'Gruppe'}</div>
-                <div className="text-[11px] font-mono text-hl-dim">{conversation.members.length} Mitglieder</div>
+              <div className="min-w-0 flex-1">
+                {canEdit ? (
+                  <div className="flex items-center gap-1.5">
+                    <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-[#060E0F] border border-white/10 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-brand-accent-light" />
+                    {title.trim() && title !== conversation.title && (
+                      <button onClick={() => act(() => updateGroup(conversation.id, { title: title.trim() }))} disabled={busy} className="p-2 rounded-lg bg-brand-accent-light text-white cursor-pointer disabled:opacity-50 shrink-0" title="Name speichern">
+                        <Check className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="font-display font-black text-white text-lg truncate">{conversation.title || 'Gruppe'}</div>
+                )}
+                <div className="text-[11px] font-mono text-hl-dim mt-0.5">{conversation.members.length} Mitglieder</div>
               </div>
             </div>
+
             <div className="text-[10px] font-mono uppercase tracking-wider text-hl-dim mb-2">Mitglieder</div>
-            <div className="space-y-2 max-h-72 overflow-y-auto">
+            <div className="space-y-1.5 mb-4">
               {conversation.members.map((mm) => {
                 const mem = members.get(mm.userId);
                 return (
                   <div key={mm.userId} className="flex items-center gap-2.5">
-                    <Avatar name={mem?.name ?? mm.userName} url={mem?.avatarUrl} status={mem?.status} size={32} showStatus ring="#0b1210" />
-                    <div className="min-w-0">
+                    <Avatar name={mem?.name ?? mm.userName} url={mem?.avatarUrl} status={mem?.status} size={30} showStatus ring="#0b1210" />
+                    <div className="min-w-0 flex-1">
                       <div className="text-sm font-sans text-white truncate">{mem?.name ?? mm.userName}</div>
-                      {mem?.status && <div className="text-[11px] text-hl-dim">{statusLine(mem.status)}</div>}
                     </div>
+                    {canEdit && mm.userId !== currentUserId && (
+                      <button onClick={() => act(() => removeGroupMember(conversation.id, mm.userId))} disabled={busy} title="Entfernen" className="p-1.5 text-hl-mute hover:text-rose-400 cursor-pointer disabled:opacity-50">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 );
               })}
             </div>
+
+            {canEdit && addable.length > 0 && (
+              <>
+                <div className="text-[10px] font-mono uppercase tracking-wider text-hl-dim mb-2 flex items-center gap-1">
+                  <UserPlus className="w-3.5 h-3.5" /> Hinzufügen
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {addable.map((m) => (
+                    <button key={m.id} onClick={() => act(() => addGroupMember(conversation.id, m.id))} disabled={busy} className="px-2.5 py-1.5 rounded-lg text-xs font-sans font-semibold border bg-white/5 border-white/10 text-hl-mute hover:text-white cursor-pointer disabled:opacity-50 flex items-center gap-1.5">
+                      <Avatar name={m.name} url={m.avatarUrl} size={18} /> {m.name}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </>
         ) : (
           <div className="flex flex-col items-center text-center gap-3 py-4">
@@ -937,9 +1020,13 @@ export default function ChatSystem({
                 >
                   <div className="flex items-center gap-2.5">
                     {c.kind === 'group' ? (
-                      <div className="w-9 h-9 rounded-full bg-brand-accent/20 border border-brand-accent-light/30 flex items-center justify-center text-brand-accent-light shrink-0">
-                        <Hash className="w-4 h-4" />
-                      </div>
+                      c.avatarUrl ? (
+                        <Avatar name={name} url={c.avatarUrl} size={36} />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-brand-accent/20 border border-brand-accent-light/30 flex items-center justify-center text-brand-accent-light shrink-0">
+                          <Hash className="w-4 h-4" />
+                        </div>
+                      )
                     ) : (
                       <Avatar name={name} url={otherMem?.avatarUrl} status={otherMem?.status} size={36} showStatus />
                     )}
@@ -1008,9 +1095,13 @@ export default function ChatSystem({
               </button>
               <button onClick={() => setShowInfo(true)} className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer" title="Infos anzeigen">
                 {active.kind === 'group' ? (
-                  <div className="w-8 h-8 rounded-full bg-brand-accent/20 border border-brand-accent-light/30 flex items-center justify-center text-brand-accent-light shrink-0">
-                    <Hash className="w-4 h-4" />
-                  </div>
+                  active.avatarUrl ? (
+                    <Avatar name={conversationTitle(active, currentUserId)} url={active.avatarUrl} size={34} />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-brand-accent/20 border border-brand-accent-light/30 flex items-center justify-center text-brand-accent-light shrink-0">
+                      <Hash className="w-4 h-4" />
+                    </div>
+                  )
                 ) : (
                   (() => {
                     const other = members.get(active.members.find((m) => m.userId !== currentUserId)?.userId ?? '');
@@ -1118,7 +1209,15 @@ export default function ChatSystem({
           />
         )}
         {showInfo && active && (
-          <ConversationInfo conversation={active} members={members} currentUserId={currentUserId} onClose={() => setShowInfo(false)} />
+          <ConversationInfo
+            conversation={active}
+            members={members}
+            team={team}
+            currentUserId={currentUserId}
+            isSuperadmin={isSuperadmin}
+            onClose={() => setShowInfo(false)}
+            onChanged={loadConvs}
+          />
         )}
         {attachView?.type === 'ticket' && (
           <TicketDetail

@@ -75,6 +75,21 @@ export interface PushPayload {
   url?: string;
 }
 
+// Gesamtzahl ungelesen (Benachrichtigungen + Chat) für die Zahl am App-Icon.
+async function badgeCount(userId: string): Promise<number> {
+  try {
+    const n = (await sql`SELECT count(*)::int AS c FROM notifications WHERE user_id = ${userId} AND is_read = false`) as { c: number }[];
+    const m = (await sql`
+      SELECT count(*)::int AS c FROM messages msg
+      JOIN conversation_members cm ON cm.conversation_id = msg.conversation_id AND cm.user_id = ${userId}
+      WHERE msg.parent_id IS NULL AND msg.author_id <> ${userId} AND msg.created_at > cm.last_read_at
+    `) as { c: number }[];
+    return (n[0]?.c ?? 0) + (m[0]?.c ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
 // Best-effort Push an alle Geräte eines Nutzers. Fehlertolerant – wirft NIE.
 export async function sendPushToUser(userId: string, payload: PushPayload): Promise<void> {
   try {
@@ -89,7 +104,8 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
       p256dh: string;
       auth: string;
     }[];
-    const body = JSON.stringify({ title: payload.title, body: payload.body, url: payload.url ?? '/admin' });
+    const badge = await badgeCount(userId);
+    const body = JSON.stringify({ title: payload.title, body: payload.body, url: payload.url ?? '/admin', badge });
     for (const s of subs) {
       try {
         await wp.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, body);

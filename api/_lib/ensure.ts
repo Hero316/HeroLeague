@@ -69,8 +69,9 @@ export async function ensureSchema(): Promise<void> {
     is_read BOOLEAN NOT NULL DEFAULT false, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
   await run(sql`CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read)`);
   await run(sql`CREATE TABLE IF NOT EXISTS conversations (
-    id TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', dm_key TEXT,
+    id TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', avatar_url TEXT NOT NULL DEFAULT '', dm_key TEXT,
     created_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+  await run(sql`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS avatar_url TEXT NOT NULL DEFAULT ''`);
   await run(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_dm ON conversations(dm_key) WHERE dm_key IS NOT NULL`);
   await run(sql`CREATE TABLE IF NOT EXISTS conversation_members (
     conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,

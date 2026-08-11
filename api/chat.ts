@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { conversations, messages, markRead, searchMessages } from './_lib/chat.js';
+import { conversations, messages, markRead, searchMessages, updateConversation, manageMember } from './_lib/chat.js';
 import { ensureSchema } from './_lib/ensure.js';
 
 // Interner Chat (Phase 3). Eigener Endpunkt (Vercel Pro).
@@ -15,6 +15,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (resource === 'messages') return messages(req, res);
     if (resource === 'read') return markRead(req, res);
     if (resource === 'search') return searchMessages(req, res);
+    if (resource === 'group') return updateConversation(req, res);
+    if (resource === 'member') return manageMember(req, res);
     return conversations(req, res);
   } catch (err) {
     console.error('Fehler in /api/chat:', err);

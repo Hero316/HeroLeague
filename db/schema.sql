@@ -217,6 +217,7 @@ CREATE TABLE conversations (
   id         TEXT PRIMARY KEY,
   kind       TEXT NOT NULL CHECK (kind IN ('group','dm')),
   title      TEXT NOT NULL DEFAULT '',
+  avatar_url TEXT NOT NULL DEFAULT '', -- Gruppen-Profilbild (Blob-URL); DMs leer
   dm_key     TEXT,               -- DMs: "kleinereId|größereId", je Paar eindeutig
   created_by TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

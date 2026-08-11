@@ -440,6 +440,7 @@ export interface Conversation {
   id: string;
   kind: 'group' | 'dm';
   title: string;
+  avatarUrl: string; // Gruppenbild (leer = Standard-Icon)
   createdBy: string;
   updatedAt: string;
   members: ConversationMember[];

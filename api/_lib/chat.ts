@@ -24,7 +24,7 @@ export async function conversations(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
     res.setHeader('Cache-Control', 'no-store');
     const rows = await sql`
-      SELECT c.id, c.kind, c.title, c.created_by AS "createdBy", c.updated_at AS "updatedAt",
+      SELECT c.id, c.kind, c.title, COALESCE(c.avatar_url, '') AS "avatarUrl", c.created_by AS "createdBy", c.updated_at AS "updatedAt",
         (SELECT count(*)::int FROM messages m
            WHERE m.conversation_id = c.id AND m.parent_id IS NULL
              AND m.created_at > cm.last_read_at AND m.author_id <> ${uid}) AS unread,
@@ -230,6 +230,62 @@ export async function searchMessages(req: VercelRequest, res: VercelResponse) {
     [session.userId, like]
   );
   return res.json(rows);
+}
+
+// --- Gruppe verwalten (nur Super-Admin): Name & Bild ------------------------
+export async function updateConversation(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
+  if (session.role !== 'superadmin') return res.status(403).json({ error: 'Nur Super-Admins dürfen Gruppen verwalten.' });
+
+  const b = req.body ?? {};
+  const id = typeof b.conversationId === 'string' ? b.conversationId : '';
+  if (!id) return badRequest(res, 'Unterhaltungs-ID fehlt.');
+  const rows = await sql`SELECT kind FROM conversations WHERE id = ${id}`;
+  if (rows.length === 0) return res.status(404).json({ error: 'Gruppe nicht gefunden.' });
+  if ((rows[0] as { kind: string }).kind !== 'group') return badRequest(res, 'Nur Gruppen können bearbeitet werden.');
+
+  const title = typeof b.title === 'string' && b.title.trim() ? b.title.trim().slice(0, 80) : undefined;
+  const avatarUrl =
+    b.avatarUrl !== undefined &&
+    typeof b.avatarUrl === 'string' &&
+    (b.avatarUrl === '' || /^https?:\/\//i.test(b.avatarUrl))
+      ? b.avatarUrl
+      : undefined;
+  await sql`UPDATE conversations SET title = COALESCE(${title ?? null}, title), avatar_url = COALESCE(${avatarUrl ?? null}, avatar_url) WHERE id = ${id}`;
+  return res.json({ ok: true });
+}
+
+// --- Gruppenmitglied hinzufügen/entfernen (nur Super-Admin) ------------------
+export async function manageMember(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
+  if (session.role !== 'superadmin') return res.status(403).json({ error: 'Nur Super-Admins dürfen Mitglieder verwalten.' });
+
+  const b = req.body ?? {};
+  const id = typeof b.conversationId === 'string' ? b.conversationId : '';
+  const userId = typeof b.userId === 'string' ? b.userId : '';
+  const op = b.op === 'remove' ? 'remove' : 'add';
+  if (!id || !userId) return badRequest(res, 'Angaben fehlen.');
+  const rows = await sql`SELECT kind FROM conversations WHERE id = ${id}`;
+  if (rows.length === 0) return res.status(404).json({ error: 'Gruppe nicht gefunden.' });
+  if ((rows[0] as { kind: string }).kind !== 'group') return badRequest(res, 'Mitglieder gibt es nur in Gruppen.');
+
+  if (op === 'remove') {
+    await sql`DELETE FROM conversation_members WHERE conversation_id = ${id} AND user_id = ${userId}`;
+    return res.json({ ok: true });
+  }
+  const members = await loadMembers();
+  if (!members.has(userId)) return badRequest(res, 'Kein aktives Team-Mitglied.');
+  await sql`
+    INSERT INTO conversation_members (conversation_id, user_id, user_name)
+    VALUES (${id}, ${userId}, ${memberName(members, userId)})
+    ON CONFLICT (conversation_id, user_id) DO NOTHING
+  `;
+  await notify(userId, session.userId, 'chat', 'conversation', id, 'Du wurdest zu einer Gruppe hinzugefügt.');
+  return res.json({ ok: true });
 }
 
 // --- Als gelesen markieren --------------------------------------------------
