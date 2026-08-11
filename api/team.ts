@@ -12,6 +12,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return teamMembers(req, res);
   } catch (err) {
     console.error('Fehler in /api/team:', err);
+    if (req.method === 'GET') return res.json([]);
     return res.status(500).json({ error: 'Interner Fehler' });
   }
 }

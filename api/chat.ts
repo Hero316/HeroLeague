@@ -18,6 +18,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return conversations(req, res);
   } catch (err) {
     console.error('Fehler in /api/chat:', err);
+    // Lese-Anfragen (Polling) degradieren leer statt 500 – falls die DB noch
+    // nicht bereit ist, bleibt die App ruhig statt Fehler zu spammen.
+    if (req.method === 'GET') return res.json([]);
     return res.status(500).json({ error: 'Interner Fehler' });
   }
 }

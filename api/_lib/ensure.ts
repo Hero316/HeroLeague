@@ -1,32 +1,47 @@
 import { sql } from './db.js';
 
-// Selbstheilendes Schema: legt die Tabellen/Spalten der Team-Zusammenarbeit
-// (Tickets, Aufgaben, Chat, Profile, Push) bei Bedarf automatisch an. Damit
-// funktioniert alles auch, wenn eine (Produktions-)Datenbank noch nicht per
-// db/*.sql migriert wurde. Alles additiv (IF NOT EXISTS) und harmlos.
-// Läuft nur einmal je Serverless-Instanz (Guard). Jeder Befehl ist einzeln
-// fehlertolerant, damit ein Fehler (z.B. Constraint) den Rest nicht blockiert.
+// Selbstheilendes Schema: legt Tabellen/Spalten der Team-Zusammenarbeit bei
+// Bedarf an. Schneller Vorab-Check überspringt alles, wenn schon vorhanden
+// (also praktisch kostenlos im Normalbetrieb). Jeder DDL-Befehl ist einzeln
+// fehlertolerant. Läuft je Serverless-Instanz höchstens einmal DDL.
 
 let ensured = false;
 
-// Einen DDL-Befehl ausführen, Fehler nur loggen (nicht werfen).
 async function run(p: Promise<unknown>): Promise<void> {
   try {
     await p;
   } catch (err) {
-    console.error('ensureSchema-Befehl fehlgeschlagen:', err);
+    console.error('ensureSchema-Befehl:', err);
   }
 }
 
 export async function ensureSchema(): Promise<void> {
   if (ensured) return;
+
+  // Schneller Check: sind die wichtigsten neuen Objekte schon da? Dann fertig.
+  try {
+    await sql`SELECT avatar_url, status, permissions, notify_prefs FROM users LIMIT 1`;
+    await sql`SELECT 1 FROM tickets LIMIT 1`;
+    await sql`SELECT priority FROM tasks LIMIT 1`;
+    await sql`SELECT 1 FROM conversations LIMIT 1`;
+    await sql`SELECT 1 FROM push_subscriptions LIMIT 1`;
+    ensured = true;
+    return;
+  } catch {
+    /* etwas fehlt -> unten anlegen */
+  }
   ensured = true;
 
-  // --- Tabellen zuerst (Reihenfolge wegen Fremdschlüsseln) -----------------
+  // --- KRITISCH zuerst: Nutzer-Spalten (Login/Team/Chat hängen daran) -------
+  await run(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '[]'`);
+  await run(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT NOT NULL DEFAULT ''`);
+  await run(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'online'`);
+  await run(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_prefs JSONB NOT NULL DEFAULT '{}'`);
+
+  // --- Tabellen ----------------------------------------------------------
   await run(sql`CREATE TABLE IF NOT EXISTS tickets (
     id TEXT PRIMARY KEY, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
-    priority TEXT NOT NULL DEFAULT 'mittel' CHECK (priority IN ('niedrig','mittel','hoch','dringend')),
-    status TEXT NOT NULL DEFAULT 'offen' CHECK (status IN ('offen','in_bearbeitung','erledigt','abgelehnt')),
+    priority TEXT NOT NULL DEFAULT 'mittel', status TEXT NOT NULL DEFAULT 'offen',
     category TEXT NOT NULL DEFAULT '', images JSONB NOT NULL DEFAULT '[]',
     created_by TEXT NOT NULL, created_by_name TEXT NOT NULL DEFAULT '',
     assigned_to TEXT, assigned_to_name TEXT,
@@ -37,9 +52,7 @@ export async function ensureSchema(): Promise<void> {
     images JSONB NOT NULL DEFAULT '[]', created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
   await run(sql`CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY, title TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '',
-    due_date DATE, iso_week TEXT,
-    status TEXT NOT NULL DEFAULT 'offen' CHECK (status IN ('leer','offen','in_bearbeitung','erledigt','abgebrochen')),
-    priority TEXT NOT NULL DEFAULT 'mittel' CHECK (priority IN ('niedrig','mittel','hoch','dringend')),
+    due_date DATE, iso_week TEXT, status TEXT NOT NULL DEFAULT 'offen', priority TEXT NOT NULL DEFAULT 'mittel',
     created_by TEXT NOT NULL, created_by_name TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
   await run(sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'mittel'`);
@@ -56,9 +69,8 @@ export async function ensureSchema(): Promise<void> {
     is_read BOOLEAN NOT NULL DEFAULT false, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
   await run(sql`CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read)`);
   await run(sql`CREATE TABLE IF NOT EXISTS conversations (
-    id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('group','dm')),
-    title TEXT NOT NULL DEFAULT '', dm_key TEXT, created_by TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+    id TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL DEFAULT '', dm_key TEXT,
+    created_by TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
   await run(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_dm ON conversations(dm_key) WHERE dm_key IS NOT NULL`);
   await run(sql`CREATE TABLE IF NOT EXISTS conversation_members (
     conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
@@ -70,23 +82,17 @@ export async function ensureSchema(): Promise<void> {
     author_id TEXT NOT NULL, author_name TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '',
     attach_type TEXT, attach_id TEXT, attach_title TEXT, attach_url TEXT, attach_mime TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+  await run(sql`ALTER TABLE messages ADD COLUMN IF NOT EXISTS attach_url TEXT`);
+  await run(sql`ALTER TABLE messages ADD COLUMN IF NOT EXISTS attach_mime TEXT`);
   await run(sql`CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at)`);
   await run(sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
     endpoint TEXT PRIMARY KEY, user_id TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
   await run(sql`CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id)`);
 
-  // --- Nachträgliche Spalten (bei älteren Tabellenständen) ------------------
-  await run(sql`ALTER TABLE messages ADD COLUMN IF NOT EXISTS attach_url TEXT`);
-  await run(sql`ALTER TABLE messages ADD COLUMN IF NOT EXISTS attach_mime TEXT`);
-  await run(sql`ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_attach_type_check`);
-  await run(sql`ALTER TABLE messages ADD CONSTRAINT messages_attach_type_check CHECK (attach_type IN ('ticket','task','file','audio'))`);
-
-  // --- Nutzer-Spalten (Profile, Rechte, Benachrichtigungen) ----------------
-  await run(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '[]'`);
-  await run(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT NOT NULL DEFAULT ''`);
-  await run(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'online'`);
-  await run(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS notify_prefs JSONB NOT NULL DEFAULT '{}'`);
+  // --- Constraints ganz zuletzt (unkritisch; nur für Rollen-/Anhang-Checks) -
   await run(sql`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
   await run(sql`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('superadmin','match_admin','referee','ticket_manager','team_member'))`);
+  await run(sql`ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_attach_type_check`);
+  await run(sql`ALTER TABLE messages ADD CONSTRAINT messages_attach_type_check CHECK (attach_type IN ('ticket','task','file','audio'))`);
 }

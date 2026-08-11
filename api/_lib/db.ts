@@ -1,5 +1,5 @@
 import { neon } from '@neondatabase/serverless';
-import type { AppUser, Match, Player, Season, Team } from '../../src/types';
+import type { AppUser, AdminPermission, UserRole, UserStatus, Match, Player, Season, Team } from '../../src/types';
 
 export const sql = neon(process.env.DATABASE_URL!);
 
@@ -61,20 +61,31 @@ export async function getCurrentSeason(): Promise<Season | null> {
   return (rows[0] as Season) ?? null;
 }
 
-const USER_COLS = `id, email, name, role, COALESCE(permissions, '[]'::jsonb) AS permissions,
-  COALESCE(avatar_url, '') AS "avatarUrl", COALESCE(status, 'online') AS status, is_active AS "isActive"`;
-
-function mapUser(r: Record<string, unknown>): AppUser {
-  return { ...r, permissions: Array.isArray(r.permissions) ? r.permissions : [] } as AppUser;
+// Aus dem kompletten Zeilen-JSON einen AppUser bauen. Bewusst über to_jsonb,
+// damit fehlende (noch nicht migrierte) Spalten wie avatar_url/status/
+// permissions/notify_prefs NICHT die ganze Abfrage crashen – sie fallen einfach
+// auf sinnvolle Standardwerte zurück. So funktioniert Login/Team/Chat auch,
+// bevor die Migration durch ist.
+function userFromJson(j: Record<string, unknown>): AppUser {
+  const role = j.role as UserRole;
+  return {
+    id: String(j.id),
+    email: typeof j.email === 'string' ? j.email : '',
+    name: typeof j.name === 'string' ? j.name : '',
+    role: role || 'match_admin',
+    permissions: Array.isArray(j.permissions) ? (j.permissions as AdminPermission[]) : [],
+    avatarUrl: typeof j.avatar_url === 'string' ? j.avatar_url : '',
+    status: typeof j.status === 'string' ? (j.status as UserStatus) : 'online',
+    isActive: j.is_active !== false,
+  };
 }
 
 export async function getUsers(): Promise<AppUser[]> {
-  const rows = await sql.query(`SELECT ${USER_COLS} FROM users ORDER BY created_at`);
-  return (rows as Record<string, unknown>[]).map(mapUser);
+  const rows = await sql`SELECT to_jsonb(u) AS j FROM users u ORDER BY created_at`;
+  return rows.map((r) => userFromJson((r as { j: Record<string, unknown> }).j));
 }
 
 export async function getUserByEmail(email: string): Promise<AppUser | null> {
-  const rows = await sql.query(`SELECT ${USER_COLS} FROM users WHERE email = $1 LIMIT 1`, [email.trim().toLowerCase()]);
-  const list = rows as Record<string, unknown>[];
-  return list[0] ? mapUser(list[0]) : null;
+  const rows = await sql`SELECT to_jsonb(u) AS j FROM users u WHERE email = ${email.trim().toLowerCase()} LIMIT 1`;
+  return rows[0] ? userFromJson((rows[0] as { j: Record<string, unknown> }).j) : null;
 }
