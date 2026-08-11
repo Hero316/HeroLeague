@@ -238,8 +238,9 @@ export interface EventArchive {
 // Rollen: superadmin darf alles; match_admin darf Spiele/Live/Ticker pflegen;
 // referee (Schiedsrichter) darf ausschließlich im Schiedsrichtermodus Spiele
 // pfeifen und die Abend-Aufstellung setzen; ticket_manager darf ausschließlich
-// Tickets bearbeiten (Status, Zuweisung, Priorität) – sonst nichts.
-export type UserRole = 'superadmin' | 'match_admin' | 'referee' | 'ticket_manager';
+// Tickets bearbeiten (Status, Zuweisung, Priorität); team_member sieht NUR den
+// Team-Bereich (Tickets/Aufgaben/Chat mitarbeiten) – keinen Liga-Admin.
+export type UserRole = 'superadmin' | 'match_admin' | 'referee' | 'ticket_manager' | 'team_member';
 
 // Zusätzliche, frei kombinierbare Rechte (unabhängig von der Basis-Rolle).
 // So kann z.B. ein Spiel-Admin ZUSÄTZLICH Tickets bearbeiten. Super-Admins

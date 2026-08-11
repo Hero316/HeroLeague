@@ -99,7 +99,7 @@ CREATE TABLE users (
   id          TEXT PRIMARY KEY,
   email       TEXT NOT NULL UNIQUE,
   name        TEXT NOT NULL DEFAULT '',
-  role        TEXT NOT NULL DEFAULT 'match_admin' CHECK (role IN ('superadmin', 'match_admin', 'referee', 'ticket_manager')),
+  role        TEXT NOT NULL DEFAULT 'match_admin' CHECK (role IN ('superadmin', 'match_admin', 'referee', 'ticket_manager', 'team_member')),
   permissions JSONB NOT NULL DEFAULT '[]',
   -- Profil: Avatar-Blob-URL (leer = Initialen) und Präsenz-Status.
   avatar_url  TEXT NOT NULL DEFAULT '',

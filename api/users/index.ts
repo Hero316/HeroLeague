@@ -7,8 +7,14 @@ function isEmail(value: unknown): value is string {
   return typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
-function isRole(value: unknown): value is 'superadmin' | 'match_admin' | 'referee' | 'ticket_manager' {
-  return value === 'superadmin' || value === 'match_admin' || value === 'referee' || value === 'ticket_manager';
+function isRole(value: unknown): value is 'superadmin' | 'match_admin' | 'referee' | 'ticket_manager' | 'team_member' {
+  return (
+    value === 'superadmin' ||
+    value === 'match_admin' ||
+    value === 'referee' ||
+    value === 'ticket_manager' ||
+    value === 'team_member'
+  );
 }
 
 const listUsers = requireSuperadmin(async (_req: VercelRequest, res: VercelResponse) => {

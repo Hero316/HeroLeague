@@ -100,7 +100,9 @@ export async function getSession(req: VercelRequest): Promise<SessionPayload | n
           ? 'referee'
           : payload.role === 'ticket_manager'
             ? 'ticket_manager'
-            : 'superadmin';
+            : payload.role === 'team_member'
+              ? 'team_member'
+              : 'superadmin';
     return {
       userId: typeof payload.userId === 'string' ? payload.userId : 'bootstrap',
       email: typeof payload.email === 'string' ? payload.email : '',

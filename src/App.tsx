@@ -776,7 +776,9 @@ export default function App() {
                         ? 'Eingeloggt als Super-Admin'
                         : isTicketManager
                           ? 'Eingeloggt als Ticket-Manager'
-                          : 'Eingeloggt als Spiel-Admin'}
+                          : sessionUser?.role === 'team_member'
+                            ? 'Eingeloggt als Team-Mitglied'
+                            : 'Eingeloggt als Spiel-Admin'}
                     </h2>
                     <p className="text-xs text-hl-green-soft font-sans mt-0.5">
                       {sessionUser?.name || sessionUser?.email ? `${sessionUser?.name || sessionUser?.email} · ` : ''}
@@ -804,7 +806,7 @@ export default function App() {
               {/* Aufgeräumtes Backoffice: Reiter nach Rubrik, darunter „dicke Tasten" */}
               <AccordionGroup
                 searchable
-                defaultOpenId="tickets"
+                defaultOpenId="aufgaben"
                 categories={[
                   { id: 'team', label: '★ Team' },
                   ...(canEditLeague
@@ -904,17 +906,6 @@ export default function App() {
                   </AccordionSection>
 
                   <AccordionSection
-                    id="aufgaben"
-                    category="team"
-                    title="Aufgaben-Board"
-                    subtitle="Wochenplanung, Personen zuweisen, Status – Monday-Style"
-                    icon={<CalendarDays className="w-5 h-5" />}
-                    accent="#22DFC9"
-                  >
-                    <TaskBoard currentUserId={sessionUser?.id ?? ''} isSuperadmin={isSuperadmin} />
-                  </AccordionSection>
-
-                  <AccordionSection
                     id="chat"
                     category="team"
                     title="Chat"
@@ -923,6 +914,17 @@ export default function App() {
                     accent="#22DFC9"
                   >
                     <ChatSystem currentUserId={sessionUser?.id ?? ''} canManageTickets={canManageTickets} isSuperadmin={isSuperadmin} />
+                  </AccordionSection>
+
+                  <AccordionSection
+                    id="aufgaben"
+                    category="team"
+                    title="Aufgaben-Board"
+                    subtitle="Kalender (Monat & Woche), Personen zuweisen, Status – Monday-Style"
+                    icon={<CalendarDays className="w-5 h-5" />}
+                    accent="#22DFC9"
+                  >
+                    <TaskBoard currentUserId={sessionUser?.id ?? ''} isSuperadmin={isSuperadmin} />
                   </AccordionSection>
 
                   {isSuperadmin && (

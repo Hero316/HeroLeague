@@ -3,8 +3,14 @@ import { getSession, requireSuperadmin, normalizePermissions } from '../_lib/aut
 import { sql } from '../_lib/db.js';
 import { badRequest } from '../_lib/validate.js';
 
-function isRole(value: unknown): value is 'superadmin' | 'match_admin' | 'referee' | 'ticket_manager' {
-  return value === 'superadmin' || value === 'match_admin' || value === 'referee' || value === 'ticket_manager';
+function isRole(value: unknown): value is 'superadmin' | 'match_admin' | 'referee' | 'ticket_manager' | 'team_member' {
+  return (
+    value === 'superadmin' ||
+    value === 'match_admin' ||
+    value === 'referee' ||
+    value === 'ticket_manager' ||
+    value === 'team_member'
+  );
 }
 
 async function countActiveSuperadmins(): Promise<number> {

@@ -12,6 +12,7 @@ const ROLE_LABEL: Record<UserRole, string> = {
   match_admin: 'Spiel-Admin',
   referee: 'Schiedsrichter',
   ticket_manager: 'Ticket-Manager',
+  team_member: 'Team-Mitglied',
 };
 
 export default function UserManager() {
@@ -138,6 +139,7 @@ export default function UserManager() {
         <div>
           <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">Rolle</label>
           <select value={newRole} onChange={(e) => setNewRole(e.target.value as UserRole)} className={`${inputClass} cursor-pointer`}>
+            <option value="team_member">Team-Mitglied</option>
             <option value="referee">Schiedsrichter</option>
             <option value="ticket_manager">Ticket-Manager</option>
             <option value="match_admin">Spiel-Admin</option>
@@ -236,6 +238,7 @@ export default function UserManager() {
                   className="bg-brand-dark border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-brand-accent-light cursor-pointer disabled:opacity-50"
                   title="Rolle ändern"
                 >
+                  <option value="team_member">Team-Mitglied</option>
                   <option value="referee">Schiedsrichter</option>
                   <option value="ticket_manager">Ticket-Manager</option>
                   <option value="match_admin">Spiel-Admin</option>
