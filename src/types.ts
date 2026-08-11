@@ -394,13 +394,51 @@ export interface Task {
   comments?: TaskComment[];
 }
 
-// In-App-Benachrichtigung (Erwähnung, Zuweisung, neuer Kommentar)
+// In-App-Benachrichtigung (Erwähnung, Zuweisung, neuer Kommentar, Chat)
 export interface AppNotification {
   id: string;
-  kind: string; // 'ticket_assigned' | 'ticket_comment' | 'task_assigned' | 'task_comment' | 'mention'
-  refType: 'ticket' | 'task';
+  kind: string; // 'ticket_assigned' | 'ticket_comment' | 'task_assigned' | 'task_comment' | 'mention' | 'chat'
+  refType: 'ticket' | 'task' | 'conversation';
   refId: string;
   body: string;
   isRead: boolean;
   createdAt: string;
+}
+
+// --- Phase 3: Chat ----------------------------------------------------------
+export interface ConversationMember {
+  userId: string;
+  userName: string;
+}
+
+export interface ChatLastMessage {
+  body: string;
+  authorName: string;
+  createdAt: string;
+  attachType: 'ticket' | 'task' | null;
+}
+
+export interface Conversation {
+  id: string;
+  kind: 'group' | 'dm';
+  title: string;
+  createdBy: string;
+  updatedAt: string;
+  members: ConversationMember[];
+  unread: number;
+  lastMessage: ChatLastMessage | null;
+}
+
+export interface ChatMessage {
+  id: string;
+  conversationId: string;
+  parentId: string | null;
+  authorId: string;
+  authorName: string;
+  body: string;
+  attachType: 'ticket' | 'task' | null;
+  attachId: string | null;
+  attachTitle: string | null;
+  createdAt: string;
+  replyCount?: number; // nur bei Top-Level-Nachrichten
 }

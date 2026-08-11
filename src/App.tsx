@@ -31,9 +31,10 @@ import HighlightsHome from './components/HighlightsHome';
 import HighlightsPage from './components/HighlightsPage';
 import TicketSystem from './components/TicketSystem';
 import TaskBoard from './components/TaskBoard';
+import ChatSystem from './components/ChatSystem';
 import NotificationBell from './components/NotificationBell';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, CalendarDays } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, CalendarDays, MessageSquare } from 'lucide-react';
 
 // Öffentliche Tabs haben eigene URLs, damit man nach einem Reload dort bleibt, wo man war.
 const TAB_PATHS: Record<ActiveTab, string> = {
@@ -878,6 +879,17 @@ export default function App() {
                     accent="#22DFC9"
                   >
                     <TaskBoard currentUserId={sessionUser?.id ?? ''} isSuperadmin={isSuperadmin} />
+                  </AccordionSection>
+
+                  <AccordionSection
+                    id="chat"
+                    category="team"
+                    title="Chat"
+                    subtitle="Gruppen & Direktnachrichten, Threads, Tickets/Aufgaben anhängen"
+                    icon={<MessageSquare className="w-5 h-5" />}
+                    accent="#22DFC9"
+                  >
+                    <ChatSystem currentUserId={sessionUser?.id ?? ''} />
                   </AccordionSection>
 
                   {isSuperadmin && (

@@ -17,34 +17,34 @@ import type { AppUser } from '../../src/types';
 // Funktionslimit) und werden aus api/twitch.ts per ?resource=... dispatcht.
 // Jeder Handler prüft die Sitzung selbst und verzweigt nach HTTP-Methode.
 
-function genId(prefix: string): string {
+export function genId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 // Anzeigename einer Sitzung (fällt sinnvoll zurück).
-function sessionName(s: SessionPayload): string {
+export function sessionName(s: SessionPayload): string {
   return (s.name && s.name.trim()) || (s.email && s.email.trim()) || 'Unbekannt';
 }
 
 // Aktive Team-Mitglieder als Nachschlagekarte (id -> {name, ...}).
-async function loadMembers(): Promise<Map<string, AppUser>> {
+export async function loadMembers(): Promise<Map<string, AppUser>> {
   const users = await getUsers();
   const map = new Map<string, AppUser>();
   for (const u of users) if (u.isActive) map.set(u.id, u);
   return map;
 }
 
-function memberName(members: Map<string, AppUser>, id: string): string {
+export function memberName(members: Map<string, AppUser>, id: string): string {
   const u = members.get(id);
   return u ? (u.name && u.name.trim() ? u.name : u.email) : 'Unbekannt';
 }
 
 // Eine Benachrichtigung anlegen (self-notify wird übersprungen).
-async function notify(
+export async function notify(
   recipientId: string | null | undefined,
   actorId: string,
   kind: string,
-  refType: 'ticket' | 'task',
+  refType: 'ticket' | 'task' | 'conversation',
   refId: string,
   body: string
 ): Promise<void> {
@@ -56,7 +56,7 @@ async function notify(
 }
 
 // Einfache @Name-Erwähnungen gegen die Mitgliederliste auflösen.
-function findMentions(text: string, members: Map<string, AppUser>): string[] {
+export function findMentions(text: string, members: Map<string, AppUser>): string[] {
   if (!text.includes('@')) return [];
   const lower = text.toLowerCase();
   const ids: string[] = [];

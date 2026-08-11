@@ -204,3 +204,42 @@ CREATE TABLE notifications (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_notifications_user ON notifications(user_id, is_read);
+
+-- ===========================================================================
+-- Phase 3: Interner Chat (Gruppen, DMs, Threads, Ticket-/Aufgaben-Anhänge)
+-- ===========================================================================
+CREATE TABLE conversations (
+  id         TEXT PRIMARY KEY,
+  kind       TEXT NOT NULL CHECK (kind IN ('group','dm')),
+  title      TEXT NOT NULL DEFAULT '',
+  dm_key     TEXT,               -- DMs: "kleinereId|größereId", je Paar eindeutig
+  created_by TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now() -- letzte Nachricht (Sortierung)
+);
+CREATE UNIQUE INDEX idx_conversations_dm ON conversations(dm_key) WHERE dm_key IS NOT NULL;
+
+CREATE TABLE conversation_members (
+  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  user_id         TEXT NOT NULL,
+  user_name       TEXT NOT NULL DEFAULT '',
+  last_read_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (conversation_id, user_id)
+);
+CREATE INDEX idx_conv_members_user ON conversation_members(user_id);
+
+-- parent_id != NULL ⇒ Thread-Antwort. attach_* = optionales Ticket/Aufgabe.
+CREATE TABLE messages (
+  id              TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  parent_id       TEXT REFERENCES messages(id) ON DELETE CASCADE,
+  author_id       TEXT NOT NULL,
+  author_name     TEXT NOT NULL DEFAULT '',
+  body            TEXT NOT NULL DEFAULT '',
+  attach_type     TEXT CHECK (attach_type IN ('ticket','task')),
+  attach_id       TEXT,
+  attach_title    TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_messages_conv ON messages(conversation_id, created_at);
+CREATE INDEX idx_messages_parent ON messages(parent_id);
