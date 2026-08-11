@@ -48,20 +48,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'session' && req.method === 'GET') {
       res.setHeader('Cache-Control', 'no-store');
       const session = await getSession(req);
-      return res.json({
-        isAdmin: Boolean(session),
-        user: session
-          ? {
-              id: session.userId,
-              email: session.email,
-              name: session.name,
-              role: session.role,
-              permissions: session.permissions,
-              avatarUrl: session.avatarUrl,
-              status: session.status,
-            }
-          : null,
-      });
+      if (!session) return res.json({ isAdmin: false, user: null });
+
+      // Werte aus dem Token als Basis …
+      let user = {
+        id: session.userId,
+        email: session.email,
+        name: session.name,
+        role: session.role,
+        permissions: session.permissions,
+        avatarUrl: session.avatarUrl,
+        status: session.status,
+      };
+      // … aber FRISCH aus der DB überschreiben (Profilbild/Name/Status/Rolle/
+      // Rechte können sich seit dem Login geändert haben – sonst „springt" alles
+      // beim Neuladen auf den alten Token-Stand zurück).
+      if (session.email) {
+        try {
+          const fresh = await getUserByEmail(session.email);
+          if (fresh) {
+            user = {
+              id: fresh.id,
+              email: fresh.email,
+              name: fresh.name,
+              role: fresh.role,
+              permissions: fresh.permissions,
+              avatarUrl: fresh.avatarUrl,
+              status: fresh.status,
+            };
+          }
+        } catch {
+          /* DB nicht erreichbar – Token-Werte behalten */
+        }
+      }
+      return res.json({ isAdmin: true, user });
     }
 
     // --- Login-Code anfordern -------------------------------------------------
