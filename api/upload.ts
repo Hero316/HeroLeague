@@ -47,10 +47,12 @@ export default requireAuth(async function handler(req: VercelRequest, res: Verce
     const filename = typeof req.body?.filename === 'string' ? req.body.filename : 'upload';
     if (typeof fileData !== 'string') return badRequest(res, 'Keine Datei-Daten empfangen.');
 
-    const match = fileData.match(/^data:([a-z0-9.+/-]+);base64,(.+)$/i);
+    // Der MIME-Teil kann Parameter enthalten (z.B. audio/webm;codecs=opus) –
+    // daher bis zum ";base64," alles erlauben und danach den Basis-Typ nehmen.
+    const match = fileData.match(/^data:([^,]*);base64,(.+)$/i);
     if (!match) return badRequest(res, 'Ungültiges Format (Base64-Data-URL erwartet).');
 
-    const mimeType = match[1].toLowerCase();
+    const mimeType = (match[1] || '').toLowerCase().split(';')[0].trim();
     const extension = allowed[mimeType];
     if (!extension) {
       return badRequest(res, isFile ? 'Dieser Dateityp ist nicht erlaubt.' : 'Nur PNG, JPEG, WebP oder GIF erlaubt.');

@@ -345,7 +345,7 @@ function Composer({
   };
 
   return (
-    <div className="border-t border-white/5 p-3">
+    <div className="border-t border-white/5 p-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}>
       {attach && <PendingAttach attach={attach} onRemove={() => setAttach(null)} />}
       {uploading && (
         <div className="flex items-center gap-1.5 mb-2 text-[11px] text-hl-faint font-mono">
