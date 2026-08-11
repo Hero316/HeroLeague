@@ -67,8 +67,18 @@ export async function getSession(req: VercelRequest): Promise<SessionPayload | n
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, getSecret());
+    // Rolle explizit normalisieren. WICHTIG: Jede NICHT ausdrücklich bekannte
+    // Rolle fällt bewusst auf 'superadmin' zurück (Alt-Sessions mit role 'admin').
+    // Neue, eingeschränkte Rollen MÜSSEN hier explizit stehen – sonst würde ein
+    // solches Token fälschlich zu Super-Admin-Rechten eskalieren.
     const role: UserRole =
-      payload.role === 'match_admin' ? 'match_admin' : payload.role === 'referee' ? 'referee' : 'superadmin';
+      payload.role === 'match_admin'
+        ? 'match_admin'
+        : payload.role === 'referee'
+          ? 'referee'
+          : payload.role === 'ticket_manager'
+            ? 'ticket_manager'
+            : 'superadmin';
     return {
       userId: typeof payload.userId === 'string' ? payload.userId : 'bootstrap',
       email: typeof payload.email === 'string' ? payload.email : '',
@@ -116,6 +126,12 @@ export const requireStaff = requireRoles(['superadmin', 'match_admin']);
 // Wrapper: Spiele + Abend-Aufstellung schreiben. Zusätzlich zum Staff darf hier
 // auch der Schiedsrichter (referee) ran – das ist sein einziger Schreibzugriff.
 export const requireMatchWrite = requireRoles(['superadmin', 'match_admin', 'referee']);
+
+// Wrapper: Tickets verwalten (Status setzen, zuweisen, Priorität ändern,
+// löschen). Der Super-Admin darf immer, der Ticket-Manager ist die spezialisierte
+// Rolle nur dafür. Tickets STELLEN und kommentieren darf jeder eingeloggte Nutzer
+// (dafür reicht requireAuth) – nur das Verwalten ist hier eingeschränkt.
+export const requireTicketManage = requireRoles(['superadmin', 'ticket_manager']);
 
 // Rückwärtskompatibler Alias für reine Lese-Endpunkte hinter Login (jede Rolle).
 export const requireAdmin = requireAuth;

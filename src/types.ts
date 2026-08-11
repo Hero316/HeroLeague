@@ -237,8 +237,9 @@ export interface EventArchive {
 
 // Rollen: superadmin darf alles; match_admin darf Spiele/Live/Ticker pflegen;
 // referee (Schiedsrichter) darf ausschließlich im Schiedsrichtermodus Spiele
-// pfeifen und die Abend-Aufstellung setzen – sonst nichts.
-export type UserRole = 'superadmin' | 'match_admin' | 'referee';
+// pfeifen und die Abend-Aufstellung setzen; ticket_manager darf ausschließlich
+// Tickets bearbeiten (Status, Zuweisung, Priorität) – sonst nichts.
+export type UserRole = 'superadmin' | 'match_admin' | 'referee' | 'ticket_manager';
 
 export interface AppUser {
   id: string;
@@ -250,6 +251,7 @@ export interface AppUser {
 
 // Die im Frontend bekannte Identität der aktiven Sitzung
 export interface SessionUser {
+  id: string; // 'bootstrap' beim Master-Passwort-Login
   email: string;
   name: string;
   role: UserRole;
@@ -311,3 +313,83 @@ export interface PlayerStat {
 }
 
 export type ActiveTab = 'home' | 'spielplan' | 'tabelle' | 'heroone' | 'statistiken' | 'highlights';
+
+// --- Team-Zusammenarbeit: Tickets, Aufgaben, Benachrichtigungen -------------
+
+// Mitglied des internen Teams (für Zuweisungen/Erwähnungen). Reduzierte, für
+// jeden eingeloggten Nutzer lesbare Nutzerliste (nicht die volle AppUser-Liste).
+export interface TeamMember {
+  id: string;
+  name: string; // Anzeigename (fällt auf E-Mail zurück, falls kein Name)
+  role: UserRole;
+}
+
+export type TicketPriority = 'niedrig' | 'mittel' | 'hoch' | 'dringend';
+export type TicketStatus = 'offen' | 'in_bearbeitung' | 'erledigt' | 'abgelehnt';
+
+export interface TicketComment {
+  id: string;
+  ticketId: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  images: string[];
+  createdAt: string;
+}
+
+export interface Ticket {
+  id: string;
+  title: string;
+  description: string;
+  priority: TicketPriority;
+  status: TicketStatus;
+  category: string;
+  images: string[]; // Screenshot-URLs (Vercel Blob)
+  createdBy: string;
+  createdByName: string;
+  assignedTo: string | null;
+  assignedToName: string | null;
+  createdAt: string;
+  updatedAt: string;
+  commentCount?: number; // nur in der Listenansicht
+  comments?: TicketComment[]; // nur in der Detailansicht
+}
+
+// Aufgaben-Board (Monday-Style)
+export type TaskStatus = 'leer' | 'offen' | 'in_bearbeitung' | 'erledigt' | 'abgebrochen';
+
+export interface TaskComment {
+  id: string;
+  taskId: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  notes: string;
+  dueDate: string | null; // YYYY-MM-DD (konkreter Tag) oder null
+  isoWeek: string | null; // z.B. "2026-W33" (Wochenansicht) oder null
+  status: TaskStatus;
+  createdBy: string;
+  createdByName: string;
+  createdAt: string;
+  updatedAt: string;
+  assignees: { userId: string; userName: string }[];
+  commentCount?: number;
+  comments?: TaskComment[];
+}
+
+// In-App-Benachrichtigung (Erwähnung, Zuweisung, neuer Kommentar)
+export interface AppNotification {
+  id: string;
+  kind: string; // 'ticket_assigned' | 'ticket_comment' | 'task_assigned' | 'task_comment' | 'mention'
+  refType: 'ticket' | 'task';
+  refId: string;
+  body: string;
+  isRead: boolean;
+  createdAt: string;
+}
