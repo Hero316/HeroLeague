@@ -5,6 +5,7 @@ import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember } from '
 import { fetchTasksRange, fetchTask, createTask, updateTask, deleteTask, addTaskComment, fetchTeam, memberMap } from '../lib/collab';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
+import { useBackdropDismiss } from './ui';
 
 const inputClass =
   'w-full bg-[#060E0F] border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent-light';
@@ -148,6 +149,7 @@ export function TaskDetail({
   const [commentBody, setCommentBody] = useState('');
   const [busy, setBusy] = useState(false);
   const canDelete = isSuperadmin || task.createdBy === currentUserId;
+  const backdrop = useBackdropDismiss(onClose);
 
   useEffect(() => {
     let alive = true;
@@ -199,7 +201,7 @@ export function TaskDetail({
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center p-0 sm:p-6 overflow-y-auto" onClick={onClose}>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center p-0 sm:p-6 overflow-y-auto" {...backdrop}>
       <motion.div initial={{ scale: 0.97, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 10 }} className="hl-card w-full max-w-xl my-0 sm:my-8 p-5 sm:p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display font-black text-lg text-white uppercase tracking-tight">Aufgabe</h3>
@@ -323,6 +325,7 @@ function NewTaskModal({
   const [assignees, setAssignees] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const toggle = (id: string) => setAssignees((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const backdrop = useBackdropDismiss(onClose);
 
   const create = async () => {
     if (!title.trim()) return alert('Bitte einen Titel angeben.');
@@ -337,7 +340,7 @@ function NewTaskModal({
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" {...backdrop}>
       <motion.div initial={{ scale: 0.97 }} animate={{ scale: 1 }} className="hl-card w-full max-w-md p-5 my-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display font-black text-lg text-white uppercase tracking-tight">Neue Aufgabe</h3>

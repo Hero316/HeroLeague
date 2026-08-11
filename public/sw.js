@@ -15,7 +15,7 @@
 // Version bei Bedarf erhöhen: beim Aktivieren löscht der SW alle Caches mit
 // abweichendem Namen → ein hängengebliebener/kaputter Asset-Cache (z. B. schwarze
 // Seite nach einem Deploy) wird beim nächsten Laden automatisch bereinigt.
-const CACHE = 'hl-static-v4';
+const CACHE = 'hl-static-v5';
 
 // App-Shell für den Offline-Fallback. Bewusst minimal.
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/assets/icon-192.png'];
@@ -116,9 +116,13 @@ self.addEventListener('push', (event) => {
         data: { url },
       })
       .then(() => {
-        // App-Icon-Zahl erhöhen (wo unterstützt).
+        // Zahl am App-Icon setzen (iOS 16.4+/Android, installierte PWA).
         try {
-          if (self.navigator && self.navigator.setAppBadge) self.navigator.setAppBadge();
+          if (self.navigator && self.navigator.setAppBadge) {
+            if (typeof data.badge === 'number' && data.badge > 0) self.navigator.setAppBadge(data.badge);
+            else if (self.navigator.clearAppBadge) self.navigator.clearAppBadge();
+            else self.navigator.setAppBadge();
+          }
         } catch (e) {
           /* ignoriert */
         }

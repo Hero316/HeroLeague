@@ -7,6 +7,26 @@ import { useInstall } from './InstallProvider';
 
 // Gemeinsame Design-Bausteine des neuen Hero-League-Looks.
 
+// Schließt ein Overlay NUR, wenn der Druck wirklich auf dem dunklen Hintergrund
+// begann (nicht innerhalb der Karte). Behebt zwei iOS-Ärgernisse:
+//  1) Beim Öffnen eines Modals landet der nachgelagerte „Ghost-Click" von iOS
+//     sonst auf dem frisch erschienenen Hintergrund → das Modal blitzt nur kurz
+//     auf und schließt sofort wieder (wirkt wie „schwarz + rauszoomen").
+//  2) Text im Modal markieren und außerhalb loslassen schließt es nicht mehr.
+// Auf den dunklen Hintergrund (motion.div) anwenden statt onClick={onClose}.
+export function useBackdropDismiss(onClose: () => void) {
+  const downOnBackdrop = React.useRef(false);
+  return {
+    onPointerDown: (e: React.PointerEvent) => {
+      downOnBackdrop.current = e.target === e.currentTarget;
+    },
+    onClick: (e: React.MouseEvent) => {
+      if (downOnBackdrop.current && e.target === e.currentTarget) onClose();
+      downOnBackdrop.current = false;
+    },
+  };
+}
+
 // Hex-Farbe abdunkeln (für die Verlaufs-Wappen)
 export function shade(hex: string, factor: number): string {
   const clean = (hex || '#22DFC9').replace('#', '');
