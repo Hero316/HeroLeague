@@ -122,7 +122,7 @@ function AssigneeChips({
 // ===========================================================================
 // Detail / Bearbeiten
 // ===========================================================================
-function TaskDetail({
+export function TaskDetail({
   task,
   team,
   currentUserId,

@@ -16,8 +16,11 @@ import {
   CalendarDays,
   Loader2,
   ArrowLeft,
+  Search,
+  Info,
 } from 'lucide-react';
-import type { Conversation, ChatMessage, TeamMember, Ticket, Task } from '../types';
+import type { Conversation, ChatMessage, TeamMember, Ticket, Task, UserStatus } from '../types';
+import { USER_STATUS } from '../types';
 import {
   fetchConversations,
   createGroup,
@@ -25,10 +28,14 @@ import {
   fetchMessages,
   sendMessage,
   conversationTitle,
+  searchChat,
+  type ChatSearchHit,
 } from '../lib/chat';
-import { fetchTeam, fetchTickets, fetchAllTasks, memberMap } from '../lib/collab';
+import { fetchTeam, fetchTickets, fetchAllTasks, fetchTask, memberMap } from '../lib/collab';
 import { uploadFile } from '../lib/api';
 import Avatar from './Avatar';
+import { TicketDetail } from './TicketSystem';
+import { TaskDetail } from './TaskBoard';
 
 const inputClass =
   'w-full bg-[#060E0F] border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent-light';
@@ -59,12 +66,18 @@ function AttachChip({ type, title }: { type: 'ticket' | 'task'; title: string | 
 }
 
 // Anhang einer bereits gesendeten Nachricht darstellen.
-function MessageAttachment({ m }: { m: ChatMessage }) {
+function MessageAttachment({ m, onOpen }: { m: ChatMessage; onOpen?: (type: 'ticket' | 'task', id: string) => void }) {
   if (m.attachType === 'ticket' || m.attachType === 'task') {
+    const type = m.attachType;
     return (
-      <div className="mt-1.5">
-        <AttachChip type={m.attachType} title={m.attachTitle} />
-      </div>
+      <button
+        type="button"
+        onClick={() => m.attachId && onOpen?.(type, m.attachId)}
+        title="Öffnen"
+        className="mt-1.5 block text-left cursor-pointer hover:brightness-125 transition"
+      >
+        <AttachChip type={type} title={m.attachTitle} />
+      </button>
     );
   }
   if (m.attachType === 'audio' && m.attachUrl) {
@@ -251,18 +264,36 @@ function Composer({
   parentId,
   onSent,
   placeholder,
+  mentionable,
 }: {
   conversationId: string;
   parentId?: string | null;
   onSent: (m: ChatMessage) => void;
   placeholder: string;
+  mentionable?: { id: string; name: string }[];
 }) {
   const [body, setBody] = useState('');
   const [attach, setAttach] = useState<Attachment | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // @-Erwähnung: Token am Textende nach '@' erkennen und passende Mitglieder anbieten.
+  const onBodyChange = (val: string) => {
+    setBody(val);
+    const mm = /@([^\s@]*)$/.exec(val);
+    setMentionQuery(mm ? mm[1].toLowerCase() : null);
+  };
+  const mentionMatches =
+    mentionQuery !== null ? (mentionable ?? []).filter((mm) => mm.name.toLowerCase().includes(mentionQuery)).slice(0, 6) : [];
+  const pickMention = (name: string) => {
+    setBody((prev) => prev.replace(/@([^\s@]*)$/, `@${name} `));
+    setMentionQuery(null);
+    taRef.current?.focus();
+  };
 
   const recorder = useAudioRecorder(async (file) => {
     setUploading(true);
@@ -321,7 +352,21 @@ function Composer({
           <Loader2 className="w-3 h-3 animate-spin" /> lädt hoch…
         </div>
       )}
-      <div className="flex items-end gap-1.5">
+      <div className="relative flex items-end gap-1.5">
+        {mentionMatches.length > 0 && (
+          <div className="absolute bottom-full left-0 mb-2 w-56 bg-[#0f1614] border border-white/15 rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-20">
+            {mentionMatches.map((mm) => (
+              <button
+                key={mm.id}
+                onClick={() => pickMention(mm.name)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/[.05] cursor-pointer"
+              >
+                <Avatar name={mm.name} size={22} />
+                <span className="text-sm text-hl-soft truncate">{mm.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <button
           onClick={() => setShowPicker(true)}
           title="Ticket oder Aufgabe anhängen"
@@ -357,10 +402,16 @@ function Composer({
           <Mic className="w-4 h-4" />
         </button>
         <textarea
+          ref={taRef}
           value={body}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={(e) => onBodyChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
+              if (mentionMatches.length > 0) {
+                e.preventDefault();
+                pickMention(mentionMatches[0].name);
+                return;
+              }
               e.preventDefault();
               submit();
             }
@@ -400,6 +451,7 @@ function MessageRow({
   displayName,
   avatarUrl,
   onOpenThread,
+  onOpenAttachment,
 }: {
   m: ChatMessage;
   mine: boolean;
@@ -407,6 +459,7 @@ function MessageRow({
   displayName?: string;
   avatarUrl?: string;
   onOpenThread?: (m: ChatMessage) => void;
+  onOpenAttachment?: (type: 'ticket' | 'task', id: string) => void;
 }) {
   const name = displayName || m.authorName;
   return (
@@ -420,7 +473,7 @@ function MessageRow({
           }`}
         >
           {m.body && <p className="text-sm font-sans whitespace-pre-wrap break-words">{m.body}</p>}
-          <MessageAttachment m={m} />
+          <MessageAttachment m={m} onOpen={onOpenAttachment} />
         </div>
         <div className={`flex items-center gap-2 mt-0.5 px-1 ${mine ? 'flex-row-reverse' : ''}`}>
           <span className="text-[10px] font-mono text-hl-faint">{fmtTime(m.createdAt)}</span>
@@ -444,12 +497,14 @@ function ThreadModal({
   conversationId,
   parent,
   currentUserId,
+  mentionable,
   onClose,
   onReplyAdded,
 }: {
   conversationId: string;
   parent: ChatMessage;
   currentUserId: string;
+  mentionable?: { id: string; name: string }[];
   onClose: () => void;
   onReplyAdded: () => void;
 }) {
@@ -505,6 +560,7 @@ function ThreadModal({
         <Composer
           conversationId={conversationId}
           parentId={parent.id}
+          mentionable={mentionable}
           placeholder="Im Thread antworten…"
           onSent={(m) => {
             setReplies((prev) => [...prev, m]);
@@ -645,8 +701,81 @@ function NewConversationModal({
   );
 }
 
+// --- Info-Fenster: Gruppen-Mitglieder bzw. DM-Profil ------------------------
+function ConversationInfo({
+  conversation,
+  members,
+  currentUserId,
+  onClose,
+}: {
+  conversation: Conversation;
+  members: Map<string, TeamMember>;
+  currentUserId: string;
+  onClose: () => void;
+}) {
+  const isGroup = conversation.kind === 'group';
+  const otherId = !isGroup ? conversation.members.find((m) => m.userId !== currentUserId)?.userId : undefined;
+  const other = otherId ? members.get(otherId) : undefined;
+  const statusLine = (s?: UserStatus | null) => (s ? `${USER_STATUS[s].emoji} ${USER_STATUS[s].label}` : '');
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[65] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <motion.div initial={{ scale: 0.97 }} animate={{ scale: 1 }} className="hl-card w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="font-display font-bold text-white uppercase tracking-tight">Infos</h4>
+          <button onClick={onClose} className="p-1 text-hl-mute hover:text-white cursor-pointer">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        {isGroup ? (
+          <>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-brand-accent/20 border border-brand-accent-light/30 flex items-center justify-center text-brand-accent-light shrink-0">
+                <Hash className="w-6 h-6" />
+              </div>
+              <div className="min-w-0">
+                <div className="font-display font-black text-white text-lg truncate">{conversation.title || 'Gruppe'}</div>
+                <div className="text-[11px] font-mono text-hl-dim">{conversation.members.length} Mitglieder</div>
+              </div>
+            </div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-hl-dim mb-2">Mitglieder</div>
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              {conversation.members.map((mm) => {
+                const mem = members.get(mm.userId);
+                return (
+                  <div key={mm.userId} className="flex items-center gap-2.5">
+                    <Avatar name={mem?.name ?? mm.userName} url={mem?.avatarUrl} status={mem?.status} size={32} showStatus ring="#0b1210" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-sans text-white truncate">{mem?.name ?? mm.userName}</div>
+                      {mem?.status && <div className="text-[11px] text-hl-dim">{statusLine(mem.status)}</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col items-center text-center gap-3 py-4">
+            <Avatar name={other?.name ?? conversationTitle(conversation, currentUserId)} url={other?.avatarUrl} status={other?.status} size={84} showStatus ring="#0b1210" />
+            <div className="font-display font-black text-white text-lg">{other?.name ?? conversationTitle(conversation, currentUserId)}</div>
+            {other?.status && <div className="text-sm text-hl-soft">{statusLine(other.status)}</div>}
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // --- Hauptkomponente --------------------------------------------------------
-export default function ChatSystem({ currentUserId }: { currentUserId: string }) {
+export default function ChatSystem({
+  currentUserId,
+  canManageTickets = false,
+  isSuperadmin = false,
+}: {
+  currentUserId: string;
+  canManageTickets?: boolean;
+  isSuperadmin?: boolean;
+}) {
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -655,7 +784,25 @@ export default function ChatSystem({ currentUserId }: { currentUserId: string })
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [thread, setThread] = useState<ChatMessage | null>(null);
+  const [attachView, setAttachView] = useState<{ type: 'ticket'; id: string } | { type: 'task'; task: Task } | null>(null);
+  const [showInfo, setShowInfo] = useState(false);
+  const [search, setSearch] = useState('');
+  const [hits, setHits] = useState<ChatSearchHit[]>([]);
+  const [convSearch, setConvSearch] = useState('');
+  const [showConvSearch, setShowConvSearch] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Ticket/Aufgabe aus einem Anhang öffnen (lesen/bearbeiten).
+  const openAttachment = async (type: 'ticket' | 'task', id: string) => {
+    if (type === 'ticket') setAttachView({ type: 'ticket', id });
+    else {
+      try {
+        setAttachView({ type: 'task', task: await fetchTask(id) });
+      } catch {
+        alert('Aufgabe nicht gefunden (evtl. gelöscht).');
+      }
+    }
+  };
 
   const loadConvs = useCallback(async () => {
     try {
@@ -699,8 +846,31 @@ export default function ChatSystem({ currentUserId }: { currentUserId: string })
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Globale Suche (entprellt).
+  useEffect(() => {
+    if (search.trim().length < 2) {
+      setHits([]);
+      return;
+    }
+    const id = setTimeout(() => {
+      searchChat(search.trim()).then(setHits).catch(() => setHits([]));
+    }, 300);
+    return () => clearTimeout(id);
+  }, [search]);
+
   const active = useMemo(() => convs.find((c) => c.id === activeId) ?? null, [convs, activeId]);
   const members = useMemo(() => memberMap(team), [team]);
+  const q = search.trim().toLowerCase();
+  const searching = q.length >= 2;
+  const convMatches = searching ? convs.filter((c) => conversationTitle(c, currentUserId).toLowerCase().includes(q)) : convs;
+  const activeMentionable = useMemo(
+    () => (active ? active.members.map((mm) => ({ id: mm.userId, name: members.get(mm.userId)?.name ?? mm.userName })) : []),
+    [active, members]
+  );
+  const shownMessages = useMemo(
+    () => (convSearch.trim() ? messages.filter((m) => (m.body ?? '').toLowerCase().includes(convSearch.toLowerCase())) : messages),
+    [messages, convSearch]
+  );
   const openConversation = (id: string) => {
     setActiveId(id);
     // Ungelesen-Zähler nach dem Öffnen aktualisieren.
@@ -721,6 +891,22 @@ export default function ChatSystem({ currentUserId }: { currentUserId: string })
             <Plus className="w-4 h-4" />
           </button>
         </div>
+        <div className="px-3 py-2 border-b border-white/5">
+          <div className="flex items-center gap-2 bg-[#060E0F] border border-white/10 rounded-lg px-2.5 py-1.5">
+            <Search className="w-3.5 h-3.5 text-hl-dim shrink-0" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Alle Chats & Nachrichten durchsuchen…"
+              className="bg-transparent text-sm text-white placeholder:text-hl-faint focus:outline-none w-full"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="text-hl-mute hover:text-white cursor-pointer shrink-0">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
         <div className="flex-1 overflow-y-auto">
           {loadingConvs ? (
             <div className="flex justify-center py-8 text-hl-mute">
@@ -731,7 +917,7 @@ export default function ChatSystem({ currentUserId }: { currentUserId: string })
               Noch keine Chats. Starte oben rechts eine Unterhaltung.
             </p>
           ) : (
-            convs.map((c) => {
+            convMatches.map((c) => {
               const name = conversationTitle(c, currentUserId);
               const otherId = c.kind === 'dm' ? c.members.find((m) => m.userId !== currentUserId)?.userId : undefined;
               const otherMem = otherId ? members.get(otherId) : undefined;
@@ -771,6 +957,33 @@ export default function ChatSystem({ currentUserId }: { currentUserId: string })
               );
             })
           )}
+
+          {searching && hits.length > 0 && (
+            <div className="border-t border-white/5">
+              <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-hl-dim">Nachrichten</div>
+              {hits.map((h) => (
+                <button
+                  key={h.id}
+                  onClick={() => {
+                    openConversation(h.conversationId);
+                    setSearch('');
+                  }}
+                  className="w-full text-left px-3 py-2 border-b border-white/5 hover:bg-white/[.03] cursor-pointer"
+                >
+                  <div className="text-[11px] font-mono text-hl-dim truncate">
+                    {h.convKind === 'group' ? `# ${h.convTitle || 'Gruppe'}` : h.authorName} · {fmtTime(h.createdAt)}
+                  </div>
+                  <div className="text-sm text-hl-soft truncate">
+                    <span className="text-white font-semibold">{h.authorName}: </span>
+                    {h.body || (h.attachType ? '📎 Anhang' : '')}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+          {searching && hits.length === 0 && convMatches.length === 0 && (
+            <p className="text-center text-sm text-hl-mute font-sans py-8 px-4">Keine Treffer.</p>
+          )}
         </div>
       </div>
 
@@ -787,43 +1000,74 @@ export default function ChatSystem({ currentUserId }: { currentUserId: string })
               <button onClick={() => setActiveId(null)} className="md:hidden p-1 text-hl-mute hover:text-white cursor-pointer">
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              {active.kind === 'group' ? (
-                <div className="w-8 h-8 rounded-full bg-brand-accent/20 border border-brand-accent-light/30 flex items-center justify-center text-brand-accent-light shrink-0">
-                  <Hash className="w-4 h-4" />
+              <button onClick={() => setShowInfo(true)} className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer" title="Infos anzeigen">
+                {active.kind === 'group' ? (
+                  <div className="w-8 h-8 rounded-full bg-brand-accent/20 border border-brand-accent-light/30 flex items-center justify-center text-brand-accent-light shrink-0">
+                    <Hash className="w-4 h-4" />
+                  </div>
+                ) : (
+                  (() => {
+                    const other = members.get(active.members.find((m) => m.userId !== currentUserId)?.userId ?? '');
+                    return <Avatar name={conversationTitle(active, currentUserId)} url={other?.avatarUrl} status={other?.status} size={34} showStatus />;
+                  })()
+                )}
+                <div className="min-w-0">
+                  <div className="font-display font-bold text-white text-sm truncate">{conversationTitle(active, currentUserId)}</div>
+                  <div className="text-[10px] font-mono text-hl-dim flex items-center gap-1">
+                    <Users className="w-3 h-3" /> {active.members.length} Mitglieder · Infos
+                  </div>
                 </div>
-              ) : (
-                (() => {
-                  const other = members.get(active.members.find((m) => m.userId !== currentUserId)?.userId ?? '');
-                  return <Avatar name={conversationTitle(active, currentUserId)} url={other?.avatarUrl} status={other?.status} size={34} showStatus />;
-                })()
-              )}
-              <div className="min-w-0">
-                <div className="font-display font-bold text-white text-sm truncate">{conversationTitle(active, currentUserId)}</div>
-                <div className="text-[10px] font-mono text-hl-dim flex items-center gap-1">
-                  <Users className="w-3 h-3" /> {active.members.length} Mitglieder
+              </button>
+              <button
+                onClick={() => setShowConvSearch((v) => !v)}
+                title="In diesem Chat suchen"
+                className={`p-2 rounded-lg border cursor-pointer shrink-0 ${showConvSearch ? 'bg-brand-accent-light/20 border-brand-accent-light/40 text-brand-accent-light' : 'bg-white/5 border-white/10 text-hl-soft hover:text-white'}`}
+              >
+                <Search className="w-4 h-4" />
+              </button>
+            </div>
+            {showConvSearch && (
+              <div className="px-3 py-2 border-b border-white/5">
+                <div className="flex items-center gap-2 bg-[#060E0F] border border-white/10 rounded-lg px-2.5 py-1.5">
+                  <Search className="w-3.5 h-3.5 text-hl-dim shrink-0" />
+                  <input
+                    value={convSearch}
+                    onChange={(e) => setConvSearch(e.target.value)}
+                    autoFocus
+                    placeholder="In diesem Chat suchen…"
+                    className="bg-transparent text-sm text-white placeholder:text-hl-faint focus:outline-none w-full"
+                  />
+                  {convSearch && (
+                    <button onClick={() => setConvSearch('')} className="text-hl-mute hover:text-white cursor-pointer shrink-0">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
-            </div>
+            )}
 
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
               {loadingMsgs ? (
                 <div className="flex justify-center py-8 text-hl-mute">
                   <Loader2 className="w-5 h-5 animate-spin" />
                 </div>
-              ) : messages.length === 0 ? (
-                <p className="text-center text-sm text-hl-mute font-sans py-8">Noch keine Nachrichten. Schreib die erste!</p>
+              ) : shownMessages.length === 0 ? (
+                <p className="text-center text-sm text-hl-mute font-sans py-8">
+                  {convSearch.trim() ? 'Keine Treffer in diesem Chat.' : 'Noch keine Nachrichten. Schreib die erste!'}
+                </p>
               ) : (
-                messages.map((m, i) => {
+                shownMessages.map((m, i) => {
                   const mem = members.get(m.authorId);
                   return (
                     <MessageRow
                       key={m.id}
                       m={m}
                       mine={m.authorId === currentUserId}
-                      showAuthor={active.kind === 'group' && (i === 0 || messages[i - 1].authorId !== m.authorId)}
+                      showAuthor={active.kind === 'group' && (i === 0 || shownMessages[i - 1].authorId !== m.authorId)}
                       displayName={mem?.name}
                       avatarUrl={mem?.avatarUrl}
                       onOpenThread={setThread}
+                      onOpenAttachment={openAttachment}
                     />
                   );
                 })
@@ -833,6 +1077,7 @@ export default function ChatSystem({ currentUserId }: { currentUserId: string })
 
             <Composer
               conversationId={active.id}
+              mentionable={activeMentionable}
               placeholder="Nachricht schreiben… (@Name erwähnt, Enter sendet)"
               onSent={(m) => {
                 setMessages((prev) => [...prev, m]);
@@ -861,8 +1106,31 @@ export default function ChatSystem({ currentUserId }: { currentUserId: string })
             conversationId={active.id}
             parent={thread}
             currentUserId={currentUserId}
+            mentionable={activeMentionable}
             onClose={() => setThread(null)}
             onReplyAdded={() => activeId && loadMessages(activeId, true)}
+          />
+        )}
+        {showInfo && active && (
+          <ConversationInfo conversation={active} members={members} currentUserId={currentUserId} onClose={() => setShowInfo(false)} />
+        )}
+        {attachView?.type === 'ticket' && (
+          <TicketDetail
+            ticketId={attachView.id}
+            team={team}
+            canManage={canManageTickets}
+            onClose={() => setAttachView(null)}
+            onChanged={() => activeId && loadMessages(activeId, true)}
+          />
+        )}
+        {attachView?.type === 'task' && (
+          <TaskDetail
+            task={attachView.task}
+            team={team}
+            currentUserId={currentUserId}
+            isSuperadmin={isSuperadmin}
+            onClose={() => setAttachView(null)}
+            onChanged={() => {}}
           />
         )}
       </AnimatePresence>

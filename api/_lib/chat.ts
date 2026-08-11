@@ -190,6 +190,29 @@ export async function messages(req: VercelRequest, res: VercelResponse) {
   return res.status(405).json({ error: 'Nicht unterstützt' });
 }
 
+// --- Globale Suche (nur eigene Unterhaltungen) ------------------------------
+export async function searchMessages(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Nicht unterstützt' });
+  res.setHeader('Cache-Control', 'no-store');
+  const q = String(req.query.q ?? '').trim();
+  if (q.length < 2) return res.json([]);
+  const like = `%${q}%`;
+  const rows = await sql.query(
+    `SELECT m.id, m.conversation_id AS "conversationId", m.author_id AS "authorId",
+            m.author_name AS "authorName", m.body, m.attach_type AS "attachType",
+            m.created_at AS "createdAt", c.kind AS "convKind", c.title AS "convTitle"
+     FROM messages m
+     JOIN conversations c ON c.id = m.conversation_id
+     JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = $1
+     WHERE m.body ILIKE $2 OR m.author_name ILIKE $2
+     ORDER BY m.created_at DESC LIMIT 40`,
+    [session.userId, like]
+  );
+  return res.json(rows);
+}
+
 // --- Als gelesen markieren --------------------------------------------------
 export async function markRead(req: VercelRequest, res: VercelResponse) {
   const session = await getSession(req);

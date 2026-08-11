@@ -37,6 +37,19 @@ export const sendMessage = (input: {
 export const markConversationRead = (conversationId: string) =>
   apiFetch('/api/chat?resource=read', { method: 'POST', body: JSON.stringify({ conversationId }) });
 
+export interface ChatSearchHit {
+  id: string;
+  conversationId: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  attachType: 'ticket' | 'task' | 'file' | 'audio' | null;
+  createdAt: string;
+  convKind: 'group' | 'dm';
+  convTitle: string;
+}
+export const searchChat = (q: string) => apiFetch<ChatSearchHit[]>(`/api/chat?resource=search&q=${encodeURIComponent(q)}`);
+
 // Anzeigename einer Unterhaltung: Gruppen tragen ihren Titel, DMs den Namen
 // des jeweils ANDEREN Teilnehmers.
 export function conversationTitle(c: Conversation, myUserId: string): string {

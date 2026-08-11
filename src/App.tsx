@@ -908,7 +908,7 @@ export default function App() {
                     icon={<MessageSquare className="w-5 h-5" />}
                     accent="#22DFC9"
                   >
-                    <ChatSystem currentUserId={sessionUser?.id ?? ''} />
+                    <ChatSystem currentUserId={sessionUser?.id ?? ''} canManageTickets={canManageTickets} isSuperadmin={isSuperadmin} />
                   </AccordionSection>
 
                   {isSuperadmin && (

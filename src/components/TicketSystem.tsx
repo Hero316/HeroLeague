@@ -141,7 +141,7 @@ function ImageStrip({ images, onRemove }: { images: string[]; onRemove?: (i: num
 }
 
 // --- Detailansicht eines Tickets -------------------------------------------
-function TicketDetail({
+export function TicketDetail({
   ticketId,
   team,
   canManage,
