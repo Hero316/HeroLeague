@@ -29,8 +29,11 @@ import EventBanner from './components/EventBanner';
 import EventErgebniszettel from './components/EventErgebniszettel';
 import HighlightsHome from './components/HighlightsHome';
 import HighlightsPage from './components/HighlightsPage';
+import TicketSystem from './components/TicketSystem';
+import TaskBoard from './components/TaskBoard';
+import NotificationBell from './components/NotificationBell';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, CalendarDays } from 'lucide-react';
 
 // Öffentliche Tabs haben eigene URLs, damit man nach einem Reload dort bleibt, wo man war.
 const TAB_PATHS: Record<ActiveTab, string> = {
@@ -99,6 +102,11 @@ export default function App() {
   const isAdmin = sessionUser !== null;
   const isSuperadmin = sessionUser?.role === 'superadmin';
   const isReferee = sessionUser?.role === 'referee';
+  // Team-Zusammenarbeit: Ticket-Manager darf Tickets verwalten; die
+  // Liga-Bereiche (Spiele/Startseite/Kanäle) sieht nur, wer sie pflegen darf.
+  const isTicketManager = sessionUser?.role === 'ticket_manager';
+  const canManageTickets = isSuperadmin || isTicketManager;
+  const canEditLeague = isSuperadmin || sessionUser?.role === 'match_admin';
   // Admin hat den Schiedsrichtermodus manuell geöffnet (per Navbar-Schnellzugang).
   const [refereeView, setRefereeView] = useState(false);
   // Abend-Aufstellungen (Schiedsrichtermodus), Schlüssel `${seasonId}:${matchday}`.
@@ -755,7 +763,11 @@ export default function App() {
                   </div>
                   <div>
                     <h2 className="font-display font-black text-lg text-white uppercase tracking-tight">
-                      {isSuperadmin ? 'Eingeloggt als Super-Admin' : 'Eingeloggt als Spiel-Admin'}
+                      {isSuperadmin
+                        ? 'Eingeloggt als Super-Admin'
+                        : isTicketManager
+                          ? 'Eingeloggt als Ticket-Manager'
+                          : 'Eingeloggt als Spiel-Admin'}
                     </h2>
                     <p className="text-xs text-hl-green-soft font-sans mt-0.5">
                       {sessionUser?.name || sessionUser?.email ? `${sessionUser?.name || sessionUser?.email} · ` : ''}
@@ -764,13 +776,16 @@ export default function App() {
                   </div>
                 </div>
 
-                <button
-                  onClick={handleLogout}
-                  className="px-5 py-2 bg-[rgba(255,84,66,.15)] border border-[rgba(255,84,66,.3)] hover:bg-[rgba(255,84,66,.25)] rounded-xl text-xs font-bold uppercase transition-all flex items-center gap-1.5 text-hl-red-soft cursor-pointer"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Abmelden</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <NotificationBell />
+                  <button
+                    onClick={handleLogout}
+                    className="px-5 py-2 bg-[rgba(255,84,66,.15)] border border-[rgba(255,84,66,.3)] hover:bg-[rgba(255,84,66,.25)] rounded-xl text-xs font-bold uppercase transition-all flex items-center gap-1.5 text-hl-red-soft cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Abmelden</span>
+                  </button>
+                </div>
               </div>
 
               {/* Live-Besucher: ganz oben im Backoffice */}
@@ -780,57 +795,89 @@ export default function App() {
               <AccordionGroup
                 searchable
                 categories={[
-                  { id: 'spiele', label: 'Spiele & Liga' },
-                  { id: 'startseite', label: 'Startseite' },
-                  { id: 'kanaele', label: 'Kanäle & Event' },
+                  ...(canEditLeague
+                    ? [
+                        { id: 'spiele', label: 'Spiele & Liga' },
+                        { id: 'startseite', label: 'Startseite' },
+                        { id: 'kanaele', label: 'Kanäle & Event' },
+                      ]
+                    : []),
+                  { id: 'team', label: 'Team' },
                   ...(isSuperadmin ? [{ id: 'zugaenge', label: 'Zugänge' }] : []),
                 ]}
               >
                 <div className="space-y-4">
+                  {canEditLeague && (
+                    <>
+                      <AccordionSection
+                        id="results"
+                        category="spiele"
+                        title="Spielplan-Ergebnisse eintragen"
+                        subtitle="Ergebnisse, Torschützen & Vorlagen zuweisen, Spiele LIVE stellen"
+                        icon={<Sparkles className="w-5 h-5" />}
+                      >
+                        <Spielplan
+                          teams={visibleTeams}
+                          matches={currentSeasonMatches}
+                          isAdmin={isAdmin}
+                          onUpdateMatchScore={handleUpdateMatchScore}
+                          onUpdateMatchMeta={handleUpdateMatchMeta}
+                        />
+                      </AccordionSection>
+
+                      <AccordionSection
+                        id="schedule"
+                        category="spiele"
+                        title="Spielplan verwalten"
+                        subtitle="Spiele anlegen oder löschen"
+                        icon={<CalendarPlus className="w-5 h-5" />}
+                      >
+                        <MatchManager
+                          teams={visibleTeams}
+                          matches={currentSeasonMatches}
+                          onAddMatch={handleAddMatch}
+                          onDeleteMatch={handleDeleteMatch}
+                        />
+                      </AccordionSection>
+
+                      <AdminPanel
+                        teams={visibleTeams}
+                        matches={currentSeasonMatches}
+                        currentSeasonLabel={currentSeasonName}
+                        nextSeasonLabel={nextSeasonName}
+                        isSuperadmin={isSuperadmin}
+                        onAddTeam={handleAddTeam}
+                        onEditTeam={handleEditTeam}
+                        onDeleteTeam={handleDeleteTeam}
+                        onStartSeason={handleStartSeason}
+                        demoActive={demo.active}
+                        onToggleDemo={handleToggleDemo}
+                      />
+                    </>
+                  )}
+
+                  {/* Team-Zusammenarbeit: Tickets + Aufgaben-Board (für jeden eingeloggten Nutzer) */}
                   <AccordionSection
-                    id="results"
-                    category="spiele"
-                    title="Spielplan-Ergebnisse eintragen"
-                    subtitle="Ergebnisse, Torschützen & Vorlagen zuweisen, Spiele LIVE stellen"
-                    icon={<Sparkles className="w-5 h-5" />}
+                    id="tickets"
+                    category="team"
+                    title="Tickets"
+                    subtitle="Ideen & Aufgaben melden, priorisieren, mit Screenshots – und bearbeiten"
+                    icon={<Ticket className="w-5 h-5" />}
+                    accent="#22DFC9"
                   >
-                    <Spielplan
-                      teams={visibleTeams}
-                      matches={currentSeasonMatches}
-                      isAdmin={isAdmin}
-                      onUpdateMatchScore={handleUpdateMatchScore}
-                      onUpdateMatchMeta={handleUpdateMatchMeta}
-                    />
+                    <TicketSystem currentUserId={sessionUser?.id ?? ''} canManage={canManageTickets} />
                   </AccordionSection>
 
                   <AccordionSection
-                    id="schedule"
-                    category="spiele"
-                    title="Spielplan verwalten"
-                    subtitle="Spiele anlegen oder löschen"
-                    icon={<CalendarPlus className="w-5 h-5" />}
+                    id="aufgaben"
+                    category="team"
+                    title="Aufgaben-Board"
+                    subtitle="Wochenplanung, Personen zuweisen, Status – Monday-Style"
+                    icon={<CalendarDays className="w-5 h-5" />}
+                    accent="#22DFC9"
                   >
-                    <MatchManager
-                      teams={visibleTeams}
-                      matches={currentSeasonMatches}
-                      onAddMatch={handleAddMatch}
-                      onDeleteMatch={handleDeleteMatch}
-                    />
+                    <TaskBoard currentUserId={sessionUser?.id ?? ''} isSuperadmin={isSuperadmin} />
                   </AccordionSection>
-
-                  <AdminPanel
-                    teams={visibleTeams}
-                    matches={currentSeasonMatches}
-                    currentSeasonLabel={currentSeasonName}
-                    nextSeasonLabel={nextSeasonName}
-                    isSuperadmin={isSuperadmin}
-                    onAddTeam={handleAddTeam}
-                    onEditTeam={handleEditTeam}
-                    onDeleteTeam={handleDeleteTeam}
-                    onStartSeason={handleStartSeason}
-                    demoActive={demo.active}
-                    onToggleDemo={handleToggleDemo}
-                  />
 
                   {isSuperadmin && (
                     <AccordionSection

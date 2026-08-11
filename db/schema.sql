@@ -110,3 +110,92 @@ CREATE TABLE login_codes (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_login_codes_email ON login_codes(email);
+
+-- ===========================================================================
+-- Team-Zusammenarbeit: Tickets, Aufgaben-Board, Benachrichtigungen
+-- created_by/author_id sind bewusst OHNE Fremdschlüssel auf users (der
+-- Master-Passwort-Zugang hat die synthetische id 'bootstrap', die es in users
+-- nicht gibt). Anzeigenamen werden als Schnappschuss (*_name) mitgespeichert,
+-- damit die Anzeige auch bei gelöschten Nutzern nie bricht.
+-- ===========================================================================
+
+-- Tickets (Verbesserungs-/Fehler-Meldungen aus dem Team). images = Array von
+-- Screenshot-URLs (Vercel Blob).
+CREATE TABLE tickets (
+  id               TEXT PRIMARY KEY,
+  title            TEXT NOT NULL,
+  description      TEXT NOT NULL DEFAULT '',
+  priority         TEXT NOT NULL DEFAULT 'mittel' CHECK (priority IN ('niedrig','mittel','hoch','dringend')),
+  status           TEXT NOT NULL DEFAULT 'offen'  CHECK (status IN ('offen','in_bearbeitung','erledigt','abgelehnt')),
+  category         TEXT NOT NULL DEFAULT '',
+  images           JSONB NOT NULL DEFAULT '[]',
+  created_by       TEXT NOT NULL,
+  created_by_name  TEXT NOT NULL DEFAULT '',
+  assigned_to      TEXT,
+  assigned_to_name TEXT,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_tickets_status ON tickets(status);
+
+-- Kommentare/Threads zu Tickets
+CREATE TABLE ticket_comments (
+  id          TEXT PRIMARY KEY,
+  ticket_id   TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  author_id   TEXT NOT NULL,
+  author_name TEXT NOT NULL DEFAULT '',
+  body        TEXT NOT NULL,
+  images      JSONB NOT NULL DEFAULT '[]',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_ticket_comments_ticket ON ticket_comments(ticket_id);
+
+-- Aufgaben (Wochen-/Tagesplanung, Monday-Style). due_date = konkreter Tag,
+-- iso_week = z.B. '2026-W33' (Wochenansicht). Beides optional.
+CREATE TABLE tasks (
+  id              TEXT PRIMARY KEY,
+  title           TEXT NOT NULL,
+  notes           TEXT NOT NULL DEFAULT '',
+  due_date        DATE,
+  iso_week        TEXT,
+  status          TEXT NOT NULL DEFAULT 'offen' CHECK (status IN ('leer','offen','in_bearbeitung','erledigt','abgebrochen')),
+  created_by      TEXT NOT NULL,
+  created_by_name TEXT NOT NULL DEFAULT '',
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_tasks_week ON tasks(iso_week);
+CREATE INDEX idx_tasks_due ON tasks(due_date);
+
+-- Zuweisung mehrerer Personen zu einer Aufgabe (user_name als Schnappschuss).
+CREATE TABLE task_assignees (
+  task_id   TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  user_id   TEXT NOT NULL,
+  user_name TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (task_id, user_id)
+);
+
+-- Kommentare/Threads zu Aufgaben
+CREATE TABLE task_comments (
+  id          TEXT PRIMARY KEY,
+  task_id     TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  author_id   TEXT NOT NULL,
+  author_name TEXT NOT NULL DEFAULT '',
+  body        TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_task_comments_task ON task_comments(task_id);
+
+-- In-App-Benachrichtigungen (Erwähnungen, Zuweisungen, neue Kommentare).
+-- user_id = Empfänger. ref_type/ref_id verweisen auf das Ticket bzw. die Aufgabe.
+CREATE TABLE notifications (
+  id         TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL,
+  kind       TEXT NOT NULL,
+  ref_type   TEXT NOT NULL,
+  ref_id     TEXT NOT NULL,
+  body       TEXT NOT NULL DEFAULT '',
+  is_read    BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_notifications_user ON notifications(user_id, is_read);

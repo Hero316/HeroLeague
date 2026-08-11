@@ -363,6 +363,23 @@ export async function tasks(req: VercelRequest, res: VercelResponse) {
   return res.status(405).json({ error: 'Nicht unterstützt' });
 }
 
+// Einzelaufgabe inkl. Kommentar-Verlauf lesen.
+export async function taskGet(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Nicht unterstützt' });
+  res.setHeader('Cache-Control', 'no-store');
+  const id = String(req.query.id ?? '');
+  if (!id) return badRequest(res, 'Aufgaben-ID fehlt.');
+  const t = await fetchTaskById(id);
+  if (!t) return res.status(404).json({ error: 'Aufgabe nicht gefunden.' });
+  const comments = await sql`
+    SELECT id, task_id AS "taskId", author_id AS "authorId", author_name AS "authorName", body, created_at AS "createdAt"
+    FROM task_comments WHERE task_id = ${id} ORDER BY created_at
+  `;
+  return res.json({ ...t, comments });
+}
+
 // Aufgabe aktualisieren oder löschen.
 export async function task(req: VercelRequest, res: VercelResponse) {
   const session = await getSession(req);
