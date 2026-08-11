@@ -24,6 +24,7 @@ import {
   memberMap,
 } from '../lib/collab';
 import Avatar from './Avatar';
+import MentionTextarea from './MentionTextarea';
 
 const inputClass =
   'w-full bg-[#060E0F] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent-light';
@@ -338,10 +339,11 @@ export function TicketDetail({
 
               {/* Neuer Kommentar */}
               <div className="mt-3">
-                <textarea
+                <MentionTextarea
                   value={commentBody}
-                  onChange={(e) => setCommentBody(e.target.value)}
+                  onChange={setCommentBody}
                   onPaste={up.onPaste}
+                  mentionable={team.map((m) => ({ id: m.id, name: m.name }))}
                   placeholder="Kommentar schreiben… (Screenshot mit Strg+V einfügen, @Name zum Erwähnen)"
                   rows={2}
                   className={`${inputClass} resize-y`}

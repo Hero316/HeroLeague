@@ -35,6 +35,7 @@ import ChatSystem from './components/ChatSystem';
 import ProfileEditor from './components/ProfileEditor';
 import Avatar from './components/Avatar';
 import NotificationBell from './components/NotificationBell';
+import ChatUnreadBadge from './components/ChatUnreadBadge';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
 import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, CalendarDays, MessageSquare, UserCircle } from 'lucide-react';
 
@@ -784,6 +785,7 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <ChatUnreadBadge />
                   <NotificationBell />
                   <button
                     onClick={handleLogout}

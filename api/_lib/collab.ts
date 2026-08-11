@@ -154,9 +154,10 @@ export async function tickets(req: VercelRequest, res: VercelResponse) {
     const id = genId('t');
     const name = sessionName(session);
 
+    const title = b.title.trim().slice(0, 200);
     const rows = await sql`
       INSERT INTO tickets (id, title, description, priority, status, category, images, created_by, created_by_name)
-      VALUES (${id}, ${b.title.trim().slice(0, 200)}, ${description}, ${priority}, 'offen',
+      VALUES (${id}, ${title}, ${description}, ${priority}, 'offen',
               ${category}, ${JSON.stringify(images)}::jsonb, ${session.userId}, ${name})
       RETURNING
         id, title, description, priority, status, category, images,
@@ -164,6 +165,16 @@ export async function tickets(req: VercelRequest, res: VercelResponse) {
         assigned_to AS "assignedTo", assigned_to_name AS "assignedToName",
         created_at AS "createdAt", updated_at AS "updatedAt"
     `;
+
+    // Alle Ticket-Bearbeiter (Super-Admin, Ticket-Manager, manage_tickets) informieren.
+    const members = await loadMembers();
+    for (const u of members.values()) {
+      const canHandle =
+        u.role === 'superadmin' || u.role === 'ticket_manager' || (u.permissions ?? []).includes('manage_tickets');
+      if (canHandle) {
+        await notify(u.id, session.userId, 'ticket_new', 'ticket', id, `Neues Ticket von ${name}: „${title}“`);
+      }
+    }
     return res.json({ ...rows[0], commentCount: 0, comments: [] });
   }
 

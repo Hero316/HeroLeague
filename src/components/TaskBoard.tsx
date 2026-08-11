@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquar
 import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember } from '../types';
 import { fetchTasksRange, fetchTask, createTask, updateTask, deleteTask, addTaskComment, fetchTeam, memberMap } from '../lib/collab';
 import Avatar from './Avatar';
+import MentionTextarea from './MentionTextarea';
 
 const inputClass =
   'w-full bg-[#060E0F] border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent-light';
@@ -266,9 +267,19 @@ export function TaskDetail({
               </div>
             ))}
           </div>
-          <div className="flex gap-2 mt-2">
-            <input value={commentBody} onChange={(e) => setCommentBody(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submitComment()} placeholder="Kommentar… (@Name erwähnt)" className={inputClass} />
-            <button onClick={submitComment} disabled={busy} className="px-3 rounded-xl bg-white/5 border border-white/10 text-hl-soft hover:text-white cursor-pointer disabled:opacity-50">
+          <div className="flex gap-2 mt-2 items-start">
+            <div className="flex-1">
+              <MentionTextarea
+                value={commentBody}
+                onChange={setCommentBody}
+                onEnter={submitComment}
+                mentionable={team.map((m) => ({ id: m.id, name: m.name }))}
+                placeholder="Kommentar… (@Name erwähnt, Enter sendet)"
+                rows={1}
+                className={inputClass}
+              />
+            </div>
+            <button onClick={submitComment} disabled={busy} className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-hl-soft hover:text-white cursor-pointer disabled:opacity-50">
               <Send className="w-4 h-4" />
             </button>
           </div>
