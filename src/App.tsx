@@ -746,26 +746,28 @@ export default function App() {
   if (currentPath.startsWith('/chat')) {
     return (
       <div className="h-screen flex flex-col bg-[#060E0F] text-hl-text">
-        <header className="flex items-center justify-between px-4 py-2.5 border-b border-white/10 bg-[rgba(7,10,8,.92)] backdrop-blur-xl shrink-0">
-          <div className="flex items-center gap-2">
-            <img src="/assets/hero-league-logo.png" alt="Hero Chat" className="h-7 w-auto" />
-            <span className="font-display font-black text-white uppercase tracking-tight text-sm">Hero Chat</span>
+        <header className="flex items-center justify-between gap-2 px-2 py-2 border-b border-white/10 bg-[rgba(7,10,8,.92)] backdrop-blur-xl shrink-0">
+          <div className="flex items-center gap-1 min-w-0">
+            <button
+              onClick={() => navigateTo('/admin')}
+              title="Zurück zum Backoffice"
+              className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-hl-soft hover:text-white active:bg-white/10 cursor-pointer shrink-0"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              <span className="text-[11px] font-sans font-semibold uppercase tracking-wider">Zurück</span>
+            </button>
+            <img src="/assets/hero-league-logo.png" alt="Hero Chat" className="h-6 w-auto ml-1" />
+            <span className="font-display font-black text-white uppercase tracking-tight text-sm truncate">Hero Chat</span>
           </div>
           {isAdmin && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => navigateTo('/admin')}
-                className="text-[11px] font-sans font-semibold uppercase tracking-wider text-hl-mute hover:text-white cursor-pointer"
-              >
-                Backoffice
-              </button>
-              <button
-                onClick={handleLogout}
-                className="px-3 py-1.5 bg-[rgba(255,84,66,.15)] border border-[rgba(255,84,66,.3)] hover:bg-[rgba(255,84,66,.25)] rounded-lg text-[11px] font-bold uppercase text-hl-red-soft cursor-pointer flex items-center gap-1"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-              </button>
-            </div>
+            <button
+              onClick={handleLogout}
+              title="Abmelden"
+              className="shrink-0 px-3 py-2 rounded-lg text-hl-mute hover:text-hl-red-soft active:bg-white/10 cursor-pointer flex items-center gap-1.5"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="text-[11px] font-sans font-semibold uppercase tracking-wider hidden sm:inline">Abmelden</span>
+            </button>
           )}
         </header>
         <main className="flex-1 min-h-0">
