@@ -1,22 +1,35 @@
-import { setVapidDetails, sendNotification } from 'web-push';
 import { sql } from './db.js';
 
-// Web-Push (Handy-Benachrichtigungen). Ohne konfigurierte VAPID-Schlüssel
-// (Env-Variablen) ist Push einfach inaktiv – alles andere funktioniert normal.
+// Web-Push (Handy-Benachrichtigungen). WICHTIG: web-push wird LAZY (dynamisch)
+// geladen, damit ein Lade-/Konfigurationsproblem NIE die aufrufenden Endpunkte
+// (Chat, Team, Aufgaben) mit 500 lahmlegt. Ohne VAPID-Env ist Push einfach aus.
 
+type WebPush = typeof import('web-push');
+let webpushMod: WebPush | null = null;
 let configured: boolean | null = null;
-function ensureConfigured(): boolean {
-  if (configured !== null) return configured;
+
+async function getWebpush(): Promise<WebPush | null> {
+  if (configured === false) return null;
+  if (configured && webpushMod) return webpushMod;
   const pub = process.env.VAPID_PUBLIC_KEY;
   const priv = process.env.VAPID_PRIVATE_KEY;
   const subject = process.env.VAPID_SUBJECT || 'mailto:admin@hero-league.de';
   if (!pub || !priv) {
     configured = false;
-    return false;
+    return null;
   }
-  setVapidDetails(subject, pub, priv);
-  configured = true;
-  return true;
+  try {
+    const mod = await import('web-push');
+    const wp = ((mod as unknown as { default?: WebPush }).default ?? mod) as WebPush;
+    wp.setVapidDetails(subject, pub, priv);
+    webpushMod = wp;
+    configured = true;
+    return wp;
+  } catch (err) {
+    console.error('web-push konnte nicht geladen werden:', err);
+    configured = false;
+    return null;
+  }
 }
 
 export function pushPublicKey(): string {
@@ -41,7 +54,6 @@ export async function removeSubscription(endpoint: string): Promise<void> {
   if (endpoint) await sql`DELETE FROM push_subscriptions WHERE endpoint = ${endpoint}`;
 }
 
-// Ist der Nutzer aktuell auf „nicht stören" (Wochenende / bis Datum)?
 function isMuted(prefs: unknown): boolean {
   if (!prefs || typeof prefs !== 'object') return false;
   const p = prefs as { muteWeekends?: boolean; muteUntil?: string };
@@ -51,7 +63,7 @@ function isMuted(prefs: unknown): boolean {
     if (!Number.isNaN(until.getTime()) && until.getTime() > now.getTime()) return true;
   }
   if (p.muteWeekends) {
-    const day = now.getDay(); // 0=So, 6=Sa (Serverzeit)
+    const day = now.getDay();
     if (day === 0 || day === 6) return true;
   }
   return false;
@@ -63,10 +75,12 @@ export interface PushPayload {
   url?: string;
 }
 
-// Best-effort Push an alle Geräte eines Nutzers (respektiert „nicht stören").
+// Best-effort Push an alle Geräte eines Nutzers. Fehlertolerant – wirft NIE.
 export async function sendPushToUser(userId: string, payload: PushPayload): Promise<void> {
   try {
-    if (!userId || userId === 'bootstrap' || !ensureConfigured()) return;
+    if (!userId || userId === 'bootstrap') return;
+    const wp = await getWebpush();
+    if (!wp) return;
     const prefRows = await sql`SELECT COALESCE(notify_prefs, '{}'::jsonb) AS prefs FROM users WHERE id = ${userId}`;
     if (prefRows[0] && isMuted((prefRows[0] as { prefs: unknown }).prefs)) return;
 
@@ -78,7 +92,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
     const body = JSON.stringify({ title: payload.title, body: payload.body, url: payload.url ?? '/admin' });
     for (const s of subs) {
       try {
-        await sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, body);
+        await wp.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, body);
       } catch (err) {
         const code = (err as { statusCode?: number })?.statusCode;
         if (code === 404 || code === 410) await sql`DELETE FROM push_subscriptions WHERE endpoint = ${s.endpoint}`;

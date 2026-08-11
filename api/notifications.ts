@@ -12,6 +12,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return notifications(req, res);
   } catch (err) {
     console.error('Fehler in /api/notifications:', err);
+    if (req.method === 'GET') return res.json({ items: [], unreadCount: 0 });
     return res.status(500).json({ error: 'Interner Fehler' });
   }
 }

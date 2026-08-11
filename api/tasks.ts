@@ -18,6 +18,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return tasks(req, res);
   } catch (err) {
     console.error('Fehler in /api/tasks:', err);
+    if (req.method === 'GET') return res.json([]);
     return res.status(500).json({ error: 'Interner Fehler' });
   }
 }
