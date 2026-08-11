@@ -241,11 +241,20 @@ export interface EventArchive {
 // Tickets bearbeiten (Status, Zuweisung, Priorität) – sonst nichts.
 export type UserRole = 'superadmin' | 'match_admin' | 'referee' | 'ticket_manager';
 
+// Zusätzliche, frei kombinierbare Rechte (unabhängig von der Basis-Rolle).
+// So kann z.B. ein Spiel-Admin ZUSÄTZLICH Tickets bearbeiten. Super-Admins
+// haben implizit alle Rechte. Bewusst erweiterbar (weitere Rechte später).
+export type AdminPermission = 'manage_tickets';
+export const ALL_ADMIN_PERMISSIONS: { id: AdminPermission; label: string }[] = [
+  { id: 'manage_tickets', label: 'Tickets bearbeiten' },
+];
+
 export interface AppUser {
   id: string;
   email: string;
   name: string;
   role: UserRole;
+  permissions: AdminPermission[];
   isActive: boolean;
 }
 
@@ -255,6 +264,7 @@ export interface SessionUser {
   email: string;
   name: string;
   role: UserRole;
+  permissions: AdminPermission[];
 }
 
 // Abend-Aufstellung (Schiedsrichtermodus): pro Team wird EINMAL für den ganzen
@@ -374,6 +384,7 @@ export interface Task {
   dueDate: string | null; // YYYY-MM-DD (konkreter Tag) oder null
   isoWeek: string | null; // z.B. "2026-W33" (Wochenansicht) oder null
   status: TaskStatus;
+  priority: TicketPriority; // gleiche Stufen wie Tickets (niedrig…dringend)
   createdBy: string;
   createdByName: string;
   createdAt: string;

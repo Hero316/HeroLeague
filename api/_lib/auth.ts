@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { SignJWT, jwtVerify } from 'jose';
-import type { UserRole } from '../../src/types';
+import type { UserRole, AdminPermission } from '../../src/types';
 
 const COOKIE_NAME = 'hl_session';
 const SESSION_DAYS = 7;
@@ -11,6 +11,13 @@ export interface SessionPayload {
   email: string;
   name: string;
   role: UserRole;
+  permissions: AdminPermission[]; // zusätzliche, frei kombinierbare Rechte
+}
+
+const KNOWN_PERMISSIONS: AdminPermission[] = ['manage_tickets'];
+export function normalizePermissions(value: unknown): AdminPermission[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((v): v is AdminPermission => KNOWN_PERMISSIONS.includes(v as AdminPermission));
 }
 
 function getSecret(): Uint8Array {
@@ -26,7 +33,13 @@ function isSecureContext(): boolean {
 }
 
 export async function createSessionToken(user: SessionPayload): Promise<string> {
-  return new SignJWT({ userId: user.userId, email: user.email, name: user.name, role: user.role })
+  return new SignJWT({
+    userId: user.userId,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    permissions: normalizePermissions(user.permissions),
+  })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(`${SESSION_DAYS}d`)
@@ -84,6 +97,7 @@ export async function getSession(req: VercelRequest): Promise<SessionPayload | n
       email: typeof payload.email === 'string' ? payload.email : '',
       name: typeof payload.name === 'string' ? payload.name : '',
       role,
+      permissions: normalizePermissions(payload.permissions),
     };
   } catch {
     return null;

@@ -5,10 +5,12 @@
 -- destruktiv.) Mehrfaches Ausführen ist dank IF NOT EXISTS unkritisch.
 -- ===========================================================================
 
--- 1) Neue Rolle 'ticket_manager' erlauben ----------------------------------
+-- 1) Neue Rolle 'ticket_manager' + Zusatzrechte-Spalte ----------------------
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
 ALTER TABLE users ADD CONSTRAINT users_role_check
   CHECK (role IN ('superadmin','match_admin','referee','ticket_manager'));
+-- Zusätzliche, frei kombinierbare Rechte (z.B. ["manage_tickets"]).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '[]';
 
 -- 2) Tickets ----------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS tickets (
@@ -47,11 +49,14 @@ CREATE TABLE IF NOT EXISTS tasks (
   due_date        DATE,
   iso_week        TEXT,
   status          TEXT NOT NULL DEFAULT 'offen' CHECK (status IN ('leer','offen','in_bearbeitung','erledigt','abgebrochen')),
+  priority        TEXT NOT NULL DEFAULT 'mittel' CHECK (priority IN ('niedrig','mittel','hoch','dringend')),
   created_by      TEXT NOT NULL,
   created_by_name TEXT NOT NULL DEFAULT '',
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Falls die Tabelle aus einer frueheren Version schon ohne priority existiert:
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'mittel';
 CREATE INDEX IF NOT EXISTS idx_tasks_week ON tasks(iso_week);
 CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_date);
 

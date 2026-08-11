@@ -48,7 +48,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const session = await getSession(req);
       return res.json({
         isAdmin: Boolean(session),
-        user: session ? { id: session.userId, email: session.email, name: session.name, role: session.role } : null,
+        user: session
+          ? { id: session.userId, email: session.email, name: session.name, role: session.role, permissions: session.permissions }
+          : null,
       });
     }
 
@@ -138,9 +140,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         email: user.email,
         name: user.name,
         role: user.role,
+        permissions: user.permissions,
       });
       res.setHeader('Set-Cookie', sessionCookie(token));
-      return res.json({ ok: true, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+      return res.json({
+        ok: true,
+        user: { id: user.id, email: user.email, name: user.name, role: user.role, permissions: user.permissions },
+      });
     }
 
     // --- Notzugang per Master-Passwort (immer Super-Admin) --------------------
@@ -159,9 +165,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         email: '',
         name: 'Super-Admin',
         role: 'superadmin',
+        permissions: [],
       });
       res.setHeader('Set-Cookie', sessionCookie(token));
-      return res.json({ ok: true, user: { id: 'bootstrap', email: '', name: 'Super-Admin', role: 'superadmin' } });
+      return res.json({ ok: true, user: { id: 'bootstrap', email: '', name: 'Super-Admin', role: 'superadmin', permissions: [] } });
     }
 
     // --- Abmelden -------------------------------------------------------------

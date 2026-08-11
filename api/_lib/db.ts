@@ -63,16 +63,18 @@ export async function getCurrentSeason(): Promise<Season | null> {
 
 export async function getUsers(): Promise<AppUser[]> {
   const rows = await sql`
-    SELECT id, email, name, role, is_active AS "isActive"
+    SELECT id, email, name, role, COALESCE(permissions, '[]'::jsonb) AS permissions, is_active AS "isActive"
     FROM users ORDER BY created_at
   `;
-  return rows as AppUser[];
+  return rows.map((r) => ({ ...r, permissions: Array.isArray(r.permissions) ? r.permissions : [] })) as AppUser[];
 }
 
 export async function getUserByEmail(email: string): Promise<AppUser | null> {
   const rows = await sql`
-    SELECT id, email, name, role, is_active AS "isActive"
+    SELECT id, email, name, role, COALESCE(permissions, '[]'::jsonb) AS permissions, is_active AS "isActive"
     FROM users WHERE email = ${email.trim().toLowerCase()} LIMIT 1
   `;
-  return (rows[0] as AppUser) ?? null;
+  if (!rows[0]) return null;
+  const r = rows[0];
+  return { ...r, permissions: Array.isArray(r.permissions) ? r.permissions : [] } as AppUser;
 }

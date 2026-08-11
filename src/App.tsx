@@ -105,7 +105,7 @@ export default function App() {
   // Team-Zusammenarbeit: Ticket-Manager darf Tickets verwalten; die
   // Liga-Bereiche (Spiele/Startseite/Kanäle) sieht nur, wer sie pflegen darf.
   const isTicketManager = sessionUser?.role === 'ticket_manager';
-  const canManageTickets = isSuperadmin || isTicketManager;
+  const canManageTickets = isSuperadmin || isTicketManager || !!sessionUser?.permissions?.includes('manage_tickets');
   const canEditLeague = isSuperadmin || sessionUser?.role === 'match_admin';
   // Admin hat den Schiedsrichtermodus manuell geöffnet (per Navbar-Schnellzugang).
   const [refereeView, setRefereeView] = useState(false);
@@ -794,7 +794,9 @@ export default function App() {
               {/* Aufgeräumtes Backoffice: Reiter nach Rubrik, darunter „dicke Tasten" */}
               <AccordionGroup
                 searchable
+                defaultOpenId="tickets"
                 categories={[
+                  { id: 'team', label: '★ Team' },
                   ...(canEditLeague
                     ? [
                         { id: 'spiele', label: 'Spiele & Liga' },
@@ -802,7 +804,6 @@ export default function App() {
                         { id: 'kanaele', label: 'Kanäle & Event' },
                       ]
                     : []),
-                  { id: 'team', label: 'Team' },
                   ...(isSuperadmin ? [{ id: 'zugaenge', label: 'Zugänge' }] : []),
                 ]}
               >

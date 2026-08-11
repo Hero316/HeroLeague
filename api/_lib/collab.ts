@@ -164,9 +164,11 @@ export async function ticket(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === 'POST') {
-    // Verwalten/Löschen NUR für Super-Admin oder Ticket-Manager.
-    if (session.role !== 'superadmin' && session.role !== 'ticket_manager') {
-      return res.status(403).json({ error: 'Nur Super-Admins oder Ticket-Manager dürfen Tickets bearbeiten.' });
+    // Verwalten/Löschen: Super-Admin, Ticket-Manager-Rolle oder das Recht 'manage_tickets'.
+    const mayManage =
+      session.role === 'superadmin' || session.role === 'ticket_manager' || session.permissions.includes('manage_tickets');
+    if (!mayManage) {
+      return res.status(403).json({ error: 'Keine Berechtigung, Tickets zu bearbeiten.' });
     }
     const b = req.body ?? {};
     const id = typeof b.id === 'string' ? b.id : '';
@@ -275,7 +277,7 @@ export async function ticketComment(req: VercelRequest, res: VercelResponse) {
 async function fetchTasks(where: string, params: unknown[]) {
   const query = `
     SELECT t.id, t.title, t.notes, to_char(t.due_date, 'YYYY-MM-DD') AS "dueDate",
-           t.iso_week AS "isoWeek", t.status,
+           t.iso_week AS "isoWeek", t.status, t.priority,
            t.created_by AS "createdBy", t.created_by_name AS "createdByName",
            t.created_at AS "createdAt", t.updated_at AS "updatedAt",
            COALESCE(
@@ -341,6 +343,7 @@ export async function tasks(req: VercelRequest, res: VercelResponse) {
     const b = req.body ?? {};
     if (!isNonEmptyString(b.title)) return badRequest(res, 'Bitte einen Titel angeben.');
     const status = isTaskStatus(b.status) ? b.status : 'offen';
+    const priority = isTicketPriority(b.priority) ? b.priority : 'mittel';
     const notes = typeof b.notes === 'string' ? b.notes.slice(0, 4000) : '';
     const dueDate = normalizeDueDate(b.dueDate);
     const isoWeek = normalizeWeek(b.isoWeek);
@@ -349,8 +352,8 @@ export async function tasks(req: VercelRequest, res: VercelResponse) {
     const name = sessionName(session);
 
     await sql`
-      INSERT INTO tasks (id, title, notes, due_date, iso_week, status, created_by, created_by_name)
-      VALUES (${id}, ${b.title.trim().slice(0, 200)}, ${notes}, ${dueDate}, ${isoWeek}, ${status}, ${session.userId}, ${name})
+      INSERT INTO tasks (id, title, notes, due_date, iso_week, status, priority, created_by, created_by_name)
+      VALUES (${id}, ${b.title.trim().slice(0, 200)}, ${notes}, ${dueDate}, ${isoWeek}, ${status}, ${priority}, ${session.userId}, ${name})
     `;
     const members = await loadMembers();
     const added = await replaceAssignees(id, assigneeIds, members);
@@ -403,6 +406,7 @@ export async function task(req: VercelRequest, res: VercelResponse) {
   }
 
   if (b.status !== undefined && !isTaskStatus(b.status)) return badRequest(res, 'Ungültiger Status.');
+  if (b.priority !== undefined && !isTicketPriority(b.priority)) return badRequest(res, 'Ungültige Priorität.');
   const title = b.title !== undefined ? String(b.title).trim().slice(0, 200) : undefined;
   if (b.title !== undefined && !title) return badRequest(res, 'Titel darf nicht leer sein.');
   const notes = b.notes !== undefined ? String(b.notes).slice(0, 4000) : undefined;
@@ -416,6 +420,7 @@ export async function task(req: VercelRequest, res: VercelResponse) {
       due_date = CASE WHEN ${b.dueDate !== undefined} THEN ${dueDate ?? null}::date ELSE due_date END,
       iso_week = CASE WHEN ${b.isoWeek !== undefined} THEN ${isoWeek ?? null} ELSE iso_week END,
       status = COALESCE(${b.status ?? null}, status),
+      priority = COALESCE(${b.priority ?? null}, priority),
       updated_at = now()
     WHERE id = ${id}
   `;

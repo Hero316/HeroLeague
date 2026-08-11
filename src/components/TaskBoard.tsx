@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquare, Users, CalendarDays } from 'lucide-react';
-import type { Task, TaskComment, TaskStatus, TeamMember } from '../types';
+import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember } from '../types';
 import {
   fetchTasksForWeek,
   fetchTask,
@@ -27,13 +27,6 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   abgebrochen: 'Abgebrochen',
 };
 // Farbwelt je Status (Punkt + linker Balken der Karte).
-const STATUS_DOT: Record<TaskStatus, string> = {
-  leer: 'bg-slate-500',
-  offen: 'bg-sky-400',
-  in_bearbeitung: 'bg-amber-400',
-  erledigt: 'bg-emerald-400',
-  abgebrochen: 'bg-rose-500',
-};
 const STATUS_BAR: Record<TaskStatus, string> = {
   leer: 'border-l-slate-500/60',
   offen: 'border-l-sky-400/70',
@@ -42,6 +35,28 @@ const STATUS_BAR: Record<TaskStatus, string> = {
   abgebrochen: 'border-l-rose-500/70',
 };
 const STATUSES: TaskStatus[] = ['leer', 'offen', 'in_bearbeitung', 'erledigt', 'abgebrochen'];
+// Volle Status-Farbfläche (Monday-Stil) für die anklickbare Status-Zelle.
+const STATUS_CELL: Record<TaskStatus, string> = {
+  leer: 'bg-slate-600/80 text-white',
+  offen: 'bg-sky-500/85 text-white',
+  in_bearbeitung: 'bg-amber-500/90 text-white',
+  erledigt: 'bg-emerald-500/85 text-white',
+  abgebrochen: 'bg-rose-600/85 text-white',
+};
+
+const PRIORITY_LABEL: Record<TicketPriority, string> = {
+  niedrig: 'Niedrig',
+  mittel: 'Mittel',
+  hoch: 'Hoch',
+  dringend: 'Dringend',
+};
+const PRIORITY_CELL: Record<TicketPriority, string> = {
+  niedrig: 'bg-slate-500/80 text-white',
+  mittel: 'bg-sky-600/80 text-white',
+  hoch: 'bg-amber-500/90 text-white',
+  dringend: 'bg-rose-600/85 text-white',
+};
+const PRIORITIES: TicketPriority[] = ['niedrig', 'mittel', 'hoch', 'dringend'];
 
 function initials(name: string): string {
   return name
@@ -101,6 +116,7 @@ function TaskDetail({
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes);
   const [status, setStatus] = useState<TaskStatus>(task.status);
+  const [priority, setPriority] = useState<TicketPriority>(task.priority);
   const [assignees, setAssignees] = useState<string[]>(task.assignees.map((a) => a.userId));
   const [comments, setComments] = useState<TaskComment[]>(task.comments ?? []);
   const [commentBody, setCommentBody] = useState('');
@@ -131,7 +147,7 @@ function TaskDetail({
     }
     setBusy(true);
     try {
-      await updateTask(task.id, { title: title.trim(), notes, status, assignees });
+      await updateTask(task.id, { title: title.trim(), notes, status, priority, assignees });
       onChanged();
       onClose();
     } catch (err) {
@@ -196,7 +212,7 @@ function TaskDetail({
         <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1 mt-3">Notizen</label>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className={`${inputClass} resize-y`} />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
           <div>
             <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Status</label>
             <select value={status} onChange={(e) => setStatus(e.target.value as TaskStatus)} className={inputClass}>
@@ -207,7 +223,17 @@ function TaskDetail({
               ))}
             </select>
           </div>
-          <div className="text-[10px] font-mono text-hl-dim uppercase pt-1">
+          <div>
+            <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Priorität</label>
+            <select value={priority} onChange={(e) => setPriority(e.target.value as TicketPriority)} className={inputClass}>
+              {PRIORITIES.map((p) => (
+                <option key={p} value={p}>
+                  {PRIORITY_LABEL[p]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="text-[10px] font-mono text-hl-dim uppercase pt-1 col-span-2 sm:col-span-1">
             <span className="block mb-1">Erstellt</span>
             <span className="text-hl-soft normal-case font-sans text-xs">
               {task.createdByName} · {fmtDate(task.createdAt)}
@@ -360,10 +386,8 @@ export default function TaskBoard({
     }
   };
 
-  const cycleStatus = async (t: Task) => {
-    const idx = STATUSES.indexOf(t.status);
-    const next = STATUSES[(idx + 1) % STATUSES.length];
-    // optimistisch
+  // Status direkt auf der Karte setzen (Monday-Stil: farbige Status-Zelle).
+  const quickSetStatus = async (t: Task, next: TaskStatus) => {
     setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: next } : x)));
     try {
       await updateTask(t.id, { status: next });
@@ -422,21 +446,34 @@ export default function TaskBoard({
                       className={`bg-[#0a1110] border border-white/5 border-l-2 ${STATUS_BAR[t.status]} rounded-lg p-2.5 cursor-pointer hover:border-white/15 transition-colors`}
                       onClick={() => setOpenTask(t)}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="text-sm font-sans text-white leading-snug break-words">{t.title}</span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            cycleStatus(t);
-                          }}
-                          title={`Status: ${STATUS_LABEL[t.status]} (klicken zum Wechseln)`}
-                          className={`shrink-0 w-3.5 h-3.5 rounded-full ${STATUS_DOT[t.status]} ring-2 ring-black/30 cursor-pointer`}
-                        />
+                      <span className="block text-sm font-sans text-white leading-snug break-words">{t.title}</span>
+
+                      {/* Status als farbige Klick-Zelle (Monday) + Prioritäts-Pille */}
+                      <div className="flex items-center gap-1.5 mt-2" onClick={(e) => e.stopPropagation()}>
+                        <div className={`relative rounded-md ${STATUS_CELL[t.status]}`}>
+                          <select
+                            value={t.status}
+                            onChange={(e) => quickSetStatus(t, e.target.value as TaskStatus)}
+                            className="appearance-none bg-transparent text-white text-[11px] font-semibold uppercase tracking-wider px-2 py-1 pr-5 rounded-md cursor-pointer focus:outline-none"
+                            title="Status ändern"
+                          >
+                            {STATUSES.map((s) => (
+                              <option key={s} value={s} className="text-black">
+                                {STATUS_LABEL[s]}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronRight className="w-3 h-3 rotate-90 absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none opacity-80" />
+                        </div>
+                        <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-1 rounded-md ${PRIORITY_CELL[t.priority]}`}>
+                          {PRIORITY_LABEL[t.priority]}
+                        </span>
                       </div>
-                      <div className="flex items-center justify-between">
+
+                      <div className="flex items-center justify-between mt-1.5">
                         <AssigneeChips assignees={t.assignees} />
                         {!!t.commentCount && (
-                          <span className="flex items-center gap-1 text-[10px] text-hl-mute font-mono mt-1.5">
+                          <span className="flex items-center gap-1 text-[10px] text-hl-mute font-mono">
                             <MessageSquare className="w-3 h-3" /> {t.commentCount}
                           </span>
                         )}

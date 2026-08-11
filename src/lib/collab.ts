@@ -52,6 +52,7 @@ export const createTask = (input: {
   dueDate?: string | null;
   isoWeek?: string | null;
   status?: TaskStatus;
+  priority?: TicketPriority;
   assignees?: string[];
 }) => apiFetch<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(input) });
 
@@ -63,6 +64,7 @@ export const updateTask = (
     dueDate?: string | null;
     isoWeek?: string | null;
     status?: TaskStatus;
+    priority?: TicketPriority;
     assignees?: string[];
   }
 ) => apiFetch<Task>('/api/tasks', { method: 'POST', body: JSON.stringify({ id, ...patch }) });

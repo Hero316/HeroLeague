@@ -92,13 +92,17 @@ CREATE INDEX idx_visits_last_seen ON visits(last_seen);
 -- Backoffice-Benutzer (passwortloser Login per E-Mail-Code).
 -- superadmin: darf alles · match_admin: Spiele/Live/Ticker pflegen ·
 -- referee: nur Schiedsrichtermodus (Spiele pfeifen + Abend-Aufstellung).
+-- permissions: zusätzliche, frei kombinierbare Rechte (Array von Strings, z.B.
+-- ["manage_tickets"]) UNABHÄNGIG von der Basis-Rolle. So kann jemand mehrere
+-- Admin-Rechte haben (z.B. Spiel-Admin + Tickets bearbeiten). Super-Admin = alles.
 CREATE TABLE users (
-  id         TEXT PRIMARY KEY,
-  email      TEXT NOT NULL UNIQUE,
-  name       TEXT NOT NULL DEFAULT '',
-  role       TEXT NOT NULL DEFAULT 'match_admin' CHECK (role IN ('superadmin', 'match_admin', 'referee')),
-  is_active  BOOLEAN NOT NULL DEFAULT true,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  id          TEXT PRIMARY KEY,
+  email       TEXT NOT NULL UNIQUE,
+  name        TEXT NOT NULL DEFAULT '',
+  role        TEXT NOT NULL DEFAULT 'match_admin' CHECK (role IN ('superadmin', 'match_admin', 'referee', 'ticket_manager')),
+  permissions JSONB NOT NULL DEFAULT '[]',
+  is_active   BOOLEAN NOT NULL DEFAULT true,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Einmal-Login-Codes (gehasht, mit Ablauf und Fehlversuchszähler)
@@ -159,6 +163,7 @@ CREATE TABLE tasks (
   due_date        DATE,
   iso_week        TEXT,
   status          TEXT NOT NULL DEFAULT 'offen' CHECK (status IN ('leer','offen','in_bearbeitung','erledigt','abgebrochen')),
+  priority        TEXT NOT NULL DEFAULT 'mittel' CHECK (priority IN ('niedrig','mittel','hoch','dringend')),
   created_by      TEXT NOT NULL,
   created_by_name TEXT NOT NULL DEFAULT '',
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
