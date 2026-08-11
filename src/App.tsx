@@ -746,7 +746,10 @@ export default function App() {
   if (currentPath.startsWith('/chat')) {
     return (
       <div className="h-screen flex flex-col bg-[#060E0F] text-hl-text">
-        <header className="flex items-center justify-between gap-2 px-2 py-2 border-b border-white/10 bg-[rgba(7,10,8,.92)] backdrop-blur-xl shrink-0">
+        <header
+          className="flex items-center justify-between gap-2 px-2 py-2 border-b border-white/10 bg-[rgba(7,10,8,.92)] backdrop-blur-xl shrink-0"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.5rem)' }}
+        >
           <div className="flex items-center gap-1 min-w-0">
             <button
               onClick={() => navigateTo('/admin')}
@@ -793,7 +796,10 @@ export default function App() {
     return (
       <div className="min-h-screen text-hl-text font-sans flex flex-col justify-between">
         <PageBackground page="default" />
-        <header className="border-b border-white/[.07] bg-[rgba(7,10,8,.72)] backdrop-blur-xl px-6 py-4">
+        <header
+          className="border-b border-white/[.07] bg-[rgba(7,10,8,.72)] backdrop-blur-xl px-6 py-4"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}
+        >
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <img src="/assets/hero-league-logo.png" alt="Hero League" className="h-9 w-auto" />
