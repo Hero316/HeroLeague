@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getSession, requireSuperadmin, normalizePermissions } from '../_lib/auth.js';
 import { sql } from '../_lib/db.js';
 import { badRequest } from '../_lib/validate.js';
+import { ensureSchema } from '../_lib/ensure.js';
 
 function isRole(value: unknown): value is 'superadmin' | 'match_admin' | 'referee' | 'ticket_manager' | 'team_member' {
   return (
@@ -79,6 +80,7 @@ const deleteUser = requireSuperadmin(async (req: VercelRequest, res: VercelRespo
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
+    await ensureSchema();
     if (req.method === 'PUT') return updateUser(req, res);
     if (req.method === 'DELETE') return deleteUser(req, res);
     return res.status(405).json({ error: 'Nicht unterstützt' });

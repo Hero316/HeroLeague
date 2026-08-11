@@ -8,6 +8,7 @@ import {
 } from '../_lib/auth.js';
 import { getUserByEmail, sql } from '../_lib/db.js';
 import { isMailConfigured, sendLoginCode } from '../_lib/mail.js';
+import { ensureSchema } from '../_lib/ensure.js';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -42,6 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const action = req.query.action;
 
   try {
+    await ensureSchema();
     // --- Aktuelle Sitzung abfragen -------------------------------------------
     if (action === 'session' && req.method === 'GET') {
       res.setHeader('Cache-Control', 'no-store');

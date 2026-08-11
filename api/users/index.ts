@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getUsers, sql } from '../_lib/db.js';
 import { requireSuperadmin, normalizePermissions } from '../_lib/auth.js';
 import { badRequest } from '../_lib/validate.js';
+import { ensureSchema } from '../_lib/ensure.js';
 
 function isEmail(value: unknown): value is string {
   return typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -44,6 +45,7 @@ const createUser = requireSuperadmin(async (req: VercelRequest, res: VercelRespo
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
+    await ensureSchema();
     if (req.method === 'GET') return listUsers(req, res);
     if (req.method === 'POST') return createUser(req, res);
     return res.status(405).json({ error: 'Nicht unterstützt' });

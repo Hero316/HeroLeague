@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { conversations, messages, markRead, searchMessages } from './_lib/chat.js';
+import { ensureSchema } from './_lib/ensure.js';
 
 // Interner Chat (Phase 3). Eigener Endpunkt (Vercel Pro).
 //  GET  /api/chat?resource=conversations              -> meine Unterhaltungen
@@ -9,6 +10,7 @@ import { conversations, messages, markRead, searchMessages } from './_lib/chat.j
 //  POST /api/chat?resource=read {conversationId}      -> als gelesen markieren
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
+    await ensureSchema();
     const resource = req.query.resource;
     if (resource === 'messages') return messages(req, res);
     if (resource === 'read') return markRead(req, res);

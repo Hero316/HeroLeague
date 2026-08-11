@@ -3,6 +3,7 @@ import { getSession } from './_lib/auth.js';
 import { sql } from './_lib/db.js';
 import { saveSubscription, removeSubscription, pushPublicKey } from './_lib/push.js';
 import { badRequest } from './_lib/validate.js';
+import { ensureSchema } from './_lib/ensure.js';
 
 // Web-Push: öffentlicher Schlüssel, An-/Abmelden, Einstellungen.
 //  GET  /api/push?resource=key           -> { key } (VAPID public)
@@ -12,6 +13,7 @@ import { badRequest } from './_lib/validate.js';
 //  POST /api/push?resource=unsubscribe { endpoint } -> Gerät abmelden
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
+    await ensureSchema();
     const session = await getSession(req);
     if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
     const resource = req.query.resource;
