@@ -99,3 +99,33 @@ export async function uploadImage(file: File, opts?: { maxDimension?: number }):
   });
   return result.url;
 }
+
+// Beliebige Datei / Audio hochladen (Chat-Anhänge). Bilder werden vorher
+// verkleinert/komprimiert (wie bei uploadImage), alles andere unverändert –
+// aber immer größenbegrenzt. Gibt URL + Name + MIME zurück.
+export async function uploadFile(file: File): Promise<{ url: string; name: string; mime: string }> {
+  // Bilder komprimieren (spart Blob-Speicher, wie bisher).
+  let upload = file;
+  if (file.type.startsWith('image/')) {
+    try {
+      upload = await compressImage(file, GALLERY_MAX_DIMENSION);
+    } catch {
+      /* Original behalten */
+    }
+  }
+  if (upload.size > MAX_UPLOAD_BYTES) {
+    throw new Error('Datei ist zu groß (max. 3 MB).');
+  }
+
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
+    reader.readAsDataURL(upload);
+  });
+
+  return apiFetch<{ url: string; name: string; mime: string }>('/api/upload', {
+    method: 'POST',
+    body: JSON.stringify({ kind: 'file', file: dataUrl, filename: file.name || 'datei' }),
+  });
+}

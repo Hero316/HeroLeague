@@ -237,22 +237,50 @@ export interface EventArchive {
 
 // Rollen: superadmin darf alles; match_admin darf Spiele/Live/Ticker pflegen;
 // referee (Schiedsrichter) darf ausschließlich im Schiedsrichtermodus Spiele
-// pfeifen und die Abend-Aufstellung setzen – sonst nichts.
-export type UserRole = 'superadmin' | 'match_admin' | 'referee';
+// pfeifen und die Abend-Aufstellung setzen; ticket_manager darf ausschließlich
+// Tickets bearbeiten (Status, Zuweisung, Priorität); team_member sieht NUR den
+// Team-Bereich (Tickets/Aufgaben/Chat mitarbeiten) – keinen Liga-Admin.
+export type UserRole = 'superadmin' | 'match_admin' | 'referee' | 'ticket_manager' | 'team_member';
+
+// Zusätzliche, frei kombinierbare Rechte (unabhängig von der Basis-Rolle).
+// So kann z.B. ein Spiel-Admin ZUSÄTZLICH Tickets bearbeiten. Super-Admins
+// haben implizit alle Rechte. Bewusst erweiterbar (weitere Rechte später).
+export type AdminPermission = 'manage_tickets';
+export const ALL_ADMIN_PERMISSIONS: { id: AdminPermission; label: string }[] = [
+  { id: 'manage_tickets', label: 'Tickets bearbeiten' },
+];
+
+// Präsenz-Status (Slack-artig) mit Emoji + Farbe. Erweiterbar.
+export type UserStatus = 'online' | 'away' | 'busy' | 'vacation' | 'out';
+export const USER_STATUS: Record<UserStatus, { emoji: string; label: string; dot: string }> = {
+  online: { emoji: '🟢', label: 'Online', dot: 'bg-emerald-400' },
+  away: { emoji: '🌙', label: 'Abwesend', dot: 'bg-amber-400' },
+  busy: { emoji: '⛔', label: 'Beschäftigt', dot: 'bg-rose-500' },
+  vacation: { emoji: '🌴', label: 'Urlaub', dot: 'bg-sky-400' },
+  out: { emoji: '🏠', label: 'Außer Haus', dot: 'bg-slate-400' },
+};
+export const USER_STATUS_LIST = Object.keys(USER_STATUS) as UserStatus[];
 
 export interface AppUser {
   id: string;
   email: string;
   name: string;
   role: UserRole;
+  permissions: AdminPermission[];
+  avatarUrl: string;
+  status: UserStatus;
   isActive: boolean;
 }
 
 // Die im Frontend bekannte Identität der aktiven Sitzung
 export interface SessionUser {
+  id: string; // 'bootstrap' beim Master-Passwort-Login
   email: string;
   name: string;
   role: UserRole;
+  permissions: AdminPermission[];
+  avatarUrl: string;
+  status: UserStatus;
 }
 
 // Abend-Aufstellung (Schiedsrichtermodus): pro Team wird EINMAL für den ganzen
@@ -311,3 +339,128 @@ export interface PlayerStat {
 }
 
 export type ActiveTab = 'home' | 'spielplan' | 'tabelle' | 'heroone' | 'statistiken' | 'highlights';
+
+// --- Team-Zusammenarbeit: Tickets, Aufgaben, Benachrichtigungen -------------
+
+// Mitglied des internen Teams (für Zuweisungen/Erwähnungen). Reduzierte, für
+// jeden eingeloggten Nutzer lesbare Nutzerliste (nicht die volle AppUser-Liste).
+export interface TeamMember {
+  id: string;
+  name: string; // Anzeigename (fällt auf E-Mail zurück, falls kein Name)
+  role: UserRole;
+  avatarUrl: string;
+  status: UserStatus;
+}
+
+export type TicketPriority = 'niedrig' | 'mittel' | 'hoch' | 'dringend';
+export type TicketStatus = 'offen' | 'in_bearbeitung' | 'erledigt' | 'abgelehnt';
+
+export interface TicketComment {
+  id: string;
+  ticketId: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  images: string[];
+  createdAt: string;
+}
+
+export interface Ticket {
+  id: string;
+  title: string;
+  description: string;
+  priority: TicketPriority;
+  status: TicketStatus;
+  category: string;
+  images: string[]; // Screenshot-URLs (Vercel Blob)
+  createdBy: string;
+  createdByName: string;
+  assignedTo: string | null;
+  assignedToName: string | null;
+  createdAt: string;
+  updatedAt: string;
+  commentCount?: number; // nur in der Listenansicht
+  comments?: TicketComment[]; // nur in der Detailansicht
+}
+
+// Aufgaben-Board (Monday-Style)
+export type TaskStatus = 'leer' | 'offen' | 'in_bearbeitung' | 'erledigt' | 'abgebrochen';
+
+export interface TaskComment {
+  id: string;
+  taskId: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  notes: string;
+  dueDate: string | null; // YYYY-MM-DD (konkreter Tag) oder null
+  isoWeek: string | null; // z.B. "2026-W33" (Wochenansicht) oder null
+  status: TaskStatus;
+  priority: TicketPriority; // gleiche Stufen wie Tickets (niedrig…dringend)
+  createdBy: string;
+  createdByName: string;
+  createdAt: string;
+  updatedAt: string;
+  assignees: { userId: string; userName: string }[];
+  commentCount?: number;
+  comments?: TaskComment[];
+}
+
+// In-App-Benachrichtigung (Erwähnung, Zuweisung, neuer Kommentar, Chat)
+export interface AppNotification {
+  id: string;
+  kind: string; // 'ticket_assigned' | 'ticket_comment' | 'task_assigned' | 'task_comment' | 'mention' | 'chat'
+  refType: 'ticket' | 'task' | 'conversation';
+  refId: string;
+  body: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+// --- Phase 3: Chat ----------------------------------------------------------
+export interface ConversationMember {
+  userId: string;
+  userName: string;
+}
+
+export interface ChatLastMessage {
+  body: string;
+  authorName: string;
+  createdAt: string;
+  attachType: 'ticket' | 'task' | 'file' | 'audio' | null;
+}
+
+export interface Conversation {
+  id: string;
+  kind: 'group' | 'dm';
+  title: string;
+  createdBy: string;
+  updatedAt: string;
+  members: ConversationMember[];
+  unread: number;
+  lastMessage: ChatLastMessage | null;
+}
+
+export type ChatAttachType = 'ticket' | 'task' | 'file' | 'audio';
+
+export interface ChatMessage {
+  id: string;
+  conversationId: string;
+  parentId: string | null;
+  authorId: string;
+  authorName: string;
+  body: string;
+  attachType: ChatAttachType | null;
+  attachId: string | null; // ticket/task: Entity-ID
+  attachTitle: string | null; // Titel bzw. Dateiname
+  attachUrl: string | null; // file/audio: Blob-URL
+  attachMime: string | null; // file: MIME-Typ (für Vorschau/Icon)
+  createdAt: string;
+  replyCount?: number; // nur bei Top-Level-Nachrichten
+}

@@ -48,7 +48,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const session = await getSession(req);
       return res.json({
         isAdmin: Boolean(session),
-        user: session ? { email: session.email, name: session.name, role: session.role } : null,
+        user: session
+          ? {
+              id: session.userId,
+              email: session.email,
+              name: session.name,
+              role: session.role,
+              permissions: session.permissions,
+              avatarUrl: session.avatarUrl,
+              status: session.status,
+            }
+          : null,
       });
     }
 
@@ -138,9 +148,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         email: user.email,
         name: user.name,
         role: user.role,
+        permissions: user.permissions,
+        avatarUrl: user.avatarUrl,
+        status: user.status,
       });
       res.setHeader('Set-Cookie', sessionCookie(token));
-      return res.json({ ok: true, user: { email: user.email, name: user.name, role: user.role } });
+      return res.json({
+        ok: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          permissions: user.permissions,
+          avatarUrl: user.avatarUrl,
+          status: user.status,
+        },
+      });
     }
 
     // --- Notzugang per Master-Passwort (immer Super-Admin) --------------------
@@ -159,9 +183,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         email: '',
         name: 'Super-Admin',
         role: 'superadmin',
+        permissions: [],
+        avatarUrl: '',
+        status: 'online',
       });
       res.setHeader('Set-Cookie', sessionCookie(token));
-      return res.json({ ok: true, user: { email: '', name: 'Super-Admin', role: 'superadmin' } });
+      return res.json({
+        ok: true,
+        user: { id: 'bootstrap', email: '', name: 'Super-Admin', role: 'superadmin', permissions: [], avatarUrl: '', status: 'online' },
+      });
     }
 
     // --- Abmelden -------------------------------------------------------------
