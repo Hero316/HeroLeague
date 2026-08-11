@@ -93,8 +93,14 @@ const MSG_COLS = `
   m.id, m.conversation_id AS "conversationId", m.parent_id AS "parentId",
   m.author_id AS "authorId", m.author_name AS "authorName", m.body,
   m.attach_type AS "attachType", m.attach_id AS "attachId", m.attach_title AS "attachTitle",
+  m.attach_url AS "attachUrl", m.attach_mime AS "attachMime",
   m.created_at AS "createdAt"
 `;
+
+// Nur http(s)-URLs als Anhang zulassen (kein javascript:/data:).
+function safeUrl(v: unknown): string | null {
+  return typeof v === 'string' && /^https?:\/\//i.test(v.trim()) ? v.trim() : null;
+}
 
 export async function messages(req: VercelRequest, res: VercelResponse) {
   const session = await getSession(req);
@@ -136,7 +142,8 @@ export async function messages(req: VercelRequest, res: VercelResponse) {
     if (!(await isMember(conversationId, uid))) return res.status(403).json({ error: 'Kein Zugriff auf diese Unterhaltung.' });
 
     const hasBody = isNonEmptyString(b.body);
-    const attachType = b.attachType === 'ticket' || b.attachType === 'task' ? b.attachType : null;
+    const ATTACH = ['ticket', 'task', 'file', 'audio'];
+    const attachType = ATTACH.includes(b.attachType) ? b.attachType : null;
     if (!hasBody && !attachType) return badRequest(res, 'Nachricht darf nicht leer sein.');
 
     const parentId = typeof b.parentId === 'string' && b.parentId ? b.parentId : null;
@@ -144,18 +151,25 @@ export async function messages(req: VercelRequest, res: VercelResponse) {
       const p = await sql`SELECT 1 FROM messages WHERE id = ${parentId} AND conversation_id = ${conversationId} LIMIT 1`;
       if (p.length === 0) return badRequest(res, 'Ungültige Thread-Nachricht.');
     }
-    const attachId = attachType ? String(b.attachId ?? '').slice(0, 80) : null;
+    // Ticket/Aufgabe: Verweis via attachId. Datei/Audio: Blob-URL + MIME.
+    const isRef = attachType === 'ticket' || attachType === 'task';
+    const isMedia = attachType === 'file' || attachType === 'audio';
+    const attachId = isRef ? String(b.attachId ?? '').slice(0, 80) : null;
     const attachTitle = attachType ? String(b.attachTitle ?? '').slice(0, 200) : null;
+    const attachUrl = isMedia ? safeUrl(b.attachUrl) : null;
+    const attachMime = isMedia ? String(b.attachMime ?? '').slice(0, 120) || null : null;
+    if (isMedia && !attachUrl) return badRequest(res, 'Anhang-URL fehlt oder ist ungültig.');
     const body = hasBody ? b.body.slice(0, 8000) : '';
     const id = genId('msg');
     const name = sessionName(session);
 
     const inserted = await sql`
-      INSERT INTO messages (id, conversation_id, parent_id, author_id, author_name, body, attach_type, attach_id, attach_title)
-      VALUES (${id}, ${conversationId}, ${parentId}, ${uid}, ${name}, ${body}, ${attachType}, ${attachId}, ${attachTitle})
+      INSERT INTO messages (id, conversation_id, parent_id, author_id, author_name, body, attach_type, attach_id, attach_title, attach_url, attach_mime)
+      VALUES (${id}, ${conversationId}, ${parentId}, ${uid}, ${name}, ${body}, ${attachType}, ${attachId}, ${attachTitle}, ${attachUrl}, ${attachMime})
       RETURNING id, conversation_id AS "conversationId", parent_id AS "parentId",
         author_id AS "authorId", author_name AS "authorName", body,
-        attach_type AS "attachType", attach_id AS "attachId", attach_title AS "attachTitle", created_at AS "createdAt"
+        attach_type AS "attachType", attach_id AS "attachId", attach_title AS "attachTitle",
+        attach_url AS "attachUrl", attach_mime AS "attachMime", created_at AS "createdAt"
     `;
     await sql`UPDATE conversations SET updated_at = now() WHERE id = ${conversationId}`;
 

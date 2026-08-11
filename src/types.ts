@@ -415,7 +415,7 @@ export interface ChatLastMessage {
   body: string;
   authorName: string;
   createdAt: string;
-  attachType: 'ticket' | 'task' | null;
+  attachType: 'ticket' | 'task' | 'file' | 'audio' | null;
 }
 
 export interface Conversation {
@@ -429,6 +429,8 @@ export interface Conversation {
   lastMessage: ChatLastMessage | null;
 }
 
+export type ChatAttachType = 'ticket' | 'task' | 'file' | 'audio';
+
 export interface ChatMessage {
   id: string;
   conversationId: string;
@@ -436,9 +438,11 @@ export interface ChatMessage {
   authorId: string;
   authorName: string;
   body: string;
-  attachType: 'ticket' | 'task' | null;
-  attachId: string | null;
-  attachTitle: string | null;
+  attachType: ChatAttachType | null;
+  attachId: string | null; // ticket/task: Entity-ID
+  attachTitle: string | null; // Titel bzw. Dateiname
+  attachUrl: string | null; // file/audio: Blob-URL
+  attachMime: string | null; // file: MIME-Typ (für Vorschau/Icon)
   createdAt: string;
   replyCount?: number; // nur bei Top-Level-Nachrichten
 }

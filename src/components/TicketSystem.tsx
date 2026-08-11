@@ -499,7 +499,7 @@ export default function TicketSystem({ canManage }: { currentUserId: string; can
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'alle' | 'offen'>('alle');
+  const [filter, setFilter] = useState<'offen' | 'abgeschlossen' | 'alle'>('offen');
 
   const load = useCallback(async () => {
     try {
@@ -519,6 +519,7 @@ export default function TicketSystem({ canManage }: { currentUserId: string; can
 
   const visible = tickets.filter((t) => {
     if (filter === 'offen') return t.status === 'offen' || t.status === 'in_bearbeitung';
+    if (filter === 'abgeschlossen') return t.status === 'erledigt' || t.status === 'abgelehnt';
     return true;
   });
 
@@ -526,7 +527,7 @@ export default function TicketSystem({ canManage }: { currentUserId: string; can
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-1.5 bg-[#060E0F]/40 border border-white/10 rounded-xl p-1">
-          {(['alle', 'offen'] as const).map((f) => (
+          {(['offen', 'abgeschlossen', 'alle'] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -534,7 +535,7 @@ export default function TicketSystem({ canManage }: { currentUserId: string; can
                 filter === f ? 'bg-brand-accent-light text-white' : 'text-hl-mute hover:text-white'
               }`}
             >
-              {f === 'alle' ? 'Alle' : 'Offen'}
+              {f === 'offen' ? 'Offen' : f === 'abgeschlossen' ? 'Abgeschlossen' : 'Alle'}
             </button>
           ))}
         </div>

@@ -236,9 +236,11 @@ CREATE TABLE messages (
   author_id       TEXT NOT NULL,
   author_name     TEXT NOT NULL DEFAULT '',
   body            TEXT NOT NULL DEFAULT '',
-  attach_type     TEXT CHECK (attach_type IN ('ticket','task')),
-  attach_id       TEXT,
-  attach_title    TEXT,
+  attach_type     TEXT CHECK (attach_type IN ('ticket','task','file','audio')),
+  attach_id       TEXT,        -- ticket/task: Entity-ID
+  attach_title    TEXT,        -- Titel bzw. Dateiname
+  attach_url      TEXT,        -- file/audio: Blob-URL
+  attach_mime     TEXT,        -- file: MIME-Typ
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_messages_conv ON messages(conversation_id, created_at);

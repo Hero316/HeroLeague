@@ -27,9 +27,11 @@ export const sendMessage = (input: {
   conversationId: string;
   body: string;
   parentId?: string | null;
-  attachType?: 'ticket' | 'task' | null;
+  attachType?: 'ticket' | 'task' | 'file' | 'audio' | null;
   attachId?: string | null;
   attachTitle?: string | null;
+  attachUrl?: string | null;
+  attachMime?: string | null;
 }) => apiFetch<ChatMessage>('/api/chat?resource=messages', { method: 'POST', body: JSON.stringify(input) });
 
 export const markConversationRead = (conversationId: string) =>

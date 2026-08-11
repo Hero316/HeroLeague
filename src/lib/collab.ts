@@ -45,6 +45,8 @@ export const addTicketComment = (ticketId: string, body: string, images: string[
 export const fetchTasksForWeek = (isoWeek: string) =>
   apiFetch<Task[]>(`/api/tasks?week=${encodeURIComponent(isoWeek)}`);
 export const fetchAllTasks = () => apiFetch<Task[]>('/api/tasks');
+export const fetchTasksRange = (from: string, to: string) =>
+  apiFetch<Task[]>(`/api/tasks?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
 export const fetchTask = (id: string) => apiFetch<Task>(`/api/tasks?id=${encodeURIComponent(id)}`);
 
 export const createTask = (input: {
