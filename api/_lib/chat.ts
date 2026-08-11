@@ -3,6 +3,7 @@ import { sql } from './db.js';
 import { getSession } from './auth.js';
 import { badRequest, isNonEmptyString } from './validate.js';
 import { genId, sessionName, loadMembers, memberName, notify, findMentions } from './collab.js';
+import { sendPushToUser } from './push.js';
 
 // Phase 3: Interner Chat – Gruppen, DMs, Slack-Threads, Ticket-/Aufgaben-Anhänge.
 // Dispatch aus api/chat.ts über ?resource=conversations|messages|read.
@@ -173,16 +174,34 @@ export async function messages(req: VercelRequest, res: VercelResponse) {
     `;
     await sql`UPDATE conversations SET updated_at = now() WHERE id = ${conversationId}`;
 
-    // Erwähnungen benachrichtigen – aber nur Mitglieder dieser Unterhaltung.
+    // Benachrichtigungen: @Erwähnungen (Glocke + Push) und Handy-Push an die
+    // übrigen Mitglieder (wie WhatsApp – nur Push, keine Glocken-Flut).
+    const convRows = await sql`SELECT kind, title FROM conversations WHERE id = ${conversationId}`;
+    const conv = (convRows[0] as { kind: string; title: string } | undefined) ?? { kind: 'group', title: '' };
+    const convMembers = (await sql`SELECT user_id AS "userId" FROM conversation_members WHERE conversation_id = ${conversationId}`) as { userId: string }[];
+    const memberSet = new Set(convMembers.map((m) => m.userId));
+    const mentioned = new Set<string>();
     if (hasBody) {
       const allMembers = await loadMembers();
-      const convMembers = (await sql`SELECT user_id AS "userId" FROM conversation_members WHERE conversation_id = ${conversationId}`) as { userId: string }[];
-      const memberSet = new Set(convMembers.map((m) => m.userId));
-      for (const mentionedId of findMentions(b.body, allMembers)) {
-        if (memberSet.has(mentionedId)) {
-          await notify(mentionedId, uid, 'mention', 'conversation', conversationId, `${name} hat dich im Chat erwähnt.`);
+      for (const mid of findMentions(b.body, allMembers)) {
+        if (memberSet.has(mid) && mid !== uid) {
+          mentioned.add(mid);
+          await notify(mid, uid, 'mention', 'conversation', conversationId, `${name} hat dich im Chat erwähnt.`);
         }
       }
+    }
+    const preview = hasBody
+      ? String(b.body).slice(0, 120)
+      : attachType === 'audio'
+        ? '🎤 Sprachnachricht'
+        : attachType === 'file'
+          ? '📎 Datei'
+          : '📎 Anhang';
+    const pushTitle = conv.kind === 'group' ? conv.title || 'Gruppe' : name;
+    const pushBody = conv.kind === 'group' ? `${name}: ${preview}` : preview;
+    for (const cm of convMembers) {
+      if (cm.userId === uid || mentioned.has(cm.userId)) continue;
+      await sendPushToUser(cm.userId, { title: pushTitle, body: pushBody, url: '/admin' });
     }
     return res.json({ ...(inserted[0] as object), replyCount: 0 });
   }

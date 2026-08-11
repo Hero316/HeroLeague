@@ -104,6 +104,8 @@ CREATE TABLE users (
   -- Profil: Avatar-Blob-URL (leer = Initialen) und Präsenz-Status.
   avatar_url  TEXT NOT NULL DEFAULT '',
   status      TEXT NOT NULL DEFAULT 'online',
+  -- Benachrichtigungs-Einstellungen (z.B. { muteWeekends, muteUntil }).
+  notify_prefs JSONB NOT NULL DEFAULT '{}',
   is_active   BOOLEAN NOT NULL DEFAULT true,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -248,3 +250,13 @@ CREATE TABLE messages (
 );
 CREATE INDEX idx_messages_conv ON messages(conversation_id, created_at);
 CREATE INDEX idx_messages_parent ON messages(parent_id);
+
+-- Web-Push-Abos (ein Eintrag je Gerät/Browser).
+CREATE TABLE push_subscriptions (
+  endpoint   TEXT PRIMARY KEY,
+  user_id    TEXT NOT NULL,
+  p256dh     TEXT NOT NULL,
+  auth       TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_push_user ON push_subscriptions(user_id);

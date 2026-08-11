@@ -15,7 +15,7 @@
 // Version bei Bedarf erhöhen: beim Aktivieren löscht der SW alle Caches mit
 // abweichendem Namen → ein hängengebliebener/kaputter Asset-Cache (z. B. schwarze
 // Seite nach einem Deploy) wird beim nächsten Laden automatisch bereinigt.
-const CACHE = 'hl-static-v3';
+const CACHE = 'hl-static-v4';
 
 // App-Shell für den Offline-Fallback. Bewusst minimal.
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/assets/icon-192.png'];
@@ -92,4 +92,51 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Alles andere: normal ans Netz.
+});
+
+// --- Web-Push: eingehende Push-Nachricht anzeigen ---------------------------
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = {};
+  }
+  const title = data.title || 'Hero League';
+  const body = data.body || '';
+  const url = data.url || '/admin';
+  event.waitUntil(
+    self.registration
+      .showNotification(title, {
+        body,
+        icon: '/assets/icon-192.png',
+        badge: '/assets/icon-192.png',
+        tag: 'hl-chat',
+        renotify: true,
+        data: { url },
+      })
+      .then(() => {
+        // App-Icon-Zahl erhöhen (wo unterstützt).
+        try {
+          if (self.navigator && self.navigator.setAppBadge) self.navigator.setAppBadge();
+        } catch (e) {
+          /* ignoriert */
+        }
+      }),
+  );
+});
+
+// Klick auf die Benachrichtigung: vorhandenes Fenster fokussieren oder öffnen.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/admin';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if (client.url.includes('/admin') && 'focus' in client) return client.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url);
+      return undefined;
+    }),
+  );
 });

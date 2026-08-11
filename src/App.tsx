@@ -33,11 +33,12 @@ import TicketSystem from './components/TicketSystem';
 import TaskBoard from './components/TaskBoard';
 import ChatSystem from './components/ChatSystem';
 import ProfileEditor from './components/ProfileEditor';
+import NotificationSettings from './components/NotificationSettings';
 import Avatar from './components/Avatar';
 import NotificationBell from './components/NotificationBell';
 import ChatUnreadBadge from './components/ChatUnreadBadge';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, CalendarDays, MessageSquare, UserCircle } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, CalendarDays, MessageSquare, UserCircle, Bell } from 'lucide-react';
 
 // Öffentliche Tabs haben eigene URLs, damit man nach einem Reload dort bleibt, wo man war.
 const TAB_PATHS: Record<ActiveTab, string> = {
@@ -878,6 +879,17 @@ export default function App() {
                     {sessionUser && (
                       <ProfileEditor user={sessionUser} onSaved={(p) => setSessionUser((u) => (u ? { ...u, ...p } : u))} />
                     )}
+                  </AccordionSection>
+
+                  <AccordionSection
+                    id="benachrichtigungen"
+                    category="team"
+                    title="Benachrichtigungen"
+                    subtitle="Handy-Push aktivieren, Nicht-stören (Wochenende/Urlaub)"
+                    icon={<Bell className="w-5 h-5" />}
+                    accent="#22DFC9"
+                  >
+                    {sessionUser && <NotificationSettings user={sessionUser} />}
                   </AccordionSection>
 
                   <AccordionSection

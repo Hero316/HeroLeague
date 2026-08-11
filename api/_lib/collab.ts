@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql, getUsers } from './db.js';
 import { getSession, normalizeStatus } from './auth.js';
 import type { SessionPayload } from './auth.js';
+import { sendPushToUser } from './push.js';
 import {
   badRequest,
   isNonEmptyString,
@@ -53,6 +54,8 @@ export async function notify(
     INSERT INTO notifications (id, user_id, kind, ref_type, ref_id, body, is_read)
     VALUES (${genId('n')}, ${recipientId}, ${kind}, ${refType}, ${refId}, ${body.slice(0, 200)}, false)
   `;
+  // Zusätzlich als Handy-Push (best-effort; respektiert „nicht stören").
+  await sendPushToUser(recipientId, { title: 'Hero League', body: body.slice(0, 200), url: '/admin' });
 }
 
 // Einfache @Name-Erwähnungen gegen die Mitgliederliste auflösen.
