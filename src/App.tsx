@@ -369,8 +369,8 @@ export default function App() {
 
   // Bearbeiten-Modus nur für Admins – beim Abmelden automatisch verlassen.
   useEffect(() => {
-    if (!isAdmin) setEditMode(false);
-  }, [isAdmin]);
+    if (!canEditLeague) setEditMode(false);
+  }, [canEditLeague]);
 
   // Aufstellungen laden, sobald jemand angemeldet ist (für den Schiedsrichtermodus).
   useEffect(() => {
@@ -399,7 +399,7 @@ export default function App() {
 
   // Menüpunkt „Highlights“ zeigen, sobald Medien/Ordner vorhanden sind – Admins
   // sehen ihn immer (auch leer), um die Galerie pflegen zu können.
-  const hasHighlights = highlights.items.length > 0 || highlights.albums.length > 0 || isAdmin;
+  const hasHighlights = highlights.items.length > 0 || highlights.albums.length > 0 || canEditLeague;
 
   const handleUpdateMatchScore = (
     matchId: string,
@@ -568,7 +568,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')}
-          onOpenReferee={() => setRefereeView(true)}
+          onOpenReferee={canEditLeague ? () => setRefereeView(true) : undefined}
           demoActive={demo.active}
           seasonLabel={selectedSeasonName}
           seasonNumber={currentSeasonNumber}
@@ -613,7 +613,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')}
-          onOpenReferee={() => setRefereeView(true)}
+          onOpenReferee={canEditLeague ? () => setRefereeView(true) : undefined}
           demoActive={demo.active}
           seasonLabel={selectedSeasonName}
           seasonNumber={currentSeasonNumber}
@@ -664,7 +664,7 @@ export default function App() {
   // ROUTE: /testspiel-zettel – Ergebniszettel zum Ausdrucken (nur Admin)
   if (currentPath.startsWith('/testspiel-zettel')) {
     const printEvent = activeEvent ?? eventArchive?.events?.[(eventArchive.events?.length ?? 0) - 1] ?? null;
-    if (isAdmin && printEvent) {
+    if (canEditLeague && printEvent) {
       return <EventErgebniszettel event={printEvent} teams={visibleTeams} onBack={() => navigateTo('/testspiel')} />;
     }
     // Kein Admin / kein Event -> fällt auf die normale Event-Seite zurück
@@ -674,7 +674,7 @@ export default function App() {
   // zuletzt angelegte Event vorab prüfen, auch wenn keins aktiv ist)
   if (currentPath.startsWith('/testspiel')) {
     const previewEvent =
-      activeEvent ?? (isAdmin ? eventArchive?.events?.[(eventArchive.events?.length ?? 0) - 1] ?? null : null);
+      activeEvent ?? (canEditLeague ? eventArchive?.events?.[(eventArchive.events?.length ?? 0) - 1] ?? null : null);
     const isPreviewOnly = !activeEvent && !!previewEvent;
     return (
       <div className="min-h-screen bg-brand-dark text-hl-text font-sans flex flex-col">
@@ -686,7 +686,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')}
-          onOpenReferee={() => setRefereeView(true)}
+          onOpenReferee={canEditLeague ? () => setRefereeView(true) : undefined}
           demoActive={demo.active}
           seasonLabel={currentSeasonName}
           seasonNumber={currentSeasonNumber}
@@ -720,7 +720,7 @@ export default function App() {
                 teams={visibleTeams}
                 onBack={goBack}
                 onSelectTeam={openTeamDetail}
-                isAdmin={isAdmin}
+                isAdmin={canEditLeague}
                 onPrint={() => navigateTo('/testspiel-zettel')}
               />
             </>
@@ -1005,7 +1005,7 @@ export default function App() {
   }
 
   // ROUTE: /ergebniszettel – druckbare Ergebnis-Vorlage (nur für angemeldete Admins)
-  if (currentPath === '/ergebniszettel' && isAdmin) {
+  if (currentPath === '/ergebniszettel' && canEditLeague) {
     return <Ergebniszettel teams={visibleTeams} matches={currentSeasonMatches} onBack={() => navigateTo('/')} />;
   }
 
@@ -1073,7 +1073,7 @@ export default function App() {
           <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
           <HighlightsHome
             highlights={highlights}
-            editMode={editMode && isAdmin}
+            editMode={editMode && canEditLeague}
             onOpenGallery={() => goToTab('highlights')}
             onOpenAlbum={openHighlightsAlbum}
             onSave={persistHighlights}
@@ -1084,7 +1084,7 @@ export default function App() {
       {activeTab === 'highlights' && (
         <HighlightsPage
           highlights={highlights}
-          editMode={editMode && isAdmin}
+          editMode={editMode && canEditLeague}
           onSave={persistHighlights}
           initialAlbumId={highlightsAlbumId}
           onInitialAlbumConsumed={() => setHighlightsAlbumId(null)}
@@ -1098,7 +1098,7 @@ export default function App() {
             title="Spielplan"
           />
           {seasonSwitcher}
-          {isAdmin && (
+          {canEditLeague && (
             <div className="max-w-[1320px] mx-auto px-4 sm:px-10 flex justify-end pb-4">
               <button
                 onClick={() => navigateTo('/ergebniszettel')}
@@ -1113,7 +1113,7 @@ export default function App() {
             <Spielplan
               teams={visibleTeams}
               matches={seasonMatches}
-              isAdmin={isAdmin && isCurrentSeasonSelected}
+              isAdmin={canEditLeague && isCurrentSeasonSelected}
               onUpdateMatchScore={handleUpdateMatchScore}
               onUpdateMatchMeta={handleUpdateMatchMeta}
               onSelectTeam={openTeamDetail}
@@ -1186,7 +1186,7 @@ export default function App() {
         </section>
       )}
 
-      {isAdmin && (activeTab === 'home' || activeTab === 'highlights') && (
+      {canEditLeague && (activeTab === 'home' || activeTab === 'highlights') && (
         <button
           onClick={() => setEditMode((v) => !v)}
           title="Highlights direkt auf der Seite bearbeiten"
