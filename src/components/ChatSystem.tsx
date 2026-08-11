@@ -39,6 +39,7 @@ import {
   type ChatSearchHit,
 } from '../lib/chat';
 import { fetchTeam, fetchTickets, fetchAllTasks, fetchTask, memberMap } from '../lib/collab';
+import { useBackdropDismiss } from './ui';
 import { uploadFile, uploadImage } from '../lib/api';
 import Avatar from './Avatar';
 import { TicketDetail } from './TicketSystem';
@@ -169,6 +170,7 @@ function AttachPicker({
       })
       .finally(() => setLoading(false));
   }, []);
+  const backdrop = useBackdropDismiss(onClose);
 
   return (
     <motion.div
@@ -176,7 +178,7 @@ function AttachPicker({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={onClose}
+      {...backdrop}
     >
       <motion.div
         initial={{ scale: 0.97 }}
@@ -528,6 +530,7 @@ function ThreadModal({
   useEffect(() => {
     load();
   }, [load]);
+  const backdrop = useBackdropDismiss(onClose);
 
   return (
     <motion.div
@@ -535,7 +538,7 @@ function ThreadModal({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[65] bg-black/70 backdrop-blur-sm flex items-stretch justify-end"
-      onClick={onClose}
+      {...backdrop}
     >
       <motion.div
         initial={{ x: 40 }}
@@ -625,6 +628,7 @@ function NewConversationModal({
       setBusy(false);
     }
   };
+  const backdrop = useBackdropDismiss(onClose);
 
   return (
     <motion.div
@@ -632,7 +636,7 @@ function NewConversationModal({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[65] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
-      onClick={onClose}
+      {...backdrop}
     >
       <motion.div initial={{ scale: 0.97 }} animate={{ scale: 1 }} className="hl-card w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
@@ -736,6 +740,7 @@ function ConversationInfo({
   const statusLine = (s?: UserStatus | null) => (s ? `${USER_STATUS[s].emoji} ${USER_STATUS[s].label}` : '');
   const memberIds = new Set(conversation.members.map((m) => m.userId));
   const addable = team.filter((m) => !memberIds.has(m.id));
+  const backdrop = useBackdropDismiss(onClose);
 
   const act = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -757,7 +762,7 @@ function ConversationInfo({
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[65] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[65] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" {...backdrop}>
       <motion.div initial={{ scale: 0.97 }} animate={{ scale: 1 }} className="hl-card w-full max-w-sm p-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h4 className="font-display font-bold text-white uppercase tracking-tight">Infos</h4>
