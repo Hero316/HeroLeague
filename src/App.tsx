@@ -269,7 +269,8 @@ export default function App() {
 
   // Anonyme Besucherzählung: nur echte Website-Besucher melden, nicht das
   // Backoffice oder den Ergebniszettel. Speist die Live-Anzeige im Backend.
-  const isPublicPath = !currentPath.startsWith('/admin') && !currentPath.startsWith('/ergebniszettel');
+  const isPublicPath =
+    !currentPath.startsWith('/admin') && !currentPath.startsWith('/ergebniszettel') && !currentPath.startsWith('/chat');
   useEffect(() => {
     if (!isPublicPath) return;
     return startPresence();
@@ -311,6 +312,13 @@ export default function App() {
     }, 20000);
     return () => clearInterval(iv);
   }, []);
+
+  // Manifest je nach Bereich umschalten: unter /chat ist es die eigene
+  // „Hero Chat"-App (eigenes Icon, startet direkt im Chat), sonst die Hauptseite.
+  useEffect(() => {
+    const link = document.querySelector('link[rel="manifest"]');
+    if (link) link.setAttribute('href', currentPath.startsWith('/chat') ? '/chat.webmanifest' : '/manifest.webmanifest');
+  }, [currentPath]);
 
   // Merkt sich, ob innerhalb der App navigiert wurde (für „Zurück").
   const navigatedInApp = useRef(false);
@@ -734,6 +742,50 @@ export default function App() {
     );
   }
 
+  // ROUTE: /chat – eigenständige „Hero Chat"-App (installierbar, startet direkt im Chat)
+  if (currentPath.startsWith('/chat')) {
+    return (
+      <div className="h-screen flex flex-col bg-[#060E0F] text-hl-text">
+        <header className="flex items-center justify-between px-4 py-2.5 border-b border-white/10 bg-[rgba(7,10,8,.92)] backdrop-blur-xl shrink-0">
+          <div className="flex items-center gap-2">
+            <img src="/assets/hero-league-logo.png" alt="Hero Chat" className="h-7 w-auto" />
+            <span className="font-display font-black text-white uppercase tracking-tight text-sm">Hero Chat</span>
+          </div>
+          {isAdmin && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigateTo('/admin')}
+                className="text-[11px] font-sans font-semibold uppercase tracking-wider text-hl-mute hover:text-white cursor-pointer"
+              >
+                Backoffice
+              </button>
+              <button
+                onClick={handleLogout}
+                className="px-3 py-1.5 bg-[rgba(255,84,66,.15)] border border-[rgba(255,84,66,.3)] hover:bg-[rgba(255,84,66,.25)] rounded-lg text-[11px] font-bold uppercase text-hl-red-soft cursor-pointer flex items-center gap-1"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </header>
+        <main className="flex-1 min-h-0">
+          {!isAdmin ? (
+            <div className="h-full flex items-center justify-center p-6">
+              <AdminLogin onLoginSuccess={(user) => setSessionUser(user)} />
+            </div>
+          ) : (
+            <ChatSystem
+              currentUserId={sessionUser?.id ?? ''}
+              canManageTickets={canManageTickets}
+              isSuperadmin={isSuperadmin}
+              fullHeight
+            />
+          )}
+        </main>
+      </div>
+    );
+  }
+
   // ROUTE: /admin – geschütztes Backoffice
   if (currentPath === '/admin') {
     return (
@@ -788,7 +840,7 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <ChatUnreadBadge />
+                  <ChatUnreadBadge onClick={() => navigateTo('/chat')} />
                   <NotificationBell />
                   <button
                     onClick={handleLogout}

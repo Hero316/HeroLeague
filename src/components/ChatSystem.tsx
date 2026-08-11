@@ -771,10 +771,12 @@ export default function ChatSystem({
   currentUserId,
   canManageTickets = false,
   isSuperadmin = false,
+  fullHeight = false,
 }: {
   currentUserId: string;
   canManageTickets?: boolean;
   isSuperadmin?: boolean;
+  fullHeight?: boolean;
 }) {
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
@@ -878,7 +880,11 @@ export default function ChatSystem({
   };
 
   return (
-    <div className="flex h-[70vh] min-h-[480px] rounded-2xl overflow-hidden border border-white/10 bg-[#070d0c]">
+    <div
+      className={`flex overflow-hidden bg-[#070d0c] ${
+        fullHeight ? 'h-full' : 'h-[70vh] min-h-[480px] rounded-2xl border border-white/10'
+      }`}
+    >
       {/* Liste */}
       <div className={`w-full md:w-72 border-r border-white/5 flex flex-col ${activeId ? 'hidden md:flex' : 'flex'}`}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
