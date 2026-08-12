@@ -113,6 +113,10 @@ function minutesOf(hm: string): number {
   const [h, m] = hm.split(':').map(Number);
   return (h || 0) * 60 + (m || 0);
 }
+function toHM(min: number): string {
+  const m = Math.max(0, Math.min(24 * 60 - 1, Math.round(min)));
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
 function dateFromKey(key: string): Date {
   return new Date(`${key}T00:00:00`);
 }
@@ -622,17 +626,51 @@ function DayView({
   tasks,
   onOpenTask,
   onAddAt,
+  onMoveTask,
 }: {
   dayKey: string;
   tasks: Task[];
   onOpenTask: (t: Task) => void;
   onAddAt: (startTime: string) => void;
+  onMoveTask: (t: Task, startTime: string, endTime: string | null) => void;
 }) {
   const covering = tasks.filter((t) => coversDay(t, dayKey));
   const allDay = covering.filter((t) => !t.startTime || isMultiDay(t));
   const timed = covering.filter((t) => t.startTime && !isMultiDay(t));
   const laid = useMemo(() => layoutTimed(timed), [timed]);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Ziehen (Schritt 2): eine Zeit-Aufgabe vertikal verschieben ⇒ neue Uhrzeit.
+  // 15-Minuten-Raster. Unter dem Schwellwert gilt es als Klick (öffnet Detail).
+  const SNAP = 15;
+  const [drag, setDrag] = useState<{ id: string; startY: number; startMin: number; durMin: number; deltaMin: number; moved: boolean } | null>(null);
+
+  const onTaskDown = (e: React.PointerEvent, t: Task) => {
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    const startMin = minutesOf(t.startTime!);
+    const durMin = (t.endTime ? Math.max(minutesOf(t.endTime), startMin + 30) : startMin + 60) - startMin;
+    setDrag({ id: t.id, startY: e.clientY, startMin, durMin, deltaMin: 0, moved: false });
+  };
+  const onTaskMove = (e: React.PointerEvent) => {
+    if (!drag) return;
+    const dy = e.clientY - drag.startY;
+    setDrag((d) => (d ? { ...d, deltaMin: (dy / HOUR_H) * 60, moved: d.moved || Math.abs(dy) > 4 } : d));
+  };
+  const onTaskUp = (e: React.PointerEvent, t: Task) => {
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+    const d = drag;
+    setDrag(null);
+    if (!d) return;
+    if (!d.moved) {
+      onOpenTask(t);
+      return;
+    }
+    let start = Math.round((d.startMin + d.deltaMin) / SNAP) * SNAP;
+    start = Math.max(0, Math.min(24 * 60 - d.durMin, start));
+    if (start === d.startMin) return; // unverändert
+    onMoveTask(t, toHM(start), t.endTime ? toHM(start + d.durMin) : null);
+  };
 
   // Beim Öffnen etwa zum Morgen (7 Uhr) scrollen, statt Mitternacht.
   useEffect(() => {
@@ -672,20 +710,30 @@ function DayView({
               <span className="absolute -top-2 left-1 text-[10px] font-mono text-hl-dim bg-[#0a1110] pr-1">{String(h).padStart(2, '0')}:00</span>
             </div>
           ))}
-          {/* Aufgaben mit Uhrzeit */}
+          {/* Aufgaben mit Uhrzeit – ziehbar (verschiebt die Uhrzeit) */}
           <div className="absolute left-12 right-1 top-0 bottom-0">
-            {laid.map(({ t, col, cols, top, height }) => (
-              <button
-                key={t.id}
-                onClick={(e) => { e.stopPropagation(); onOpenTask(t); }}
-                style={{ top, height, left: `${(col / cols) * 100}%`, width: `calc(${(1 / cols) * 100}% - 4px)` }}
-                className={`absolute rounded-md px-1.5 py-0.5 text-left overflow-hidden shadow-sm shadow-black/30 ${STATUS_CELL[t.status]}`}
-                title={`${timeLabel(t)} ${t.title}`}
-              >
-                <div className="text-[11px] font-semibold leading-tight truncate">{t.title}</div>
-                <div className="text-[9px] opacity-80 leading-tight truncate">{timeLabel(t)}</div>
-              </button>
-            ))}
+            {laid.map(({ t, col, cols, top, height }) => {
+              const active = drag?.id === t.id;
+              const offset = active ? (drag!.deltaMin / 60) * HOUR_H : 0;
+              // Live-Vorschau der (gerasterten) Zeit beim Ziehen.
+              const liveStart = active ? Math.max(0, Math.min(24 * 60 - drag!.durMin, Math.round((drag!.startMin + drag!.deltaMin) / SNAP) * SNAP)) : null;
+              const liveLabel = liveStart != null ? `${toHM(liveStart)}${t.endTime ? `–${toHM(liveStart + drag!.durMin)}` : ''}` : timeLabel(t);
+              return (
+                <button
+                  key={t.id}
+                  onPointerDown={(e) => onTaskDown(e, t)}
+                  onPointerMove={onTaskMove}
+                  onPointerUp={(e) => onTaskUp(e, t)}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ top: top + offset, height, left: `${(col / cols) * 100}%`, width: `calc(${(1 / cols) * 100}% - 4px)`, touchAction: 'none' }}
+                  className={`absolute rounded-md px-1.5 py-0.5 text-left overflow-hidden shadow-sm shadow-black/30 select-none ${active ? 'ring-2 ring-white/70 z-10 cursor-grabbing opacity-95' : 'cursor-grab'} ${STATUS_CELL[t.status]}`}
+                  title={`${timeLabel(t)} · ${t.title} (zum Verschieben ziehen)`}
+                >
+                  <div className="text-[11px] font-semibold leading-tight truncate">{t.title}</div>
+                  <div className="text-[9px] opacity-80 leading-tight truncate">{liveLabel}</div>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -770,6 +818,16 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
     setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: next } : x)));
     try {
       await updateTask(t.id, { status: next });
+    } catch {
+      load();
+    }
+  };
+
+  // Schritt 2: Aufgabe im Tages-Zeitraster verschieben (neue Uhrzeit).
+  const moveTask = async (t: Task, startTime: string, endTime: string | null) => {
+    setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, startTime, endTime } : x)));
+    try {
+      await updateTask(t.id, { startTime, endTime });
     } catch {
       load();
     }
@@ -942,6 +1000,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
           tasks={tasks}
           onOpenTask={setOpenTask}
           onAddAt={(startTime) => setNewTask({ date: ymd(anchor), startTime })}
+          onMoveTask={moveTask}
         />
       ) : (
         /* -------- WOCHENANSICHT -------- */
