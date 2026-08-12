@@ -33,7 +33,21 @@ export default function ChatApp({
   onBack: () => void;
   onLogout: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>('chats');
+  // Aktiven Tab in der URL halten (?tab=…), damit ein Reload auf derselben
+  // Seite bleibt (Chats/Aufgaben/Tickets) statt immer auf „Chats" zu landen.
+  const readTab = (): Tab => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    return t === 'aufgaben' || t === 'tickets' ? t : 'chats';
+  };
+  const [tab, setTabState] = useState<Tab>(readTab);
+  const setTab = (t: Tab) => {
+    setTabState(t);
+    try {
+      window.history.replaceState(null, '', t === 'chats' ? '/chat' : `/chat?tab=${t}`);
+    } catch {
+      /* ignore */
+    }
+  };
   const [showInstall, setShowInstall] = useState(true);
   const { isStandalone, isIos, canInstall, promptInstall } = useInstall();
   const current = TABS.find((t) => t.id === tab)!;
