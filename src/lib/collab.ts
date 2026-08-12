@@ -66,6 +66,9 @@ export const createTask = (input: {
   title: string;
   notes?: string;
   dueDate?: string | null;
+  endDate?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
   isoWeek?: string | null;
   status?: TaskStatus;
   priority?: TicketPriority;
@@ -78,6 +81,9 @@ export const updateTask = (
     title?: string;
     notes?: string;
     dueDate?: string | null;
+    endDate?: string | null;
+    startTime?: string | null;
+    endTime?: string | null;
     isoWeek?: string | null;
     status?: TaskStatus;
     priority?: TicketPriority;

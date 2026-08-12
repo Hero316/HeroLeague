@@ -397,7 +397,10 @@ export interface Task {
   id: string;
   title: string;
   notes: string;
-  dueDate: string | null; // YYYY-MM-DD (konkreter Tag) oder null
+  dueDate: string | null; // YYYY-MM-DD – START-Tag der Aufgabe (oder null)
+  endDate: string | null; // YYYY-MM-DD – END-Tag (null = eintägig, Balken über mehrere Tage möglich)
+  startTime: string | null; // "HH:MM" – Startzeit (null = ganztägig)
+  endTime: string | null; // "HH:MM" – Endzeit (nur mit startTime sinnvoll)
   isoWeek: string | null; // z.B. "2026-W33" (Wochenansicht) oder null
   status: TaskStatus;
   priority: TicketPriority; // gleiche Stufen wie Tickets (niedrig…dringend)
