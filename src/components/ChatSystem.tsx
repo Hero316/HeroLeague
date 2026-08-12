@@ -912,6 +912,10 @@ export default function ChatSystem({
   const [convSearch, setConvSearch] = useState('');
   const [showConvSearch, setShowConvSearch] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // Scroll-Container der Nachrichten. WICHTIG: Wir scrollen NUR diesen Container
+  // (scrollTop), niemals via scrollIntoView – sonst würde im Backoffice die ganze
+  // /admin-Seite mitgescrollt (der Chat sitzt dort in einer Sektion).
+  const listRef = useRef<HTMLDivElement>(null);
   // Ist der Nutzer aktuell (nahe) am unteren Ende? Nur dann automatisch scrollen.
   const atBottomRef = useRef(true);
   const onMsgScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -980,11 +984,14 @@ export default function ChatSystem({
     return () => clearInterval(iv);
   }, [activeId, loadMessages]);
 
-  // Nach unten scrollen NUR, wenn man ohnehin unten ist. Sonst würde das
-  // 5-Sekunden-Aktualisieren einen beim Lesen älterer Nachrichten ständig
-  // nach unten reißen.
+  // Nach unten scrollen NUR, wenn man ohnehin unten ist – und nur INNERHALB des
+  // Chat-Containers (nicht die ganze Seite). Sonst würde das 5-Sekunden-
+  // Aktualisieren einen beim Lesen ständig nach unten reißen bzw. im Backoffice
+  // die komplette Seite nach unten scrollen.
   useEffect(() => {
-    if (atBottomRef.current) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (atBottomRef.current && listRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight;
+    }
   }, [messages]);
 
   // Globale Suche (entprellt).
@@ -1199,7 +1206,7 @@ export default function ChatSystem({
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto p-3 space-y-2" onScroll={onMsgScroll}>
+            <div ref={listRef} className="flex-1 overflow-y-auto p-3 space-y-2" onScroll={onMsgScroll}>
               {loadingMsgs ? (
                 <div className="flex justify-center py-8 text-hl-mute">
                   <Loader2 className="w-5 h-5 animate-spin" />
