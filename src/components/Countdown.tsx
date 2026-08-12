@@ -64,7 +64,7 @@ export default function Countdown({ target, title }: CountdownProps) {
         </div>
       )}
 
-      <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 py-9 sm:py-12 text-center hl-fade">
+      <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 py-5 sm:py-6 text-center hl-fade">
         {kicker && (
           <div
             className={`font-sans font-extrabold text-[11px] sm:text-xs tracking-[3.5px] uppercase mb-5 ${
