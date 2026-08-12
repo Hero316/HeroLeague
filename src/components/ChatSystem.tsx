@@ -912,6 +912,12 @@ export default function ChatSystem({
   const [convSearch, setConvSearch] = useState('');
   const [showConvSearch, setShowConvSearch] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // Ist der Nutzer aktuell (nahe) am unteren Ende? Nur dann automatisch scrollen.
+  const atBottomRef = useRef(true);
+  const onMsgScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  };
 
   // Ticket/Aufgabe aus einem Anhang öffnen (lesen/bearbeiten).
   const openAttachment = async (type: 'ticket' | 'task', id: string) => {
@@ -968,14 +974,17 @@ export default function ChatSystem({
   // Aktive Unterhaltung laden + alle 5 s aktualisieren.
   useEffect(() => {
     if (!activeId) return;
+    atBottomRef.current = true; // beim Öffnen unten starten
     loadMessages(activeId);
     const iv = setInterval(() => loadMessages(activeId, true), 5000);
     return () => clearInterval(iv);
   }, [activeId, loadMessages]);
 
-  // Nach unten scrollen, wenn neue Nachrichten kommen.
+  // Nach unten scrollen NUR, wenn man ohnehin unten ist. Sonst würde das
+  // 5-Sekunden-Aktualisieren einen beim Lesen älterer Nachrichten ständig
+  // nach unten reißen.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (atBottomRef.current) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   // Globale Suche (entprellt).
@@ -1190,7 +1199,7 @@ export default function ChatSystem({
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            <div className="flex-1 overflow-y-auto p-3 space-y-2" onScroll={onMsgScroll}>
               {loadingMsgs ? (
                 <div className="flex justify-center py-8 text-hl-mute">
                   <Loader2 className="w-5 h-5 animate-spin" />
