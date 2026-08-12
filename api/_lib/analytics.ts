@@ -41,9 +41,9 @@ export async function recordVisit(visitorId: unknown): Promise<void> {
 export interface VisitStats {
   online: number; // eindeutige Besucher gerade aktiv
   today: number; // eindeutige Besucher heute
-  perDay: number; // Ø eindeutige Besucher pro Tag (letzte 30 Tage mit Daten)
-  perWeek: number; // Ø eindeutige Besucher pro Woche
-  perMonth: number; // Ø eindeutige Besucher pro Monat
+  perDay: number; // Ø eindeutige Besucher pro Tag (letzte 30 abgeschlossene Tage mit Daten)
+  perWeek: number; // eindeutige Besucher der letzten 7 Tage (rollierend)
+  perMonth: number; // eindeutige Besucher der letzten 30 Tage (rollierend)
   daily: { day: string; count: number }[]; // letzte 14 Tage (Mini-Verlauf)
 }
 
@@ -66,24 +66,23 @@ export async function readVisitStats(): Promise<VisitStats> {
         FROM visits
         WHERE day > (now() AT TIME ZONE 'Europe/Berlin')::date - 14
         GROUP BY day ORDER BY day`,
-    // Ø pro Tag über die letzten 30 Tage (nur Tage mit Besuchern zählen)
+    // Ø pro Tag über die letzten 30 abgeschlossenen Tage (nur Tage mit Besuchern
+    // zählen; der angebrochene heutige Tag bleibt außen vor, damit er den
+    // Schnitt nicht verwässert).
     sql`SELECT avg(c) AS avg FROM (
           SELECT count(*)::int AS c FROM visits
           WHERE day > (now() AT TIME ZONE 'Europe/Berlin')::date - 30
+            AND day < (now() AT TIME ZONE 'Europe/Berlin')::date
           GROUP BY day
         ) t`,
-    // Ø pro Woche über die letzten ~12 Wochen
-    sql`SELECT avg(c) AS avg FROM (
-          SELECT count(DISTINCT visitor_id)::int AS c FROM visits
-          WHERE day > (now() AT TIME ZONE 'Europe/Berlin')::date - 84
-          GROUP BY date_trunc('week', day)
-        ) t`,
-    // Ø pro Monat über die letzten 12 Monate
-    sql`SELECT avg(c) AS avg FROM (
-          SELECT count(DISTINCT visitor_id)::int AS c FROM visits
-          WHERE day > (now() AT TIME ZONE 'Europe/Berlin')::date - 365
-          GROUP BY date_trunc('month', day)
-        ) t`,
+    // Eindeutige Besucher der letzten 7 Tage (rollierendes Fenster statt
+    // Kalenderwoche – so kippt der Wert am Wochenanfang nicht weg).
+    sql`SELECT count(DISTINCT visitor_id)::int AS n FROM visits
+        WHERE day > (now() AT TIME ZONE 'Europe/Berlin')::date - 7`,
+    // Eindeutige Besucher der letzten 30 Tage (rollierendes Fenster statt
+    // Kalendermonat).
+    sql`SELECT count(DISTINCT visitor_id)::int AS n FROM visits
+        WHERE day > (now() AT TIME ZONE 'Europe/Berlin')::date - 30`,
   ]);
 
   const days = daily as { day: string; count: number }[];
@@ -93,8 +92,8 @@ export async function readVisitStats(): Promise<VisitStats> {
     online: toInt(online[0]?.n),
     today: toInt(days.find((d) => d.day === todayStr)?.count),
     perDay: toInt(perDay[0]?.avg),
-    perWeek: toInt(perWeek[0]?.avg),
-    perMonth: toInt(perMonth[0]?.avg),
+    perWeek: toInt(perWeek[0]?.n),
+    perMonth: toInt(perMonth[0]?.n),
     daily: days,
   };
 }
