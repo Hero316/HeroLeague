@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquare, Users, CalendarDays, LayoutGrid, ListChecks, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquare, Users, CalendarDays, LayoutGrid, ListChecks, Clock, Move, Check } from 'lucide-react';
 import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember } from '../types';
 import { fetchTasksRange, fetchAllTasks, fetchTask, createTask, updateTask, deleteTask, addTaskComment, fetchTeam, memberMap } from '../lib/collab';
 import Avatar from './Avatar';
@@ -640,41 +640,46 @@ function DayView({
   const laid = useMemo(() => layoutTimed(timed), [timed]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Ziehen (Schritt 2): eine Zeit-Aufgabe vertikal verschieben ⇒ neue Uhrzeit.
-  // 15-Minuten-Raster. Unter dem Schwellwert gilt es als Klick (öffnet Detail).
+  // Verschieben/Größe ändern nur nach Aktivieren (Bearbeiten-Taste), damit man
+  // beim Scrollen nichts aus Versehen verschiebt. 15-Minuten-Raster.
   const SNAP = 15;
-  const [drag, setDrag] = useState<{ id: string; startY: number; startMin: number; durMin: number; deltaMin: number; moved: boolean } | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [drag, setDrag] = useState<{ id: string; mode: 'move' | 'top' | 'bottom'; startY: number; startMin: number; endMin: number; deltaMin: number } | null>(null);
 
-  const onTaskDown = (e: React.PointerEvent, t: Task) => {
+  const effEnd = (t: Task) => (t.endTime ? Math.max(minutesOf(t.endTime), minutesOf(t.startTime!) + SNAP) : minutesOf(t.startTime!) + 60);
+
+  const onHandleDown = (e: React.PointerEvent, t: Task, mode: 'move' | 'top' | 'bottom') => {
     e.stopPropagation();
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-    const startMin = minutesOf(t.startTime!);
-    const durMin = (t.endTime ? Math.max(minutesOf(t.endTime), startMin + 30) : startMin + 60) - startMin;
-    setDrag({ id: t.id, startY: e.clientY, startMin, durMin, deltaMin: 0, moved: false });
+    setDrag({ id: t.id, mode, startY: e.clientY, startMin: minutesOf(t.startTime!), endMin: effEnd(t), deltaMin: 0 });
   };
-  const onTaskMove = (e: React.PointerEvent) => {
+  const onHandleMove = (e: React.PointerEvent) => {
     if (!drag) return;
-    const dy = e.clientY - drag.startY;
-    setDrag((d) => (d ? { ...d, deltaMin: (dy / HOUR_H) * 60, moved: d.moved || Math.abs(dy) > 4 } : d));
+    setDrag((d) => (d ? { ...d, deltaMin: ((e.clientY - d.startY) / HOUR_H) * 60 } : d));
   };
-  const onTaskUp = (e: React.PointerEvent, t: Task) => {
+  const onHandleUp = (e: React.PointerEvent, t: Task) => {
     (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
     const d = drag;
     setDrag(null);
     if (!d) return;
-    if (!d.moved) {
-      onOpenTask(t);
-      return;
+    const snap = (m: number) => Math.round(m / SNAP) * SNAP;
+    const dur = d.endMin - d.startMin;
+    if (d.mode === 'move') {
+      const start = Math.max(0, Math.min(24 * 60 - dur, snap(d.startMin + d.deltaMin)));
+      if (start !== d.startMin) onMoveTask(t, toHM(start), t.endTime ? toHM(start + dur) : null);
+    } else if (d.mode === 'bottom') {
+      const end = Math.max(d.startMin + SNAP, Math.min(24 * 60, snap(d.endMin + d.deltaMin)));
+      if (end !== d.endMin) onMoveTask(t, t.startTime!, toHM(end));
+    } else {
+      const start = Math.max(0, Math.min(d.endMin - SNAP, snap(d.startMin + d.deltaMin)));
+      if (start !== d.startMin) onMoveTask(t, toHM(start), toHM(d.endMin));
     }
-    let start = Math.round((d.startMin + d.deltaMin) / SNAP) * SNAP;
-    start = Math.max(0, Math.min(24 * 60 - d.durMin, start));
-    if (start === d.startMin) return; // unverändert
-    onMoveTask(t, toHM(start), t.endTime ? toHM(start + d.durMin) : null);
   };
 
-  // Beim Öffnen etwa zum Morgen (7 Uhr) scrollen, statt Mitternacht.
+  // Beim Öffnen etwa zum Morgen (7 Uhr) scrollen; Bearbeiten-Modus zurücksetzen.
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = 7 * HOUR_H;
+    setEditId(null);
   }, [dayKey]);
 
   const onBgClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -710,28 +715,97 @@ function DayView({
               <span className="absolute -top-2 left-1 text-[10px] font-mono text-hl-dim bg-[#0a1110] pr-1">{String(h).padStart(2, '0')}:00</span>
             </div>
           ))}
-          {/* Aufgaben mit Uhrzeit – ziehbar (verschiebt die Uhrzeit) */}
+          {/* Aufgaben mit Uhrzeit. Standard: tippen öffnet Detail, Scrollen geht.
+              Erst nach Tippen auf die Bearbeiten-Taste (Move-Symbol) lässt sich
+              die Aufgabe verschieben und oben/unten länger/kürzer ziehen. */}
           <div className="absolute left-12 right-1 top-0 bottom-0">
             {laid.map(({ t, col, cols, top, height }) => {
+              const editing = editId === t.id;
               const active = drag?.id === t.id;
-              const offset = active ? (drag!.deltaMin / 60) * HOUR_H : 0;
-              // Live-Vorschau der (gerasterten) Zeit beim Ziehen.
-              const liveStart = active ? Math.max(0, Math.min(24 * 60 - drag!.durMin, Math.round((drag!.startMin + drag!.deltaMin) / SNAP) * SNAP)) : null;
-              const liveLabel = liveStart != null ? `${toHM(liveStart)}${t.endTime ? `–${toHM(liveStart + drag!.durMin)}` : ''}` : timeLabel(t);
+              const px = (min: number) => (min / 60) * HOUR_H;
+              const dMin = active && drag ? drag.deltaMin : 0;
+              let dispTop = top;
+              let dispHeight = height;
+              if (active && drag) {
+                if (drag.mode === 'move') dispTop = top + px(dMin);
+                else if (drag.mode === 'bottom') dispHeight = Math.max(16, height + px(dMin));
+                else {
+                  dispTop = top + px(dMin);
+                  dispHeight = Math.max(16, height - px(dMin));
+                }
+              }
+              const snap = (m: number) => Math.round(m / SNAP) * SNAP;
+              const label =
+                active && drag
+                  ? drag.mode === 'bottom'
+                    ? `${t.startTime}–${toHM(Math.max(drag.startMin + SNAP, snap(drag.endMin + dMin)))}`
+                    : drag.mode === 'top'
+                      ? `${toHM(Math.min(drag.endMin - SNAP, snap(drag.startMin + dMin)))}–${toHM(drag.endMin)}`
+                      : (() => {
+                          const s = snap(drag.startMin + dMin);
+                          return `${toHM(s)}${t.endTime ? '–' + toHM(s + (drag.endMin - drag.startMin)) : ''}`;
+                        })()
+                  : timeLabel(t);
               return (
-                <button
+                <div
                   key={t.id}
-                  onPointerDown={(e) => onTaskDown(e, t)}
-                  onPointerMove={onTaskMove}
-                  onPointerUp={(e) => onTaskUp(e, t)}
                   onClick={(e) => e.stopPropagation()}
-                  style={{ top: top + offset, height, left: `${(col / cols) * 100}%`, width: `calc(${(1 / cols) * 100}% - 4px)`, touchAction: 'none' }}
-                  className={`absolute rounded-md px-1.5 py-0.5 text-left overflow-hidden shadow-sm shadow-black/30 select-none ${active ? 'ring-2 ring-white/70 z-10 cursor-grabbing opacity-95' : 'cursor-grab'} ${STATUS_CELL[t.status]}`}
-                  title={`${timeLabel(t)} · ${t.title} (zum Verschieben ziehen)`}
+                  style={{ top: dispTop, height: dispHeight, left: `${(col / cols) * 100}%`, width: `calc(${(1 / cols) * 100}% - 4px)` }}
+                  className={`absolute rounded-md overflow-hidden shadow-sm shadow-black/30 select-none ${active || editing ? 'ring-2 ring-white/70 z-10' : ''} ${STATUS_CELL[t.status]}`}
                 >
-                  <div className="text-[11px] font-semibold leading-tight truncate">{t.title}</div>
-                  <div className="text-[9px] opacity-80 leading-tight truncate">{liveLabel}</div>
-                </button>
+                  {editing ? (
+                    <>
+                      <div
+                        onPointerDown={(e) => onHandleDown(e, t, 'top')}
+                        onPointerMove={onHandleMove}
+                        onPointerUp={(e) => onHandleUp(e, t)}
+                        style={{ touchAction: 'none' }}
+                        className="absolute top-0 inset-x-0 h-2.5 bg-white/25 cursor-ns-resize"
+                        title="Startzeit ziehen"
+                      />
+                      <div
+                        onPointerDown={(e) => onHandleDown(e, t, 'move')}
+                        onPointerMove={onHandleMove}
+                        onPointerUp={(e) => onHandleUp(e, t)}
+                        style={{ touchAction: 'none' }}
+                        className="h-full px-1.5 py-2 cursor-move"
+                      >
+                        <div className="text-[11px] font-semibold leading-tight truncate pr-5">{t.title}</div>
+                        <div className="text-[9px] opacity-90 leading-tight truncate">{label}</div>
+                      </div>
+                      <div
+                        onPointerDown={(e) => onHandleDown(e, t, 'bottom')}
+                        onPointerMove={onHandleMove}
+                        onPointerUp={(e) => onHandleUp(e, t)}
+                        style={{ touchAction: 'none' }}
+                        className="absolute bottom-0 inset-x-0 h-2.5 bg-white/25 cursor-ns-resize"
+                        title="Endzeit ziehen"
+                      />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEditId(null); }}
+                        title="Fertig"
+                        className="absolute top-0.5 right-0.5 w-5 h-5 rounded-md bg-white text-emerald-700 flex items-center justify-center shadow cursor-pointer"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  ) : (
+                    <button onClick={() => onOpenTask(t)} className="w-full h-full text-left px-1.5 py-0.5">
+                      <div className="text-[11px] font-semibold leading-tight truncate pr-5">{t.title}</div>
+                      <div className="text-[9px] opacity-80 leading-tight truncate">{label}</div>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => { e.stopPropagation(); setEditId(t.id); }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        title="Verschieben / Länge ändern"
+                        className="absolute top-0.5 right-0.5 w-5 h-5 rounded-md bg-black/30 hover:bg-black/50 text-white flex items-center justify-center cursor-pointer"
+                      >
+                        <Move className="w-3 h-3" />
+                      </span>
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -976,17 +1050,18 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
                   className="absolute left-0 right-0 grid grid-cols-7 pointer-events-none"
                   style={{ top: DAY_NUM_H, gridAutoRows: `${LANE_H + 2}px` }}
                 >
+                  {/* Balken sind rein visuell: Klicks gehen an die Tageszelle
+                      darunter und öffnen die Tagesansicht (nie direkt die Aufgabe). */}
                   {bars.map(({ t, colStart, colEnd, lane }) => (
-                    <button
+                    <div
                       key={t.id}
-                      onClick={(e) => { e.stopPropagation(); setOpenTask(t); }}
                       style={{ gridColumn: `${colStart + 1} / ${colEnd + 2}`, gridRow: lane + 1, height: LANE_H }}
-                      className={`pointer-events-auto mx-0.5 rounded px-1 text-[10px] leading-[16px] text-left truncate ${STATUS_CELL[t.status]}`}
+                      className={`mx-0.5 rounded px-1 text-[10px] leading-[16px] text-left truncate ${STATUS_CELL[t.status]}`}
                       title={t.title}
                     >
                       {!isMultiDay(t) && t.startTime && <span className="opacity-80 mr-0.5">{t.startTime}</span>}
                       {t.title}
-                    </button>
+                    </div>
                   ))}
                 </div>
               </div>
