@@ -21,10 +21,10 @@ export function normalizeStatus(value: unknown): UserStatus {
   return KNOWN_STATUS.includes(value as UserStatus) ? (value as UserStatus) : 'online';
 }
 
-const KNOWN_PERMISSIONS: AdminPermission[] = ['manage_tickets'];
-export function normalizePermissions(value: unknown): AdminPermission[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((v): v is AdminPermission => KNOWN_PERMISSIONS.includes(v as AdminPermission));
+// Aktuell gibt es keine frei kombinierbaren Zusatzrechte mehr (Tickets verwalten
+// hängt allein an der Super-Admin-Rolle). Immer leer normalisieren.
+export function normalizePermissions(_value: unknown): AdminPermission[] {
+  return [];
 }
 
 function getSecret(): Uint8Array {
@@ -98,11 +98,10 @@ export async function getSession(req: VercelRequest): Promise<SessionPayload | n
         ? 'match_admin'
         : payload.role === 'referee'
           ? 'referee'
-          : payload.role === 'ticket_manager'
-            ? 'ticket_manager'
-            : payload.role === 'team_member'
-              ? 'team_member'
-              : 'superadmin';
+          : // Alt-Rolle „ticket_manager" gibt es nicht mehr → wie Team-Mitglied behandeln.
+            payload.role === 'team_member' || payload.role === 'ticket_manager'
+            ? 'team_member'
+            : 'superadmin';
     return {
       userId: typeof payload.userId === 'string' ? payload.userId : 'bootstrap',
       email: typeof payload.email === 'string' ? payload.email : '',
@@ -158,7 +157,7 @@ export const requireMatchWrite = requireRoles(['superadmin', 'match_admin', 'ref
 // löschen). Der Super-Admin darf immer, der Ticket-Manager ist die spezialisierte
 // Rolle nur dafür. Tickets STELLEN und kommentieren darf jeder eingeloggte Nutzer
 // (dafür reicht requireAuth) – nur das Verwalten ist hier eingeschränkt.
-export const requireTicketManage = requireRoles(['superadmin', 'ticket_manager']);
+export const requireTicketManage = requireRoles(['superadmin']);
 
 // Rückwärtskompatibler Alias für reine Lese-Endpunkte hinter Login (jede Rolle).
 export const requireAdmin = requireAuth;

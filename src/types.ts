@@ -237,18 +237,16 @@ export interface EventArchive {
 
 // Rollen: superadmin darf alles; match_admin darf Spiele/Live/Ticker pflegen;
 // referee (Schiedsrichter) darf ausschließlich im Schiedsrichtermodus Spiele
-// pfeifen und die Abend-Aufstellung setzen; ticket_manager darf ausschließlich
-// Tickets bearbeiten (Status, Zuweisung, Priorität); team_member sieht NUR den
+// pfeifen und die Abend-Aufstellung setzen; team_member sieht NUR den
 // Team-Bereich (Tickets/Aufgaben/Chat mitarbeiten) – keinen Liga-Admin.
-export type UserRole = 'superadmin' | 'match_admin' | 'referee' | 'ticket_manager' | 'team_member';
+// Tickets VERWALTEN dürfen ausschließlich Super-Admins (keine eigene Rolle mehr).
+export type UserRole = 'superadmin' | 'match_admin' | 'referee' | 'team_member';
 
 // Zusätzliche, frei kombinierbare Rechte (unabhängig von der Basis-Rolle).
-// So kann z.B. ein Spiel-Admin ZUSÄTZLICH Tickets bearbeiten. Super-Admins
-// haben implizit alle Rechte. Bewusst erweiterbar (weitere Rechte später).
-export type AdminPermission = 'manage_tickets';
-export const ALL_ADMIN_PERMISSIONS: { id: AdminPermission; label: string }[] = [
-  { id: 'manage_tickets', label: 'Tickets bearbeiten' },
-];
+// Aktuell keine – bewusst leer gelassen (erweiterbar). Tickets verwalten hängt
+// allein an der Super-Admin-Rolle, daher kein „Tickets bearbeiten"-Recht mehr.
+export type AdminPermission = never;
+export const ALL_ADMIN_PERMISSIONS: { id: AdminPermission; label: string }[] = [];
 
 // Präsenz-Status (Slack-artig) mit Emoji + Farbe. Erweiterbar.
 export type UserStatus = 'online' | 'away' | 'busy' | 'vacation' | 'out';

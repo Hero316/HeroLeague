@@ -737,6 +737,7 @@ export function AccordionSection({
   subtitle,
   accent = '#22DFC9',
   category,
+  show = true,
   children,
 }: {
   id: string;
@@ -745,6 +746,7 @@ export function AccordionSection({
   subtitle?: string;
   accent?: string; // Farbe des Symbol-Kästchens
   category?: string; // Rubrik/Reiter – nur sichtbar, wenn dieser Reiter aktiv ist
+  show?: boolean; // false = Sektion für diese Rolle komplett ausblenden (auch aus der Suche)
   children: React.ReactNode;
 }) {
   const ctx = React.useContext(AccordionContext);
@@ -752,13 +754,15 @@ export function AccordionSection({
   const open = ctx?.openId === id;
 
   // Selbst bei der Gruppe registrieren, damit die Admin-Suche diesen Menüpunkt
-  // kennt (register/unregister sind stabil → kein erneutes Auslösen).
+  // kennt (register/unregister sind stabil → kein erneutes Auslösen). Ausgeblendete
+  // Sektionen (show=false) werden NICHT registriert – die Suche findet sie nicht.
   const register = ctx?.register;
   const unregister = ctx?.unregister;
   React.useEffect(() => {
+    if (!show) return;
     register?.({ id, title, subtitle, category });
     return () => unregister?.(id);
-  }, [id, title, subtitle, category, register, unregister]);
+  }, [id, title, subtitle, category, register, unregister, show]);
 
   // Wenn dieser Abschnitt per Suche geöffnet wurde: sanft dorthin scrollen.
   const scrollTargetId = ctx?.scrollTargetId;
@@ -770,6 +774,8 @@ export function AccordionSection({
     }
   }, [open, scrollTargetId, id, clearScrollTarget]);
 
+  // Für diese Rolle ausgeblendet.
+  if (!show) return null;
   // Bei aktiver Reiter-Leiste nur die Abschnitte der gewählten Rubrik zeigen.
   if (ctx?.activeCategory != null && category != null && category !== ctx.activeCategory) return null;
   const panelId = `acc-panel-${id}`;

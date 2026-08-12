@@ -4,14 +4,8 @@ import { sql } from '../_lib/db.js';
 import { badRequest } from '../_lib/validate.js';
 import { ensureSchema } from '../_lib/ensure.js';
 
-function isRole(value: unknown): value is 'superadmin' | 'match_admin' | 'referee' | 'ticket_manager' | 'team_member' {
-  return (
-    value === 'superadmin' ||
-    value === 'match_admin' ||
-    value === 'referee' ||
-    value === 'ticket_manager' ||
-    value === 'team_member'
-  );
+function isRole(value: unknown): value is 'superadmin' | 'match_admin' | 'referee' | 'team_member' {
+  return value === 'superadmin' || value === 'match_admin' || value === 'referee' || value === 'team_member';
 }
 
 async function countActiveSuperadmins(): Promise<number> {

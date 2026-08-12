@@ -176,11 +176,10 @@ export async function tickets(req: VercelRequest, res: VercelResponse) {
         created_at AS "createdAt", updated_at AS "updatedAt"
     `;
 
-    // Alle Ticket-Bearbeiter (Super-Admin, Ticket-Manager, manage_tickets) informieren.
+    // Alle Ticket-Bearbeiter (nur Super-Admins) informieren.
     const members = await loadMembers();
     for (const u of members.values()) {
-      const canHandle =
-        u.role === 'superadmin' || u.role === 'ticket_manager' || (u.permissions ?? []).includes('manage_tickets');
+      const canHandle = u.role === 'superadmin';
       if (canHandle) {
         await notify(u.id, session.userId, 'ticket_new', 'ticket', id, `Neues Ticket von ${name}: „${title}“`);
       }
@@ -218,9 +217,8 @@ export async function ticket(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === 'POST') {
-    // Verwalten/Löschen: Super-Admin, Ticket-Manager-Rolle oder das Recht 'manage_tickets'.
-    const mayManage =
-      session.role === 'superadmin' || session.role === 'ticket_manager' || session.permissions.includes('manage_tickets');
+    // Verwalten/Löschen (Status, Zuweisung, Priorität, Löschen): nur Super-Admins.
+    const mayManage = session.role === 'superadmin';
     if (!mayManage) {
       return res.status(403).json({ error: 'Keine Berechtigung, Tickets zu bearbeiten.' });
     }
