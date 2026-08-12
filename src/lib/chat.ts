@@ -59,6 +59,7 @@ export const removeGroupMember = (conversationId: string, userId: string) =>
 export interface ChatSearchHit {
   id: string;
   conversationId: string;
+  parentId: string | null; // gesetzt = Treffer stammt aus einem Thread
   authorId: string;
   authorName: string;
   body: string;
@@ -67,7 +68,12 @@ export interface ChatSearchHit {
   convKind: 'group' | 'dm';
   convTitle: string;
 }
-export const searchChat = (q: string) => apiFetch<ChatSearchHit[]>(`/api/chat?resource=search&q=${encodeURIComponent(q)}`);
+// Optional auf eine Unterhaltung eingrenzen (Lupe im einzelnen Chat, inkl. Threads).
+export const searchChat = (q: string, conversationId?: string) =>
+  apiFetch<ChatSearchHit[]>(
+    `/api/chat?resource=search&q=${encodeURIComponent(q)}` +
+      (conversationId ? `&conversationId=${encodeURIComponent(conversationId)}` : '')
+  );
 
 // Anzeigename einer Unterhaltung: Gruppen tragen ihren Titel, DMs den Namen
 // des jeweils ANDEREN Teilnehmers.

@@ -218,16 +218,26 @@ export async function searchMessages(req: VercelRequest, res: VercelResponse) {
   const q = String(req.query.q ?? '').trim();
   if (q.length < 2) return res.json([]);
   const like = `%${q}%`;
+  // Optional auf eine Unterhaltung eingrenzen (Lupe innerhalb eines Chats).
+  // Es werden bewusst AUCH Thread-Antworten (parent_id gesetzt) durchsucht;
+  // parentId wird mitgeliefert, damit der Client den Thread öffnen kann.
+  const conversationId = typeof req.query.conversationId === 'string' ? req.query.conversationId : '';
+  const params: unknown[] = [session.userId, like];
+  let extra = '';
+  if (conversationId) {
+    params.push(conversationId);
+    extra = ` AND m.conversation_id = $${params.length}`;
+  }
   const rows = await sql.query(
-    `SELECT m.id, m.conversation_id AS "conversationId", m.author_id AS "authorId",
+    `SELECT m.id, m.conversation_id AS "conversationId", m.parent_id AS "parentId", m.author_id AS "authorId",
             m.author_name AS "authorName", m.body, m.attach_type AS "attachType",
             m.created_at AS "createdAt", c.kind AS "convKind", c.title AS "convTitle"
      FROM messages m
      JOIN conversations c ON c.id = m.conversation_id
      JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = $1
-     WHERE m.body ILIKE $2 OR m.author_name ILIKE $2
+     WHERE (m.body ILIKE $2 OR m.author_name ILIKE $2)${extra}
      ORDER BY m.created_at DESC LIMIT 40`,
-    [session.userId, like]
+    params
   );
   return res.json(rows);
 }
