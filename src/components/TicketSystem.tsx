@@ -542,8 +542,16 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
   });
 
   return (
-    <div>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <div className={persist ? 'flex flex-col min-h-full md:block md:min-h-0' : ''}>
+      {/* Steuerleiste. Im Handy-App-Modus (persist) unten – mit dem Daumen
+          erreichbar; ab md wieder oben. */}
+      <div
+        className={`flex flex-wrap items-center justify-between gap-3 ${
+          persist
+            ? 'order-2 sticky bottom-0 z-20 -mx-3 border-t border-white/10 bg-[#060E0F] px-3 pt-3 mt-3 md:static md:bottom-auto md:z-auto md:mx-0 md:mt-0 md:mb-4 md:border-0 md:bg-transparent md:px-0 md:pt-0'
+            : 'mb-4'
+        }`}
+      >
         <div className="flex items-center gap-1.5 bg-[#060E0F]/40 border border-white/10 rounded-xl p-1">
           {(['offen', 'abgeschlossen', 'alle'] as const).map((f) => (
             <button
@@ -565,6 +573,7 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
         </button>
       </div>
 
+      <div className={persist ? 'order-1 flex-1 min-h-0 md:contents' : 'contents'}>
       <AnimatePresence>
         {showNew && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-4">
@@ -622,6 +631,7 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
           ))}
         </div>
       )}
+      </div>
 
       <AnimatePresence>
         {openId && (
