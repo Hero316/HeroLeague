@@ -1652,7 +1652,7 @@ export default function ChatSystem({
             <Composer
               conversationId={active.id}
               mentionable={activeMentionable}
-              placeholder="Nachricht schreiben… (@Name erwähnt, Enter sendet)"
+              placeholder="Nachricht schreiben…"
               onTyping={onTyping}
               onStopTyping={onStopTyping}
               onSent={(m) => {
