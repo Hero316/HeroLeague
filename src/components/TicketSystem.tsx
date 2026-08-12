@@ -226,7 +226,7 @@ export function TicketDetail({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[60] bg-black/80 flex items-start sm:items-center justify-center p-0 sm:p-6 overflow-y-auto"
+      className="fixed inset-0 z-[60] bg-black/80 flex items-start sm:items-center justify-center p-0 pt-[env(safe-area-inset-top)] sm:p-6 overflow-y-auto"
       {...backdrop}
     >
       <motion.div
