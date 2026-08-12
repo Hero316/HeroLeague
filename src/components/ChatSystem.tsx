@@ -729,7 +729,10 @@ function ThreadModal({
         className="w-full max-w-md bg-[#0a1110] border-l border-white/10 flex flex-col h-full"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+        <div
+          className="flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)' }}
+        >
           <span className="font-display font-bold text-white uppercase tracking-tight flex items-center gap-1.5">
             <MessageSquare className="w-4 h-4 text-brand-accent-light" /> Thread
           </span>
