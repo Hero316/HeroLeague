@@ -31,7 +31,7 @@ import HighlightsHome from './components/HighlightsHome';
 import HighlightsPage from './components/HighlightsPage';
 import TicketSystem from './components/TicketSystem';
 import TaskBoard from './components/TaskBoard';
-import ChatSystem from './components/ChatSystem';
+import ChatApp from './components/ChatApp';
 import ProfileEditor from './components/ProfileEditor';
 import NotificationSettings from './components/NotificationSettings';
 import Avatar from './components/Avatar';
@@ -776,53 +776,27 @@ export default function App() {
     );
   }
 
-  // ROUTE: /chat – eigenständige „Hero Chat"-App (installierbar, startet direkt im Chat)
+  // ROUTE: /chat – eigenständige „Team-App" (installierbar, Vollbild mit
+  // unterer Tab-Leiste Chats · Aufgaben · Tickets). Ohne Login: Anmeldemaske.
   if (currentPath.startsWith('/chat')) {
-    return (
-      <div className="h-screen flex flex-col bg-[#060E0F] text-hl-text">
-        <header
-          className="flex items-center justify-between gap-2 px-2 py-2 border-b border-white/10 bg-[rgba(7,10,8,.92)] backdrop-blur-xl shrink-0"
-          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.5rem)' }}
-        >
-          <div className="flex items-center gap-1 min-w-0">
-            <button
-              onClick={() => navigateTo('/admin')}
-              title="Zurück zum Backoffice"
-              className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-hl-soft hover:text-white active:bg-white/10 cursor-pointer shrink-0"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              <span className="text-[11px] font-sans font-semibold uppercase tracking-wider">Zurück</span>
-            </button>
-            <img src="/assets/hero-league-logo.png" alt="Hero Chat" className="h-6 w-auto ml-1" />
-            <span className="font-display font-black text-white uppercase tracking-tight text-sm truncate">Hero Chat</span>
+    if (!isAdmin) {
+      return (
+        <div className="h-screen flex flex-col bg-[#060E0F] text-hl-text">
+          <div className="flex-1 flex items-center justify-center p-6">
+            <AdminLogin onLoginSuccess={(user) => setSessionUser(user)} />
           </div>
-          {isAdmin && (
-            <button
-              onClick={handleLogout}
-              title="Abmelden"
-              className="shrink-0 px-3 py-2 rounded-lg text-hl-mute hover:text-hl-red-soft active:bg-white/10 cursor-pointer flex items-center gap-1.5"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="text-[11px] font-sans font-semibold uppercase tracking-wider hidden sm:inline">Abmelden</span>
-            </button>
-          )}
-        </header>
-        <main className="flex-1 min-h-0">
-          {!isAdmin ? (
-            <div className="h-full flex items-center justify-center p-6">
-              <AdminLogin onLoginSuccess={(user) => setSessionUser(user)} />
-            </div>
-          ) : (
-            <ChatSystem
-              currentUserId={sessionUser?.id ?? ''}
-              canManageTickets={canManageTickets}
-              isSuperadmin={isSuperadmin}
-              fullHeight
-              initialConversationId={new URLSearchParams(window.location.search).get('c')}
-            />
-          )}
-        </main>
-      </div>
+        </div>
+      );
+    }
+    return (
+      <ChatApp
+        currentUserId={sessionUser?.id ?? ''}
+        canManageTickets={canManageTickets}
+        isSuperadmin={isSuperadmin}
+        initialConversationId={new URLSearchParams(window.location.search).get('c')}
+        onBack={() => navigateTo('/admin')}
+        onLogout={handleLogout}
+      />
     );
   }
 
@@ -903,7 +877,7 @@ export default function App() {
                 searchable
                 defaultOpenId="aufgaben"
                 categories={[
-                  { id: 'team', label: '★ Team' },
+                  { id: 'team', label: '★ Intern' },
                   ...(canSeeLeagueArea ? [{ id: 'spiele', label: 'Spiele & Liga' }] : []),
                   ...(canSeeStartseiteArea ? [{ id: 'startseite', label: 'Startseite' }] : []),
                   ...(canSeeChannelsArea ? [{ id: 'kanaele', label: 'Kanäle & Event' }] : []),
@@ -1006,12 +980,26 @@ export default function App() {
                   <AccordionSection
                     id="chat"
                     category="team"
-                    title="Chat"
-                    subtitle="Gruppen & Direktnachrichten, Threads, Tickets/Aufgaben anhängen"
+                    title="Chat & Team-App"
+                    subtitle="Vollbild-App: Chats, Aufgaben & Tickets – zum Home-Bildschirm hinzufügbar"
                     icon={<MessageSquare className="w-5 h-5" />}
                     accent="#22DFC9"
                   >
-                    <ChatSystem currentUserId={sessionUser?.id ?? ''} canManageTickets={canManageTickets} isSuperadmin={isSuperadmin} />
+                    <button
+                      onClick={() => navigateTo('/chat')}
+                      className="w-full flex items-center gap-4 p-4 rounded-2xl bg-brand-accent-light/10 border border-brand-accent-light/30 hover:bg-brand-accent-light/15 cursor-pointer text-left transition-colors"
+                    >
+                      <span className="grid place-items-center w-12 h-12 rounded-xl bg-brand-accent-light text-[#04120f] shrink-0">
+                        <MessageSquare className="w-6 h-6" />
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block font-display font-black text-white uppercase tracking-tight">Team-App öffnen</span>
+                        <span className="block text-[12px] text-hl-mute font-sans mt-0.5">
+                          Chat im Vollbild – mit Aufgaben & Tickets. Fühlt sich wie eine eigene App an.
+                        </span>
+                      </span>
+                      <ArrowLeft className="w-5 h-5 text-brand-accent-light rotate-180 shrink-0" />
+                    </button>
                   </AccordionSection>
 
                   <AccordionSection
