@@ -41,6 +41,7 @@ import {
 import { fetchTeam, fetchTickets, fetchAllTasks, fetchTask, memberMap } from '../lib/collab';
 import { setChatUnread } from '../lib/badge';
 import { setUrlParam } from '../lib/urlState';
+import { useBackClose, goBackLayer } from '../lib/backStack';
 import { useBackdropDismiss, ModalPortal } from './ui';
 import { uploadFile, uploadImage } from '../lib/api';
 import Avatar from './Avatar';
@@ -1221,6 +1222,18 @@ export default function ChatSystem({
   useEffect(() => {
     setUrlParam('thread', thread?.id ?? null);
   }, [thread]);
+
+  // Handy-Zurück-Geste/-Taste fängt jede offene Ebene ab (schließt sie, statt
+  // die App zu verlassen). Reihenfolge = Schachtelung: Thread liegt über der
+  // offenen Unterhaltung, Fenster liegen über allem.
+  useBackClose(activeId !== null, () => setActiveId(null));
+  useBackClose(thread !== null, () => {
+    setThread(null);
+    setThreadHighlightId(null);
+  });
+  useBackClose(showNew, () => setShowNew(false));
+  useBackClose(showInfo, () => setShowInfo(false));
+  useBackClose(attachView !== null, () => setAttachView(null));
   // Nach dem Laden den beim Aktualisieren offenen Thread wiederherstellen.
   const didOpenInitialThread = useRef(false);
   useEffect(() => {
@@ -1539,7 +1552,7 @@ export default function ChatSystem({
         ) : (
           <>
             <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/5 bg-[#0b1512]">
-              <button onClick={() => setActiveId(null)} className="md:hidden p-1 -ml-1 text-hl-mute hover:text-white cursor-pointer">
+              <button onClick={goBackLayer} className="md:hidden p-1 -ml-1 text-hl-mute hover:text-white cursor-pointer">
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <button onClick={() => setShowInfo(true)} className="flex items-center gap-2.5 min-w-0 flex-1 text-left cursor-pointer" title="Infos anzeigen">
@@ -1687,10 +1700,7 @@ export default function ChatSystem({
             currentUserId={currentUserId}
             mentionable={activeMentionable}
             highlightId={threadHighlightId}
-            onClose={() => {
-              setThread(null);
-              setThreadHighlightId(null);
-            }}
+            onClose={goBackLayer}
             onReplyAdded={() => activeId && loadMessages(activeId, true)}
           />
         )}
