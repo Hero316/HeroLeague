@@ -55,6 +55,31 @@ function fmtTime(iso: string): string {
     return '';
   }
 }
+// Nur die Uhrzeit (hh:mm) – klein in der Nachrichten-Bubble.
+function fmtClock(iso: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '';
+  }
+}
+// Tages-Schlüssel zum Erkennen eines Datumswechsels beim Scrollen.
+function dayKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+// Datums-Trenner wie bei WhatsApp: „Heute“, „Gestern“, Wochentag oder Datum.
+function fmtDaySeparator(iso: string): string {
+  const d = new Date(iso);
+  d.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diff = Math.round((today.getTime() - d.getTime()) / 86400000);
+  if (diff === 0) return 'Heute';
+  if (diff === 1) return 'Gestern';
+  if (diff > 1 && diff < 7) return d.toLocaleDateString('de-DE', { weekday: 'long' });
+  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
 function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
 }
@@ -474,28 +499,31 @@ function MessageRow({
   return (
     <div className={`flex gap-2 ${mine ? 'justify-end' : 'justify-start'}`}>
       {!mine && <div className="w-7 shrink-0 self-end">{showAuthor && <Avatar name={name} url={avatarUrl} size={28} />}</div>}
-      <div className={`max-w-[78%] ${mine ? 'items-end' : 'items-start'} flex flex-col`}>
-        {showAuthor && !mine && <span className="text-[10px] font-mono text-hl-dim mb-0.5 px-1">{name}</span>}
+      <div className={`max-w-[80%] ${mine ? 'items-end' : 'items-start'} flex flex-col`}>
+        {/* Gruppen: Name des Absenders klein über dem ersten Block (wie WhatsApp) */}
+        {showAuthor && !mine && <span className="text-[11px] font-sans font-semibold text-brand-accent-light/90 mb-0.5 px-1">{name}</span>}
         <div
-          className={`rounded-2xl px-3 py-2 ${
+          className={`rounded-2xl px-3 py-1.5 ${
             mine ? 'bg-brand-accent-light/90 text-white rounded-br-sm' : 'bg-[#0f1614] border border-white/5 text-hl-soft rounded-bl-sm'
           }`}
         >
           {m.body && <p className="text-sm font-sans whitespace-pre-wrap break-words">{m.body}</p>}
           <MessageAttachment m={m} onOpen={onOpenAttachment} />
+          {/* Uhrzeit klein in der Bubble, rechts unten */}
+          <div className={`text-[9px] font-mono leading-none text-right mt-1 ${mine ? 'text-white/70' : 'text-hl-faint'}`}>
+            {fmtClock(m.createdAt)}
+          </div>
         </div>
-        <div className={`flex items-center gap-2 mt-0.5 px-1 ${mine ? 'flex-row-reverse' : ''}`}>
-          <span className="text-[10px] font-mono text-hl-faint">{fmtTime(m.createdAt)}</span>
-          {onOpenThread && (
-            <button
-              onClick={() => onOpenThread(m)}
-              className="text-[10px] font-mono text-hl-mute hover:text-brand-accent-light cursor-pointer flex items-center gap-1"
-            >
-              <MessageSquare className="w-3 h-3" />
-              {m.replyCount ? `${m.replyCount} Antworten` : 'Antworten'}
-            </button>
-          )}
-        </div>
+        {/* Antworten dezent: nur Symbol, mit Zahl wenn schon Antworten da sind */}
+        {onOpenThread && (
+          <button
+            onClick={() => onOpenThread(m)}
+            className="mt-0.5 px-1 text-[10px] font-mono text-hl-faint hover:text-brand-accent-light cursor-pointer flex items-center gap-1"
+          >
+            <MessageSquare className="w-3 h-3" />
+            {m.replyCount ? m.replyCount : ''}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -1160,17 +1188,30 @@ export default function ChatSystem({
               ) : (
                 shownMessages.map((m, i) => {
                   const mem = members.get(m.authorId);
+                  const prev = i > 0 ? shownMessages[i - 1] : null;
+                  const newDay = !prev || dayKey(prev.createdAt) !== dayKey(m.createdAt);
+                  // Absender-Name/Bild nur beim ersten Block einer Person zeigen
+                  // (bzw. nach einem Tageswechsel wieder).
+                  const showAuthor = active.kind === 'group' && (newDay || !prev || prev.authorId !== m.authorId);
                   return (
-                    <MessageRow
-                      key={m.id}
-                      m={m}
-                      mine={m.authorId === currentUserId}
-                      showAuthor={active.kind === 'group' && (i === 0 || shownMessages[i - 1].authorId !== m.authorId)}
-                      displayName={mem?.name}
-                      avatarUrl={mem?.avatarUrl}
-                      onOpenThread={setThread}
-                      onOpenAttachment={openAttachment}
-                    />
+                    <React.Fragment key={m.id}>
+                      {newDay && (
+                        <div className="flex justify-center my-3">
+                          <span className="text-[10px] font-mono uppercase tracking-wider text-hl-mute bg-[#0b1210] border border-white/10 rounded-full px-3 py-1">
+                            {fmtDaySeparator(m.createdAt)}
+                          </span>
+                        </div>
+                      )}
+                      <MessageRow
+                        m={m}
+                        mine={m.authorId === currentUserId}
+                        showAuthor={showAuthor}
+                        displayName={mem?.name}
+                        avatarUrl={mem?.avatarUrl}
+                        onOpenThread={setThread}
+                        onOpenAttachment={openAttachment}
+                      />
+                    </React.Fragment>
                   );
                 })
               )}
