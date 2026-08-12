@@ -1090,9 +1090,16 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
     setAnchor((a) => (view === 'month' ? addMonths(a, dir) : view === 'day' ? addDays(a, dir) : addDays(a, dir * 7)));
 
   return (
-    <div>
-      {/* Kopfzeile: Ansicht + Navigation */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <div className={persist ? 'flex flex-col min-h-full md:block md:min-h-0' : ''}>
+      {/* Kopfzeile: Ansicht + Navigation. Im Handy-App-Modus (persist) sitzt sie
+          unten – mit dem Daumen erreichbar; ab md wieder oben. */}
+      <div
+        className={`flex flex-wrap items-center justify-between gap-3 ${
+          persist
+            ? 'order-2 sticky bottom-0 z-20 -mx-3 border-t border-white/10 bg-[#060E0F] px-3 pt-3 mt-3 md:static md:bottom-auto md:z-auto md:mx-0 md:mt-0 md:mb-4 md:border-0 md:bg-transparent md:px-0 md:pt-0'
+            : 'mb-4'
+        }`}
+      >
         <div className="flex items-center gap-1 bg-[#060E0F]/50 border border-white/10 rounded-xl p-1 overflow-x-auto max-w-full">
           {(['month', 'week', 'day', 'termine', 'aufgaben'] as const).map((v) => (
             <button
@@ -1131,6 +1138,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
         </button>
       </div>
 
+      <div className={persist ? 'order-1 flex-1 min-h-0 md:contents' : 'contents'}>
       {loading ? (
         <div className="flex items-center justify-center py-16 text-hl-mute">
           <Loader2 className="w-6 h-6 animate-spin" />
@@ -1381,6 +1389,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
           })}
         </div>
       )}
+      </div>
 
       <AnimatePresence>
         {newTask && (
