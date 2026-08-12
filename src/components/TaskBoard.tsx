@@ -201,8 +201,8 @@ export function TaskDetail({
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center p-0 sm:p-6 overflow-y-auto" {...backdrop}>
-      <motion.div initial={{ scale: 0.97, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 10 }} className="hl-card w-full max-w-xl my-0 sm:my-8 p-5 sm:p-6" onClick={(e) => e.stopPropagation()}>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/80 flex items-start sm:items-center justify-center p-0 sm:p-6 overflow-y-auto" {...backdrop}>
+      <motion.div initial={{ scale: 0.97, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 10 }} className="hl-card hl-modal-card w-full max-w-xl my-0 sm:my-8 p-5 sm:p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display font-black text-lg text-white uppercase tracking-tight">Aufgabe</h3>
           <button onClick={onClose} className="p-1.5 text-hl-mute hover:text-white cursor-pointer">
@@ -340,8 +340,8 @@ function NewTaskModal({
   };
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" {...backdrop}>
-      <motion.div initial={{ scale: 0.97 }} animate={{ scale: 1 }} className="hl-card w-full max-w-md p-5 my-6" onClick={(e) => e.stopPropagation()}>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4 overflow-y-auto" {...backdrop}>
+      <motion.div initial={{ scale: 0.97 }} animate={{ scale: 1 }} className="hl-card hl-modal-card w-full max-w-md p-5 my-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-display font-black text-lg text-white uppercase tracking-tight">Neue Aufgabe</h3>
           <button onClick={onClose} className="p-1.5 text-hl-mute hover:text-white cursor-pointer">
