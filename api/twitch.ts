@@ -58,6 +58,7 @@ const DEFAULT_EVENT = {
   title: 'Testspieltag',
   tagline: '6 Teams · jeder gegen jeden · ab 20:30 Uhr',
   dateLabel: 'Sonntag, 2. August 2026',
+  date: '2026-08-02',
   location: 'Soccer Center Königsfeld',
   teams: ['New Way F.C.', 'Süss FC', 'Phalanx United', 'Trossingen F.C.', 'FC Apex', 'FC Patchwork'],
   matches: [
@@ -286,6 +287,8 @@ function normalizeEvent(body: unknown, index = 0) {
     title: str(b.title, 'Testspieltag').trim() || 'Testspieltag',
     tagline: str(b.tagline).trim(),
     dateLabel: str(b.dateLabel).trim(),
+    // Echtes Kalenderdatum (YYYY-MM-DD) für die Aufgaben-Kalender-Markierung.
+    date: /^\d{4}-\d{2}-\d{2}$/.test(str(b.date).trim()) ? str(b.date).trim() : '',
     location: str(b.location).trim(),
     teams: Array.isArray(b.teams) ? b.teams.map((t) => str(t).trim()).filter(Boolean) : [],
     matches: matches.map((raw, i) => {
