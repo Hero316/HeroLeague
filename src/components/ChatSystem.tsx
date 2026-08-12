@@ -587,6 +587,7 @@ function MessageRow({
   colorSeed,
   displayName,
   avatarUrl,
+  highlight = false,
   onOpenThread,
   onOpenAttachment,
 }: {
@@ -597,17 +598,18 @@ function MessageRow({
   colorSeed: string;
   displayName?: string;
   avatarUrl?: string;
+  highlight?: boolean;
   onOpenThread?: (m: ChatMessage) => void;
   onOpenAttachment?: (type: 'ticket' | 'task', id: string) => void;
 }) {
   const name = displayName || m.authorName;
   const tailClass = firstOfRun ? (mine ? 'hl-bubble-out rounded-tr-md' : 'hl-bubble-in rounded-tl-md') : '';
   return (
-    <div className={`flex gap-2 ${mine ? 'justify-end' : 'justify-start'} ${firstOfRun ? 'mt-2.5' : 'mt-0.5'}`}>
+    <div data-mid={m.id} className={`flex gap-2 ${mine ? 'justify-end' : 'justify-start'} ${firstOfRun ? 'mt-2.5' : 'mt-0.5'}`}>
       {!mine && <div className="w-7 shrink-0 self-end">{firstOfRun && <Avatar name={name} url={avatarUrl} size={28} />}</div>}
       <div className={`max-w-[82%] ${mine ? 'items-end' : 'items-start'} flex flex-col`}>
         <div
-          className={`hl-bubble px-3 py-2 rounded-2xl shadow-sm shadow-black/20 ${mine ? 'text-white rounded-br-md' : 'text-hl-text rounded-bl-md'} ${tailClass}`}
+          className={`hl-bubble px-3 py-2 rounded-2xl shadow-sm shadow-black/20 ${mine ? 'text-white rounded-br-md' : 'text-hl-text rounded-bl-md'} ${tailClass} ${highlight ? 'ring-2 ring-brand-accent-light ring-offset-1 ring-offset-[#0a1210]' : ''}`}
           style={{ background: mine ? BUBBLE_MINE : BUBBLE_OTHER }}
         >
           {/* Gruppen: Name des Absenders in seiner (konstanten) Farbe */}
@@ -671,6 +673,7 @@ function ThreadModal({
   parent,
   currentUserId,
   mentionable,
+  highlightId,
   onClose,
   onReplyAdded,
 }: {
@@ -678,11 +681,13 @@ function ThreadModal({
   parent: ChatMessage;
   currentUserId: string;
   mentionable?: { id: string; name: string }[];
+  highlightId?: string | null;
   onClose: () => void;
   onReplyAdded: () => void;
 }) {
   const [replies, setReplies] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(() => {
     fetchMessages(conversationId, parent.id)
@@ -694,6 +699,14 @@ function ThreadModal({
   useEffect(() => {
     load();
   }, [load]);
+
+  // Nach dem Laden zur gesuchten Antwort scrollen (falls aus der Suche geöffnet).
+  useEffect(() => {
+    if (loading || !highlightId || !bodyRef.current) return;
+    const c = bodyRef.current;
+    const el = c.querySelector(`[data-mid="${highlightId}"]`) as HTMLElement | null;
+    if (el) c.scrollTop += el.getBoundingClientRect().top - c.getBoundingClientRect().top - 80;
+  }, [loading, highlightId, replies]);
   const backdrop = useBackdropDismiss(onClose);
 
   return (
@@ -719,9 +732,9 @@ function ThreadModal({
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-3 hl-chat-bg">
+        <div ref={bodyRef} className="flex-1 overflow-y-auto p-3 hl-chat-bg">
           <div className="pb-3 mb-1 border-b border-white/5">
-            <MessageRow m={parent} mine={parent.authorId === currentUserId} showAuthor colorSeed={conversationId} />
+            <MessageRow m={parent} mine={parent.authorId === currentUserId} showAuthor colorSeed={conversationId} highlight={highlightId === parent.id} />
           </div>
           {loading ? (
             <div className="flex justify-center py-6 text-hl-mute">
@@ -739,6 +752,7 @@ function ThreadModal({
                   firstOfRun={!block}
                   showAuthor={!block}
                   colorSeed={conversationId}
+                  highlight={highlightId === r.id}
                 />
               );
             })
@@ -1039,6 +1053,49 @@ function ConversationInfo({
   );
 }
 
+// --- Ergebnisliste der In-Chat-Suche (inkl. Thread-Treffer) -----------------
+function ConvSearchResults({
+  hits,
+  members,
+  onPick,
+}: {
+  hits: ChatSearchHit[];
+  members: Map<string, TeamMember>;
+  onPick: (h: ChatSearchHit) => void;
+}) {
+  if (hits.length === 0) {
+    return <p className="text-center text-sm text-hl-mute font-sans py-8">Keine Treffer in diesem Chat.</p>;
+  }
+  return (
+    <div className="space-y-1.5">
+      {hits.map((h) => {
+        const mem = members.get(h.authorId);
+        return (
+          <button
+            key={h.id}
+            onClick={() => onPick(h)}
+            className="w-full text-left px-2.5 py-2 rounded-xl bg-[#0f1614] hover:bg-[#131b19] border border-white/5 hover:border-white/15 cursor-pointer flex items-start gap-2.5 transition-colors"
+          >
+            <Avatar name={mem?.name ?? h.authorName} url={mem?.avatarUrl} size={30} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] font-sans font-semibold text-white truncate">{mem?.name ?? h.authorName}</span>
+                {h.parentId && (
+                  <span className="inline-flex items-center gap-0.5 text-[9px] font-mono uppercase tracking-wider text-brand-accent-light bg-brand-accent/15 border border-brand-accent-light/30 rounded px-1 py-0.5 shrink-0">
+                    <MessageSquare className="w-2.5 h-2.5" /> Thread
+                  </span>
+                )}
+                <span className="text-[10px] font-mono text-hl-faint ml-auto shrink-0">{fmtTime(h.createdAt)}</span>
+              </div>
+              <div className="text-[13px] text-hl-soft truncate">{h.body || (h.attachType ? '📎 Anhang' : '')}</div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // --- Hauptkomponente --------------------------------------------------------
 export default function ChatSystem({
   currentUserId,
@@ -1067,6 +1124,13 @@ export default function ChatSystem({
   const [hits, setHits] = useState<ChatSearchHit[]>([]);
   const [convSearch, setConvSearch] = useState('');
   const [showConvSearch, setShowConvSearch] = useState(false);
+  // In-Chat-Suche (inkl. Threads): Ergebnisse + Hervorhebung des Fundorts.
+  const [convHits, setConvHits] = useState<ChatSearchHit[]>([]);
+  const [highlightId, setHighlightId] = useState<string | null>(null); // im Haupt-Verlauf
+  const [threadHighlightId, setThreadHighlightId] = useState<string | null>(null); // im Thread
+  // Aus einem (globalen) Suchtreffer heraus einen Thread öffnen, sobald die
+  // Unterhaltung geladen ist.
+  const [pendingThread, setPendingThread] = useState<{ convId: string; parentId: string; hitId: string } | null>(null);
   // Präsenz: wer ist online + wer tippt in der geöffneten Unterhaltung.
   const [online, setOnline] = useState<Set<string>>(new Set());
   const [typers, setTypers] = useState<{ userId: string; userName: string }[]>([]);
@@ -1217,6 +1281,40 @@ export default function ChatSystem({
     return () => clearTimeout(id);
   }, [search]);
 
+  // In-Chat-Suche (entprellt, serverseitig, inkl. Thread-Antworten).
+  useEffect(() => {
+    if (!activeId || convSearch.trim().length < 2) {
+      setConvHits([]);
+      return;
+    }
+    const id = setTimeout(() => {
+      searchChat(convSearch.trim(), activeId).then(setConvHits).catch(() => setConvHits([]));
+    }, 250);
+    return () => clearTimeout(id);
+  }, [convSearch, activeId]);
+
+  // Zum hervorgehobenen Treffer im Haupt-Verlauf scrollen (kurz aufleuchten).
+  useEffect(() => {
+    if (!highlightId || !listRef.current) return;
+    const c = listRef.current;
+    const el = c.querySelector(`[data-mid="${highlightId}"]`) as HTMLElement | null;
+    if (el) c.scrollTop += el.getBoundingClientRect().top - c.getBoundingClientRect().top - 90;
+    const t = setTimeout(() => setHighlightId(null), 2600);
+    return () => clearTimeout(t);
+  }, [highlightId]);
+
+  // Aus (globalem) Suchtreffer heraus den Thread öffnen, sobald die passende
+  // Unterhaltung mit ihren Nachrichten geladen ist.
+  useEffect(() => {
+    if (!pendingThread || pendingThread.convId !== activeId) return;
+    const parent = messages.find((m) => m.id === pendingThread.parentId);
+    if (parent) {
+      setThreadHighlightId(pendingThread.hitId);
+      setThread(parent);
+      setPendingThread(null);
+    }
+  }, [pendingThread, activeId, messages]);
+
   const active = useMemo(() => convs.find((c) => c.id === activeId) ?? null, [convs, activeId]);
   const members = useMemo(() => memberMap(team), [team]);
   const q = search.trim().toLowerCase();
@@ -1226,14 +1324,36 @@ export default function ChatSystem({
     () => (active ? active.members.map((mm) => ({ id: mm.userId, name: members.get(mm.userId)?.name ?? mm.userName })) : []),
     [active, members]
   );
-  const shownMessages = useMemo(
-    () => (convSearch.trim() ? messages.filter((m) => (m.body ?? '').toLowerCase().includes(convSearch.toLowerCase())) : messages),
-    [messages, convSearch]
-  );
+  const convSearching = convSearch.trim().length >= 2;
   const openConversation = (id: string) => {
     setActiveId(id);
     // Ungelesen-Zähler nach dem Öffnen aktualisieren.
     setTimeout(loadConvs, 800);
+  };
+
+  // Klick auf einen In-Chat-Suchtreffer: Thread öffnen bzw. im Verlauf hinspringen.
+  const openConvHit = (h: ChatSearchHit) => {
+    if (h.parentId) {
+      const parent = messages.find((m) => m.id === h.parentId);
+      if (parent) {
+        setThreadHighlightId(h.id);
+        setThread(parent);
+      }
+    } else {
+      setShowConvSearch(false);
+      setConvSearch('');
+      atBottomRef.current = false;
+      setHighlightId(h.id);
+    }
+  };
+
+  // Klick auf einen globalen Suchtreffer: Unterhaltung öffnen; ist es ein
+  // Thread-Treffer, danach den Thread aufschlagen (sobald geladen).
+  const openGlobalHit = (h: ChatSearchHit) => {
+    openConversation(h.conversationId);
+    setSearch('');
+    if (h.parentId) setPendingThread({ convId: h.conversationId, parentId: h.parentId, hitId: h.id });
+    else if (h.conversationId === activeId) setHighlightId(h.id);
   };
 
   // Kopfzeilen-Unterzeile mit echter Präsenz („online“, „X online“, „… tippt“).
@@ -1350,14 +1470,16 @@ export default function ChatSystem({
               {hits.map((h) => (
                 <button
                   key={h.id}
-                  onClick={() => {
-                    openConversation(h.conversationId);
-                    setSearch('');
-                  }}
+                  onClick={() => openGlobalHit(h)}
                   className="w-full text-left px-3 py-2 border-b border-white/5 hover:bg-white/[.03] cursor-pointer"
                 >
-                  <div className="text-[11px] font-mono text-hl-dim truncate">
-                    {h.convKind === 'group' ? `# ${h.convTitle || 'Gruppe'}` : h.authorName} · {fmtTime(h.createdAt)}
+                  <div className="text-[11px] font-mono text-hl-dim truncate flex items-center gap-1.5">
+                    <span className="truncate">{h.convKind === 'group' ? `# ${h.convTitle || 'Gruppe'}` : h.authorName} · {fmtTime(h.createdAt)}</span>
+                    {h.parentId && (
+                      <span className="inline-flex items-center gap-0.5 text-brand-accent-light shrink-0">
+                        <MessageSquare className="w-2.5 h-2.5" /> Thread
+                      </span>
+                    )}
                   </div>
                   <div className="text-sm text-hl-soft truncate">
                     <span className="text-white font-semibold">{h.authorName}: </span>
@@ -1422,8 +1544,8 @@ export default function ChatSystem({
                 </div>
               </button>
               <button
-                onClick={() => setShowConvSearch((v) => !v)}
-                title="In diesem Chat suchen"
+                onClick={() => setShowConvSearch((v) => { if (v) setConvSearch(''); return !v; })}
+                title="In diesem Chat suchen (auch Threads)"
                 className={`p-2 rounded-lg border cursor-pointer shrink-0 ${showConvSearch ? 'bg-brand-accent-light/20 border-brand-accent-light/40 text-brand-accent-light' : 'bg-white/5 border-white/10 text-hl-soft hover:text-white'}`}
               >
                 <Search className="w-4 h-4" />
@@ -1437,7 +1559,7 @@ export default function ChatSystem({
                     value={convSearch}
                     onChange={(e) => setConvSearch(e.target.value)}
                     autoFocus
-                    placeholder="In diesem Chat suchen…"
+                    placeholder="In diesem Chat & Threads suchen…"
                     className="bg-transparent text-sm text-white placeholder:text-hl-faint focus:outline-none w-full"
                   />
                   {convSearch && (
@@ -1450,18 +1572,18 @@ export default function ChatSystem({
             )}
 
             <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-3 hl-chat-bg" onScroll={onMsgScroll}>
-              {loadingMsgs ? (
+              {convSearching ? (
+                <ConvSearchResults hits={convHits} members={members} onPick={openConvHit} />
+              ) : loadingMsgs ? (
                 <div className="flex justify-center py-8 text-hl-mute">
                   <Loader2 className="w-5 h-5 animate-spin" />
                 </div>
-              ) : shownMessages.length === 0 ? (
-                <p className="text-center text-sm text-hl-mute font-sans py-8">
-                  {convSearch.trim() ? 'Keine Treffer in diesem Chat.' : 'Noch keine Nachrichten. Schreib die erste!'}
-                </p>
+              ) : messages.length === 0 ? (
+                <p className="text-center text-sm text-hl-mute font-sans py-8">Noch keine Nachrichten. Schreib die erste!</p>
               ) : (
-                shownMessages.map((m, i) => {
+                messages.map((m, i) => {
                   const mem = members.get(m.authorId);
-                  const prev = i > 0 ? shownMessages[i - 1] : null;
+                  const prev = i > 0 ? messages[i - 1] : null;
                   const newDay = !prev || dayKey(prev.createdAt) !== dayKey(m.createdAt);
                   const block = !newDay && sameBlock(prev, m);
                   const firstOfRun = !block;
@@ -1484,6 +1606,7 @@ export default function ChatSystem({
                         colorSeed={active.id}
                         displayName={mem?.name}
                         avatarUrl={mem?.avatarUrl}
+                        highlight={highlightId === m.id}
                         onOpenThread={setThread}
                         onOpenAttachment={openAttachment}
                       />
@@ -1491,7 +1614,7 @@ export default function ChatSystem({
                   );
                 })
               )}
-              {!convSearch.trim() && typers.length > 0 && <TypingRow typers={typers} members={members} />}
+              {!convSearching && typers.length > 0 && <TypingRow typers={typers} members={members} />}
               <div ref={bottomRef} />
             </div>
 
@@ -1529,7 +1652,11 @@ export default function ChatSystem({
             parent={thread}
             currentUserId={currentUserId}
             mentionable={activeMentionable}
-            onClose={() => setThread(null)}
+            highlightId={threadHighlightId}
+            onClose={() => {
+              setThread(null);
+              setThreadHighlightId(null);
+            }}
             onReplyAdded={() => activeId && loadMessages(activeId, true)}
           />
         )}
