@@ -14,6 +14,7 @@ import {
 import type { Ticket, TicketComment, TicketPriority, TicketStatus, TeamMember } from '../types';
 import { uploadImage } from '../lib/api';
 import { getUrlParam, setUrlParam } from '../lib/urlState';
+import { useBackClose, goBackLayer } from '../lib/backStack';
 import {
   fetchTickets,
   fetchTicket,
@@ -513,6 +514,8 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
   useEffect(() => {
     if (persist) setUrlParam('ticket', openId);
   }, [openId, persist]);
+  // Handy-Zurück-Geste schließt das offene Ticket, statt die App zu verlassen.
+  useBackClose(openId !== null, () => setOpenId(null));
   const [filter, setFilter] = useState<'offen' | 'abgeschlossen' | 'alle'>('offen');
   const members = useMemo(() => memberMap(team), [team]);
 
@@ -626,7 +629,7 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
             ticketId={openId}
             team={team}
             canManage={canManage}
-            onClose={() => setOpenId(null)}
+            onClose={goBackLayer}
             onChanged={load}
           />
         )}
