@@ -401,6 +401,17 @@ body {
   -webkit-backdrop-filter: none !important;
 }
 
+/* iOS zoomt beim Antippen in ein Eingabefeld mit Schrift < 16px hinein – das
+   ist das „plötzlich so groß". 16px auf echten Text-Eingaben (input/textarea)
+   verhindert das zuverlässig. Kleine Status-Auswahlen (select) bleiben
+   unberührt, damit die Pillen klein bleiben. Nur auf Handy-Breite. */
+@media (max-width: 640px) {
+  input:not([type='checkbox']):not([type='radio']),
+  textarea {
+    font-size: 16px;
+  }
+}
+
 /* =====================================================================
    Ergebniszettel – druckbare Vorlage zum handschriftlichen Eintragen
    (helles „Papier"-Layout, identisch auf Bildschirm-Vorschau & Druck)

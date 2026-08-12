@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquare, Users, CalendarDays, LayoutGrid } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquare, Users, CalendarDays, LayoutGrid, ListChecks } from 'lucide-react';
 import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember } from '../types';
-import { fetchTasksRange, fetchTask, createTask, updateTask, deleteTask, addTaskComment, fetchTeam, memberMap } from '../lib/collab';
+import { fetchTasksRange, fetchAllTasks, fetchTask, createTask, updateTask, deleteTask, addTaskComment, fetchTeam, memberMap } from '../lib/collab';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
 import { useBackdropDismiss } from './ui';
@@ -402,7 +402,7 @@ function NewTaskModal({
 // Board
 // ===========================================================================
 export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUserId: string; isSuperadmin: boolean }) {
-  const [view, setView] = useState<'month' | 'week'>('month');
+  const [view, setView] = useState<'month' | 'week' | 'mine'>('month');
   const [anchor, setAnchor] = useState<Date>(() => new Date());
   const [tasks, setTasks] = useState<Task[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
@@ -424,7 +424,11 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [t, m] = await Promise.all([fetchTasksRange(range.from, range.to), fetchTeam().catch(() => [])]);
+      // „Meine Aufgaben" braucht ALLE Aufgaben (nicht nur den Kalenderbereich).
+      const [t, m] = await Promise.all([
+        view === 'mine' ? fetchAllTasks() : fetchTasksRange(range.from, range.to),
+        fetchTeam().catch(() => []),
+      ]);
       setTasks(t);
       setTeam(m);
     } catch (err) {
@@ -432,7 +436,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
     } finally {
       setLoading(false);
     }
-  }, [range.from, range.to]);
+  }, [view, range.from, range.to]);
 
   useEffect(() => {
     load();
@@ -447,6 +451,15 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
     }
     return map;
   }, [tasks]);
+
+  // „Meine Aufgaben": alle mir zugewiesenen, offene zuerst, erledigte unten.
+  const myTasks = useMemo(() => {
+    const order: Record<TaskStatus, number> = { in_bearbeitung: 0, offen: 1, leer: 2, erledigt: 3, abgebrochen: 4 };
+    return tasks
+      .filter((t) => t.assignees.some((a) => a.userId === currentUserId))
+      .slice()
+      .sort((a, b) => (order[a.status] - order[b.status]) || (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999'));
+  }, [tasks, currentUserId]);
 
   const quickSetStatus = async (t: Task, next: TaskStatus) => {
     setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: next } : x)));
@@ -469,7 +482,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
       {/* Kopfzeile: Ansicht + Navigation */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-1 bg-[#060E0F]/50 border border-white/10 rounded-xl p-1">
-          {(['month', 'week'] as const).map((v) => (
+          {(['month', 'week', 'mine'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -477,24 +490,26 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
                 view === v ? 'bg-brand-accent-light text-white' : 'text-hl-mute hover:text-white'
               }`}
             >
-              {v === 'month' ? <LayoutGrid className="w-3.5 h-3.5" /> : <CalendarDays className="w-3.5 h-3.5" />}
-              {v === 'month' ? 'Monat' : 'Woche'}
+              {v === 'month' ? <LayoutGrid className="w-3.5 h-3.5" /> : v === 'week' ? <CalendarDays className="w-3.5 h-3.5" /> : <ListChecks className="w-3.5 h-3.5" />}
+              {v === 'month' ? 'Monat' : v === 'week' ? 'Woche' : 'Meine'}
             </button>
           ))}
         </div>
 
-        <div className="flex items-center gap-2">
-          <button onClick={() => shift(-1)} className="p-2 rounded-lg bg-white/5 border border-white/10 text-hl-soft hover:text-white cursor-pointer">
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <span className="font-display font-bold text-white text-sm min-w-[8rem] text-center">{label}</span>
-          <button onClick={() => shift(1)} className="p-2 rounded-lg bg-white/5 border border-white/10 text-hl-soft hover:text-white cursor-pointer">
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          <button onClick={() => setAnchor(new Date())} className="px-3 py-2 rounded-lg text-xs font-sans font-semibold bg-white/5 border border-white/10 text-hl-mute hover:text-white cursor-pointer">
-            Heute
-          </button>
-        </div>
+        {view !== 'mine' && (
+          <div className="flex items-center gap-2">
+            <button onClick={() => shift(-1)} className="p-2 rounded-lg bg-white/5 border border-white/10 text-hl-soft hover:text-white cursor-pointer">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="font-display font-bold text-white text-sm min-w-[8rem] text-center">{label}</span>
+            <button onClick={() => shift(1)} className="p-2 rounded-lg bg-white/5 border border-white/10 text-hl-soft hover:text-white cursor-pointer">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <button onClick={() => setAnchor(new Date())} className="px-3 py-2 rounded-lg text-xs font-sans font-semibold bg-white/5 border border-white/10 text-hl-mute hover:text-white cursor-pointer">
+              Heute
+            </button>
+          </div>
+        )}
 
         <button onClick={() => setNewDate(TODAY)} className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white cursor-pointer flex items-center gap-1.5">
           <Plus className="w-4 h-4" /> Aufgabe
@@ -504,6 +519,55 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
       {loading ? (
         <div className="flex items-center justify-center py-16 text-hl-mute">
           <Loader2 className="w-6 h-6 animate-spin" />
+        </div>
+      ) : view === 'mine' ? (
+        /* -------- MEINE AUFGABEN (alle mir zugewiesenen, abzuarbeiten) -------- */
+        <div className="space-y-2">
+          {myTasks.length === 0 ? (
+            <p className="text-center text-sm text-hl-mute font-sans py-12">Dir sind aktuell keine Aufgaben zugewiesen.</p>
+          ) : (
+            myTasks.map((t) => (
+              <div
+                key={t.id}
+                onClick={() => setOpenTask(t)}
+                className={`bg-[#0a1110] border border-white/5 rounded-xl p-3 cursor-pointer hover:border-white/15 transition-colors flex items-center gap-3 ${
+                  t.status === 'erledigt' || t.status === 'abgebrochen' ? 'opacity-60' : ''
+                }`}
+              >
+                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${STATUS_DOT[t.status]}`} />
+                <div className="min-w-0 flex-1">
+                  <span className={`block text-sm font-sans text-white leading-snug break-words ${t.status === 'erledigt' ? 'line-through text-hl-mute' : ''}`}>
+                    {t.title}
+                  </span>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap text-[10px] font-mono text-hl-dim">
+                    {t.dueDate && (
+                      <span className="flex items-center gap-1">
+                        <CalendarDays className="w-3 h-3" /> {t.dueDate.slice(8)}.{t.dueDate.slice(5, 7)}.{t.dueDate.slice(0, 4)}
+                      </span>
+                    )}
+                    <span className={`px-1.5 py-0.5 rounded ${PRIORITY_CELL[t.priority]}`}>{PRIORITY_LABEL[t.priority]}</span>
+                    {!!t.commentCount && (
+                      <span className="flex items-center gap-1">
+                        <MessageSquare className="w-3 h-3" /> {t.commentCount}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                  <select
+                    value={t.status}
+                    onChange={(e) => quickSetStatus(t, e.target.value as TaskStatus)}
+                    className={`appearance-none text-[11px] font-semibold uppercase tracking-wider px-2 py-1 rounded-md cursor-pointer focus:outline-none ${STATUS_CELL[t.status]}`}
+                    title="Status ändern"
+                  >
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s} className="text-black">{STATUS_LABEL[s]}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       ) : view === 'month' ? (
         /* -------- MONATSANSICHT (Google-Kalender-Stil) -------- */
