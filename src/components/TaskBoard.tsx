@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquar
 import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember, Match, EventArchive } from '../types';
 import { fetchTasksRange, fetchAllTasks, fetchTask, createTask, updateTask, deleteTask, addTaskComment, fetchTeam, memberMap } from '../lib/collab';
 import { apiFetch } from '../lib/api';
+import { getUrlParam, setUrlParam } from '../lib/urlState';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
 import { useBackdropDismiss } from './ui';
@@ -897,9 +898,23 @@ function DayView({
 // ===========================================================================
 // Board
 // ===========================================================================
-export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUserId: string; isSuperadmin: boolean }) {
-  const [view, setView] = useState<'month' | 'week' | 'day' | 'mine'>('month');
-  const [anchor, setAnchor] = useState<Date>(() => new Date());
+export default function TaskBoard({ currentUserId, isSuperadmin, persist = false }: { currentUserId: string; isSuperadmin: boolean; persist?: boolean }) {
+  // Ansicht + Datum aus der URL wiederherstellen (nur in der Team-App), damit
+  // man nach dem Aktualisieren dort bleibt (Tag/Woche/Monat + Datum).
+  const [view, setView] = useState<'month' | 'week' | 'day' | 'mine'>(() => {
+    const v = persist ? getUrlParam('av') : null;
+    return v === 'week' || v === 'day' || v === 'mine' ? v : 'month';
+  });
+  const [anchor, setAnchor] = useState<Date>(() => {
+    const d = persist ? getUrlParam('ad') : null;
+    return d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? dateFromKey(d) : new Date();
+  });
+  useEffect(() => {
+    if (persist) setUrlParam('av', view === 'month' ? null : view);
+  }, [view, persist]);
+  useEffect(() => {
+    if (persist) setUrlParam('ad', ymd(anchor) === TODAY ? null : ymd(anchor));
+  }, [anchor, persist]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);

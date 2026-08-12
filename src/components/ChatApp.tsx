@@ -4,6 +4,7 @@ import ChatSystem from './ChatSystem';
 import TaskBoard from './TaskBoard';
 import TicketSystem from './TicketSystem';
 import { useInstall } from './InstallProvider';
+import { getUrlParam, setUrlParam } from '../lib/urlState';
 
 // Eigenständige „Team-App" unter /chat: Vollbild auf iPhone & Android, mit
 // unterer Tab-Leiste (Chats · Aufgaben · Tickets). Bewusst getrennt vom
@@ -36,17 +37,14 @@ export default function ChatApp({
   // Aktiven Tab in der URL halten (?tab=…), damit ein Reload auf derselben
   // Seite bleibt (Chats/Aufgaben/Tickets) statt immer auf „Chats" zu landen.
   const readTab = (): Tab => {
-    const t = new URLSearchParams(window.location.search).get('tab');
+    const t = getUrlParam('tab');
     return t === 'aufgaben' || t === 'tickets' ? t : 'chats';
   };
   const [tab, setTabState] = useState<Tab>(readTab);
   const setTab = (t: Tab) => {
     setTabState(t);
-    try {
-      window.history.replaceState(null, '', t === 'chats' ? '/chat' : `/chat?tab=${t}`);
-    } catch {
-      /* ignore */
-    }
+    // Nur den 'tab'-Parameter ändern – c/thread/av/ad usw. bleiben erhalten.
+    setUrlParam('tab', t === 'chats' ? null : t);
   };
   const [showInstall, setShowInstall] = useState(true);
   const { isStandalone, isIos, canInstall, promptInstall } = useInstall();
@@ -115,15 +113,16 @@ export default function ChatApp({
             canManageTickets={canManageTickets}
             isSuperadmin={isSuperadmin}
             fullHeight
-            initialConversationId={initialConversationId}
+            initialConversationId={initialConversationId ?? getUrlParam('c')}
+            initialThreadId={getUrlParam('thread')}
           />
         ) : tab === 'aufgaben' ? (
           <div className="h-full overflow-y-auto p-3">
-            <TaskBoard currentUserId={currentUserId} isSuperadmin={isSuperadmin} />
+            <TaskBoard currentUserId={currentUserId} isSuperadmin={isSuperadmin} persist />
           </div>
         ) : (
           <div className="h-full overflow-y-auto p-3">
-            <TicketSystem currentUserId={currentUserId} canManage={canManageTickets} />
+            <TicketSystem currentUserId={currentUserId} canManage={canManageTickets} persist />
           </div>
         )}
       </main>

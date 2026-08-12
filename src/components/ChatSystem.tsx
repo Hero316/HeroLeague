@@ -40,6 +40,7 @@ import {
 } from '../lib/chat';
 import { fetchTeam, fetchTickets, fetchAllTasks, fetchTask, memberMap } from '../lib/collab';
 import { setChatUnread } from '../lib/badge';
+import { setUrlParam } from '../lib/urlState';
 import { useBackdropDismiss } from './ui';
 import { uploadFile, uploadImage } from '../lib/api';
 import Avatar from './Avatar';
@@ -1103,12 +1104,14 @@ export default function ChatSystem({
   isSuperadmin = false,
   fullHeight = false,
   initialConversationId = null,
+  initialThreadId = null,
 }: {
   currentUserId: string;
   canManageTickets?: boolean;
   isSuperadmin?: boolean;
   fullHeight?: boolean;
   initialConversationId?: string | null;
+  initialThreadId?: string | null;
 }) {
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
@@ -1197,6 +1200,25 @@ export default function ChatSystem({
       setActiveId(initialConversationId);
     }
   }, [initialConversationId]);
+
+  // Offene Unterhaltung in der URL halten (?c=…), damit ein Reload dort bleibt.
+  useEffect(() => {
+    setUrlParam('c', activeId);
+  }, [activeId]);
+  // Offenen Thread in der URL halten (?thread=…).
+  useEffect(() => {
+    setUrlParam('thread', thread?.id ?? null);
+  }, [thread]);
+  // Nach dem Laden den beim Aktualisieren offenen Thread wiederherstellen.
+  const didOpenInitialThread = useRef(false);
+  useEffect(() => {
+    if (didOpenInitialThread.current || !initialThreadId) return;
+    const parent = messages.find((m) => m.id === initialThreadId);
+    if (parent) {
+      didOpenInitialThread.current = true;
+      setThread(parent);
+    }
+  }, [initialThreadId, messages]);
 
   const loadMessages = useCallback(async (id: string, quiet = false) => {
     if (!quiet) setLoadingMsgs(true);
