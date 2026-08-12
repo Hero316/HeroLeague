@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { Ticket, TicketComment, TicketPriority, TicketStatus, TeamMember } from '../types';
 import { uploadImage } from '../lib/api';
+import { getUrlParam, setUrlParam } from '../lib/urlState';
 import {
   fetchTickets,
   fetchTicket,
@@ -499,12 +500,17 @@ function NewTicketForm({ onCreated, onCancel }: { onCreated: () => void; onCance
 }
 
 // --- Hauptkomponente --------------------------------------------------------
-export default function TicketSystem({ canManage }: { currentUserId: string; canManage: boolean }) {
+export default function TicketSystem({ canManage, persist = false }: { currentUserId: string; canManage: boolean; persist?: boolean }) {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
+  // Offenes Ticket in der URL halten (nur in der Team-App), damit ein Reload
+  // das Ticket wieder öffnet statt zur Liste zurückzuspringen.
+  const [openId, setOpenId] = useState<string | null>(() => (persist ? getUrlParam('ticket') : null));
+  useEffect(() => {
+    if (persist) setUrlParam('ticket', openId);
+  }, [openId, persist]);
   const [filter, setFilter] = useState<'offen' | 'abgeschlossen' | 'alle'>('offen');
   const members = useMemo(() => memberMap(team), [team]);
 
