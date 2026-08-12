@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Menu, X, LogOut, LayoutDashboard, Instagram, Youtube, Zap, Smartphone, Shield } from 'lucide-react';
+import { Menu, X, LogOut, LayoutDashboard, Instagram, Youtube, Zap, Smartphone, Shield, MessageSquare } from 'lucide-react';
 import { ActiveTab, HighlightAlbum, Match, SocialLinks, Team } from '../types';
 import { numberWord } from '../lib/heroAward';
 import { apiFetch } from '../lib/api';
@@ -26,6 +26,7 @@ interface NavbarProps {
   onOpenLogin: () => void;
   onOpenBackoffice: () => void;
   onOpenReferee?: () => void; // Admin: direkt in den Schiedsrichtermodus wechseln
+  onOpenChat?: () => void; // Admin: direkt in die Team-App (/chat) springen
   seasonLabel?: string;
   seasonNumber?: number; // für den HERO-Award-Titel (HERO ONE/TWO …)
   demoActive?: boolean; // Demo-Modus aktiv? -> rot pulsierende Warnleiste ganz oben
@@ -52,6 +53,7 @@ export default function Navbar({
   onLogout,
   onOpenBackoffice,
   onOpenReferee,
+  onOpenChat,
   seasonLabel,
   seasonNumber,
   demoActive,
@@ -362,6 +364,18 @@ export default function Navbar({
             >
               <LayoutDashboard className="w-4 h-4" />
               Backoffice öffnen
+            </button>
+          )}
+          {isAdmin && onOpenChat && (
+            <button
+              onClick={() => {
+                onOpenChat();
+                setIsOpen(false);
+              }}
+              className="w-full flex items-center justify-center gap-1.5 mt-2 bg-[rgba(34,223,201,.12)] border border-[rgba(34,223,201,.3)] text-brand-accent-light py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer"
+            >
+              <MessageSquare className="w-4 h-4" />
+              Team-App öffnen
             </button>
           )}
           {isAdmin && onOpenReferee && (
