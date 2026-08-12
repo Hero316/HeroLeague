@@ -250,6 +250,12 @@ interface AdminPanelProps {
   currentSeasonLabel: string;
   nextSeasonLabel: string;
   isSuperadmin: boolean;
+  // Granulare Sichtbarkeit einzelner Sektionen (Spiel-Admin sieht nur einen Teil).
+  canManageClubs: boolean; // Klubs/Kader
+  canManageSeason: boolean; // Saison verwalten
+  canEditHomepage: boolean; // Startseite (Hero/Countdown), News-Ticker, Partner
+  canManagePom: boolean; // Spieler des Monats
+  canManageChannels: boolean; // Twitch/Social, Event/Testspiel
   onAddTeam: (team: Omit<Team, 'id'>) => Promise<boolean>;
   onEditTeam: (teamId: string, updatedData: Partial<Team>) => Promise<boolean>;
   onDeleteTeam: (teamId: string) => Promise<boolean>;
@@ -328,6 +334,11 @@ export default function AdminPanel({
   currentSeasonLabel,
   nextSeasonLabel,
   isSuperadmin,
+  canManageClubs,
+  canManageSeason,
+  canEditHomepage,
+  canManagePom,
+  canManageChannels,
   onAddTeam,
   onEditTeam,
   onDeleteTeam,
@@ -1154,8 +1165,8 @@ export default function AdminPanel({
         )}
       </AnimatePresence>
 
-      {/* Klubs registrieren & bearbeiten (nur Super-Admin) */}
-      {isSuperadmin && (
+      {/* Klubs registrieren & bearbeiten (Super-Admin + Spiel-Admin) */}
+      {canManageClubs && (
       <AccordionSection
         id="clubs"
         category="spiele"
@@ -1509,6 +1520,7 @@ export default function AdminPanel({
       {/* Spieler des Monats */}
       <AccordionSection
         id="pom"
+        show={canManagePom}
         category="startseite"
         title="Spieler des Monats konfigurieren"
         subtitle="Auszeichnung, Verein, Leistungsdaten & Portraitfoto"
@@ -1626,6 +1638,7 @@ export default function AdminPanel({
       {/* Startseite: eigene Hero-Hintergrundbilder */}
       <AccordionSection
         id="hero"
+        show={canEditHomepage}
         category="startseite"
         title="Startseite · Hero-Bilder & Countdown"
         subtitle="Hintergrundbilder der drei Slides + Countdown bis zum Anstoß"
@@ -1767,6 +1780,7 @@ export default function AdminPanel({
       {/* News-Laufband (Ticker unter der Navigation) */}
       <AccordionSection
         id="news"
+        show={canEditHomepage}
         category="startseite"
         title="News-Laufband (Ticker)"
         subtitle="Eigene Kurz-Nachrichten für das Laufband oben auf der Seite"
@@ -1850,6 +1864,7 @@ export default function AdminPanel({
       {/* Twitch-Livestream & Social Media */}
       <AccordionSection
         id="twitch"
+        show={canManageChannels}
         category="kanaele"
         title="Twitch & Social Media"
         subtitle="Twitch-Kanal, Live-Banner & Social-Media-Links"
@@ -1984,7 +1999,7 @@ export default function AdminPanel({
       </AccordionSection>
 
       {/* Partner / Sponsoren-Logos – nur Super-Admin */}
-      {isSuperadmin && (
+      {canEditHomepage && (
         <AccordionSection
           id="partners"
           category="startseite"
@@ -2173,6 +2188,7 @@ export default function AdminPanel({
       {/* Testspiel / Sonder-Event */}
       <AccordionSection
         id="event"
+        show={canManageChannels}
         category="kanaele"
         title="Testspiel / Event"
         subtitle="Spontanes Event ein-/ausblenden, Ergebnisse pflegen"
@@ -2559,7 +2575,7 @@ export default function AdminPanel({
       </AccordionSection>
 
       {/* Saison verwalten (nur Super-Admin) */}
-      {isSuperadmin && (
+      {canManageSeason && (
       <AccordionSection
         id="season"
         category="spiele"

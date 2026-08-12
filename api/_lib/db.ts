@@ -67,12 +67,14 @@ export async function getCurrentSeason(): Promise<Season | null> {
 // auf sinnvolle Standardwerte zurück. So funktioniert Login/Team/Chat auch,
 // bevor die Migration durch ist.
 function userFromJson(j: Record<string, unknown>): AppUser {
-  const role = j.role as UserRole;
+  // Alt-Rolle „ticket_manager" gibt es nicht mehr → wie Team-Mitglied behandeln.
+  const raw = typeof j.role === 'string' ? j.role : '';
+  const role: UserRole = raw === 'ticket_manager' ? 'team_member' : ((raw as UserRole) || 'match_admin');
   return {
     id: String(j.id),
     email: typeof j.email === 'string' ? j.email : '',
     name: typeof j.name === 'string' ? j.name : '',
-    role: role || 'match_admin',
+    role,
     permissions: Array.isArray(j.permissions) ? (j.permissions as AdminPermission[]) : [],
     avatarUrl: typeof j.avatar_url === 'string' ? j.avatar_url : '',
     status: typeof j.status === 'string' ? (j.status as UserStatus) : 'online',
