@@ -26,7 +26,7 @@ import {
 } from '../lib/collab';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
-import { useBackdropDismiss } from './ui';
+import { useBackdropDismiss, ModalPortal } from './ui';
 
 const inputClass =
   'w-full bg-[#060E0F] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent-light';
@@ -221,6 +221,7 @@ export function TicketDetail({
   const backdrop = useBackdropDismiss(onClose);
 
   return (
+    <ModalPortal>
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -389,6 +390,7 @@ export function TicketDetail({
         )}
       </motion.div>
     </motion.div>
+    </ModalPortal>
   );
 }
 

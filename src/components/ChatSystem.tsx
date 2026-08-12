@@ -41,7 +41,7 @@ import {
 import { fetchTeam, fetchTickets, fetchAllTasks, fetchTask, memberMap } from '../lib/collab';
 import { setChatUnread } from '../lib/badge';
 import { setUrlParam } from '../lib/urlState';
-import { useBackdropDismiss } from './ui';
+import { useBackdropDismiss, ModalPortal } from './ui';
 import { uploadFile, uploadImage } from '../lib/api';
 import Avatar from './Avatar';
 import { TicketDetail } from './TicketSystem';
@@ -231,6 +231,7 @@ function AttachPicker({
   const backdrop = useBackdropDismiss(onClose);
 
   return (
+    <ModalPortal>
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -300,6 +301,7 @@ function AttachPicker({
         </div>
       </motion.div>
     </motion.div>
+    </ModalPortal>
   );
 }
 
@@ -711,6 +713,7 @@ function ThreadModal({
   const backdrop = useBackdropDismiss(onClose);
 
   return (
+    <ModalPortal>
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -771,6 +774,7 @@ function ThreadModal({
         />
       </motion.div>
     </motion.div>
+    </ModalPortal>
   );
 }
 
@@ -823,6 +827,7 @@ function NewConversationModal({
   const backdrop = useBackdropDismiss(onClose);
 
   return (
+    <ModalPortal>
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -901,6 +906,7 @@ function NewConversationModal({
         </div>
       </motion.div>
     </motion.div>
+    </ModalPortal>
   );
 }
 
@@ -956,6 +962,7 @@ function ConversationInfo({
   };
 
   return (
+    <ModalPortal>
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[65] bg-black/80 flex items-center justify-center p-4" {...backdrop}>
       <motion.div initial={{ scale: 0.97 }} animate={{ scale: 1 }} className="hl-card hl-modal-card w-full max-w-sm p-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
@@ -1051,6 +1058,7 @@ function ConversationInfo({
         )}
       </motion.div>
     </motion.div>
+    </ModalPortal>
   );
 }
 
