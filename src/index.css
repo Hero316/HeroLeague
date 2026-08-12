@@ -684,3 +684,13 @@ body {
   background: inherit;
   border-top-right-radius: 3px;
 }
+
+/* Leuchtende Kalender-Marker (Spieltage/Testspieltage): sanftes Pulsieren.
+   Die Farbe kommt per Inline-Style (tonabhängig) – hier nur die Helligkeit. */
+@keyframes hlCalGlow {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.28); }
+}
+.hl-cal-glow {
+  animation: hlCalGlow 2.6s ease-in-out infinite;
+}

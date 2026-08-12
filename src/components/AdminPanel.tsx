@@ -869,6 +869,7 @@ export default function AdminPanel({
       title: 'Testspieltag',
       tagline: '',
       dateLabel: '',
+      date: '',
       location: '',
       teams: [],
       matches: [],
@@ -2284,6 +2285,11 @@ export default function AdminPanel({
                     <div>
                       <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">DATUM (TEXT)</label>
                       <input type="text" value={selectedEvent.dateLabel} onChange={(e) => patchEvent({ dateLabel: e.target.value })} placeholder="z.B. Sonntag, 2. August 2026" className={inputClass} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">DATUM (KALENDER)</label>
+                      <input type="date" value={selectedEvent.date ?? ''} onChange={(e) => patchEvent({ date: e.target.value })} className={inputClass} />
+                      <p className="text-[10px] text-gray-500 mt-1">Für die leuchtende Markierung im Aufgaben-Kalender.</p>
                     </div>
                     <div>
                       <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">ORT</label>

@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquare, Users, CalendarDays, LayoutGrid, ListChecks, Clock, Move, Check } from 'lucide-react';
-import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember } from '../types';
+import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember, Match, EventArchive } from '../types';
 import { fetchTasksRange, fetchAllTasks, fetchTask, createTask, updateTask, deleteTask, addTaskComment, fetchTeam, memberMap } from '../lib/collab';
+import { apiFetch } from '../lib/api';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
 import { useBackdropDismiss } from './ui';
@@ -123,6 +124,66 @@ function dateFromKey(key: string): Date {
 function fmtDayHeading(key: string): string {
   const d = dateFromKey(key);
   return `${['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][d.getDay()]}, ${d.getDate()}. ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+// --- Leuchtende Kalender-Marker: Liga-Spieltage & Testspieltage -------------
+type HlTone = 'liga' | 'opening' | 'final' | 'test';
+type Highlight = { date: string; label: string; tone: HlTone };
+
+function hlColor(tone: HlTone): string {
+  switch (tone) {
+    case 'opening':
+    case 'final':
+      return '#E9C46A'; // Gold
+    case 'test':
+      return '#F45FB0'; // Magenta/Lila (Testspiel-Welt)
+    default:
+      return '#22DFC9'; // Türkis (normale Liga-Spieltage)
+  }
+}
+
+// Aus Liga-Spielen + Testspiel-Events die Tag→Marker-Zuordnung bauen.
+function buildHighlights(matches: Match[], ev: EventArchive | null): Record<string, Highlight> {
+  const map: Record<string, Highlight> = {};
+  // Liga: pro Saison das früheste Datum je Spieltag; erster/letzter = Gold.
+  const perSeason: Record<string, Record<number, string>> = {};
+  for (const m of matches) {
+    if (!m.date || m.matchday == null) continue;
+    const md = (perSeason[m.seasonId] ??= {});
+    if (!md[m.matchday] || m.date < md[m.matchday]) md[m.matchday] = m.date;
+  }
+  for (const sId of Object.keys(perSeason)) {
+    const md = perSeason[sId];
+    const nums = Object.keys(md).map(Number);
+    const min = Math.min(...nums);
+    const max = Math.max(...nums);
+    for (const n of nums) {
+      const tone: HlTone = n === max ? 'final' : n === min ? 'opening' : 'liga';
+      const label = tone === 'final' ? 'Final Night' : tone === 'opening' ? 'Opening Night' : `Spieltag ${n}`;
+      map[md[n]] = { date: md[n], label, tone };
+    }
+  }
+  // Testspieltage (Event) mit echtem Datum – überschreiben ggf. einen Liga-Tag.
+  for (const e of ev?.events ?? []) {
+    if (e.date && /^\d{4}-\d{2}-\d{2}$/.test(e.date)) {
+      map[e.date] = { date: e.date, label: e.title || 'Testspieltag', tone: 'test' };
+    }
+  }
+  return map;
+}
+
+// Leuchtender Marker-Pill (für Monat/Woche).
+function HighlightPill({ h, className = '' }: { h: Highlight; className?: string }) {
+  const c = hlColor(h.tone);
+  return (
+    <div
+      className={`hl-cal-glow rounded px-1 text-[10px] leading-[15px] font-sans font-bold truncate ${className}`}
+      style={{ background: `${c}22`, border: `1px solid ${c}66`, color: c, boxShadow: `0 0 10px ${c}55, inset 0 0 8px ${c}22` }}
+      title={h.label}
+    >
+      {h.label}
+    </div>
+  );
 }
 
 // Monats-Raster: max. sichtbare Balken-Reihen je Tag; Rest -> „+N".
@@ -624,12 +685,14 @@ function NewTaskModal({
 function DayView({
   dayKey,
   tasks,
+  highlight,
   onOpenTask,
   onAddAt,
   onMoveTask,
 }: {
   dayKey: string;
   tasks: Task[];
+  highlight?: Highlight;
   onOpenTask: (t: Task) => void;
   onAddAt: (startTime: string) => void;
   onMoveTask: (t: Task, startTime: string, endTime: string | null) => void;
@@ -690,6 +753,22 @@ function DayView({
 
   return (
     <div className="rounded-xl border border-white/5 overflow-hidden bg-[#0a1110]">
+      {/* Leuchtender Spieltag-/Testspieltag-Marker */}
+      {highlight && (
+        <div className="p-2 border-b border-white/5">
+          <div
+            className="hl-cal-glow rounded-lg px-3 py-2 text-center font-display font-black uppercase tracking-tight"
+            style={{
+              background: `${hlColor(highlight.tone)}1f`,
+              border: `1px solid ${hlColor(highlight.tone)}66`,
+              color: hlColor(highlight.tone),
+              boxShadow: `0 0 16px ${hlColor(highlight.tone)}55, inset 0 0 12px ${hlColor(highlight.tone)}22`,
+            }}
+          >
+            {highlight.label}
+          </div>
+        </div>
+      )}
       {/* Ganztägig / mehrtägig */}
       <div className="border-b border-white/5 p-2">
         <div className="text-[10px] font-mono uppercase tracking-wider text-hl-dim mb-1 px-1">Ganztägig</div>
@@ -826,6 +905,14 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
   const [loading, setLoading] = useState(true);
   const [openTask, setOpenTask] = useState<Task | null>(null);
   const [newTask, setNewTask] = useState<{ date: string; startTime?: string } | null>(null);
+  // Leuchtende Marker: Liga-Spieltage & Testspieltage (einmal laden).
+  const [hl, setHl] = useState<Record<string, Highlight>>({});
+  useEffect(() => {
+    Promise.all([
+      apiFetch<Match[]>('/api/matches').catch(() => [] as Match[]),
+      apiFetch<EventArchive>('/api/twitch?resource=event').catch(() => null),
+    ]).then(([ms, ev]) => setHl(buildHighlights(ms ?? [], ev)));
+  }, []);
 
   // Einen Tag öffnen (aus der Monatsansicht heraus).
   const openDay = (key: string) => {
@@ -1020,12 +1107,16 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
           {range.weeks.map((week, wi) => {
             const { bars, overflowByCol } = weekBars(week, tasks);
             const laneAreaH = MAX_LANES * (LANE_H + 2);
+            const HL_H = 17;
+            const weekHasHL = week.some((d) => hl[ymd(d)]);
+            const barsTop = DAY_NUM_H + (weekHasHL ? HL_H : 0);
             return (
               <div key={wi} className="relative grid grid-cols-7">
                 {week.map((d, ci) => {
                   const key = ymd(d);
                   const inMonth = d.getMonth() === anchor.getMonth();
                   const isToday = key === TODAY;
+                  const dayHl = hl[key];
                   return (
                     <div
                       key={key}
@@ -1033,13 +1124,17 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
                       className={`border-l border-b border-white/5 first:border-l-0 px-0.5 pt-1 cursor-pointer transition-colors ${
                         inMonth ? 'hover:bg-white/[.03]' : 'bg-[#070d0c]/40'
                       }`}
-                      style={{ minHeight: DAY_NUM_H + laneAreaH + 14 }}
+                      style={{ minHeight: barsTop + laneAreaH + 14 }}
                     >
                       <div className="flex justify-center">
-                        <span className={`text-[11px] font-mono w-5 h-5 flex items-center justify-center rounded-full ${isToday ? 'bg-brand-accent-light text-brand-dark font-bold' : inMonth ? 'text-hl-soft' : 'text-hl-faint'}`}>
+                        <span
+                          className={`text-[11px] font-mono w-5 h-5 flex items-center justify-center rounded-full ${isToday ? 'bg-brand-accent-light text-brand-dark font-bold' : inMonth ? 'text-hl-soft' : 'text-hl-faint'}`}
+                          style={dayHl && !isToday ? { color: hlColor(dayHl.tone) } : undefined}
+                        >
                           {d.getDate()}
                         </span>
                       </div>
+                      {dayHl && <div style={{ height: HL_H }} className="px-px pt-0.5"><HighlightPill h={dayHl} /></div>}
                       <div style={{ height: laneAreaH }} />
                       {overflowByCol[ci] > 0 && <div className="text-[9px] text-hl-dim text-center leading-none">+{overflowByCol[ci]}</div>}
                     </div>
@@ -1048,7 +1143,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
                 {/* Balken-Overlay: spannt echte Mehrtages-Aufgaben über die Spalten */}
                 <div
                   className="absolute left-0 right-0 grid grid-cols-7 pointer-events-none"
-                  style={{ top: DAY_NUM_H, gridAutoRows: `${LANE_H + 2}px` }}
+                  style={{ top: barsTop, gridAutoRows: `${LANE_H + 2}px` }}
                 >
                   {/* Balken sind rein visuell: Klicks gehen an die Tageszelle
                       darunter und öffnen die Tagesansicht (nie direkt die Aufgabe). */}
@@ -1073,6 +1168,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
         <DayView
           dayKey={ymd(anchor)}
           tasks={tasks}
+          highlight={hl[ymd(anchor)]}
           onOpenTask={setOpenTask}
           onAddAt={(startTime) => setNewTask({ date: ymd(anchor), startTime })}
           onMoveTask={moveTask}
@@ -1092,6 +1188,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
                   </span>
                   <span className="text-[10px] font-mono text-hl-dim">{key.slice(8)}.{key.slice(5, 7)}.</span>
                 </div>
+                {hl[key] && <div className="mb-2"><HighlightPill h={hl[key]} className="!text-[11px] !leading-[18px] py-0.5 text-center" /></div>}
                 <div className="space-y-2 flex-1 min-h-[2rem]">
                   {dayTasks.map((t) => (
                     <div key={t.id} onClick={() => setOpenTask(t)} className="bg-[#0a1110] border border-white/5 rounded-lg p-2.5 cursor-pointer hover:border-white/15 transition-colors">
