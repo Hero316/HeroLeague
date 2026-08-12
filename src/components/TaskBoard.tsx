@@ -5,6 +5,7 @@ import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember, Match, 
 import { fetchTasksRange, fetchAllTasks, fetchTask, createTask, updateTask, deleteTask, addTaskComment, fetchTeam, memberMap } from '../lib/collab';
 import { apiFetch } from '../lib/api';
 import { getUrlParam, setUrlParam } from '../lib/urlState';
+import { useBackClose } from '../lib/backStack';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
 import { useBackdropDismiss, ModalPortal } from './ui';
@@ -970,6 +971,10 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
   const [loading, setLoading] = useState(true);
   const [openTask, setOpenTask] = useState<Task | null>(null);
   const [newTask, setNewTask] = useState<{ date: string; startTime?: string; type?: TaskKind } | null>(null);
+  // Handy-Zurück-Geste schließt das offene Detail-/Neu-Fenster, statt die App
+  // zu verlassen.
+  useBackClose(openTask !== null, () => setOpenTask(null));
+  useBackClose(newTask !== null, () => setNewTask(null));
   // Leuchtende Marker: Liga-Spieltage & Testspieltage (einmal laden).
   const [hl, setHl] = useState<Record<string, Highlight>>({});
   useEffect(() => {
