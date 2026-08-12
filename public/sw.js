@@ -130,14 +130,21 @@ self.addEventListener('push', (event) => {
   );
 });
 
-// Klick auf die Benachrichtigung: vorhandenes Fenster fokussieren oder öffnen.
+// Klick auf die Benachrichtigung: vorhandenes Fenster auf die Ziel-URL
+// (Chat/Ticket/Aufgabe) navigieren und fokussieren – sonst neu öffnen.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const url = (event.notification.data && event.notification.data.url) || '/admin';
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const client of list) {
-        if (client.url.includes('/admin') && 'focus' in client) return client.focus();
+        if ('focus' in client) {
+          // Bestehendes Fenster direkt zum Ziel schicken (Deep-Link).
+          if ('navigate' in client) {
+            return client.navigate(url).then((c) => (c && c.focus ? c.focus() : undefined)).catch(() => client.focus());
+          }
+          return client.focus();
+        }
       }
       if (self.clients.openWindow) return self.clients.openWindow(url);
       return undefined;

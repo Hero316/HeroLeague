@@ -41,6 +41,13 @@ export function memberName(members: Map<string, AppUser>, id: string): string {
 }
 
 // Eine Benachrichtigung anlegen (self-notify wird übersprungen).
+// Ziel-URL für Klick auf die Benachrichtigung (Handy-Push): direkt zum Chat,
+// Ticket oder zur Aufgabe – statt nur allgemein ins Backoffice.
+function notifyUrl(refType: 'ticket' | 'task' | 'conversation', refId: string): string {
+  if (refType === 'conversation') return `/chat?c=${encodeURIComponent(refId)}`;
+  return `/admin?open=${refType}&id=${encodeURIComponent(refId)}`;
+}
+
 export async function notify(
   recipientId: string | null | undefined,
   actorId: string,
@@ -55,7 +62,7 @@ export async function notify(
     VALUES (${genId('n')}, ${recipientId}, ${kind}, ${refType}, ${refId}, ${body.slice(0, 200)}, false)
   `;
   // Zusätzlich als Handy-Push (best-effort; respektiert „nicht stören").
-  await sendPushToUser(recipientId, { title: 'Hero League', body: body.slice(0, 200), url: '/admin' });
+  await sendPushToUser(recipientId, { title: 'Hero League', body: body.slice(0, 200), url: notifyUrl(refType, refId) });
 }
 
 // Einfache @Name-Erwähnungen gegen die Mitgliederliste auflösen.

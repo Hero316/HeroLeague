@@ -39,6 +39,7 @@ import {
   type ChatSearchHit,
 } from '../lib/chat';
 import { fetchTeam, fetchTickets, fetchAllTasks, fetchTask, memberMap } from '../lib/collab';
+import { setChatUnread } from '../lib/badge';
 import { useBackdropDismiss } from './ui';
 import { uploadFile, uploadImage } from '../lib/api';
 import Avatar from './Avatar';
@@ -888,11 +889,13 @@ export default function ChatSystem({
   canManageTickets = false,
   isSuperadmin = false,
   fullHeight = false,
+  initialConversationId = null,
 }: {
   currentUserId: string;
   canManageTickets?: boolean;
   isSuperadmin?: boolean;
   fullHeight?: boolean;
+  initialConversationId?: string | null;
 }) {
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
@@ -924,13 +927,24 @@ export default function ChatSystem({
 
   const loadConvs = useCallback(async () => {
     try {
-      setConvs(await fetchConversations());
+      const cs = await fetchConversations();
+      setConvs(cs);
+      setChatUnread(cs.reduce((s, c) => s + (c.unread || 0), 0)); // App-Icon-Zahl
     } catch {
       /* still */
     } finally {
       setLoadingConvs(false);
     }
   }, []);
+
+  // Deep-Link: aus einer Benachrichtigung direkt in diese Unterhaltung springen.
+  const didOpenInitial = useRef(false);
+  useEffect(() => {
+    if (initialConversationId && !didOpenInitial.current) {
+      didOpenInitial.current = true;
+      setActiveId(initialConversationId);
+    }
+  }, [initialConversationId]);
 
   const loadMessages = useCallback(async (id: string, quiet = false) => {
     if (!quiet) setLoadingMsgs(true);
