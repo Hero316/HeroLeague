@@ -8,8 +8,6 @@ import {
   Users,
   Hash,
   User as UserIcon,
-  Paperclip,
-  Link2,
   Mic,
   File as FileIcon,
   Ticket as TicketIcon,
@@ -17,11 +15,11 @@ import {
   Loader2,
   ArrowLeft,
   Search,
-  Info,
   Camera,
   Trash2,
   UserPlus,
   Check,
+  Image as ImageIcon,
 } from 'lucide-react';
 import type { Conversation, ChatMessage, TeamMember, Ticket, Task, UserStatus } from '../types';
 import { USER_STATUS } from '../types';
@@ -36,6 +34,8 @@ import {
   updateGroup,
   addGroupMember,
   removeGroupMember,
+  sendPresence,
+  fetchPresence,
   type ChatSearchHit,
 } from '../lib/chat';
 import { fetchTeam, fetchTickets, fetchAllTasks, fetchTask, memberMap } from '../lib/collab';
@@ -48,6 +48,28 @@ import { TaskDetail } from './TaskBoard';
 
 const inputClass =
   'w-full bg-[#060E0F] border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent-light';
+
+// Bubble-Farben (fest, on-brand): eigene Nachricht dunkel-türkis, fremde dunkel.
+const BUBBLE_MINE = '#0b5d51';
+const BUBBLE_OTHER = '#141e1c';
+
+// Zufällige-aber-konstante Namensfarben (wie WhatsApp). Pro Gruppe anders, weil
+// der Konversations-Schlüssel in den Hash einfließt. Gut lesbar auf dunkel.
+const NAME_COLORS = [
+  '#22DFC9', '#F79AC4', '#E9C46A', '#5CE9AC', '#8AB4FF', '#FF8578', '#C9A0FF',
+  '#5FD0E0', '#F6A65A', '#9AE86A', '#FF9FD1', '#B8C36A', '#7FE0C0', '#E0A0F0',
+];
+function hashStr(s: string): number {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+function pickNameColor(name: string, seed: string): string {
+  return NAME_COLORS[hashStr(`${name}::${seed}`) % NAME_COLORS.length];
+}
+function firstName(name: string): string {
+  return name.split(/\s+/).filter(Boolean)[0] || name;
+}
 
 function fmtTime(iso: string): string {
   try {
@@ -81,8 +103,12 @@ function fmtDaySeparator(iso: string): string {
   if (diff > 1 && diff < 7) return d.toLocaleDateString('de-DE', { weekday: 'long' });
   return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
-function initials(name: string): string {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('');
+// Gehören zwei aufeinanderfolgende Nachrichten zum selben „Block“ (gleicher
+// Absender, gleicher Tag, < 5 min Abstand)? Dann rücken sie enger zusammen.
+function sameBlock(prev: ChatMessage | null, m: ChatMessage): boolean {
+  if (!prev || prev.authorId !== m.authorId) return false;
+  if (dayKey(prev.createdAt) !== dayKey(m.createdAt)) return false;
+  return new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() < 5 * 60000;
 }
 
 // Anhang im Composer (noch nicht gesendet): Verweis (Ticket/Aufgabe) oder Medium (Datei/Audio).
@@ -118,13 +144,16 @@ function MessageAttachment({ m, onOpen }: { m: ChatMessage; onOpen?: (type: 'tic
     return <audio controls src={m.attachUrl} className="mt-1.5 w-56 max-w-full h-9" />;
   }
   if (m.attachType === 'file' && m.attachUrl) {
-    const isImg = (m.attachMime ?? '').startsWith('image/');
-    if (isImg) {
+    const mime = m.attachMime ?? '';
+    if (mime.startsWith('image/')) {
       return (
         <a href={m.attachUrl} target="_blank" rel="noreferrer" className="block mt-1.5">
-          <img src={m.attachUrl} alt={m.attachTitle ?? 'Bild'} className="max-h-56 max-w-full rounded-lg border border-white/10" />
+          <img src={m.attachUrl} alt={m.attachTitle ?? 'Bild'} className="max-h-64 max-w-full rounded-xl border border-white/10" />
         </a>
       );
+    }
+    if (mime.startsWith('video/')) {
+      return <video controls src={m.attachUrl} className="mt-1.5 max-h-64 max-w-full rounded-xl border border-white/10" />;
     }
     return (
       <a
@@ -177,13 +206,15 @@ function useAudioRecorder(onDone: (file: File) => void) {
 
 // --- Anhang wählen (Ticket/Aufgabe) ----------------------------------------
 function AttachPicker({
+  initialTab = 'ticket',
   onPick,
   onClose,
 }: {
+  initialTab?: 'ticket' | 'task';
   onPick: (a: { type: 'ticket' | 'task'; id: string; title: string }) => void;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<'ticket' | 'task'>('ticket');
+  const [tab, setTab] = useState<'ticket' | 'task'>(initialTab);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -273,6 +304,7 @@ function AttachPicker({
 
 // --- Composer (wiederverwendet für Haupt-Chat und Threads) ------------------
 function PendingAttach({ attach, onRemove }: { attach: Attachment; onRemove: () => void }) {
+  const isVideo = attach.kind === 'media' && attach.type === 'file' && attach.mime.startsWith('video/');
   return (
     <div className="flex items-center gap-2 mb-2">
       {attach.kind === 'ref' ? (
@@ -281,6 +313,8 @@ function PendingAttach({ attach, onRemove }: { attach: Attachment; onRemove: () 
         <audio controls src={attach.url} className="h-9 w-56 max-w-full" />
       ) : attach.mime.startsWith('image/') ? (
         <img src={attach.url} alt={attach.title} className="h-16 w-16 object-cover rounded-lg border border-white/10" />
+      ) : isVideo ? (
+        <video src={attach.url} className="h-16 w-16 object-cover rounded-lg border border-white/10" />
       ) : (
         <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-hl-soft text-[12px] max-w-[12rem]">
           <FileIcon className="w-4 h-4 shrink-0 text-brand-accent-light" />
@@ -294,26 +328,48 @@ function PendingAttach({ attach, onRemove }: { attach: Attachment; onRemove: () 
   );
 }
 
+// Eine Kachel im Aufklapp-Menü (wie WhatsApp „+“): farbiges Rund + Beschriftung.
+function SheetTile({ label, color, icon: Icon, onClick }: { label: string; color: string; icon: typeof ImageIcon; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="flex flex-col items-center gap-1.5 cursor-pointer group">
+      <span
+        className="w-14 h-14 rounded-full flex items-center justify-center transition-transform group-hover:scale-105 group-active:scale-95"
+        style={{ background: `${color}22`, border: `1px solid ${color}55` }}
+      >
+        <Icon className="w-6 h-6" style={{ color }} />
+      </span>
+      <span className="text-[11px] font-sans text-hl-soft">{label}</span>
+    </button>
+  );
+}
+
 function Composer({
   conversationId,
   parentId,
   onSent,
   placeholder,
   mentionable,
+  onTyping,
+  onStopTyping,
 }: {
   conversationId: string;
   parentId?: string | null;
   onSent: (m: ChatMessage) => void;
   placeholder: string;
   mentionable?: { id: string; name: string }[];
+  onTyping?: () => void;
+  onStopTyping?: () => void;
 }) {
   const [body, setBody] = useState('');
   const [attach, setAttach] = useState<Attachment | null>(null);
-  const [showPicker, setShowPicker] = useState(false);
+  const [picker, setPicker] = useState<null | 'ticket' | 'task'>(null);
+  const [sheet, setSheet] = useState(false);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const docRef = useRef<HTMLInputElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   // @-Erwähnung: Token am Textende nach '@' erkennen und passende Mitglieder anbieten.
@@ -321,6 +377,9 @@ function Composer({
     setBody(val);
     const mm = /@([^\s@]*)$/.exec(val);
     setMentionQuery(mm ? mm[1].toLowerCase() : null);
+    // Tipp-Signal an die Präsenz (bewusst KEINE Lesebestätigung).
+    if (val.trim()) onTyping?.();
+    else onStopTyping?.();
   };
   const mentionMatches =
     mentionQuery !== null ? (mentionable ?? []).filter((mm) => mm.name.toLowerCase().includes(mentionQuery)).slice(0, 6) : [];
@@ -371,6 +430,7 @@ function Composer({
       });
       setBody('');
       setAttach(null);
+      onStopTyping?.();
       onSent(m);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Nachricht konnte nicht gesendet werden.');
@@ -379,17 +439,33 @@ function Composer({
     }
   };
 
+  const hasContent = !!body.trim() || !!attach;
+
+  const tiles: { key: string; label: string; color: string; icon: typeof ImageIcon; onClick: () => void }[] = [
+    { key: 'gallery', label: 'Galerie', color: '#8B7CFF', icon: ImageIcon, onClick: () => { setSheet(false); galleryRef.current?.click(); } },
+    { key: 'camera', label: 'Kamera', color: '#F472B6', icon: Camera, onClick: () => { setSheet(false); cameraRef.current?.click(); } },
+    { key: 'document', label: 'Dokument', color: '#818CF8', icon: FileIcon, onClick: () => { setSheet(false); docRef.current?.click(); } },
+    { key: 'audio', label: 'Audio', color: '#F59E0B', icon: Mic, onClick: () => { setSheet(false); recorder.toggle(); } },
+    { key: 'ticket', label: 'Ticket', color: '#22DFC9', icon: TicketIcon, onClick: () => { setSheet(false); setPicker('ticket'); } },
+    { key: 'task', label: 'Aufgabe', color: '#E9C46A', icon: CalendarDays, onClick: () => { setSheet(false); setPicker('task'); } },
+  ];
+
   return (
-    <div className="border-t border-white/5 p-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}>
+    <div className="border-t border-white/5 px-2.5 py-2.5" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.65rem)' }}>
       {attach && <PendingAttach attach={attach} onRemove={() => setAttach(null)} />}
       {uploading && (
         <div className="flex items-center gap-1.5 mb-2 text-[11px] text-hl-faint font-mono">
           <Loader2 className="w-3 h-3 animate-spin" /> lädt hoch…
         </div>
       )}
-      <div className="relative flex items-end gap-1.5">
+      {recorder.recording && (
+        <div className="flex items-center gap-1.5 mb-2 text-[11px] text-rose-300 font-mono">
+          <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" /> Aufnahme läuft – nochmal auf das Mikro tippen zum Stoppen.
+        </div>
+      )}
+      <div className="relative flex items-end gap-2">
         {mentionMatches.length > 0 && (
-          <div className="absolute bottom-full left-0 mb-2 w-56 bg-[#0f1614] border border-white/15 rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-20">
+          <div className="absolute bottom-full left-0 mb-2 w-56 bg-[#0f1614] border border-white/15 rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-30">
             {mentionMatches.map((mm) => (
               <button
                 key={mm.id}
@@ -402,75 +478,99 @@ function Composer({
             ))}
           </div>
         )}
+
+        {/* Aufklapp-Menü (wie WhatsApp „+“) */}
+        <AnimatePresence>
+          {sheet && (
+            <>
+              <div className="fixed inset-0 z-[59]" onClick={() => setSheet(false)} />
+              <motion.div
+                initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 14, scale: 0.98 }}
+                transition={{ duration: 0.16 }}
+                className="absolute bottom-full left-0 right-0 mb-2 z-[60] rounded-2xl bg-[#12211f] border border-white/10 shadow-2xl shadow-black/60 p-4"
+              >
+                <div className="grid grid-cols-3 gap-y-4 gap-x-2">
+                  {tiles.map((t) => (
+                    <SheetTile key={t.key} label={t.label} color={t.color} icon={t.icon} onClick={t.onClick} />
+                  ))}
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
         <button
-          onClick={() => setShowPicker(true)}
-          title="Ticket oder Aufgabe anhängen"
-          className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-hl-soft hover:text-white cursor-pointer shrink-0"
+          onClick={() => setSheet((v) => !v)}
+          title="Anhängen"
+          className={`p-3 rounded-full border cursor-pointer shrink-0 transition-colors ${
+            sheet ? 'bg-brand-accent-light text-white border-brand-accent-light rotate-45' : 'bg-white/5 border-white/10 text-hl-soft hover:text-white'
+          } transition-transform`}
         >
-          <Link2 className="w-4 h-4" />
+          <Plus className="w-5 h-5" />
         </button>
-        <button
-          onClick={() => fileRef.current?.click()}
-          title="Datei / Bild anhängen"
-          className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-hl-soft hover:text-white cursor-pointer shrink-0"
-        >
-          <Paperclip className="w-4 h-4" />
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          className="hidden"
-          onChange={(e) => {
-            void onFileChosen(e.target.files?.[0]);
-            e.target.value = '';
-          }}
-        />
-        <button
-          onClick={recorder.toggle}
-          title={recorder.recording ? 'Aufnahme stoppen & anhängen' : 'Sprachnachricht aufnehmen'}
-          className={`p-2.5 rounded-xl border cursor-pointer shrink-0 transition-colors ${
-            recorder.recording
-              ? 'bg-rose-500/20 border-rose-500/50 text-rose-300 animate-pulse'
-              : 'bg-white/5 border-white/10 text-hl-soft hover:text-white'
-          }`}
-        >
-          <Mic className="w-4 h-4" />
-        </button>
-        <textarea
-          ref={taRef}
-          value={body}
-          onChange={(e) => onBodyChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              if (mentionMatches.length > 0) {
+
+        {/* versteckte Datei-Eingaben */}
+        <input ref={galleryRef} type="file" accept="image/*" className="hidden" onChange={(e) => { void onFileChosen(e.target.files?.[0]); e.target.value = ''; }} />
+        <input ref={cameraRef} type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(e) => { void onFileChosen(e.target.files?.[0]); e.target.value = ''; }} />
+        <input ref={docRef} type="file" className="hidden" onChange={(e) => { void onFileChosen(e.target.files?.[0]); e.target.value = ''; }} />
+
+        <div className="flex-1 flex items-end bg-[#0e1a18] border border-white/10 rounded-3xl px-4 focus-within:border-brand-accent-light/60 transition-colors">
+          <textarea
+            ref={taRef}
+            value={body}
+            onChange={(e) => onBodyChange(e.target.value)}
+            onBlur={() => onStopTyping?.()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                if (mentionMatches.length > 0) {
+                  e.preventDefault();
+                  pickMention(mentionMatches[0].name);
+                  return;
+                }
                 e.preventDefault();
-                pickMention(mentionMatches[0].name);
-                return;
+                submit();
               }
-              e.preventDefault();
-              submit();
-            }
-          }}
-          rows={1}
-          placeholder={placeholder}
-          className={`${inputClass} resize-none max-h-32`}
-        />
-        <button
-          onClick={submit}
-          disabled={busy || uploading}
-          className="p-2.5 rounded-xl bg-brand-accent-light hover:bg-brand-accent text-white cursor-pointer disabled:opacity-50 shrink-0"
-        >
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-        </button>
+            }}
+            rows={1}
+            placeholder={placeholder}
+            className="w-full bg-transparent text-[15px] text-white placeholder:text-hl-faint focus:outline-none resize-none max-h-36 py-3 leading-snug"
+          />
+        </div>
+
+        {hasContent ? (
+          <button
+            onClick={submit}
+            disabled={busy || uploading}
+            title="Senden"
+            className="p-3 rounded-full bg-brand-accent-light hover:bg-brand-accent text-white cursor-pointer disabled:opacity-50 shrink-0"
+          >
+            {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+          </button>
+        ) : (
+          <button
+            onClick={recorder.toggle}
+            title={recorder.recording ? 'Aufnahme stoppen & anhängen' : 'Sprachnachricht aufnehmen'}
+            className={`p-3 rounded-full border cursor-pointer shrink-0 transition-colors ${
+              recorder.recording
+                ? 'bg-rose-500 border-rose-500 text-white animate-pulse'
+                : 'bg-brand-accent-light border-brand-accent-light text-white hover:bg-brand-accent'
+            }`}
+          >
+            <Mic className="w-5 h-5" />
+          </button>
+        )}
       </div>
       <AnimatePresence>
-        {showPicker && (
+        {picker && (
           <AttachPicker
+            initialTab={picker}
             onPick={(a) => {
               setAttach({ kind: 'ref', type: a.type, id: a.id, title: a.title });
-              setShowPicker(false);
+              setPicker(null);
             }}
-            onClose={() => setShowPicker(false)}
+            onClose={() => setPicker(null)}
           />
         )}
       </AnimatePresence>
@@ -482,7 +582,9 @@ function Composer({
 function MessageRow({
   m,
   mine,
+  firstOfRun = true,
   showAuthor,
+  colorSeed,
   displayName,
   avatarUrl,
   onOpenThread,
@@ -490,28 +592,34 @@ function MessageRow({
 }: {
   m: ChatMessage;
   mine: boolean;
+  firstOfRun?: boolean;
   showAuthor: boolean;
+  colorSeed: string;
   displayName?: string;
   avatarUrl?: string;
   onOpenThread?: (m: ChatMessage) => void;
   onOpenAttachment?: (type: 'ticket' | 'task', id: string) => void;
 }) {
   const name = displayName || m.authorName;
+  const tailClass = firstOfRun ? (mine ? 'hl-bubble-out rounded-tr-md' : 'hl-bubble-in rounded-tl-md') : '';
   return (
-    <div className={`flex gap-2 ${mine ? 'justify-end' : 'justify-start'}`}>
-      {!mine && <div className="w-7 shrink-0 self-end">{showAuthor && <Avatar name={name} url={avatarUrl} size={28} />}</div>}
-      <div className={`max-w-[80%] ${mine ? 'items-end' : 'items-start'} flex flex-col`}>
-        {/* Gruppen: Name des Absenders klein über dem ersten Block (wie WhatsApp) */}
-        {showAuthor && !mine && <span className="text-[11px] font-sans font-semibold text-brand-accent-light/90 mb-0.5 px-1">{name}</span>}
+    <div className={`flex gap-2 ${mine ? 'justify-end' : 'justify-start'} ${firstOfRun ? 'mt-2.5' : 'mt-0.5'}`}>
+      {!mine && <div className="w-7 shrink-0 self-end">{firstOfRun && <Avatar name={name} url={avatarUrl} size={28} />}</div>}
+      <div className={`max-w-[82%] ${mine ? 'items-end' : 'items-start'} flex flex-col`}>
         <div
-          className={`rounded-2xl px-3 py-1.5 ${
-            mine ? 'bg-brand-accent-light/90 text-white rounded-br-sm' : 'bg-[#0f1614] border border-white/5 text-hl-soft rounded-bl-sm'
-          }`}
+          className={`hl-bubble px-3 py-2 rounded-2xl shadow-sm shadow-black/20 ${mine ? 'text-white rounded-br-md' : 'text-hl-text rounded-bl-md'} ${tailClass}`}
+          style={{ background: mine ? BUBBLE_MINE : BUBBLE_OTHER }}
         >
-          {m.body && <p className="text-sm font-sans whitespace-pre-wrap break-words">{m.body}</p>}
+          {/* Gruppen: Name des Absenders in seiner (konstanten) Farbe */}
+          {showAuthor && !mine && (
+            <div className="text-[12px] font-sans font-bold mb-0.5" style={{ color: pickNameColor(name, colorSeed) }}>
+              {name}
+            </div>
+          )}
+          {m.body && <p className="text-[15px] font-sans whitespace-pre-wrap break-words leading-snug">{m.body}</p>}
           <MessageAttachment m={m} onOpen={onOpenAttachment} />
-          {/* Uhrzeit klein in der Bubble, rechts unten */}
-          <div className={`text-[9px] font-mono leading-none text-right mt-1 ${mine ? 'text-white/70' : 'text-hl-faint'}`}>
+          {/* Uhrzeit klein in der Bubble, rechts unten (KEINE Lesebestätigung) */}
+          <div className={`text-[10px] font-mono leading-none text-right mt-1 ${mine ? 'text-white/60' : 'text-hl-faint'}`}>
             {fmtClock(m.createdAt)}
           </div>
         </div>
@@ -525,6 +633,33 @@ function MessageRow({
             {m.replyCount ? m.replyCount : ''}
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// „Tippt gerade“-Blase (wie WhatsApp: Profilbild + wippende Punkte).
+function TypingRow({
+  typers,
+  members,
+}: {
+  typers: { userId: string; userName: string }[];
+  members: Map<string, TeamMember>;
+}) {
+  const first = typers[0];
+  if (!first) return null;
+  const mem = members.get(first.userId);
+  return (
+    <div className="flex gap-2 justify-start items-end mt-2.5">
+      <div className="w-7 shrink-0 self-end">
+        <Avatar name={mem?.name ?? first.userName} url={mem?.avatarUrl} size={28} />
+      </div>
+      <div className="hl-bubble hl-bubble-in rounded-2xl rounded-bl-md rounded-tl-md px-4 py-3" style={{ background: BUBBLE_OTHER }}>
+        <span className="flex items-center gap-1.5 text-brand-accent-light">
+          <span className="hl-typing-dot" style={{ animationDelay: '0s' }} />
+          <span className="hl-typing-dot" style={{ animationDelay: '0.18s' }} />
+          <span className="hl-typing-dot" style={{ animationDelay: '0.36s' }} />
+        </span>
       </div>
     </div>
   );
@@ -584,16 +719,29 @@ function ThreadModal({
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
-          <div className="pb-3 border-b border-white/5">
-            <MessageRow m={parent} mine={parent.authorId === currentUserId} showAuthor />
+        <div className="flex-1 overflow-y-auto p-3 hl-chat-bg">
+          <div className="pb-3 mb-1 border-b border-white/5">
+            <MessageRow m={parent} mine={parent.authorId === currentUserId} showAuthor colorSeed={conversationId} />
           </div>
           {loading ? (
             <div className="flex justify-center py-6 text-hl-mute">
               <Loader2 className="w-5 h-5 animate-spin" />
             </div>
           ) : (
-            replies.map((r) => <MessageRow key={r.id} m={r} mine={r.authorId === currentUserId} showAuthor />)
+            replies.map((r, i) => {
+              const prev = i > 0 ? replies[i - 1] : null;
+              const block = sameBlock(prev, r);
+              return (
+                <MessageRow
+                  key={r.id}
+                  m={r}
+                  mine={r.authorId === currentUserId}
+                  firstOfRun={!block}
+                  showAuthor={!block}
+                  colorSeed={conversationId}
+                />
+              );
+            })
           )}
         </div>
         <Composer
@@ -748,6 +896,7 @@ function ConversationInfo({
   team,
   currentUserId,
   isSuperadmin,
+  online,
   onClose,
   onChanged,
 }: {
@@ -756,6 +905,7 @@ function ConversationInfo({
   team: TeamMember[];
   currentUserId: string;
   isSuperadmin: boolean;
+  online: Set<string>;
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -840,12 +990,14 @@ function ConversationInfo({
             <div className="space-y-1.5 mb-4">
               {conversation.members.map((mm) => {
                 const mem = members.get(mm.userId);
+                const isOnline = online.has(mm.userId);
                 return (
                   <div key={mm.userId} className="flex items-center gap-2.5">
-                    <Avatar name={mem?.name ?? mm.userName} url={mem?.avatarUrl} status={mem?.status} size={30} showStatus ring="#0b1210" />
+                    <Avatar name={mem?.name ?? mm.userName} url={mem?.avatarUrl} status={isOnline ? 'online' : undefined} size={30} showStatus={isOnline} ring="#0b1210" />
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-sans text-white truncate">{mem?.name ?? mm.userName}</div>
                     </div>
+                    {isOnline && <span className="text-[10px] font-mono text-hl-green shrink-0">online</span>}
                     {canEdit && mm.userId !== currentUserId && (
                       <button onClick={() => act(() => removeGroupMember(conversation.id, mm.userId))} disabled={busy} title="Entfernen" className="p-1.5 text-hl-mute hover:text-rose-400 cursor-pointer disabled:opacity-50">
                         <Trash2 className="w-4 h-4" />
@@ -873,9 +1025,13 @@ function ConversationInfo({
           </>
         ) : (
           <div className="flex flex-col items-center text-center gap-3 py-4">
-            <Avatar name={other?.name ?? conversationTitle(conversation, currentUserId)} url={other?.avatarUrl} status={other?.status} size={84} showStatus ring="#0b1210" />
+            <Avatar name={other?.name ?? conversationTitle(conversation, currentUserId)} url={other?.avatarUrl} status={otherId && online.has(otherId) ? 'online' : undefined} size={84} showStatus={!!(otherId && online.has(otherId))} ring="#0b1210" />
             <div className="font-display font-black text-white text-lg">{other?.name ?? conversationTitle(conversation, currentUserId)}</div>
-            {other?.status && <div className="text-sm text-hl-soft">{statusLine(other.status)}</div>}
+            {otherId && online.has(otherId) ? (
+              <div className="text-sm text-hl-green">online</div>
+            ) : (
+              other?.status && <div className="text-sm text-hl-soft">{statusLine(other.status)}</div>
+            )}
           </div>
         )}
       </motion.div>
@@ -911,6 +1067,9 @@ export default function ChatSystem({
   const [hits, setHits] = useState<ChatSearchHit[]>([]);
   const [convSearch, setConvSearch] = useState('');
   const [showConvSearch, setShowConvSearch] = useState(false);
+  // Präsenz: wer ist online + wer tippt in der geöffneten Unterhaltung.
+  const [online, setOnline] = useState<Set<string>>(new Set());
+  const [typers, setTypers] = useState<{ userId: string; userName: string }[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   // Scroll-Container der Nachrichten. WICHTIG: Wir scrollen NUR diesen Container
   // (scrollTop), niemals via scrollIntoView – sonst würde im Backoffice die ganze
@@ -922,6 +1081,25 @@ export default function ChatSystem({
     const el = e.currentTarget;
     atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
   };
+
+  // --- Präsenz: Heartbeat senden + Tipp-Status ------------------------------
+  const isTypingRef = useRef(false);
+  const lastTypingPing = useRef(0);
+  const onTyping = useCallback(() => {
+    isTypingRef.current = true;
+    const now = Date.now();
+    if (now - lastTypingPing.current > 2500 && activeId) {
+      lastTypingPing.current = now;
+      sendPresence(activeId).catch(() => {});
+    }
+  }, [activeId]);
+  const onStopTyping = useCallback(() => {
+    if (isTypingRef.current) {
+      isTypingRef.current = false;
+      lastTypingPing.current = 0;
+      sendPresence(null).catch(() => {});
+    }
+  }, []);
 
   // Ticket/Aufgabe aus einem Anhang öffnen (lesen/bearbeiten).
   const openAttachment = async (type: 'ticket' | 'task', id: string) => {
@@ -979,20 +1157,53 @@ export default function ChatSystem({
   useEffect(() => {
     if (!activeId) return;
     atBottomRef.current = true; // beim Öffnen unten starten
+    setTypers([]); // Tipp-Anzeige der vorigen Unterhaltung sofort leeren
     loadMessages(activeId);
     const iv = setInterval(() => loadMessages(activeId, true), 5000);
     return () => clearInterval(iv);
   }, [activeId, loadMessages]);
 
+  // Online-Heartbeat: alle ~18 s (und beim Sichtbarwerden) senden. Trägt den
+  // Tipp-Status mit, damit ein Heartbeat das Tippen nicht fälschlich löscht.
+  useEffect(() => {
+    const beat = () => sendPresence(isTypingRef.current ? activeId : null).catch(() => {});
+    beat();
+    const iv = setInterval(beat, 18000);
+    const onVis = () => document.visibilityState === 'visible' && beat();
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(iv);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [activeId]);
+
+  // Präsenz lesen: online-Menge global, Tipp-Anzeige für die aktive Unterhaltung.
+  useEffect(() => {
+    let stop = false;
+    const load = () => {
+      fetchPresence(activeId ?? undefined)
+        .then((p) => {
+          if (stop) return;
+          setOnline(new Set(p?.online ?? []));
+          setTypers((p?.typing ?? []).filter((t) => t.userId !== currentUserId));
+        })
+        .catch(() => {});
+    };
+    load();
+    const iv = setInterval(load, 4000);
+    return () => {
+      stop = true;
+      clearInterval(iv);
+    };
+  }, [activeId, currentUserId]);
+
   // Nach unten scrollen NUR, wenn man ohnehin unten ist – und nur INNERHALB des
-  // Chat-Containers (nicht die ganze Seite). Sonst würde das 5-Sekunden-
-  // Aktualisieren einen beim Lesen ständig nach unten reißen bzw. im Backoffice
-  // die komplette Seite nach unten scrollen.
+  // Chat-Containers (nicht die ganze Seite).
   useEffect(() => {
     if (atBottomRef.current && listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, typers.length]);
 
   // Globale Suche (entprellt).
   useEffect(() => {
@@ -1025,6 +1236,19 @@ export default function ChatSystem({
     setTimeout(loadConvs, 800);
   };
 
+  // Kopfzeilen-Unterzeile mit echter Präsenz („online“, „X online“, „… tippt“).
+  const activeOtherId = active && active.kind === 'dm' ? active.members.find((m) => m.userId !== currentUserId)?.userId : undefined;
+  const typingLabel = (() => {
+    if (typers.length === 0) return null;
+    if (!active || active.kind === 'dm') return 'tippt…';
+    if (typers.length === 1) return `${firstName(typers[0].userName)} tippt…`;
+    if (typers.length === 2) return `${firstName(typers[0].userName)} und ${firstName(typers[1].userName)} tippen…`;
+    return 'mehrere tippen…';
+  })();
+  const groupOnlineCount = active && active.kind === 'group'
+    ? active.members.filter((m) => m.userId !== currentUserId && online.has(m.userId)).length
+    : 0;
+
   return (
     <div
       className={`flex overflow-hidden bg-[#070d0c] ${
@@ -1032,7 +1256,7 @@ export default function ChatSystem({
       }`}
     >
       {/* Liste */}
-      <div className={`w-full md:w-72 border-r border-white/5 flex flex-col ${activeId ? 'hidden md:flex' : 'flex'}`}>
+      <div className={`w-full md:w-80 border-r border-white/5 flex flex-col ${activeId ? 'hidden md:flex' : 'flex'}`}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
           <span className="font-display font-bold text-white uppercase tracking-tight">Chats</span>
           <button
@@ -1073,6 +1297,7 @@ export default function ChatSystem({
               const name = conversationTitle(c, currentUserId);
               const otherId = c.kind === 'dm' ? c.members.find((m) => m.userId !== currentUserId)?.userId : undefined;
               const otherMem = otherId ? members.get(otherId) : undefined;
+              const dmOnline = !!(otherId && online.has(otherId));
               return (
                 <button
                   key={c.id}
@@ -1081,32 +1306,37 @@ export default function ChatSystem({
                     c.id === activeId ? 'bg-white/[.05]' : ''
                   }`}
                 >
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-3">
                     {c.kind === 'group' ? (
                       c.avatarUrl ? (
-                        <Avatar name={name} url={c.avatarUrl} size={36} />
+                        <Avatar name={name} url={c.avatarUrl} size={44} />
                       ) : (
-                        <div className="w-9 h-9 rounded-full bg-brand-accent/20 border border-brand-accent-light/30 flex items-center justify-center text-brand-accent-light shrink-0">
-                          <Hash className="w-4 h-4" />
+                        <div className="w-11 h-11 rounded-full bg-brand-accent/20 border border-brand-accent-light/30 flex items-center justify-center text-brand-accent-light shrink-0">
+                          <Hash className="w-5 h-5" />
                         </div>
                       )
                     ) : (
-                      <Avatar name={name} url={otherMem?.avatarUrl} status={otherMem?.status} size={36} showStatus />
+                      <Avatar name={name} url={otherMem?.avatarUrl} status={dmOnline ? 'online' : undefined} size={44} showStatus={dmOnline} />
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-sans font-semibold text-sm text-white truncate">{name}</span>
+                        <span className="font-sans font-semibold text-[15px] text-white truncate">{name}</span>
+                        {c.lastMessage && (
+                          <span className="text-[10px] font-mono text-hl-faint shrink-0">{fmtClock(c.lastMessage.createdAt)}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[12px] text-hl-dim font-sans truncate block">
+                          {c.lastMessage
+                            ? `${c.kind === 'group' ? `${firstName(c.lastMessage.authorName)}: ` : ''}${c.lastMessage.attachType ? '📎 ' : ''}${c.lastMessage.body || 'Anhang'}`
+                            : 'Noch keine Nachrichten'}
+                        </span>
                         {c.unread > 0 && (
-                          <span className="min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shrink-0">
+                          <span className="min-w-[18px] h-[18px] px-1 bg-brand-accent-light text-[#04120f] text-[10px] font-bold rounded-full flex items-center justify-center shrink-0">
                             {c.unread > 9 ? '9+' : c.unread}
                           </span>
                         )}
                       </div>
-                      <span className="text-[11px] text-hl-dim font-sans truncate block">
-                        {c.lastMessage
-                          ? `${c.lastMessage.authorName}: ${c.lastMessage.attachType ? '📎 ' : ''}${c.lastMessage.body || 'Anhang'}`
-                          : 'Noch keine Nachrichten'}
-                      </span>
                     </div>
                   </div>
                 </button>
@@ -1146,35 +1376,48 @@ export default function ChatSystem({
       {/* Nachrichten */}
       <div className={`flex-1 flex-col ${activeId ? 'flex' : 'hidden md:flex'}`}>
         {!active ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-hl-mute gap-2">
+          <div className="flex-1 flex flex-col items-center justify-center text-hl-mute gap-2 hl-chat-bg">
             <MessageSquare className="w-8 h-8 text-hl-faint" />
             <p className="text-sm font-sans">Wähle links eine Unterhaltung.</p>
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-white/5">
-              <button onClick={() => setActiveId(null)} className="md:hidden p-1 text-hl-mute hover:text-white cursor-pointer">
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/5 bg-[#0b1512]">
+              <button onClick={() => setActiveId(null)} className="md:hidden p-1 -ml-1 text-hl-mute hover:text-white cursor-pointer">
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <button onClick={() => setShowInfo(true)} className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer" title="Infos anzeigen">
+              <button onClick={() => setShowInfo(true)} className="flex items-center gap-2.5 min-w-0 flex-1 text-left cursor-pointer" title="Infos anzeigen">
                 {active.kind === 'group' ? (
                   active.avatarUrl ? (
-                    <Avatar name={conversationTitle(active, currentUserId)} url={active.avatarUrl} size={34} />
+                    <Avatar name={conversationTitle(active, currentUserId)} url={active.avatarUrl} size={40} />
                   ) : (
-                    <div className="w-8 h-8 rounded-full bg-brand-accent/20 border border-brand-accent-light/30 flex items-center justify-center text-brand-accent-light shrink-0">
-                      <Hash className="w-4 h-4" />
+                    <div className="w-10 h-10 rounded-full bg-brand-accent/20 border border-brand-accent-light/30 flex items-center justify-center text-brand-accent-light shrink-0">
+                      <Hash className="w-5 h-5" />
                     </div>
                   )
                 ) : (
                   (() => {
-                    const other = members.get(active.members.find((m) => m.userId !== currentUserId)?.userId ?? '');
-                    return <Avatar name={conversationTitle(active, currentUserId)} url={other?.avatarUrl} status={other?.status} size={34} showStatus />;
+                    const other = members.get(activeOtherId ?? '');
+                    const dmOnline = !!(activeOtherId && online.has(activeOtherId));
+                    return <Avatar name={conversationTitle(active, currentUserId)} url={other?.avatarUrl} status={dmOnline ? 'online' : undefined} size={40} showStatus={dmOnline} />;
                   })()
                 )}
                 <div className="min-w-0">
-                  <div className="font-display font-bold text-white text-sm truncate">{conversationTitle(active, currentUserId)}</div>
-                  <div className="text-[10px] font-mono text-hl-dim flex items-center gap-1">
-                    <Users className="w-3 h-3" /> {active.members.length} Mitglieder · Infos
+                  <div className="font-display font-bold text-white text-[15px] truncate">{conversationTitle(active, currentUserId)}</div>
+                  <div className="text-[11px] font-sans truncate">
+                    {typingLabel ? (
+                      <span className="text-brand-accent-light">{typingLabel}</span>
+                    ) : active.kind === 'dm' ? (
+                      activeOtherId && online.has(activeOtherId) ? (
+                        <span className="text-hl-green">online</span>
+                      ) : (
+                        <span className="text-hl-dim">offline · Infos</span>
+                      )
+                    ) : groupOnlineCount > 0 ? (
+                      <span className="text-hl-green">{groupOnlineCount} online · {active.members.length} Mitglieder</span>
+                    ) : (
+                      <span className="text-hl-dim flex items-center gap-1"><Users className="w-3 h-3" /> {active.members.length} Mitglieder</span>
+                    )}
                   </div>
                 </div>
               </button>
@@ -1187,7 +1430,7 @@ export default function ChatSystem({
               </button>
             </div>
             {showConvSearch && (
-              <div className="px-3 py-2 border-b border-white/5">
+              <div className="px-3 py-2 border-b border-white/5 bg-[#0b1512]">
                 <div className="flex items-center gap-2 bg-[#060E0F] border border-white/10 rounded-lg px-2.5 py-1.5">
                   <Search className="w-3.5 h-3.5 text-hl-dim shrink-0" />
                   <input
@@ -1206,7 +1449,7 @@ export default function ChatSystem({
               </div>
             )}
 
-            <div ref={listRef} className="flex-1 overflow-y-auto p-3 space-y-2" onScroll={onMsgScroll}>
+            <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-3 hl-chat-bg" onScroll={onMsgScroll}>
               {loadingMsgs ? (
                 <div className="flex justify-center py-8 text-hl-mute">
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -1220,14 +1463,15 @@ export default function ChatSystem({
                   const mem = members.get(m.authorId);
                   const prev = i > 0 ? shownMessages[i - 1] : null;
                   const newDay = !prev || dayKey(prev.createdAt) !== dayKey(m.createdAt);
-                  // Absender-Name/Bild nur beim ersten Block einer Person zeigen
-                  // (bzw. nach einem Tageswechsel wieder).
-                  const showAuthor = active.kind === 'group' && (newDay || !prev || prev.authorId !== m.authorId);
+                  const block = !newDay && sameBlock(prev, m);
+                  const firstOfRun = !block;
+                  // Absender-Name/Bild nur beim ersten Block einer Person zeigen.
+                  const showAuthor = active.kind === 'group' && firstOfRun;
                   return (
                     <React.Fragment key={m.id}>
                       {newDay && (
                         <div className="flex justify-center my-3">
-                          <span className="text-[10px] font-mono uppercase tracking-wider text-hl-mute bg-[#0b1210] border border-white/10 rounded-full px-3 py-1">
+                          <span className="text-[10px] font-mono uppercase tracking-wider text-hl-mute bg-[#0b1210]/90 border border-white/10 rounded-full px-3 py-1">
                             {fmtDaySeparator(m.createdAt)}
                           </span>
                         </div>
@@ -1235,7 +1479,9 @@ export default function ChatSystem({
                       <MessageRow
                         m={m}
                         mine={m.authorId === currentUserId}
+                        firstOfRun={firstOfRun}
                         showAuthor={showAuthor}
+                        colorSeed={active.id}
                         displayName={mem?.name}
                         avatarUrl={mem?.avatarUrl}
                         onOpenThread={setThread}
@@ -1245,6 +1491,7 @@ export default function ChatSystem({
                   );
                 })
               )}
+              {!convSearch.trim() && typers.length > 0 && <TypingRow typers={typers} members={members} />}
               <div ref={bottomRef} />
             </div>
 
@@ -1252,6 +1499,8 @@ export default function ChatSystem({
               conversationId={active.id}
               mentionable={activeMentionable}
               placeholder="Nachricht schreiben… (@Name erwähnt, Enter sendet)"
+              onTyping={onTyping}
+              onStopTyping={onStopTyping}
               onSent={(m) => {
                 setMessages((prev) => [...prev, m]);
                 loadConvs();
@@ -1291,6 +1540,7 @@ export default function ChatSystem({
             team={team}
             currentUserId={currentUserId}
             isSuperadmin={isSuperadmin}
+            online={online}
             onClose={() => setShowInfo(false)}
             onChanged={loadConvs}
           />

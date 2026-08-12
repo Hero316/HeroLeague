@@ -446,6 +446,13 @@ export interface Conversation {
   lastMessage: ChatLastMessage | null;
 }
 
+// Präsenz-Schnappschuss für den Chat: wer ist gerade online + wer tippt in der
+// geöffneten Unterhaltung. Bewusst ohne Lesebestätigung.
+export interface ChatPresence {
+  online: string[]; // User-IDs mit frischem Heartbeat
+  typing: { userId: string; userName: string }[]; // tippt in der aktiven Unterhaltung
+}
+
 export type ChatAttachType = 'ticket' | 'task' | 'file' | 'audio';
 
 export interface ChatMessage {

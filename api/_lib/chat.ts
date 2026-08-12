@@ -288,6 +288,58 @@ export async function manageMember(req: VercelRequest, res: VercelResponse) {
   return res.json({ ok: true });
 }
 
+// --- Präsenz: echter Online-Status + „tippt gerade" -------------------------
+// Bewusst leichtgewichtig und ephemer (kein Verlauf, keine Lesebestätigung –
+// das würde nur Antwortdruck erzeugen). Ein Eintrag pro Nutzer.
+//   POST /api/chat?resource=presence {typingConversationId?}  -> Heartbeat (+Tippen)
+//   GET  /api/chat?resource=presence[&conversationId=X]       -> {online[],typing[]}
+export async function presence(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  const uid = session.userId;
+
+  if (req.method === 'POST') {
+    const b = req.body ?? {};
+    const typingConv = typeof b.typingConversationId === 'string' && b.typingConversationId ? b.typingConversationId : null;
+    const name = sessionName(session);
+    // Heartbeat aktualisiert immer last_seen; Tipp-Status wird gesetzt bzw.
+    // gelöscht (typing_at nur, wenn tatsächlich in einer Unterhaltung getippt).
+    await sql`
+      INSERT INTO chat_presence (user_id, last_seen, typing_conv, typing_at, typing_name)
+      VALUES (${uid}, now(), ${typingConv},
+              CASE WHEN ${typingConv}::text IS NULL THEN NULL ELSE now() END, ${name})
+      ON CONFLICT (user_id) DO UPDATE SET
+        last_seen = now(),
+        typing_conv = EXCLUDED.typing_conv,
+        typing_at = EXCLUDED.typing_at,
+        typing_name = EXCLUDED.typing_name
+    `;
+    return res.json({ ok: true });
+  }
+
+  if (req.method === 'GET') {
+    res.setHeader('Cache-Control', 'no-store');
+    const conversationId = String(req.query.conversationId ?? '');
+    // Online = Heartbeat jünger als 35 s (Client sendet alle ~18 s).
+    const onlineRows = (await sql`
+      SELECT user_id AS "userId" FROM chat_presence WHERE last_seen > now() - interval '35 seconds'
+    `) as { userId: string }[];
+    let typing: { userId: string; userName: string }[] = [];
+    if (conversationId && (await isMember(conversationId, uid))) {
+      typing = (await sql`
+        SELECT user_id AS "userId", COALESCE(typing_name, '') AS "userName"
+        FROM chat_presence
+        WHERE typing_conv = ${conversationId}
+          AND typing_at > now() - interval '6 seconds'
+          AND user_id <> ${uid}
+      `) as { userId: string; userName: string }[];
+    }
+    return res.json({ online: onlineRows.map((o) => o.userId), typing });
+  }
+
+  return res.status(405).json({ error: 'Nicht unterstützt' });
+}
+
 // --- Als gelesen markieren --------------------------------------------------
 export async function markRead(req: VercelRequest, res: VercelResponse) {
   const session = await getSession(req);
