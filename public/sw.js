@@ -15,7 +15,7 @@
 // Version bei Bedarf erhöhen: beim Aktivieren löscht der SW alle Caches mit
 // abweichendem Namen → ein hängengebliebener/kaputter Asset-Cache (z. B. schwarze
 // Seite nach einem Deploy) wird beim nächsten Laden automatisch bereinigt.
-const CACHE = 'hl-static-v6';
+const CACHE = 'hl-static-v7';
 
 // App-Shell für den Offline-Fallback. Bewusst minimal.
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/assets/icon-192.png'];
@@ -62,14 +62,19 @@ self.addEventListener('fetch', (event) => {
   if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) return;
 
   // Statische Assets: cache-first (Dateinamen sind durch Hashing eindeutig).
+  // WICHTIG: NUR erfolgreiche (200, same-origin) Antworten cachen. Sonst würde
+  // eine 404/Fehlerseite – z. B. wenn während eines Deploys ein JS-Chunk kurz
+  // fehlt – dauerhaft gecacht und die Seite bliebe leer hängen.
   if (isStaticAsset(url)) {
     event.respondWith(
       caches.match(request).then(
         (cached) =>
           cached ||
           fetch(request).then((res) => {
-            const copy = res.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => undefined);
+            if (res && res.ok && res.status === 200 && res.type === 'basic') {
+              const copy = res.clone();
+              caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => undefined);
+            }
             return res;
           }),
       ),
@@ -78,12 +83,15 @@ self.addEventListener('fetch', (event) => {
   }
 
   // HTML/Navigationen: network-first, damit online immer die aktuelle Seite kommt.
+  // Ebenfalls nur erfolgreiche Antworten als Offline-Fallback ablegen.
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((cache) => cache.put('/index.html', copy)).catch(() => undefined);
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((cache) => cache.put('/index.html', copy)).catch(() => undefined);
+          }
           return res;
         })
         .catch(() => caches.match(request).then((cached) => cached || caches.match('/index.html'))),

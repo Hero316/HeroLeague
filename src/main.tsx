@@ -15,6 +15,14 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 );
 
+// App ist erfolgreich gestartet → Selbstheilungs-Sperre lösen, damit ein
+// späterer Deploy in einer neuen Sitzung wieder heilen darf.
+try {
+  sessionStorage.removeItem('hl-recovered');
+} catch {
+  /* ignore */
+}
+
 // Service Worker registrieren: macht die Seite auf Android zuverlässig installierbar.
 // Läuft nur im Browser (nicht bei SSR) und stört bei Fehler die App nicht.
 if ('serviceWorker' in navigator) {

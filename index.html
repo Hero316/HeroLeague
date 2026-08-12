@@ -47,6 +47,62 @@
         "url": "https://www.hero-league.de/"
       }
     </script>
+    <!-- Selbstheilung: Bleibt die Seite nach einem Deploy leer (Haupt-Skript
+         konnte nicht geladen werden, z. B. veralteter Service-Worker-Cache),
+         dann SW abmelden, Caches leeren und EINMAL sauber neu laden. Verhindert
+         den "leeren/dunklen Bildschirm", ohne dass man x-mal aktualisieren muss. -->
+    <script>
+      (function () {
+        var recovered = false;
+        function hlRecover() {
+          if (recovered) return;
+          recovered = true;
+          try {
+            if (sessionStorage.getItem('hl-recovered')) return; // pro Sitzung nur 1x
+            sessionStorage.setItem('hl-recovered', '1');
+          } catch (e) {}
+          var reload = function () { try { location.reload(); } catch (e) {} };
+          var tasks = [];
+          try {
+            if ('serviceWorker' in navigator) {
+              tasks.push(
+                navigator.serviceWorker.getRegistrations().then(function (rs) {
+                  return Promise.all(rs.map(function (r) { return r.unregister(); }));
+                })
+              );
+            }
+            if (window.caches && caches.keys) {
+              tasks.push(
+                caches.keys().then(function (keys) {
+                  return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+                })
+              );
+            }
+          } catch (e) {}
+          Promise.all(tasks).then(reload, reload);
+          setTimeout(reload, 2500); // Sicherheitsnetz
+        }
+        // 1) Haupt-Skript/CSS konnte nicht laden (404/MIME) -> sofort heilen.
+        window.addEventListener(
+          'error',
+          function (e) {
+            var t = e && e.target;
+            if (t && (t.tagName === 'SCRIPT' || t.tagName === 'LINK') && (t.src || t.href) &&
+                String(t.src || t.href).indexOf('/assets/') !== -1) {
+              hlRecover();
+            }
+          },
+          true
+        );
+        // 2) Wächter: Ist #root nach ein paar Sekunden noch leer, ebenfalls heilen.
+        window.addEventListener('load', function () {
+          setTimeout(function () {
+            var root = document.getElementById('root');
+            if (root && root.childElementCount === 0) hlRecover();
+          }, 7000);
+        });
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
