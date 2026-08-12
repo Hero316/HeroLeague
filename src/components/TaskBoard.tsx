@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquare, Users, CalendarDays, LayoutGrid, ListChecks, Clock, Move, Check } from 'lucide-react';
-import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember, Match, EventArchive } from '../types';
+import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquare, Users, CalendarDays, LayoutGrid, ListChecks, Clock, Move, Check, Calendar, CheckSquare, Square } from 'lucide-react';
+import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember, Match, EventArchive, TaskKind } from '../types';
 import { fetchTasksRange, fetchAllTasks, fetchTask, createTask, updateTask, deleteTask, addTaskComment, fetchTeam, memberMap } from '../lib/collab';
 import { apiFetch } from '../lib/api';
 import { getUrlParam, setUrlParam } from '../lib/urlState';
@@ -102,6 +102,14 @@ function taskEnd(t: Task): string {
 function isMultiDay(t: Task): boolean {
   return !!(t.dueDate && t.endDate && t.endDate > t.dueDate);
 }
+// Termin (termin|beides) landet im Kalender; Aufgabe (aufgabe|beides) in der Liste.
+function isEvent(t: Task): boolean {
+  return t.type !== 'aufgabe';
+}
+function isTodo(t: Task): boolean {
+  return t.type !== 'termin';
+}
+const KIND_LABEL: Record<TaskKind, string> = { termin: 'Termin', aufgabe: 'Aufgabe', beides: 'Beides' };
 // Deckt die Aufgabe (Start..Ende) diesen Tag ab? (Stringvergleich YYYY-MM-DD)
 function coversDay(t: Task, key: string): boolean {
   if (!t.dueDate) return false;
@@ -297,8 +305,30 @@ function AssigneeChips({
   );
 }
 
+// 3-Wege-Umschalter Termin / Aufgabe / Beides.
+function TypeToggle({ value, onChange }: { value: TaskKind; onChange: (v: TaskKind) => void }) {
+  return (
+    <div className="flex gap-1 bg-[#060E0F]/40 border border-white/10 rounded-xl p-1">
+      {(['termin', 'aufgabe', 'beides'] as const).map((k) => (
+        <button
+          key={k}
+          type="button"
+          onClick={() => onChange(k)}
+          className={`flex-1 px-2 py-2 rounded-lg text-xs font-sans font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+            value === k ? 'bg-brand-accent-light text-white' : 'text-hl-mute hover:text-white'
+          }`}
+        >
+          {KIND_LABEL[k]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // Termin-Eingaben (Google-Stil): Ganztägig-Schalter, Tag von/bis, Uhrzeit von/bis.
+// Bei „Aufgabe" heißt der Starttag „Frist" und das Bis-Datum entfällt.
 function ScheduleFields({
+  kind,
   dueDate,
   endDate,
   allDay,
@@ -310,6 +340,7 @@ function ScheduleFields({
   onStart,
   onEndTime,
 }: {
+  kind: TaskKind;
   dueDate: string;
   endDate: string;
   allDay: boolean;
@@ -321,6 +352,7 @@ function ScheduleFields({
   onStart: (v: string) => void;
   onEndTime: (v: string) => void;
 }) {
+  const pureTask = kind === 'aufgabe';
   return (
     <div className="mt-3 rounded-xl border border-white/10 bg-[#060E0F]/40 p-3 space-y-3">
       <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -331,17 +363,19 @@ function ScheduleFields({
         >
           <span className={`absolute top-[3px] w-4 h-4 rounded-full bg-white shadow transition-all ${allDay ? 'left-[21px]' : 'left-[3px]'}`} />
         </button>
-        <span className="text-sm font-sans text-hl-soft">Ganztägig</span>
+        <span className="text-sm font-sans text-hl-soft">{pureTask ? 'Ohne Uhrzeit' : 'Ganztägig'}</span>
       </label>
-      <div className="grid grid-cols-2 gap-3">
+      <div className={`grid ${pureTask ? 'grid-cols-1' : 'grid-cols-2'} gap-3`}>
         <div>
-          <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Tag von</label>
+          <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">{pureTask ? 'Frist (Datum)' : 'Tag von'}</label>
           <input type="date" value={dueDate} onChange={(e) => onDue(e.target.value)} className={inputClass} />
         </div>
-        <div>
-          <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Tag bis</label>
-          <input type="date" value={endDate} min={dueDate || undefined} onChange={(e) => onEnd(e.target.value)} className={inputClass} />
-        </div>
+        {!pureTask && (
+          <div>
+            <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Tag bis</label>
+            <input type="date" value={endDate} min={dueDate || undefined} onChange={(e) => onEnd(e.target.value)} className={inputClass} />
+          </div>
+        )}
       </div>
       {!allDay && (
         <div className="grid grid-cols-2 gap-3">
@@ -379,6 +413,7 @@ export function TaskDetail({
 }) {
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes);
+  const [type, setType] = useState<TaskKind>(task.type ?? 'termin');
   const [status, setStatus] = useState<TaskStatus>(task.status);
   const [priority, setPriority] = useState<TicketPriority>(task.priority);
   const [dueDate, setDueDate] = useState<string>(task.dueDate ?? '');
@@ -410,10 +445,11 @@ export function TaskDetail({
       await updateTask(task.id, {
         title: title.trim(),
         notes,
+        type,
         status,
         priority,
         dueDate: dueDate || null,
-        endDate: endDate && dueDate && endDate > dueDate ? endDate : null,
+        endDate: type !== 'aufgabe' && endDate && dueDate && endDate > dueDate ? endDate : null,
         startTime: allDay ? null : startTime || null,
         endTime: allDay ? null : endTime || null,
         assignees,
@@ -469,7 +505,11 @@ export function TaskDetail({
         <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1 mt-3">Notizen</label>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className={`${inputClass} resize-y`} />
 
+        <div className="mt-3">
+          <TypeToggle value={type} onChange={setType} />
+        </div>
         <ScheduleFields
+          kind={type}
           dueDate={dueDate}
           endDate={endDate}
           allDay={allDay}
@@ -576,12 +616,13 @@ function NewTaskModal({
   onClose,
   onCreated,
 }: {
-  prefill: { date: string; startTime?: string };
+  prefill: { date: string; startTime?: string; type?: TaskKind };
   team: TeamMember[];
   onClose: () => void;
   onCreated: () => void;
 }) {
   const [title, setTitle] = useState('');
+  const [type, setType] = useState<TaskKind>(prefill.type ?? 'termin');
   const [dueDate, setDueDate] = useState(prefill.date);
   const [endDate, setEndDate] = useState('');
   const [allDay, setAllDay] = useState(!prefill.startTime);
@@ -600,8 +641,9 @@ function NewTaskModal({
     try {
       await createTask({
         title: title.trim(),
+        type,
         dueDate: dueDate || null,
-        endDate: endDate && dueDate && endDate > dueDate ? endDate : null,
+        endDate: type !== 'aufgabe' && endDate && dueDate && endDate > dueDate ? endDate : null,
         startTime: allDay ? null : startTime || null,
         endTime: allDay ? null : endTime || null,
         status,
@@ -620,14 +662,18 @@ function NewTaskModal({
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4 overflow-y-auto" {...backdrop}>
       <motion.div initial={{ scale: 0.97 }} animate={{ scale: 1 }} className="hl-card hl-modal-card w-full max-w-md p-5 my-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display font-black text-lg text-white uppercase tracking-tight">Neue Aufgabe</h3>
+          <h3 className="font-display font-black text-lg text-white uppercase tracking-tight">Neu</h3>
           <button onClick={onClose} className="p-1.5 text-hl-mute hover:text-white cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
+        <div className="mb-3">
+          <TypeToggle value={type} onChange={setType} />
+        </div>
         <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Titel *</label>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus placeholder="z.B. Video schneiden" className={inputClass} />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus placeholder={type === 'aufgabe' ? 'z.B. Video schneiden' : 'z.B. DVAG Treff'} className={inputClass} />
         <ScheduleFields
+          kind={type}
           dueDate={dueDate}
           endDate={endDate}
           allDay={allDay}
@@ -905,9 +951,9 @@ function DayView({
 export default function TaskBoard({ currentUserId, isSuperadmin, persist = false }: { currentUserId: string; isSuperadmin: boolean; persist?: boolean }) {
   // Ansicht + Datum aus der URL wiederherstellen (nur in der Team-App), damit
   // man nach dem Aktualisieren dort bleibt (Tag/Woche/Monat + Datum).
-  const [view, setView] = useState<'month' | 'week' | 'day' | 'mine'>(() => {
+  const [view, setView] = useState<'month' | 'week' | 'day' | 'termine' | 'aufgaben'>(() => {
     const v = persist ? getUrlParam('av') : null;
-    return v === 'week' || v === 'day' || v === 'mine' ? v : 'month';
+    return v === 'week' || v === 'day' || v === 'termine' || v === 'aufgaben' ? v : 'month';
   });
   const [anchor, setAnchor] = useState<Date>(() => {
     const d = persist ? getUrlParam('ad') : null;
@@ -923,7 +969,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [openTask, setOpenTask] = useState<Task | null>(null);
-  const [newTask, setNewTask] = useState<{ date: string; startTime?: string } | null>(null);
+  const [newTask, setNewTask] = useState<{ date: string; startTime?: string; type?: TaskKind } | null>(null);
   // Leuchtende Marker: Liga-Spieltage & Testspieltage (einmal laden).
   const [hl, setHl] = useState<Record<string, Highlight>>({});
   useEffect(() => {
@@ -957,9 +1003,9 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      // „Meine Aufgaben" braucht ALLE Aufgaben (nicht nur den Kalenderbereich).
+      // Die Listen (Termine/Aufgaben) brauchen ALLE Einträge, der Kalender nur den Bereich.
       const [t, m] = await Promise.all([
-        view === 'mine' ? fetchAllTasks() : fetchTasksRange(range.from, range.to),
+        view === 'termine' || view === 'aufgaben' ? fetchAllTasks() : fetchTasksRange(range.from, range.to),
         fetchTeam().catch(() => []),
       ]);
       setTasks(t);
@@ -976,23 +1022,38 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
   }, [load]);
 
   const members = useMemo(() => memberMap(team), [team]);
+  // Für den Kalender nur Termine (termin|beides).
+  const eventTasks = useMemo(() => tasks.filter(isEvent), [tasks]);
   const tasksByDay = useMemo(() => {
     const map: Record<string, Task[]> = {};
-    for (const t of tasks) {
+    for (const t of eventTasks) {
       if (!t.dueDate) continue;
       (map[t.dueDate] ??= []).push(t);
     }
     return map;
-  }, [tasks]);
+  }, [eventTasks]);
 
-  // „Meine Aufgaben": alle mir zugewiesenen, offene zuerst, erledigte unten.
-  const myTasks = useMemo(() => {
-    const order: Record<TaskStatus, number> = { in_bearbeitung: 0, offen: 1, leer: 2, erledigt: 3, abgebrochen: 4 };
-    return tasks
-      .filter((t) => t.assignees.some((a) => a.userId === currentUserId))
-      .slice()
-      .sort((a, b) => (order[a.status] - order[b.status]) || (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999'));
-  }, [tasks, currentUserId]);
+  const involvesMe = (t: Task) => t.assignees.some((a) => a.userId === currentUserId) || t.createdBy === currentUserId;
+
+  // „Meine Termine": kommende zuerst, nach Datum + Uhrzeit.
+  const myEvents = useMemo(
+    () =>
+      tasks
+        .filter((t) => isEvent(t) && involvesMe(t))
+        .slice()
+        .sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999') || (a.startTime ?? '').localeCompare(b.startTime ?? '')),
+    [tasks, currentUserId] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  // „Meine Aufgaben": To-dos mit Frist, gruppiert (überfällig/heute/…); erledigte unten.
+  const myTodos = useMemo(
+    () =>
+      tasks
+        .filter((t) => isTodo(t) && involvesMe(t))
+        .slice()
+        .sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999') || (a.startTime ?? '').localeCompare(b.startTime ?? '')),
+    [tasks, currentUserId] // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   const quickSetStatus = async (t: Task, next: TaskStatus) => {
     setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: next } : x)));
@@ -1027,22 +1088,22 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
     <div>
       {/* Kopfzeile: Ansicht + Navigation */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-1 bg-[#060E0F]/50 border border-white/10 rounded-xl p-1">
-          {(['month', 'week', 'day', 'mine'] as const).map((v) => (
+        <div className="flex items-center gap-1 bg-[#060E0F]/50 border border-white/10 rounded-xl p-1 overflow-x-auto max-w-full">
+          {(['month', 'week', 'day', 'termine', 'aufgaben'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-sans font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1.5 ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-sans font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1.5 shrink-0 ${
                 view === v ? 'bg-brand-accent-light text-white' : 'text-hl-mute hover:text-white'
               }`}
             >
-              {v === 'month' ? <LayoutGrid className="w-3.5 h-3.5" /> : v === 'week' ? <CalendarDays className="w-3.5 h-3.5" /> : v === 'day' ? <Clock className="w-3.5 h-3.5" /> : <ListChecks className="w-3.5 h-3.5" />}
-              {v === 'month' ? 'Monat' : v === 'week' ? 'Woche' : v === 'day' ? 'Tag' : 'Meine'}
+              {v === 'month' ? <LayoutGrid className="w-3.5 h-3.5" /> : v === 'week' ? <CalendarDays className="w-3.5 h-3.5" /> : v === 'day' ? <Clock className="w-3.5 h-3.5" /> : v === 'termine' ? <Calendar className="w-3.5 h-3.5" /> : <CheckSquare className="w-3.5 h-3.5" />}
+              {v === 'month' ? 'Monat' : v === 'week' ? 'Woche' : v === 'day' ? 'Tag' : v === 'termine' ? 'Termine' : 'Aufgaben'}
             </button>
           ))}
         </div>
 
-        {view !== 'mine' && (
+        {(view === 'month' || view === 'week' || view === 'day') && (
           <div className="flex items-center gap-2">
             <button onClick={() => shift(-1)} className="p-2 rounded-lg bg-white/5 border border-white/10 text-hl-soft hover:text-white cursor-pointer">
               <ChevronLeft className="w-4 h-4" />
@@ -1057,8 +1118,11 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
           </div>
         )}
 
-        <button onClick={() => setNewTask({ date: view === 'day' ? ymd(anchor) : TODAY })} className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white cursor-pointer flex items-center gap-1.5">
-          <Plus className="w-4 h-4" /> Aufgabe
+        <button
+          onClick={() => setNewTask({ date: view === 'day' ? ymd(anchor) : TODAY, type: view === 'aufgaben' ? 'aufgabe' : 'termin' })}
+          className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white cursor-pointer flex items-center gap-1.5 shrink-0"
+        >
+          <Plus className="w-4 h-4" /> {view === 'aufgaben' ? 'Aufgabe' : 'Neu'}
         </button>
       </div>
 
@@ -1066,55 +1130,120 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
         <div className="flex items-center justify-center py-16 text-hl-mute">
           <Loader2 className="w-6 h-6 animate-spin" />
         </div>
-      ) : view === 'mine' ? (
-        /* -------- MEINE AUFGABEN (alle mir zugewiesenen, abzuarbeiten) -------- */
-        <div className="space-y-2">
-          {myTasks.length === 0 ? (
-            <p className="text-center text-sm text-hl-mute font-sans py-12">Dir sind aktuell keine Aufgaben zugewiesen.</p>
+      ) : view === 'termine' ? (
+        /* -------- MEINE TERMINE (Agenda, nach Datum) -------- */
+        <div className="space-y-1.5">
+          {myEvents.length === 0 ? (
+            <p className="text-center text-sm text-hl-mute font-sans py-12">Keine Termine, die dich betreffen.</p>
           ) : (
-            myTasks.map((t) => (
-              <div
-                key={t.id}
-                onClick={() => setOpenTask(t)}
-                className={`bg-[#0a1110] border border-white/5 rounded-xl p-3 cursor-pointer hover:border-white/15 transition-colors flex items-center gap-3 ${
-                  t.status === 'erledigt' || t.status === 'abgebrochen' ? 'opacity-60' : ''
-                }`}
-              >
-                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${STATUS_DOT[t.status]}`} />
-                <div className="min-w-0 flex-1">
-                  <span className={`block text-sm font-sans text-white leading-snug break-words ${t.status === 'erledigt' ? 'line-through text-hl-mute' : ''}`}>
-                    {t.title}
-                  </span>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap text-[10px] font-mono text-hl-dim">
-                    {t.dueDate && (
-                      <span className="flex items-center gap-1">
-                        <CalendarDays className="w-3 h-3" /> {t.dueDate.slice(8)}.{t.dueDate.slice(5, 7)}.{t.dueDate.slice(0, 4)}
-                      </span>
-                    )}
-                    <span className={`px-1.5 py-0.5 rounded ${PRIORITY_CELL[t.priority]}`}>{PRIORITY_LABEL[t.priority]}</span>
-                    {!!t.commentCount && (
-                      <span className="flex items-center gap-1">
-                        <MessageSquare className="w-3 h-3" /> {t.commentCount}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div onClick={(e) => e.stopPropagation()} className="shrink-0">
-                  <select
-                    value={t.status}
-                    onChange={(e) => quickSetStatus(t, e.target.value as TaskStatus)}
-                    className={`appearance-none text-[11px] font-semibold uppercase tracking-wider px-2 py-1 rounded-md cursor-pointer focus:outline-none ${STATUS_CELL[t.status]}`}
-                    title="Status ändern"
+            myEvents.map((t, i) => {
+              const prev = i > 0 ? myEvents[i - 1] : null;
+              const showDate = !prev || prev.dueDate !== t.dueDate;
+              const past = !!t.dueDate && taskEnd(t) < TODAY;
+              return (
+                <React.Fragment key={t.id}>
+                  {showDate && (
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-hl-dim pt-3 pb-1 px-1">
+                      {t.dueDate ? fmtDayHeading(t.dueDate) : 'Ohne Datum'}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setOpenTask(t)}
+                    className={`w-full text-left bg-[#0a1110] border border-white/5 rounded-xl p-3 cursor-pointer hover:border-white/15 flex items-center gap-3 ${past ? 'opacity-60' : ''}`}
                   >
-                    {STATUSES.map((s) => (
-                      <option key={s} value={s} className="text-black">{STATUS_LABEL[s]}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            ))
+                    <span className="w-1.5 self-stretch rounded-full shrink-0" style={{ background: t.type === 'beides' ? '#E9C46A' : '#22DFC9' }} />
+                    <div className="min-w-0 flex-1">
+                      <span className="block text-sm font-sans text-white leading-snug break-words">{t.title}</span>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap text-[10px] font-mono text-hl-dim">
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> {t.startTime ? timeLabel(t) : 'ganztägig'}
+                          {isMultiDay(t) ? ` · bis ${taskEnd(t).slice(8)}.${taskEnd(t).slice(5, 7)}.` : ''}
+                        </span>
+                        {t.type === 'beides' && <span className="px-1.5 py-0.5 rounded bg-brand-accent/15 text-brand-accent-light">auch Aufgabe</span>}
+                      </div>
+                    </div>
+                    <AssigneeChips assignees={t.assignees} urlFor={(id) => members.get(id)?.avatarUrl} px={22} />
+                  </button>
+                </React.Fragment>
+              );
+            })
           )}
         </div>
+      ) : view === 'aufgaben' ? (
+        /* -------- MEINE AUFGABEN (nach Frist gruppiert, zum Abhaken) -------- */
+        (() => {
+          if (myTodos.length === 0)
+            return <p className="text-center text-sm text-hl-mute font-sans py-12">Dir sind aktuell keine Aufgaben zugewiesen.</p>;
+          const bucketOf = (t: Task) => {
+            if (t.status === 'erledigt') return 'done';
+            if (!t.dueDate) return 'none';
+            if (t.dueDate < TODAY) return 'overdue';
+            if (t.dueDate === TODAY) return 'today';
+            return t.dueDate <= ymd(addDays(new Date(), 7)) ? 'week' : 'later';
+          };
+          const BUCKETS: { key: string; label: string; tone?: string }[] = [
+            { key: 'overdue', label: 'Überfällig', tone: '#FF8578' },
+            { key: 'today', label: 'Heute', tone: '#22DFC9' },
+            { key: 'week', label: 'Diese Woche' },
+            { key: 'later', label: 'Später' },
+            { key: 'none', label: 'Ohne Frist' },
+            { key: 'done', label: 'Erledigt' },
+          ];
+          const grouped: Record<string, Task[]> = {};
+          for (const t of myTodos) (grouped[bucketOf(t)] ??= []).push(t);
+          return (
+            <div className="space-y-4">
+              {BUCKETS.filter((b) => grouped[b.key]?.length).map((b) => (
+                <div key={b.key}>
+                  <div className="text-[11px] font-mono uppercase tracking-wider mb-1.5 px-1" style={{ color: b.tone ?? '#7e877f' }}>
+                    {b.label} · {grouped[b.key].length}
+                  </div>
+                  <div className="space-y-1.5">
+                    {grouped[b.key].map((t) => {
+                      const done = t.status === 'erledigt';
+                      const overdue = !done && !!t.dueDate && t.dueDate < TODAY;
+                      return (
+                        <div
+                          key={t.id}
+                          onClick={() => setOpenTask(t)}
+                          className={`bg-[#0a1110] border border-white/5 rounded-xl p-3 cursor-pointer hover:border-white/15 flex items-center gap-3 ${done ? 'opacity-60' : ''}`}
+                        >
+                          <button
+                            onClick={(e) => { e.stopPropagation(); quickSetStatus(t, done ? 'offen' : 'erledigt'); }}
+                            className="shrink-0 cursor-pointer"
+                            title={done ? 'Als offen markieren' : 'Als erledigt markieren'}
+                          >
+                            {done ? <CheckSquare className="w-5 h-5 text-brand-accent-light" /> : <Square className="w-5 h-5 text-hl-mute" />}
+                          </button>
+                          <div className="min-w-0 flex-1">
+                            <span className={`block text-sm font-sans leading-snug break-words ${done ? 'line-through text-hl-mute' : 'text-white'}`}>{t.title}</span>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap text-[10px] font-mono">
+                              {t.dueDate ? (
+                                <span className={`flex items-center gap-1 ${overdue ? 'text-hl-red-soft' : 'text-hl-dim'}`}>
+                                  <CalendarDays className="w-3 h-3" /> Frist {t.dueDate.slice(8)}.{t.dueDate.slice(5, 7)}.{t.startTime ? ` ${t.startTime}` : ''}
+                                </span>
+                              ) : (
+                                <span className="text-hl-faint">ohne Frist</span>
+                              )}
+                              <span className={`px-1.5 py-0.5 rounded ${PRIORITY_CELL[t.priority]}`}>{PRIORITY_LABEL[t.priority]}</span>
+                              {t.type === 'beides' && <span className="px-1.5 py-0.5 rounded bg-brand-accent/15 text-brand-accent-light">auch Termin</span>}
+                              {!!t.commentCount && (
+                                <span className="flex items-center gap-1 text-hl-dim">
+                                  <MessageSquare className="w-3 h-3" /> {t.commentCount}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <AssigneeChips assignees={t.assignees} urlFor={(id) => members.get(id)?.avatarUrl} px={22} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()
       ) : view === 'month' ? (
         /* -------- MONATSANSICHT (Google-Stil, bildschirmfüllend, Mehrtages-Balken) -------- */
         <div className="rounded-xl border border-white/5 overflow-hidden bg-[#0a1110]">
@@ -1124,7 +1253,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
             ))}
           </div>
           {range.weeks.map((week, wi) => {
-            const { bars, overflowByCol } = weekBars(week, tasks);
+            const { bars, overflowByCol } = weekBars(week, eventTasks);
             const laneAreaH = MAX_LANES * (LANE_H + 2);
             const HL_H = 17;
             const weekHasHL = week.some((d) => hl[ymd(d)]);
@@ -1173,6 +1302,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                       className={`mx-0.5 rounded px-1 text-[10px] leading-[16px] text-left truncate ${STATUS_CELL[t.status]}`}
                       title={t.title}
                     >
+                      {t.type === 'beides' && <Check className="w-2.5 h-2.5 inline align-[-1px] mr-0.5" />}
                       {!isMultiDay(t) && t.startTime && <span className="opacity-80 mr-0.5">{t.startTime}</span>}
                       {t.title}
                     </div>
@@ -1186,7 +1316,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
         /* -------- TAGESANSICHT (Zeitraster + Ganztägig, Google-Stil) -------- */
         <DayView
           dayKey={ymd(anchor)}
-          tasks={tasks}
+          tasks={eventTasks}
           highlight={hl[ymd(anchor)]}
           onOpenTask={setOpenTask}
           onAddAt={(startTime) => setNewTask({ date: ymd(anchor), startTime })}

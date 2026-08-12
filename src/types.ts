@@ -394,10 +394,14 @@ export interface TaskComment {
   createdAt: string;
 }
 
+// Termin (Kalender-Eintrag) · Aufgabe (To-do mit Frist) · beides.
+export type TaskKind = 'termin' | 'aufgabe' | 'beides';
+
 export interface Task {
   id: string;
   title: string;
   notes: string;
+  type: TaskKind; // termin = im Kalender, aufgabe = To-do mit Frist, beides = beides
   dueDate: string | null; // YYYY-MM-DD – START-Tag der Aufgabe (oder null)
   endDate: string | null; // YYYY-MM-DD – END-Tag (null = eintägig, Balken über mehrere Tage möglich)
   startTime: string | null; // "HH:MM" – Startzeit (null = ganztägig)

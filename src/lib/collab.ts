@@ -65,6 +65,7 @@ export const fetchTask = (id: string) => apiFetch<Task>(`/api/tasks?id=${encodeU
 export const createTask = (input: {
   title: string;
   notes?: string;
+  type?: 'termin' | 'aufgabe' | 'beides';
   dueDate?: string | null;
   endDate?: string | null;
   startTime?: string | null;
@@ -80,6 +81,7 @@ export const updateTask = (
   patch: {
     title?: string;
     notes?: string;
+    type?: 'termin' | 'aufgabe' | 'beides';
     dueDate?: string | null;
     endDate?: string | null;
     startTime?: string | null;
