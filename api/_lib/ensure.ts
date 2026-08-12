@@ -23,7 +23,10 @@ export async function ensureSchema(): Promise<void> {
     await sql`SELECT avatar_url, status, permissions, notify_prefs FROM users LIMIT 1`;
     await sql`SELECT 1 FROM tickets LIMIT 1`;
     await sql`SELECT priority FROM tasks LIMIT 1`;
-    await sql`SELECT 1 FROM conversations LIMIT 1`;
+    // WICHTIG: hier die NEUE Spalte mitprüfen (nicht nur die Tabelle!). Sonst
+    // denkt der Schnell-Check, alles sei da, und überspringt das ALTER, das die
+    // Spalte anlegt – die Chat-Abfrage bricht dann und die Liste kommt leer.
+    await sql`SELECT avatar_url FROM conversations LIMIT 1`;
     await sql`SELECT 1 FROM push_subscriptions LIMIT 1`;
     ensured = true;
     return;
