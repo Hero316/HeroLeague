@@ -36,6 +36,7 @@ import ProfileEditor from './components/ProfileEditor';
 import NotificationSettings from './components/NotificationSettings';
 import Avatar from './components/Avatar';
 import NotificationBell from './components/NotificationBell';
+import DeepLinkModal from './components/DeepLinkModal';
 import ChatUnreadBadge from './components/ChatUnreadBadge';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
 import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, CalendarDays, MessageSquare, UserCircle, Bell } from 'lucide-react';
@@ -104,6 +105,8 @@ export default function App() {
   // Läuft gerade ein Spiel im aktiven Event?
   const eventHasLive = !!activeEvent?.matches?.some((m) => m.status === 'live');
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
+  // Aus einer Benachrichtigung direkt geöffnetes Ticket/Aufgabe (Deep-Link).
+  const [deepOpen, setDeepOpen] = useState<{ type: 'ticket' | 'task'; id: string } | null>(null);
   const isAdmin = sessionUser !== null;
   const isSuperadmin = sessionUser?.role === 'superadmin';
   const isReferee = sessionUser?.role === 'referee';
@@ -320,6 +323,20 @@ export default function App() {
     if (link) link.setAttribute('href', currentPath.startsWith('/chat') ? '/chat.webmanifest' : '/manifest.webmanifest');
   }, [currentPath]);
 
+  // Deep-Link aus einer Handy-Benachrichtigung: /admin?open=ticket&id=… bzw.
+  // …?open=task&id=… → das Ticket/die Aufgabe direkt als Fenster öffnen. Danach
+  // die URL säubern, damit ein Neuladen nicht erneut öffnet. (Chat-Deep-Links
+  // laufen über /chat?c=… und werden dort direkt geöffnet.)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const open = params.get('open');
+    const id = params.get('id');
+    if ((open === 'ticket' || open === 'task') && id) {
+      setDeepOpen({ type: open, id });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [currentPath]);
+
   // Merkt sich, ob innerhalb der App navigiert wurde (für „Zurück").
   const navigatedInApp = useRef(false);
 
@@ -328,6 +345,13 @@ export default function App() {
     navigatedInApp.current = true;
     setCurrentPath(path);
     window.scrollTo({ top: 0 }); // neue Seite (z.B. Vereinsseite) immer oben starten
+  };
+
+  // Ziel einer Benachrichtigung öffnen (Glocke): Chat → eigene Seite, Ticket/
+  // Aufgabe → Detail-Fenster direkt hier.
+  const openNotificationTarget = (refType: 'ticket' | 'task' | 'conversation', refId: string) => {
+    if (refType === 'conversation') navigateTo(`/chat?c=${encodeURIComponent(refId)}`);
+    else setDeepOpen({ type: refType, id: refId });
   };
 
   // Zurück zur zuletzt besuchten Seite (statt fest zur Startseite). Wurde die
@@ -784,6 +808,7 @@ export default function App() {
               canManageTickets={canManageTickets}
               isSuperadmin={isSuperadmin}
               fullHeight
+              initialConversationId={new URLSearchParams(window.location.search).get('c')}
             />
           )}
         </main>
@@ -849,7 +874,7 @@ export default function App() {
 
                 <div className="flex items-center gap-2">
                   <ChatUnreadBadge onClick={() => navigateTo('/chat')} />
-                  <NotificationBell />
+                  <NotificationBell onOpen={openNotificationTarget} />
                   <button
                     onClick={handleLogout}
                     className="px-5 py-2 bg-[rgba(255,84,66,.15)] border border-[rgba(255,84,66,.3)] hover:bg-[rgba(255,84,66,.25)] rounded-xl text-xs font-bold uppercase transition-all flex items-center gap-1.5 text-hl-red-soft cursor-pointer"
@@ -1008,6 +1033,17 @@ export default function App() {
         <footer className="border-t border-white/5 bg-[#080b09] py-6 text-center text-xs text-hl-faint font-sans">
           <p>© 2026 Hero League. Geschützter Administrationsbereich.</p>
         </footer>
+
+        {/* Aus einer Benachrichtigung direkt geöffnetes Ticket/Aufgabe */}
+        {deepOpen && (
+          <DeepLinkModal
+            target={deepOpen}
+            currentUserId={sessionUser?.id ?? ''}
+            isSuperadmin={isSuperadmin}
+            canManageTickets={canManageTickets}
+            onClose={() => setDeepOpen(null)}
+          />
+        )}
       </div>
     );
   }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { fetchConversations } from '../lib/chat';
+import { setChatUnread } from '../lib/badge';
 
 // Ungelesen-Anzeige für Chats (oben im Backoffice). Setzt zusätzlich – wo vom
 // Browser unterstützt (installierte PWA) – die Zahl am App-Icon.
@@ -10,19 +11,16 @@ export default function ChatUnreadBadge({ onClick }: { onClick?: () => void }) {
   useEffect(() => {
     const load = () =>
       fetchConversations()
-        .then((cs) => setUnread(cs.reduce((s, c) => s + (c.unread || 0), 0)))
+        .then((cs) => {
+          const total = cs.reduce((s, c) => s + (c.unread || 0), 0);
+          setUnread(total);
+          setChatUnread(total); // App-Icon-Zahl (kombiniert mit Benachrichtigungen)
+        })
         .catch(() => {});
     load();
     const iv = setInterval(load, 25000);
     return () => clearInterval(iv);
   }, []);
-
-  // App-Icon-Badge (Chrome/Edge/Android, installierte PWA; iOS ab 16.4).
-  useEffect(() => {
-    const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
-    if (unread > 0) nav.setAppBadge?.(unread).catch(() => {});
-    else nav.clearAppBadge?.().catch(() => {});
-  }, [unread]);
 
   return (
     <button

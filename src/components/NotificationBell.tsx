@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Bell, Check, Loader2 } from 'lucide-react';
 import type { AppNotification } from '../types';
 import { fetchNotifications, markNotificationRead, markAllNotificationsRead } from '../lib/collab';
+import { setNotifUnread } from '../lib/badge';
 
 function fmtDate(iso: string): string {
   try {
@@ -12,7 +13,7 @@ function fmtDate(iso: string): string {
   }
 }
 
-export default function NotificationBell() {
+export default function NotificationBell({ onOpen }: { onOpen?: (refType: 'ticket' | 'task' | 'conversation', refId: string) => void }) {
   const [items, setItems] = useState<AppNotification[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
@@ -24,6 +25,7 @@ export default function NotificationBell() {
       const data = await fetchNotifications();
       setItems(data.items);
       setUnread(data.unreadCount);
+      setNotifUnread(data.unreadCount); // App-Icon-Zahl aktuell halten
     } catch {
       /* still – Bereich bleibt leer */
     }
@@ -57,19 +59,28 @@ export default function NotificationBell() {
   };
 
   const onItemClick = async (n: AppNotification) => {
-    if (n.isRead) return;
-    setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
-    setUnread((u) => Math.max(0, u - 1));
-    try {
-      await markNotificationRead(n.id);
-    } catch {
-      load();
+    // Direkt zum Ziel springen (Chat/Ticket/Aufgabe).
+    setOpen(false);
+    onOpen?.(n.refType, n.refId);
+    if (!n.isRead) {
+      setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, isRead: true } : x)));
+      setUnread((u) => {
+        const next = Math.max(0, u - 1);
+        setNotifUnread(next);
+        return next;
+      });
+      try {
+        await markNotificationRead(n.id);
+      } catch {
+        load();
+      }
     }
   };
 
   const markAll = async () => {
     setItems((prev) => prev.map((x) => ({ ...x, isRead: true })));
     setUnread(0);
+    setNotifUnread(0);
     try {
       await markAllNotificationsRead();
     } catch {
