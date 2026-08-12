@@ -5,6 +5,7 @@ import TaskBoard from './TaskBoard';
 import TicketSystem from './TicketSystem';
 import { useInstall } from './InstallProvider';
 import { getUrlParam, setUrlParam } from '../lib/urlState';
+import { AudioPlayerProvider, MiniPlayer } from './AudioPlayer';
 
 // Eigenständige „Team-App" unter /chat: Vollbild auf iPhone & Android, mit
 // unterer Tab-Leiste (Chats · Aufgaben · Tickets). Bewusst getrennt vom
@@ -51,6 +52,7 @@ export default function ChatApp({
   const current = TABS.find((t) => t.id === tab)!;
 
   return (
+    <AudioPlayerProvider>
     <div className="h-screen flex flex-col bg-[#060E0F] text-hl-text">
       {/* Kopfzeile */}
       <header
@@ -127,6 +129,9 @@ export default function ChatApp({
         )}
       </main>
 
+      {/* Läuft weiter beim Tab-Wechsel: Sprachnachrichten-Mini-Leiste */}
+      <MiniPlayer />
+
       {/* Untere Tab-Leiste (wie WhatsApp/Slack) */}
       <nav
         className="shrink-0 grid grid-cols-3 border-t border-white/10 bg-[rgba(7,10,8,.96)] backdrop-blur-xl"
@@ -151,5 +156,6 @@ export default function ChatApp({
         })}
       </nav>
     </div>
+    </AudioPlayerProvider>
   );
 }
