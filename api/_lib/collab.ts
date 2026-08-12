@@ -328,7 +328,7 @@ export async function ticketComment(req: VercelRequest, res: VercelResponse) {
 // --- Aufgaben-Board ---------------------------------------------------------
 async function fetchTasks(where: string, params: unknown[]) {
   const query = `
-    SELECT t.id, t.title, t.notes, to_char(t.due_date, 'YYYY-MM-DD') AS "dueDate",
+    SELECT t.id, t.title, t.notes, COALESCE(t.type, 'termin') AS "type", to_char(t.due_date, 'YYYY-MM-DD') AS "dueDate",
            to_char(t.end_date, 'YYYY-MM-DD') AS "endDate",
            t.start_time AS "startTime", t.end_time AS "endTime",
            t.iso_week AS "isoWeek", t.status, t.priority,
@@ -410,6 +410,7 @@ export async function tasks(req: VercelRequest, res: VercelResponse) {
     if (!isNonEmptyString(b.title)) return badRequest(res, 'Bitte einen Titel angeben.');
     const status = isTaskStatus(b.status) ? b.status : 'offen';
     const priority = isTicketPriority(b.priority) ? b.priority : 'mittel';
+    const type = ['termin', 'aufgabe', 'beides'].includes(b.type) ? b.type : 'termin';
     const notes = typeof b.notes === 'string' ? b.notes.slice(0, 4000) : '';
     const dueDate = normalizeDueDate(b.dueDate);
     const isoWeek = normalizeWeek(b.isoWeek);
@@ -424,8 +425,8 @@ export async function tasks(req: VercelRequest, res: VercelResponse) {
     const name = sessionName(session);
 
     await sql`
-      INSERT INTO tasks (id, title, notes, due_date, end_date, start_time, end_time, iso_week, status, priority, created_by, created_by_name)
-      VALUES (${id}, ${b.title.trim().slice(0, 200)}, ${notes}, ${dueDate}, ${endDate}, ${startTime}, ${endTime}, ${isoWeek}, ${status}, ${priority}, ${session.userId}, ${name})
+      INSERT INTO tasks (id, title, notes, type, due_date, end_date, start_time, end_time, iso_week, status, priority, created_by, created_by_name)
+      VALUES (${id}, ${b.title.trim().slice(0, 200)}, ${notes}, ${type}, ${dueDate}, ${endDate}, ${startTime}, ${endTime}, ${isoWeek}, ${status}, ${priority}, ${session.userId}, ${name})
     `;
     const members = await loadMembers();
     const added = await replaceAssignees(id, assigneeIds, members);
@@ -481,6 +482,7 @@ export async function task(req: VercelRequest, res: VercelResponse) {
   if (b.priority !== undefined && !isTicketPriority(b.priority)) return badRequest(res, 'Ungültige Priorität.');
   const title = b.title !== undefined ? String(b.title).trim().slice(0, 200) : undefined;
   if (b.title !== undefined && !title) return badRequest(res, 'Titel darf nicht leer sein.');
+  const type = b.type !== undefined && ['termin', 'aufgabe', 'beides'].includes(b.type) ? b.type : undefined;
   const notes = b.notes !== undefined ? String(b.notes).slice(0, 4000) : undefined;
   const dueDate = b.dueDate !== undefined ? normalizeDueDate(b.dueDate) : undefined;
   const isoWeek = b.isoWeek !== undefined ? normalizeWeek(b.isoWeek) : undefined;
@@ -496,6 +498,7 @@ export async function task(req: VercelRequest, res: VercelResponse) {
   await sql`
     UPDATE tasks SET
       title = COALESCE(${title ?? null}, title),
+      type = COALESCE(${type ?? null}, type),
       notes = COALESCE(${notes ?? null}, notes),
       due_date = CASE WHEN ${b.dueDate !== undefined} THEN ${dueDate ?? null}::date ELSE due_date END,
       end_date = CASE WHEN ${b.endDate !== undefined} THEN ${endDate ?? null}::date ELSE end_date END,

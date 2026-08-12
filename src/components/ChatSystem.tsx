@@ -46,6 +46,7 @@ import { uploadFile, uploadImage } from '../lib/api';
 import Avatar from './Avatar';
 import { TicketDetail } from './TicketSystem';
 import { TaskDetail } from './TaskBoard';
+import { VoiceMessage } from './AudioPlayer';
 
 const inputClass =
   'w-full bg-[#060E0F] border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent-light';
@@ -127,7 +128,7 @@ function AttachChip({ type, title }: { type: 'ticket' | 'task'; title: string | 
 }
 
 // Anhang einer bereits gesendeten Nachricht darstellen.
-function MessageAttachment({ m, onOpen }: { m: ChatMessage; onOpen?: (type: 'ticket' | 'task', id: string) => void }) {
+function MessageAttachment({ m, mine = false, onOpen }: { m: ChatMessage; mine?: boolean; onOpen?: (type: 'ticket' | 'task', id: string) => void }) {
   if (m.attachType === 'ticket' || m.attachType === 'task') {
     const type = m.attachType;
     return (
@@ -142,7 +143,7 @@ function MessageAttachment({ m, onOpen }: { m: ChatMessage; onOpen?: (type: 'tic
     );
   }
   if (m.attachType === 'audio' && m.attachUrl) {
-    return <audio controls src={m.attachUrl} className="mt-1.5 w-56 max-w-full h-9" />;
+    return <VoiceMessage url={m.attachUrl} mine={mine} />;
   }
   if (m.attachType === 'file' && m.attachUrl) {
     const mime = m.attachMime ?? '';
@@ -622,7 +623,7 @@ function MessageRow({
             </div>
           )}
           {m.body && <p className="text-[15px] font-sans whitespace-pre-wrap break-words leading-snug">{m.body}</p>}
-          <MessageAttachment m={m} onOpen={onOpenAttachment} />
+          <MessageAttachment m={m} mine={mine} onOpen={onOpenAttachment} />
           {/* Uhrzeit klein in der Bubble, rechts unten (KEINE Lesebestätigung) */}
           <div className={`text-[10px] font-mono leading-none text-right mt-1 ${mine ? 'text-white/60' : 'text-hl-faint'}`}>
             {fmtClock(m.createdAt)}

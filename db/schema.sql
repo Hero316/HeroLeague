@@ -165,7 +165,8 @@ CREATE TABLE tasks (
   id              TEXT PRIMARY KEY,
   title           TEXT NOT NULL,
   notes           TEXT NOT NULL DEFAULT '',
-  due_date        DATE,        -- START-Tag der Aufgabe
+  type            TEXT NOT NULL DEFAULT 'termin' CHECK (type IN ('termin','aufgabe','beides')),
+  due_date        DATE,        -- Termin: Starttag · Aufgabe: Frist
   end_date        DATE,        -- END-Tag (NULL = eintägig; sonst Mehrtages-Balken)
   start_time      TEXT,        -- "HH:MM" Startzeit (NULL = ganztägig)
   end_time        TEXT,        -- "HH:MM" Endzeit
