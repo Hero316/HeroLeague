@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquare, Users, CalendarDays, LayoutGrid, ListChecks } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquare, Users, CalendarDays, LayoutGrid, ListChecks, Clock } from 'lucide-react';
 import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember } from '../types';
 import { fetchTasksRange, fetchAllTasks, fetchTask, createTask, updateTask, deleteTask, addTaskComment, fetchTeam, memberMap } from '../lib/collab';
 import Avatar from './Avatar';
@@ -92,6 +92,116 @@ function initials(name: string): string {
 }
 const TODAY = ymd(new Date());
 
+// --- Zeitraum-/Uhrzeit-Helfer (Google-Kalender-Logik) -----------------------
+// Enddatum einer Aufgabe (fällt auf den Starttag zurück).
+function taskEnd(t: Task): string {
+  return t.endDate && t.dueDate && t.endDate > t.dueDate ? t.endDate : (t.dueDate ?? '');
+}
+function isMultiDay(t: Task): boolean {
+  return !!(t.dueDate && t.endDate && t.endDate > t.dueDate);
+}
+// Deckt die Aufgabe (Start..Ende) diesen Tag ab? (Stringvergleich YYYY-MM-DD)
+function coversDay(t: Task, key: string): boolean {
+  if (!t.dueDate) return false;
+  return t.dueDate <= key && key <= taskEnd(t);
+}
+function timeLabel(t: Task): string {
+  if (!t.startTime) return '';
+  return t.endTime ? `${t.startTime}–${t.endTime}` : t.startTime;
+}
+function minutesOf(hm: string): number {
+  const [h, m] = hm.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+function dateFromKey(key: string): Date {
+  return new Date(`${key}T00:00:00`);
+}
+function fmtDayHeading(key: string): string {
+  const d = dateFromKey(key);
+  return `${['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][d.getDay()]}, ${d.getDate()}. ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+// Monats-Raster: max. sichtbare Balken-Reihen je Tag; Rest -> „+N".
+const MAX_LANES = 3;
+const LANE_H = 16; // Höhe einer Balken-Reihe (px)
+const DAY_NUM_H = 24; // Platz für die Tageszahl oben (px)
+// Tagesansicht: Höhe einer Stunde im Zeitraster (px).
+const HOUR_H = 48;
+
+// Balken-Layout für eine Woche: jedem (Teil-)Balken eine Reihe (lane) zuweisen,
+// sodass sich überlappende Aufgaben stapeln. Überzählige je Spalte -> Overflow.
+function weekBars(week: Date[], tasks: Task[]) {
+  const weekStart = ymd(week[0]);
+  const weekEnd = ymd(week[6]);
+  const segs = tasks
+    .filter((t) => t.dueDate && taskEnd(t) >= weekStart && t.dueDate <= weekEnd)
+    .map((t) => {
+      const s = t.dueDate! < weekStart ? weekStart : t.dueDate!;
+      const e = taskEnd(t) > weekEnd ? weekEnd : taskEnd(t);
+      return { t, colStart: week.findIndex((d) => ymd(d) === s), colEnd: week.findIndex((d) => ymd(d) === e) };
+    })
+    .filter((x) => x.colStart >= 0 && x.colEnd >= 0)
+    // Längere/mehrtägige Balken zuerst, dann nach Start & Uhrzeit.
+    .sort(
+      (a, b) =>
+        b.colEnd - b.colStart - (a.colEnd - a.colStart) ||
+        (a.t.dueDate ?? '').localeCompare(b.t.dueDate ?? '') ||
+        (a.t.startTime ?? '').localeCompare(b.t.startTime ?? '')
+    );
+  const laneOcc: [number, number][][] = [];
+  const bars: { t: Task; colStart: number; colEnd: number; lane: number }[] = [];
+  const overflowByCol = [0, 0, 0, 0, 0, 0, 0];
+  for (const seg of segs) {
+    let lane = 0;
+    for (;;) {
+      const occ = laneOcc[lane] ?? (laneOcc[lane] = []);
+      const clash = occ.some(([cs, ce]) => !(seg.colEnd < cs || seg.colStart > ce));
+      if (!clash) {
+        occ.push([seg.colStart, seg.colEnd]);
+        break;
+      }
+      lane++;
+    }
+    if (lane < MAX_LANES) bars.push({ t: seg.t, colStart: seg.colStart, colEnd: seg.colEnd, lane });
+    else for (let c = seg.colStart; c <= seg.colEnd; c++) overflowByCol[c]++;
+  }
+  return { bars, overflowByCol };
+}
+
+// Zeit-Aufgaben eines Tages in Spalten legen (überlappende nebeneinander).
+function layoutTimed(items: Task[]): { t: Task; col: number; cols: number; top: number; height: number }[] {
+  const startMin = (t: Task) => minutesOf(t.startTime!);
+  const endMin = (t: Task) => (t.endTime ? Math.max(minutesOf(t.endTime), startMin(t) + 30) : startMin(t) + 60);
+  const sorted = [...items].sort((a, b) => startMin(a) - startMin(b) || endMin(a) - endMin(b));
+  const out: { t: Task; col: number; cols: number; top: number; height: number }[] = [];
+  let cluster: Task[] = [];
+  let clusterEnd = -1;
+  const flush = () => {
+    const colEnds: number[] = [];
+    const cols: number[] = [];
+    cluster.forEach((it) => {
+      let c = 0;
+      while (c < colEnds.length && colEnds[c] > startMin(it)) c++;
+      colEnds[c] = endMin(it);
+      cols.push(c);
+    });
+    const total = colEnds.length || 1;
+    cluster.forEach((it, i) => {
+      const top = (startMin(it) / 60) * HOUR_H;
+      const height = Math.max(22, ((endMin(it) - startMin(it)) / 60) * HOUR_H - 2);
+      out.push({ t: it, col: cols[i], cols: total, top, height });
+    });
+    cluster = [];
+  };
+  for (const it of sorted) {
+    if (cluster.length && startMin(it) >= clusterEnd) flush();
+    cluster.push(it);
+    clusterEnd = Math.max(clusterEnd, endMin(it));
+  }
+  if (cluster.length) flush();
+  return out;
+}
+
 function AssigneeChips({
   assignees,
   urlFor,
@@ -121,6 +231,68 @@ function AssigneeChips({
   );
 }
 
+// Termin-Eingaben (Google-Stil): Ganztägig-Schalter, Tag von/bis, Uhrzeit von/bis.
+function ScheduleFields({
+  dueDate,
+  endDate,
+  allDay,
+  startTime,
+  endTime,
+  onDue,
+  onEnd,
+  onAllDay,
+  onStart,
+  onEndTime,
+}: {
+  dueDate: string;
+  endDate: string;
+  allDay: boolean;
+  startTime: string;
+  endTime: string;
+  onDue: (v: string) => void;
+  onEnd: (v: string) => void;
+  onAllDay: (v: boolean) => void;
+  onStart: (v: string) => void;
+  onEndTime: (v: string) => void;
+}) {
+  return (
+    <div className="mt-3 rounded-xl border border-white/10 bg-[#060E0F]/40 p-3 space-y-3">
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <button
+          type="button"
+          onClick={() => onAllDay(!allDay)}
+          className={`relative w-10 h-[22px] rounded-full transition-colors shrink-0 ${allDay ? 'bg-brand-accent-light' : 'bg-white/15'}`}
+        >
+          <span className={`absolute top-[3px] w-4 h-4 rounded-full bg-white shadow transition-all ${allDay ? 'left-[21px]' : 'left-[3px]'}`} />
+        </button>
+        <span className="text-sm font-sans text-hl-soft">Ganztägig</span>
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Tag von</label>
+          <input type="date" value={dueDate} onChange={(e) => onDue(e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Tag bis</label>
+          <input type="date" value={endDate} min={dueDate || undefined} onChange={(e) => onEnd(e.target.value)} className={inputClass} />
+        </div>
+      </div>
+      {!allDay && (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Uhrzeit von</label>
+            <input type="time" value={startTime} onChange={(e) => onStart(e.target.value)} className={inputClass} />
+          </div>
+          <div>
+            <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Uhrzeit bis</label>
+            <input type="time" value={endTime} onChange={(e) => onEndTime(e.target.value)} className={inputClass} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ===========================================================================
 // Detail / Bearbeiten
 // ===========================================================================
@@ -144,6 +316,10 @@ export function TaskDetail({
   const [status, setStatus] = useState<TaskStatus>(task.status);
   const [priority, setPriority] = useState<TicketPriority>(task.priority);
   const [dueDate, setDueDate] = useState<string>(task.dueDate ?? '');
+  const [endDate, setEndDate] = useState<string>(task.endDate ?? '');
+  const [allDay, setAllDay] = useState<boolean>(!task.startTime);
+  const [startTime, setStartTime] = useState<string>(task.startTime ?? '');
+  const [endTime, setEndTime] = useState<string>(task.endTime ?? '');
   const [assignees, setAssignees] = useState<string[]>(task.assignees.map((a) => a.userId));
   const [comments, setComments] = useState<TaskComment[]>(task.comments ?? []);
   const [commentBody, setCommentBody] = useState('');
@@ -165,7 +341,17 @@ export function TaskDetail({
     if (!title.trim()) return alert('Titel darf nicht leer sein.');
     setBusy(true);
     try {
-      await updateTask(task.id, { title: title.trim(), notes, status, priority, dueDate: dueDate || null, assignees });
+      await updateTask(task.id, {
+        title: title.trim(),
+        notes,
+        status,
+        priority,
+        dueDate: dueDate || null,
+        endDate: endDate && dueDate && endDate > dueDate ? endDate : null,
+        startTime: allDay ? null : startTime || null,
+        endTime: allDay ? null : endTime || null,
+        assignees,
+      });
       onChanged();
       onClose();
     } catch (err) {
@@ -216,11 +402,20 @@ export function TaskDetail({
         <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1 mt-3">Notizen</label>
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className={`${inputClass} resize-y`} />
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
-          <div>
-            <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Datum</label>
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputClass} />
-          </div>
+        <ScheduleFields
+          dueDate={dueDate}
+          endDate={endDate}
+          allDay={allDay}
+          startTime={startTime}
+          endTime={endTime}
+          onDue={setDueDate}
+          onEnd={setEndDate}
+          onAllDay={setAllDay}
+          onStart={setStartTime}
+          onEndTime={setEndTime}
+        />
+
+        <div className="grid grid-cols-2 gap-3 mt-3">
           <div>
             <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Status</label>
             <select value={status} onChange={(e) => setStatus(e.target.value as TaskStatus)} className={inputClass}>
@@ -308,18 +503,22 @@ export function TaskDetail({
 // Neue Aufgabe (mit vorgewähltem Datum)
 // ===========================================================================
 function NewTaskModal({
-  date,
+  prefill,
   team,
   onClose,
   onCreated,
 }: {
-  date: string;
+  prefill: { date: string; startTime?: string };
   team: TeamMember[];
   onClose: () => void;
   onCreated: () => void;
 }) {
   const [title, setTitle] = useState('');
-  const [dueDate, setDueDate] = useState(date);
+  const [dueDate, setDueDate] = useState(prefill.date);
+  const [endDate, setEndDate] = useState('');
+  const [allDay, setAllDay] = useState(!prefill.startTime);
+  const [startTime, setStartTime] = useState(prefill.startTime ?? '');
+  const [endTime, setEndTime] = useState('');
   const [status, setStatus] = useState<TaskStatus>('offen');
   const [priority, setPriority] = useState<TicketPriority>('mittel');
   const [assignees, setAssignees] = useState<string[]>([]);
@@ -331,7 +530,16 @@ function NewTaskModal({
     if (!title.trim()) return alert('Bitte einen Titel angeben.');
     setBusy(true);
     try {
-      await createTask({ title: title.trim(), dueDate: dueDate || null, status, priority, assignees });
+      await createTask({
+        title: title.trim(),
+        dueDate: dueDate || null,
+        endDate: endDate && dueDate && endDate > dueDate ? endDate : null,
+        startTime: allDay ? null : startTime || null,
+        endTime: allDay ? null : endTime || null,
+        status,
+        priority,
+        assignees,
+      });
       onCreated();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Aufgabe konnte nicht erstellt werden.');
@@ -350,11 +558,19 @@ function NewTaskModal({
         </div>
         <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Titel *</label>
         <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus placeholder="z.B. Video schneiden" className={inputClass} />
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
-          <div>
-            <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Datum</label>
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputClass} />
-          </div>
+        <ScheduleFields
+          dueDate={dueDate}
+          endDate={endDate}
+          allDay={allDay}
+          startTime={startTime}
+          endTime={endTime}
+          onDue={setDueDate}
+          onEnd={setEndDate}
+          onAllDay={setAllDay}
+          onStart={setStartTime}
+          onEndTime={setEndTime}
+        />
+        <div className="grid grid-cols-2 gap-3 mt-3">
           <div>
             <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Status</label>
             <select value={status} onChange={(e) => setStatus(e.target.value as TaskStatus)} className={inputClass}>
@@ -399,22 +615,111 @@ function NewTaskModal({
 }
 
 // ===========================================================================
+// Tagesansicht (Google-Stil): Ganztägig oben + Stunden-Zeitraster
+// ===========================================================================
+function DayView({
+  dayKey,
+  tasks,
+  onOpenTask,
+  onAddAt,
+}: {
+  dayKey: string;
+  tasks: Task[];
+  onOpenTask: (t: Task) => void;
+  onAddAt: (startTime: string) => void;
+}) {
+  const covering = tasks.filter((t) => coversDay(t, dayKey));
+  const allDay = covering.filter((t) => !t.startTime || isMultiDay(t));
+  const timed = covering.filter((t) => t.startTime && !isMultiDay(t));
+  const laid = useMemo(() => layoutTimed(timed), [timed]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Beim Öffnen etwa zum Morgen (7 Uhr) scrollen, statt Mitternacht.
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 7 * HOUR_H;
+  }, [dayKey]);
+
+  const onBgClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const hour = Math.max(0, Math.min(23, Math.floor((e.clientY - rect.top) / HOUR_H)));
+    onAddAt(`${String(hour).padStart(2, '0')}:00`);
+  };
+
+  return (
+    <div className="rounded-xl border border-white/5 overflow-hidden bg-[#0a1110]">
+      {/* Ganztägig / mehrtägig */}
+      <div className="border-b border-white/5 p-2">
+        <div className="text-[10px] font-mono uppercase tracking-wider text-hl-dim mb-1 px-1">Ganztägig</div>
+        {allDay.length === 0 ? (
+          <div className="text-[11px] text-hl-faint px-1 py-0.5">—</div>
+        ) : (
+          <div className="space-y-1">
+            {allDay.map((t) => (
+              <button key={t.id} onClick={() => onOpenTask(t)} className={`w-full text-left truncate rounded px-2 py-1 text-[12px] ${STATUS_CELL[t.status]}`}>
+                {isMultiDay(t) && <span className="opacity-80 mr-1">{t.dueDate?.slice(8)}.–{taskEnd(t).slice(8)}.</span>}
+                {t.title}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Stunden-Zeitraster */}
+      <div ref={scrollRef} className="overflow-y-auto" style={{ maxHeight: '60vh' }}>
+        <div className="relative" style={{ height: 24 * HOUR_H }} onClick={onBgClick}>
+          {Array.from({ length: 24 }, (_, h) => (
+            <div key={h} className="absolute left-0 right-0 border-t border-white/5" style={{ top: h * HOUR_H, height: HOUR_H }}>
+              <span className="absolute -top-2 left-1 text-[10px] font-mono text-hl-dim bg-[#0a1110] pr-1">{String(h).padStart(2, '0')}:00</span>
+            </div>
+          ))}
+          {/* Aufgaben mit Uhrzeit */}
+          <div className="absolute left-12 right-1 top-0 bottom-0">
+            {laid.map(({ t, col, cols, top, height }) => (
+              <button
+                key={t.id}
+                onClick={(e) => { e.stopPropagation(); onOpenTask(t); }}
+                style={{ top, height, left: `${(col / cols) * 100}%`, width: `calc(${(1 / cols) * 100}% - 4px)` }}
+                className={`absolute rounded-md px-1.5 py-0.5 text-left overflow-hidden shadow-sm shadow-black/30 ${STATUS_CELL[t.status]}`}
+                title={`${timeLabel(t)} ${t.title}`}
+              >
+                <div className="text-[11px] font-semibold leading-tight truncate">{t.title}</div>
+                <div className="text-[9px] opacity-80 leading-tight truncate">{timeLabel(t)}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===========================================================================
 // Board
 // ===========================================================================
 export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUserId: string; isSuperadmin: boolean }) {
-  const [view, setView] = useState<'month' | 'week' | 'mine'>('month');
+  const [view, setView] = useState<'month' | 'week' | 'day' | 'mine'>('month');
   const [anchor, setAnchor] = useState<Date>(() => new Date());
   const [tasks, setTasks] = useState<Task[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [openTask, setOpenTask] = useState<Task | null>(null);
-  const [newDate, setNewDate] = useState<string | null>(null);
+  const [newTask, setNewTask] = useState<{ date: string; startTime?: string } | null>(null);
+
+  // Einen Tag öffnen (aus der Monatsansicht heraus).
+  const openDay = (key: string) => {
+    setAnchor(dateFromKey(key));
+    setView('day');
+  };
 
   // Sichtbarer Datumsbereich je Ansicht.
   const range = useMemo(() => {
     if (view === 'month') {
       const weeks = monthWeeks(anchor);
       return { from: ymd(weeks[0][0]), to: ymd(weeks[weeks.length - 1][6]), weeks };
+    }
+    if (view === 'day') {
+      const key = ymd(anchor);
+      return { from: key, to: key, weeks: [[anchor]] };
     }
     const mon = mondayOf(anchor);
     const days = Array.from({ length: 7 }, (_, i) => addDays(mon, i));
@@ -473,16 +778,19 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
   const label =
     view === 'month'
       ? `${MONTHS[anchor.getMonth()]} ${anchor.getFullYear()}`
-      : `${ymd(range.weeks[0][0]).slice(8)}.–${ymd(range.weeks[0][6]).slice(8)}.${String(anchor.getMonth() + 1).padStart(2, '0')}`;
+      : view === 'day'
+        ? fmtDayHeading(ymd(anchor))
+        : `${ymd(range.weeks[0][0]).slice(8)}.–${ymd(range.weeks[0][6]).slice(8)}.${String(anchor.getMonth() + 1).padStart(2, '0')}`;
 
-  const shift = (dir: number) => setAnchor((a) => (view === 'month' ? addMonths(a, dir) : addDays(a, dir * 7)));
+  const shift = (dir: number) =>
+    setAnchor((a) => (view === 'month' ? addMonths(a, dir) : view === 'day' ? addDays(a, dir) : addDays(a, dir * 7)));
 
   return (
     <div>
       {/* Kopfzeile: Ansicht + Navigation */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-1 bg-[#060E0F]/50 border border-white/10 rounded-xl p-1">
-          {(['month', 'week', 'mine'] as const).map((v) => (
+          {(['month', 'week', 'day', 'mine'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -490,8 +798,8 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
                 view === v ? 'bg-brand-accent-light text-white' : 'text-hl-mute hover:text-white'
               }`}
             >
-              {v === 'month' ? <LayoutGrid className="w-3.5 h-3.5" /> : v === 'week' ? <CalendarDays className="w-3.5 h-3.5" /> : <ListChecks className="w-3.5 h-3.5" />}
-              {v === 'month' ? 'Monat' : v === 'week' ? 'Woche' : 'Meine'}
+              {v === 'month' ? <LayoutGrid className="w-3.5 h-3.5" /> : v === 'week' ? <CalendarDays className="w-3.5 h-3.5" /> : v === 'day' ? <Clock className="w-3.5 h-3.5" /> : <ListChecks className="w-3.5 h-3.5" />}
+              {v === 'month' ? 'Monat' : v === 'week' ? 'Woche' : v === 'day' ? 'Tag' : 'Meine'}
             </button>
           ))}
         </div>
@@ -511,7 +819,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
           </div>
         )}
 
-        <button onClick={() => setNewDate(TODAY)} className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white cursor-pointer flex items-center gap-1.5">
+        <button onClick={() => setNewTask({ date: view === 'day' ? ymd(anchor) : TODAY })} className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white cursor-pointer flex items-center gap-1.5">
           <Plus className="w-4 h-4" /> Aufgabe
         </button>
       </div>
@@ -570,55 +878,71 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
           )}
         </div>
       ) : view === 'month' ? (
-        /* -------- MONATSANSICHT (Google-Kalender-Stil) -------- */
-        <div className="overflow-x-auto">
-          <div className="min-w-[720px]">
-            <div className="grid grid-cols-7 mb-1">
-              {WEEKDAYS.map((w) => (
-                <div key={w} className="text-center text-[11px] font-mono uppercase tracking-wider text-hl-dim py-1">{w}</div>
-              ))}
-            </div>
-            <div className="grid grid-cols-7 gap-1.5">
-              {range.weeks.flat().map((d) => {
-                const key = ymd(d);
-                const inMonth = d.getMonth() === anchor.getMonth();
-                const isToday = key === TODAY;
-                const dayTasks = tasksByDay[key] ?? [];
-                return (
-                  <div
-                    key={key}
-                    onClick={() => setNewDate(key)}
-                    className={`min-h-[92px] rounded-lg border p-1.5 cursor-pointer transition-colors ${
-                      inMonth ? 'bg-[#0a1110] border-white/5 hover:border-white/15' : 'bg-[#070d0c]/40 border-white/5 opacity-50'
-                    }`}
-                  >
-                    <div className="flex justify-end">
-                      <span className={`text-[11px] font-mono w-5 h-5 flex items-center justify-center rounded-full ${isToday ? 'bg-brand-accent-light text-brand-dark font-bold' : 'text-hl-dim'}`}>
-                        {d.getDate()}
-                      </span>
-                    </div>
-                    <div className="space-y-1 mt-0.5">
-                      {dayTasks.slice(0, 3).map((t) => (
-                        <button
-                          key={t.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenTask(t);
-                          }}
-                          className="w-full flex items-center gap-1 text-left px-1.5 py-1 rounded-md bg-[#0f1614] hover:bg-[#131b19] transition-colors"
-                        >
-                          <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[t.status]}`} />
-                          <span className="text-[11px] text-hl-soft truncate">{t.title}</span>
-                        </button>
-                      ))}
-                      {dayTasks.length > 3 && <div className="text-[10px] text-hl-dim px-1.5">+{dayTasks.length - 3} mehr</div>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+        /* -------- MONATSANSICHT (Google-Stil, bildschirmfüllend, Mehrtages-Balken) -------- */
+        <div className="rounded-xl border border-white/5 overflow-hidden bg-[#0a1110]">
+          <div className="grid grid-cols-7 border-b border-white/5">
+            {WEEKDAYS.map((w) => (
+              <div key={w} className="text-center text-[10px] font-mono uppercase tracking-wider text-hl-dim py-1.5">{w}</div>
+            ))}
           </div>
+          {range.weeks.map((week, wi) => {
+            const { bars, overflowByCol } = weekBars(week, tasks);
+            const laneAreaH = MAX_LANES * (LANE_H + 2);
+            return (
+              <div key={wi} className="relative grid grid-cols-7">
+                {week.map((d, ci) => {
+                  const key = ymd(d);
+                  const inMonth = d.getMonth() === anchor.getMonth();
+                  const isToday = key === TODAY;
+                  return (
+                    <div
+                      key={key}
+                      onClick={() => openDay(key)}
+                      className={`border-l border-b border-white/5 first:border-l-0 px-0.5 pt-1 cursor-pointer transition-colors ${
+                        inMonth ? 'hover:bg-white/[.03]' : 'bg-[#070d0c]/40'
+                      }`}
+                      style={{ minHeight: DAY_NUM_H + laneAreaH + 14 }}
+                    >
+                      <div className="flex justify-center">
+                        <span className={`text-[11px] font-mono w-5 h-5 flex items-center justify-center rounded-full ${isToday ? 'bg-brand-accent-light text-brand-dark font-bold' : inMonth ? 'text-hl-soft' : 'text-hl-faint'}`}>
+                          {d.getDate()}
+                        </span>
+                      </div>
+                      <div style={{ height: laneAreaH }} />
+                      {overflowByCol[ci] > 0 && <div className="text-[9px] text-hl-dim text-center leading-none">+{overflowByCol[ci]}</div>}
+                    </div>
+                  );
+                })}
+                {/* Balken-Overlay: spannt echte Mehrtages-Aufgaben über die Spalten */}
+                <div
+                  className="absolute left-0 right-0 grid grid-cols-7 pointer-events-none"
+                  style={{ top: DAY_NUM_H, gridAutoRows: `${LANE_H + 2}px` }}
+                >
+                  {bars.map(({ t, colStart, colEnd, lane }) => (
+                    <button
+                      key={t.id}
+                      onClick={(e) => { e.stopPropagation(); setOpenTask(t); }}
+                      style={{ gridColumn: `${colStart + 1} / ${colEnd + 2}`, gridRow: lane + 1, height: LANE_H }}
+                      className={`pointer-events-auto mx-0.5 rounded px-1 text-[10px] leading-[16px] text-left truncate ${STATUS_CELL[t.status]}`}
+                      title={t.title}
+                    >
+                      {!isMultiDay(t) && t.startTime && <span className="opacity-80 mr-0.5">{t.startTime}</span>}
+                      {t.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
+      ) : view === 'day' ? (
+        /* -------- TAGESANSICHT (Zeitraster + Ganztägig, Google-Stil) -------- */
+        <DayView
+          dayKey={ymd(anchor)}
+          tasks={tasks}
+          onOpenTask={setOpenTask}
+          onAddAt={(startTime) => setNewTask({ date: ymd(anchor), startTime })}
+        />
       ) : (
         /* -------- WOCHENANSICHT -------- */
         <div className="flex gap-3 overflow-x-auto pb-2">
@@ -664,7 +988,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
                     </div>
                   ))}
                 </div>
-                <button onClick={() => setNewDate(key)} className="mt-2 w-full py-1.5 rounded-lg border border-dashed border-white/15 text-hl-mute hover:text-white hover:border-white/30 text-xs cursor-pointer flex items-center justify-center gap-1">
+                <button onClick={() => setNewTask({ date: key })} className="mt-2 w-full py-1.5 rounded-lg border border-dashed border-white/15 text-hl-mute hover:text-white hover:border-white/30 text-xs cursor-pointer flex items-center justify-center gap-1">
                   <Plus className="w-3.5 h-3.5" /> Aufgabe
                 </button>
               </div>
@@ -674,8 +998,8 @@ export default function TaskBoard({ currentUserId, isSuperadmin }: { currentUser
       )}
 
       <AnimatePresence>
-        {newDate && (
-          <NewTaskModal date={newDate} team={team} onClose={() => setNewDate(null)} onCreated={() => { setNewDate(null); load(); }} />
+        {newTask && (
+          <NewTaskModal prefill={newTask} team={team} onClose={() => setNewTask(null)} onCreated={() => { setNewTask(null); load(); }} />
         )}
         {openTask && (
           <TaskDetail task={openTask} team={team} currentUserId={currentUserId} isSuperadmin={isSuperadmin} onClose={() => setOpenTask(null)} onChanged={load} />

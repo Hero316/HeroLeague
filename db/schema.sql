@@ -165,7 +165,10 @@ CREATE TABLE tasks (
   id              TEXT PRIMARY KEY,
   title           TEXT NOT NULL,
   notes           TEXT NOT NULL DEFAULT '',
-  due_date        DATE,
+  due_date        DATE,        -- START-Tag der Aufgabe
+  end_date        DATE,        -- END-Tag (NULL = eintägig; sonst Mehrtages-Balken)
+  start_time      TEXT,        -- "HH:MM" Startzeit (NULL = ganztägig)
+  end_time        TEXT,        -- "HH:MM" Endzeit
   iso_week        TEXT,
   status          TEXT NOT NULL DEFAULT 'offen' CHECK (status IN ('leer','offen','in_bearbeitung','erledigt','abgebrochen')),
   priority        TEXT NOT NULL DEFAULT 'mittel' CHECK (priority IN ('niedrig','mittel','hoch','dringend')),

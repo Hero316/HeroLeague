@@ -329,6 +329,8 @@ export async function ticketComment(req: VercelRequest, res: VercelResponse) {
 async function fetchTasks(where: string, params: unknown[]) {
   const query = `
     SELECT t.id, t.title, t.notes, to_char(t.due_date, 'YYYY-MM-DD') AS "dueDate",
+           to_char(t.end_date, 'YYYY-MM-DD') AS "endDate",
+           t.start_time AS "startTime", t.end_time AS "endTime",
            t.iso_week AS "isoWeek", t.status, t.priority,
            t.created_by AS "createdBy", t.created_by_name AS "createdByName",
            t.created_at AS "createdAt", t.updated_at AS "updatedAt",
@@ -374,6 +376,15 @@ function normalizeDueDate(v: unknown): string | null {
 function normalizeWeek(v: unknown): string | null {
   return typeof v === 'string' && /^\d{4}-W\d{2}$/.test(v) ? v : null;
 }
+// Uhrzeit "HH:MM" (00:00–23:59). Alles andere -> null (= ganztägig).
+function normalizeTime(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const m = /^(\d{2}):(\d{2})$/.exec(v.trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  return h >= 0 && h <= 23 && min >= 0 && min <= 59 ? `${m[1]}:${m[2]}` : null;
+}
 
 export async function tasks(req: VercelRequest, res: VercelResponse) {
   const session = await getSession(req);
@@ -386,7 +397,10 @@ export async function tasks(req: VercelRequest, res: VercelResponse) {
     const to = normalizeDueDate(req.query.to);
     let rows;
     if (week) rows = await fetchTasks('WHERE t.iso_week = $1', [week]);
-    else if (from && to) rows = await fetchTasks('WHERE t.due_date BETWEEN $1 AND $2', [from, to]);
+    // Überlappung mit dem Sichtbereich: Aufgabe startet vor/an "to" UND endet
+    // (end_date, sonst due_date) nach/an "from" – so werden Mehrtages-Balken,
+    // die in den Bereich hineinragen, ebenfalls geladen.
+    else if (from && to) rows = await fetchTasks('WHERE t.due_date <= $2 AND COALESCE(t.end_date, t.due_date) >= $1', [from, to]);
     else rows = await fetchTasks('', []);
     return res.json(rows);
   }
@@ -399,13 +413,19 @@ export async function tasks(req: VercelRequest, res: VercelResponse) {
     const notes = typeof b.notes === 'string' ? b.notes.slice(0, 4000) : '';
     const dueDate = normalizeDueDate(b.dueDate);
     const isoWeek = normalizeWeek(b.isoWeek);
+    // Enddatum nur behalten, wenn es NACH dem Starttag liegt (sonst eintägig).
+    let endDate = normalizeDueDate(b.endDate);
+    if (!dueDate || (endDate && endDate <= dueDate)) endDate = null;
+    // Uhrzeiten: ohne Startzeit ist die Aufgabe ganztägig (auch keine Endzeit).
+    const startTime = normalizeTime(b.startTime);
+    const endTime = startTime ? normalizeTime(b.endTime) : null;
     const assigneeIds = Array.isArray(b.assignees) ? b.assignees.filter((x: unknown): x is string => typeof x === 'string') : [];
     const id = genId('task');
     const name = sessionName(session);
 
     await sql`
-      INSERT INTO tasks (id, title, notes, due_date, iso_week, status, priority, created_by, created_by_name)
-      VALUES (${id}, ${b.title.trim().slice(0, 200)}, ${notes}, ${dueDate}, ${isoWeek}, ${status}, ${priority}, ${session.userId}, ${name})
+      INSERT INTO tasks (id, title, notes, due_date, end_date, start_time, end_time, iso_week, status, priority, created_by, created_by_name)
+      VALUES (${id}, ${b.title.trim().slice(0, 200)}, ${notes}, ${dueDate}, ${endDate}, ${startTime}, ${endTime}, ${isoWeek}, ${status}, ${priority}, ${session.userId}, ${name})
     `;
     const members = await loadMembers();
     const added = await replaceAssignees(id, assigneeIds, members);
@@ -464,12 +484,23 @@ export async function task(req: VercelRequest, res: VercelResponse) {
   const notes = b.notes !== undefined ? String(b.notes).slice(0, 4000) : undefined;
   const dueDate = b.dueDate !== undefined ? normalizeDueDate(b.dueDate) : undefined;
   const isoWeek = b.isoWeek !== undefined ? normalizeWeek(b.isoWeek) : undefined;
+  // Enddatum: nur behalten, wenn nach dem (mit-)gesetzten Starttag.
+  let endDate = b.endDate !== undefined ? normalizeDueDate(b.endDate) : undefined;
+  if (endDate && dueDate && endDate <= dueDate) endDate = null;
+  const startTime = b.startTime !== undefined ? normalizeTime(b.startTime) : undefined;
+  let endTime = b.endTime !== undefined ? normalizeTime(b.endTime) : undefined;
+  // Ganztägig (Startzeit auf null gesetzt) => Endzeit ebenfalls leeren.
+  if (startTime === null) endTime = null;
+  const setEndTime = b.endTime !== undefined || startTime === null;
 
   await sql`
     UPDATE tasks SET
       title = COALESCE(${title ?? null}, title),
       notes = COALESCE(${notes ?? null}, notes),
       due_date = CASE WHEN ${b.dueDate !== undefined} THEN ${dueDate ?? null}::date ELSE due_date END,
+      end_date = CASE WHEN ${b.endDate !== undefined} THEN ${endDate ?? null}::date ELSE end_date END,
+      start_time = CASE WHEN ${b.startTime !== undefined} THEN ${startTime ?? null} ELSE start_time END,
+      end_time = CASE WHEN ${setEndTime} THEN ${endTime ?? null} ELSE end_time END,
       iso_week = CASE WHEN ${b.isoWeek !== undefined} THEN ${isoWeek ?? null} ELSE iso_week END,
       status = COALESCE(${b.status ?? null}, status),
       priority = COALESCE(${b.priority ?? null}, priority),

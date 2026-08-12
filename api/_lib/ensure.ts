@@ -22,7 +22,7 @@ export async function ensureSchema(): Promise<void> {
   try {
     await sql`SELECT avatar_url, status, permissions, notify_prefs FROM users LIMIT 1`;
     await sql`SELECT 1 FROM tickets LIMIT 1`;
-    await sql`SELECT priority FROM tasks LIMIT 1`;
+    await sql`SELECT priority, end_date, start_time FROM tasks LIMIT 1`;
     // WICHTIG: hier die NEUE Spalte mitprüfen (nicht nur die Tabelle!). Sonst
     // denkt der Schnell-Check, alles sei da, und überspringt das ALTER, das die
     // Spalte anlegt – die Chat-Abfrage bricht dann und die Liste kommt leer.
@@ -62,6 +62,10 @@ export async function ensureSchema(): Promise<void> {
     created_by TEXT NOT NULL, created_by_name TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
   await run(sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'mittel'`);
+  // Google-Kalender-Stil: Enddatum (Mehrtages-Balken) + Uhrzeiten (Tagesansicht).
+  await run(sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS end_date DATE`);
+  await run(sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS start_time TEXT`);
+  await run(sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS end_time TEXT`);
   await run(sql`CREATE TABLE IF NOT EXISTS task_assignees (
     task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL, user_name TEXT NOT NULL DEFAULT '', PRIMARY KEY (task_id, user_id))`);
