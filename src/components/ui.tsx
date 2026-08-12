@@ -27,6 +27,38 @@ export function useBackdropDismiss(onClose: () => void) {
   };
 }
 
+// Zählt offene Modals, damit der Hintergrund-Scroll erst wieder frei ist, wenn
+// das LETZTE Modal geschlossen wurde (Modals können sich stapeln).
+let modalLockCount = 0;
+function lockBodyScroll() {
+  if (modalLockCount === 0) {
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+  }
+  modalLockCount++;
+}
+function unlockBodyScroll() {
+  modalLockCount = Math.max(0, modalLockCount - 1);
+  if (modalLockCount === 0) {
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
+  }
+}
+
+// Hängt ein Modal-Overlay direkt an <body> (Portal) und sperrt den
+// Hintergrund-Scroll. WICHTIG für iOS: nur so ist `position: fixed` wirklich
+// bildschirmfest. Liegt das Overlay dagegen im scrollbaren Kalender-/Chat-
+// Container, „scheint der Hintergrund durch", verschiebt sich beim Tippen in ein
+// Eingabefeld nach oben oder man tippt versehentlich in den Hintergrund.
+export function ModalPortal({ children }: { children: React.ReactNode }) {
+  React.useEffect(() => {
+    lockBodyScroll();
+    return () => unlockBodyScroll();
+  }, []);
+  if (typeof document === 'undefined') return null;
+  return createPortal(children, document.body);
+}
+
 // Hex-Farbe abdunkeln (für die Verlaufs-Wappen)
 export function shade(hex: string, factor: number): string {
   const clean = (hex || '#22DFC9').replace('#', '');

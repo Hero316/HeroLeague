@@ -7,7 +7,7 @@ import { apiFetch } from '../lib/api';
 import { getUrlParam, setUrlParam } from '../lib/urlState';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
-import { useBackdropDismiss } from './ui';
+import { useBackdropDismiss, ModalPortal } from './ui';
 
 const inputClass =
   'w-full bg-[#060E0F] border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent-light';
@@ -453,6 +453,7 @@ export function TaskDetail({
   };
 
   return (
+    <ModalPortal>
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/80 flex items-start sm:items-center justify-center p-0 sm:p-6 overflow-y-auto" {...backdrop}>
       <motion.div initial={{ scale: 0.97, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 10 }} className="hl-card hl-modal-card w-full max-w-xl my-0 sm:my-8 p-5 sm:p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
@@ -562,6 +563,7 @@ export function TaskDetail({
         </div>
       </motion.div>
     </motion.div>
+    </ModalPortal>
   );
 }
 
@@ -614,6 +616,7 @@ function NewTaskModal({
   };
 
   return (
+    <ModalPortal>
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4 overflow-y-auto" {...backdrop}>
       <motion.div initial={{ scale: 0.97 }} animate={{ scale: 1 }} className="hl-card hl-modal-card w-full max-w-md p-5 my-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
@@ -677,6 +680,7 @@ function NewTaskModal({
         </div>
       </motion.div>
     </motion.div>
+    </ModalPortal>
   );
 }
 
