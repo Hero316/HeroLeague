@@ -28,6 +28,9 @@ export async function ensureSchema(): Promise<void> {
     // Spalte anlegt – die Chat-Abfrage bricht dann und die Liste kommt leer.
     await sql`SELECT avatar_url FROM conversations LIMIT 1`;
     await sql`SELECT 1 FROM push_subscriptions LIMIT 1`;
+    // Neue Präsenz-Tabelle mitprüfen, sonst überspringt der Schnell-Check das
+    // Anlegen auf bereits bestehenden Datenbanken.
+    await sql`SELECT 1 FROM chat_presence LIMIT 1`;
     ensured = true;
     return;
   } catch {
@@ -93,6 +96,11 @@ export async function ensureSchema(): Promise<void> {
     endpoint TEXT PRIMARY KEY, user_id TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
   await run(sql`CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id)`);
+  // Chat-Präsenz (echter Online-Status + „tippt gerade"). Ephemer.
+  await run(sql`CREATE TABLE IF NOT EXISTS chat_presence (
+    user_id TEXT PRIMARY KEY, last_seen TIMESTAMPTZ NOT NULL DEFAULT now(),
+    typing_conv TEXT, typing_at TIMESTAMPTZ, typing_name TEXT)`);
+  await run(sql`CREATE INDEX IF NOT EXISTS idx_chat_presence_seen ON chat_presence(last_seen)`);
 
   // --- Constraints ganz zuletzt (unkritisch; nur für Rollen-/Anhang-Checks) -
   await run(sql`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);

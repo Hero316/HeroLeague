@@ -252,6 +252,20 @@ CREATE TABLE messages (
 CREATE INDEX idx_messages_conv ON messages(conversation_id, created_at);
 CREATE INDEX idx_messages_parent ON messages(parent_id);
 
+-- Chat-Präsenz: echter Online-Status per Heartbeat + „tippt gerade".
+-- Bewusst ephemer (kein historischer Verlauf) – ein Eintrag pro Nutzer.
+-- last_seen  = letzter Heartbeat (online, wenn jünger als ~35 s).
+-- typing_conv = Unterhaltung, in der gerade getippt wird (NULL = nirgends).
+-- typing_at   = Zeitpunkt des letzten Tipp-Signals (aktiv, wenn jünger als ~6 s).
+CREATE TABLE chat_presence (
+  user_id     TEXT PRIMARY KEY,
+  last_seen   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  typing_conv TEXT,
+  typing_at   TIMESTAMPTZ,
+  typing_name TEXT
+);
+CREATE INDEX idx_chat_presence_seen ON chat_presence(last_seen);
+
 -- Web-Push-Abos (ein Eintrag je Gerät/Browser).
 CREATE TABLE push_subscriptions (
   endpoint   TEXT PRIMARY KEY,

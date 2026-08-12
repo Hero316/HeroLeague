@@ -631,3 +631,56 @@ body {
     margin: 10mm;
   }
 }
+
+/* =====================================================================
+   Interner Chat (Hero Chat) – WhatsApp-artige, ruhige Optik
+   ===================================================================== */
+
+/* Ruhiger Chat-Hintergrund: dunkle Basis + sehr dezentes Punkte-Raster.
+   Bewusst zurückhaltend, damit Nachrichten im Vordergrund stehen. */
+.hl-chat-bg {
+  background-color: #0a1210;
+  background-image:
+    radial-gradient(rgba(34, 223, 201, 0.05) 0.5px, transparent 0.5px),
+    radial-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 26px 26px, 26px 26px;
+  background-position: 0 0, 13px 13px;
+}
+
+/* „Tippt gerade" – drei sanft wippende Punkte (wie WhatsApp). */
+@keyframes hlTyping {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+.hl-typing-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: hlTyping 1.3s infinite ease-in-out;
+}
+
+/* Nachrichten-Bubbles: kleiner „Zipfel" (Tail) an der jeweiligen Seite,
+   erzeugt über ein gedrehtes Quadrat – robust ohne SVG. */
+.hl-bubble { position: relative; }
+.hl-bubble-in::before,
+.hl-bubble-out::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 12px;
+  height: 12px;
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+.hl-bubble-in::before {
+  left: -6px;
+  background: inherit;
+  border-top-left-radius: 3px;
+  transform: scaleX(-1);
+}
+.hl-bubble-out::before {
+  right: -6px;
+  background: inherit;
+  border-top-right-radius: 3px;
+}
