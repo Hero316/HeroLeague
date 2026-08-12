@@ -28,6 +28,19 @@ export function pushSupported(): boolean {
   return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
 
+function isIos(): boolean {
+  return (
+    /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+}
+function isStandalone(): boolean {
+  return (
+    window.matchMedia?.('(display-mode: standalone)').matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
+}
+
 export async function isPushEnabled(): Promise<boolean> {
   if (!pushSupported()) return false;
   try {
@@ -39,10 +52,26 @@ export async function isPushEnabled(): Promise<boolean> {
 }
 
 export async function enablePush(): Promise<void> {
-  if (!pushSupported()) throw new Error('Dieser Browser unterstützt keine Push-Benachrichtigungen.');
+  if (!pushSupported()) {
+    if (isIos() && !isStandalone()) {
+      throw new Error(
+        'Auf dem iPhone gehen Benachrichtigungen nur in der installierten App: unten auf „Teilen" tippen → „Zum Home-Bildschirm", dann die App von dort öffnen und hier Benachrichtigungen erlauben.'
+      );
+    }
+    throw new Error('Dieser Browser unterstützt keine Push-Benachrichtigungen.');
+  }
+  // Wurde es früher blockiert, fragt der Browser NICHT erneut – man muss es in
+  // den Einstellungen wieder erlauben. Klare Anleitung geben.
+  if (Notification.permission === 'denied') {
+    throw new Error(
+      isIos()
+        ? 'Benachrichtigungen sind blockiert. iPhone: Einstellungen → Apps/Safari bzw. die installierte App „Hero League" → Benachrichtigungen erlauben. Danach hier erneut versuchen.'
+        : 'Benachrichtigungen sind für diese Seite blockiert. Im Browser links neben der Adresse auf das Schloss/⋮ tippen → Website-Einstellungen → Benachrichtigungen auf „Erlauben" stellen, dann erneut versuchen.'
+    );
+  }
   const reg = await navigator.serviceWorker.ready;
-  const perm = await Notification.requestPermission();
-  if (perm !== 'granted') throw new Error('Benachrichtigungen wurden nicht erlaubt.');
+  const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+  if (perm !== 'granted') throw new Error('Benachrichtigungen wurden nicht erlaubt. Bitte beim Nachfragen auf „Erlauben" tippen.');
   const { key } = await getPushKey();
   if (!key) throw new Error('Push ist serverseitig noch nicht eingerichtet (VAPID-Schlüssel fehlen).');
   const existing = await reg.pushManager.getSubscription();
