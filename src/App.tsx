@@ -601,7 +601,7 @@ export default function App() {
           isAdmin={isAdmin}
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
-          onOpenBackoffice={() => navigateTo('/admin')}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
           onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
           demoActive={demo.active}
           seasonLabel={selectedSeasonName}
@@ -646,7 +646,7 @@ export default function App() {
           isAdmin={isAdmin}
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
-          onOpenBackoffice={() => navigateTo('/admin')}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
           onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
           demoActive={demo.active}
           seasonLabel={selectedSeasonName}
@@ -719,7 +719,7 @@ export default function App() {
           isAdmin={isAdmin}
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
-          onOpenBackoffice={() => navigateTo('/admin')}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
           onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
           demoActive={demo.active}
           seasonLabel={currentSeasonName}
@@ -1087,7 +1087,7 @@ export default function App() {
         isAdmin={isAdmin}
         onLogout={handleLogout}
         onOpenLogin={() => navigateTo('/admin')}
-        onOpenBackoffice={() => navigateTo('/admin')}
+        onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
         onOpenReferee={() => setRefereeView(true)}
         demoActive={demo.active}
         seasonLabel={currentSeasonName}
