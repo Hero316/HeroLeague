@@ -43,7 +43,9 @@ import {
   reactMessage,
   editMessage,
   deleteMessage,
+  fetchThreads,
   type ChatSearchHit,
+  type ThreadSummary,
 } from '../lib/chat';
 import { fetchTeam, fetchTickets, fetchAllTasks, fetchTask, memberMap } from '../lib/collab';
 import { setChatUnread } from '../lib/badge';
@@ -804,14 +806,20 @@ function MessageRow({
           </div>
         )}
 
-        {/* Antworten dezent: nur Symbol, mit Zahl wenn schon Antworten da sind */}
+        {/* Antworten dezent: nur Symbol, mit Zahl wenn schon Antworten da sind.
+            Ungelesene Thread-Antworten lassen es leuchten. */}
         {onOpenThread && !deleted && (
           <button
             onClick={() => onOpenThread(m)}
-            className="mt-0.5 px-1 text-[10px] font-mono text-hl-faint hover:text-brand-accent-light cursor-pointer flex items-center gap-1"
+            className={`mt-0.5 px-1 text-[10px] font-mono cursor-pointer flex items-center gap-1 ${
+              (m.unreadReplies ?? 0) > 0
+                ? 'text-brand-accent-light font-bold [text-shadow:0_0_8px_rgba(34,223,201,.6)]'
+                : 'text-hl-faint hover:text-brand-accent-light'
+            }`}
           >
             <MessageSquare className="w-3 h-3" />
             {m.replyCount ? m.replyCount : ''}
+            {(m.unreadReplies ?? 0) > 0 && <span className="w-1.5 h-1.5 rounded-full bg-brand-accent-light animate-pulse" />}
           </button>
         )}
       </div>
@@ -1402,6 +1410,75 @@ function ConvSearchResults({
   );
 }
 
+// --- Threads-Übersicht (ungelesene Threads, „damit nichts untergeht") -------
+function ThreadsOverview({ threads, onOpen, onClose }: { threads: ThreadSummary[]; onOpen: (t: ThreadSummary) => void; onClose: () => void }) {
+  const backdrop = useBackdropDismiss(onClose);
+  return (
+    <ModalPortal>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[66] bg-black/80 flex items-stretch justify-end"
+        {...backdrop}
+      >
+        <motion.div
+          initial={{ x: 40 }}
+          animate={{ x: 0 }}
+          exit={{ x: 40 }}
+          className="w-full max-w-md bg-[#0a1110] border-l border-white/10 flex flex-col h-full"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            className="flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0"
+            style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)' }}
+          >
+            <span className="font-display font-bold text-white uppercase tracking-tight flex items-center gap-1.5">
+              <MessageSquare className="w-4 h-4 text-brand-accent-light" /> Threads
+            </span>
+            <button onClick={onClose} className="p-1 text-hl-mute hover:text-white cursor-pointer">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {threads.length === 0 ? (
+              <p className="text-center text-sm text-hl-mute font-sans py-10 px-4">Keine ungelesenen Threads. 🎉</p>
+            ) : (
+              threads.map((t) => (
+                <button
+                  key={t.parentId}
+                  onClick={() => onOpen(t)}
+                  className="w-full text-left px-3 py-3 border-b border-white/5 hover:bg-white/[.03] cursor-pointer"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-0.5">
+                    <span className="text-[12px] font-mono text-brand-accent-light truncate flex items-center gap-1">
+                      {t.convKind === 'group' && <Hash className="w-3 h-3 shrink-0" />}
+                      {t.source || 'Chat'}
+                    </span>
+                    <span className="min-w-[18px] h-[18px] px-1 bg-brand-accent-light text-[#04120f] text-[10px] font-bold rounded-full flex items-center justify-center shrink-0">
+                      {t.unreadCount}
+                    </span>
+                  </div>
+                  <div className="text-sm text-white truncate">
+                    <span className="text-hl-dim">{t.authorName}: </span>
+                    {t.body || (t.attachType ? '📎 Anhang' : '—')}
+                  </div>
+                  {t.lastReplyAuthor && (
+                    <div className="text-[11px] text-hl-mute font-mono mt-0.5 flex items-center gap-1">
+                      <MessageSquare className="w-2.5 h-2.5" /> {t.lastReplyAuthor}
+                      {t.lastReplyAt ? ` · ${fmtTime(t.lastReplyAt)}` : ''}
+                    </div>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </motion.div>
+      </motion.div>
+    </ModalPortal>
+  );
+}
+
 // --- Hauptkomponente --------------------------------------------------------
 export default function ChatSystem({
   currentUserId,
@@ -1428,6 +1505,9 @@ export default function ChatSystem({
   const [thread, setThread] = useState<ChatMessage | null>(null);
   const [attachView, setAttachView] = useState<{ type: 'ticket'; id: string } | { type: 'task'; task: Task } | null>(null);
   const [showInfo, setShowInfo] = useState(false);
+  const [threadList, setThreadList] = useState<ThreadSummary[]>([]); // ungelesene Threads
+  const [showThreads, setShowThreads] = useState(false);
+  useBackClose(showThreads, () => setShowThreads(false));
   const [search, setSearch] = useState('');
   const [hits, setHits] = useState<ChatSearchHit[]>([]);
   const [convSearch, setConvSearch] = useState('');
@@ -1497,6 +1577,14 @@ export default function ChatSystem({
     }
   }, []);
 
+  const loadThreads = useCallback(async () => {
+    try {
+      setThreadList(await fetchThreads());
+    } catch {
+      /* still */
+    }
+  }, []);
+
   // Deep-Link: aus einer Benachrichtigung direkt in diese Unterhaltung springen.
   const didOpenInitial = useRef(false);
   useEffect(() => {
@@ -1548,13 +1636,14 @@ export default function ChatSystem({
     }
   }, []);
 
-  // Erstladen + Team + Polling der Liste.
+  // Erstladen + Team + Polling der Liste (inkl. ungelesene Threads).
   useEffect(() => {
     loadConvs();
+    loadThreads();
     fetchTeam().then(setTeam).catch(() => {});
-    const iv = setInterval(loadConvs, 8000);
+    const iv = setInterval(() => { loadConvs(); loadThreads(); }, 8000);
     return () => clearInterval(iv);
-  }, [loadConvs]);
+  }, [loadConvs, loadThreads]);
 
   // Aktive Unterhaltung laden + alle 5 s aktualisieren.
   useEffect(() => {
@@ -1670,6 +1759,14 @@ export default function ChatSystem({
     setTimeout(loadConvs, 800);
   };
 
+  // Aus der Threads-Übersicht direkt in den Thread springen.
+  const openThreadFromSummary = (t: ThreadSummary) => {
+    setShowThreads(false);
+    openConversation(t.conversationId);
+    setPendingThread({ convId: t.conversationId, parentId: t.parentId, hitId: t.parentId });
+    setTimeout(loadThreads, 1200);
+  };
+
   // Klick auf einen In-Chat-Suchtreffer: Thread öffnen bzw. im Verlauf hinspringen.
   const openConvHit = (h: ChatSearchHit) => {
     if (h.parentId) {
@@ -1742,6 +1839,24 @@ export default function ChatSystem({
             )}
           </div>
         </div>
+        {/* Threads-Übersicht: damit ungelesene Thread-Antworten nicht untergehen */}
+        {threadList.length > 0 && (
+          <button
+            onClick={() => setShowThreads(true)}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 border-b border-white/5 bg-brand-accent-light/[.07] hover:bg-brand-accent-light/[.12] cursor-pointer text-left"
+          >
+            <div className="w-9 h-9 rounded-full bg-brand-accent-light/20 border border-brand-accent-light/40 flex items-center justify-center text-brand-accent-light shrink-0">
+              <MessageSquare className="w-4 h-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-sans font-semibold text-white">Threads</div>
+              <div className="text-[12px] text-brand-accent-light font-sans">{threadList.length} Thread{threadList.length === 1 ? '' : 's'} mit neuen Antworten</div>
+            </div>
+            <span className="min-w-[20px] h-5 px-1.5 bg-brand-accent-light text-[#04120f] text-[11px] font-bold rounded-full flex items-center justify-center shrink-0">
+              {threadList.reduce((s, t) => s + t.unreadCount, 0)}
+            </span>
+          </button>
+        )}
         <div className="flex-1 overflow-y-auto">
           {loadingConvs ? (
             <div className="flex justify-center py-8 text-hl-mute">
@@ -1975,6 +2090,9 @@ export default function ChatSystem({
       </div>
 
       <AnimatePresence>
+        {showThreads && (
+          <ThreadsOverview threads={threadList} onOpen={openThreadFromSummary} onClose={() => setShowThreads(false)} />
+        )}
         {showNew && (
           <NewConversationModal
             team={team}

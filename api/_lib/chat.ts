@@ -130,15 +130,24 @@ export async function messages(req: VercelRequest, res: VercelResponse) {
         `SELECT ${MSG_COLS} FROM messages m WHERE m.conversation_id = $1 AND m.parent_id = $2 ORDER BY m.created_at`,
         [conversationId, parentId]
       );
+      // Thread als gelesen markieren (für „ungelesene Threads" + Leuchten).
+      await sql`
+        INSERT INTO thread_reads (user_id, parent_id, last_read_at) VALUES (${uid}, ${parentId}, now())
+        ON CONFLICT (user_id, parent_id) DO UPDATE SET last_read_at = now()
+      `;
       return res.json(replies);
     }
 
-    // Top-Level-Nachrichten inkl. Antwort-Zähler
+    // Top-Level-Nachrichten inkl. Antwort-Zähler + ungelesene Thread-Antworten
+    // (Antworten von anderen, die neuer sind als mein letzter Blick in den Thread).
     const rows = await sql.query(
       `SELECT ${MSG_COLS},
-         (SELECT count(*)::int FROM messages r WHERE r.parent_id = m.id) AS "replyCount"
+         (SELECT count(*)::int FROM messages r WHERE r.parent_id = m.id AND r.deleted_at IS NULL) AS "replyCount",
+         (SELECT count(*)::int FROM messages r
+            WHERE r.parent_id = m.id AND r.author_id <> $2 AND r.deleted_at IS NULL
+              AND r.created_at > COALESCE((SELECT tr.last_read_at FROM thread_reads tr WHERE tr.user_id = $2 AND tr.parent_id = m.id), to_timestamp(0))) AS "unreadReplies"
        FROM messages m WHERE m.conversation_id = $1 AND m.parent_id IS NULL ORDER BY m.created_at`,
-      [conversationId]
+      [conversationId, uid]
     );
     // Beim Öffnen als gelesen markieren.
     await sql`UPDATE conversation_members SET last_read_at = now() WHERE conversation_id = ${conversationId} AND user_id = ${uid}`;
@@ -208,12 +217,21 @@ export async function messages(req: VercelRequest, res: VercelResponse) {
           ? '📎 Datei'
           : '📎 Anhang';
     const pushTitle = conv.kind === 'group' ? conv.title || 'Gruppe' : name;
-    const pushBody = conv.kind === 'group' ? `${name}: ${preview}` : preview;
-    for (const cm of convMembers) {
-      if (cm.userId === uid || mentioned.has(cm.userId)) continue;
-      await sendPushToUser(cm.userId, { title: pushTitle, body: pushBody, url: '/admin' });
+    // Thread-Antworten benachrichtigen NUR die Thread-Beteiligten (Eltern-Autor
+    // + bisherige Antwortende) – nicht die ganze Gruppe. Top-Level wie bisher alle.
+    let recipients: string[] = convMembers.map((m) => m.userId);
+    if (parentId) {
+      const parts = (await sql`
+        SELECT DISTINCT author_id AS "userId" FROM messages WHERE id = ${parentId} OR parent_id = ${parentId}
+      `) as { userId: string }[];
+      recipients = parts.map((p) => p.userId).filter((x) => memberSet.has(x));
     }
-    return res.json({ ...(inserted[0] as object), reactions: [], replyCount: 0 });
+    const pushBody = (conv.kind === 'group' ? `${name}: ${preview}` : preview) + (parentId ? ' (Thread)' : '');
+    for (const rid of recipients) {
+      if (rid === uid || mentioned.has(rid)) continue;
+      await sendPushToUser(rid, { title: pushTitle, body: pushBody, url: '/admin' });
+    }
+    return res.json({ ...(inserted[0] as object), reactions: [], replyCount: 0, unreadReplies: 0 });
   }
 
   // --- Nachricht bearbeiten (nur eigene, nicht gelöschte) -------------------
@@ -282,6 +300,40 @@ export async function reactMessage(req: VercelRequest, res: VercelResponse) {
     SELECT user_id AS "userId", emoji FROM message_reactions WHERE message_id = ${messageId} ORDER BY created_at
   `;
   return res.json({ messageId, reactions });
+}
+
+// --- Ungelesene Threads (Übersicht „damit nichts untergeht") ----------------
+// GET /api/chat?resource=threads -> Threads mit neuen Antworten (von anderen,
+// neuer als mein letzter Blick), quer über alle meine Unterhaltungen.
+export async function threads(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Nicht unterstützt' });
+  res.setHeader('Cache-Control', 'no-store');
+  const uid = session.userId;
+  const rows = await sql.query(
+    `SELECT m.id AS "parentId", m.conversation_id AS "conversationId",
+            m.author_name AS "authorName",
+            CASE WHEN m.deleted_at IS NULL THEN m.body ELSE '' END AS body,
+            m.attach_type AS "attachType", c.kind AS "convKind",
+            CASE WHEN c.kind = 'dm'
+                 THEN (SELECT x.user_name FROM conversation_members x WHERE x.conversation_id = c.id AND x.user_id <> $1 LIMIT 1)
+                 ELSE c.title END AS source,
+            (SELECT count(*)::int FROM messages r WHERE r.parent_id = m.id AND r.author_id <> $1 AND r.deleted_at IS NULL
+               AND r.created_at > COALESCE(tr.last_read_at, to_timestamp(0))) AS "unreadCount",
+            (SELECT max(r.created_at) FROM messages r WHERE r.parent_id = m.id) AS "lastReplyAt",
+            (SELECT r.author_name FROM messages r WHERE r.parent_id = m.id AND r.deleted_at IS NULL ORDER BY r.created_at DESC LIMIT 1) AS "lastReplyAuthor"
+     FROM messages m
+     JOIN conversations c ON c.id = m.conversation_id
+     JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = $1
+     LEFT JOIN thread_reads tr ON tr.parent_id = m.id AND tr.user_id = $1
+     WHERE m.parent_id IS NULL
+       AND EXISTS (SELECT 1 FROM messages r WHERE r.parent_id = m.id AND r.author_id <> $1 AND r.deleted_at IS NULL
+                     AND r.created_at > COALESCE(tr.last_read_at, to_timestamp(0)))
+     ORDER BY "lastReplyAt" DESC NULLS LAST LIMIT 50`,
+    [uid]
+  );
+  return res.json(rows);
 }
 
 // --- Globale Suche (nur eigene Unterhaltungen) ------------------------------

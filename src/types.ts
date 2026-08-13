@@ -486,4 +486,5 @@ export interface ChatMessage {
   deletedAt?: string | null; // gesetzt = für alle zurückgenommen
   reactions?: MessageReaction[]; // Emoji-Reaktionen
   replyCount?: number; // nur bei Top-Level-Nachrichten
+  unreadReplies?: number; // ungelesene Thread-Antworten (Top-Level, für das Leuchten)
 }

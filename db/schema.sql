@@ -268,6 +268,15 @@ CREATE TABLE message_reactions (
 );
 CREATE INDEX idx_message_reactions_msg ON message_reactions(message_id);
 
+-- Thread-Lesestand: pro Nutzer & Thread (Eltern-Nachricht) der letzte Blick,
+-- damit man ungelesene Thread-Antworten erkennt (Leuchten + Threads-Übersicht).
+CREATE TABLE thread_reads (
+  user_id      TEXT NOT NULL,
+  parent_id    TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  last_read_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, parent_id)
+);
+
 -- Chat-Präsenz: echter Online-Status per Heartbeat + „tippt gerade".
 -- Bewusst ephemer (kein historischer Verlauf) – ein Eintrag pro Nutzer.
 -- last_seen  = letzter Heartbeat (online, wenn jünger als ~35 s).
