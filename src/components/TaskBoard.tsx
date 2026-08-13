@@ -8,7 +8,7 @@ import { getUrlParam, setUrlParam } from '../lib/urlState';
 import { useBackClose } from '../lib/backStack';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
-import { useBackdropDismiss, ModalPortal } from './ui';
+import { useBackdropDismiss, ModalPortal, SegmentedControl } from './ui';
 
 const inputClass =
   'w-full bg-[#060E0F] border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent-light';
@@ -1124,65 +1124,70 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
       {/* Kopfzeile: Ansicht + Navigation. Im Handy-App-Modus (persist) sitzt sie
           unten – mit dem Daumen erreichbar; ab md wieder oben. */}
       <div
-        className={`flex flex-wrap items-center justify-between gap-3 ${
+        className={`flex flex-col gap-2 ${
           persist
             ? 'order-2 sticky bottom-0 z-20 -mx-3 border-t border-white/10 bg-[#060E0F] px-3 pt-3 mt-3 md:static md:bottom-auto md:z-auto md:mx-0 md:mt-0 md:mb-4 md:border-0 md:bg-transparent md:px-0 md:pt-0'
             : 'mb-4'
         }`}
       >
-        {mode === 'tasks' ? (
-          <div className="flex items-center gap-1 bg-[#060E0F]/50 border border-white/10 rounded-xl p-1">
-            {(['list', 'week'] as const).map((tv) => (
-              <button
-                key={tv}
-                onClick={() => setTaskView(tv)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-sans font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1.5 ${
-                  taskView === tv ? 'bg-brand-accent-light text-white' : 'text-hl-mute hover:text-white'
-                }`}
-              >
-                {tv === 'list' ? <ListChecks className="w-3.5 h-3.5" /> : <CalendarDays className="w-3.5 h-3.5" />}
-                {tv === 'list' ? 'Liste' : 'Woche'}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="flex items-center gap-1 bg-[#060E0F]/50 border border-white/10 rounded-xl p-1 overflow-x-auto max-w-full">
-            {calendarViews.map((v) => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-sans font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1.5 shrink-0 ${
-                  view === v ? 'bg-brand-accent-light text-white' : 'text-hl-mute hover:text-white'
-                }`}
-              >
-                {v === 'month' ? <LayoutGrid className="w-3.5 h-3.5" /> : v === 'week' ? <CalendarDays className="w-3.5 h-3.5" /> : v === 'day' ? <Clock className="w-3.5 h-3.5" /> : v === 'termine' ? <Calendar className="w-3.5 h-3.5" /> : <CheckSquare className="w-3.5 h-3.5" />}
-                {v === 'month' ? 'Monat' : v === 'week' ? 'Woche' : v === 'day' ? 'Tag' : v === 'termine' ? 'Termine' : 'Aufgaben'}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Zeile 1: Umschalter links, „Neu" rechts – die Position bleibt STABIL,
+            egal welche Ansicht (kein Springen mehr). */}
+        <div className="flex items-center justify-between gap-3">
+          {mode === 'tasks' ? (
+            <SegmentedControl
+              groupId="taskview"
+              value={taskView}
+              onChange={(v) => setTaskView(v)}
+              options={[
+                { value: 'list' as const, label: 'Liste', icon: ListChecks },
+                { value: 'week' as const, label: 'Woche', icon: CalendarDays },
+              ]}
+            />
+          ) : (
+            <SegmentedControl
+              groupId="calview"
+              value={view}
+              onChange={(v) => setView(v)}
+              options={calendarViews.map((v) => ({
+                value: v as 'month' | 'week' | 'day' | 'termine' | 'aufgaben',
+                label: v === 'month' ? 'Monat' : v === 'week' ? 'Woche' : v === 'day' ? 'Tag' : v === 'termine' ? 'Termine' : 'Aufgaben',
+                icon: v === 'month' ? LayoutGrid : v === 'week' ? CalendarDays : v === 'day' ? Clock : v === 'termine' ? Calendar : CheckSquare,
+              }))}
+            />
+          )}
+          <button
+            onClick={() => setNewTask({ date: view === 'day' ? ymd(anchor) : TODAY, type: view === 'aufgaben' ? 'aufgabe' : 'termin' })}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white cursor-pointer flex items-center gap-1.5 shrink-0 active:scale-95 transition-transform"
+          >
+            <Plus className="w-4 h-4" /> {view === 'aufgaben' ? 'Aufgabe' : 'Neu'}
+          </button>
+        </div>
 
-        {((mode !== 'tasks' && (view === 'month' || view === 'week' || view === 'day')) || (mode === 'tasks' && taskView === 'week')) && (
-          <div className="flex items-center gap-2">
-            <button onClick={() => shift(-1)} className="p-2 rounded-lg bg-white/5 border border-white/10 text-hl-soft hover:text-white cursor-pointer">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="font-display font-bold text-white text-sm min-w-[8rem] text-center">{label}</span>
-            <button onClick={() => shift(1)} className="p-2 rounded-lg bg-white/5 border border-white/10 text-hl-soft hover:text-white cursor-pointer">
-              <ChevronRight className="w-4 h-4" />
-            </button>
-            <button onClick={() => setAnchor(new Date())} className="px-3 py-2 rounded-lg text-xs font-sans font-semibold bg-white/5 border border-white/10 text-hl-mute hover:text-white cursor-pointer">
-              Heute
-            </button>
-          </div>
-        )}
-
-        <button
-          onClick={() => setNewTask({ date: view === 'day' ? ymd(anchor) : TODAY, type: view === 'aufgaben' ? 'aufgabe' : 'termin' })}
-          className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white cursor-pointer flex items-center gap-1.5 shrink-0"
-        >
-          <Plus className="w-4 h-4" /> {view === 'aufgaben' ? 'Aufgabe' : 'Neu'}
-        </button>
+        {/* Zeile 2: Datums-Navigation – blendet SMOOTH ein/aus statt zu poppen. */}
+        <AnimatePresence initial={false}>
+          {((mode !== 'tasks' && (view === 'month' || view === 'week' || view === 'day')) || (mode === 'tasks' && taskView === 'week')) && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="overflow-hidden"
+            >
+              <div className="flex items-center justify-center gap-2 pt-0.5">
+                <button onClick={() => shift(-1)} className="p-2 rounded-lg bg-white/5 border border-white/10 text-hl-soft hover:text-white cursor-pointer active:scale-90 transition-transform">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="font-display font-bold text-white text-sm min-w-[8rem] text-center">{label}</span>
+                <button onClick={() => shift(1)} className="p-2 rounded-lg bg-white/5 border border-white/10 text-hl-soft hover:text-white cursor-pointer active:scale-90 transition-transform">
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                <button onClick={() => setAnchor(new Date())} className="px-3 py-2 rounded-lg text-xs font-sans font-semibold bg-white/5 border border-white/10 text-hl-mute hover:text-white cursor-pointer active:scale-95 transition-transform">
+                  Heute
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <div className={persist ? 'order-1 flex-1 min-h-0 md:contents' : 'contents'}>

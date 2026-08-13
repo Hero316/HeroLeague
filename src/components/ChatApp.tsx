@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { motion } from 'motion/react';
 import { ArrowLeft, LogOut, MessageSquare, CalendarDays, ListChecks, Ticket as TicketIcon, Smartphone, X } from 'lucide-react';
 import ChatSystem from './ChatSystem';
 import TaskBoard from './TaskBoard';
@@ -149,12 +150,23 @@ export default function ChatApp({
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`relative flex flex-col items-center justify-center gap-0.5 py-2.5 cursor-pointer transition-colors ${
+              className={`relative flex flex-col items-center justify-center gap-0.5 py-2.5 cursor-pointer transition-colors active:scale-90 ${
                 active ? 'text-brand-accent-light' : 'text-hl-mute hover:text-white'
               }`}
             >
-              {active && <span className="absolute top-0 h-0.5 w-10 rounded-full bg-brand-accent-light" />}
-              <Icon className="w-5 h-5" />
+              {active && (
+                <motion.span
+                  layoutId="tab-indicator"
+                  className="absolute top-0 h-0.5 w-10 rounded-full bg-brand-accent-light"
+                  transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+                />
+              )}
+              <motion.span
+                animate={{ scale: active ? 1.12 : 1, y: active ? -1 : 0 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              >
+                <Icon className="w-5 h-5" />
+              </motion.span>
               <span className="text-[10px] font-sans font-semibold uppercase tracking-wide">{t.label}</span>
             </button>
           );
