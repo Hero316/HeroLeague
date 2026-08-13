@@ -595,12 +595,12 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
           <p className="text-sm font-sans">Noch keine Tickets. Leg mit „Neues Ticket" los.</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {visible.map((t) => (
             <button
               key={t.id}
               onClick={() => setOpenId(t.id)}
-              className="w-full text-left hl-surf-soft border border-white/5 hover:border-white/15 rounded-xl px-4 py-3 transition-colors cursor-pointer"
+              className="w-full text-left hl-surf border border-white/5 hover:border-white/15 rounded-2xl px-4 py-3.5 shadow-sm hover:shadow transition-all cursor-pointer"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">

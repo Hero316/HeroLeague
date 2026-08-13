@@ -1302,7 +1302,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                   )}
                   <button
                     onClick={() => setOpenTask(t)}
-                    className={`w-full text-left hl-surf border border-white/5 rounded-xl p-3 cursor-pointer hover:border-white/15 flex items-center gap-3 ${past ? 'opacity-60' : ''}`}
+                    className={`w-full text-left hl-surf border border-white/5 rounded-2xl p-3.5 cursor-pointer hover:border-white/15 shadow-sm hover:shadow transition-all flex items-center gap-3 ${past ? 'opacity-60' : ''}`}
                   >
                     <span className="w-1.5 self-stretch rounded-full shrink-0" style={{ background: t.type === 'beides' ? '#E9C46A' : '#22DFC9' }} />
                     <div className="min-w-0 flex-1">
@@ -1351,7 +1351,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                   <div className="text-[11px] font-mono uppercase tracking-wider mb-1.5 px-1" style={{ color: b.tone ?? '#7e877f' }}>
                     {b.label} · {grouped[b.key].length}
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {grouped[b.key].map((t) => {
                       const done = t.status === 'erledigt';
                       const overdue = !done && !!t.dueDate && t.dueDate < TODAY;
@@ -1359,7 +1359,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                         <div
                           key={t.id}
                           onClick={() => setOpenTask(t)}
-                          className={`hl-surf border border-white/5 rounded-xl p-3 cursor-pointer hover:border-white/15 flex items-center gap-3 ${done ? 'opacity-60' : ''}`}
+                          className={`hl-surf border border-white/5 rounded-2xl p-3.5 cursor-pointer hover:border-white/15 shadow-sm hover:shadow transition-all flex items-center gap-3 ${done ? 'opacity-60' : ''}`}
                         >
                           <button
                             onClick={(e) => { e.stopPropagation(); quickSetStatus(t, done ? 'offen' : 'erledigt'); }}
