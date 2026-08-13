@@ -11,7 +11,7 @@ import MentionTextarea from './MentionTextarea';
 import { useBackdropDismiss, ModalPortal, SegmentedControl } from './ui';
 
 const inputClass =
-  'w-full hl-surf-0 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent-light';
+  'w-full hl-surf-0 border border-white/10 rounded-xl px-3.5 py-2.5 text-[15px] text-white focus:outline-none focus:border-brand-accent-light transition-colors';
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   leer: 'Nichts',
@@ -662,68 +662,98 @@ function NewTaskModal({
   return (
     <ModalPortal>
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4 overflow-y-auto" {...backdrop}>
-      <motion.div initial={{ scale: 0.97 }} animate={{ scale: 1 }} className="hl-card hl-modal-card w-full max-w-md p-5 my-6" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display font-black text-lg text-white uppercase tracking-tight">Neu</h3>
-          <button onClick={onClose} className="p-1.5 text-hl-mute hover:text-white cursor-pointer">
+      <motion.div initial={{ scale: 0.97, y: 8 }} animate={{ scale: 1, y: 0 }} className="hl-card hl-modal-card w-full max-w-md p-5 sm:p-6 rounded-3xl my-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="font-display font-black text-xl text-white uppercase tracking-tight">
+            {type === 'aufgabe' ? 'Neue Aufgabe' : type === 'beides' ? 'Neuer Eintrag' : 'Neuer Termin'}
+          </h3>
+          <button onClick={onClose} className="p-2 -mr-1 rounded-full text-hl-mute hover:text-white hover:bg-white/5 cursor-pointer transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="mb-3">
-          <TypeToggle value={type} onChange={setType} />
-        </div>
-        <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Titel *</label>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus placeholder={type === 'aufgabe' ? 'z.B. Video schneiden' : 'z.B. DVAG Treff'} className={inputClass} />
-        <ScheduleFields
-          kind={type}
-          dueDate={dueDate}
-          endDate={endDate}
-          allDay={allDay}
-          startTime={startTime}
-          endTime={endTime}
-          onDue={setDueDate}
-          onEnd={setEndDate}
-          onAllDay={setAllDay}
-          onStart={setStartTime}
-          onEndTime={setEndTime}
-        />
-        <div className="grid grid-cols-2 gap-3 mt-3">
+
+        <div className="space-y-4">
+          <SegmentedControl
+            groupId="newtasktype"
+            fill
+            value={type}
+            onChange={(v) => setType(v)}
+            options={[
+              { value: 'termin' as const, label: 'Termin', icon: Calendar },
+              { value: 'aufgabe' as const, label: 'Aufgabe', icon: CheckSquare },
+              { value: 'beides' as const, label: 'Beides', icon: Check },
+            ]}
+          />
+
           <div>
-            <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Status</label>
-            <select value={status} onChange={(e) => setStatus(e.target.value as TaskStatus)} className={inputClass}>
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>{STATUS_LABEL[s]}</option>
-              ))}
-            </select>
+            <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-1.5">Titel</label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus placeholder={type === 'aufgabe' ? 'z.B. Video schneiden' : 'z.B. DVAG Treff'} className={inputClass} />
           </div>
+
+          <ScheduleFields
+            kind={type}
+            dueDate={dueDate}
+            endDate={endDate}
+            allDay={allDay}
+            startTime={startTime}
+            endTime={endTime}
+            onDue={setDueDate}
+            onEnd={setEndDate}
+            onAllDay={setAllDay}
+            onStart={setStartTime}
+            onEndTime={setEndTime}
+          />
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-1.5">Status</label>
+              <select value={status} onChange={(e) => setStatus(e.target.value as TaskStatus)} className={inputClass}>
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-1.5">Priorität</label>
+              <select value={priority} onChange={(e) => setPriority(e.target.value as TicketPriority)} className={inputClass}>
+                {PRIORITIES.map((p) => (
+                  <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           <div>
-            <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Priorität</label>
-            <select value={priority} onChange={(e) => setPriority(e.target.value as TicketPriority)} className={inputClass}>
-              {PRIORITIES.map((p) => (
-                <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>
-              ))}
-            </select>
+            <label className="text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5" /> Personen
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {team.map((m) => {
+                const on = assignees.includes(m.id);
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => toggle(m.id)}
+                    className={`flex items-center gap-1.5 pl-1 pr-3 py-1 rounded-full border text-[13px] font-sans font-semibold transition-all active:scale-95 cursor-pointer ${
+                      on ? 'bg-brand-accent-light/20 border-brand-accent-light/50 text-brand-accent-light' : 'bg-white/5 border-white/10 text-hl-mute hover:text-white'
+                    }`}
+                  >
+                    <Avatar name={m.name} url={m.avatarUrl} size={22} />
+                    {m.name}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
-        <label className="text-[10px] font-mono text-hl-dim uppercase mb-1.5 mt-3 flex items-center gap-1">
-          <Users className="w-3.5 h-3.5" /> Personen
-        </label>
-        <div className="flex flex-wrap gap-1.5">
-          {team.map((m) => {
-            const on = assignees.includes(m.id);
-            return (
-              <button key={m.id} type="button" onClick={() => toggle(m.id)} className={`px-2.5 py-1.5 rounded-lg text-xs font-sans font-semibold border transition-colors cursor-pointer ${on ? 'bg-brand-accent-light/20 border-brand-accent-light/50 text-brand-accent-light' : 'bg-white/5 border-white/10 text-hl-mute hover:text-white'}`}>
-                {m.name}
-              </button>
-            );
-          })}
-        </div>
-        <div className="flex justify-end gap-2 mt-5">
-          <button onClick={onClose} className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-white/5 border border-white/10 text-hl-mute hover:text-white cursor-pointer">
+
+        <div className="flex gap-2.5 mt-6">
+          <button onClick={onClose} className="flex-1 py-3 rounded-2xl text-xs font-bold uppercase tracking-wider bg-white/5 border border-white/10 text-hl-mute hover:text-white cursor-pointer transition-colors active:scale-[.98]">
             Abbrechen
           </button>
-          <button onClick={create} disabled={busy} className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white cursor-pointer disabled:opacity-50">
-            Anlegen
+          <button onClick={create} disabled={busy} className="flex-[1.5] py-3 rounded-2xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white cursor-pointer disabled:opacity-50 transition-all active:scale-[.98] flex items-center justify-center gap-2">
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Anlegen
           </button>
         </div>
       </motion.div>

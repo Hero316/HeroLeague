@@ -69,15 +69,17 @@ export function SegmentedControl<T extends string>({
   onChange,
   groupId,
   className = '',
+  fill = false,
 }: {
   options: { value: T; label: string; icon?: React.ComponentType<{ className?: string }> }[];
   value: T;
   onChange: (v: T) => void;
   groupId: string;
   className?: string;
+  fill?: boolean;
 }) {
   return (
-    <div className={`relative flex items-center gap-0.5 hl-surf-soft border border-white/10 rounded-2xl p-1 overflow-x-auto no-scrollbar max-w-full ${className}`}>
+    <div className={`relative flex items-center gap-0.5 hl-surf-soft border border-white/10 rounded-2xl p-1 max-w-full ${fill ? 'w-full' : 'overflow-x-auto no-scrollbar'} ${className}`}>
       {options.map((o) => {
         const active = o.value === value;
         const Icon = o.icon;
@@ -85,9 +87,9 @@ export function SegmentedControl<T extends string>({
           <button
             key={o.value}
             onClick={() => onChange(o.value)}
-            className={`relative px-3.5 py-2 rounded-xl text-xs font-sans font-bold uppercase tracking-wider cursor-pointer flex items-center gap-1.5 shrink-0 transition-colors duration-200 active:scale-95 ${
-              active ? 'text-white' : 'text-hl-mute hover:text-white'
-            }`}
+            className={`relative px-3.5 py-2 rounded-xl text-xs font-sans font-bold uppercase tracking-wider cursor-pointer flex items-center gap-1.5 transition-colors duration-200 active:scale-95 ${
+              fill ? 'flex-1 justify-center' : 'shrink-0'
+            } ${active ? 'text-white' : 'text-hl-mute hover:text-white'}`}
           >
             {active && (
               <motion.span
