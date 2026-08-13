@@ -234,7 +234,7 @@ export function TicketDetail({
         initial={{ scale: 0.97, y: 10 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.97, y: 10 }}
-        className="hl-card hl-modal-card w-full max-w-2xl my-0 sm:my-8 p-5 sm:p-6"
+        className="hl-card hl-modal-card w-full max-w-2xl my-0 sm:my-8 p-5 sm:p-6 rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         {loading || !ticket ? (
@@ -253,7 +253,7 @@ export function TicketDetail({
                   von {ticket.createdByName} · {fmtDate(ticket.createdAt)}
                 </p>
               </div>
-              <button onClick={onClose} className="p-1.5 text-hl-mute hover:text-white shrink-0 cursor-pointer">
+              <button onClick={onClose} className="p-2 -mr-1 rounded-full text-hl-mute hover:text-white hover:bg-white/5 transition-colors shrink-0 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -274,11 +274,11 @@ export function TicketDetail({
 
             {/* Verwaltung (nur Super-Admin) */}
             {canManage && (
-              <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3 hl-surf-soft border border-white/5 rounded-xl p-3">
+              <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3 hl-surf-soft border border-white/5 rounded-2xl p-4">
                 <div>
-                  <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Status</label>
+                  <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-1.5">Status</label>
                   <select
-                    className={`${inputClass} py-2`}
+                    className={inputClass}
                     value={ticket.status}
                     disabled={busy}
                     onChange={(e) => patch({ status: e.target.value as TicketStatus })}
@@ -291,9 +291,9 @@ export function TicketDetail({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Priorität</label>
+                  <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-1.5">Priorität</label>
                   <select
-                    className={`${inputClass} py-2`}
+                    className={inputClass}
                     value={ticket.priority}
                     disabled={busy}
                     onChange={(e) => patch({ priority: e.target.value as TicketPriority })}
@@ -306,9 +306,9 @@ export function TicketDetail({
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Zuständig</label>
+                  <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-1.5">Zuständig</label>
                   <select
-                    className={`${inputClass} py-2`}
+                    className={inputClass}
                     value={ticket.assignedTo ?? ''}
                     disabled={busy}
                     onChange={(e) => patch({ assignedTo: e.target.value || null })}
@@ -371,7 +371,7 @@ export function TicketDetail({
                       <button
                         onClick={remove}
                         disabled={busy}
-                        className="px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:bg-rose-500/20 transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                        className="px-4 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wider bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:bg-rose-500/20 transition-all active:scale-[.98] cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
                       >
                         <Trash2 className="w-3.5 h-3.5" /> Löschen
                       </button>
@@ -379,9 +379,9 @@ export function TicketDetail({
                     <button
                       onClick={submitComment}
                       disabled={busy || up.uploading}
-                      className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                      className="px-5 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white transition-all active:scale-[.98] cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
                     >
-                      <Send className="w-3.5 h-3.5" /> Senden
+                      {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Senden
                     </button>
                   </div>
                 </div>
