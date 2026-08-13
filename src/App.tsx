@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster, PlayerOfMonth } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
 import { startPresence } from './lib/presence';
+import { syncPush } from './lib/push';
 import { seasonName } from './lib/heroAward';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
@@ -436,6 +437,13 @@ export default function App() {
   useEffect(() => {
     if (sessionUser) fetchRoster();
   }, [sessionUser, fetchRoster]);
+
+  // Push-Abo lebendig halten: Sobald jemand angemeldet ist, ein zuvor auf diesem
+  // Gerät gewünschtes (aber vom Browser evtl. verworfenes) Abo wiederherstellen
+  // und serverseitig auffrischen. Best-effort – ohne Wunsch/Erlaubnis passiert nichts.
+  useEffect(() => {
+    if (sessionUser) syncPush().catch(() => {});
+  }, [sessionUser]);
 
   // Highlights speichern (optimistisch): erst lokal setzen, dann serverseitig
   // schützen lassen. Schlägt das Speichern fehl, wird zurückgerollt.

@@ -28,6 +28,27 @@ export function pushSupported(): boolean {
   return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
 
+// Wunsch des Nutzers pro Gerät merken ("ich will hier Push"). Browser verwerfen
+// ein Push-Abo gelegentlich von selbst (z.B. nach längerer Zeit / Update) – dann
+// wäre der Schalter nach dem Neustart wieder aus. Mit diesem Merker stellen wir
+// das Abo beim App-Start automatisch wieder her (siehe syncPush).
+const PUSH_INTENT_KEY = 'hl-push-intent';
+function setPushIntent(on: boolean): void {
+  try {
+    if (on) localStorage.setItem(PUSH_INTENT_KEY, '1');
+    else localStorage.removeItem(PUSH_INTENT_KEY);
+  } catch {
+    /* localStorage evtl. blockiert – dann eben nicht merken */
+  }
+}
+export function pushIntended(): boolean {
+  try {
+    return localStorage.getItem(PUSH_INTENT_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 function isIos(): boolean {
   return (
     /iphone|ipad|ipod/i.test(navigator.userAgent) ||
@@ -78,14 +99,45 @@ export async function enablePush(): Promise<void> {
   const sub =
     existing ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8Array(key) }));
   await savePushSubscription(sub.toJSON());
+  setPushIntent(true); // Wunsch merken → beim nächsten Start automatisch wiederherstellen
 }
 
 export async function disablePush(): Promise<void> {
+  setPushIntent(false); // Wunsch zurücknehmen – zuerst, damit syncPush nicht gegenhält
   if (!pushSupported()) return;
   const reg = await navigator.serviceWorker.ready;
   const sub = await reg.pushManager.getSubscription();
   if (sub) {
     await removePushSubscription(sub.endpoint);
     await sub.unsubscribe();
+  }
+}
+
+// Selbstheilung: Gleicht beim App-Start aufrufen (wenn angemeldet). Hat der
+// Nutzer auf diesem Gerät Push gewollt (Merker gesetzt) und ist die Erlaubnis
+// noch erteilt, aber das Abo vom Browser verworfen worden, wird es hier neu
+// angelegt und serverseitig aufgefrischt. Gibt zurück, ob Push jetzt aktiv ist.
+// Wirft NIE – rein best-effort.
+export async function syncPush(): Promise<boolean> {
+  if (!pushSupported()) return false;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    // Ohne Erlaubnis (oder ohne Wunsch) nichts anlegen – nur den Ist-Zustand melden.
+    if (Notification.permission !== 'granted' || !pushIntended()) return !!sub;
+    if (!sub) {
+      const { key } = await getPushKey();
+      if (!key) return false;
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8Array(key) });
+    }
+    // Abo (neu oder bestehend) serverseitig sicherstellen – idempotent.
+    try {
+      await savePushSubscription(sub.toJSON());
+    } catch {
+      /* z.B. kurz nicht angemeldet – Abo bleibt lokal bestehen */
+    }
+    return true;
+  } catch {
+    return false;
   }
 }
