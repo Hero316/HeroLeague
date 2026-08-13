@@ -1842,9 +1842,10 @@ export default function ChatSystem({
         </div>
         {/* Threads-Übersicht: damit ungelesene Thread-Antworten nicht untergehen */}
         {threadList.length > 0 && (
+          <div className="px-2 pt-2">
           <button
             onClick={() => setShowThreads(true)}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 border-b border-white/5 bg-brand-accent-light/[.07] hover:bg-brand-accent-light/[.12] cursor-pointer text-left"
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl border border-brand-accent-light/30 bg-brand-accent-light/[.10] hover:bg-brand-accent-light/[.16] cursor-pointer text-left transition-all active:scale-[.99]"
           >
             <div className="w-9 h-9 rounded-full bg-brand-accent-light/20 border border-brand-accent-light/40 flex items-center justify-center text-brand-accent-light shrink-0">
               <MessageSquare className="w-4 h-4" />
@@ -1857,8 +1858,9 @@ export default function ChatSystem({
               {threadList.reduce((s, t) => s + t.unreadCount, 0)}
             </span>
           </button>
+          </div>
         )}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1.5">
           {loadingConvs ? (
             <div className="flex justify-center py-8 text-hl-mute">
               <Loader2 className="w-5 h-5 animate-spin" />
@@ -1877,8 +1879,8 @@ export default function ChatSystem({
                 <button
                   key={c.id}
                   onClick={() => openConversation(c.id)}
-                  className={`w-full text-left px-3 py-2.5 border-b border-white/5 hover:bg-white/[.03] cursor-pointer transition-all active:scale-[.985] ${
-                    c.id === activeId ? 'bg-white/[.05]' : ''
+                  className={`w-full text-left px-3 py-2.5 rounded-2xl bg-white border shadow-sm shadow-black/[.04] cursor-pointer transition-all active:scale-[.985] hover:shadow-md ${
+                    c.id === activeId ? 'border-brand-accent-light/50 ring-1 ring-brand-accent-light/30' : 'border-black/5'
                   }`}
                 >
                   <div className="flex items-center gap-3">

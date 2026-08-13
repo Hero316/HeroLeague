@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { ArrowLeft, LogOut, MessageSquare, CalendarDays, ListChecks, Ticket as TicketIcon, Smartphone, X } from 'lucide-react';
 import ChatSystem from './ChatSystem';
@@ -52,6 +52,14 @@ export default function ChatApp({
   const [showInstall, setShowInstall] = useState(true);
   const { isStandalone, isIos, canInstall, promptInstall } = useInstall();
   const current = TABS.find((t) => t.id === tab)!;
+
+  // Helles Team-App-Theme auf <html> markieren, damit AUCH die per Portal an den
+  // <body> gehängten Fenster (Modals) das Theme erben. Beim Verlassen wieder weg,
+  // damit Website & Backoffice unberührt dunkel bleiben.
+  useEffect(() => {
+    document.documentElement.classList.add('hl-team');
+    return () => document.documentElement.classList.remove('hl-team');
+  }, []);
 
   return (
     <AudioPlayerProvider>
@@ -152,10 +160,10 @@ export default function ChatApp({
       {/* Läuft weiter beim Tab-Wechsel: Sprachnachrichten-Mini-Leiste */}
       <MiniPlayer />
 
-      {/* Untere Tab-Leiste (wie WhatsApp/Slack) */}
+      {/* Untere Tab-Leiste: schwebende Pille, die zum getippten Tab „fliegt". */}
       <nav
-        className="shrink-0 grid grid-cols-4 border-t border-white/10 bg-[rgba(255,255,255,.9)] backdrop-blur-xl"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        className="shrink-0 grid grid-cols-4 gap-1 border-t border-white/10 bg-[rgba(255,255,255,.92)] backdrop-blur-xl px-2 pt-2"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
       >
         {TABS.map((t) => {
           const active = t.id === tab;
@@ -164,24 +172,25 @@ export default function ChatApp({
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`relative flex flex-col items-center justify-center gap-0.5 py-2.5 cursor-pointer transition-colors active:scale-90 ${
-                active ? 'text-brand-accent-light' : 'text-hl-mute hover:text-white'
-              }`}
+              className="relative flex flex-col items-center justify-center gap-1 py-2 rounded-2xl cursor-pointer active:scale-90 transition-transform"
             >
               {active && (
                 <motion.span
-                  layoutId="tab-indicator"
-                  className="absolute top-0 h-0.5 w-10 rounded-full bg-brand-accent-light"
-                  transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+                  layoutId="tab-pill"
+                  className="absolute inset-0 rounded-2xl bg-brand-accent-light/15 ring-1 ring-brand-accent-light/25"
+                  transition={{ type: 'spring', stiffness: 480, damping: 38 }}
                 />
               )}
               <motion.span
-                animate={{ scale: active ? 1.12 : 1, y: active ? -1 : 0 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                animate={{ scale: active ? 1.14 : 1, y: active ? -1 : 0 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 26 }}
+                className={`relative z-10 transition-colors ${active ? 'text-brand-accent-light' : 'text-hl-mute'}`}
               >
-                <Icon className="w-5 h-5" />
+                <Icon className="w-[22px] h-[22px]" />
               </motion.span>
-              <span className="text-[10px] font-sans font-semibold uppercase tracking-wide">{t.label}</span>
+              <span className={`relative z-10 text-[10px] font-sans font-bold uppercase tracking-wide transition-colors ${active ? 'text-brand-accent-light' : 'text-hl-mute'}`}>
+                {t.label}
+              </span>
             </button>
           );
         })}
