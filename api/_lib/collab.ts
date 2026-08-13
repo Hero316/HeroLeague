@@ -41,11 +41,14 @@ export function memberName(members: Map<string, AppUser>, id: string): string {
 }
 
 // Eine Benachrichtigung anlegen (self-notify wird übersprungen).
-// Ziel-URL für Klick auf die Benachrichtigung (Handy-Push): direkt zum Chat,
-// Ticket oder zur Aufgabe – statt nur allgemein ins Backoffice.
+// Ziel-URL für Klick auf die Benachrichtigung (Handy-Push): IMMER in die
+// Team-App (/chat) – Chat direkt in die Unterhaltung, Ticket/Aufgabe als
+// Detail-Fenster obendrauf. So landet man einheitlich in der Team-App und
+// nicht mehr im Liga-Backoffice.
 function notifyUrl(refType: 'ticket' | 'task' | 'conversation', refId: string): string {
   if (refType === 'conversation') return `/chat?c=${encodeURIComponent(refId)}`;
-  return `/admin?open=${refType}&id=${encodeURIComponent(refId)}`;
+  if (refType === 'ticket') return `/chat?openTicket=${encodeURIComponent(refId)}`;
+  return `/chat?openTask=${encodeURIComponent(refId)}`; // task (Aufgabe/Termin)
 }
 
 export async function notify(

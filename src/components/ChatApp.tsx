@@ -1,45 +1,57 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, MessageSquare, CalendarDays, ListChecks, Ticket as TicketIcon, Smartphone, X, Sun, Moon } from 'lucide-react';
+import { ArrowLeft, MessageSquare, CalendarDays, ListChecks, Ticket as TicketIcon, Smartphone, X, Sun, Moon, Settings } from 'lucide-react';
 import ChatSystem from './ChatSystem';
 import TaskBoard from './TaskBoard';
 import TicketSystem from './TicketSystem';
+import TeamSettings from './TeamSettings';
+import DeepLinkModal from './DeepLinkModal';
 import { useInstall } from './InstallProvider';
 import { getUrlParam, setUrlParam } from '../lib/urlState';
 import { AudioPlayerProvider, MiniPlayer } from './AudioPlayer';
+import type { SessionUser, UserStatus } from '../types';
 
 // Eigenständige „Team-App" unter /chat: Vollbild auf iPhone & Android, mit
 // unterer Tab-Leiste (Chats · Aufgaben · Tickets). Bewusst getrennt vom
 // aufklappbaren Backoffice, damit sich der Chat wie eine echte App anfühlt und
 // zum Home-Bildschirm hinzugefügt werden kann (eigenes Manifest chat.webmanifest).
 
-type Tab = 'chats' | 'aufgaben' | 'kalender' | 'tickets';
+type Tab = 'chats' | 'aufgaben' | 'kalender' | 'tickets' | 'mehr';
 
 const TABS: { id: Tab; label: string; icon: typeof MessageSquare }[] = [
   { id: 'chats', label: 'Chats', icon: MessageSquare },
   { id: 'aufgaben', label: 'Aufgaben', icon: ListChecks },
   { id: 'kalender', label: 'Kalender', icon: CalendarDays },
   { id: 'tickets', label: 'Tickets', icon: TicketIcon },
+  { id: 'mehr', label: 'Mehr', icon: Settings },
 ];
 
 export default function ChatApp({
+  user,
   currentUserId,
   canManageTickets,
   isSuperadmin,
   initialConversationId,
   onBack,
+  onUpdateUser,
+  onGoWebsite,
+  onLogout,
 }: {
+  user: SessionUser;
   currentUserId: string;
   canManageTickets: boolean;
   isSuperadmin: boolean;
   initialConversationId: string | null;
   onBack: () => void;
+  onUpdateUser: (p: { name: string; avatarUrl: string; status: UserStatus }) => void;
+  onGoWebsite: () => void;
+  onLogout: () => void;
 }) {
   // Aktiven Tab in der URL halten (?tab=…), damit ein Reload auf derselben
   // Seite bleibt (Chats/Aufgaben/Tickets) statt immer auf „Chats" zu landen.
   const readTab = (): Tab => {
     const t = getUrlParam('tab');
-    return t === 'aufgaben' || t === 'kalender' || t === 'tickets' ? t : 'chats';
+    return t === 'aufgaben' || t === 'kalender' || t === 'tickets' || t === 'mehr' ? t : 'chats';
   };
   const [tab, setTabState] = useState<Tab>(readTab);
   const setTab = (t: Tab) => {
@@ -50,6 +62,24 @@ export default function ChatApp({
   const [showInstall, setShowInstall] = useState(true);
   const { isStandalone, isIos, canInstall, promptInstall } = useInstall();
   const current = TABS.find((t) => t.id === tab)!;
+
+  // Deep-Link aus einer Benachrichtigung: /chat?openTicket=… bzw. …?openTask=…
+  // öffnet das Ticket/die Aufgabe direkt als Detail-Fenster – unabhängig vom
+  // aktiven Tab. Danach den Parameter aus der URL entfernen, damit ein Neuladen
+  // nicht erneut öffnet.
+  const [deepOpen, setDeepOpen] = useState<{ type: 'ticket' | 'task'; id: string } | null>(() => {
+    const t = getUrlParam('openTicket');
+    if (t) return { type: 'ticket', id: t };
+    const a = getUrlParam('openTask');
+    if (a) return { type: 'task', id: a };
+    return null;
+  });
+  useEffect(() => {
+    if (deepOpen) {
+      setUrlParam('openTicket', null);
+      setUrlParam('openTask', null);
+    }
+  }, [deepOpen]);
 
   // Tag-/Nacht-Ansicht der Team-App. Merkt sich die Wahl (localStorage), Standard
   // ist die helle Ansicht. „Hell" = Klasse .hl-team, „Dunkel" = ohne Klasse
@@ -88,7 +118,7 @@ export default function ChatApp({
         <div className="flex items-center gap-1 min-w-0">
           <button
             onClick={onBack}
-            title="Zurück zum Backoffice"
+            title="Zurück"
             className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-hl-soft hover:text-white active:bg-white/10 cursor-pointer shrink-0"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -170,20 +200,40 @@ export default function ChatApp({
             <div className="h-full overflow-y-auto p-3">
               <TaskBoard key="tab-kalender" currentUserId={currentUserId} isSuperadmin={isSuperadmin} persist mode="calendar" />
             </div>
-          ) : (
+          ) : tab === 'tickets' ? (
             <div className="h-full overflow-y-auto p-3">
               <TicketSystem currentUserId={currentUserId} canManage={canManageTickets} persist />
             </div>
+          ) : (
+            <TeamSettings
+              user={user}
+              onUpdateUser={onUpdateUser}
+              theme={theme}
+              onToggleTheme={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
+              onGoWebsite={onGoWebsite}
+              onLogout={onLogout}
+            />
           )}
         </motion.div>
       </main>
+
+      {/* Ticket/Aufgabe aus einer Benachrichtigung direkt geöffnet */}
+      {deepOpen && (
+        <DeepLinkModal
+          target={deepOpen}
+          currentUserId={currentUserId}
+          isSuperadmin={isSuperadmin}
+          canManageTickets={canManageTickets}
+          onClose={() => setDeepOpen(null)}
+        />
+      )}
 
       {/* Läuft weiter beim Tab-Wechsel: Sprachnachrichten-Mini-Leiste */}
       <MiniPlayer />
 
       {/* Untere Tab-Leiste: schwebende Pille, die zum getippten Tab „fliegt". */}
       <nav
-        className="shrink-0 grid grid-cols-4 gap-1 border-t border-white/10 hl-app-dock backdrop-blur-xl px-2 pt-2"
+        className="shrink-0 grid grid-cols-5 gap-1 border-t border-white/10 hl-app-dock backdrop-blur-xl px-2 pt-2"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
       >
         {TABS.map((t) => {

@@ -22,6 +22,7 @@ interface NavbarProps {
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
   isAdmin: boolean;
+  canAccessBackoffice?: boolean; // Backoffice-Eintrag zeigen? (team_member = nein)
   onLogout: () => void;
   onOpenLogin: () => void;
   onOpenBackoffice: () => void;
@@ -50,6 +51,7 @@ export default function Navbar({
   activeTab,
   setActiveTab,
   isAdmin,
+  canAccessBackoffice = true,
   onLogout,
   onOpenBackoffice,
   onOpenReferee,
@@ -238,7 +240,7 @@ export default function Navbar({
               {seasonShort}
             </div>
           )}
-          {isAdmin && (
+          {isAdmin && canAccessBackoffice && (
             <button
               onClick={onOpenBackoffice}
               className="hidden lg:flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.3)] text-brand-accent-light font-sans font-bold text-[11px] tracking-wider uppercase hover:bg-[rgba(34,223,201,.2)] transition-colors cursor-pointer"
@@ -354,7 +356,7 @@ export default function Navbar({
             </button>
           )}
 
-          {isAdmin && (
+          {isAdmin && canAccessBackoffice && (
             <button
               onClick={() => {
                 onOpenBackoffice();

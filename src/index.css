@@ -744,6 +744,16 @@ body {
   -webkit-backdrop-filter: none;
 }
 .hl-team .hl-modal-card { background: #FFFFFF !important; }
+/* Einstellungen/Profil in der Team-App (heller Modus): die wiederverwendeten
+   Editoren (Profil, Benachrichtigungen) haben fest dunkle Eingabefelder – hier
+   auf hell drehen, sonst wäre der Text dunkel-auf-dunkel und unlesbar. */
+.hl-team .hl-settings input,
+.hl-team .hl-settings textarea,
+.hl-team .hl-settings select {
+  background-color: #F1F6F5;
+  color: #12211E;
+  border-color: rgba(16, 42, 38, 0.15);
+}
 /* Glas-Chrome hell (falls im Team-Bereich verwendet). */
 .hl-team .hl-glass-nav,
 .hl-team .hl-glass-dock,
