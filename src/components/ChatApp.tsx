@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, LogOut, MessageSquare, CalendarDays, ListChecks, Ticket as TicketIcon, Smartphone, X } from 'lucide-react';
+import { ArrowLeft, LogOut, MessageSquare, CalendarDays, ListChecks, Ticket as TicketIcon, Smartphone, X, Sun, Moon } from 'lucide-react';
 import ChatSystem from './ChatSystem';
 import TaskBoard from './TaskBoard';
 import TicketSystem from './TicketSystem';
@@ -53,26 +53,38 @@ export default function ChatApp({
   const { isStandalone, isIos, canInstall, promptInstall } = useInstall();
   const current = TABS.find((t) => t.id === tab)!;
 
-  // Helles Team-App-Theme auf <html> markieren, damit AUCH die per Portal an den
-  // <body> gehängten Fenster (Modals) das Theme erben. Beim Verlassen wieder weg,
-  // damit Website & Backoffice unberührt dunkel bleiben.
+  // Tag-/Nacht-Ansicht der Team-App. Merkt sich die Wahl (localStorage), Standard
+  // ist die helle Ansicht. „Hell" = Klasse .hl-team, „Dunkel" = ohne Klasse
+  // (dann greifen die dunklen Standard-Töne der geteilten Komponenten).
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    try {
+      return localStorage.getItem('hl-theme') === 'dark' ? 'dark' : 'light';
+    } catch {
+      return 'light';
+    }
+  });
+
+  // Theme auf <html> markieren, damit AUCH die per Portal an den <body> gehängten
+  // Fenster (Modals) es erben. Beim Verlassen wieder weg, damit Website &
+  // Backoffice unberührt dunkel bleiben.
   useEffect(() => {
-    document.documentElement.classList.add('hl-team');
-    return () => document.documentElement.classList.remove('hl-team');
-  }, []);
+    const el = document.documentElement;
+    if (theme === 'light') el.classList.add('hl-team');
+    else el.classList.remove('hl-team');
+    try {
+      localStorage.setItem('hl-theme', theme);
+    } catch {
+      /* localStorage evtl. blockiert – dann eben nicht merken */
+    }
+    return () => el.classList.remove('hl-team');
+  }, [theme]);
 
   return (
     <AudioPlayerProvider>
-    <div
-      className="h-screen flex flex-col text-hl-text hl-team"
-      style={{
-        background:
-          'radial-gradient(1100px 600px at 8% -8%, #DDF4EF 0%, transparent 55%), radial-gradient(900px 560px at 108% 0%, #ECEAFF 0%, transparent 52%), #EAF0F1',
-      }}
-    >
+    <div className="h-screen flex flex-col text-hl-text hl-app-bg">
       {/* Kopfzeile */}
       <header
-        className="flex items-center justify-between gap-2 px-2 py-2 border-b border-white/10 bg-[rgba(255,255,255,.82)] backdrop-blur-xl shrink-0"
+        className="flex items-center justify-between gap-2 px-2 py-2 border-b border-white/10 hl-app-bar backdrop-blur-xl shrink-0"
         style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.5rem)' }}
       >
         <div className="flex items-center gap-1 min-w-0">
@@ -87,14 +99,33 @@ export default function ChatApp({
           <img src="/assets/hero-league-logo.png" alt="Hero Team" className="h-6 w-auto ml-1 shrink-0 hl-applogo" />
           <span className="font-display font-black text-white uppercase tracking-tight text-sm truncate">{current.label}</span>
         </div>
-        <button
-          onClick={onLogout}
-          title="Abmelden"
-          className="shrink-0 px-3 py-2 rounded-lg text-hl-mute hover:text-hl-red-soft active:bg-white/10 cursor-pointer flex items-center gap-1.5"
-        >
-          <LogOut className="w-4 h-4" />
-          <span className="text-[11px] font-sans font-semibold uppercase tracking-wider hidden sm:inline">Abmelden</span>
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          {/* Sonne/Mond: Tag-/Nacht-Ansicht umschalten (merkt sich die Wahl). */}
+          <button
+            onClick={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
+            title={theme === 'light' ? 'Dunkle Ansicht' : 'Helle Ansicht'}
+            aria-label={theme === 'light' ? 'Dunkle Ansicht' : 'Helle Ansicht'}
+            className="p-2 rounded-full text-hl-mute hover:text-brand-accent-light active:bg-white/10 cursor-pointer transition-colors"
+          >
+            <motion.span
+              key={theme}
+              initial={{ rotate: -90, scale: 0.6, opacity: 0 }}
+              animate={{ rotate: 0, scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 24 }}
+              className="block"
+            >
+              {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+            </motion.span>
+          </button>
+          <button
+            onClick={onLogout}
+            title="Abmelden"
+            className="px-3 py-2 rounded-lg text-hl-mute hover:text-hl-red-soft active:bg-white/10 cursor-pointer flex items-center gap-1.5"
+          >
+            <LogOut className="w-4 h-4" />
+            <span className="text-[11px] font-sans font-semibold uppercase tracking-wider hidden sm:inline">Abmelden</span>
+          </button>
+        </div>
       </header>
 
       {/* Hinweis „Zum Home-Bildschirm hinzufügen" – nur wenn nicht schon als App gestartet */}
@@ -162,7 +193,7 @@ export default function ChatApp({
 
       {/* Untere Tab-Leiste: schwebende Pille, die zum getippten Tab „fliegt". */}
       <nav
-        className="shrink-0 grid grid-cols-4 gap-1 border-t border-white/10 bg-[rgba(255,255,255,.92)] backdrop-blur-xl px-2 pt-2"
+        className="shrink-0 grid grid-cols-4 gap-1 border-t border-white/10 hl-app-dock backdrop-blur-xl px-2 pt-2"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
       >
         {TABS.map((t) => {

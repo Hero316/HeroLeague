@@ -210,7 +210,7 @@ export function MiniPlayer() {
   const pct = duration ? (time / duration) * 100 : 0;
   return (
     <div
-      className="shrink-0 flex items-center gap-2.5 px-3 py-2 border-t border-white/10 bg-[#10201d]"
+      className="shrink-0 flex items-center gap-2.5 px-3 py-2 border-t border-white/10 hl-surf-0"
       style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) * 0)' }}
     >
       <span className="w-8 h-8 shrink-0 rounded-full bg-brand-accent/20 border border-brand-accent-light/30 flex items-center justify-center text-brand-accent-light">

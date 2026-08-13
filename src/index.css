@@ -765,3 +765,27 @@ body {
 .hl-team .hl-surf-0 { background: #EEF3F4; }
 .hl-surf-soft { background: rgba(6, 14, 15, 0.4); }
 .hl-team .hl-surf-soft { background: rgba(255, 255, 255, 0.6); }
+
+/* Fremde Nachrichten-Bubble (Gegenüber): dunkle Fläche im Dunkelmodus,
+   weiß im Hellmodus. Der Bubble-Zipfel erbt die Farbe (background: inherit). */
+.hl-bubble-other { background: #17211F; }
+.hl-team .hl-bubble-other { background: #FFFFFF; }
+
+/* App-Rahmen der Team-App (Hintergrund, Kopf- und Fußleiste). Dunkel als
+   Standard, hell unter .hl-team – so trägt der Sonne/Mond-Schalter alles mit. */
+.hl-app-bg {
+  background:
+    radial-gradient(1100px 600px at 8% -8%, rgba(34, 223, 201, 0.08) 0%, transparent 55%),
+    radial-gradient(900px 560px at 108% 0%, rgba(139, 124, 255, 0.08) 0%, transparent 52%),
+    #0a1210;
+}
+.hl-team .hl-app-bg {
+  background:
+    radial-gradient(1100px 600px at 8% -8%, #DDF4EF 0%, transparent 55%),
+    radial-gradient(900px 560px at 108% 0%, #ECEAFF 0%, transparent 52%),
+    #EAF0F1;
+}
+.hl-app-bar { background: rgba(10, 18, 16, 0.82); }
+.hl-team .hl-app-bar { background: rgba(255, 255, 255, 0.82); }
+.hl-app-dock { background: rgba(10, 18, 16, 0.92); }
+.hl-team .hl-app-dock { background: rgba(255, 255, 255, 0.92); }
