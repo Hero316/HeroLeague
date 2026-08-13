@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, LogOut, MessageSquare, CalendarDays, ListChecks, Ticket as TicketIcon, Smartphone, X, Sun, Moon } from 'lucide-react';
+import { ArrowLeft, MessageSquare, CalendarDays, ListChecks, Ticket as TicketIcon, Smartphone, X, Sun, Moon } from 'lucide-react';
 import ChatSystem from './ChatSystem';
 import TaskBoard from './TaskBoard';
 import TicketSystem from './TicketSystem';
@@ -28,14 +28,12 @@ export default function ChatApp({
   isSuperadmin,
   initialConversationId,
   onBack,
-  onLogout,
 }: {
   currentUserId: string;
   canManageTickets: boolean;
   isSuperadmin: boolean;
   initialConversationId: string | null;
   onBack: () => void;
-  onLogout: () => void;
 }) {
   // Aktiven Tab in der URL halten (?tab=…), damit ein Reload auf derselben
   // Seite bleibt (Chats/Aufgaben/Tickets) statt immer auf „Chats" zu landen.
@@ -99,33 +97,25 @@ export default function ChatApp({
           <img src="/assets/hero-league-logo.png" alt="Hero Team" className="h-6 w-auto ml-1 shrink-0 hl-applogo" />
           <span className="font-display font-black text-white uppercase tracking-tight text-sm truncate">{current.label}</span>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
-          {/* Sonne/Mond: Tag-/Nacht-Ansicht umschalten (merkt sich die Wahl). */}
-          <button
-            onClick={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
-            title={theme === 'light' ? 'Dunkle Ansicht' : 'Helle Ansicht'}
-            aria-label={theme === 'light' ? 'Dunkle Ansicht' : 'Helle Ansicht'}
-            className="p-2 rounded-full text-hl-mute hover:text-brand-accent-light active:bg-white/10 cursor-pointer transition-colors"
+        {/* Sonne/Mond: Tag-/Nacht-Ansicht umschalten (merkt sich die Wahl).
+            Bewusst KEIN Abmelden-Knopf hier – man flog sonst zu leicht raus.
+            Abmelden geht weiterhin im Backoffice (über „Zurück"). */}
+        <button
+          onClick={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
+          title={theme === 'light' ? 'Dunkle Ansicht' : 'Helle Ansicht'}
+          aria-label={theme === 'light' ? 'Dunkle Ansicht' : 'Helle Ansicht'}
+          className="shrink-0 p-2.5 rounded-full text-hl-mute hover:text-brand-accent-light active:bg-white/10 cursor-pointer transition-colors"
+        >
+          <motion.span
+            key={theme}
+            initial={{ rotate: -90, scale: 0.6, opacity: 0 }}
+            animate={{ rotate: 0, scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 24 }}
+            className="block"
           >
-            <motion.span
-              key={theme}
-              initial={{ rotate: -90, scale: 0.6, opacity: 0 }}
-              animate={{ rotate: 0, scale: 1, opacity: 1 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 24 }}
-              className="block"
-            >
-              {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-            </motion.span>
-          </button>
-          <button
-            onClick={onLogout}
-            title="Abmelden"
-            className="px-3 py-2 rounded-lg text-hl-mute hover:text-hl-red-soft active:bg-white/10 cursor-pointer flex items-center gap-1.5"
-          >
-            <LogOut className="w-4 h-4" />
-            <span className="text-[11px] font-sans font-semibold uppercase tracking-wider hidden sm:inline">Abmelden</span>
-          </button>
-        </div>
+            {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+          </motion.span>
+        </button>
       </header>
 
       {/* Hinweis „Zum Home-Bildschirm hinzufügen" – nur wenn nicht schon als App gestartet */}

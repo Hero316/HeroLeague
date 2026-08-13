@@ -554,6 +554,8 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
       >
         <SegmentedControl
           groupId="ticketfilter"
+          fill
+          className="flex-1 min-w-0"
           value={filter}
           onChange={(v) => setFilter(v)}
           options={[
@@ -564,7 +566,7 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
         />
         <button
           onClick={() => setShowNew((v) => !v)}
-          className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white transition-colors cursor-pointer flex items-center gap-1.5 shrink-0 active:scale-95"
+          className="px-4 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white transition-colors cursor-pointer flex items-center gap-1.5 shrink-0 active:scale-95"
         >
           <Plus className="w-4 h-4" /> Neu
         </button>

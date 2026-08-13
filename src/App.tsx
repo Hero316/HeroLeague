@@ -795,7 +795,6 @@ export default function App() {
         isSuperadmin={isSuperadmin}
         initialConversationId={new URLSearchParams(window.location.search).get('c')}
         onBack={() => navigateTo('/admin')}
-        onLogout={handleLogout}
       />
     );
   }
