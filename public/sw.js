@@ -168,24 +168,53 @@ self.addEventListener('push', (event) => {
   );
 });
 
-// Klick auf die Benachrichtigung: vorhandenes Fenster auf die Ziel-URL
-// (Chat/Ticket/Aufgabe) navigieren und fokussieren – sonst neu öffnen.
+// Klick auf die Benachrichtigung: im PASSENDEN Fenster öffnen. Da fast alle
+// Benachrichtigungen jetzt in die Team-App (/chat) führen, bevorzugen wir ein
+// bereits offenes Team-App-Fenster und schicken es per Deep-Link ans Ziel –
+// sonst neu öffnen (Android öffnet /chat automatisch in der installierten
+// Team-App, weil deren Scope /chat ist). So landet man nicht mal in der App,
+// mal auf der Website.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || '/admin';
+  const url = (event.notification.data && event.notification.data.url) || '/chat';
+  let wantsChat = true;
+  try {
+    wantsChat = new URL(url, self.location.origin).pathname.startsWith('/chat');
+  } catch (e) {
+    wantsChat = true;
+  }
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+    (async () => {
+      const list = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      // Fenster im passenden Bereich bevorzugen (Team-App für /chat-Ziele).
+      let target = null;
       for (const client of list) {
-        if ('focus' in client) {
-          // Bestehendes Fenster direkt zum Ziel schicken (Deep-Link).
-          if ('navigate' in client) {
-            return client.navigate(url).then((c) => (c && c.focus ? c.focus() : undefined)).catch(() => client.focus());
-          }
-          return client.focus();
+        let path = '/';
+        try {
+          path = new URL(client.url).pathname;
+        } catch (e) {
+          /* ignorieren */
         }
+        const inScope = wantsChat ? path.startsWith('/chat') : !path.startsWith('/chat');
+        if (inScope) {
+          target = client;
+          break;
+        }
+      }
+      if (!target && list.length) target = list[0];
+      if (target) {
+        if ('navigate' in target) {
+          try {
+            const c = await target.navigate(url);
+            return c && c.focus ? c.focus() : target.focus && target.focus();
+          } catch (e) {
+            return target.focus && target.focus();
+          }
+        }
+        return target.focus && target.focus();
       }
       if (self.clients.openWindow) return self.clients.openWindow(url);
       return undefined;
-    }),
+    })(),
   );
 });

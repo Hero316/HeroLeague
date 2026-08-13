@@ -111,6 +111,11 @@ export default function App() {
   const isSuperadmin = sessionUser?.role === 'superadmin';
   const isReferee = sessionUser?.role === 'referee';
   const isMatchAdmin = sessionUser?.role === 'match_admin';
+  const isTeamMember = sessionUser?.role === 'team_member';
+  // Reine Team-Mitglieder (Chat/Aufgaben/Tickets) haben KEIN Liga-Backoffice –
+  // sie erreichen nur die Team-App (über das Hamburger-Menü). Backoffice bleibt
+  // Super-Admins, Spiel-Admins und Schiedsrichtern vorbehalten.
+  const canAccessBackoffice = isAdmin && !isTeamMember;
   // Tickets verwalten (Status/Zuweisung/Löschen) dürfen nur Super-Admins.
   const canManageTickets = isSuperadmin;
   // Granulare Rechte – der Spiel-Admin bekommt bewusst nur einen Teil:
@@ -344,6 +349,15 @@ export default function App() {
     setAttr('meta[name="apple-mobile-web-app-title"]', 'content', inChat ? 'Hero Team' : 'Hero League');
     setAttr('meta[name="theme-color"]', 'content', inChat ? '#070d0c' : '#060E0F');
   }, [currentPath]);
+
+  // Team-Mitglieder haben kein Backoffice: Wer als team_member auf /admin landet
+  // (z.B. nach dem Login über die Anmeldemaske dort), wird auf die normale
+  // Startseite geschickt – von dort geht es über das Hamburger-Menü in die
+  // Team-App. Andere Rollen (Super-Admin, Spiel-Admin, Schiri) bleiben.
+  useEffect(() => {
+    if (isTeamMember && currentPath === '/admin') navigateTo('/');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTeamMember, currentPath]);
 
   // Deep-Link aus einer Handy-Benachrichtigung: /admin?open=ticket&id=… bzw.
   // …?open=task&id=… → das Ticket/die Aufgabe direkt als Fenster öffnen. Danach
@@ -611,6 +625,7 @@ export default function App() {
           activeTab={activeTab}
           setActiveTab={goToTab}
           isAdmin={isAdmin}
+          canAccessBackoffice={canAccessBackoffice}
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
@@ -656,6 +671,7 @@ export default function App() {
           activeTab={activeTab}
           setActiveTab={goToTab}
           isAdmin={isAdmin}
+          canAccessBackoffice={canAccessBackoffice}
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
@@ -729,6 +745,7 @@ export default function App() {
           activeTab={activeTab}
           setActiveTab={goToTab}
           isAdmin={isAdmin}
+          canAccessBackoffice={canAccessBackoffice}
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
@@ -802,17 +819,23 @@ export default function App() {
     }
     return (
       <ChatApp
+        user={sessionUser!}
         currentUserId={sessionUser?.id ?? ''}
         canManageTickets={canManageTickets}
         isSuperadmin={isSuperadmin}
         initialConversationId={new URLSearchParams(window.location.search).get('c')}
-        onBack={() => navigateTo('/admin')}
+        onBack={() => navigateTo(canAccessBackoffice ? '/admin' : '/')}
+        onUpdateUser={(p) => setSessionUser((u) => (u ? { ...u, ...p } : u))}
+        onGoWebsite={() => navigateTo('/')}
+        onLogout={handleLogout}
       />
     );
   }
 
-  // ROUTE: /admin – geschütztes Backoffice
+  // ROUTE: /admin – geschütztes Backoffice. Team-Mitglieder haben hier nichts zu
+  // suchen (siehe Redirect-Effekt oben) – kurz nichts zeigen, bis er greift.
   if (currentPath === '/admin') {
+    if (isAdmin && isTeamMember) return null;
     return (
       <div className="min-h-screen text-hl-text font-sans flex flex-col justify-between">
         <PageBackground page="default" />
@@ -1096,6 +1119,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={goToTab}
         isAdmin={isAdmin}
+        canAccessBackoffice={canAccessBackoffice}
         onLogout={handleLogout}
         onOpenLogin={() => navigateTo('/admin')}
         onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
