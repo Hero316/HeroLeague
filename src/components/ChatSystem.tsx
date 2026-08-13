@@ -59,12 +59,11 @@ import { TaskDetail } from './TaskBoard';
 import { VoiceMessage } from './AudioPlayer';
 
 const inputClass =
-  'w-full bg-[#EEF3F4] border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent-light';
+  'w-full hl-surf-0 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent-light';
 
 // Bubble-Farben (heller Look): eigene Nachricht türkiser Verlauf (weiße Schrift),
 // fremde Nachricht weiße Karte (dunkle Schrift via Token).
 const BUBBLE_MINE = 'linear-gradient(135deg, #22DFC9 0%, #12AEC6 100%)';
-const BUBBLE_OTHER = '#FFFFFF';
 
 // Zufällige-aber-konstante Namensfarben (wie WhatsApp). Pro Gruppe anders, weil
 // der Konversations-Schlüssel in den Hash einfließt. Gut lesbar auf dunkel.
@@ -287,7 +286,7 @@ function AttachPicker({
                 <button
                   key={t.id}
                   onClick={() => onPick({ type: 'ticket', id: t.id, title: t.title })}
-                  className="w-full text-left px-3 py-2 rounded-lg bg-[#EEF3F4]/40 border border-white/5 hover:border-white/20 text-sm text-hl-soft cursor-pointer flex items-center gap-2"
+                  className="w-full text-left px-3 py-2 rounded-lg hl-surf-soft border border-white/5 hover:border-white/20 text-sm text-hl-soft cursor-pointer flex items-center gap-2"
                 >
                   <ItemIcon className="w-4 h-4 text-brand-accent-light shrink-0" />
                   <span className="truncate">{t.title}</span>
@@ -301,7 +300,7 @@ function AttachPicker({
               <button
                 key={t.id}
                 onClick={() => onPick({ type: 'task', id: t.id, title: t.title })}
-                className="w-full text-left px-3 py-2 rounded-lg bg-[#EEF3F4]/40 border border-white/5 hover:border-white/20 text-sm text-hl-soft cursor-pointer flex items-center gap-2"
+                className="w-full text-left px-3 py-2 rounded-lg hl-surf-soft border border-white/5 hover:border-white/20 text-sm text-hl-soft cursor-pointer flex items-center gap-2"
               >
                 <ItemIcon className="w-4 h-4 text-brand-accent-light shrink-0" />
                 <span className="truncate">{t.title}</span>
@@ -478,7 +477,7 @@ function Composer({
       )}
       <div className="relative flex items-end gap-2">
         {mentionMatches.length > 0 && (
-          <div className="absolute bottom-full left-0 mb-2 w-56 bg-[#FFFFFF] border border-white/15 rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-30">
+          <div className="absolute bottom-full left-0 mb-2 w-56 hl-surf border border-white/15 rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-30">
             {mentionMatches.map((mm) => (
               <button
                 key={mm.id}
@@ -502,7 +501,7 @@ function Composer({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 14, scale: 0.98 }}
                 transition={{ duration: 0.16 }}
-                className="absolute bottom-full left-0 right-0 mb-2 z-[60] rounded-2xl bg-[#FFFFFF] border border-white/10 shadow-2xl shadow-black/60 p-4"
+                className="absolute bottom-full left-0 right-0 mb-2 z-[60] rounded-2xl hl-surf border border-white/10 shadow-2xl shadow-black/60 p-4"
               >
                 <div className="grid grid-cols-3 gap-y-4 gap-x-2">
                   {tiles.map((t) => (
@@ -528,7 +527,7 @@ function Composer({
         <input ref={galleryRef} type="file" accept="image/*" className="hidden" onChange={(e) => { void onFileChosen(e.target.files?.[0]); e.target.value = ''; }} />
         <input ref={docRef} type="file" className="hidden" onChange={(e) => { void onFileChosen(e.target.files?.[0]); e.target.value = ''; }} />
 
-        <div className="flex-1 flex items-end bg-[#F1F5F5] border border-white/10 rounded-3xl pl-2 pr-4 focus-within:border-brand-accent-light/60 transition-colors">
+        <div className="flex-1 flex items-end hl-surf-0 border border-white/10 rounded-3xl pl-2 pr-4 focus-within:border-brand-accent-light/60 transition-colors">
           <button
             type="button"
             onClick={() => setEmoji(true)}
@@ -628,7 +627,7 @@ function EmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 20, opacity: 0 }}
-          className="w-full sm:max-w-md bg-[#FFFFFF] border border-white/10 rounded-t-2xl sm:rounded-2xl p-3 max-h-[55vh] overflow-y-auto"
+          className="w-full sm:max-w-md hl-surf border border-white/10 rounded-t-2xl sm:rounded-2xl p-3 max-h-[55vh] overflow-y-auto"
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -765,8 +764,8 @@ function MessageRow({
       <div className={`max-w-[82%] ${mine ? 'items-end' : 'items-start'} flex flex-col`}>
         <div
           {...(deleted ? {} : longPress)}
-          className={`hl-bubble px-3 py-2 rounded-2xl ${mine ? 'text-white rounded-br-md shadow-md shadow-brand-accent-light/25' : 'text-hl-text rounded-bl-md shadow-sm shadow-black/5'} ${tailClass} ${highlight ? 'ring-2 ring-brand-accent-light ring-offset-1 ring-offset-[#F1F6F5]' : ''} ${deleted ? 'opacity-70' : 'select-none'}`}
-          style={{ background: mine ? BUBBLE_MINE : BUBBLE_OTHER, ...(mine && !deleted ? { color: '#fff' } : {}) }}
+          className={`hl-bubble px-3 py-2 rounded-2xl ${mine ? 'text-white rounded-br-md shadow-md shadow-brand-accent-light/25' : 'hl-bubble-other text-hl-text rounded-bl-md shadow-sm shadow-black/5'} ${tailClass} ${highlight ? 'ring-2 ring-brand-accent-light ring-offset-1 ring-offset-[#F1F6F5]' : ''} ${deleted ? 'opacity-70' : 'select-none'}`}
+          style={mine ? { background: BUBBLE_MINE, ...(deleted ? {} : { color: '#fff' }) } : undefined}
         >
           {/* Gruppen: Name des Absenders in seiner (konstanten) Farbe */}
           {showAuthor && !mine && (
@@ -839,11 +838,11 @@ function MessageRow({
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 20, opacity: 0 }}
-              className="w-full sm:max-w-sm bg-[#FFFFFF] border-t sm:border border-white/10 rounded-t-2xl sm:rounded-2xl p-3"
+              className="w-full sm:max-w-sm hl-surf border-t sm:border border-white/10 rounded-t-2xl sm:rounded-2xl p-3"
               style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between gap-1 bg-[#FFFFFF] rounded-full px-2 py-1.5 mb-3">
+              <div className="flex items-center justify-between gap-1 hl-surf rounded-full px-2 py-1.5 mb-3">
                 {QUICK_REACTIONS.map((e) => (
                   <button
                     key={e}
@@ -887,7 +886,7 @@ function MessageRow({
                 onChange={(e) => setEditText(e.target.value)}
                 rows={3}
                 autoFocus
-                className="w-full bg-[#EEF3F4] border border-white/10 rounded-xl px-3 py-2 text-[15px] text-white focus:outline-none focus:border-brand-accent-light resize-y"
+                className="w-full hl-surf-0 border border-white/10 rounded-xl px-3 py-2 text-[15px] text-white focus:outline-none focus:border-brand-accent-light resize-y"
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(); } }}
               />
               <div className="flex justify-end gap-2 mt-3">
@@ -920,7 +919,7 @@ function TypingRow({
       <div className="w-7 shrink-0 self-end">
         <Avatar name={mem?.name ?? first.userName} url={mem?.avatarUrl} size={28} />
       </div>
-      <div className="hl-bubble hl-bubble-in rounded-2xl rounded-bl-md rounded-tl-md px-4 py-3" style={{ background: BUBBLE_OTHER }}>
+      <div className="hl-bubble hl-bubble-other hl-bubble-in rounded-2xl rounded-bl-md rounded-tl-md px-4 py-3">
         <span className="flex items-center gap-1.5 text-brand-accent-light">
           <span className="hl-typing-dot" style={{ animationDelay: '0s' }} />
           <span className="hl-typing-dot" style={{ animationDelay: '0.18s' }} />
@@ -990,7 +989,7 @@ function ThreadModal({
         initial={{ x: 40 }}
         animate={{ x: 0 }}
         exit={{ x: 40 }}
-        className="w-full max-w-md bg-[#FFFFFF] border-l border-white/10 flex flex-col h-full"
+        className="w-full max-w-md hl-surf border-l border-white/10 flex flex-col h-full"
         onClick={(e) => e.stopPropagation()}
       >
         <div
@@ -1120,7 +1119,7 @@ function NewConversationModal({
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="flex gap-1.5 mb-4 bg-[#EEF3F4]/40 border border-white/10 rounded-xl p-1">
+        <div className="flex gap-1.5 mb-4 hl-surf-soft border border-white/10 rounded-xl p-1">
           {(['dm', 'group'] as const).map((mo) => (
             <button
               key={mo}
@@ -1276,7 +1275,7 @@ function ConversationInfo({
               <div className="min-w-0 flex-1">
                 {canEdit ? (
                   <div className="flex items-center gap-1.5">
-                    <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-[#EEF3F4] border border-white/10 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-brand-accent-light" />
+                    <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full hl-surf-0 border border-white/10 rounded-lg px-2.5 py-1.5 text-sm text-white focus:outline-none focus:border-brand-accent-light" />
                     {title.trim() && title !== conversation.title && (
                       <button onClick={() => act(() => updateGroup(conversation.id, { title: title.trim() }))} disabled={busy} className="p-2 rounded-lg bg-brand-accent-light text-white cursor-pointer disabled:opacity-50 shrink-0" title="Name speichern">
                         <Check className="w-4 h-4" />
@@ -1389,7 +1388,7 @@ function ConvSearchResults({
           <button
             key={h.id}
             onClick={() => onPick(h)}
-            className="w-full text-left px-2.5 py-2 rounded-xl bg-[#FFFFFF] hover:bg-[#FFFFFF] border border-white/5 hover:border-white/15 cursor-pointer flex items-start gap-2.5 transition-colors"
+            className="w-full text-left px-2.5 py-2 rounded-xl hl-surf border border-white/5 hover:border-white/15 cursor-pointer flex items-start gap-2.5 transition-colors"
           >
             <Avatar name={mem?.name ?? h.authorName} url={mem?.avatarUrl} size={30} />
             <div className="min-w-0 flex-1">
@@ -1427,7 +1426,7 @@ function ThreadsOverview({ threads, onOpen, onClose }: { threads: ThreadSummary[
           initial={{ x: 40 }}
           animate={{ x: 0 }}
           exit={{ x: 40 }}
-          className="w-full max-w-md bg-[#FFFFFF] border-l border-white/10 flex flex-col h-full"
+          className="w-full max-w-md hl-surf border-l border-white/10 flex flex-col h-full"
           onClick={(e) => e.stopPropagation()}
         >
           <div
@@ -1808,7 +1807,7 @@ export default function ChatSystem({
 
   return (
     <div
-      className={`flex overflow-hidden bg-[#EAF0F1] ${
+      className={`flex overflow-hidden hl-chat-bg ${
         fullHeight ? 'h-full' : 'h-[70vh] min-h-[480px] rounded-2xl border border-white/10'
       }`}
     >
@@ -1825,7 +1824,7 @@ export default function ChatSystem({
           </button>
         </div>
         <div className="px-3 py-2 border-b border-white/5">
-          <div className="flex items-center gap-2 bg-[#EEF3F4] border border-white/10 rounded-lg px-2.5 py-1.5">
+          <div className="flex items-center gap-2 hl-surf-0 border border-white/10 rounded-lg px-2.5 py-1.5">
             <Search className="w-3.5 h-3.5 text-hl-dim shrink-0" />
             <input
               value={search}
@@ -1879,8 +1878,8 @@ export default function ChatSystem({
                 <button
                   key={c.id}
                   onClick={() => openConversation(c.id)}
-                  className={`w-full text-left px-3 py-2.5 rounded-2xl bg-white border shadow-sm shadow-black/[.04] cursor-pointer transition-all active:scale-[.985] hover:shadow-md ${
-                    c.id === activeId ? 'border-brand-accent-light/50 ring-1 ring-brand-accent-light/30' : 'border-black/5'
+                  className={`w-full text-left px-3 py-2.5 rounded-2xl hl-surf border shadow-sm shadow-black/[.04] cursor-pointer transition-all active:scale-[.985] hover:shadow-md ${
+                    c.id === activeId ? 'border-brand-accent-light/50 ring-1 ring-brand-accent-light/30' : 'border-white/5'
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -1961,7 +1960,7 @@ export default function ChatSystem({
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/5 bg-[#FFFFFF]">
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/5 hl-surf">
               <button onClick={goBackLayer} className="md:hidden p-1 -ml-1 text-hl-mute hover:text-white cursor-pointer">
                 <ArrowLeft className="w-5 h-5" />
               </button>
@@ -2009,8 +2008,8 @@ export default function ChatSystem({
               </button>
             </div>
             {showConvSearch && (
-              <div className="px-3 py-2 border-b border-white/5 bg-[#FFFFFF]">
-                <div className="flex items-center gap-2 bg-[#EEF3F4] border border-white/10 rounded-lg px-2.5 py-1.5">
+              <div className="px-3 py-2 border-b border-white/5 hl-surf">
+                <div className="flex items-center gap-2 hl-surf-0 border border-white/10 rounded-lg px-2.5 py-1.5">
                   <Search className="w-3.5 h-3.5 text-hl-dim shrink-0" />
                   <input
                     value={convSearch}
@@ -2050,7 +2049,7 @@ export default function ChatSystem({
                     <React.Fragment key={m.id}>
                       {newDay && (
                         <div className="flex justify-center my-3">
-                          <span className="text-[10px] font-mono uppercase tracking-wider text-hl-mute bg-[#FFFFFF]/90 border border-white/10 rounded-full px-3 py-1">
+                          <span className="text-[10px] font-mono uppercase tracking-wider text-hl-mute hl-surf border border-white/10 rounded-full px-3 py-1">
                             {fmtDaySeparator(m.createdAt)}
                           </span>
                         </div>
