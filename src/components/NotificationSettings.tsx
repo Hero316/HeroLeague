@@ -1,23 +1,51 @@
 import { useEffect, useState } from 'react';
-import { Bell, BellOff, Loader2, Check } from 'lucide-react';
+import { Bell, BellOff, Loader2, Check, Send } from 'lucide-react';
 import type { SessionUser } from '../types';
 import {
   pushSupported,
+  pushIntended,
   syncPush,
   enablePush,
   disablePush,
+  sendTestPush,
   getNotifyPrefs,
   setNotifyPrefs,
 } from '../lib/push';
 
 export default function NotificationSettings({ user }: { user: SessionUser }) {
   const [supported] = useState(pushSupported());
-  const [enabled, setEnabled] = useState(false);
+  // Gemerkte Wahl sofort anzeigen (persistiert lokal); syncPush korrigiert danach.
+  const [enabled, setEnabled] = useState(() => pushIntended());
   const [busy, setBusy] = useState(false);
   const [muteWeekends, setMuteWeekends] = useState(false);
   const [muteUntil, setMuteUntil] = useState('');
   const [savedOk, setSavedOk] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testMsg, setTestMsg] = useState('');
   const isBootstrap = user.id === 'bootstrap';
+
+  const runTest = async () => {
+    setTesting(true);
+    setTestMsg('');
+    try {
+      const r = await sendTestPush();
+      if (!r.configured) {
+        setTestMsg('⚠️ Push ist auf dem Server nicht eingerichtet (VAPID-Schlüssel fehlen).');
+      } else if (r.devices === 0) {
+        setTestMsg('⚠️ Kein angemeldetes Gerät gefunden. Bitte oben Push aus- und wieder einschalten, dann erneut testen.');
+      } else if (r.sent > 0) {
+        setTestMsg(
+          `✅ Test an ${r.devices} Gerät(e) gesendet – die Benachrichtigung sollte gleich erscheinen. Kommt nichts an, in den Handy-Einstellungen die Benachrichtigungen für diese App erlauben.`
+        );
+      } else {
+        setTestMsg(`⚠️ Zustellung an ${r.devices} Gerät(e) fehlgeschlagen (${r.failed}). Bitte Push aus- und wieder einschalten.`);
+      }
+    } catch (err) {
+      setTestMsg(err instanceof Error ? err.message : 'Test fehlgeschlagen.');
+    } finally {
+      setTesting(false);
+    }
+  };
 
   useEffect(() => {
     // Beim Öffnen den echten Zustand ermitteln UND ein evtl. vom Browser
@@ -87,6 +115,21 @@ export default function NotificationSettings({ user }: { user: SessionUser }) {
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : enabled ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
             {enabled ? 'Push auf diesem Gerät deaktivieren' : 'Push auf diesem Gerät aktivieren'}
           </button>
+        )}
+
+        {/* Test: prüft sofort, ob wirklich eine Benachrichtigung ankommt. */}
+        {supported && !isBootstrap && (
+          <div className="mt-3">
+            <button
+              onClick={runTest}
+              disabled={testing}
+              className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer disabled:opacity-50 flex items-center gap-2 border border-white/15 bg-white/[.04] text-hl-soft hover:text-white transition-colors"
+            >
+              {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              Test-Benachrichtigung senden
+            </button>
+            {testMsg && <p className="text-xs text-hl-soft font-sans mt-2 leading-snug">{testMsg}</p>}
+          </div>
         )}
       </div>
 

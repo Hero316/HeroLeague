@@ -438,11 +438,18 @@ export default function App() {
     if (sessionUser) fetchRoster();
   }, [sessionUser, fetchRoster]);
 
-  // Push-Abo lebendig halten: Sobald jemand angemeldet ist, ein zuvor auf diesem
-  // Gerät gewünschtes (aber vom Browser evtl. verworfenes) Abo wiederherstellen
-  // und serverseitig auffrischen. Best-effort – ohne Wunsch/Erlaubnis passiert nichts.
+  // Push-Abo lebendig halten: Sobald jemand angemeldet ist – und jedes Mal, wenn
+  // die App wieder in den Vordergrund kommt – ein zuvor gewünschtes (aber vom
+  // Browser evtl. verworfenes) Abo wiederherstellen und serverseitig auffrischen.
+  // Best-effort – ohne Wunsch/Erlaubnis passiert nichts.
   useEffect(() => {
-    if (sessionUser) syncPush().catch(() => {});
+    if (!sessionUser) return;
+    const beat = () => {
+      if (document.visibilityState === 'visible') syncPush().catch(() => {});
+    };
+    beat();
+    document.addEventListener('visibilitychange', beat);
+    return () => document.removeEventListener('visibilitychange', beat);
   }, [sessionUser]);
 
   // Highlights speichern (optimistisch): erst lokal setzen, dann serverseitig
