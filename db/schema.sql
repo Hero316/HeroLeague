@@ -251,10 +251,22 @@ CREATE TABLE messages (
   attach_title    TEXT,        -- Titel bzw. Dateiname
   attach_url      TEXT,        -- file/audio: Blob-URL
   attach_mime     TEXT,        -- file: MIME-Typ
+  edited_at       TIMESTAMPTZ, -- nachträglich bearbeitet (WhatsApp-Stil)
+  deleted_at      TIMESTAMPTZ, -- für alle zurückgenommen (Inhalt wird geleert)
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_messages_conv ON messages(conversation_id, created_at);
 CREATE INDEX idx_messages_parent ON messages(parent_id);
+
+-- Emoji-Reaktionen: eine Reaktion pro Nutzer & Nachricht (Tippen ersetzt/togglet).
+CREATE TABLE message_reactions (
+  message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL,
+  emoji      TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (message_id, user_id)
+);
+CREATE INDEX idx_message_reactions_msg ON message_reactions(message_id);
 
 -- Chat-Präsenz: echter Online-Status per Heartbeat + „tippt gerade".
 -- Bewusst ephemer (kein historischer Verlauf) – ein Eintrag pro Nutzer.
