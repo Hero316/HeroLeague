@@ -15,15 +15,6 @@ export const getNotifyPrefs = () => apiFetch<NotifyPrefs>('/api/push?resource=pr
 export const setNotifyPrefs = (prefs: NotifyPrefs) =>
   apiFetch<NotifyPrefs>('/api/push?resource=prefs', { method: 'POST', body: JSON.stringify(prefs) });
 
-export interface TestPushResult {
-  configured: boolean; // VAPID serverseitig eingerichtet?
-  devices: number; // wie viele Geräte dieses Nutzers sind angemeldet
-  sent: number; // erfolgreich zugestellt (an den Push-Dienst übergeben)
-  failed: number;
-}
-// Sendet SOFORT eine Test-Benachrichtigung an alle Geräte des Nutzers.
-export const sendTestPush = () => apiFetch<TestPushResult>('/api/push?resource=test', { method: 'POST' });
-
 function urlB64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');

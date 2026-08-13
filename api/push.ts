@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getSession } from './_lib/auth.js';
 import { sql } from './_lib/db.js';
-import { saveSubscription, removeSubscription, pushPublicKey, sendTestPush } from './_lib/push.js';
+import { saveSubscription, removeSubscription, pushPublicKey } from './_lib/push.js';
 import { badRequest } from './_lib/validate.js';
 import { ensureSchema } from './_lib/ensure.js';
 
@@ -38,11 +38,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'POST' && resource === 'unsubscribe') {
       await removeSubscription(typeof req.body?.endpoint === 'string' ? req.body.endpoint : '');
       return res.json({ ok: true });
-    }
-    if (req.method === 'POST' && resource === 'test') {
-      if (session.userId === 'bootstrap') return badRequest(res, 'Bitte mit einem echten Account anmelden.');
-      const result = await sendTestPush(session.userId);
-      return res.json(result);
     }
     if (req.method === 'POST') {
       await saveSubscription(session.userId, req.body?.subscription ?? {});

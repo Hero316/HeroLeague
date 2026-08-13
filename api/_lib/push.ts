@@ -129,38 +129,3 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
   }
 }
 
-// Diagnose/Test: schickt SOFORT eine Test-Benachrichtigung an alle Geräte des
-// Nutzers – bewusst OHNE „Nicht stören"-Filter (es ist ein bewusster Test) – und
-// meldet zurück, woran es liegt: ob Push serverseitig eingerichtet ist
-// (VAPID), wie viele Geräte angemeldet sind und wie viele Sendungen klappten.
-export async function sendTestPush(
-  userId: string
-): Promise<{ configured: boolean; devices: number; sent: number; failed: number }> {
-  const wp = await getWebpush();
-  const subs = (await sql`SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ${userId}`) as {
-    endpoint: string;
-    p256dh: string;
-    auth: string;
-  }[];
-  if (!wp) return { configured: false, devices: subs.length, sent: 0, failed: 0 };
-  const badge = await badgeCount(userId);
-  const body = JSON.stringify({
-    title: 'Hero League – Test ✅',
-    body: 'Push funktioniert! Wenn du das siehst, kommen Benachrichtigungen an.',
-    url: '/chat',
-    badge,
-  });
-  let sent = 0;
-  let failed = 0;
-  for (const s of subs) {
-    try {
-      await wp.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, body);
-      sent++;
-    } catch (err) {
-      failed++;
-      const code = (err as { statusCode?: number })?.statusCode;
-      if (code === 404 || code === 410) await sql`DELETE FROM push_subscriptions WHERE endpoint = ${s.endpoint}`;
-    }
-  }
-  return { configured: true, devices: subs.length, sent, failed };
-}
