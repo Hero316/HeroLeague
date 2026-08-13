@@ -1,8 +1,15 @@
 import React, { useRef, useState } from 'react';
 import Avatar from './Avatar';
 
+// Touch-Gerät (Handy/Tablet)? Dann macht die Enter-/Return-Taste eine neue
+// Zeile statt zu senden – gesendet wird über den Senden-Knopf. Nur mit echter
+// Tastatur (Desktop) sendet Enter direkt (Shift+Enter = neue Zeile).
+const IS_TOUCH =
+  typeof window !== 'undefined' &&
+  (window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window);
+
 // Textfeld mit @-Erwähnung (Auswahlliste wie im Chat). Kontrolliert über value/onChange.
-// onEnter (optional) sendet bei Enter ohne Shift – solange keine Erwähnungsliste offen ist.
+// onEnter (optional) sendet bei Enter ohne Shift – am Desktop. Am Handy: neue Zeile.
 export default function MentionTextarea({
   value,
   onChange,
@@ -60,18 +67,22 @@ export default function MentionTextarea({
         onChange={(e) => change(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey) {
+            // Offene @-Liste: Enter übernimmt den ersten Treffer (auf allen Geräten).
             if (matches.length > 0) {
               e.preventDefault();
               pick(matches[0].name);
               return;
             }
-            if (onEnter) {
+            // Am Handy macht Enter eine NEUE ZEILE (nicht senden) – gesendet wird
+            // über den Senden-Knopf. Nur am Desktop sendet Enter direkt.
+            if (onEnter && !IS_TOUCH) {
               e.preventDefault();
               onEnter();
             }
           }
         }}
         onPaste={onPaste}
+        enterKeyHint={IS_TOUCH ? 'enter' : 'send'}
         rows={rows}
         placeholder={placeholder}
         className={className}

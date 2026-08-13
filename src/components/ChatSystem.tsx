@@ -61,6 +61,13 @@ import { VoiceMessage } from './AudioPlayer';
 const inputClass =
   'w-full hl-surf-0 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent-light';
 
+// Touch-Gerät (Handy/Tablet)? Dann macht die Enter-/Return-Taste eine neue Zeile
+// statt zu senden – gesendet wird über den Senden-Knopf. Nur mit echter Tastatur
+// (Desktop) sendet Enter direkt (Shift+Enter = neue Zeile).
+const IS_TOUCH =
+  typeof window !== 'undefined' &&
+  (window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window);
+
 // Bubble-Farben (heller Look): eigene Nachricht türkiser Verlauf (weiße Schrift),
 // fremde Nachricht weiße Karte (dunkle Schrift via Token).
 const BUBBLE_MINE = 'linear-gradient(135deg, #22DFC9 0%, #12AEC6 100%)';
@@ -384,6 +391,16 @@ function Composer({
   const docRef = useRef<HTMLInputElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
+  // Textfeld wächst mit dem Inhalt mit, damit mehrzeilige Nachrichten (neue
+  // Zeile per Enter) sichtbar sind – bis zur Maximalhöhe (max-h-36), danach
+  // scrollt es intern.
+  useEffect(() => {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [body]);
+
   // @-Erwähnung: Token am Textende nach '@' erkennen und passende Mitglieder anbieten.
   const onBodyChange = (val: string) => {
     setBody(val);
@@ -543,15 +560,21 @@ function Composer({
             onBlur={() => onStopTyping?.()}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
+                // Offene @-Liste: Enter übernimmt den ersten Treffer (überall).
                 if (mentionMatches.length > 0) {
                   e.preventDefault();
                   pickMention(mentionMatches[0].name);
                   return;
                 }
-                e.preventDefault();
-                submit();
+                // Am Handy macht Enter eine NEUE ZEILE (nicht senden) – gesendet
+                // wird über den Senden-Knopf. Nur am Desktop sendet Enter direkt.
+                if (!IS_TOUCH) {
+                  e.preventDefault();
+                  submit();
+                }
               }
             }}
+            enterKeyHint={IS_TOUCH ? 'enter' : 'send'}
             rows={1}
             placeholder={placeholder}
             className="w-full bg-transparent text-[15px] text-white placeholder:text-hl-faint focus:outline-none resize-none max-h-36 py-3 leading-snug"
@@ -887,7 +910,8 @@ function MessageRow({
                 rows={3}
                 autoFocus
                 className="w-full hl-surf-0 border border-white/10 rounded-xl px-3 py-2 text-[15px] text-white focus:outline-none focus:border-brand-accent-light resize-y"
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(); } }}
+                enterKeyHint={IS_TOUCH ? 'enter' : 'send'}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !IS_TOUCH) { e.preventDefault(); saveEdit(); } }}
               />
               <div className="flex justify-end gap-2 mt-3">
                 <button onClick={() => setEditing(false)} className="px-3 py-2 rounded-lg text-sm text-hl-mute hover:text-white cursor-pointer">Abbrechen</button>
