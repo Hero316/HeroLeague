@@ -31,6 +31,9 @@ export async function ensureSchema(): Promise<void> {
     // Neue Präsenz-Tabelle mitprüfen, sonst überspringt der Schnell-Check das
     // Anlegen auf bereits bestehenden Datenbanken.
     await sql`SELECT 1 FROM chat_presence LIMIT 1`;
+    // Reaktionen + Bearbeitet/Gelöscht (WhatsApp-Funktionen) mitprüfen.
+    await sql`SELECT edited_at, deleted_at FROM messages LIMIT 1`;
+    await sql`SELECT 1 FROM message_reactions LIMIT 1`;
     ensured = true;
     return;
   } catch {
@@ -97,7 +100,16 @@ export async function ensureSchema(): Promise<void> {
     created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
   await run(sql`ALTER TABLE messages ADD COLUMN IF NOT EXISTS attach_url TEXT`);
   await run(sql`ALTER TABLE messages ADD COLUMN IF NOT EXISTS attach_mime TEXT`);
+  // WhatsApp-Funktionen: Bearbeiten (edited_at) + Löschen für alle (deleted_at).
+  await run(sql`ALTER TABLE messages ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ`);
+  await run(sql`ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`);
   await run(sql`CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at)`);
+  // Emoji-Reaktionen: eine Reaktion pro Nutzer & Nachricht (Tippen ersetzt/togglet).
+  await run(sql`CREATE TABLE IF NOT EXISTS message_reactions (
+    message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL, emoji TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (message_id, user_id))`);
+  await run(sql`CREATE INDEX IF NOT EXISTS idx_message_reactions_msg ON message_reactions(message_id)`);
   await run(sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
     endpoint TEXT PRIMARY KEY, user_id TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
