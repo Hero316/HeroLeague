@@ -30,7 +30,7 @@ import MentionTextarea from './MentionTextarea';
 import { useBackdropDismiss, ModalPortal, SegmentedControl } from './ui';
 
 const inputClass =
-  'w-full hl-surf-0 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent-light';
+  'w-full hl-surf-0 border border-white/10 rounded-xl px-3.5 py-2.5 text-[15px] text-white focus:outline-none focus:border-brand-accent-light transition-colors';
 
 const PRIORITY_LABEL: Record<TicketPriority, string> = {
   niedrig: 'Niedrig',
@@ -422,20 +422,20 @@ function NewTicketForm({ onCreated, onCancel }: { onCreated: () => void; onCance
   };
 
   return (
-    <form onSubmit={submit} className="hl-surf-soft border border-white/10 rounded-2xl p-4 sm:p-5 space-y-3">
+    <form onSubmit={submit} className="hl-surf-soft border border-white/10 rounded-3xl p-5 sm:p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h4 className="font-display font-bold text-white uppercase tracking-tight">Neues Ticket</h4>
-        <button type="button" onClick={onCancel} className="p-1 text-hl-mute hover:text-white cursor-pointer">
+        <h4 className="font-display font-black text-lg text-white uppercase tracking-tight">Neues Ticket</h4>
+        <button type="button" onClick={onCancel} className="p-2 -mr-1 rounded-full text-hl-mute hover:text-white hover:bg-white/5 transition-colors cursor-pointer">
           <X className="w-5 h-5" />
         </button>
       </div>
       <div>
-        <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Titel *</label>
+        <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-1.5">Titel</label>
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Worum geht's?" className={inputClass} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Priorität</label>
+          <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-1.5">Priorität</label>
           <select value={priority} onChange={(e) => setPriority(e.target.value as TicketPriority)} className={inputClass}>
             {PRIORITIES.map((p) => (
               <option key={p} value={p}>
@@ -445,12 +445,12 @@ function NewTicketForm({ onCreated, onCancel }: { onCreated: () => void; onCance
           </select>
         </div>
         <div>
-          <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Bereich (optional)</label>
+          <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-1.5">Bereich (optional)</label>
           <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="z.B. Startseite, Tabelle…" className={inputClass} />
         </div>
       </div>
       <div>
-        <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Beschreibung / Umsetzungsidee</label>
+        <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-1.5">Beschreibung / Umsetzungsidee</label>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -486,16 +486,16 @@ function NewTicketForm({ onCreated, onCancel }: { onCreated: () => void; onCance
           )}
         </div>
       </div>
-      <div className="flex justify-end gap-2 pt-1">
-        <button type="button" onClick={onCancel} className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-white/5 border border-white/10 text-hl-mute hover:text-white transition-colors cursor-pointer">
+      <div className="flex gap-2.5 pt-1">
+        <button type="button" onClick={onCancel} className="flex-1 py-3 rounded-2xl text-xs font-bold uppercase tracking-wider bg-white/5 border border-white/10 text-hl-mute hover:text-white transition-colors active:scale-[.98] cursor-pointer">
           Abbrechen
         </button>
         <button
           type="submit"
           disabled={busy || up.uploading}
-          className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+          className="flex-[1.5] py-3 rounded-2xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white transition-all active:scale-[.98] cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
         >
-          <Send className="w-4 h-4" /> Absenden
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Absenden
         </button>
       </div>
     </form>
