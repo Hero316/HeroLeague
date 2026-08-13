@@ -15,6 +15,15 @@ export const getNotifyPrefs = () => apiFetch<NotifyPrefs>('/api/push?resource=pr
 export const setNotifyPrefs = (prefs: NotifyPrefs) =>
   apiFetch<NotifyPrefs>('/api/push?resource=prefs', { method: 'POST', body: JSON.stringify(prefs) });
 
+export interface TestPushResult {
+  configured: boolean; // VAPID serverseitig eingerichtet?
+  devices: number; // wie viele Geräte dieses Nutzers sind angemeldet
+  sent: number; // erfolgreich zugestellt (an den Push-Dienst übergeben)
+  failed: number;
+}
+// Sendet SOFORT eine Test-Benachrichtigung an alle Geräte des Nutzers.
+export const sendTestPush = () => apiFetch<TestPushResult>('/api/push?resource=test', { method: 'POST' });
+
 function urlB64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -93,13 +102,16 @@ export async function enablePush(): Promise<void> {
   const reg = await navigator.serviceWorker.ready;
   const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
   if (perm !== 'granted') throw new Error('Benachrichtigungen wurden nicht erlaubt. Bitte beim Nachfragen auf „Erlauben" tippen.');
+  // Wunsch SOFORT merken (bevor die Netz-Schritte kommen): Selbst wenn das
+  // Speichern gleich scheitert, stellt syncPush() beim nächsten Start das Abo
+  // automatisch wieder her – der Schalter „vergisst" nichts mehr.
+  setPushIntent(true);
   const { key } = await getPushKey();
   if (!key) throw new Error('Push ist serverseitig noch nicht eingerichtet (VAPID-Schlüssel fehlen).');
   const existing = await reg.pushManager.getSubscription();
   const sub =
     existing ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8Array(key) }));
   await savePushSubscription(sub.toJSON());
-  setPushIntent(true); // Wunsch merken → beim nächsten Start automatisch wiederherstellen
 }
 
 export async function disablePush(): Promise<void> {
