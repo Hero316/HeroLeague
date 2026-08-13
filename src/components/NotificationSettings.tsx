@@ -4,6 +4,7 @@ import type { SessionUser } from '../types';
 import {
   pushSupported,
   pushIntended,
+  pushDebug,
   syncPush,
   enablePush,
   disablePush,
@@ -22,7 +23,14 @@ export default function NotificationSettings({ user }: { user: SessionUser }) {
   const [savedOk, setSavedOk] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState('');
+  const [diag, setDiag] = useState<Awaited<ReturnType<typeof pushDebug>> | null>(null);
   const isBootstrap = user.id === 'bootstrap';
+
+  // Sichtbarer Ist-Zustand (Erlaubnis / Abo / gemerkt) – zeigt nach einem
+  // Neustart, was verloren ging, und hilft beim gezielten Nachbessern.
+  useEffect(() => {
+    pushDebug().then(setDiag).catch(() => {});
+  }, [enabled, busy, testing]);
 
   const runTest = async () => {
     setTesting(true);
@@ -130,6 +138,25 @@ export default function NotificationSettings({ user }: { user: SessionUser }) {
             </button>
             {testMsg && <p className="text-xs text-hl-soft font-sans mt-2 leading-snug">{testMsg}</p>}
           </div>
+        )}
+
+        {/* Sichtbarer Status – hilft zu sehen, was nach einem Neustart fehlt. */}
+        {supported && diag && (
+          <p className="text-[11px] text-hl-mute font-mono mt-3 leading-relaxed">
+            Status: Erlaubnis{' '}
+            <strong className={diag.permission === 'granted' ? 'text-emerald-400' : 'text-amber-400'}>
+              {diag.permission === 'granted' ? 'erteilt ✓' : diag.permission === 'denied' ? 'blockiert ✗' : 'noch offen'}
+            </strong>{' '}
+            · Abo{' '}
+            <strong className={diag.hasSubscription ? 'text-emerald-400' : 'text-amber-400'}>
+              {diag.hasSubscription ? 'aktiv ✓' : 'nicht aktiv ✗'}
+            </strong>{' '}
+            · gemerkt{' '}
+            <strong className={diag.intended ? 'text-emerald-400' : 'text-amber-400'}>
+              {diag.intended ? 'ja ✓' : 'nein ✗'}
+            </strong>
+            {!diag.standalone && <span className="text-hl-faint"> · (im Browser geöffnet, nicht als installierte App)</span>}
+          </p>
         )}
       </div>
 

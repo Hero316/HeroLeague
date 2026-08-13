@@ -71,6 +71,30 @@ function isStandalone(): boolean {
   );
 }
 
+// Diagnose des aktuellen Push-Zustands auf diesem Gerät – für die sichtbare
+// Status-Zeile in den Einstellungen. So sehen wir, was nach einem Neustart weg
+// ist: die Browser-Erlaubnis, das Abo selbst, oder der gemerkte Wunsch.
+export async function pushDebug(): Promise<{
+  supported: boolean;
+  permission: string; // 'granted' | 'denied' | 'default' | 'unsupported'
+  hasSubscription: boolean;
+  intended: boolean;
+  standalone: boolean;
+}> {
+  const supported = pushSupported();
+  const permission = typeof Notification !== 'undefined' ? Notification.permission : 'unsupported';
+  let hasSubscription = false;
+  if (supported) {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      hasSubscription = !!(await reg.pushManager.getSubscription());
+    } catch {
+      /* egal */
+    }
+  }
+  return { supported, permission, hasSubscription, intended: pushIntended(), standalone: isStandalone() };
+}
+
 export async function isPushEnabled(): Promise<boolean> {
   if (!pushSupported()) return false;
   try {
