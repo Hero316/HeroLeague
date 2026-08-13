@@ -55,10 +55,16 @@ export default function ChatApp({
 
   return (
     <AudioPlayerProvider>
-    <div className="h-screen flex flex-col bg-[#060E0F] text-hl-text">
+    <div
+      className="h-screen flex flex-col text-hl-text hl-team"
+      style={{
+        background:
+          'radial-gradient(1100px 600px at 8% -8%, #DDF4EF 0%, transparent 55%), radial-gradient(900px 560px at 108% 0%, #ECEAFF 0%, transparent 52%), #EAF0F1',
+      }}
+    >
       {/* Kopfzeile */}
       <header
-        className="flex items-center justify-between gap-2 px-2 py-2 border-b border-white/10 bg-[rgba(7,10,8,.92)] backdrop-blur-xl shrink-0"
+        className="flex items-center justify-between gap-2 px-2 py-2 border-b border-white/10 bg-[rgba(255,255,255,.82)] backdrop-blur-xl shrink-0"
         style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.5rem)' }}
       >
         <div className="flex items-center gap-1 min-w-0">
@@ -70,7 +76,7 @@ export default function ChatApp({
             <ArrowLeft className="w-5 h-5" />
             <span className="text-[11px] font-sans font-semibold uppercase tracking-wider">Zurück</span>
           </button>
-          <img src="/assets/hero-league-logo.png" alt="Hero Team" className="h-6 w-auto ml-1 shrink-0" />
+          <img src="/assets/hero-league-logo.png" alt="Hero Team" className="h-6 w-auto ml-1 shrink-0 hl-applogo" />
           <span className="font-display font-black text-white uppercase tracking-tight text-sm truncate">{current.label}</span>
         </div>
         <button
@@ -109,30 +115,38 @@ export default function ChatApp({
         </div>
       )}
 
-      {/* Inhalt des aktiven Tabs */}
+      {/* Inhalt des aktiven Tabs – sanfter Fade beim Wechsel */}
       <main className="flex-1 min-h-0">
-        {tab === 'chats' ? (
-          <ChatSystem
-            currentUserId={currentUserId}
-            canManageTickets={canManageTickets}
-            isSuperadmin={isSuperadmin}
-            fullHeight
-            initialConversationId={initialConversationId ?? getUrlParam('c')}
-            initialThreadId={getUrlParam('thread')}
-          />
-        ) : tab === 'aufgaben' ? (
-          <div className="h-full overflow-y-auto p-3">
-            <TaskBoard key="tab-aufgaben" currentUserId={currentUserId} isSuperadmin={isSuperadmin} persist mode="tasks" />
-          </div>
-        ) : tab === 'kalender' ? (
-          <div className="h-full overflow-y-auto p-3">
-            <TaskBoard key="tab-kalender" currentUserId={currentUserId} isSuperadmin={isSuperadmin} persist mode="calendar" />
-          </div>
-        ) : (
-          <div className="h-full overflow-y-auto p-3">
-            <TicketSystem currentUserId={currentUserId} canManage={canManageTickets} persist />
-          </div>
-        )}
+        <motion.div
+          key={tab}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+          className="h-full"
+        >
+          {tab === 'chats' ? (
+            <ChatSystem
+              currentUserId={currentUserId}
+              canManageTickets={canManageTickets}
+              isSuperadmin={isSuperadmin}
+              fullHeight
+              initialConversationId={initialConversationId ?? getUrlParam('c')}
+              initialThreadId={getUrlParam('thread')}
+            />
+          ) : tab === 'aufgaben' ? (
+            <div className="h-full overflow-y-auto p-3">
+              <TaskBoard key="tab-aufgaben" currentUserId={currentUserId} isSuperadmin={isSuperadmin} persist mode="tasks" />
+            </div>
+          ) : tab === 'kalender' ? (
+            <div className="h-full overflow-y-auto p-3">
+              <TaskBoard key="tab-kalender" currentUserId={currentUserId} isSuperadmin={isSuperadmin} persist mode="calendar" />
+            </div>
+          ) : (
+            <div className="h-full overflow-y-auto p-3">
+              <TicketSystem currentUserId={currentUserId} canManage={canManageTickets} persist />
+            </div>
+          )}
+        </motion.div>
       </main>
 
       {/* Läuft weiter beim Tab-Wechsel: Sprachnachrichten-Mini-Leiste */}
@@ -140,7 +154,7 @@ export default function ChatApp({
 
       {/* Untere Tab-Leiste (wie WhatsApp/Slack) */}
       <nav
-        className="shrink-0 grid grid-cols-4 border-t border-white/10 bg-[rgba(7,10,8,.96)] backdrop-blur-xl"
+        className="shrink-0 grid grid-cols-4 border-t border-white/10 bg-[rgba(255,255,255,.9)] backdrop-blur-xl"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {TABS.map((t) => {

@@ -30,7 +30,7 @@ import MentionTextarea from './MentionTextarea';
 import { useBackdropDismiss, ModalPortal, SegmentedControl } from './ui';
 
 const inputClass =
-  'w-full bg-[#060E0F] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent-light';
+  'w-full hl-surf-0 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent-light';
 
 const PRIORITY_LABEL: Record<TicketPriority, string> = {
   niedrig: 'Niedrig',
@@ -274,7 +274,7 @@ export function TicketDetail({
 
             {/* Verwaltung (nur Super-Admin) */}
             {canManage && (
-              <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3 bg-[#060E0F]/40 border border-white/5 rounded-xl p-3">
+              <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3 hl-surf-soft border border-white/5 rounded-xl p-3">
                 <div>
                   <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Status</label>
                   <select
@@ -331,7 +331,7 @@ export function TicketDetail({
               </h4>
               <div className="space-y-3">
                 {(ticket.comments ?? []).map((c: TicketComment) => (
-                  <div key={c.id} className="bg-[#060E0F]/40 border border-white/5 rounded-lg p-3">
+                  <div key={c.id} className="hl-surf-soft border border-white/5 rounded-lg p-3">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-sans font-semibold text-white">{c.authorName}</span>
                       <span className="text-[10px] font-mono text-hl-faint">{fmtDate(c.createdAt)}</span>
@@ -422,7 +422,7 @@ function NewTicketForm({ onCreated, onCancel }: { onCreated: () => void; onCance
   };
 
   return (
-    <form onSubmit={submit} className="bg-[#060E0F]/40 border border-white/10 rounded-2xl p-4 sm:p-5 space-y-3">
+    <form onSubmit={submit} className="hl-surf-soft border border-white/10 rounded-2xl p-4 sm:p-5 space-y-3">
       <div className="flex items-center justify-between">
         <h4 className="font-display font-bold text-white uppercase tracking-tight">Neues Ticket</h4>
         <button type="button" onClick={onCancel} className="p-1 text-hl-mute hover:text-white cursor-pointer">
@@ -548,7 +548,7 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
       <div
         className={`flex items-center justify-between gap-3 ${
           persist
-            ? 'order-2 sticky bottom-0 z-20 -mx-3 border-t border-white/10 bg-[#060E0F] px-3 pt-3 mt-3 md:static md:bottom-auto md:z-auto md:mx-0 md:mt-0 md:mb-4 md:border-0 md:bg-transparent md:px-0 md:pt-0'
+            ? 'order-2 sticky bottom-0 z-20 -mx-3 border-t border-white/10 hl-surf-0 px-3 pt-3 mt-3 md:static md:bottom-auto md:z-auto md:mx-0 md:mt-0 md:mb-4 md:border-0 md:bg-transparent md:px-0 md:pt-0'
             : 'mb-4'
         }`}
       >
@@ -600,7 +600,7 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
             <button
               key={t.id}
               onClick={() => setOpenId(t.id)}
-              className="w-full text-left bg-[#060E0F]/40 border border-white/5 hover:border-white/15 rounded-xl px-4 py-3 transition-colors cursor-pointer"
+              className="w-full text-left hl-surf-soft border border-white/5 hover:border-white/15 rounded-xl px-4 py-3 transition-colors cursor-pointer"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">

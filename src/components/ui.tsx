@@ -77,7 +77,7 @@ export function SegmentedControl<T extends string>({
   className?: string;
 }) {
   return (
-    <div className={`relative flex items-center gap-0.5 bg-[#060E0F]/50 border border-white/10 rounded-xl p-1 overflow-x-auto no-scrollbar max-w-full ${className}`}>
+    <div className={`relative flex items-center gap-0.5 hl-surf-soft border border-white/10 rounded-xl p-1 overflow-x-auto no-scrollbar max-w-full ${className}`}>
       {options.map((o) => {
         const active = o.value === value;
         const Icon = o.icon;
