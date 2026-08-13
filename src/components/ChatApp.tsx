@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, MessageSquare, CalendarDays, ListChecks, Ticket as TicketIcon, Smartphone, X, Sun, Moon, Settings } from 'lucide-react';
+import { ArrowLeft, MessageSquare, CalendarDays, ListChecks, Ticket as TicketIcon, Smartphone, X, Sun, Moon, Settings, Bell } from 'lucide-react';
 import ChatSystem from './ChatSystem';
 import TaskBoard from './TaskBoard';
 import TicketSystem from './TicketSystem';
 import TeamSettings from './TeamSettings';
 import DeepLinkModal from './DeepLinkModal';
 import { useInstall } from './InstallProvider';
+import { pushDebug, enablePush } from '../lib/push';
 import { getUrlParam, setUrlParam } from '../lib/urlState';
 import { AudioPlayerProvider, MiniPlayer } from './AudioPlayer';
 import type { SessionUser, UserStatus } from '../types';
@@ -62,6 +63,35 @@ export default function ChatApp({
   const [showInstall, setShowInstall] = useState(true);
   const { isStandalone, isIos, canInstall, promptInstall } = useInstall();
   const current = TABS.find((t) => t.id === tab)!;
+
+  // Reaktivierungs-Hinweis: Manche Handys setzen die Benachrichtigungs-Erlaubnis
+  // beim Schließen der App zurück (Wunsch bleibt gemerkt, Erlaubnis geht weg).
+  // Ist das der Fall, bieten wir oben einen Ein-Tipp-Knopf zum Wieder-Einschalten
+  // an – statt dass man jedes Mal in die Einstellungen muss.
+  const [needsPush, setNeedsPush] = useState(false);
+  const [reactivating, setReactivating] = useState(false);
+  useEffect(() => {
+    const check = () => {
+      if (document.visibilityState !== 'visible') return;
+      pushDebug()
+        .then((d) => setNeedsPush(d.supported && d.intended && d.permission !== 'granted'))
+        .catch(() => {});
+    };
+    check();
+    document.addEventListener('visibilitychange', check);
+    return () => document.removeEventListener('visibilitychange', check);
+  }, []);
+  const reactivatePush = async () => {
+    setReactivating(true);
+    try {
+      await enablePush();
+      setNeedsPush(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Konnte nicht aktivieren.');
+    } finally {
+      setReactivating(false);
+    }
+  };
 
   // Deep-Link aus einer Benachrichtigung: /chat?openTicket=… bzw. …?openTask=…
   // öffnet das Ticket/die Aufgabe direkt als Detail-Fenster – unabhängig vom
@@ -172,6 +202,24 @@ export default function ChatApp({
             <X className="w-4 h-4" />
           </button>
         </div>
+      )}
+
+      {/* Benachrichtigungen reaktivieren: erscheint, wenn Push gewünscht ist, die
+          Handy-Erlaubnis aber (z.B. nach App-Neustart) fehlt. Ein Tipp genügt. */}
+      {needsPush && (
+        <button
+          onClick={reactivatePush}
+          disabled={reactivating}
+          className="w-full flex items-center gap-2 px-3 py-2.5 bg-amber-500/15 border-b border-amber-500/30 text-left shrink-0 cursor-pointer disabled:opacity-60"
+        >
+          <Bell className="w-4 h-4 text-amber-500 shrink-0" />
+          <span className="flex-1 text-[12px] text-hl-soft leading-snug">
+            <span className="font-semibold text-white">Benachrichtigungen sind aus.</span> Zum Wieder-Einschalten hier tippen.
+          </span>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-amber-500 shrink-0">
+            {reactivating ? '…' : 'Einschalten'}
+          </span>
+        </button>
       )}
 
       {/* Inhalt des aktiven Tabs – sanfter Fade beim Wechsel */}
