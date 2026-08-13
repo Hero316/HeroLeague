@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquare, Users, CalendarDays, LayoutGrid, ListChecks, Clock, Move, Check, Calendar, CheckSquare, Square } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquare, Users, CalendarDays, ListChecks, Clock, Move, Check, Calendar, CheckSquare, Square } from 'lucide-react';
 import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember, Match, EventArchive, TaskKind } from '../types';
 import { fetchTasksRange, fetchAllTasks, fetchTask, createTask, updateTask, deleteTask, addTaskComment, fetchTeam, memberMap } from '../lib/collab';
 import { apiFetch } from '../lib/api';
@@ -291,13 +291,13 @@ function AssigneeChips({
   return (
     <div className="flex -space-x-1.5">
       {assignees.slice(0, 4).map((a) => (
-        <span key={a.userId} title={a.userName} className="inline-flex rounded-full ring-2 ring-[#0a1110]">
+        <span key={a.userId} title={a.userName} className="inline-flex hl-avatar-ring">
           <Avatar name={a.userName} url={urlFor?.(a.userId)} size={px} />
         </span>
       ))}
       {assignees.length > 4 && (
         <span
-          className="rounded-full bg-white/10 border border-white/20 font-bold text-hl-soft flex items-center justify-center ring-2 ring-[#0a1110]"
+          className="hl-avatar-ring bg-white/10 border border-white/20 font-bold text-hl-soft flex items-center justify-center"
           style={{ width: px, height: px, fontSize: Math.round(px * 0.4) }}
         >
           +{assignees.length - 4}
@@ -1167,64 +1167,69 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
             : 'mb-4'
         }`}
       >
-        {/* Zeile 1: Umschalter links, „Neu" rechts – die Position bleibt STABIL,
-            egal welche Ansicht (kein Springen mehr). */}
-        <div className="flex items-center justify-between gap-3">
-          {mode === 'tasks' ? (
-            <SegmentedControl
-              groupId="taskview"
-              value={taskView}
-              onChange={(v) => setTaskView(v)}
-              options={[
-                { value: 'list' as const, label: 'Liste', icon: ListChecks },
-                { value: 'week' as const, label: 'Woche', icon: CalendarDays },
-              ]}
-            />
-          ) : (
-            <SegmentedControl
-              groupId="calview"
-              value={view}
-              onChange={(v) => setView(v)}
-              options={calendarViews.map((v) => ({
-                value: v as 'month' | 'week' | 'day' | 'termine' | 'aufgaben',
-                label: v === 'month' ? 'Monat' : v === 'week' ? 'Woche' : v === 'day' ? 'Tag' : v === 'termine' ? 'Termine' : 'Aufgaben',
-                icon: v === 'month' ? LayoutGrid : v === 'week' ? CalendarDays : v === 'day' ? Clock : v === 'termine' ? Calendar : CheckSquare,
-              }))}
-            />
-          )}
+        {/* Zeile 1: Ansicht-Umschalter über die VOLLE Breite – so sind auf dem
+            iPhone alle Punkte (auch „Tag"/„Termine") sichtbar & erreichbar. */}
+        {mode === 'tasks' ? (
+          <SegmentedControl
+            groupId="taskview"
+            fill
+            value={taskView}
+            onChange={(v) => setTaskView(v)}
+            options={[
+              { value: 'list' as const, label: 'Liste', icon: ListChecks },
+              { value: 'week' as const, label: 'Woche', icon: CalendarDays },
+            ]}
+          />
+        ) : (
+          <SegmentedControl
+            groupId="calview"
+            fill
+            value={view}
+            onChange={(v) => setView(v)}
+            options={calendarViews.map((v) => ({
+              value: v as 'month' | 'week' | 'day' | 'termine' | 'aufgaben',
+              // Bewusst OHNE Icon: 4 Optionen + Icon würden auf dem iPhone die
+              // Beschriftung abschneiden. So bleibt jeder Punkt voll lesbar.
+              label: v === 'month' ? 'Monat' : v === 'week' ? 'Woche' : v === 'day' ? 'Tag' : v === 'termine' ? 'Termine' : 'Aufgaben',
+            }))}
+          />
+        )}
+
+        {/* Zeile 2: Datums-Navigation (blendet SMOOTH ein/aus) + „Neu" rechts –
+            „Neu" ist immer erreichbar, egal welche Ansicht. */}
+        <div className="flex items-center gap-2 mt-2">
+          <div className="flex-1 min-w-0 flex items-center justify-center gap-2">
+            <AnimatePresence initial={false}>
+              {((mode !== 'tasks' && (view === 'month' || view === 'week' || view === 'day')) || (mode === 'tasks' && taskView === 'week')) && (
+                <motion.div
+                  key="datenav"
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  className="flex items-center gap-2 min-w-0"
+                >
+                  <button onClick={() => shift(-1)} className="p-2 rounded-lg bg-white/5 border border-white/10 text-hl-soft hover:text-white cursor-pointer active:scale-90 transition-transform shrink-0">
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="font-display font-bold text-white text-sm text-center truncate">{label}</span>
+                  <button onClick={() => shift(1)} className="p-2 rounded-lg bg-white/5 border border-white/10 text-hl-soft hover:text-white cursor-pointer active:scale-90 transition-transform shrink-0">
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => setAnchor(new Date())} className="px-3 py-2 rounded-lg text-xs font-sans font-semibold bg-white/5 border border-white/10 text-hl-mute hover:text-white cursor-pointer active:scale-95 transition-transform shrink-0">
+                    Heute
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
           <button
             onClick={() => setNewTask({ date: view === 'day' ? ymd(anchor) : TODAY, type: view === 'aufgaben' ? 'aufgabe' : 'termin' })}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white cursor-pointer flex items-center gap-1.5 shrink-0 active:scale-95 transition-transform"
+            className="px-4 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white cursor-pointer flex items-center gap-1.5 shrink-0 active:scale-95 transition-transform"
           >
             <Plus className="w-4 h-4" /> {view === 'aufgaben' ? 'Aufgabe' : 'Neu'}
           </button>
         </div>
-
-        {/* Zeile 2: Datums-Navigation – blendet SMOOTH ein/aus statt zu poppen. */}
-        <AnimatePresence initial={false}>
-          {((mode !== 'tasks' && (view === 'month' || view === 'week' || view === 'day')) || (mode === 'tasks' && taskView === 'week')) && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="overflow-hidden"
-            >
-              <div className="flex items-center justify-center gap-2 pt-0.5">
-                <button onClick={() => shift(-1)} className="p-2 rounded-lg bg-white/5 border border-white/10 text-hl-soft hover:text-white cursor-pointer active:scale-90 transition-transform">
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <span className="font-display font-bold text-white text-sm min-w-[8rem] text-center">{label}</span>
-                <button onClick={() => shift(1)} className="p-2 rounded-lg bg-white/5 border border-white/10 text-hl-soft hover:text-white cursor-pointer active:scale-90 transition-transform">
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-                <button onClick={() => setAnchor(new Date())} className="px-3 py-2 rounded-lg text-xs font-sans font-semibold bg-white/5 border border-white/10 text-hl-mute hover:text-white cursor-pointer active:scale-95 transition-transform">
-                  Heute
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       <div className={persist ? 'order-1 flex-1 min-h-0 md:contents' : 'contents'}>

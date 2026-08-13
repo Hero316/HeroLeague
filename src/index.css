@@ -789,3 +789,9 @@ body {
 .hl-team .hl-app-bar { background: rgba(255, 255, 255, 0.82); }
 .hl-app-dock { background: rgba(10, 18, 16, 0.92); }
 .hl-team .hl-app-dock { background: rgba(255, 255, 255, 0.92); }
+
+/* Trenn-Ring um (überlappende) Avatare: nimmt die Farbe der Karte dahinter an,
+   damit gestapelte Profilbilder sauber getrennt wirken statt „verbacken".
+   Dunkel als Standard, weiß unter .hl-team. */
+.hl-avatar-ring { border-radius: 9999px; box-shadow: 0 0 0 2px #0a1110; }
+.hl-team .hl-avatar-ring { box-shadow: 0 0 0 2px #FFFFFF; }

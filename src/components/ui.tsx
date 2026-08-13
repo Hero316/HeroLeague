@@ -116,8 +116,8 @@ export function SegmentedControl<T extends string>({
           <button
             key={o.value}
             onClick={() => onChange(o.value)}
-            className={`relative px-3.5 py-2 rounded-xl text-xs font-sans font-bold uppercase tracking-wider cursor-pointer flex items-center gap-1.5 transition-colors duration-200 active:scale-95 ${
-              fill ? 'flex-1 justify-center' : 'shrink-0'
+            className={`relative py-2 rounded-xl text-xs font-sans font-bold uppercase tracking-wider cursor-pointer flex items-center justify-center whitespace-nowrap transition-colors duration-200 active:scale-95 ${
+              fill ? 'flex-1 min-w-0 px-2' : 'shrink-0 px-3.5'
             } ${active ? 'text-white' : 'text-hl-mute hover:text-white'}`}
           >
             {active && (
@@ -127,9 +127,9 @@ export function SegmentedControl<T extends string>({
                 transition={{ type: 'spring', stiffness: 520, damping: 40 }}
               />
             )}
-            <span className="relative z-10 flex items-center gap-1.5">
-              {Icon && <Icon className="w-4 h-4" />}
-              {o.label}
+            <span className={`relative z-10 flex items-center min-w-0 ${fill ? 'gap-1' : 'gap-1.5'}`}>
+              {Icon && <Icon className={`shrink-0 ${fill ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />}
+              <span className="truncate">{o.label}</span>
             </span>
           </button>
         );
