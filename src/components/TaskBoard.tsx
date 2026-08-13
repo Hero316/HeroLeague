@@ -424,6 +424,13 @@ export function TaskDetail({
     if (!title.trim()) return alert('Titel darf nicht leer sein.');
     setBusy(true);
     try {
+      // Steht im Kommentarfeld noch Text, diesen NICHT verwerfen, sondern
+      // mitspeichern – sonst geht der Kommentar beim „Speichern" verloren.
+      const pending = commentBody.trim();
+      if (pending) {
+        await addTaskComment(task.id, pending);
+        setCommentBody('');
+      }
       await updateTask(task.id, {
         title: title.trim(),
         notes,
