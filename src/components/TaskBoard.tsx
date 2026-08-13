@@ -776,6 +776,7 @@ function DayView({
   dayKey,
   tasks,
   highlight,
+  fullHeight = false,
   onOpenTask,
   onAddAt,
   onMoveTask,
@@ -783,6 +784,7 @@ function DayView({
   dayKey: string;
   tasks: Task[];
   highlight?: Highlight;
+  fullHeight?: boolean;
   onOpenTask: (t: Task) => void;
   onAddAt: (startTime: string) => void;
   onMoveTask: (t: Task, startTime: string, endTime: string | null) => void;
@@ -842,10 +844,10 @@ function DayView({
   };
 
   return (
-    <div className="rounded-2xl border border-white/5 overflow-hidden hl-surf shadow-sm">
+    <div className={`rounded-2xl border border-white/5 overflow-hidden hl-surf shadow-sm ${fullHeight ? 'h-full flex flex-col' : ''}`}>
       {/* Leuchtender Spieltag-/Testspieltag-Marker */}
       {highlight && (
-        <div className="p-2 border-b border-white/5">
+        <div className="p-2 border-b border-white/5 shrink-0">
           <div
             className="hl-cal-glow rounded-lg px-3 py-2 text-center font-display font-black uppercase tracking-tight"
             style={{
@@ -860,7 +862,7 @@ function DayView({
         </div>
       )}
       {/* Ganztägig / mehrtägig */}
-      <div className="border-b border-white/5 p-2">
+      <div className="border-b border-white/5 p-2 shrink-0">
         <div className="text-[10px] font-mono uppercase tracking-wider text-hl-dim mb-1 px-1">Ganztägig</div>
         {allDay.length === 0 ? (
           <div className="text-[11px] text-hl-faint px-1 py-0.5">—</div>
@@ -877,7 +879,7 @@ function DayView({
       </div>
 
       {/* Stunden-Zeitraster */}
-      <div ref={scrollRef} className="overflow-y-auto" style={{ maxHeight: '60vh' }}>
+      <div ref={scrollRef} className={fullHeight ? 'flex-1 min-h-0 overflow-y-auto' : 'overflow-y-auto'} style={fullHeight ? undefined : { maxHeight: '60vh' }}>
         <div className="relative" style={{ height: 24 * HOUR_H }} onClick={onBgClick}>
           {Array.from({ length: 24 }, (_, h) => (
             <div key={h} className="absolute left-0 right-0 border-t border-white/5" style={{ top: h * HOUR_H, height: HOUR_H }}>
@@ -1144,9 +1146,12 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
   const shift = (dir: number) =>
     setAnchor((a) => (view === 'month' ? addMonths(a, dir) : view === 'day' ? addDays(a, dir) : addDays(a, dir * 7)));
 
-  // Wochenansichten (Kalender-Woche + Aufgaben-Woche) füllen die volle Höhe und
-  // scrollen intern; alle anderen Ansichten fließen normal (Seite scrollt).
-  const fullHeightView = (mode === 'tasks' && taskView === 'week') || (mode !== 'tasks' && view === 'week');
+  // Diese Ansichten füllen die volle Höhe und scrollen INTERN – so gibt es keinen
+  // großen äußeren Scrollbalken (der beim Umschalten unschön aufpoppt). Kalender:
+  // Monat, Woche und Tag. Aufgaben: Woche. Alles andere (Agenda-Listen) fließt.
+  const fullHeightView =
+    (mode === 'tasks' && taskView === 'week') ||
+    (mode !== 'tasks' && (view === 'month' || view === 'week' || view === 'day'));
 
   return (
     <div
@@ -1404,12 +1409,15 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
         })()
       ) : view === 'month' ? (
         /* -------- MONATSANSICHT (Google-Stil, bildschirmfüllend, Mehrtages-Balken) -------- */
-        <div className="rounded-2xl border border-white/5 overflow-hidden hl-surf shadow-sm">
-          <div className="grid grid-cols-7 border-b border-white/5">
+        <div className={`rounded-2xl border border-white/5 overflow-hidden hl-surf shadow-sm ${persist ? 'h-full flex flex-col' : ''}`}>
+          <div className="grid grid-cols-7 border-b border-white/5 shrink-0">
             {WEEKDAYS.map((w) => (
               <div key={w} className="text-center text-[10px] font-mono uppercase tracking-wider text-hl-dim py-1.5">{w}</div>
             ))}
           </div>
+          {/* Wochen: füllen im Handy-Modus die Höhe und scrollen INTERN (kein
+              großer äußerer Scrollbalken). Am Desktop fließt es wie gehabt. */}
+          <div className={persist ? 'flex-1 min-h-0 overflow-y-auto' : ''}>
           {range.weeks.map((week, wi) => {
             const { bars, overflowByCol } = weekBars(week, eventTasks);
             const laneAreaH = MAX_LANES * (LANE_H + 2);
@@ -1469,6 +1477,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
               </div>
             );
           })}
+          </div>
         </div>
       ) : view === 'day' ? (
         /* -------- TAGESANSICHT (Zeitraster + Ganztägig, Google-Stil) -------- */
@@ -1476,6 +1485,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
           dayKey={ymd(anchor)}
           tasks={eventTasks}
           highlight={hl[ymd(anchor)]}
+          fullHeight={persist}
           onOpenTask={setOpenTask}
           onAddAt={(startTime) => setNewTask({ date: ymd(anchor), startTime })}
           onMoveTask={moveTask}
