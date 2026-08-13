@@ -11,7 +11,7 @@ import MentionTextarea from './MentionTextarea';
 import { useBackdropDismiss, ModalPortal, SegmentedControl } from './ui';
 
 const inputClass =
-  'w-full bg-[#060E0F] border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent-light';
+  'w-full hl-surf-0 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent-light';
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   leer: 'Nichts',
@@ -310,7 +310,7 @@ function AssigneeChips({
 // 3-Wege-Umschalter Termin / Aufgabe / Beides.
 function TypeToggle({ value, onChange }: { value: TaskKind; onChange: (v: TaskKind) => void }) {
   return (
-    <div className="flex gap-1 bg-[#060E0F]/40 border border-white/10 rounded-xl p-1">
+    <div className="flex gap-1 hl-surf-soft border border-white/10 rounded-xl p-1">
       {(['termin', 'aufgabe', 'beides'] as const).map((k) => (
         <button
           key={k}
@@ -356,7 +356,7 @@ function ScheduleFields({
 }) {
   const pureTask = kind === 'aufgabe';
   return (
-    <div className="mt-3 rounded-xl border border-white/10 bg-[#060E0F]/40 p-3 space-y-3">
+    <div className="mt-3 rounded-xl border border-white/10 hl-surf-soft p-3 space-y-3">
       <label className="flex items-center gap-2 cursor-pointer select-none">
         <button
           type="button"
@@ -564,7 +564,7 @@ export function TaskDetail({
           </h4>
           <div className="space-y-2 max-h-44 overflow-y-auto">
             {comments.map((c) => (
-              <div key={c.id} className="bg-[#060E0F]/40 border border-white/5 rounded-lg p-2.5">
+              <div key={c.id} className="hl-surf-soft border border-white/5 rounded-lg p-2.5">
                 <div className="flex items-center justify-between mb-0.5">
                   <span className="text-xs font-sans font-semibold text-white">{c.authorName}</span>
                   <span className="text-[10px] font-mono text-hl-faint">{fmtTime(c.createdAt)}</span>
@@ -805,7 +805,7 @@ function DayView({
   };
 
   return (
-    <div className="rounded-xl border border-white/5 overflow-hidden bg-[#0a1110]">
+    <div className="rounded-xl border border-white/5 overflow-hidden hl-surf">
       {/* Leuchtender Spieltag-/Testspieltag-Marker */}
       {highlight && (
         <div className="p-2 border-b border-white/5">
@@ -844,7 +844,7 @@ function DayView({
         <div className="relative" style={{ height: 24 * HOUR_H }} onClick={onBgClick}>
           {Array.from({ length: 24 }, (_, h) => (
             <div key={h} className="absolute left-0 right-0 border-t border-white/5" style={{ top: h * HOUR_H, height: HOUR_H }}>
-              <span className="absolute -top-2 left-1 text-[10px] font-mono text-hl-dim bg-[#0a1110] pr-1">{String(h).padStart(2, '0')}:00</span>
+              <span className="absolute -top-2 left-1 text-[10px] font-mono text-hl-dim hl-surf pr-1">{String(h).padStart(2, '0')}:00</span>
             </div>
           ))}
           {/* Aufgaben mit Uhrzeit. Standard: tippen öffnet Detail, Scrollen geht.
@@ -1126,7 +1126,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
       <div
         className={`flex flex-col gap-2 ${
           persist
-            ? 'order-2 sticky bottom-0 z-20 -mx-3 border-t border-white/10 bg-[#060E0F] px-3 pt-3 mt-3 md:static md:bottom-auto md:z-auto md:mx-0 md:mt-0 md:mb-4 md:border-0 md:bg-transparent md:px-0 md:pt-0'
+            ? 'order-2 sticky bottom-0 z-20 -mx-3 border-t border-white/10 hl-surf-0 px-3 pt-3 mt-3 md:static md:bottom-auto md:z-auto md:mx-0 md:mt-0 md:mb-4 md:border-0 md:bg-transparent md:px-0 md:pt-0'
             : 'mb-4'
         }`}
       >
@@ -1203,7 +1203,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
             const isToday = key === TODAY;
             const dayTodos = myTodosByDay[key] ?? [];
             return (
-              <div key={key} className={`shrink-0 w-64 bg-[#060E0F]/40 border border-white/5 rounded-xl p-2.5 flex flex-col ${persist ? 'h-full' : 'min-h-[14rem]'}`}>
+              <div key={key} className={`shrink-0 w-64 hl-surf-soft border border-white/5 rounded-xl p-2.5 flex flex-col ${persist ? 'h-full' : 'min-h-[14rem]'}`}>
                 <div className="flex items-baseline justify-between px-1 mb-2">
                   <span className={`font-display font-bold text-sm uppercase tracking-tight ${isToday ? 'text-brand-accent-light' : 'text-white'}`}>
                     {WEEKDAYS_FULL[(d.getDay() + 6) % 7]}
@@ -1217,7 +1217,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                     dayTodos.map((t) => {
                       const done = t.status === 'erledigt';
                       return (
-                        <div key={t.id} onClick={() => setOpenTask(t)} className={`bg-[#0a1110] border border-white/5 rounded-lg p-2.5 cursor-pointer hover:border-white/15 transition-colors flex items-start gap-2 ${done ? 'opacity-60' : ''}`}>
+                        <div key={t.id} onClick={() => setOpenTask(t)} className={`hl-surf border border-white/5 rounded-lg p-2.5 cursor-pointer hover:border-white/15 transition-colors flex items-start gap-2 ${done ? 'opacity-60' : ''}`}>
                           <button onClick={(e) => { e.stopPropagation(); quickSetStatus(t, done ? 'offen' : 'erledigt'); }} className="shrink-0 cursor-pointer mt-0.5" title={done ? 'Als offen markieren' : 'Als erledigt markieren'}>
                             {done ? <CheckSquare className="w-5 h-5 text-brand-accent-light" /> : <Square className="w-5 h-5 text-hl-mute" />}
                           </button>
@@ -1265,7 +1265,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                   )}
                   <button
                     onClick={() => setOpenTask(t)}
-                    className={`w-full text-left bg-[#0a1110] border border-white/5 rounded-xl p-3 cursor-pointer hover:border-white/15 flex items-center gap-3 ${past ? 'opacity-60' : ''}`}
+                    className={`w-full text-left hl-surf border border-white/5 rounded-xl p-3 cursor-pointer hover:border-white/15 flex items-center gap-3 ${past ? 'opacity-60' : ''}`}
                   >
                     <span className="w-1.5 self-stretch rounded-full shrink-0" style={{ background: t.type === 'beides' ? '#E9C46A' : '#22DFC9' }} />
                     <div className="min-w-0 flex-1">
@@ -1322,7 +1322,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                         <div
                           key={t.id}
                           onClick={() => setOpenTask(t)}
-                          className={`bg-[#0a1110] border border-white/5 rounded-xl p-3 cursor-pointer hover:border-white/15 flex items-center gap-3 ${done ? 'opacity-60' : ''}`}
+                          className={`hl-surf border border-white/5 rounded-xl p-3 cursor-pointer hover:border-white/15 flex items-center gap-3 ${done ? 'opacity-60' : ''}`}
                         >
                           <button
                             onClick={(e) => { e.stopPropagation(); quickSetStatus(t, done ? 'offen' : 'erledigt'); }}
@@ -1362,7 +1362,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
         })()
       ) : view === 'month' ? (
         /* -------- MONATSANSICHT (Google-Stil, bildschirmfüllend, Mehrtages-Balken) -------- */
-        <div className="rounded-xl border border-white/5 overflow-hidden bg-[#0a1110]">
+        <div className="rounded-xl border border-white/5 overflow-hidden hl-surf">
           <div className="grid grid-cols-7 border-b border-white/5">
             {WEEKDAYS.map((w) => (
               <div key={w} className="text-center text-[10px] font-mono uppercase tracking-wider text-hl-dim py-1.5">{w}</div>
@@ -1386,7 +1386,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                       key={key}
                       onClick={() => openDay(key)}
                       className={`border-l border-b border-white/5 first:border-l-0 px-0.5 pt-1 cursor-pointer transition-colors ${
-                        inMonth ? 'hover:bg-white/[.03]' : 'bg-[#070d0c]/40'
+                        inMonth ? 'hover:bg-white/[.03]' : 'hl-surf-soft'
                       }`}
                       style={{ minHeight: barsTop + laneAreaH + 14 }}
                     >
@@ -1446,7 +1446,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
             const isToday = key === TODAY;
             const dayTasks = tasksByDay[key] ?? [];
             return (
-              <div key={key} className={`shrink-0 w-64 bg-[#060E0F]/40 border border-white/5 rounded-xl p-2.5 flex flex-col ${persist ? 'h-full' : 'min-h-[14rem]'}`}>
+              <div key={key} className={`shrink-0 w-64 hl-surf-soft border border-white/5 rounded-xl p-2.5 flex flex-col ${persist ? 'h-full' : 'min-h-[14rem]'}`}>
                 <div className="flex items-baseline justify-between px-1 mb-2">
                   <span className={`font-display font-bold text-sm uppercase tracking-tight ${isToday ? 'text-brand-accent-light' : 'text-white'}`}>
                     {WEEKDAYS_FULL[(d.getDay() + 6) % 7]}
@@ -1456,7 +1456,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                 {hl[key] && <div className="mb-2"><HighlightPill h={hl[key]} className="!text-[11px] !leading-[18px] py-0.5 text-center" /></div>}
                 <div className={`space-y-2 min-h-[2rem] ${persist ? 'flex-1 overflow-y-auto' : 'flex-1'}`}>
                   {dayTasks.map((t) => (
-                    <div key={t.id} onClick={() => setOpenTask(t)} className="bg-[#0a1110] border border-white/5 rounded-lg p-2.5 cursor-pointer hover:border-white/15 transition-colors">
+                    <div key={t.id} onClick={() => setOpenTask(t)} className="hl-surf border border-white/5 rounded-lg p-2.5 cursor-pointer hover:border-white/15 transition-colors">
                       <span className="block text-sm font-sans text-white leading-snug break-words">{t.title}</span>
                       <div className="flex items-center gap-1.5 mt-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
                         <select

@@ -694,3 +694,65 @@ body {
 .hl-cal-glow {
   animation: hlCalGlow 2.6s ease-in-out infinite;
 }
+
+/* =====================================================================
+   Team-App (Chats · Aufgaben · Kalender · Tickets) – heller, cleaner Look.
+   Scoped auf .hl-team, damit die öffentliche Website unberührt dunkel bleibt.
+   Bewusst so gebaut, dass der schlimmste Fall KOSMETISCH ist (nie unsichtbarer
+   Text): text-white -> dunkle Tinte, helle Ränder/Overlays -> dunkle Pendants.
+   ===================================================================== */
+.hl-team {
+  /* Text-Tokens: dunkel auf hell – alle text-hl-* ziehen automatisch mit. */
+  --color-hl-text: #12211E;
+  --color-hl-soft: #384A46;
+  --color-hl-mute: #5C716E;
+  --color-hl-dim: #7C8F8B;
+  --color-hl-faint: #A4B2AF;
+  color: var(--color-hl-text);
+}
+/* Voll-deckendes text-white -> dunkle Tinte (nie unsichtbar). Die /xx-Varianten
+   (z. B. Bubble-Zeit auf Farbe) bleiben bewusst weiß. */
+.hl-team .text-white { color: #12211E; }
+/* Helle Ränder -> dezente dunkle Haarlinien (Trennkanten bleiben sichtbar). */
+.hl-team [class*="border-white"] { border-color: rgba(16, 42, 38, 0.10); }
+/* Subtile weiße Overlays (Hover/Fill) -> subtile dunkle Overlays. */
+.hl-team [class*="bg-white/"] { background-color: rgba(16, 42, 38, 0.05); }
+/* Heller Chat-Hintergrund mit zartem Punktraster. */
+.hl-team .hl-chat-bg {
+  background-color: #F1F6F5;
+  background-image:
+    radial-gradient(rgba(18, 174, 198, 0.10) 0.5px, transparent 0.5px),
+    radial-gradient(rgba(16, 42, 38, 0.03) 1px, transparent 1px);
+  background-size: 26px 26px, 26px 26px;
+  background-position: 0 0, 13px 13px;
+}
+/* Karten & Modals hell. */
+.hl-team .hl-card {
+  background: #FFFFFF;
+  border: 1px solid rgba(16, 42, 38, 0.08);
+  box-shadow: 0 18px 44px -22px rgba(16, 42, 40, 0.30);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.hl-team .hl-modal-card { background: #FFFFFF !important; }
+/* Glas-Chrome hell (falls im Team-Bereich verwendet). */
+.hl-team .hl-glass-nav,
+.hl-team .hl-glass-dock,
+.hl-team .hl-glass-panel {
+  background: rgba(255, 255, 255, 0.85) !important;
+}
+/* Weiße Scrollbars -> dunkle, dezente Scrollbars im hellen Bereich. */
+.hl-team ::-webkit-scrollbar-thumb { background: rgba(16, 42, 38, 0.14); }
+.hl-team ::-webkit-scrollbar-thumb:hover { background: rgba(16, 42, 38, 0.24); }
+/* Weißes Hero-League-Logo in der hellen Kopfzeile einfärben (sonst unsichtbar). */
+.hl-team .hl-applogo { filter: brightness(0) saturate(100%); opacity: 0.9; }
+
+/* Neutrale Flächen für die GETEILTEN Komponenten (Aufgaben/Kalender/Tickets),
+   die AUCH im dunklen Backoffice laufen: dunkel als Standard, hell nur unter
+   .hl-team (Team-App). So bleibt das Backoffice unberührt dunkel. */
+.hl-surf { background: #0a1110; }
+.hl-team .hl-surf { background: #FFFFFF; }
+.hl-surf-0 { background: #060E0F; }
+.hl-team .hl-surf-0 { background: #EEF3F4; }
+.hl-surf-soft { background: rgba(6, 14, 15, 0.4); }
+.hl-team .hl-surf-soft { background: rgba(255, 255, 255, 0.6); }
