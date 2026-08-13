@@ -20,6 +20,9 @@ import {
   Trash2,
   UserPlus,
   Check,
+  Smile,
+  Pencil,
+  Copy,
   Image as ImageIcon,
 } from 'lucide-react';
 import type { Conversation, ChatMessage, TeamMember, Ticket, Task, UserStatus } from '../types';
@@ -37,6 +40,9 @@ import {
   removeGroupMember,
   sendPresence,
   fetchPresence,
+  reactMessage,
+  editMessage,
+  deleteMessage,
   type ChatSearchHit,
 } from '../lib/chat';
 import { fetchTeam, fetchTickets, fetchAllTasks, fetchTask, memberMap } from '../lib/collab';
@@ -368,6 +374,7 @@ function Composer({
   const [attach, setAttach] = useState<Attachment | null>(null);
   const [picker, setPicker] = useState<null | 'ticket' | 'task' | 'termin'>(null);
   const [sheet, setSheet] = useState(false);
+  const [emoji, setEmoji] = useState(false);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -518,7 +525,15 @@ function Composer({
         <input ref={galleryRef} type="file" accept="image/*" className="hidden" onChange={(e) => { void onFileChosen(e.target.files?.[0]); e.target.value = ''; }} />
         <input ref={docRef} type="file" className="hidden" onChange={(e) => { void onFileChosen(e.target.files?.[0]); e.target.value = ''; }} />
 
-        <div className="flex-1 flex items-end bg-[#0e1a18] border border-white/10 rounded-3xl px-4 focus-within:border-brand-accent-light/60 transition-colors">
+        <div className="flex-1 flex items-end bg-[#0e1a18] border border-white/10 rounded-3xl pl-2 pr-4 focus-within:border-brand-accent-light/60 transition-colors">
+          <button
+            type="button"
+            onClick={() => setEmoji(true)}
+            title="Emoji"
+            className="p-2 mb-1.5 text-hl-mute hover:text-brand-accent-light cursor-pointer shrink-0"
+          >
+            <Smile className="w-6 h-6" />
+          </button>
           <textarea
             ref={taRef}
             value={body}
@@ -575,12 +590,86 @@ function Composer({
             onClose={() => setPicker(null)}
           />
         )}
+        {emoji && <EmojiPicker onPick={(e) => setBody((b) => b + e)} onClose={() => setEmoji(false)} />}
       </AnimatePresence>
     </div>
   );
 }
 
+// --- Emoji-Reaktionen & -Auswahl -------------------------------------------
+const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '😍'];
+const EMOJIS = [
+  '😀','😃','😄','😁','😆','😅','😂','🤣','🥲','😊','😇','🙂','🙃','😉','😌','😍',
+  '🥰','😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🥳','🤩',
+  '😏','😒','😞','😔','😟','😕','🙁','☹️','😣','😖','😫','😩','🥺','😢','😭','😤',
+  '😠','😡','🤬','🤯','😳','🥵','🥶','😱','😨','😰','😥','😓','🤗','🤔','🤭','🤫',
+  '😶','😐','😑','😬','🙄','😯','😦','😧','😮','😲','🥱','😴','🤤','😪','🤐','🥴',
+  '🤢','🤮','🤧','😷','🤒','🤕','🤑','🤠','😈','👿','👍','👎','👏','🙏','💪','🔥',
+  '❤️','🧡','💛','💚','💙','💜','🖤','🤍','💯','🎉','✅','❌','⚽','🏆','🥇','👀',
+];
+
+// Voll-Emoji-Auswahl (für „+" bei Reaktionen und die Emoji-Taste im Eingabefeld).
+function EmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose: () => void }) {
+  const backdrop = useBackdropDismiss(onClose);
+  useBackClose(true, onClose);
+  return (
+    <ModalPortal>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[85] bg-black/70 flex items-end sm:items-center justify-center p-0 sm:p-4"
+        {...backdrop}
+      >
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 20, opacity: 0 }}
+          className="w-full sm:max-w-md bg-[#0f1614] border border-white/10 rounded-t-2xl sm:rounded-2xl p-3 max-h-[55vh] overflow-y-auto"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="grid grid-cols-8 gap-1">
+            {EMOJIS.map((e, i) => (
+              <button key={`${e}-${i}`} onClick={() => onPick(e)} className="text-2xl leading-none p-1.5 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer">
+                {e}
+              </button>
+            ))}
+          </div>
+        </motion.div>
+      </motion.div>
+    </ModalPortal>
+  );
+}
+
+// Lange-Drücken (Touch) bzw. Rechtsklick (Desktop) erkennen – öffnet das
+// Nachrichten-Menü (Reagieren/Bearbeiten/Löschen), wie bei WhatsApp.
+function useLongPress(onLongPress: () => void, ms = 420) {
+  const timer = useRef<number | null>(null);
+  const clear = () => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+  };
+  return {
+    onContextMenu: (e: React.MouseEvent) => { e.preventDefault(); onLongPress(); },
+    onTouchStart: () => { clear(); timer.current = window.setTimeout(onLongPress, ms); },
+    onTouchEnd: clear,
+    onTouchMove: clear,
+    onTouchCancel: clear,
+  };
+}
+
 // --- Eine Nachricht ---------------------------------------------------------
+function ActionBtn({ icon: Icon, label, onClick, tone }: { icon: typeof Trash2; label: string; onClick: () => void; tone?: 'rose' }) {
+  return (
+    <button onClick={onClick} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[.06] active:bg-white/10 cursor-pointer text-left ${tone === 'rose' ? 'text-rose-300' : 'text-hl-soft'}`}>
+      <Icon className="w-5 h-5 shrink-0" /> <span className="text-sm font-sans font-semibold">{label}</span>
+    </button>
+  );
+}
+
 function MessageRow({
   m,
   mine,
@@ -590,8 +679,10 @@ function MessageRow({
   displayName,
   avatarUrl,
   highlight = false,
+  currentUserId,
   onOpenThread,
   onOpenAttachment,
+  onChanged,
 }: {
   m: ChatMessage;
   mine: boolean;
@@ -601,17 +692,77 @@ function MessageRow({
   displayName?: string;
   avatarUrl?: string;
   highlight?: boolean;
+  currentUserId?: string;
   onOpenThread?: (m: ChatMessage) => void;
   onOpenAttachment?: (type: 'ticket' | 'task', id: string) => void;
+  onChanged?: (m: ChatMessage) => void;
 }) {
   const name = displayName || m.authorName;
+  const deleted = !!m.deletedAt;
+  const [menu, setMenu] = useState(false);
+  const [pick, setPick] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(m.body);
+  const [busy, setBusy] = useState(false);
+  const longPress = useLongPress(() => { if (!deleted) setMenu(true); });
+  const menuBackdrop = useBackdropDismiss(() => setMenu(false));
+  useBackClose(menu, () => setMenu(false));
+  useBackClose(editing, () => setEditing(false));
+
+  const myEmoji = (m.reactions ?? []).find((r) => r.userId === currentUserId)?.emoji;
+  const react = async (emoji: string) => {
+    setMenu(false);
+    setPick(false);
+    try {
+      const res = await reactMessage(m.id, emoji);
+      onChanged?.({ ...m, reactions: res.reactions });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Reaktion fehlgeschlagen.');
+    }
+  };
+  const doDelete = async () => {
+    setMenu(false);
+    if (!window.confirm('Diese Nachricht für alle löschen?')) return;
+    try {
+      await deleteMessage(m.id);
+      onChanged?.({ ...m, deletedAt: new Date().toISOString(), body: '', attachType: null, attachId: null, attachTitle: null, attachUrl: null, attachMime: null, reactions: [] });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Löschen fehlgeschlagen.');
+    }
+  };
+  const saveEdit = async () => {
+    const t = editText.trim();
+    if (!t) return;
+    setBusy(true);
+    try {
+      const updated = await editMessage(m.id, t);
+      onChanged?.(updated);
+      setEditing(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Bearbeiten fehlgeschlagen.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Reaktionen bündeln: Emoji -> Anzahl (+ ob ich selbst reagiert habe).
+  const grouped: { emoji: string; count: number; mine: boolean }[] = [];
+  for (const r of m.reactions ?? []) {
+    const g = grouped.find((x) => x.emoji === r.emoji);
+    if (g) { g.count++; if (r.userId === currentUserId) g.mine = true; }
+    else grouped.push({ emoji: r.emoji, count: 1, mine: r.userId === currentUserId });
+  }
+
   const tailClass = firstOfRun ? (mine ? 'hl-bubble-out rounded-tr-md' : 'hl-bubble-in rounded-tl-md') : '';
+  const canEdit = mine && !deleted && !!m.body;
+
   return (
     <div data-mid={m.id} className={`flex gap-2 ${mine ? 'justify-end' : 'justify-start'} ${firstOfRun ? 'mt-2.5' : 'mt-0.5'}`}>
       {!mine && <div className="w-7 shrink-0 self-end">{firstOfRun && <Avatar name={name} url={avatarUrl} size={28} />}</div>}
       <div className={`max-w-[82%] ${mine ? 'items-end' : 'items-start'} flex flex-col`}>
         <div
-          className={`hl-bubble px-3 py-2 rounded-2xl shadow-sm shadow-black/20 ${mine ? 'text-white rounded-br-md' : 'text-hl-text rounded-bl-md'} ${tailClass} ${highlight ? 'ring-2 ring-brand-accent-light ring-offset-1 ring-offset-[#0a1210]' : ''}`}
+          {...(deleted ? {} : longPress)}
+          className={`hl-bubble px-3 py-2 rounded-2xl shadow-sm shadow-black/20 ${mine ? 'text-white rounded-br-md' : 'text-hl-text rounded-bl-md'} ${tailClass} ${highlight ? 'ring-2 ring-brand-accent-light ring-offset-1 ring-offset-[#0a1210]' : ''} ${deleted ? 'opacity-70' : 'select-none'}`}
           style={{ background: mine ? BUBBLE_MINE : BUBBLE_OTHER }}
         >
           {/* Gruppen: Name des Absenders in seiner (konstanten) Farbe */}
@@ -620,15 +771,41 @@ function MessageRow({
               {name}
             </div>
           )}
-          {m.body && <p className="text-[15px] font-sans whitespace-pre-wrap break-words leading-snug">{m.body}</p>}
-          <MessageAttachment m={m} mine={mine} onOpen={onOpenAttachment} />
+          {deleted ? (
+            <p className="text-[15px] font-sans italic text-white/60 flex items-center gap-1.5">
+              <Trash2 className="w-3.5 h-3.5" /> Nachricht gelöscht
+            </p>
+          ) : (
+            <>
+              {m.body && <p className="text-[15px] font-sans whitespace-pre-wrap break-words leading-snug">{m.body}</p>}
+              <MessageAttachment m={m} mine={mine} onOpen={onOpenAttachment} />
+            </>
+          )}
           {/* Uhrzeit klein in der Bubble, rechts unten (KEINE Lesebestätigung) */}
-          <div className={`text-[10px] font-mono leading-none text-right mt-1 ${mine ? 'text-white/60' : 'text-hl-faint'}`}>
+          <div className={`text-[10px] font-mono leading-none text-right mt-1 flex items-center justify-end gap-1.5 ${mine ? 'text-white/60' : 'text-hl-faint'}`}>
+            {m.editedAt && !deleted && <span className="italic">bearbeitet</span>}
             {fmtClock(m.createdAt)}
           </div>
         </div>
+
+        {/* Reaktionen unter der Blase */}
+        {grouped.length > 0 && (
+          <div className={`flex flex-wrap gap-1 mt-1 ${mine ? 'justify-end' : 'justify-start'}`}>
+            {grouped.map((g) => (
+              <button
+                key={g.emoji}
+                onClick={() => react(g.emoji)}
+                className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border cursor-pointer ${g.mine ? 'bg-brand-accent-light/20 border-brand-accent-light/50' : 'bg-white/5 border-white/10'}`}
+              >
+                <span className="text-sm leading-none">{g.emoji}</span>
+                {g.count > 1 && <span className="text-[11px] font-mono text-hl-soft">{g.count}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Antworten dezent: nur Symbol, mit Zahl wenn schon Antworten da sind */}
-        {onOpenThread && (
+        {onOpenThread && !deleted && (
           <button
             onClick={() => onOpenThread(m)}
             className="mt-0.5 px-1 text-[10px] font-mono text-hl-faint hover:text-brand-accent-light cursor-pointer flex items-center gap-1"
@@ -638,6 +815,82 @@ function MessageRow({
           </button>
         )}
       </div>
+
+      {/* Aktions-Menü (lange drücken / Rechtsklick) */}
+      {menu && (
+        <ModalPortal>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[80] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4"
+            {...menuBackdrop}
+          >
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 20, opacity: 0 }}
+              className="w-full sm:max-w-sm bg-[#12211f] border-t sm:border border-white/10 rounded-t-2xl sm:rounded-2xl p-3"
+              style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-1 bg-[#0a1110] rounded-full px-2 py-1.5 mb-3">
+                {QUICK_REACTIONS.map((e) => (
+                  <button
+                    key={e}
+                    onClick={() => react(e)}
+                    className={`text-2xl leading-none p-1 rounded-full cursor-pointer ${myEmoji === e ? 'bg-brand-accent-light/25' : 'hover:bg-white/10'}`}
+                  >
+                    {e}
+                  </button>
+                ))}
+                <button onClick={() => { setMenu(false); setPick(true); }} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-hl-soft hover:text-white cursor-pointer shrink-0">
+                  <Plus className="w-5 h-5" />
+                </button>
+              </div>
+              {onOpenThread && <ActionBtn icon={MessageSquare} label="Antworten" onClick={() => { setMenu(false); onOpenThread(m); }} />}
+              {!!m.body && <ActionBtn icon={Copy} label="Kopieren" onClick={() => { setMenu(false); navigator.clipboard?.writeText(m.body).catch(() => {}); }} />}
+              {canEdit && <ActionBtn icon={Pencil} label="Bearbeiten" onClick={() => { setMenu(false); setEditText(m.body); setEditing(true); }} />}
+              {mine && !deleted && <ActionBtn icon={Trash2} label="Für alle löschen" tone="rose" onClick={doDelete} />}
+            </motion.div>
+          </motion.div>
+        </ModalPortal>
+      )}
+
+      {pick && <EmojiPicker onPick={react} onClose={() => setPick(false)} />}
+
+      {editing && (
+        <ModalPortal>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[82] bg-black/70 flex items-center justify-center p-4"
+            onClick={() => setEditing(false)}
+          >
+            <div className="hl-card hl-modal-card w-full max-w-md p-4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-display font-bold text-white uppercase tracking-tight">Nachricht bearbeiten</h4>
+                <button onClick={() => setEditing(false)} className="p-1 text-hl-mute hover:text-white cursor-pointer"><X className="w-5 h-5" /></button>
+              </div>
+              <textarea
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                rows={3}
+                autoFocus
+                className="w-full bg-[#060E0F] border border-white/10 rounded-xl px-3 py-2 text-[15px] text-white focus:outline-none focus:border-brand-accent-light resize-y"
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(); } }}
+              />
+              <div className="flex justify-end gap-2 mt-3">
+                <button onClick={() => setEditing(false)} className="px-3 py-2 rounded-lg text-sm text-hl-mute hover:text-white cursor-pointer">Abbrechen</button>
+                <button onClick={saveEdit} disabled={busy || !editText.trim()} className="px-4 py-2 rounded-lg text-sm font-semibold bg-brand-accent-light hover:bg-brand-accent text-white cursor-pointer disabled:opacity-50 flex items-center gap-1.5">
+                  {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Speichern
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </ModalPortal>
+      )}
     </div>
   );
 }
@@ -678,6 +931,7 @@ function ThreadModal({
   highlightId,
   onClose,
   onReplyAdded,
+  onParentChanged,
 }: {
   conversationId: string;
   parent: ChatMessage;
@@ -686,9 +940,12 @@ function ThreadModal({
   highlightId?: string | null;
   onClose: () => void;
   onReplyAdded: () => void;
+  onParentChanged?: (m: ChatMessage) => void;
 }) {
   const [replies, setReplies] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [parentMsg, setParentMsg] = useState(parent);
+  useEffect(() => setParentMsg(parent), [parent]);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(() => {
@@ -740,7 +997,15 @@ function ThreadModal({
         </div>
         <div ref={bodyRef} className="flex-1 overflow-y-auto p-3 hl-chat-bg">
           <div className="pb-3 mb-1 border-b border-white/5">
-            <MessageRow m={parent} mine={parent.authorId === currentUserId} showAuthor colorSeed={conversationId} highlight={highlightId === parent.id} />
+            <MessageRow
+              m={parentMsg}
+              mine={parentMsg.authorId === currentUserId}
+              showAuthor
+              colorSeed={conversationId}
+              highlight={highlightId === parentMsg.id}
+              currentUserId={currentUserId}
+              onChanged={(um) => { setParentMsg((p) => ({ ...p, ...um })); onParentChanged?.(um); }}
+            />
           </div>
           {loading ? (
             <div className="flex justify-center py-6 text-hl-mute">
@@ -759,6 +1024,8 @@ function ThreadModal({
                   showAuthor={!block}
                   colorSeed={conversationId}
                   highlight={highlightId === r.id}
+                  currentUserId={currentUserId}
+                  onChanged={(um) => setReplies((prev) => prev.map((x) => (x.id === um.id ? { ...x, ...um } : x)))}
                 />
               );
             })
@@ -1679,8 +1946,10 @@ export default function ChatSystem({
                         displayName={mem?.name}
                         avatarUrl={mem?.avatarUrl}
                         highlight={highlightId === m.id}
+                        currentUserId={currentUserId}
                         onOpenThread={setThread}
                         onOpenAttachment={openAttachment}
+                        onChanged={(um) => setMessages((prev) => prev.map((x) => (x.id === um.id ? { ...x, ...um } : x)))}
                       />
                     </React.Fragment>
                   );
@@ -1727,6 +1996,7 @@ export default function ChatSystem({
             highlightId={threadHighlightId}
             onClose={goBackLayer}
             onReplyAdded={() => activeId && loadMessages(activeId, true)}
+            onParentChanged={(um) => setMessages((prev) => prev.map((x) => (x.id === um.id ? { ...x, ...um } : x)))}
           />
         )}
         {showInfo && active && (

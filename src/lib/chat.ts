@@ -1,6 +1,6 @@
 // Client-Helfer für den internen Chat (Phase 3).
 import { apiFetch } from './api';
-import type { Conversation, ChatMessage, ChatPresence } from '../types';
+import type { Conversation, ChatMessage, ChatPresence, MessageReaction } from '../types';
 
 export const fetchConversations = () =>
   apiFetch<Conversation[]>('/api/chat?resource=conversations');
@@ -33,6 +33,25 @@ export const sendMessage = (input: {
   attachUrl?: string | null;
   attachMime?: string | null;
 }) => apiFetch<ChatMessage>('/api/chat?resource=messages', { method: 'POST', body: JSON.stringify(input) });
+
+// Emoji-Reaktion setzen/umschalten. Antwort = aktuelle Reaktionsliste.
+export const reactMessage = (messageId: string, emoji: string) =>
+  apiFetch<{ messageId: string; reactions: MessageReaction[] }>('/api/chat?resource=react', {
+    method: 'POST',
+    body: JSON.stringify({ messageId, emoji }),
+  });
+
+// Eigene Nachricht bearbeiten (gibt die aktualisierte Nachricht zurück).
+export const editMessage = (messageId: string, body: string) =>
+  apiFetch<ChatMessage>('/api/chat?resource=messages', { method: 'PATCH', body: JSON.stringify({ messageId, body }) });
+
+// Eigene Nachricht für alle zurücknehmen. messageId zusätzlich im Query, falls
+// der DELETE-Body serverseitig nicht geparst wird.
+export const deleteMessage = (messageId: string) =>
+  apiFetch<{ ok: true; id: string }>(`/api/chat?resource=messages&messageId=${encodeURIComponent(messageId)}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ messageId }),
+  });
 
 export const markConversationRead = (conversationId: string) =>
   apiFetch('/api/chat?resource=read', { method: 'POST', body: JSON.stringify({ conversationId }) });

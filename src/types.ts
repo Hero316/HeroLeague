@@ -440,6 +440,12 @@ export interface ChatLastMessage {
   authorName: string;
   createdAt: string;
   attachType: 'ticket' | 'task' | 'file' | 'audio' | null;
+  deleted?: boolean; // Nachricht wurde zurückgenommen
+}
+
+export interface MessageReaction {
+  userId: string;
+  emoji: string;
 }
 
 export interface Conversation {
@@ -476,5 +482,8 @@ export interface ChatMessage {
   attachUrl: string | null; // file/audio: Blob-URL
   attachMime: string | null; // file: MIME-Typ (für Vorschau/Icon)
   createdAt: string;
+  editedAt?: string | null; // gesetzt = nachträglich bearbeitet
+  deletedAt?: string | null; // gesetzt = für alle zurückgenommen
+  reactions?: MessageReaction[]; // Emoji-Reaktionen
   replyCount?: number; // nur bei Top-Level-Nachrichten
 }

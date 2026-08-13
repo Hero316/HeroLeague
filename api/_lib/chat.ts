@@ -30,8 +30,11 @@ export async function conversations(req: VercelRequest, res: VercelResponse) {
              AND m.created_at > cm.last_read_at AND m.author_id <> ${uid}) AS unread,
         (SELECT json_agg(json_build_object('userId', x.user_id, 'userName', x.user_name))
            FROM conversation_members x WHERE x.conversation_id = c.id) AS members,
-        (SELECT json_build_object('body', m.body, 'authorName', m.author_name,
-                                  'createdAt', m.created_at, 'attachType', m.attach_type)
+        (SELECT json_build_object(
+                  'body', CASE WHEN m.deleted_at IS NULL THEN m.body ELSE '' END,
+                  'authorName', m.author_name, 'createdAt', m.created_at,
+                  'attachType', CASE WHEN m.deleted_at IS NULL THEN m.attach_type END,
+                  'deleted', m.deleted_at IS NOT NULL)
            FROM messages m WHERE m.conversation_id = c.id AND m.parent_id IS NULL
            ORDER BY m.created_at DESC LIMIT 1) AS "lastMessage"
       FROM conversations c
@@ -92,10 +95,16 @@ export async function conversations(req: VercelRequest, res: VercelResponse) {
 // --- Nachrichten ------------------------------------------------------------
 const MSG_COLS = `
   m.id, m.conversation_id AS "conversationId", m.parent_id AS "parentId",
-  m.author_id AS "authorId", m.author_name AS "authorName", m.body,
-  m.attach_type AS "attachType", m.attach_id AS "attachId", m.attach_title AS "attachTitle",
-  m.attach_url AS "attachUrl", m.attach_mime AS "attachMime",
-  m.created_at AS "createdAt"
+  m.author_id AS "authorId", m.author_name AS "authorName",
+  CASE WHEN m.deleted_at IS NULL THEN m.body ELSE '' END AS body,
+  CASE WHEN m.deleted_at IS NULL THEN m.attach_type END AS "attachType",
+  CASE WHEN m.deleted_at IS NULL THEN m.attach_id END AS "attachId",
+  CASE WHEN m.deleted_at IS NULL THEN m.attach_title END AS "attachTitle",
+  CASE WHEN m.deleted_at IS NULL THEN m.attach_url END AS "attachUrl",
+  CASE WHEN m.deleted_at IS NULL THEN m.attach_mime END AS "attachMime",
+  m.edited_at AS "editedAt", m.deleted_at AS "deletedAt", m.created_at AS "createdAt",
+  COALESCE((SELECT json_agg(json_build_object('userId', r.user_id, 'emoji', r.emoji) ORDER BY r.created_at)
+            FROM message_reactions r WHERE r.message_id = m.id), '[]'::json) AS reactions
 `;
 
 // Nur http(s)-URLs als Anhang zulassen (kein javascript:/data:).
@@ -170,7 +179,8 @@ export async function messages(req: VercelRequest, res: VercelResponse) {
       RETURNING id, conversation_id AS "conversationId", parent_id AS "parentId",
         author_id AS "authorId", author_name AS "authorName", body,
         attach_type AS "attachType", attach_id AS "attachId", attach_title AS "attachTitle",
-        attach_url AS "attachUrl", attach_mime AS "attachMime", created_at AS "createdAt"
+        attach_url AS "attachUrl", attach_mime AS "attachMime",
+        edited_at AS "editedAt", deleted_at AS "deletedAt", created_at AS "createdAt"
     `;
     await sql`UPDATE conversations SET updated_at = now() WHERE id = ${conversationId}`;
 
@@ -203,10 +213,75 @@ export async function messages(req: VercelRequest, res: VercelResponse) {
       if (cm.userId === uid || mentioned.has(cm.userId)) continue;
       await sendPushToUser(cm.userId, { title: pushTitle, body: pushBody, url: '/admin' });
     }
-    return res.json({ ...(inserted[0] as object), replyCount: 0 });
+    return res.json({ ...(inserted[0] as object), reactions: [], replyCount: 0 });
+  }
+
+  // --- Nachricht bearbeiten (nur eigene, nicht gelöschte) -------------------
+  if (req.method === 'PATCH') {
+    const b = req.body ?? {};
+    const messageId = typeof b.messageId === 'string' ? b.messageId : '';
+    if (!messageId) return badRequest(res, 'Nachrichten-ID fehlt.');
+    if (!isNonEmptyString(b.body)) return badRequest(res, 'Nachricht darf nicht leer sein.');
+    const own = await sql`SELECT author_id, deleted_at FROM messages WHERE id = ${messageId} LIMIT 1`;
+    const row = own[0] as { author_id: string; deleted_at: string | null } | undefined;
+    if (!row) return res.status(404).json({ error: 'Nachricht nicht gefunden.' });
+    if (row.author_id !== uid) return res.status(403).json({ error: 'Nur eigene Nachrichten können bearbeitet werden.' });
+    if (row.deleted_at) return badRequest(res, 'Gelöschte Nachricht kann nicht bearbeitet werden.');
+    await sql`UPDATE messages SET body = ${b.body.slice(0, 8000)}, edited_at = now() WHERE id = ${messageId}`;
+    const updated = await sql.query(`SELECT ${MSG_COLS} FROM messages m WHERE m.id = $1`, [messageId]);
+    return res.json(updated[0] ?? { ok: true });
+  }
+
+  // --- Nachricht für alle löschen (nur eigene) ------------------------------
+  if (req.method === 'DELETE') {
+    const messageId = typeof req.body?.messageId === 'string' ? req.body.messageId : String(req.query.messageId ?? '');
+    if (!messageId) return badRequest(res, 'Nachrichten-ID fehlt.');
+    const own = await sql`SELECT author_id FROM messages WHERE id = ${messageId} LIMIT 1`;
+    const row = own[0] as { author_id: string } | undefined;
+    if (!row) return res.status(404).json({ error: 'Nachricht nicht gefunden.' });
+    if (row.author_id !== uid) return res.status(403).json({ error: 'Nur eigene Nachrichten können gelöscht werden.' });
+    // Inhalt tatsächlich leeren (nicht nur ausblenden) + als gelöscht markieren.
+    await sql`UPDATE messages SET deleted_at = now(), body = '', attach_type = NULL, attach_id = NULL, attach_title = NULL, attach_url = NULL, attach_mime = NULL WHERE id = ${messageId}`;
+    await sql`DELETE FROM message_reactions WHERE message_id = ${messageId}`;
+    return res.json({ ok: true, id: messageId });
   }
 
   return res.status(405).json({ error: 'Nicht unterstützt' });
+}
+
+// --- Emoji-Reaktion setzen/umschalten ---------------------------------------
+// POST /api/chat?resource=react { messageId, emoji }
+// Eine Reaktion pro Nutzer & Nachricht: gleicher Emoji = weg (Toggle), anderer
+// Emoji = ersetzt. Antwort: aktuelle Reaktionsliste der Nachricht.
+export async function reactMessage(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
+  const uid = session.userId;
+  const b = req.body ?? {};
+  const messageId = typeof b.messageId === 'string' ? b.messageId : '';
+  const emoji = typeof b.emoji === 'string' ? b.emoji.slice(0, 16) : '';
+  if (!messageId || !emoji) return badRequest(res, 'Angaben fehlen.');
+
+  const rows = await sql`SELECT conversation_id, deleted_at FROM messages WHERE id = ${messageId} LIMIT 1`;
+  const msg = rows[0] as { conversation_id: string; deleted_at: string | null } | undefined;
+  if (!msg || msg.deleted_at) return res.status(404).json({ error: 'Nachricht nicht gefunden.' });
+  if (!(await isMember(msg.conversation_id, uid))) return res.status(403).json({ error: 'Kein Zugriff auf diese Unterhaltung.' });
+
+  const existing = await sql`SELECT emoji FROM message_reactions WHERE message_id = ${messageId} AND user_id = ${uid} LIMIT 1`;
+  const current = (existing[0] as { emoji: string } | undefined)?.emoji;
+  if (current === emoji) {
+    await sql`DELETE FROM message_reactions WHERE message_id = ${messageId} AND user_id = ${uid}`;
+  } else {
+    await sql`
+      INSERT INTO message_reactions (message_id, user_id, emoji) VALUES (${messageId}, ${uid}, ${emoji})
+      ON CONFLICT (message_id, user_id) DO UPDATE SET emoji = EXCLUDED.emoji, created_at = now()
+    `;
+  }
+  const reactions = await sql`
+    SELECT user_id AS "userId", emoji FROM message_reactions WHERE message_id = ${messageId} ORDER BY created_at
+  `;
+  return res.json({ messageId, reactions });
 }
 
 // --- Globale Suche (nur eigene Unterhaltungen) ------------------------------
