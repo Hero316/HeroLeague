@@ -27,7 +27,7 @@ import {
 } from '../lib/collab';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
-import { useBackdropDismiss, ModalPortal } from './ui';
+import { useBackdropDismiss, ModalPortal, SegmentedControl } from './ui';
 
 const inputClass =
   'w-full bg-[#060E0F] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent-light';
@@ -546,30 +546,27 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
       {/* Steuerleiste. Im Handy-App-Modus (persist) unten – mit dem Daumen
           erreichbar; ab md wieder oben. */}
       <div
-        className={`flex flex-wrap items-center justify-between gap-3 ${
+        className={`flex items-center justify-between gap-3 ${
           persist
             ? 'order-2 sticky bottom-0 z-20 -mx-3 border-t border-white/10 bg-[#060E0F] px-3 pt-3 mt-3 md:static md:bottom-auto md:z-auto md:mx-0 md:mt-0 md:mb-4 md:border-0 md:bg-transparent md:px-0 md:pt-0'
             : 'mb-4'
         }`}
       >
-        <div className="flex items-center gap-1.5 bg-[#060E0F]/40 border border-white/10 rounded-xl p-1">
-          {(['offen', 'abgeschlossen', 'alle'] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-sans font-semibold transition-colors cursor-pointer ${
-                filter === f ? 'bg-brand-accent-light text-white' : 'text-hl-mute hover:text-white'
-              }`}
-            >
-              {f === 'offen' ? 'Offen' : f === 'abgeschlossen' ? 'Abgeschlossen' : 'Alle'}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          groupId="ticketfilter"
+          value={filter}
+          onChange={(v) => setFilter(v)}
+          options={[
+            { value: 'offen' as const, label: 'Offen' },
+            { value: 'abgeschlossen' as const, label: 'Erledigt' },
+            { value: 'alle' as const, label: 'Alle' },
+          ]}
+        />
         <button
           onClick={() => setShowNew((v) => !v)}
-          className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white transition-colors cursor-pointer flex items-center gap-1.5"
+          className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white transition-colors cursor-pointer flex items-center gap-1.5 shrink-0 active:scale-95"
         >
-          <Plus className="w-4 h-4" /> Neues Ticket
+          <Plus className="w-4 h-4" /> Neu
         </button>
       </div>
 

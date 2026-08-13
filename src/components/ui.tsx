@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { motion } from 'motion/react';
 import { ChevronDown, X, Smartphone, Search } from 'lucide-react';
 import { ActiveTab, Partner, PartnersConfig, Team } from '../types';
 import { apiFetch } from '../lib/api';
@@ -57,6 +58,53 @@ export function ModalPortal({ children }: { children: React.ReactNode }) {
   }, []);
   if (typeof document === 'undefined') return null;
   return createPortal(children, document.body);
+}
+
+// Animierter Umschalter (Segmented Control) mit gleitender Pille – wie bei
+// hochwertigen Apps. Die aktive Pille „fliegt" per layoutId sanft an die neue
+// Stelle, statt hart umzuspringen. groupId muss je Instanz eindeutig sein.
+export function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+  groupId,
+  className = '',
+}: {
+  options: { value: T; label: string; icon?: React.ComponentType<{ className?: string }> }[];
+  value: T;
+  onChange: (v: T) => void;
+  groupId: string;
+  className?: string;
+}) {
+  return (
+    <div className={`relative flex items-center gap-0.5 bg-[#060E0F]/50 border border-white/10 rounded-xl p-1 overflow-x-auto no-scrollbar max-w-full ${className}`}>
+      {options.map((o) => {
+        const active = o.value === value;
+        const Icon = o.icon;
+        return (
+          <button
+            key={o.value}
+            onClick={() => onChange(o.value)}
+            className={`relative px-2.5 py-1.5 rounded-lg text-xs font-sans font-bold uppercase tracking-wider cursor-pointer flex items-center gap-1.5 shrink-0 transition-colors duration-200 active:scale-95 ${
+              active ? 'text-white' : 'text-hl-mute hover:text-white'
+            }`}
+          >
+            {active && (
+              <motion.span
+                layoutId={`seg-${groupId}`}
+                className="absolute inset-0 rounded-lg bg-brand-accent-light shadow-sm shadow-brand-accent-light/30"
+                transition={{ type: 'spring', stiffness: 520, damping: 40 }}
+              />
+            )}
+            <span className="relative z-10 flex items-center gap-1.5">
+              {Icon && <Icon className="w-3.5 h-3.5" />}
+              {o.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 // Hex-Farbe abdunkeln (für die Verlaufs-Wappen)
