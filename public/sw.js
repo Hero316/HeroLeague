@@ -113,28 +113,58 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'Hero League';
   const body = data.body || '';
   const url = data.url || '/admin';
+
+  // Ziel-Chat aus der URL (?c=…) herauslesen – nur bei Chat-Pushs gesetzt.
+  let convId = null;
+  try {
+    convId = new URL(url, self.location.origin).searchParams.get('c');
+  } catch (e) {
+    convId = null;
+  }
+
   event.waitUntil(
-    self.registration
-      .showNotification(title, {
+    (async () => {
+      // „Bin ich eh schon drin?" – Wenn genau dieser Chat gerade sichtbar offen
+      // ist (gleiches Gerät, App im Vordergrund), KEINE Push-Benachrichtigung
+      // zeigen (wie WhatsApp). Erkennung über die offene Unterhaltung in der URL
+      // (?c=…), die der Chat live mitführt. Nur relevant für Chat-Pushs.
+      if (convId) {
+        try {
+          const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+          const openHere = wins.some((c) => {
+            if (c.visibilityState !== 'visible') return false;
+            try {
+              return new URL(c.url).searchParams.get('c') === convId;
+            } catch (e) {
+              return false;
+            }
+          });
+          if (openHere) return; // still: kein Banner, Badge unverändert lassen
+        } catch (e) {
+          /* im Zweifel Benachrichtigung zeigen */
+        }
+      }
+
+      await self.registration.showNotification(title, {
         body,
         icon: '/assets/icon-192.png',
         badge: '/assets/icon-192.png',
         tag: 'hl-chat',
         renotify: true,
         data: { url },
-      })
-      .then(() => {
-        // Zahl am App-Icon setzen (iOS 16.4+/Android, installierte PWA).
-        try {
-          if (self.navigator && self.navigator.setAppBadge) {
-            if (typeof data.badge === 'number' && data.badge > 0) self.navigator.setAppBadge(data.badge);
-            else if (self.navigator.clearAppBadge) self.navigator.clearAppBadge();
-            else self.navigator.setAppBadge();
-          }
-        } catch (e) {
-          /* ignoriert */
+      });
+
+      // Zahl am App-Icon setzen (iOS 16.4+/Android, installierte PWA).
+      try {
+        if (self.navigator && self.navigator.setAppBadge) {
+          if (typeof data.badge === 'number' && data.badge > 0) self.navigator.setAppBadge(data.badge);
+          else if (self.navigator.clearAppBadge) self.navigator.clearAppBadge();
+          else self.navigator.setAppBadge();
         }
-      }),
+      } catch (e) {
+        /* ignoriert */
+      }
+    })(),
   );
 });
 
