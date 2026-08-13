@@ -28,20 +28,20 @@ const STATUS_DOT: Record<TaskStatus, string> = {
   abgebrochen: 'bg-rose-500',
 };
 const STATUS_CELL: Record<TaskStatus, string> = {
-  leer: 'bg-slate-600/80 text-white',
-  offen: 'bg-sky-500/85 text-white',
-  in_bearbeitung: 'bg-amber-500/90 text-white',
-  erledigt: 'bg-emerald-500/85 text-white',
-  abgebrochen: 'bg-rose-600/85 text-white',
+  leer: 'bg-slate-200 text-slate-700',
+  offen: 'bg-sky-100 text-sky-700',
+  in_bearbeitung: 'bg-amber-100 text-amber-800',
+  erledigt: 'bg-emerald-100 text-emerald-700',
+  abgebrochen: 'bg-rose-100 text-rose-700',
 };
 const STATUSES: TaskStatus[] = ['leer', 'offen', 'in_bearbeitung', 'erledigt', 'abgebrochen'];
 
 const PRIORITY_LABEL: Record<TicketPriority, string> = { niedrig: 'Niedrig', mittel: 'Mittel', hoch: 'Hoch', dringend: 'Dringend' };
 const PRIORITY_CELL: Record<TicketPriority, string> = {
-  niedrig: 'bg-slate-500/80 text-white',
-  mittel: 'bg-sky-600/80 text-white',
-  hoch: 'bg-amber-500/90 text-white',
-  dringend: 'bg-rose-600/85 text-white',
+  niedrig: 'bg-slate-200 text-slate-600',
+  mittel: 'bg-sky-100 text-sky-700',
+  hoch: 'bg-amber-100 text-amber-800',
+  dringend: 'bg-rose-100 text-rose-700',
 };
 const PRIORITIES: TicketPriority[] = ['niedrig', 'mittel', 'hoch', 'dringend'];
 
@@ -580,7 +580,7 @@ export function TaskDetail({
                 onChange={setCommentBody}
                 onEnter={submitComment}
                 mentionable={team.map((m) => ({ id: m.id, name: m.name }))}
-                placeholder="Kommentar… (@Name erwähnt, Enter sendet)"
+                placeholder="Kommentar…"
                 rows={1}
                 className={inputClass}
               />
@@ -1239,7 +1239,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                     })
                   )}
                 </div>
-                <button onClick={() => setNewTask({ date: key, type: 'aufgabe' })} className="mt-2 w-full py-1.5 rounded-lg border border-dashed border-white/15 text-hl-mute hover:text-white hover:border-white/30 text-xs cursor-pointer flex items-center justify-center gap-1">
+                <button onClick={() => setNewTask({ date: key, type: 'aufgabe' })} className="mt-2 w-full py-2.5 rounded-xl border border-dashed border-black/10 text-hl-mute hover:text-brand-accent-light hover:border-brand-accent-light/40 text-[13px] font-medium cursor-pointer flex items-center justify-center gap-1.5 transition-colors active:scale-[.98]">
                   <Plus className="w-3.5 h-3.5" /> Aufgabe
                 </button>
               </div>
@@ -1484,7 +1484,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                     </div>
                   ))}
                 </div>
-                <button onClick={() => setNewTask({ date: key, type: 'termin' })} className="mt-2 w-full py-1.5 rounded-lg border border-dashed border-white/15 text-hl-mute hover:text-white hover:border-white/30 text-xs cursor-pointer flex items-center justify-center gap-1">
+                <button onClick={() => setNewTask({ date: key, type: 'termin' })} className="mt-2 w-full py-2.5 rounded-xl border border-dashed border-black/10 text-hl-mute hover:text-brand-accent-light hover:border-brand-accent-light/40 text-[13px] font-medium cursor-pointer flex items-center justify-center gap-1.5 transition-colors active:scale-[.98]">
                   <Plus className="w-3.5 h-3.5" /> Termin
                 </button>
               </div>

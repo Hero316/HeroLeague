@@ -39,10 +39,10 @@ const PRIORITY_LABEL: Record<TicketPriority, string> = {
   dringend: 'Dringend',
 };
 const PRIORITY_STYLE: Record<TicketPriority, string> = {
-  niedrig: 'bg-slate-500/15 text-slate-300 border-slate-400/30',
-  mittel: 'bg-sky-500/15 text-sky-300 border-sky-400/30',
-  hoch: 'bg-amber-500/15 text-amber-300 border-amber-400/30',
-  dringend: 'bg-rose-500/15 text-rose-300 border-rose-400/40',
+  niedrig: 'bg-slate-100 text-slate-600 border-slate-200',
+  mittel: 'bg-sky-100 text-sky-700 border-sky-200',
+  hoch: 'bg-amber-100 text-amber-800 border-amber-200',
+  dringend: 'bg-rose-100 text-rose-700 border-rose-200',
 };
 const STATUS_LABEL: Record<TicketStatus, string> = {
   offen: 'Offen',
@@ -51,10 +51,10 @@ const STATUS_LABEL: Record<TicketStatus, string> = {
   abgelehnt: 'Abgelehnt',
 };
 const STATUS_STYLE: Record<TicketStatus, string> = {
-  offen: 'bg-sky-500/15 text-sky-300 border-sky-400/30',
-  in_bearbeitung: 'bg-amber-500/15 text-amber-300 border-amber-400/30',
-  erledigt: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30',
-  abgelehnt: 'bg-white/5 text-hl-mute border-white/10',
+  offen: 'bg-sky-100 text-sky-700 border-sky-200',
+  in_bearbeitung: 'bg-amber-100 text-amber-800 border-amber-200',
+  erledigt: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  abgelehnt: 'bg-slate-100 text-slate-500 border-slate-200',
 };
 
 const PRIORITIES: TicketPriority[] = ['niedrig', 'mittel', 'hoch', 'dringend'];
@@ -349,7 +349,7 @@ export function TicketDetail({
                   onChange={setCommentBody}
                   onPaste={up.onPaste}
                   mentionable={team.map((m) => ({ id: m.id, name: m.name }))}
-                  placeholder="Kommentar schreiben… (Screenshot mit Strg+V einfügen, @Name zum Erwähnen)"
+                  placeholder="Kommentar…"
                   rows={2}
                   className={`${inputClass} resize-y`}
                 />
@@ -456,7 +456,7 @@ function NewTicketForm({ onCreated, onCancel }: { onCreated: () => void; onCance
           onChange={(e) => setDescription(e.target.value)}
           onPaste={up.onPaste}
           rows={4}
-          placeholder="Beschreibe die Idee. Screenshot? Einfach mit Strg+V hier einfügen."
+          placeholder="Beschreibe die Idee…"
           className={`${inputClass} resize-y`}
         />
         <ImageStrip images={up.images} onRemove={up.removeAt} />
