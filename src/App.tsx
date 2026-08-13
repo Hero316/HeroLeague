@@ -326,11 +326,23 @@ export default function App() {
     return () => clearInterval(iv);
   }, []);
 
-  // Manifest je nach Bereich umschalten: unter /chat ist es die eigene
-  // „Hero Chat"-App (eigenes Icon, startet direkt im Chat), sonst die Hauptseite.
+  // App-Identität je nach Bereich umschalten: unter /chat ist es die eigene
+  // „Hero Team"-App (eigenes Manifest, eigenes Symbol, startet direkt im Chat),
+  // sonst die Hauptseite „Hero League". Wichtig fürs Installieren:
+  //  • Android/Chrome liest das Manifest (eigenes `id` → getrennte App).
+  //  • iPhone/iPad liest apple-touch-icon + Titel aus dem <head> im Moment des
+  //    „Zum Home-Bildschirm". Deshalb hier dynamisch mitsetzen, damit die
+  //    Team-App auf dem iPhone ihr eigenes Symbol und ihren eigenen Namen bekommt.
   useEffect(() => {
-    const link = document.querySelector('link[rel="manifest"]');
-    if (link) link.setAttribute('href', currentPath.startsWith('/chat') ? '/chat.webmanifest' : '/manifest.webmanifest');
+    const inChat = currentPath.startsWith('/chat');
+    const setAttr = (selector: string, attr: string, value: string) => {
+      const el = document.querySelector(selector);
+      if (el) el.setAttribute(attr, value);
+    };
+    setAttr('link[rel="manifest"]', 'href', inChat ? '/chat.webmanifest' : '/manifest.webmanifest');
+    setAttr('link[rel="apple-touch-icon"]', 'href', inChat ? '/assets/chat-apple-touch-icon.png' : '/assets/apple-touch-icon.png');
+    setAttr('meta[name="apple-mobile-web-app-title"]', 'content', inChat ? 'Hero Team' : 'Hero League');
+    setAttr('meta[name="theme-color"]', 'content', inChat ? '#070d0c' : '#060E0F');
   }, [currentPath]);
 
   // Deep-Link aus einer Handy-Benachrichtigung: /admin?open=ticket&id=… bzw.
