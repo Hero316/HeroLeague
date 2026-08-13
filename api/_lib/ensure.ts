@@ -34,6 +34,8 @@ export async function ensureSchema(): Promise<void> {
     // Reaktionen + Bearbeitet/Gelöscht (WhatsApp-Funktionen) mitprüfen.
     await sql`SELECT edited_at, deleted_at FROM messages LIMIT 1`;
     await sql`SELECT 1 FROM message_reactions LIMIT 1`;
+    // Thread-Lesestand (ungelesene Thread-Antworten) mitprüfen.
+    await sql`SELECT 1 FROM thread_reads LIMIT 1`;
     ensured = true;
     return;
   } catch {
@@ -110,6 +112,10 @@ export async function ensureSchema(): Promise<void> {
     user_id TEXT NOT NULL, emoji TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (message_id, user_id))`);
   await run(sql`CREATE INDEX IF NOT EXISTS idx_message_reactions_msg ON message_reactions(message_id)`);
+  // Thread-Lesestand: pro Nutzer & Thread (Eltern-Nachricht) der letzte Blick.
+  await run(sql`CREATE TABLE IF NOT EXISTS thread_reads (
+    user_id TEXT NOT NULL, parent_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    last_read_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (user_id, parent_id))`);
   await run(sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
     endpoint TEXT PRIMARY KEY, user_id TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
