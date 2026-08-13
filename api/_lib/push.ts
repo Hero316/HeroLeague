@@ -54,18 +54,28 @@ export async function removeSubscription(endpoint: string): Promise<void> {
   if (endpoint) await sql`DELETE FROM push_subscriptions WHERE endpoint = ${endpoint}`;
 }
 
+// Aktuelles Datum (YYYY-MM-DD) und Wochentag in deutscher Ortszeit bestimmen –
+// der Server läuft in UTC, „Nicht stören" ist aber aus Nutzersicht deutsche Zeit.
+function berlinNow(): { date: string; weekday: number } {
+  const now = new Date();
+  const date = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Berlin',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now); // liefert "YYYY-MM-DD"
+  const wd = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Berlin', weekday: 'short' }).format(now);
+  const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return { date, weekday: map[wd] ?? 0 };
+}
+
 function isMuted(prefs: unknown): boolean {
   if (!prefs || typeof prefs !== 'object') return false;
   const p = prefs as { muteWeekends?: boolean; muteUntil?: string };
-  const now = new Date();
-  if (p.muteUntil) {
-    const until = new Date(p.muteUntil);
-    if (!Number.isNaN(until.getTime()) && until.getTime() > now.getTime()) return true;
-  }
-  if (p.muteWeekends) {
-    const day = now.getDay();
-    if (day === 0 || day === 6) return true;
-  }
+  const { date, weekday } = berlinNow();
+  // „Pausieren bis: TT.MM.JJJJ" gilt INKLUSIVE des gewählten Tages (deutsche Zeit).
+  if (p.muteUntil && /^\d{4}-\d{2}-\d{2}$/.test(p.muteUntil) && date <= p.muteUntil) return true;
+  if (p.muteWeekends && (weekday === 0 || weekday === 6)) return true;
   return false;
 }
 

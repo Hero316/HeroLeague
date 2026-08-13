@@ -123,18 +123,27 @@ export async function syncPush(): Promise<boolean> {
   try {
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
-    // Ohne Erlaubnis (oder ohne Wunsch) nichts anlegen – nur den Ist-Zustand melden.
-    if (Notification.permission !== 'granted' || !pushIntended()) return !!sub;
-    if (!sub) {
-      const { key } = await getPushKey();
-      if (!key) return false;
-      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8Array(key) });
+    // Besteht schon ein Abo, dieses IMMER serverseitig auffrischen (heilt vom
+    // Server entfernte Zeilen) und den Wunsch-Merker setzen – sonst zeigt der
+    // Schalter „an", der Server kennt das Gerät aber nicht mehr.
+    if (sub) {
+      try {
+        await savePushSubscription(sub.toJSON());
+      } catch {
+        /* z.B. kurz nicht angemeldet – Abo bleibt lokal bestehen */
+      }
+      setPushIntent(true);
+      return true;
     }
-    // Abo (neu oder bestehend) serverseitig sicherstellen – idempotent.
+    // Kein Abo vorhanden: nur wiederherstellen, wenn gewünscht UND erlaubt.
+    if (Notification.permission !== 'granted' || !pushIntended()) return false;
+    const { key } = await getPushKey();
+    if (!key) return false;
+    sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8Array(key) });
     try {
       await savePushSubscription(sub.toJSON());
     } catch {
-      /* z.B. kurz nicht angemeldet – Abo bleibt lokal bestehen */
+      /* Abo bleibt lokal bestehen; nächster Start heilt nach */
     }
     return true;
   } catch {
