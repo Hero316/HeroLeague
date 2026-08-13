@@ -27,7 +27,7 @@ import {
 } from '../lib/collab';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
-import { useBackdropDismiss, ModalPortal, SegmentedControl } from './ui';
+import { useBackdropDismiss, ModalPortal, SegmentedControl, EmptyState } from './ui';
 
 const inputClass =
   'w-full hl-surf-0 border border-white/10 rounded-xl px-3.5 py-2.5 text-[15px] text-white focus:outline-none focus:border-brand-accent-light transition-colors';
@@ -590,10 +590,7 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
           <Loader2 className="w-6 h-6 animate-spin" />
         </div>
       ) : visible.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 text-center py-10 text-hl-mute">
-          <TicketIcon className="w-7 h-7 text-hl-faint" />
-          <p className="text-sm font-sans">Noch keine Tickets. Leg mit „Neues Ticket" los.</p>
-        </div>
+        <EmptyState icon={TicketIcon} title="Noch keine Tickets" hint="Leg oben ein neues Ticket an." />
       ) : (
         <div className="space-y-2.5">
           {visible.map((t) => (
