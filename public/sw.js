@@ -102,6 +102,46 @@ self.addEventListener('fetch', (event) => {
   // Alles andere: normal ans Netz.
 });
 
+// Base64url (VAPID public key) -> Uint8Array für pushManager.subscribe.
+function urlB64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+// --- Web-Push: Abo-Wechsel durch den Browser auffangen ----------------------
+// Browser tauschen ein Push-Abo gelegentlich von selbst aus (Rotation/Ablauf).
+// Passiert das, während die App zu ist, würden ohne diesen Handler ab da keine
+// Push-Nachrichten mehr ankommen. Wir legen sofort ein neues Abo an und melden
+// es am Server an (Session-Cookie wird mitgeschickt). Best-effort.
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    (async () => {
+      try {
+        const res = await fetch('/api/push?resource=key', { credentials: 'include' });
+        if (!res.ok) return;
+        const { key } = await res.json();
+        if (!key) return;
+        const sub = await self.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlB64ToUint8Array(key),
+        });
+        await fetch('/api/push', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscription: sub.toJSON() }),
+        });
+      } catch (e) {
+        /* nichts zu tun – beim nächsten App-Start heilt syncPush nach */
+      }
+    })(),
+  );
+});
+
 // --- Web-Push: eingehende Push-Nachricht anzeigen ---------------------------
 self.addEventListener('push', (event) => {
   let data = {};

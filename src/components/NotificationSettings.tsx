@@ -3,7 +3,7 @@ import { Bell, BellOff, Loader2, Check } from 'lucide-react';
 import type { SessionUser } from '../types';
 import {
   pushSupported,
-  isPushEnabled,
+  syncPush,
   enablePush,
   disablePush,
   getNotifyPrefs,
@@ -20,7 +20,9 @@ export default function NotificationSettings({ user }: { user: SessionUser }) {
   const isBootstrap = user.id === 'bootstrap';
 
   useEffect(() => {
-    isPushEnabled().then(setEnabled).catch(() => {});
+    // Beim Öffnen den echten Zustand ermitteln UND ein evtl. vom Browser
+    // verworfenes Abo automatisch wiederherstellen (wenn zuvor gewünscht).
+    syncPush().then(setEnabled).catch(() => {});
     if (!isBootstrap) {
       getNotifyPrefs()
         .then((p) => {
