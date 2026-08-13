@@ -345,12 +345,12 @@ function SheetTile({ label, color, icon: Icon, onClick }: { label: string; color
   return (
     <button onClick={onClick} className="flex flex-col items-center gap-1.5 cursor-pointer group">
       <span
-        className="w-14 h-14 rounded-full flex items-center justify-center transition-transform group-hover:scale-105 group-active:scale-95"
+        className="w-14 h-14 rounded-[18px] flex items-center justify-center shadow-sm transition-transform group-hover:scale-105 group-active:scale-95"
         style={{ background: `${color}22`, border: `1px solid ${color}55` }}
       >
         <Icon className="w-6 h-6" style={{ color }} />
       </span>
-      <span className="text-[11px] font-sans text-hl-soft">{label}</span>
+      <span className="text-[11px] font-sans font-medium text-hl-soft">{label}</span>
     </button>
   );
 }
