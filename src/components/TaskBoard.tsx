@@ -1121,7 +1121,9 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
     setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: next } : x)));
     try {
       await updateTask(t.id, { status: next });
-    } catch {
+    } catch (err) {
+      // Nicht still zurückrollen – sonst denkt man, es sei gespeichert.
+      alert(err instanceof Error ? err.message : 'Konnte nicht gespeichert werden.');
       load();
     }
   };
@@ -1131,7 +1133,8 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
     setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, startTime, endTime } : x)));
     try {
       await updateTask(t.id, { startTime, endTime });
-    } catch {
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Konnte nicht gespeichert werden.');
       load();
     }
   };
