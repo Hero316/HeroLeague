@@ -121,11 +121,11 @@ export default function ChatApp({
           />
         ) : tab === 'aufgaben' ? (
           <div className="h-full overflow-y-auto p-3">
-            <TaskBoard currentUserId={currentUserId} isSuperadmin={isSuperadmin} persist mode="tasks" />
+            <TaskBoard key="tab-aufgaben" currentUserId={currentUserId} isSuperadmin={isSuperadmin} persist mode="tasks" />
           </div>
         ) : tab === 'kalender' ? (
           <div className="h-full overflow-y-auto p-3">
-            <TaskBoard currentUserId={currentUserId} isSuperadmin={isSuperadmin} persist mode="calendar" />
+            <TaskBoard key="tab-kalender" currentUserId={currentUserId} isSuperadmin={isSuperadmin} persist mode="calendar" />
           </div>
         ) : (
           <div className="h-full overflow-y-auto p-3">
