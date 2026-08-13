@@ -227,9 +227,13 @@ export async function messages(req: VercelRequest, res: VercelResponse) {
       recipients = parts.map((p) => p.userId).filter((x) => memberSet.has(x));
     }
     const pushBody = (conv.kind === 'group' ? `${name}: ${preview}` : preview) + (parentId ? ' (Thread)' : '');
+    // Klick auf die Handy-Benachrichtigung öffnet direkt DIESEN Chat (Deep-Link
+    // via /chat?c=…) – nicht mehr allgemein das Backoffice. Der Service Worker
+    // unterdrückt den Banner zudem, wenn der Chat gerade sichtbar offen ist.
+    const chatUrl = `/chat?c=${encodeURIComponent(conversationId)}`;
     for (const rid of recipients) {
       if (rid === uid || mentioned.has(rid)) continue;
-      await sendPushToUser(rid, { title: pushTitle, body: pushBody, url: '/admin' });
+      await sendPushToUser(rid, { title: pushTitle, body: pushBody, url: chatUrl });
     }
     return res.json({ ...(inserted[0] as object), reactions: [], replyCount: 0, unreadReplies: 0 });
   }
