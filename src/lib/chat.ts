@@ -94,6 +94,21 @@ export const searchChat = (q: string, conversationId?: string) =>
       (conversationId ? `&conversationId=${encodeURIComponent(conversationId)}` : '')
   );
 
+// Ungelesene Threads (Übersicht auf der Chat-Seite, „damit nichts untergeht").
+export interface ThreadSummary {
+  parentId: string;
+  conversationId: string;
+  authorName: string; // Autor der Eltern-Nachricht
+  body: string; // Eltern-Snippet (leer wenn gelöscht)
+  attachType: 'ticket' | 'task' | 'file' | 'audio' | null;
+  convKind: 'group' | 'dm';
+  source: string; // Gruppenname bzw. DM-Partnername
+  unreadCount: number;
+  lastReplyAt: string | null;
+  lastReplyAuthor: string | null;
+}
+export const fetchThreads = () => apiFetch<ThreadSummary[]>('/api/chat?resource=threads');
+
 // Anzeigename einer Unterhaltung: Gruppen tragen ihren Titel, DMs den Namen
 // des jeweils ANDEREN Teilnehmers.
 export function conversationTitle(c: Conversation, myUserId: string): string {
