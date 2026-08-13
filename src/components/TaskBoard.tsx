@@ -8,7 +8,7 @@ import { getUrlParam, setUrlParam } from '../lib/urlState';
 import { useBackClose } from '../lib/backStack';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
-import { useBackdropDismiss, ModalPortal, SegmentedControl } from './ui';
+import { useBackdropDismiss, ModalPortal, SegmentedControl, EmptyState } from './ui';
 
 const inputClass =
   'w-full hl-surf-0 border border-white/10 rounded-xl px-3.5 py-2.5 text-[15px] text-white focus:outline-none focus:border-brand-accent-light transition-colors';
@@ -842,7 +842,7 @@ function DayView({
   };
 
   return (
-    <div className="rounded-xl border border-white/5 overflow-hidden hl-surf">
+    <div className="rounded-2xl border border-white/5 overflow-hidden hl-surf shadow-sm">
       {/* Leuchtender Spieltag-/Testspieltag-Marker */}
       {highlight && (
         <div className="p-2 border-b border-white/5">
@@ -1287,7 +1287,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
         /* -------- MEINE TERMINE (Agenda, nach Datum) -------- */
         <div className="space-y-1.5">
           {myEvents.length === 0 ? (
-            <p className="text-center text-sm text-hl-mute font-sans py-12">Keine Termine, die dich betreffen.</p>
+            <EmptyState icon={Calendar} title="Keine Termine" hint="Termine, die dich betreffen, erscheinen hier." />
           ) : (
             myEvents.map((t, i) => {
               const prev = i > 0 ? myEvents[i - 1] : null;
@@ -1326,7 +1326,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
         /* -------- MEINE AUFGABEN (nach Frist gruppiert, zum Abhaken) -------- */
         (() => {
           if (myTodos.length === 0)
-            return <p className="text-center text-sm text-hl-mute font-sans py-12">Dir sind aktuell keine Aufgaben zugewiesen.</p>;
+            return <EmptyState icon={CheckSquare} title="Alles erledigt" hint="Dir sind aktuell keine Aufgaben zugewiesen." />;
           const bucketOf = (t: Task) => {
             if (t.status === 'erledigt') return 'done';
             if (!t.dueDate) return 'none';
@@ -1399,7 +1399,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
         })()
       ) : view === 'month' ? (
         /* -------- MONATSANSICHT (Google-Stil, bildschirmfüllend, Mehrtages-Balken) -------- */
-        <div className="rounded-xl border border-white/5 overflow-hidden hl-surf">
+        <div className="rounded-2xl border border-white/5 overflow-hidden hl-surf shadow-sm">
           <div className="grid grid-cols-7 border-b border-white/5">
             {WEEKDAYS.map((w) => (
               <div key={w} className="text-center text-[10px] font-mono uppercase tracking-wider text-hl-dim py-1.5">{w}</div>

@@ -60,6 +60,35 @@ export function ModalPortal({ children }: { children: React.ReactNode }) {
   return createPortal(children, document.body);
 }
 
+// Freundlicher Leer-Zustand: Icon in weicher Kachel, Titel und optionaler
+// Hinweis – statt einer nackten grauen Textzeile. Theme-fähig (hell & dunkel).
+export function EmptyState({
+  icon: Icon,
+  title,
+  hint,
+  className = '',
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  hint?: string;
+  className?: string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: 'easeOut' }}
+      className={`flex flex-col items-center justify-center text-center py-14 px-6 ${className}`}
+    >
+      <div className="w-14 h-14 rounded-2xl hl-surf-soft border border-white/10 flex items-center justify-center mb-3.5 shadow-sm">
+        <Icon className="w-7 h-7 text-hl-mute" />
+      </div>
+      <p className="text-sm font-sans font-semibold text-hl-soft">{title}</p>
+      {hint && <p className="text-[13px] font-sans text-hl-mute mt-1 max-w-[16rem] leading-snug">{hint}</p>}
+    </motion.div>
+  );
+}
+
 // Animierter Umschalter (Segmented Control) mit gleitender Pille – wie bei
 // hochwertigen Apps. Die aktive Pille „fliegt" per layoutId sanft an die neue
 // Stelle, statt hart umzuspringen. groupId muss je Instanz eindeutig sein.

@@ -51,7 +51,7 @@ import { fetchTeam, fetchTickets, fetchAllTasks, fetchTask, memberMap } from '..
 import { setChatUnread } from '../lib/badge';
 import { setUrlParam } from '../lib/urlState';
 import { useBackClose, goBackLayer } from '../lib/backStack';
-import { useBackdropDismiss, ModalPortal } from './ui';
+import { useBackdropDismiss, ModalPortal, EmptyState } from './ui';
 import { uploadFile, uploadImage } from '../lib/api';
 import Avatar from './Avatar';
 import { TicketDetail } from './TicketSystem';
@@ -1865,9 +1865,7 @@ export default function ChatSystem({
               <Loader2 className="w-5 h-5 animate-spin" />
             </div>
           ) : convs.length === 0 ? (
-            <p className="text-center text-sm text-hl-mute font-sans py-8 px-4">
-              Noch keine Chats. Starte oben rechts eine Unterhaltung.
-            </p>
+            <EmptyState icon={MessageSquare} title="Noch keine Chats" hint="Starte oben rechts eine Unterhaltung." />
           ) : (
             convMatches.map((c) => {
               const name = conversationTitle(c, currentUserId);
@@ -2035,7 +2033,7 @@ export default function ChatSystem({
                   <Loader2 className="w-5 h-5 animate-spin" />
                 </div>
               ) : messages.length === 0 ? (
-                <p className="text-center text-sm text-hl-mute font-sans py-8">Noch keine Nachrichten. Schreib die erste!</p>
+                <EmptyState icon={Send} title="Noch keine Nachrichten" hint="Schreib die erste Nachricht!" />
               ) : (
                 messages.map((m, i) => {
                   const mem = members.get(m.authorId);
