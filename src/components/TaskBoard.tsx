@@ -307,26 +307,6 @@ function AssigneeChips({
   );
 }
 
-// 3-Wege-Umschalter Termin / Aufgabe / Beides.
-function TypeToggle({ value, onChange }: { value: TaskKind; onChange: (v: TaskKind) => void }) {
-  return (
-    <div className="flex gap-1 hl-surf-soft border border-white/10 rounded-xl p-1">
-      {(['termin', 'aufgabe', 'beides'] as const).map((k) => (
-        <button
-          key={k}
-          type="button"
-          onClick={() => onChange(k)}
-          className={`flex-1 px-2 py-2 rounded-lg text-xs font-sans font-bold uppercase tracking-wider transition-colors cursor-pointer ${
-            value === k ? 'bg-brand-accent-light text-white' : 'text-hl-mute hover:text-white'
-          }`}
-        >
-          {KIND_LABEL[k]}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 // Termin-Eingaben (Google-Stil): Ganztägig-Schalter, Tag von/bis, Uhrzeit von/bis.
 // Bei „Aufgabe" heißt der Starttag „Frist" und das Bis-Datum entfällt.
 function ScheduleFields({
@@ -493,69 +473,96 @@ export function TaskDetail({
   return (
     <ModalPortal>
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/80 flex items-start sm:items-center justify-center p-0 pt-[env(safe-area-inset-top)] sm:p-6 overflow-y-auto" {...backdrop}>
-      <motion.div initial={{ scale: 0.97, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 10 }} className="hl-card hl-modal-card w-full max-w-xl my-0 sm:my-8 p-5 sm:p-6" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-display font-black text-lg text-white uppercase tracking-tight">Aufgabe</h3>
-          <button onClick={onClose} className="p-1.5 text-hl-mute hover:text-white cursor-pointer">
+      <motion.div initial={{ scale: 0.97, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 10 }} className="hl-card hl-modal-card w-full max-w-xl my-0 sm:my-8 p-5 sm:p-6 rounded-3xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="font-display font-black text-xl text-white uppercase tracking-tight">
+            {type === 'aufgabe' ? 'Aufgabe' : type === 'beides' ? 'Eintrag' : 'Termin'}
+          </h3>
+          <button onClick={onClose} className="p-2 -mr-1 rounded-full text-hl-mute hover:text-white hover:bg-white/5 transition-colors cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Titel</label>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
+        <div className="space-y-4">
+          <SegmentedControl
+            groupId="taskdetailtype"
+            fill
+            value={type}
+            onChange={(v) => setType(v)}
+            options={[
+              { value: 'termin' as const, label: 'Termin', icon: Calendar },
+              { value: 'aufgabe' as const, label: 'Aufgabe', icon: CheckSquare },
+              { value: 'beides' as const, label: 'Beides', icon: Check },
+            ]}
+          />
 
-        <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1 mt-3">Notizen</label>
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className={`${inputClass} resize-y`} />
-
-        <div className="mt-3">
-          <TypeToggle value={type} onChange={setType} />
-        </div>
-        <ScheduleFields
-          kind={type}
-          dueDate={dueDate}
-          endDate={endDate}
-          allDay={allDay}
-          startTime={startTime}
-          endTime={endTime}
-          onDue={setDueDate}
-          onEnd={setEndDate}
-          onAllDay={setAllDay}
-          onStart={setStartTime}
-          onEndTime={setEndTime}
-        />
-
-        <div className="grid grid-cols-2 gap-3 mt-3">
           <div>
-            <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Status</label>
-            <select value={status} onChange={(e) => setStatus(e.target.value as TaskStatus)} className={inputClass}>
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>{STATUS_LABEL[s]}</option>
-              ))}
-            </select>
+            <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-1.5">Titel</label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
           </div>
-          <div>
-            <label className="block text-[10px] font-mono text-hl-dim uppercase mb-1">Priorität</label>
-            <select value={priority} onChange={(e) => setPriority(e.target.value as TicketPriority)} className={inputClass}>
-              {PRIORITIES.map((p) => (
-                <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>
-              ))}
-            </select>
-          </div>
-        </div>
 
-        <label className="text-[10px] font-mono text-hl-dim uppercase mb-1.5 mt-3 flex items-center gap-1">
-          <Users className="w-3.5 h-3.5" /> Personen
-        </label>
-        <div className="flex flex-wrap gap-1.5">
-          {team.map((m) => {
-            const on = assignees.includes(m.id);
-            return (
-              <button key={m.id} type="button" onClick={() => toggleAssignee(m.id)} className={`px-2.5 py-1.5 rounded-lg text-xs font-sans font-semibold border transition-colors cursor-pointer ${on ? 'bg-brand-accent-light/20 border-brand-accent-light/50 text-brand-accent-light' : 'bg-white/5 border-white/10 text-hl-mute hover:text-white'}`}>
-                {m.name}
-              </button>
-            );
-          })}
-          {team.length === 0 && <span className="text-xs text-hl-faint">Keine Team-Mitglieder.</span>}
+          <div>
+            <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-1.5">Notizen</label>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className={`${inputClass} resize-y`} />
+          </div>
+
+          <ScheduleFields
+            kind={type}
+            dueDate={dueDate}
+            endDate={endDate}
+            allDay={allDay}
+            startTime={startTime}
+            endTime={endTime}
+            onDue={setDueDate}
+            onEnd={setEndDate}
+            onAllDay={setAllDay}
+            onStart={setStartTime}
+            onEndTime={setEndTime}
+          />
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-1.5">Status</label>
+              <select value={status} onChange={(e) => setStatus(e.target.value as TaskStatus)} className={inputClass}>
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-1.5">Priorität</label>
+              <select value={priority} onChange={(e) => setPriority(e.target.value as TicketPriority)} className={inputClass}>
+                {PRIORITIES.map((p) => (
+                  <option key={p} value={p}>{PRIORITY_LABEL[p]}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5" /> Personen
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {team.map((m) => {
+                const on = assignees.includes(m.id);
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => toggleAssignee(m.id)}
+                    className={`flex items-center gap-1.5 pl-1 pr-3 py-1 rounded-full border text-[13px] font-sans font-semibold transition-all active:scale-95 cursor-pointer ${
+                      on ? 'bg-brand-accent-light/20 border-brand-accent-light/50 text-brand-accent-light' : 'bg-white/5 border-white/10 text-hl-mute hover:text-white'
+                    }`}
+                  >
+                    <Avatar name={m.name} url={m.avatarUrl} size={22} />
+                    {m.name}
+                  </button>
+                );
+              })}
+              {team.length === 0 && <span className="text-xs text-hl-faint">Keine Team-Mitglieder.</span>}
+            </div>
+          </div>
         </div>
 
         <div className="mt-5">
@@ -591,16 +598,16 @@ export function TaskDetail({
           </div>
         </div>
 
-        <div className="flex justify-between gap-2 mt-5 pt-4 border-t border-white/5">
+        <div className="flex justify-between gap-2.5 mt-5 pt-4 border-t border-white/5">
           {canDelete ? (
-            <button onClick={remove} disabled={busy} className="px-3 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:bg-rose-500/20 cursor-pointer disabled:opacity-50 flex items-center gap-1.5">
+            <button onClick={remove} disabled={busy} className="px-4 py-3 rounded-2xl text-xs font-bold uppercase tracking-wider bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:bg-rose-500/20 transition-all active:scale-[.98] cursor-pointer disabled:opacity-50 flex items-center gap-1.5">
               <Trash2 className="w-3.5 h-3.5" /> Löschen
             </button>
           ) : (
             <span />
           )}
-          <button onClick={save} disabled={busy} className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white cursor-pointer disabled:opacity-50">
-            Speichern
+          <button onClick={save} disabled={busy} className="flex-[1.5] max-w-[60%] py-3 rounded-2xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white transition-all active:scale-[.98] cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2">
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Speichern
           </button>
         </div>
       </motion.div>
