@@ -949,20 +949,26 @@ function DayView({
 // ===========================================================================
 // Board
 // ===========================================================================
-export default function TaskBoard({ currentUserId, isSuperadmin, persist = false }: { currentUserId: string; isSuperadmin: boolean; persist?: boolean }) {
+export default function TaskBoard({ currentUserId, isSuperadmin, persist = false, mode = 'all' }: { currentUserId: string; isSuperadmin: boolean; persist?: boolean; mode?: 'calendar' | 'tasks' | 'all' }) {
+  // mode='calendar' → nur Kalender (Monat/Woche/Tag/Termine); mode='tasks' → nur
+  // die Aufgabenliste; mode='all' → alles (Backoffice, unverändert).
+  const calendarViews = mode === 'calendar' ? (['month', 'week', 'day', 'termine'] as const) : (['month', 'week', 'day', 'termine', 'aufgaben'] as const);
   // Ansicht + Datum aus der URL wiederherstellen (nur in der Team-App), damit
   // man nach dem Aktualisieren dort bleibt (Tag/Woche/Monat + Datum).
   const [view, setView] = useState<'month' | 'week' | 'day' | 'termine' | 'aufgaben'>(() => {
+    if (mode === 'tasks') return 'aufgaben';
     const v = persist ? getUrlParam('av') : null;
-    return v === 'week' || v === 'day' || v === 'termine' || v === 'aufgaben' ? v : 'month';
+    return v && (calendarViews as readonly string[]).includes(v) ? (v as 'week' | 'day' | 'termine' | 'aufgaben') : 'month';
   });
   const [anchor, setAnchor] = useState<Date>(() => {
     const d = persist ? getUrlParam('ad') : null;
     return d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? dateFromKey(d) : new Date();
   });
   useEffect(() => {
-    if (persist) setUrlParam('av', view === 'month' ? null : view);
-  }, [view, persist]);
+    // In der reinen Aufgabenliste keine Ansicht persistieren (teilt sich ?av mit
+    // dem Kalender-Tab).
+    if (persist && mode !== 'tasks') setUrlParam('av', view === 'month' ? null : view);
+  }, [view, persist, mode]);
   useEffect(() => {
     if (persist) setUrlParam('ad', ymd(anchor) === TODAY ? null : ymd(anchor));
   }, [anchor, persist]);
@@ -1100,20 +1106,22 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
             : 'mb-4'
         }`}
       >
-        <div className="flex items-center gap-1 bg-[#060E0F]/50 border border-white/10 rounded-xl p-1 overflow-x-auto max-w-full">
-          {(['month', 'week', 'day', 'termine', 'aufgaben'] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-sans font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1.5 shrink-0 ${
-                view === v ? 'bg-brand-accent-light text-white' : 'text-hl-mute hover:text-white'
-              }`}
-            >
-              {v === 'month' ? <LayoutGrid className="w-3.5 h-3.5" /> : v === 'week' ? <CalendarDays className="w-3.5 h-3.5" /> : v === 'day' ? <Clock className="w-3.5 h-3.5" /> : v === 'termine' ? <Calendar className="w-3.5 h-3.5" /> : <CheckSquare className="w-3.5 h-3.5" />}
-              {v === 'month' ? 'Monat' : v === 'week' ? 'Woche' : v === 'day' ? 'Tag' : v === 'termine' ? 'Termine' : 'Aufgaben'}
-            </button>
-          ))}
-        </div>
+        {mode !== 'tasks' && (
+          <div className="flex items-center gap-1 bg-[#060E0F]/50 border border-white/10 rounded-xl p-1 overflow-x-auto max-w-full">
+            {calendarViews.map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-sans font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                  view === v ? 'bg-brand-accent-light text-white' : 'text-hl-mute hover:text-white'
+                }`}
+              >
+                {v === 'month' ? <LayoutGrid className="w-3.5 h-3.5" /> : v === 'week' ? <CalendarDays className="w-3.5 h-3.5" /> : v === 'day' ? <Clock className="w-3.5 h-3.5" /> : v === 'termine' ? <Calendar className="w-3.5 h-3.5" /> : <CheckSquare className="w-3.5 h-3.5" />}
+                {v === 'month' ? 'Monat' : v === 'week' ? 'Woche' : v === 'day' ? 'Tag' : v === 'termine' ? 'Termine' : 'Aufgaben'}
+              </button>
+            ))}
+          </div>
+        )}
 
         {(view === 'month' || view === 'week' || view === 'day') && (
           <div className="flex items-center gap-2">

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, LogOut, MessageSquare, CalendarDays, Ticket as TicketIcon, Smartphone, X } from 'lucide-react';
+import { ArrowLeft, LogOut, MessageSquare, CalendarDays, ListChecks, Ticket as TicketIcon, Smartphone, X } from 'lucide-react';
 import ChatSystem from './ChatSystem';
 import TaskBoard from './TaskBoard';
 import TicketSystem from './TicketSystem';
@@ -12,11 +12,12 @@ import { AudioPlayerProvider, MiniPlayer } from './AudioPlayer';
 // aufklappbaren Backoffice, damit sich der Chat wie eine echte App anfühlt und
 // zum Home-Bildschirm hinzugefügt werden kann (eigenes Manifest chat.webmanifest).
 
-type Tab = 'chats' | 'aufgaben' | 'tickets';
+type Tab = 'chats' | 'aufgaben' | 'kalender' | 'tickets';
 
 const TABS: { id: Tab; label: string; icon: typeof MessageSquare }[] = [
   { id: 'chats', label: 'Chats', icon: MessageSquare },
-  { id: 'aufgaben', label: 'Aufgaben', icon: CalendarDays },
+  { id: 'aufgaben', label: 'Aufgaben', icon: ListChecks },
+  { id: 'kalender', label: 'Kalender', icon: CalendarDays },
   { id: 'tickets', label: 'Tickets', icon: TicketIcon },
 ];
 
@@ -39,7 +40,7 @@ export default function ChatApp({
   // Seite bleibt (Chats/Aufgaben/Tickets) statt immer auf „Chats" zu landen.
   const readTab = (): Tab => {
     const t = getUrlParam('tab');
-    return t === 'aufgaben' || t === 'tickets' ? t : 'chats';
+    return t === 'aufgaben' || t === 'kalender' || t === 'tickets' ? t : 'chats';
   };
   const [tab, setTabState] = useState<Tab>(readTab);
   const setTab = (t: Tab) => {
@@ -120,7 +121,11 @@ export default function ChatApp({
           />
         ) : tab === 'aufgaben' ? (
           <div className="h-full overflow-y-auto p-3">
-            <TaskBoard currentUserId={currentUserId} isSuperadmin={isSuperadmin} persist />
+            <TaskBoard currentUserId={currentUserId} isSuperadmin={isSuperadmin} persist mode="tasks" />
+          </div>
+        ) : tab === 'kalender' ? (
+          <div className="h-full overflow-y-auto p-3">
+            <TaskBoard currentUserId={currentUserId} isSuperadmin={isSuperadmin} persist mode="calendar" />
           </div>
         ) : (
           <div className="h-full overflow-y-auto p-3">
@@ -134,7 +139,7 @@ export default function ChatApp({
 
       {/* Untere Tab-Leiste (wie WhatsApp/Slack) */}
       <nav
-        className="shrink-0 grid grid-cols-3 border-t border-white/10 bg-[rgba(7,10,8,.96)] backdrop-blur-xl"
+        className="shrink-0 grid grid-cols-4 border-t border-white/10 bg-[rgba(7,10,8,.96)] backdrop-blur-xl"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {TABS.map((t) => {

@@ -16,6 +16,7 @@ import {
   ArrowLeft,
   Search,
   Camera,
+  ListChecks,
   Trash2,
   UserPlus,
   Check,
@@ -207,17 +208,19 @@ function useAudioRecorder(onDone: (file: File) => void) {
   return { recording, toggle: () => (recording ? stop() : start()) };
 }
 
-// --- Anhang wählen (Ticket/Aufgabe) ----------------------------------------
+// --- Anhang wählen (Ticket / Aufgabe / Termin) -----------------------------
+// kind='ticket' → Tickets; 'task' → nur To-dos (aufgabe|beides); 'termin' →
+// nur Termine (termin|beides). Ein Termin wird als type 'task' angehängt (es
+// ist technisch eine Task) und öffnet das Aufgaben-/Termin-Detail.
 function AttachPicker({
-  initialTab = 'ticket',
+  kind,
   onPick,
   onClose,
 }: {
-  initialTab?: 'ticket' | 'task';
+  kind: 'ticket' | 'task' | 'termin';
   onPick: (a: { type: 'ticket' | 'task'; id: string; title: string }) => void;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<'ticket' | 'task'>(initialTab);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -231,6 +234,15 @@ function AttachPicker({
       .finally(() => setLoading(false));
   }, []);
   const backdrop = useBackdropDismiss(onClose);
+
+  const title = kind === 'ticket' ? 'Ticket anhängen' : kind === 'task' ? 'Aufgabe anhängen' : 'Termin anhängen';
+  const emptyText = kind === 'ticket' ? 'Keine Tickets.' : kind === 'task' ? 'Keine Aufgaben.' : 'Keine Termine.';
+  // Termine (termin|beides) vs. Aufgaben (aufgabe|beides); fehlender Typ = Termin.
+  const filteredTasks =
+    kind === 'task'
+      ? tasks.filter((t) => (t.type ?? 'termin') !== 'termin')
+      : tasks.filter((t) => (t.type ?? 'termin') !== 'aufgabe');
+  const ItemIcon = kind === 'ticket' ? TicketIcon : kind === 'task' ? ListChecks : CalendarDays;
 
   return (
     <ModalPortal>
@@ -248,32 +260,19 @@ function AttachPicker({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3">
-          <h4 className="font-display font-bold text-white uppercase tracking-tight">Anhängen</h4>
+          <h4 className="font-display font-bold text-white uppercase tracking-tight">{title}</h4>
           <button onClick={onClose} className="p-1 text-hl-mute hover:text-white cursor-pointer">
             <X className="w-5 h-5" />
           </button>
-        </div>
-        <div className="flex gap-1.5 mb-3 bg-[#060E0F]/40 border border-white/10 rounded-xl p-1">
-          {(['ticket', 'task'] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-sans font-semibold transition-colors cursor-pointer ${
-                tab === t ? 'bg-brand-accent-light text-white' : 'text-hl-mute hover:text-white'
-              }`}
-            >
-              {t === 'ticket' ? 'Tickets' : 'Aufgaben'}
-            </button>
-          ))}
         </div>
         <div className="overflow-y-auto flex-1 space-y-1.5">
           {loading ? (
             <div className="flex justify-center py-8 text-hl-mute">
               <Loader2 className="w-5 h-5 animate-spin" />
             </div>
-          ) : tab === 'ticket' ? (
+          ) : kind === 'ticket' ? (
             tickets.length === 0 ? (
-              <p className="text-center text-sm text-hl-mute py-6">Keine Tickets.</p>
+              <p className="text-center text-sm text-hl-mute py-6">{emptyText}</p>
             ) : (
               tickets.map((t) => (
                 <button
@@ -281,21 +280,21 @@ function AttachPicker({
                   onClick={() => onPick({ type: 'ticket', id: t.id, title: t.title })}
                   className="w-full text-left px-3 py-2 rounded-lg bg-[#060E0F]/40 border border-white/5 hover:border-white/20 text-sm text-hl-soft cursor-pointer flex items-center gap-2"
                 >
-                  <TicketIcon className="w-4 h-4 text-brand-accent-light shrink-0" />
+                  <ItemIcon className="w-4 h-4 text-brand-accent-light shrink-0" />
                   <span className="truncate">{t.title}</span>
                 </button>
               ))
             )
-          ) : tasks.length === 0 ? (
-            <p className="text-center text-sm text-hl-mute py-6">Keine Aufgaben.</p>
+          ) : filteredTasks.length === 0 ? (
+            <p className="text-center text-sm text-hl-mute py-6">{emptyText}</p>
           ) : (
-            tasks.map((t) => (
+            filteredTasks.map((t) => (
               <button
                 key={t.id}
                 onClick={() => onPick({ type: 'task', id: t.id, title: t.title })}
                 className="w-full text-left px-3 py-2 rounded-lg bg-[#060E0F]/40 border border-white/5 hover:border-white/20 text-sm text-hl-soft cursor-pointer flex items-center gap-2"
               >
-                <CalendarDays className="w-4 h-4 text-brand-accent-light shrink-0" />
+                <ItemIcon className="w-4 h-4 text-brand-accent-light shrink-0" />
                 <span className="truncate">{t.title}</span>
               </button>
             ))
@@ -367,13 +366,12 @@ function Composer({
 }) {
   const [body, setBody] = useState('');
   const [attach, setAttach] = useState<Attachment | null>(null);
-  const [picker, setPicker] = useState<null | 'ticket' | 'task'>(null);
+  const [picker, setPicker] = useState<null | 'ticket' | 'task' | 'termin'>(null);
   const [sheet, setSheet] = useState(false);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
-  const cameraRef = useRef<HTMLInputElement>(null);
   const docRef = useRef<HTMLInputElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
@@ -448,11 +446,11 @@ function Composer({
 
   const tiles: { key: string; label: string; color: string; icon: typeof ImageIcon; onClick: () => void }[] = [
     { key: 'gallery', label: 'Galerie', color: '#8B7CFF', icon: ImageIcon, onClick: () => { setSheet(false); galleryRef.current?.click(); } },
-    { key: 'camera', label: 'Kamera', color: '#F472B6', icon: Camera, onClick: () => { setSheet(false); cameraRef.current?.click(); } },
-    { key: 'document', label: 'Dokument', color: '#818CF8', icon: FileIcon, onClick: () => { setSheet(false); docRef.current?.click(); } },
     { key: 'audio', label: 'Audio', color: '#F59E0B', icon: Mic, onClick: () => { setSheet(false); recorder.toggle(); } },
+    { key: 'document', label: 'Dokument', color: '#818CF8', icon: FileIcon, onClick: () => { setSheet(false); docRef.current?.click(); } },
     { key: 'ticket', label: 'Ticket', color: '#22DFC9', icon: TicketIcon, onClick: () => { setSheet(false); setPicker('ticket'); } },
-    { key: 'task', label: 'Aufgabe', color: '#E9C46A', icon: CalendarDays, onClick: () => { setSheet(false); setPicker('task'); } },
+    { key: 'task', label: 'Aufgabe', color: '#E9C46A', icon: ListChecks, onClick: () => { setSheet(false); setPicker('task'); } },
+    { key: 'termin', label: 'Kalender', color: '#E6238E', icon: CalendarDays, onClick: () => { setSheet(false); setPicker('termin'); } },
   ];
 
   return (
@@ -518,7 +516,6 @@ function Composer({
 
         {/* versteckte Datei-Eingaben */}
         <input ref={galleryRef} type="file" accept="image/*" className="hidden" onChange={(e) => { void onFileChosen(e.target.files?.[0]); e.target.value = ''; }} />
-        <input ref={cameraRef} type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(e) => { void onFileChosen(e.target.files?.[0]); e.target.value = ''; }} />
         <input ref={docRef} type="file" className="hidden" onChange={(e) => { void onFileChosen(e.target.files?.[0]); e.target.value = ''; }} />
 
         <div className="flex-1 flex items-end bg-[#0e1a18] border border-white/10 rounded-3xl px-4 focus-within:border-brand-accent-light/60 transition-colors">
@@ -570,7 +567,7 @@ function Composer({
       <AnimatePresence>
         {picker && (
           <AttachPicker
-            initialTab={picker}
+            kind={picker}
             onPick={(a) => {
               setAttach({ kind: 'ref', type: a.type, id: a.id, title: a.title });
               setPicker(null);
