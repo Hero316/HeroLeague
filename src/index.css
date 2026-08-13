@@ -713,6 +713,15 @@ body {
 /* Voll-deckendes text-white -> dunkle Tinte (nie unsichtbar). Die /xx-Varianten
    (z. B. Bubble-Zeit auf Farbe) bleiben bewusst weiß. */
 .hl-team .text-white { color: #12211E; }
+/* Akzent-TEXT auf Weiß lesbarer machen (Hintergründe bleiben hell/bunt!).
+   Die hellen Marken-/Statusfarben sind für dunklen Grund gedacht und wären als
+   Text auf Weiß zu kontrastarm – hier nur die Text-Nutzungen abdunkeln. */
+.hl-team .text-brand-accent-light { color: #0AA79A; }
+.hl-team .text-brand-accent { color: #0C8F86; }
+.hl-team .text-hl-green, .hl-team .text-hl-green-soft { color: #0E9D6A; }
+.hl-team .text-hl-red, .hl-team .text-hl-red-soft { color: #D63D2C; }
+.hl-team .text-hl-gold { color: #B07D0A; }
+.hl-team .text-hl-magenta, .hl-team .text-hl-magenta-soft { color: #C41E76; }
 /* Helle Ränder -> dezente dunkle Haarlinien (Trennkanten bleiben sichtbar). */
 .hl-team [class*="border-white"] { border-color: rgba(16, 42, 38, 0.10); }
 /* Subtile weiße Overlays (Hover/Fill) -> subtile dunkle Overlays. */
