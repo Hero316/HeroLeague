@@ -46,6 +46,7 @@ const PRIORITY_CELL: Record<TicketPriority, string> = {
 const PRIORITIES: TicketPriority[] = ['niedrig', 'mittel', 'hoch', 'dringend'];
 
 const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+const WEEKDAYS_FULL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 
 // --- Datums-Helfer (lokale Tage, keine Zeitzonen-Verschiebung) --------------
@@ -964,6 +965,8 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
     const d = persist ? getUrlParam('ad') : null;
     return d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? dateFromKey(d) : new Date();
   });
+  // Aufgaben-Tab: Liste (alles) oder Wochenansicht (wie Kalender, aber Aufgaben).
+  const [taskView, setTaskView] = useState<'list' | 'week'>('list');
   useEffect(() => {
     // In der reinen Aufgabenliste keine Ansicht persistieren (teilt sich ?av mit
     // dem Kalender-Tab).
@@ -1065,6 +1068,15 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
         .sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999') || (a.startTime ?? '').localeCompare(b.startTime ?? '')),
     [tasks, currentUserId] // eslint-disable-line react-hooks/exhaustive-deps
   );
+  // Meine To-dos nach Frist-Tag (für die Aufgaben-Wochenansicht).
+  const myTodosByDay = useMemo(() => {
+    const map: Record<string, Task[]> = {};
+    for (const t of myTodos) {
+      if (!t.dueDate) continue;
+      (map[t.dueDate] ??= []).push(t);
+    }
+    return map;
+  }, [myTodos]);
 
   const quickSetStatus = async (t: Task, next: TaskStatus) => {
     setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: next } : x)));
@@ -1095,8 +1107,20 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
   const shift = (dir: number) =>
     setAnchor((a) => (view === 'month' ? addMonths(a, dir) : view === 'day' ? addDays(a, dir) : addDays(a, dir * 7)));
 
+  // Wochenansichten (Kalender-Woche + Aufgaben-Woche) füllen die volle Höhe und
+  // scrollen intern; alle anderen Ansichten fließen normal (Seite scrollt).
+  const fullHeightView = (mode === 'tasks' && taskView === 'week') || (mode !== 'tasks' && view === 'week');
+
   return (
-    <div className={persist ? 'flex flex-col min-h-full md:block md:min-h-0' : ''}>
+    <div
+      className={
+        persist
+          ? fullHeightView
+            ? 'flex flex-col h-full md:block md:h-auto'
+            : 'flex flex-col min-h-full md:block md:min-h-0'
+          : ''
+      }
+    >
       {/* Kopfzeile: Ansicht + Navigation. Im Handy-App-Modus (persist) sitzt sie
           unten – mit dem Daumen erreichbar; ab md wieder oben. */}
       <div
@@ -1106,7 +1130,22 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
             : 'mb-4'
         }`}
       >
-        {mode !== 'tasks' && (
+        {mode === 'tasks' ? (
+          <div className="flex items-center gap-1 bg-[#060E0F]/50 border border-white/10 rounded-xl p-1">
+            {(['list', 'week'] as const).map((tv) => (
+              <button
+                key={tv}
+                onClick={() => setTaskView(tv)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-sans font-bold uppercase tracking-wider transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  taskView === tv ? 'bg-brand-accent-light text-white' : 'text-hl-mute hover:text-white'
+                }`}
+              >
+                {tv === 'list' ? <ListChecks className="w-3.5 h-3.5" /> : <CalendarDays className="w-3.5 h-3.5" />}
+                {tv === 'list' ? 'Liste' : 'Woche'}
+              </button>
+            ))}
+          </div>
+        ) : (
           <div className="flex items-center gap-1 bg-[#060E0F]/50 border border-white/10 rounded-xl p-1 overflow-x-auto max-w-full">
             {calendarViews.map((v) => (
               <button
@@ -1123,7 +1162,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
           </div>
         )}
 
-        {(view === 'month' || view === 'week' || view === 'day') && (
+        {((mode !== 'tasks' && (view === 'month' || view === 'week' || view === 'day')) || (mode === 'tasks' && taskView === 'week')) && (
           <div className="flex items-center gap-2">
             <button onClick={() => shift(-1)} className="p-2 rounded-lg bg-white/5 border border-white/10 text-hl-soft hover:text-white cursor-pointer">
               <ChevronLeft className="w-4 h-4" />
@@ -1150,6 +1189,57 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
       {loading ? (
         <div className="flex items-center justify-center py-16 text-hl-mute">
           <Loader2 className="w-6 h-6 animate-spin" />
+        </div>
+      ) : mode === 'tasks' && taskView === 'week' ? (
+        /* -------- AUFGABEN-WOCHE (meine To-dos in Wochentagsspalten) -------- */
+        <div className={`flex gap-3 overflow-x-auto ${persist ? 'h-full pb-1' : 'pb-2'}`}>
+          {range.weeks[0].map((d) => {
+            const key = ymd(d);
+            const isToday = key === TODAY;
+            const dayTodos = myTodosByDay[key] ?? [];
+            return (
+              <div key={key} className={`shrink-0 w-64 bg-[#060E0F]/40 border border-white/5 rounded-xl p-2.5 flex flex-col ${persist ? 'h-full' : 'min-h-[14rem]'}`}>
+                <div className="flex items-baseline justify-between px-1 mb-2">
+                  <span className={`font-display font-bold text-sm uppercase tracking-tight ${isToday ? 'text-brand-accent-light' : 'text-white'}`}>
+                    {WEEKDAYS_FULL[(d.getDay() + 6) % 7]}
+                  </span>
+                  <span className="text-[10px] font-mono text-hl-dim">{key.slice(8)}.{key.slice(5, 7)}.</span>
+                </div>
+                <div className={`space-y-2 min-h-[2rem] ${persist ? 'flex-1 overflow-y-auto' : 'flex-1'}`}>
+                  {dayTodos.length === 0 ? (
+                    <p className="text-center text-[11px] text-hl-faint py-3">—</p>
+                  ) : (
+                    dayTodos.map((t) => {
+                      const done = t.status === 'erledigt';
+                      return (
+                        <div key={t.id} onClick={() => setOpenTask(t)} className={`bg-[#0a1110] border border-white/5 rounded-lg p-2.5 cursor-pointer hover:border-white/15 transition-colors flex items-start gap-2 ${done ? 'opacity-60' : ''}`}>
+                          <button onClick={(e) => { e.stopPropagation(); quickSetStatus(t, done ? 'offen' : 'erledigt'); }} className="shrink-0 cursor-pointer mt-0.5" title={done ? 'Als offen markieren' : 'Als erledigt markieren'}>
+                            {done ? <CheckSquare className="w-5 h-5 text-brand-accent-light" /> : <Square className="w-5 h-5 text-hl-mute" />}
+                          </button>
+                          <div className="min-w-0 flex-1">
+                            <span className={`block text-sm font-sans leading-snug break-words ${done ? 'line-through text-hl-mute' : 'text-white'}`}>{t.title}</span>
+                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                              <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${PRIORITY_CELL[t.priority]}`}>{PRIORITY_LABEL[t.priority]}</span>
+                              {t.startTime && <span className="text-[10px] font-mono text-hl-dim">{t.startTime}</span>}
+                            </div>
+                            <div className="flex items-center justify-between mt-1.5">
+                              <AssigneeChips assignees={t.assignees} urlFor={(id) => members.get(id)?.avatarUrl} px={20} />
+                              {!!t.commentCount && (
+                                <span className="flex items-center gap-1 text-[10px] text-hl-mute font-mono"><MessageSquare className="w-3 h-3" /> {t.commentCount}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+                <button onClick={() => setNewTask({ date: key, type: 'aufgabe' })} className="mt-2 w-full py-1.5 rounded-lg border border-dashed border-white/15 text-hl-mute hover:text-white hover:border-white/30 text-xs cursor-pointer flex items-center justify-center gap-1">
+                  <Plus className="w-3.5 h-3.5" /> Aufgabe
+                </button>
+              </div>
+            );
+          })}
         </div>
       ) : view === 'termine' ? (
         /* -------- MEINE TERMINE (Agenda, nach Datum) -------- */
@@ -1344,22 +1434,22 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
           onMoveTask={moveTask}
         />
       ) : (
-        /* -------- WOCHENANSICHT -------- */
-        <div className="flex gap-3 overflow-x-auto pb-2">
+        /* -------- WOCHENANSICHT (Kalender/Termine) -------- */
+        <div className={`flex gap-3 overflow-x-auto ${persist ? 'h-full pb-1' : 'pb-2'}`}>
           {range.weeks[0].map((d) => {
             const key = ymd(d);
             const isToday = key === TODAY;
             const dayTasks = tasksByDay[key] ?? [];
             return (
-              <div key={key} className="shrink-0 w-60 bg-[#060E0F]/40 border border-white/5 rounded-xl p-2.5 flex flex-col">
+              <div key={key} className={`shrink-0 w-64 bg-[#060E0F]/40 border border-white/5 rounded-xl p-2.5 flex flex-col ${persist ? 'h-full' : 'min-h-[14rem]'}`}>
                 <div className="flex items-baseline justify-between px-1 mb-2">
                   <span className={`font-display font-bold text-sm uppercase tracking-tight ${isToday ? 'text-brand-accent-light' : 'text-white'}`}>
-                    {WEEKDAYS[(d.getDay() + 6) % 7]}
+                    {WEEKDAYS_FULL[(d.getDay() + 6) % 7]}
                   </span>
                   <span className="text-[10px] font-mono text-hl-dim">{key.slice(8)}.{key.slice(5, 7)}.</span>
                 </div>
                 {hl[key] && <div className="mb-2"><HighlightPill h={hl[key]} className="!text-[11px] !leading-[18px] py-0.5 text-center" /></div>}
-                <div className="space-y-2 flex-1 min-h-[2rem]">
+                <div className={`space-y-2 min-h-[2rem] ${persist ? 'flex-1 overflow-y-auto' : 'flex-1'}`}>
                   {dayTasks.map((t) => (
                     <div key={t.id} onClick={() => setOpenTask(t)} className="bg-[#0a1110] border border-white/5 rounded-lg p-2.5 cursor-pointer hover:border-white/15 transition-colors">
                       <span className="block text-sm font-sans text-white leading-snug break-words">{t.title}</span>
@@ -1389,8 +1479,8 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                     </div>
                   ))}
                 </div>
-                <button onClick={() => setNewTask({ date: key })} className="mt-2 w-full py-1.5 rounded-lg border border-dashed border-white/15 text-hl-mute hover:text-white hover:border-white/30 text-xs cursor-pointer flex items-center justify-center gap-1">
-                  <Plus className="w-3.5 h-3.5" /> Aufgabe
+                <button onClick={() => setNewTask({ date: key, type: 'termin' })} className="mt-2 w-full py-1.5 rounded-lg border border-dashed border-white/15 text-hl-mute hover:text-white hover:border-white/30 text-xs cursor-pointer flex items-center justify-center gap-1">
+                  <Plus className="w-3.5 h-3.5" /> Termin
                 </button>
               </div>
             );

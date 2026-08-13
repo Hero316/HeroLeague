@@ -936,6 +936,8 @@ function ConversationInfo({
   const canEdit = isGroup && isSuperadmin;
   const [title, setTitle] = useState(conversation.title);
   const [busy, setBusy] = useState(false);
+  const [zoom, setZoom] = useState<string | null>(null); // Profilbild groß
+  useBackClose(zoom !== null, () => setZoom(null));
   const fileRef = useRef<HTMLInputElement>(null);
   const otherId = !isGroup ? conversation.members.find((m) => m.userId !== currentUserId)?.userId : undefined;
   const other = otherId ? members.get(otherId) : undefined;
@@ -978,7 +980,9 @@ function ConversationInfo({
             <div className="flex items-center gap-3 mb-4">
               <div className="relative shrink-0">
                 {conversation.avatarUrl ? (
-                  <Avatar name={conversation.title || 'Gruppe'} url={conversation.avatarUrl} size={56} />
+                  <button type="button" onClick={() => setZoom(conversation.avatarUrl!)} className="cursor-zoom-in rounded-full block" title="Bild groß ansehen">
+                    <Avatar name={conversation.title || 'Gruppe'} url={conversation.avatarUrl} size={56} />
+                  </button>
                 ) : (
                   <div className="w-14 h-14 rounded-full bg-brand-accent/20 border border-brand-accent-light/30 flex items-center justify-center text-brand-accent-light">
                     <Hash className="w-7 h-7" />
@@ -1049,7 +1053,15 @@ function ConversationInfo({
           </>
         ) : (
           <div className="flex flex-col items-center text-center gap-3 py-4">
-            <Avatar name={other?.name ?? conversationTitle(conversation, currentUserId)} url={other?.avatarUrl} status={otherId && online.has(otherId) ? 'online' : undefined} size={84} showStatus={!!(otherId && online.has(otherId))} ring="#0b1210" />
+            <button
+              type="button"
+              disabled={!other?.avatarUrl}
+              onClick={() => other?.avatarUrl && setZoom(other.avatarUrl)}
+              className={other?.avatarUrl ? 'cursor-zoom-in rounded-full' : 'cursor-default'}
+              title={other?.avatarUrl ? 'Bild groß ansehen' : undefined}
+            >
+              <Avatar name={other?.name ?? conversationTitle(conversation, currentUserId)} url={other?.avatarUrl} status={otherId && online.has(otherId) ? 'online' : undefined} size={84} showStatus={!!(otherId && online.has(otherId))} ring="#0b1210" />
+            </button>
             <div className="font-display font-black text-white text-lg">{other?.name ?? conversationTitle(conversation, currentUserId)}</div>
             {otherId && online.has(otherId) ? (
               <div className="text-sm text-hl-green">online</div>
@@ -1060,6 +1072,22 @@ function ConversationInfo({
         )}
       </motion.div>
     </motion.div>
+    {zoom && (
+      <div
+        className="fixed inset-0 z-[80] bg-black/90 flex items-center justify-center p-4 cursor-zoom-out"
+        onClick={() => setZoom(null)}
+      >
+        <img src={zoom} alt="Profilbild" className="max-w-full max-h-full rounded-2xl object-contain" />
+        <button
+          onClick={() => setZoom(null)}
+          className="absolute right-4 p-2 rounded-full bg-white/10 border border-white/20 text-white hover:bg-white/20 cursor-pointer"
+          style={{ top: 'calc(env(safe-area-inset-top) + 1rem)' }}
+          title="Schließen"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+    )}
     </ModalPortal>
   );
 }
