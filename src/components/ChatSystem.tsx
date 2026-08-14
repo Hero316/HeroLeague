@@ -544,7 +544,7 @@ function Composer({
         <input ref={galleryRef} type="file" accept="image/*" className="hidden" onChange={(e) => { void onFileChosen(e.target.files?.[0]); e.target.value = ''; }} />
         <input ref={docRef} type="file" className="hidden" onChange={(e) => { void onFileChosen(e.target.files?.[0]); e.target.value = ''; }} />
 
-        <div className="flex-1 flex items-end hl-surf-0 border border-white/10 rounded-3xl pl-2 pr-4 focus-within:border-brand-accent-light/60 transition-colors">
+        <div className="flex-1 min-w-0 flex items-end hl-surf-0 border border-white/10 rounded-3xl pl-2 pr-4 focus-within:border-brand-accent-light/60 transition-colors">
           <button
             type="button"
             onClick={() => setEmoji(true)}
@@ -784,7 +784,7 @@ function MessageRow({
   return (
     <div data-mid={m.id} className={`flex gap-2 ${mine ? 'justify-end' : 'justify-start'} ${firstOfRun ? 'mt-2.5' : 'mt-0.5'}`}>
       {!mine && <div className="w-7 shrink-0 self-end">{firstOfRun && <Avatar name={name} url={avatarUrl} size={28} />}</div>}
-      <div className={`max-w-[82%] ${mine ? 'items-end' : 'items-start'} flex flex-col`}>
+      <div className={`max-w-[82%] min-w-0 ${mine ? 'items-end' : 'items-start'} flex flex-col`}>
         <div
           {...(deleted ? {} : longPress)}
           className={`hl-bubble px-3 py-2 rounded-2xl ${mine ? 'text-white rounded-br-md shadow-md shadow-brand-accent-light/25' : 'hl-bubble-other text-hl-text rounded-bl-md shadow-sm shadow-black/5'} ${tailClass} ${highlight ? 'ring-2 ring-brand-accent-light ring-offset-1 ring-offset-[#F1F6F5]' : ''} ${deleted ? 'opacity-70' : 'select-none'}`}
@@ -802,7 +802,7 @@ function MessageRow({
             </p>
           ) : (
             <>
-              {m.body && <p className="text-[15px] font-sans whitespace-pre-wrap break-words leading-snug">{m.body}</p>}
+              {m.body && <p className="text-[15px] font-sans whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-snug">{m.body}</p>}
               <MessageAttachment m={m} mine={mine} onOpen={onOpenAttachment} />
             </>
           )}
@@ -1989,7 +1989,7 @@ export default function ChatSystem({
       </div>
 
       {/* Nachrichten */}
-      <div className={`flex-1 flex-col ${activeId ? 'flex' : 'hidden md:flex'}`}>
+      <div className={`flex-1 min-w-0 flex-col ${activeId ? 'flex' : 'hidden md:flex'}`}>
         {!active ? (
           <div className="flex-1 flex flex-col items-center justify-center text-hl-mute gap-2 hl-chat-bg">
             <MessageSquare className="w-8 h-8 text-hl-faint" />
@@ -2064,7 +2064,7 @@ export default function ChatSystem({
               </div>
             )}
 
-            <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-3 hl-chat-bg" onScroll={onMsgScroll}>
+            <div ref={listRef} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 py-3 hl-chat-bg" onScroll={onMsgScroll}>
               {convSearching ? (
                 <ConvSearchResults hits={convHits} members={members} onPick={openConvHit} />
               ) : loadingMsgs ? (
