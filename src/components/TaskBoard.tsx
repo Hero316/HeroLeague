@@ -1306,6 +1306,9 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                           <div className="min-w-0 flex-1">
                             <span className={`block text-sm font-sans leading-snug break-words ${done ? 'line-through text-hl-mute' : 'text-white'}`}>{t.title}</span>
                             <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                              {t.status !== 'offen' && t.status !== 'leer' && (
+                                <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${STATUS_CELL[t.status]}`}>{STATUS_LABEL[t.status]}</span>
+                              )}
                               <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${PRIORITY_CELL[t.priority]}`}>{PRIORITY_LABEL[t.priority]}</span>
                               {t.startTime && <span className="text-[10px] font-mono text-hl-dim">{t.startTime}</span>}
                             </div>
@@ -1422,6 +1425,9 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                                 </span>
                               ) : (
                                 <span className="text-hl-faint">ohne Frist</span>
+                              )}
+                              {t.status !== 'offen' && t.status !== 'leer' && (
+                                <span className={`px-1.5 py-0.5 rounded font-semibold ${STATUS_CELL[t.status]}`}>{STATUS_LABEL[t.status]}</span>
                               )}
                               <span className={`px-1.5 py-0.5 rounded ${PRIORITY_CELL[t.priority]}`}>{PRIORITY_LABEL[t.priority]}</span>
                               {t.type === 'beides' && <span className="px-1.5 py-0.5 rounded bg-brand-accent/15 text-brand-accent-light">auch Termin</span>}
