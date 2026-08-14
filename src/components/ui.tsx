@@ -271,9 +271,21 @@ export function PageHeader({ kicker, title, text }: PageHeaderProps) {
 // alle Footer-Instanzen die Logos sofort (der Footer wird pro Route neu gemountet).
 let partnersCache: PartnersConfig | null = null;
 
-// Ein einzelnes Partner-Logo: farbig hochgeladen, per CSS grau dargestellt und
-// erst beim Hovern farbig. Mit Link ⇒ anklickbar (neuer Tab), sonst reines Bild.
-function PartnerLogo({ partner, heightClass, maxWClass }: { partner: Partner; heightClass: string; maxWClass: string }) {
+// Ein einzelnes Partner-Logo. Standard: farbig hochgeladen, per CSS grau
+// dargestellt und erst beim Hovern farbig (auf Touch-Geräten dauerhaft farbig).
+// `glow` = Hauptpartner: IMMER farbig (PC + Handy); auf dem Handy leuchtet es
+// dauerhaft, auf dem PC beim Hovern (dann auch etwas größer).
+function PartnerLogo({
+  partner,
+  heightClass,
+  maxWClass,
+  glow = false,
+}: {
+  partner: Partner;
+  heightClass: string;
+  maxWClass: string;
+  glow?: boolean;
+}) {
   const img = (
     <img
       src={partner.logoUrl}
@@ -281,7 +293,11 @@ function PartnerLogo({ partner, heightClass, maxWClass }: { partner: Partner; he
       loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"
-      className={`hl-partner-logo ${heightClass} ${maxWClass} w-auto object-contain grayscale brightness-[.45] contrast-[1.1] opacity-90 transition duration-300 ease-out hover:grayscale-0 hover:brightness-100 hover:contrast-100 hover:opacity-100 hover:scale-105`}
+      className={
+        glow
+          ? `hl-partner-main-logo ${heightClass} ${maxWClass} w-auto object-contain`
+          : `hl-partner-logo ${heightClass} ${maxWClass} w-auto object-contain grayscale brightness-[.45] contrast-[1.1] opacity-90 transition duration-300 ease-out hover:grayscale-0 hover:brightness-100 hover:contrast-100 hover:opacity-100 hover:scale-105`
+      }
     />
   );
   return partner.linkUrl ? (
@@ -295,15 +311,16 @@ function PartnerLogo({ partner, heightClass, maxWClass }: { partner: Partner; he
   );
 }
 
-// Große Partner (Hauptpartner/Bankpartner) auch aus Altdaten erkennen, die noch
-// `main:true` statt `tier` gespeichert haben.
-function isBigPartner(p: Partner): boolean {
-  return p.tier === 'main' || p.tier === 'bank' || (p as unknown as { main?: boolean }).main === true;
+// Hauptpartner auch aus Altdaten erkennen, die noch `main:true` statt `tier`
+// gespeichert haben.
+function isMainPartner(p: Partner): boolean {
+  return p.tier === 'main' || (p as unknown as { main?: boolean }).main === true;
 }
 
-// Partner-/Sponsoren-Sektion ganz unten auf jeder öffentlichen Seite. Hauptpartner
-// und Bankpartner stehen groß oben nebeneinander – jeweils mit eigener Überschrift
-// darüber. Darunter das normale Raster. Leere Liste ⇒ die Sektion wird nicht gerendert.
+// Partner-/Sponsoren-Sektion ganz unten auf jeder öffentlichen Seite. Der
+// Hauptpartner steht ganz oben – am größten, immer farbig und leuchtend, hebt
+// sich klar ab. Darunter der Bankpartner (mit eigener Überschrift), darunter das
+// normale Raster. Leere Liste ⇒ die Sektion wird nicht gerendert.
 export function PartnerSection() {
   const [partners, setPartners] = React.useState<Partner[]>(partnersCache?.items ?? []);
 
@@ -321,8 +338,9 @@ export function PartnerSection() {
 
   const withLogo = partners.filter((p) => p.logoUrl);
   if (withLogo.length === 0) return null;
-  const bigs = withLogo.filter(isBigPartner);
-  const rest = withLogo.filter((p) => !isBigPartner(p));
+  const mains = withLogo.filter(isMainPartner);
+  const banks = withLogo.filter((p) => p.tier === 'bank');
+  const rest = withLogo.filter((p) => !isMainPartner(p) && p.tier !== 'bank');
 
   return (
     <section className="bg-[linear-gradient(180deg,#e2e8fb_0%,#ccd6f2_100%)] text-[#0b0b0f]">
@@ -331,14 +349,31 @@ export function PartnerSection() {
           Partner
         </h2>
 
-        {bigs.length > 0 && (
+        {/* Hauptpartner – hebt sich klar ab: größer, immer farbig & leuchtend,
+            eigene gold schimmernde Überschrift, ganz oben und für sich allein. */}
+        {mains.length > 0 && (
+          <div className="flex flex-wrap items-end justify-center gap-x-16 sm:gap-x-24 gap-y-10 mb-12 sm:mb-16">
+            {mains.map((p) => (
+              <div key={p.id} className="flex flex-col items-center gap-3.5">
+                {p.label && (
+                  <span className="hl-partner-hero font-sans text-sm sm:text-lg font-black uppercase tracking-[0.18em]">
+                    {p.label}
+                  </span>
+                )}
+                <PartnerLogo partner={p} heightClass="h-20 sm:h-28" maxWClass="max-w-[300px]" glow />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Bankpartner – weiterhin groß mit eigener Überschrift, aber unter dem
+            Hauptpartner (Grau→Farbe beim Hovern, auf dem Handy dauerhaft farbig). */}
+        {banks.length > 0 && (
           <div className="flex flex-wrap items-end justify-center gap-x-14 sm:gap-x-20 gap-y-10 mb-12 sm:mb-16">
-            {bigs.map((p) => (
+            {banks.map((p) => (
               <div key={p.id} className="flex flex-col items-center gap-3">
                 {p.label && (
-                  <span
-                    className={`${p.tier === 'bank' ? 'hl-partner-bank' : 'hl-partner-main'} font-sans text-[13px] sm:text-base font-extrabold uppercase tracking-[0.16em]`}
-                  >
+                  <span className="hl-partner-bank font-sans text-[13px] sm:text-base font-extrabold uppercase tracking-[0.16em]">
                     {p.label}
                   </span>
                 )}

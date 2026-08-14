@@ -2058,10 +2058,10 @@ export default function AdminPanel({
               Logo bitte <strong className="text-gray-300">farbig</strong> und mit{' '}
               <strong className="text-gray-300">transparentem Hintergrund</strong> (PNG/WebP) hochladen — kein zweites
               Schwarz-Weiß-Bild nötig. Über die <strong className="text-gray-300">Anzeige-Stufe</strong> bestimmst du die
-              Größe: <strong className="text-gray-300">Hauptpartner</strong> und{' '}
-              <strong className="text-gray-300">Bankpartner</strong> erscheinen groß nebeneinander ganz oben — jeweils mit
-              eigener Überschrift darüber (z. B. „Offizieller Bankpartner"). <strong className="text-gray-300">Normal</strong>{' '}
-              landet im kleinen Raster darunter. Reihenfolge über die Pfeile.
+              Größe: Der <strong className="text-gray-300">Hauptpartner</strong> steht ganz oben — am größten, immer farbig
+              und leuchtend (auch am Handy), mit gold schimmernder Überschrift. Darunter der{' '}
+              <strong className="text-gray-300">Bankpartner</strong> mit eigener Überschrift (z. B. „Offizieller Bankpartner").
+              <strong className="text-gray-300"> Normal</strong> landet im kleinen Raster darunter. Reihenfolge über die Pfeile.
             </p>
 
             <div className="space-y-4">
