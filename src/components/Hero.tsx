@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActiveTab, HeroImages, Match, PlayerOfMonth, PlayerStat, Team } from '../types';
+import { ActiveTab, HeroImages, Match, Partner, PlayerOfMonth, PlayerStat, Team } from '../types';
 import { apiFetch } from '../lib/api';
 import { MapPin } from 'lucide-react';
 import { calculateStandings } from '../lib/standings';
@@ -25,6 +25,8 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
   // pom kommt bevorzugt von oben (vorgeladen); nur ohne Prop selbst nachladen.
   const [pomState, setPomState] = useState<PlayerOfMonth | null>(null);
   const pom = pomProp !== undefined ? pomProp : pomState;
+  // Partner-Liste für den Sponsor der „Spieler des Spieltages"-Auszeichnung.
+  const [partners, setPartners] = useState<Partner[]>([]);
   const [active, setActive] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -35,9 +37,18 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
         if (data && data.name) setPomState(data);
       })
       .catch(() => {
-        // Noch kein Spieler des Monats gepflegt
+        // Noch kein Spieler des Spieltages gepflegt
       });
   }, [pomProp]);
+
+  // Partner laden (für das Sponsor-Logo neben der Auszeichnung).
+  useEffect(() => {
+    apiFetch<{ items: Partner[] }>('/api/twitch?resource=partners')
+      .then((data) => setPartners(Array.isArray(data.items) ? data.items : []))
+      .catch(() => {
+        /* keine Partner gepflegt */
+      });
+  }, []);
 
   const getTeam = (id: string) => teams.find((t) => t.id === id);
 
@@ -104,7 +115,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
   const secondaryBtn =
     'inline-flex items-center gap-2 px-4 py-2.5 sm:gap-2.5 sm:px-6 sm:py-[15px] rounded-[11px] sm:rounded-[13px] bg-white/5 border border-white/[.16] text-hl-text font-sans font-bold text-xs sm:text-sm tracking-wider transition-[color,border-color,background-color,transform] duration-150 ease-out hover:border-brand-accent-light hover:bg-[rgba(34,223,201,.06)] active:scale-[.97] cursor-pointer';
 
-  const dotLabels: Record<string, string> = { match: 'SPIELTAG', pom: 'SPIELER DES MONATS', table: 'TABELLE' };
+  const dotLabels: Record<string, string> = { match: 'SPIELTAG', pom: 'SPIELER DES SPIELTAGES', table: 'TABELLE' };
 
   // ---------- Slide 1: Spieltag (Abend-Übersicht) ----------
   const renderMatchSlide = () => {
@@ -279,6 +290,8 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
     const pomPoints = players.find(
       (p) => p.name === pom.name && (!pomTeam || p.teamId === pomTeam.id)
     )?.points;
+    // Sponsor der Auszeichnung (aus der Partner-Liste über die gespeicherte ID).
+    const sponsor = pom.sponsorId ? partners.find((p) => p.id === pom.sponsorId) : undefined;
     return (
       <>
         {/* Hintergrund: eigenes Foto (falls hochgeladen) mit Overlays, sonst das
@@ -312,11 +325,37 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
               <h1 className="mt-5 font-display font-black text-[30px] sm:text-7xl xl:text-[88px] leading-[.85] tracking-tight sm:tracking-[-0.03em] xl:tracking-[-0.04em] uppercase text-white">
                 Spieler des
                 <br />
-                <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">Monats</span>
+                <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">
+                  Spieltages{pom.matchday ? ` ${pom.matchday}` : ''}
+                </span>
               </h1>
               <p className="mt-5 max-w-[430px] mx-auto lg:mx-0 hidden sm:block text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
-                Die herausragende Leistung des Monats in der Hero League.
+                Die herausragende Leistung des Spieltags in der Hero League.
               </p>
+              {/* Sponsor der Auszeichnung – Logo/Name mit Link, aktualisiert sich
+                  automatisch mit der Partner-Auswahl im Admin. Auch auf dem Handy sichtbar. */}
+              {sponsor && (sponsor.logoUrl || sponsor.name) && (
+                <div className="mt-5 flex items-center justify-center lg:justify-start gap-2.5">
+                  <span className="font-sans font-bold text-[10.5px] tracking-[2px] uppercase text-hl-gold/90 whitespace-nowrap">
+                    Gesponsert von
+                  </span>
+                  {sponsor.logoUrl ? (
+                    sponsor.linkUrl ? (
+                      <a href={sponsor.linkUrl} target="_blank" rel="noopener noreferrer" title={sponsor.name} className="inline-flex items-center">
+                        <img src={sponsor.logoUrl} alt={sponsor.name || 'Sponsor'} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-8 sm:h-9 w-auto max-w-[150px] object-contain drop-shadow-[0_2px_10px_rgba(0,0,0,.5)]" />
+                      </a>
+                    ) : (
+                      <img src={sponsor.logoUrl} alt={sponsor.name || 'Sponsor'} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-8 sm:h-9 w-auto max-w-[150px] object-contain drop-shadow-[0_2px_10px_rgba(0,0,0,.5)]" />
+                    )
+                  ) : sponsor.linkUrl ? (
+                    <a href={sponsor.linkUrl} target="_blank" rel="noopener noreferrer" className="font-display font-black text-lg text-white hover:text-brand-accent-light transition-colors">
+                      {sponsor.name}
+                    </a>
+                  ) : (
+                    <span className="font-display font-black text-lg text-white">{sponsor.name}</span>
+                  )}
+                </div>
+              )}
               {/* Buttons auf Desktop in der Textspalte */}
               <div className="hidden lg:flex gap-3 mt-7 flex-wrap justify-start">
                 <button onClick={() => onNavigate('heroone')} className={primaryBtn}>

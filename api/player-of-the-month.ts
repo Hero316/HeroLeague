@@ -6,10 +6,10 @@ import { DEFAULT_PLAYER_OF_MONTH } from './_lib/seed.js';
 
 // Leerer Spieler des Monats – wird bewusst gespeichert, wenn die Auszeichnung
 // entfernt wird, damit das GET nicht auf die Demo-Vorgabe zurückfällt.
-const EMPTY_PLAYER_OF_MONTH = { name: '', club: '', teamId: '', goals: 0, assists: 0, image: '' };
+const EMPTY_PLAYER_OF_MONTH = { name: '', club: '', teamId: '', goals: 0, assists: 0, image: '', matchday: 0, sponsorId: '' };
 
 const savePom = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
-  const { name, club, teamId, goals, assists, image } = req.body ?? {};
+  const { name, club, teamId, goals, assists, image, matchday, sponsorId } = req.body ?? {};
   if (!isNonEmptyString(name)) return badRequest(res, 'Bitte einen Spieler-Namen angeben.');
 
   const pom = {
@@ -19,6 +19,10 @@ const savePom = requireStaff(async (req: VercelRequest, res: VercelResponse) => 
     goals: Number.isFinite(Number(goals)) ? Math.max(0, Math.floor(Number(goals))) : 0,
     assists: Number.isFinite(Number(assists)) ? Math.max(0, Math.floor(Number(assists))) : 0,
     image: typeof image === 'string' ? image : '',
+    // Spieltag-Nummer für „Spieler des Spieltages N" (0 = ohne Nummer anzeigen)
+    matchday: Number.isFinite(Number(matchday)) ? Math.max(0, Math.floor(Number(matchday))) : 0,
+    // Partner-ID des Sponsors dieser Auszeichnung (leer = kein Sponsor)
+    sponsorId: typeof sponsorId === 'string' ? sponsorId : '',
   };
 
   await sql`

@@ -139,7 +139,7 @@ export default function SearchBar({
       { label: 'Tabelle', kw: 'tabelle ligatabelle standings platzierung rang', go: () => onNavigate?.('tabelle') },
       { label: 'HERO ONE', kw: 'hero one heroone award auszeichnung ballon dor bester spieler', go: () => onNavigate?.('heroone') },
       { label: 'Statistiken', kw: 'statistiken stats zahlen torschützen torschützenkrone goldener handschuh torwart assists vorlagen', go: () => onNavigate?.('statistiken') },
-      { label: 'Spieler des Monats', kw: 'spieler des monats mvp startseite', go: () => onNavigate?.('home') },
+      { label: 'Spieler des Spieltages', kw: 'spieler des spieltages spieltag monats mvp startseite', go: () => onNavigate?.('home') },
       ...(hasHighlights
         ? [{ label: 'Highlights', kw: 'highlights bilder fotos videos galerie clips ordner', go: () => onNavigate?.('highlights') }]
         : []),

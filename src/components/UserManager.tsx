@@ -88,7 +88,7 @@ export default function UserManager() {
       </h3>
       <p className="text-xs text-gray-400 font-sans mb-6">
         Lege Zugänge an und vergib Rollen. <strong className="text-hl-soft">Super-Admins</strong> dürfen alles,{' '}
-        <strong className="text-hl-soft">Spiel-Admins</strong> pflegen Spielplan/Ergebnisse/Klubs, Spieler des Monats & Highlights
+        <strong className="text-hl-soft">Spiel-Admins</strong> pflegen Spielplan/Ergebnisse/Klubs, Spieler des Spieltages & Highlights
         (keine Startseite, Kanäle, Saison oder Zugänge),{' '}
         <strong className="text-hl-soft">Schiedsrichter</strong> nur den Schiedsrichtermodus,{' '}
         <strong className="text-hl-soft">Team-Mitglieder</strong> nur den Team-Bereich (Chat, Aufgaben, Tickets).

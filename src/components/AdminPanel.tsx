@@ -388,6 +388,8 @@ export default function AdminPanel({
   const [pomGoals, setPomGoals] = useState(0);
   const [pomAssists, setPomAssists] = useState(0);
   const [pomImage, setPomImage] = useState('');
+  const [pomMatchday, setPomMatchday] = useState(0); // Spieltag-Nummer für „Spieler des Spieltages N"
+  const [pomSponsorId, setPomSponsorId] = useState(''); // Partner-ID des Sponsors
   const [pomSuccess, setPomSuccess] = useState(false);
   const [pomAutoNote, setPomAutoNote] = useState('');
 
@@ -457,7 +459,7 @@ export default function AdminPanel({
   const [isStartingSeason, setIsStartingSeason] = useState(false);
 
   useEffect(() => {
-    apiFetch<{ name: string; club: string; teamId?: string; goals: number; assists: number; image: string }>('/api/player-of-the-month')
+    apiFetch<{ name: string; club: string; teamId?: string; goals: number; assists: number; image: string; matchday?: number; sponsorId?: string }>('/api/player-of-the-month')
       .then((data) => {
         setPomName(data.name || '');
         setPomClub(data.club || '');
@@ -465,9 +467,11 @@ export default function AdminPanel({
         setPomGoals(data.goals || 0);
         setPomAssists(data.assists || 0);
         setPomImage(data.image || '');
+        setPomMatchday(data.matchday || 0);
+        setPomSponsorId(data.sponsorId || '');
       })
       .catch(() => {
-        // Noch kein Spieler des Monats gepflegt
+        // Noch kein Spieler des Spieltages gepflegt
       });
   }, []);
 
@@ -486,6 +490,8 @@ export default function AdminPanel({
           goals: Number(pomGoals),
           assists: Number(pomAssists),
           image: pomImage,
+          matchday: Number(pomMatchday),
+          sponsorId: pomSponsorId,
         }),
       });
       setPomSuccess(true);
@@ -497,7 +503,7 @@ export default function AdminPanel({
 
   // Auszeichnung komplett entfernen: leert Formular + Datenbank -> Karte verschwindet von der Startseite.
   const handleClearPom = async () => {
-    if (!window.confirm('Spieler des Monats wirklich entfernen? Die Karte verschwindet dann von der Startseite.')) return;
+    if (!window.confirm('Spieler des Spieltages wirklich entfernen? Die Karte verschwindet dann von der Startseite.')) return;
     try {
       await apiFetch('/api/player-of-the-month', { method: 'DELETE' });
       setPomName('');
@@ -506,6 +512,8 @@ export default function AdminPanel({
       setPomGoals(0);
       setPomAssists(0);
       setPomImage('');
+      setPomMatchday(0);
+      setPomSponsorId('');
       setPomAutoNote('');
       setPomSuccess(true);
       setTimeout(() => setPomSuccess(false), 3000);
@@ -595,8 +603,10 @@ export default function AdminPanel({
 
   // Partner laden (nur relevant für Super-Admin, schadet sonst aber nicht).
   // Altdaten mit `main:true` (statt `tier`) werden auf die neue Stufe migriert.
+  // Partner werden für die Partner-Sektion (Super-Admin) UND für die
+  // Sponsor-Auswahl beim „Spieler des Spieltages" (auch Spiel-Admins) gebraucht.
   useEffect(() => {
-    if (!isSuperadmin) return;
+    if (!isSuperadmin && !canManagePom) return;
     apiFetch<{ items: Partner[] }>('/api/twitch?resource=partners')
       .then((data) => {
         const items = (Array.isArray(data.items) ? data.items : []).map((p) => ({
@@ -609,7 +619,7 @@ export default function AdminPanel({
       .catch(() => {
         /* noch nicht konfiguriert */
       });
-  }, [isSuperadmin]);
+  }, [isSuperadmin, canManagePom]);
 
   const addPartner = () => {
     setPartners((prev) => [
@@ -1518,20 +1528,21 @@ export default function AdminPanel({
       </AccordionSection>
       )}
 
-      {/* Spieler des Monats */}
+      {/* Spieler des Spieltages */}
       <AccordionSection
         id="pom"
         show={canManagePom}
         category="startseite"
-        title="Spieler des Monats konfigurieren"
-        subtitle="Auszeichnung, Verein, Leistungsdaten & Portraitfoto"
+        title="Spieler des Spieltages konfigurieren"
+        subtitle="Auszeichnung, Spieltag-Nr., Sponsor, Leistungsdaten & Portraitfoto"
         icon={<Award className="w-5 h-5" />}
         accent="#E9C46A"
       >
         <div>
           <p className="text-xs text-gray-400 font-sans mb-4">
-            Bestimme den ausgezeichneten Spieler, seinen Verein, die Leistungsdaten und lade sein Portraitfoto hoch —
-            erscheint prominent auf der Startseite.
+            Bestimme den ausgezeichneten Spieler, seinen Verein, die Spieltag-Nummer, den Sponsor, die Leistungsdaten
+            und lade sein Portraitfoto hoch — erscheint prominent auf der Startseite (z.&nbsp;B. „Spieler des Spieltages 1,
+            gesponsert von …").
           </p>
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
@@ -1541,7 +1552,7 @@ export default function AdminPanel({
               className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 bg-brand-accent-light/15 hover:bg-brand-accent-light/25 border border-brand-accent-light/40 text-brand-accent-light rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
             >
               <Sparkles className="w-4 h-4" />
-              <span>Aus Monatsdaten berechnen</span>
+              <span>Automatisch berechnen</span>
             </button>
             {pomAutoNote && (
               <span className="text-xs text-emerald-400 font-sans">{pomAutoNote}</span>
@@ -1549,6 +1560,34 @@ export default function AdminPanel({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div>
+              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">SPIELTAG-NR.</label>
+              <input
+                type="number"
+                min={0}
+                value={pomMatchday}
+                onChange={(e) => setPomMatchday(Number(e.target.value))}
+                placeholder="z. B. 1"
+                className={inputClass}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">SPONSOR</label>
+              <select
+                value={pomSponsorId}
+                onChange={(e) => setPomSponsorId(e.target.value)}
+                className={`${inputClass} cursor-pointer`}
+              >
+                <option value="">-- Kein Sponsor --</option>
+                {partners.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name || p.label || 'Partner ohne Namen'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">VEREIN</label>
               <select
@@ -1592,12 +1631,12 @@ export default function AdminPanel({
             </div>
 
             <div>
-              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">TORE IM MONAT</label>
+              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">TORE</label>
               <input type="number" min={0} value={pomGoals} onChange={(e) => setPomGoals(Number(e.target.value))} className={inputClass} />
             </div>
 
             <div>
-              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">VORLAGEN IM MONAT</label>
+              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">VORLAGEN</label>
               <input type="number" min={0} value={pomAssists} onChange={(e) => setPomAssists(Number(e.target.value))} className={inputClass} />
             </div>
 
@@ -1661,7 +1700,7 @@ export default function AdminPanel({
               maxDimension={1920}
             />
             <ImageUploader
-              label="Slide 2 · Spieler des Monats"
+              label="Slide 2 · Spieler des Spieltages"
               value={heroImages.pom}
               onChange={(url) => setHeroImages((h) => ({ ...h, pom: url }))}
               maxDimension={1920}
