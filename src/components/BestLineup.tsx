@@ -102,7 +102,12 @@ const Chip = React.memo(function Chip({
       <span className="font-sans font-semibold text-[10px] leading-tight text-white text-center truncate max-w-full drop-shadow-[0_1px_2px_rgba(0,0,0,.9)]">
         {firstName}
       </span>
-      <span className="font-display font-black text-[10px] leading-none" style={{ color: accent }}>
+      <span
+        className={`font-display font-black leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,.95)] ${
+          size === 'bench' ? 'text-[12px]' : 'text-[14px]'
+        }`}
+        style={{ color: accent }}
+      >
         {winRate === null ? '–' : `${winRate}%`}
       </span>
     </motion.button>
