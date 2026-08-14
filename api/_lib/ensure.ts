@@ -38,6 +38,8 @@ export async function ensureSchema(): Promise<void> {
     await sql`SELECT 1 FROM thread_reads LIMIT 1`;
     // Ideen-Bereich (Brainstorm) mitprüfen.
     await sql`SELECT 1 FROM ideas LIMIT 1`;
+    // Benannte Links („Link-Tasten") mitprüfen.
+    await sql`SELECT links FROM tasks LIMIT 1`;
     ensured = true;
     return;
   } catch {
@@ -144,6 +146,11 @@ export async function ensureSchema(): Promise<void> {
     author_id TEXT NOT NULL, author_name TEXT NOT NULL DEFAULT '', body TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
   await run(sql`CREATE INDEX IF NOT EXISTS idx_idea_comments_idea ON idea_comments(idea_id, created_at)`);
+
+  // --- Benannte Links („Link-Tasten") auf Aufgaben/Terminen, Tickets, Ideen --
+  await run(sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]'`);
+  await run(sql`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]'`);
+  await run(sql`ALTER TABLE ideas ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]'`);
 
   // --- Constraints ganz zuletzt (unkritisch; nur für Rollen-/Anhang-Checks) -
   await run(sql`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);

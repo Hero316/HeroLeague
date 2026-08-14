@@ -331,3 +331,9 @@ CREATE TABLE idea_comments (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_idea_comments_idea ON idea_comments(idea_id, created_at);
+
+-- Benannte Links („Link-Tasten") auf Aufgaben/Terminen, Tickets und Ideen.
+-- Format: JSONB-Array [{ "url": "...", "label": "Anzeigetext" }].
+ALTER TABLE tasks   ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE tickets ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE ideas   ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]';

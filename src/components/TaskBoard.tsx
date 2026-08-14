@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquare, Users, CalendarDays, ListChecks, Clock, Move, Check, Calendar, CheckSquare, Square } from 'lucide-react';
-import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember, Match, EventArchive, TaskKind } from '../types';
+import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember, Match, EventArchive, TaskKind, LinkItem } from '../types';
 import { fetchTasksRange, fetchAllTasks, fetchTask, createTask, updateTask, deleteTask, addTaskComment, fetchTeam, memberMap } from '../lib/collab';
 import { apiFetch } from '../lib/api';
 import { getUrlParam, setUrlParam } from '../lib/urlState';
 import { useBackClose } from '../lib/backStack';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
+import LinkChips from './LinkChips';
 import { useBackdropDismiss, ModalPortal, SegmentedControl, EmptyState } from './ui';
 
 const inputClass =
@@ -406,9 +407,21 @@ export function TaskDetail({
   const [assignees, setAssignees] = useState<string[]>(task.assignees.map((a) => a.userId));
   const [comments, setComments] = useState<TaskComment[]>(task.comments ?? []);
   const [commentBody, setCommentBody] = useState('');
+  const [links, setLinks] = useState<LinkItem[]>(task.links ?? []);
   const [busy, setBusy] = useState(false);
   const canDelete = isSuperadmin || task.createdBy === currentUserId;
   const backdrop = useBackdropDismiss(onClose);
+
+  // Link-Tasten sofort speichern (unabhängig vom „Speichern"-Knopf).
+  const saveLinks = async (next: LinkItem[]) => {
+    setLinks(next);
+    try {
+      await updateTask(task.id, { links: next });
+      onChanged();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Link konnte nicht gespeichert werden.');
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -573,6 +586,11 @@ export function TaskDetail({
         </div>
 
         <div className="mt-5">
+          <h4 className="text-xs font-mono uppercase tracking-wider text-hl-dim mb-2">Links</h4>
+          <LinkChips links={links} onChange={saveLinks} />
+        </div>
+
+        <div className="mt-5">
           <h4 className="text-xs font-mono uppercase tracking-wider text-hl-dim mb-2 flex items-center gap-1.5">
             <MessageSquare className="w-4 h-4" /> Verlauf ({comments.length})
           </h4>
@@ -647,6 +665,7 @@ function NewTaskModal({
   const [status, setStatus] = useState<TaskStatus>('offen');
   const [priority, setPriority] = useState<TicketPriority>('mittel');
   const [assignees, setAssignees] = useState<string[]>([]);
+  const [links, setLinks] = useState<LinkItem[]>([]);
   const [busy, setBusy] = useState(false);
   const toggle = (id: string) => setAssignees((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   const backdrop = useBackdropDismiss(onClose);
@@ -665,6 +684,7 @@ function NewTaskModal({
         status,
         priority,
         assignees,
+        links,
       });
       onCreated();
     } catch (err) {
@@ -759,6 +779,11 @@ function NewTaskModal({
                 );
               })}
             </div>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-2">Links (z.B. Google-Drive-Ordner)</label>
+            <LinkChips links={links} onChange={setLinks} />
           </div>
         </div>
 

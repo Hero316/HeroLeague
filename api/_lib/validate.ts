@@ -48,6 +48,24 @@ export function sanitizeImageUrls(value: unknown, limit = 10): string[] {
     .slice(0, limit);
 }
 
+// Benannte Links („Link-Tasten"): nur http(s), optionaler Name (Anzeigetext).
+// Ergebnis: [{ url, label }]. Bewusst begrenzt (Länge/Anzahl).
+export function sanitizeLinks(value: unknown, limit = 20): { url: string; label: string }[] {
+  if (!Array.isArray(value)) return [];
+  const out: { url: string; label: string }[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const rawUrl = (item as { url?: unknown }).url;
+    const url = typeof rawUrl === 'string' ? rawUrl.trim() : '';
+    if (!/^https?:\/\//i.test(url)) continue;
+    const rawLabel = (item as { label?: unknown }).label;
+    const label = typeof rawLabel === 'string' ? rawLabel.trim().slice(0, 80) : '';
+    out.push({ url: url.slice(0, 2000), label });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 export function isRoster(value: unknown): value is Player[] {
   return (
     Array.isArray(value) &&

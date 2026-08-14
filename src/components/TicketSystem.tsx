@@ -11,7 +11,7 @@ import {
   ArrowLeft,
   Ticket as TicketIcon,
 } from 'lucide-react';
-import type { Ticket, TicketComment, TicketPriority, TicketStatus, TeamMember } from '../types';
+import type { Ticket, TicketComment, TicketPriority, TicketStatus, TeamMember, LinkItem } from '../types';
 import { uploadImage } from '../lib/api';
 import { getUrlParam, setUrlParam } from '../lib/urlState';
 import { useBackClose, goBackLayer } from '../lib/backStack';
@@ -20,6 +20,7 @@ import {
   fetchTicket,
   createTicket,
   updateTicket,
+  updateTicketLinks,
   deleteTicket,
   addTicketComment,
   fetchTeam,
@@ -27,6 +28,7 @@ import {
 } from '../lib/collab';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
+import LinkChips from './LinkChips';
 import { useBackdropDismiss, ModalPortal, SegmentedControl, EmptyState } from './ui';
 
 const inputClass =
@@ -207,6 +209,18 @@ export function TicketDetail({
     }
   };
 
+  const saveLinks = async (next: LinkItem[]) => {
+    setTicket((t) => (t ? { ...t, links: next } : t));
+    try {
+      const updated = await updateTicketLinks(ticketId, next);
+      setTicket((t) => (t ? { ...t, ...updated } : updated));
+      onChanged();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Link konnte nicht gespeichert werden.');
+      load();
+    }
+  };
+
   const remove = async () => {
     if (!confirm('Ticket wirklich löschen? Alle Kommentare gehen verloren.')) return;
     setBusy(true);
@@ -323,6 +337,12 @@ export function TicketDetail({
                 </div>
               </div>
             )}
+
+            {/* Links */}
+            <div className="mt-6">
+              <h4 className="text-xs font-mono uppercase tracking-wider text-hl-dim mb-2">Links</h4>
+              <LinkChips links={ticket.links ?? []} onChange={saveLinks} />
+            </div>
 
             {/* Kommentare */}
             <div className="mt-6">

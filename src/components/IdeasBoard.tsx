@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { Plus, X, Send, Trash2, Loader2, Lightbulb, Check, ListChecks, CalendarDays, Users } from 'lucide-react';
-import type { Idea, IdeaComment, IdeaStatus, TeamMember } from '../types';
+import type { Idea, IdeaComment, IdeaStatus, LinkItem, TeamMember } from '../types';
 import { fetchIdeas, fetchIdea, createIdea, updateIdea, deleteIdea, convertIdea, addIdeaComment, fetchTeam } from '../lib/collab';
 import { useBackClose } from '../lib/backStack';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
+import LinkChips from './LinkChips';
 import { useBackdropDismiss, ModalPortal, EmptyState } from './ui';
 
 // Ideen-Bereich (Brainstorm): Jede Idee ist ein kleiner eigener Verlauf, in dem
@@ -332,6 +333,17 @@ function IdeaDetail({
     }
   };
 
+  const saveLinks = async (next: LinkItem[]) => {
+    setIdea((cur) => (cur ? { ...cur, links: next } : cur));
+    try {
+      await updateIdea(ideaId, { links: next });
+      onChanged();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Link konnte nicht gespeichert werden.');
+      load();
+    }
+  };
+
   const saveFazit = async () => {
     setBusy(true);
     try {
@@ -433,6 +445,12 @@ function IdeaDetail({
                   const tm = team.find((t) => t.id === m.userId);
                   return <Avatar key={m.userId} name={m.userName} url={tm?.avatarUrl} size={24} />;
                 })}
+              </div>
+
+              {/* Links */}
+              <div className="mb-4">
+                <h4 className="text-xs font-mono uppercase tracking-wider text-hl-dim mb-2">Links</h4>
+                <LinkChips links={idea.links ?? []} onChange={saveLinks} />
               </div>
 
               {/* Brainstorm-Verlauf */}

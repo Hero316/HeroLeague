@@ -354,6 +354,12 @@ export interface TeamMember {
 export type TicketPriority = 'niedrig' | 'mittel' | 'hoch' | 'dringend';
 export type TicketStatus = 'offen' | 'in_bearbeitung' | 'erledigt' | 'abgelehnt';
 
+// Benannter Link („Link-Taste"): url = Ziel, label = Anzeigetext (leer = Host).
+export interface LinkItem {
+  url: string;
+  label: string;
+}
+
 export interface TicketComment {
   id: string;
   ticketId: string;
@@ -372,6 +378,7 @@ export interface Ticket {
   status: TicketStatus;
   category: string;
   images: string[]; // Screenshot-URLs (Vercel Blob)
+  links: LinkItem[]; // benannte Link-Tasten
   createdBy: string;
   createdByName: string;
   assignedTo: string | null;
@@ -409,6 +416,7 @@ export interface Task {
   isoWeek: string | null; // z.B. "2026-W33" (Wochenansicht) oder null
   status: TaskStatus;
   priority: TicketPriority; // gleiche Stufen wie Tickets (niedrig…dringend)
+  links: LinkItem[]; // benannte Link-Tasten (z.B. Google-Drive-Ordner)
   createdBy: string;
   createdByName: string;
   createdAt: string;
@@ -438,6 +446,7 @@ export interface Idea {
   title: string;
   summary: string; // manuelles Fazit / Zusammenfassung
   status: IdeaStatus;
+  links: LinkItem[]; // benannte Link-Tasten
   createdBy: string;
   createdByName: string;
   linkedTaskId: string | null; // gesetzt, wenn daraus eine Aufgabe/Termin wurde

@@ -10,6 +10,7 @@ import {
   isTicketStatus,
   isTaskStatus,
   sanitizeImageUrls,
+  sanitizeLinks,
 } from './validate.js';
 import type { AppUser } from '../../src/types';
 
@@ -145,6 +146,7 @@ export async function tickets(req: VercelRequest, res: VercelResponse) {
     const rows = await sql`
       SELECT
         t.id, t.title, t.description, t.priority, t.status, t.category, t.images,
+        COALESCE(t.links, '[]'::jsonb) AS links,
         t.created_by AS "createdBy", t.created_by_name AS "createdByName",
         t.assigned_to AS "assignedTo", t.assigned_to_name AS "assignedToName",
         t.created_at AS "createdAt", t.updated_at AS "updatedAt",
@@ -165,16 +167,18 @@ export async function tickets(req: VercelRequest, res: VercelResponse) {
     const description = typeof b.description === 'string' ? b.description.slice(0, 8000) : '';
     const category = typeof b.category === 'string' ? b.category.trim().slice(0, 60) : '';
     const images = sanitizeImageUrls(b.images);
+    const links = sanitizeLinks(b.links);
     const id = genId('t');
     const name = sessionName(session);
 
     const title = b.title.trim().slice(0, 200);
     const rows = await sql`
-      INSERT INTO tickets (id, title, description, priority, status, category, images, created_by, created_by_name)
+      INSERT INTO tickets (id, title, description, priority, status, category, images, links, created_by, created_by_name)
       VALUES (${id}, ${title}, ${description}, ${priority}, 'offen',
-              ${category}, ${JSON.stringify(images)}::jsonb, ${session.userId}, ${name})
+              ${category}, ${JSON.stringify(images)}::jsonb, ${JSON.stringify(links)}::jsonb, ${session.userId}, ${name})
       RETURNING
         id, title, description, priority, status, category, images,
+        COALESCE(links, '[]'::jsonb) AS links,
         created_by AS "createdBy", created_by_name AS "createdByName",
         assigned_to AS "assignedTo", assigned_to_name AS "assignedToName",
         created_at AS "createdAt", updated_at AS "updatedAt"
@@ -206,6 +210,7 @@ export async function ticket(req: VercelRequest, res: VercelResponse) {
     const rows = await sql`
       SELECT
         t.id, t.title, t.description, t.priority, t.status, t.category, t.images,
+        COALESCE(t.links, '[]'::jsonb) AS links,
         t.created_by AS "createdBy", t.created_by_name AS "createdByName",
         t.assigned_to AS "assignedTo", t.assigned_to_name AS "assignedToName",
         t.created_at AS "createdAt", t.updated_at AS "updatedAt"
@@ -221,14 +226,33 @@ export async function ticket(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === 'POST') {
+    const b = req.body ?? {};
+    const id = typeof b.id === 'string' ? b.id : '';
+    if (!id) return badRequest(res, 'Ticket-ID fehlt.');
+
+    // Link-Tasten darf JEDER eingeloggte Nutzer setzen (harmlos, kollaborativ) –
+    // anders als Status/Zuweisung/Löschen, das Super-Admins vorbehalten bleibt.
+    if (b.op === 'links') {
+      const links = sanitizeLinks(b.links);
+      const rows = await sql`
+        UPDATE tickets SET links = ${JSON.stringify(links)}::jsonb, updated_at = now()
+        WHERE id = ${id}
+        RETURNING
+          id, title, description, priority, status, category, images,
+          COALESCE(links, '[]'::jsonb) AS links,
+          created_by AS "createdBy", created_by_name AS "createdByName",
+          assigned_to AS "assignedTo", assigned_to_name AS "assignedToName",
+          created_at AS "createdAt", updated_at AS "updatedAt"
+      `;
+      if (rows.length === 0) return res.status(404).json({ error: 'Ticket nicht gefunden.' });
+      return res.json(rows[0]);
+    }
+
     // Verwalten/Löschen (Status, Zuweisung, Priorität, Löschen): nur Super-Admins.
     const mayManage = session.role === 'superadmin';
     if (!mayManage) {
       return res.status(403).json({ error: 'Keine Berechtigung, Tickets zu bearbeiten.' });
     }
-    const b = req.body ?? {};
-    const id = typeof b.id === 'string' ? b.id : '';
-    if (!id) return badRequest(res, 'Ticket-ID fehlt.');
 
     const existing = await sql`
       SELECT id, status, priority, category, assigned_to AS "assignedTo", title
@@ -280,6 +304,7 @@ export async function ticket(req: VercelRequest, res: VercelResponse) {
       WHERE id = ${id}
       RETURNING
         id, title, description, priority, status, category, images,
+        COALESCE(links, '[]'::jsonb) AS links,
         created_by AS "createdBy", created_by_name AS "createdByName",
         assigned_to AS "assignedTo", assigned_to_name AS "assignedToName",
         created_at AS "createdAt", updated_at AS "updatedAt"
@@ -336,6 +361,7 @@ async function fetchTasks(where: string, params: unknown[]) {
            to_char(t.end_date, 'YYYY-MM-DD') AS "endDate",
            t.start_time AS "startTime", t.end_time AS "endTime",
            t.iso_week AS "isoWeek", t.status, t.priority,
+           COALESCE(t.links, '[]'::jsonb) AS links,
            t.created_by AS "createdBy", t.created_by_name AS "createdByName",
            t.created_at AS "createdAt", t.updated_at AS "updatedAt",
            COALESCE(
@@ -425,12 +451,13 @@ export async function tasks(req: VercelRequest, res: VercelResponse) {
     const startTime = normalizeTime(b.startTime);
     const endTime = startTime ? normalizeTime(b.endTime) : null;
     const assigneeIds = Array.isArray(b.assignees) ? b.assignees.filter((x: unknown): x is string => typeof x === 'string') : [];
+    const links = sanitizeLinks(b.links);
     const id = genId('task');
     const name = sessionName(session);
 
     await sql`
-      INSERT INTO tasks (id, title, notes, type, due_date, end_date, start_time, end_time, iso_week, status, priority, created_by, created_by_name)
-      VALUES (${id}, ${b.title.trim().slice(0, 200)}, ${notes}, ${type}, ${dueDate}, ${endDate}, ${startTime}, ${endTime}, ${isoWeek}, ${status}, ${priority}, ${session.userId}, ${name})
+      INSERT INTO tasks (id, title, notes, type, due_date, end_date, start_time, end_time, iso_week, status, priority, links, created_by, created_by_name)
+      VALUES (${id}, ${b.title.trim().slice(0, 200)}, ${notes}, ${type}, ${dueDate}, ${endDate}, ${startTime}, ${endTime}, ${isoWeek}, ${status}, ${priority}, ${JSON.stringify(links)}::jsonb, ${session.userId}, ${name})
     `;
     const members = await loadMembers();
     const added = await replaceAssignees(id, assigneeIds, members);
@@ -498,6 +525,7 @@ export async function task(req: VercelRequest, res: VercelResponse) {
   // Ganztägig (Startzeit auf null gesetzt) => Endzeit ebenfalls leeren.
   if (startTime === null) endTime = null;
   const setEndTime = b.endTime !== undefined || startTime === null;
+  const links = b.links !== undefined ? sanitizeLinks(b.links) : undefined;
 
   await sql`
     UPDATE tasks SET
@@ -511,6 +539,7 @@ export async function task(req: VercelRequest, res: VercelResponse) {
       iso_week = CASE WHEN ${b.isoWeek !== undefined} THEN ${isoWeek ?? null} ELSE iso_week END,
       status = COALESCE(${b.status ?? null}, status),
       priority = COALESCE(${b.priority ?? null}, priority),
+      links = CASE WHEN ${links !== undefined} THEN ${JSON.stringify(links ?? [])}::jsonb ELSE links END,
       updated_at = now()
     WHERE id = ${id}
   `;
@@ -606,6 +635,7 @@ async function isIdeaMember(ideaId: string, userId: string): Promise<boolean> {
 async function fetchIdeaById(id: string) {
   const rows = await sql`
     SELECT i.id, i.title, i.summary, i.status,
+           COALESCE(i.links, '[]'::jsonb) AS links,
            i.created_by AS "createdBy", i.created_by_name AS "createdByName",
            i.linked_task_id AS "linkedTaskId",
            i.created_at AS "createdAt", i.updated_at AS "updatedAt",
@@ -641,6 +671,7 @@ export async function ideas(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Cache-Control', 'no-store');
     const rows = await sql`
       SELECT i.id, i.title, i.summary, i.status,
+             COALESCE(i.links, '[]'::jsonb) AS links,
              i.created_by AS "createdBy", i.created_by_name AS "createdByName",
              i.linked_task_id AS "linkedTaskId",
              i.created_at AS "createdAt", i.updated_at AS "updatedAt",
@@ -742,12 +773,14 @@ export async function idea(req: VercelRequest, res: VercelResponse) {
     const title = b.title !== undefined ? String(b.title).trim().slice(0, 200) : undefined;
     if (b.title !== undefined && !title) return badRequest(res, 'Titel darf nicht leer sein.');
     const summary = b.summary !== undefined ? String(b.summary).slice(0, 8000) : undefined;
+    const links = b.links !== undefined ? sanitizeLinks(b.links) : undefined;
 
     await sql`
       UPDATE ideas SET
         title = COALESCE(${title ?? null}, title),
         status = COALESCE(${b.status ?? null}, status),
         summary = CASE WHEN ${b.summary !== undefined} THEN ${summary ?? ''} ELSE summary END,
+        links = CASE WHEN ${links !== undefined} THEN ${JSON.stringify(links ?? [])}::jsonb ELSE links END,
         updated_at = now()
       WHERE id = ${id}`;
 

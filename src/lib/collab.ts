@@ -15,6 +15,7 @@ import type {
   Idea,
   IdeaComment,
   IdeaStatus,
+  LinkItem,
 } from '../types';
 
 // --- Team-Mitglieder & eigenes Profil ---------------------------------------
@@ -41,12 +42,17 @@ export const createTicket = (input: {
   priority: TicketPriority;
   category: string;
   images: string[];
+  links?: LinkItem[];
 }) => apiFetch<Ticket>('/api/tickets', { method: 'POST', body: JSON.stringify(input) });
 
 export const updateTicket = (
   id: string,
   patch: { status?: TicketStatus; priority?: TicketPriority; category?: string; assignedTo?: string | null }
 ) => apiFetch<Ticket>('/api/tickets', { method: 'POST', body: JSON.stringify({ id, ...patch }) });
+
+// Link-Tasten eines Tickets setzen – darf jeder (op:'links', ohne Super-Admin).
+export const updateTicketLinks = (id: string, links: LinkItem[]) =>
+  apiFetch<Ticket>('/api/tickets', { method: 'POST', body: JSON.stringify({ id, op: 'links', links }) });
 
 export const deleteTicket = (id: string) =>
   apiFetch<{ ok: boolean }>('/api/tickets', { method: 'POST', body: JSON.stringify({ id, op: 'delete' }) });
@@ -77,6 +83,7 @@ export const createTask = (input: {
   status?: TaskStatus;
   priority?: TicketPriority;
   assignees?: string[];
+  links?: LinkItem[];
 }) => apiFetch<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(input) });
 
 export const updateTask = (
@@ -93,6 +100,7 @@ export const updateTask = (
     status?: TaskStatus;
     priority?: TicketPriority;
     assignees?: string[];
+    links?: LinkItem[];
   }
 ) => apiFetch<Task>('/api/tasks', { method: 'POST', body: JSON.stringify({ id, ...patch }) });
 
@@ -111,7 +119,7 @@ export const createIdea = (input: { title: string; memberIds: string[] }) =>
 
 export const updateIdea = (
   id: string,
-  patch: { title?: string; status?: IdeaStatus; summary?: string; memberIds?: string[] }
+  patch: { title?: string; status?: IdeaStatus; summary?: string; memberIds?: string[]; links?: LinkItem[] }
 ) => apiFetch<Idea>('/api/team?resource=idea', { method: 'POST', body: JSON.stringify({ id, ...patch }) });
 
 export const deleteIdea = (id: string) =>
