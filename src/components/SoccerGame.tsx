@@ -29,6 +29,8 @@ const PLAYER_SPEED = 120;
 const SPRINT_MUL = 1.5;
 const SHOT_SPEED = 340;
 const THROUGH_SPEED = 300;
+const TACKLE_R = 30; // Reichweite für eine Grätsche
+const SLIDE_SPEED = 210; // Tempo während der Grätsche
 
 type Side = 'me' | 'ai';
 
@@ -43,6 +45,9 @@ interface GPlayer {
   fx: number; fy: number; // Blickrichtung
   hx: number; hy: number; // Formations-Heimatposition
   dec: number; // KI-Entscheidungs-Timer
+  tackle: number; // >0: gerade am Grätschen (Animation/Slide)
+  tackleCd: number; // Abklingzeit bis zur nächsten Grätsche
+  down: number; // >0: nach verunglückter Grätsche kurz am Boden
 }
 
 interface GBall {
@@ -68,7 +73,7 @@ export interface Lineup {
   players: { name: string; num: number; gk: boolean }[]; // genau 5, einer davon gk
 }
 
-interface Input { mx: number; my: number; sprint: boolean; action: null | 'pass' | 'through' | 'shoot'; }
+interface Input { mx: number; my: number; sprint: boolean; action: null | 'pass' | 'through' | 'shoot' | 'tackle'; }
 
 interface GState {
   players: GPlayer[];
@@ -105,13 +110,14 @@ function textOn(hex: string): string {
 }
 
 // Formation für 5 Spieler (GK + 2 hinten + 2 vorne), als Feldanteile.
-// fy: 0 = eigenes Tor, 1 = gegnerisches Tor.
+// fy: 0 = eigenes Tor, 1 = gegnerisches Tor. Alle < 0.5 ⇒ beim Anpfiff steht
+// jedes Team komplett in seiner EIGENEN Hälfte (5 vs 5, keine Überschneidung).
 const FORM: { fx: number; fy: number }[] = [
-  { fx: 0.5, fy: 0.08 }, // GK
-  { fx: 0.28, fy: 0.32 },
-  { fx: 0.72, fy: 0.32 },
-  { fx: 0.34, fy: 0.62 },
-  { fx: 0.66, fy: 0.62 },
+  { fx: 0.5, fy: 0.07 }, // GK
+  { fx: 0.26, fy: 0.24 },
+  { fx: 0.74, fy: 0.24 },
+  { fx: 0.34, fy: 0.44 },
+  { fx: 0.66, fy: 0.44 },
 ];
 
 function homeFor(side: Side, idx: number): { x: number; y: number } {
@@ -139,6 +145,7 @@ function buildState(mine: Lineup, ai: Lineup, diff: Diff): GState {
         fx: 0, fy: side === 'me' ? -1 : 1,
         hx: home.x, hy: home.y,
         dec: Math.random() * diff.decEvery,
+        tackle: 0, tackleCd: 0, down: 0,
       });
     });
   };
@@ -154,6 +161,7 @@ function resetKickoff(s: GState, towards: Side) {
     const home = homeFor(p.side, idx);
     p.x = home.x; p.y = home.y; p.vx = 0; p.vy = 0;
     p.fx = 0; p.fy = p.side === 'me' ? -1 : 1;
+    p.tackle = 0; p.tackleCd = 0; p.down = 0;
   }
   s.ball = { x: CX, y: CY, vx: 0, vy: 0, owner: null, hold: 0, noPickup: 0, selfLock: 0, lastKicker: null };
   s.frozen = 0.8;
@@ -255,7 +263,8 @@ function supportAI(s: GState, p: GPlayer, dt: number) {
 
 function aiControl(s: GState, p: GPlayer, dt: number) {
   const b = s.ball;
-  const aiSpeed = PLAYER_SPEED * s.diff.aiMul;
+  const carrying = b.owner === p.id;
+  const aiSpeed = PLAYER_SPEED * s.diff.aiMul * (carrying ? pressureFactor(s, p) : 1);
   const myGoalY = BOTTOM; // ai greift nach unten an (Mensch verteidigt unten)
   if (b.owner === p.id) {
     p.dec -= dt;
@@ -299,6 +308,33 @@ function nearest(s: GState, from: GPlayer, side: Side): GPlayer | null {
   return best;
 }
 
+// Ein bedrängter Ballführer wird langsamer (man kann ihn nicht mehr einfach
+// davonlaufen lassen). Gibt einen Faktor 0..1 auf die Geschwindigkeit.
+function pressureFactor(s: GState, p: GPlayer): number {
+  const opp: Side = p.side === 'me' ? 'ai' : 'me';
+  const n = nearest(s, p, opp);
+  if (n && dist(p.x, p.y, n.x, n.y) < 28) return 0.62;
+  return 1;
+}
+
+// Grätsche: kurzer Slide in Blickrichtung. Ist ein Gegner mit Ball in
+// Reichweite, 50/50 auf Ballgewinn – sonst geht der Grätscher kurz zu Boden.
+function tryTackle(s: GState, p: GPlayer) {
+  if (p.tackle > 0 || p.tackleCd > 0 || p.down > 0) return;
+  p.tackle = 0.4;
+  p.tackleCd = 1.1;
+  const o = byId(s, s.ball.owner);
+  if (o && o.side !== p.side && !o.gk && dist(p.x, p.y, o.x, o.y) <= TACKLE_R) {
+    if (Math.random() < 0.5) {
+      // Ballgewinn
+      s.ball.owner = p.id; s.ball.hold = 0; s.ball.vx = 0; s.ball.vy = 0;
+      s.ball.lastKicker = null; s.ball.noPickup = 0;
+    } else {
+      p.down = 0.7; // daneben – kurz am Boden
+    }
+  }
+}
+
 function gkBehavior(s: GState, p: GPlayer, dt: number) {
   const b = s.ball;
   const lineY = p.side === 'me' ? BOTTOM - 8 : TOP + 8;
@@ -329,8 +365,8 @@ function updateBall(s: GState, input: Input, meActive: GPlayer, dt: number) {
     } else {
       b.hold = 0;
     }
-    // Mensch-Aktion
-    if (o.id === meActive.id && input.action) {
+    // Mensch-Aktion (Grätsche ist eine Verteidigungsaktion, kein Kick).
+    if (o.id === meActive.id && input.action && input.action !== 'tackle') {
       doAction(s, o, input.action);
       return;
     }
@@ -386,12 +422,25 @@ function step(s: GState, input: Input, dt: number) {
   const meActive = pickActive(s, 'me');
   const aiActive = pickActive(s, 'ai');
 
+  // Zeitgeber (Grätsche/Abklingen/am Boden) für alle herunterzählen.
   for (const p of s.players) {
+    p.tackle = Math.max(0, p.tackle - dt);
+    p.tackleCd = Math.max(0, p.tackleCd - dt);
+    p.down = Math.max(0, p.down - dt);
+  }
+
+  // Mensch will grätschen (nur wenn er den Ball NICHT selbst führt).
+  if (input.action === 'tackle' && s.ball.owner !== meActive.id) tryTackle(s, meActive);
+
+  for (const p of s.players) {
+    // Am Boden: kurz bewegungslos. Grätsche: Slide in Blickrichtung.
+    if (p.down > 0) { p.vx = 0; p.vy = 0; continue; }
+    if (p.tackle > 0) { const k = p.tackle / 0.4; p.vx = p.fx * SLIDE_SPEED * k; p.vy = p.fy * SLIDE_SPEED * k; continue; }
     if (p.gk) { gkBehavior(s, p, dt); continue; }
     if (p.side === 'me') {
       if (p.id === meActive.id) {
         const mag = Math.hypot(input.mx, input.my);
-        const sp = PLAYER_SPEED * (input.sprint ? SPRINT_MUL : 1);
+        const sp = PLAYER_SPEED * (input.sprint ? SPRINT_MUL : 1) * (s.ball.owner === p.id ? pressureFactor(s, p) : 1);
         if (mag > 0.08) stepVel(p, input.mx * sp, input.my * sp, dt);
         else stepVel(p, 0, 0, dt);
       } else supportAI(s, p, dt);
@@ -408,8 +457,34 @@ function step(s: GState, input: Input, dt: number) {
     if (m > 6) { p.fx = p.vx / m; p.fy = p.vy / m; }
   }
 
+  resolveCollisions(s);
   updateBall(s, input, meActive, dt);
   return meActive.id;
+}
+
+// Spieler stoßen sich ab – man kann nicht mehr einfach durcheinander laufen.
+// Torwarte bleiben stehen (schieben nur andere weg). Grätschende überrennen
+// leicht (halber Push), damit ein Slide „durchgeht".
+function resolveCollisions(s: GState) {
+  const ps = s.players;
+  const minD = 2 * PR - 1;
+  for (let i = 0; i < ps.length; i++) {
+    for (let j = i + 1; j < ps.length; j++) {
+      const a = ps[i], b = ps[j];
+      let dx = b.x - a.x, dy = b.y - a.y;
+      let d = Math.hypot(dx, dy);
+      if (d >= minD) continue;
+      if (d < 0.01) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d = 0.5; }
+      const push = (minD - d);
+      const ux = dx / d, uy = dy / d;
+      const aFix = a.gk ? 0 : b.gk ? 1 : 0.5;
+      const bFix = b.gk ? 0 : a.gk ? 1 : 0.5;
+      a.x = clamp(a.x - ux * push * aFix, LEFT + PR, RIGHT - PR);
+      a.y = clamp(a.y - uy * push * aFix, TOP + PR, BOTTOM - PR);
+      b.x = clamp(b.x + ux * push * bFix, LEFT + PR, RIGHT - PR);
+      b.y = clamp(b.y + uy * push * bFix, TOP + PR, BOTTOM - PR);
+    }
+  }
 }
 
 // --- Zeichnen ---------------------------------------------------------------
@@ -463,6 +538,19 @@ function draw(ctx: CanvasRenderingContext2D, s: GState, mine: Lineup, ai: Lineup
   for (const p of s.players) {
     const lu = p.side === 'me' ? mine : ai;
     const base = p.gk ? mix(lu.color, 0, 0.45) : lu.color;
+    const sliding = p.tackle > 0;
+
+    // Grätsche: Slide-Spur hinter dem Spieler (Animation).
+    if (sliding) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+      ctx.lineWidth = 4; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(p.x - p.fx * PR * 2.6, p.y - p.fy * PR * 2.6);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+    }
+
     // Schatten
     ctx.beginPath(); ctx.ellipse(p.x, p.y + PR * 0.7, PR * 0.9, PR * 0.45, 0, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fill();
@@ -471,10 +559,20 @@ function draw(ctx: CanvasRenderingContext2D, s: GState, mine: Lineup, ai: Lineup
       ctx.beginPath(); ctx.arc(p.x, p.y, PR + 4, 0, Math.PI * 2);
       ctx.strokeStyle = '#facc15'; ctx.lineWidth = 3; ctx.stroke();
     }
-    ctx.beginPath(); ctx.arc(p.x, p.y, PR, 0, Math.PI * 2);
+    // Körper: beim Grätschen in Blickrichtung gestreckt, am Boden flach/blass.
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    if (sliding) ctx.rotate(Math.atan2(p.fy, p.fx));
+    ctx.globalAlpha = p.down > 0 ? 0.55 : 1;
+    ctx.beginPath();
+    if (sliding) ctx.ellipse(0, 0, PR * 1.5, PR * 0.8, 0, 0, Math.PI * 2);
+    else if (p.down > 0) ctx.ellipse(0, 0, PR * 1.2, PR * 0.7, 0, 0, Math.PI * 2);
+    else ctx.arc(0, 0, PR, 0, Math.PI * 2);
     ctx.fillStyle = base; ctx.fill();
     ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.stroke();
+    ctx.restore();
     // Nummer
+    ctx.globalAlpha = 1;
     ctx.fillStyle = textOn(base);
     ctx.font = 'bold 11px system-ui, sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -500,7 +598,7 @@ function MatchView({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<GState>(buildState(mine, ai, diff));
   const inputRef = useRef<Input>({ mx: 0, my: 0, sprint: false, action: null });
-  const [hud, setHud] = useState({ me: 0, ai: 0, time: seconds });
+  const [hud, setHud] = useState({ me: 0, ai: 0, time: seconds, hasBall: false });
   const [countdown, setCountdown] = useState(3);
   const finishedRef = useRef(false);
 
@@ -509,7 +607,7 @@ function MatchView({
   const joyId = useRef<number | null>(null);
   const [knob, setKnob] = useState({ x: 0, y: 0 });
 
-  const setAction = (a: 'pass' | 'through' | 'shoot') => { inputRef.current.action = a; };
+  const setAction = (a: 'pass' | 'through' | 'shoot' | 'tackle') => { inputRef.current.action = a; };
 
   const onJoyDown = (e: React.PointerEvent) => {
     joyId.current = e.pointerId;
@@ -578,7 +676,7 @@ function MatchView({
       acc += dt;
       if (acc > 0.1) {
         acc = 0;
-        setHud({ me: s.scoreMe, ai: s.scoreAi, time: Math.ceil(timeLeft) });
+        setHud({ me: s.scoreMe, ai: s.scoreAi, time: Math.ceil(timeLeft), hasBall: s.ball.owner === activeId });
       }
 
       const ctx = canvasRef.current?.getContext('2d');
@@ -672,10 +770,10 @@ function MatchView({
           <span className="absolute inset-0 flex items-center justify-center text-[10px] font-mono uppercase text-white/30 pointer-events-none">Bewegen</span>
         </div>
 
-        {/* Aktionsknöpfe */}
-        <div className="grid grid-cols-2 gap-2 flex-1 max-w-[240px]">
+        {/* Aktionsknöpfe – wechseln je nachdem, ob du den Ball hast. */}
+        <div className="grid grid-cols-2 grid-rows-2 gap-2 flex-1 max-w-[240px]">
           <button
-            className={`${btn} bg-gradient-to-br from-amber-400 to-orange-500 text-[13px]`}
+            className={`${btn} bg-gradient-to-br from-amber-400 to-orange-500 text-[13px] ${hud.hasBall ? '' : 'col-start-1 row-span-2'}`}
             onPointerDown={(e) => { e.preventDefault(); inputRef.current.sprint = true; }}
             onPointerUp={() => { inputRef.current.sprint = false; }}
             onPointerLeave={() => { inputRef.current.sprint = false; }}
@@ -683,15 +781,26 @@ function MatchView({
           >
             <Zap className="w-5 h-5" /> Sprint
           </button>
-          <button className={`${btn} bg-gradient-to-br from-rose-500 to-red-600 text-[13px]`} onPointerDown={(e) => { e.preventDefault(); setAction('shoot'); }}>
-            ⚽ Schuss
-          </button>
-          <button className={`${btn} bg-gradient-to-br from-sky-500 to-blue-600 text-[13px]`} onPointerDown={(e) => { e.preventDefault(); setAction('pass'); }}>
-            Pass
-          </button>
-          <button className={`${btn} bg-gradient-to-br from-violet-500 to-fuchsia-600 text-[13px]`} onPointerDown={(e) => { e.preventDefault(); setAction('through'); }}>
-            Steil
-          </button>
+          {hud.hasBall ? (
+            <>
+              <button className={`${btn} bg-gradient-to-br from-rose-500 to-red-600 text-[13px]`} onPointerDown={(e) => { e.preventDefault(); setAction('shoot'); }}>
+                ⚽ Schuss
+              </button>
+              <button className={`${btn} bg-gradient-to-br from-sky-500 to-blue-600 text-[13px]`} onPointerDown={(e) => { e.preventDefault(); setAction('pass'); }}>
+                Pass
+              </button>
+              <button className={`${btn} bg-gradient-to-br from-violet-500 to-fuchsia-600 text-[13px]`} onPointerDown={(e) => { e.preventDefault(); setAction('through'); }}>
+                Steil
+              </button>
+            </>
+          ) : (
+            <button
+              className={`${btn} col-start-2 row-start-1 row-span-2 bg-gradient-to-br from-emerald-500 to-green-600 text-[15px]`}
+              onPointerDown={(e) => { e.preventDefault(); setAction('tackle'); }}
+            >
+              🦵 Grätsche
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -1001,7 +1110,7 @@ export default function SoccerGame({ currentUserId, onClose }: { currentUserId: 
             mine={match.mine}
             ai={match.ai}
             diff={match.diff}
-            seconds={60}
+            seconds={90}
             onFinish={finish}
             onExit={() => setScreen('home')}
           />
