@@ -267,6 +267,24 @@ function IdeaDetail({
   const [summary, setSummary] = useState('');
   const [busy, setBusy] = useState(false);
   const [savedFazit, setSavedFazit] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // Ganzen Brainstorm als Text kopieren – zum Einfügen in eine KI („fasse das
+  // zusammen"). Bewusst ohne eigenen KI-Dienst: kostenlos, kein Schlüssel nötig.
+  const copyBrainstorm = async () => {
+    if (!idea) return;
+    const lines = comments.map((c) => `- ${c.authorName}: ${c.body}`).join('\n');
+    const text =
+      `Idee: ${idea.title}\n\nBrainstorm-Verlauf:\n${lines || '(noch keine Beiträge)'}\n\n` +
+      `Bitte fasse die wichtigsten Punkte als kurzes, klares Fazit in Stichpunkten zusammen.`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      alert('Kopieren nicht möglich – bitte den Verlauf von Hand markieren und kopieren.');
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -455,7 +473,18 @@ function IdeaDetail({
 
               {/* Fazit / Zusammenfassung */}
               <div className="mt-5">
-                <h4 className="text-xs font-mono uppercase tracking-wider text-hl-dim mb-2">Fazit / Zusammenfassung</h4>
+                <div className="flex items-center justify-between mb-2 gap-2">
+                  <h4 className="text-xs font-mono uppercase tracking-wider text-hl-dim">Fazit / Zusammenfassung</h4>
+                  {comments.length > 0 && (
+                    <button
+                      onClick={copyBrainstorm}
+                      title="Ganzen Brainstorm kopieren – zum Zusammenfassen per KI einfügen"
+                      className="text-[11px] font-sans font-semibold text-brand-accent-light hover:text-white cursor-pointer shrink-0"
+                    >
+                      {copied ? '✓ kopiert' : 'Brainstorm kopieren'}
+                    </button>
+                  )}
+                </div>
                 <textarea
                   value={summary}
                   onChange={(e) => setSummary(e.target.value)}
