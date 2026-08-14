@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { ArrowLeft, MessageSquare, CalendarDays, ListChecks, Ticket as TicketIcon, Smartphone, X, Sun, Moon, Settings, Bell, Lightbulb } from 'lucide-react';
 import ChatSystem from './ChatSystem';
+import SoccerGame from './SoccerGame';
 import TaskBoard from './TaskBoard';
 import TicketSystem from './TicketSystem';
 import IdeasBoard from './IdeasBoard';
@@ -67,6 +68,8 @@ export default function ChatApp({
     setUrlParam('tab', t === 'chats' ? null : t);
   };
   const [showInstall, setShowInstall] = useState(true);
+  const [showGame, setShowGame] = useState(false);
+  useBackClose(showGame, () => setShowGame(false));
   const { isStandalone, isIos, canInstall, promptInstall } = useInstall();
   const current = TABS.find((t) => t.id === tab) ?? SETTINGS_TAB;
   // Deep-Link: aus einer Benachrichtigung direkt eine bestimmte Idee öffnen.
@@ -186,6 +189,14 @@ export default function ChatApp({
         {/* Rechts oben: Einstellungen (Zahnrad) + Tag/Nacht. Abmelden bewusst
             nicht hier – das steckt in den Einstellungen. */}
         <div className="flex items-center gap-0.5 shrink-0">
+          <button
+            onClick={() => setShowGame(true)}
+            title="Hero Kicker – Mini-Spiel"
+            aria-label="Hero Kicker – Mini-Spiel"
+            className="p-2.5 rounded-full text-hl-mute hover:text-brand-accent-light active:bg-white/10 cursor-pointer transition-colors text-[19px] leading-none"
+          >
+            ⚽
+          </button>
           <button
             onClick={() => setTab('mehr')}
             title="Einstellungen"
@@ -315,6 +326,9 @@ export default function ChatApp({
           onClose={() => setDeepOpen(null)}
         />
       )}
+
+      {/* Mini-Spiel „Hero Kicker" (⚽ oben rechts) */}
+      {showGame && <SoccerGame currentUserId={currentUserId} onClose={() => setShowGame(false)} />}
 
       {/* Läuft weiter beim Tab-Wechsel: Sprachnachrichten-Mini-Leiste */}
       <MiniPlayer />
