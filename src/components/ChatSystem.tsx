@@ -1511,6 +1511,7 @@ export default function ChatSystem({
   fullHeight = false,
   initialConversationId = null,
   initialThreadId = null,
+  homeSignal = 0,
 }: {
   currentUserId: string;
   canManageTickets?: boolean;
@@ -1518,6 +1519,7 @@ export default function ChatSystem({
   fullHeight?: boolean;
   initialConversationId?: string | null;
   initialThreadId?: string | null;
+  homeSignal?: number; // erhöht sich, wenn unten „Chats" getippt wird → zur Liste
 }) {
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
@@ -1626,6 +1628,19 @@ export default function ChatSystem({
   useEffect(() => {
     setUrlParam('thread', thread?.id ?? null);
   }, [thread]);
+
+  // Unten auf das „Chats"-Symbol getippt (homeSignal erhöht sich): offenen Chat
+  // und Thread schließen → zurück zur Liste. Beim Erststart NICHT auslösen.
+  const didMountHome = useRef(false);
+  useEffect(() => {
+    if (!didMountHome.current) {
+      didMountHome.current = true;
+      return;
+    }
+    setThread(null);
+    setThreadHighlightId(null);
+    setActiveId(null);
+  }, [homeSignal]);
 
   // Handy-Zurück-Geste/-Taste fängt jede offene Ebene ab (schließt sie, statt
   // die App zu verlassen). Reihenfolge = Schachtelung: Thread liegt über der

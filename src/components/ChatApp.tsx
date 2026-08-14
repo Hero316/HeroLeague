@@ -10,6 +10,7 @@ import DeepLinkModal from './DeepLinkModal';
 import { useInstall } from './InstallProvider';
 import { pushDebug, enablePush } from '../lib/push';
 import { getUrlParam, setUrlParam } from '../lib/urlState';
+import { useBackClose } from '../lib/backStack';
 import { AudioPlayerProvider, MiniPlayer } from './AudioPlayer';
 import type { SessionUser, UserStatus } from '../types';
 
@@ -74,6 +75,20 @@ export default function ChatApp({
   useEffect(() => {
     if (initialOpenIdeaId) setUrlParam('openIdea', null);
   }, [initialOpenIdeaId]);
+
+  // Zurück-Geste/-Taste (iPhone-Kantenwisch, Android-Zurück): Ist man NICHT auf
+  // dem Chats-Tab, geht „zurück" zuerst auf den Chats-Tab, statt die App zu
+  // verlassen. So landet man von Einstellungen/Aufgaben/… wieder im Chat.
+  useBackClose(tab !== 'chats', () => setTab('chats'));
+
+  // „Chats-Home"-Signal: Tippt man unten auf das Chats-Symbol, soll ein offener
+  // Chat/Thread zugehen (zurück zur Liste) – ein Zähler, den ChatSystem beobachtet.
+  const [chatHomeSignal, setChatHomeSignal] = useState(0);
+  const goChatsHome = () => {
+    setUrlParam('c', null);
+    setUrlParam('thread', null);
+    setChatHomeSignal((n) => n + 1);
+  };
 
   // Reaktivierungs-Hinweis: Manche Handys setzen die Benachrichtigungs-Erlaubnis
   // beim Schließen der App zurück (Wunsch bleibt gemerkt, Erlaubnis geht weg).
@@ -261,6 +276,7 @@ export default function ChatApp({
               fullHeight
               initialConversationId={initialConversationId ?? getUrlParam('c')}
               initialThreadId={getUrlParam('thread')}
+              homeSignal={chatHomeSignal}
             />
           ) : tab === 'aufgaben' ? (
             <div className="h-full overflow-y-auto p-3">
@@ -314,7 +330,12 @@ export default function ChatApp({
           return (
             <button
               key={t.id}
-              onClick={() => setTab(t.id)}
+              onClick={() => {
+                // Tippt man auf „Chats", immer zurück zur Chat-Liste (offenen
+                // Chat/Thread schließen) – egal ob man schon auf dem Tab ist.
+                if (t.id === 'chats') goChatsHome();
+                setTab(t.id);
+              }}
               className="relative flex flex-col items-center justify-center gap-1 py-2 rounded-2xl cursor-pointer active:scale-90 transition-transform"
             >
               {active && (
