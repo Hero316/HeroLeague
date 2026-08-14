@@ -23,7 +23,7 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
 
   // Zonen: Meisterschaftsrunde = Top 3, Abstiegszone = letzte 2 (nur bei genug Teams)
   const championsEnd = 3;
-  const relegationStart = standings.length >= 6 ? standings.length - 1 : Number.POSITIVE_INFINITY;
+  const relegationStart = standings.length >= 6 ? standings.length - 2 : Number.POSITIVE_INFINITY;
 
   const rankColors: Record<number, string> = { 1: '#E9C46A', 2: '#C9D1CC', 3: '#C98A5A' };
 
@@ -66,9 +66,7 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
 
       {displayStandings.map((standing, index) => {
         const rank = index + 1;
-        const isChamp = rank <= championsEnd;
         const isReleg = rank > relegationStart;
-        const zoneColor = isChamp ? '#22DFC9' : isReleg ? '#FF5442' : 'transparent';
 
         return (
           <motion.button
@@ -79,11 +77,16 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
             title={onSelectTeam ? `${standing.teamName} – Vereinsseite öffnen` : undefined}
             className={`grid ${gridCols} gap-1.5 sm:gap-2 items-center w-full text-left px-1.5 sm:px-2.5 py-[9px] rounded-[11px] border-b border-white/[.04] transition-colors ${
               onSelectTeam ? 'cursor-pointer hover:bg-white/5' : ''
-            } ${rank === 1 ? 'bg-[rgba(34,223,201,.06)]' : ''}`}
+            } ${
+              rank === 1
+                ? 'bg-[rgba(233,196,106,.10)]'
+                : isReleg
+                ? 'bg-[rgba(255,84,66,.07)]'
+                : ''
+            }`}
           >
-            {/* Rang + Zonen-Balken */}
+            {/* Rang */}
             <span className="flex items-center gap-1 sm:gap-1.5">
-              {!compact && <span className="w-[3px] h-[26px] rounded-sm shrink-0" style={{ background: zoneColor }} />}
               {rankColors[rank] ? (
                 <span
                   className="grid place-items-center w-[22px] h-[22px] sm:w-6 sm:h-6 rounded-[7px] font-display font-black text-[13px] sm:text-sm text-[#0b0f0b] shrink-0"
@@ -166,7 +169,7 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
       ) : (
         <div className="flex flex-wrap gap-3 sm:gap-5 items-center pt-[18px] px-1.5 sm:px-2.5 pb-1 font-sans font-semibold text-[10.5px] sm:text-[11px] tracking-[.5px] text-hl-dim">
           <span className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-[3px] bg-brand-accent-light" />
+            <span className="w-2.5 h-2.5 rounded-[3px] bg-[#E9C46A]" />
             Meisterschaftsrunde (1–{Math.min(championsEnd, standings.length)})
           </span>
           {Number.isFinite(relegationStart) && (
