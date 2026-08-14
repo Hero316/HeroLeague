@@ -345,33 +345,37 @@ export function PartnerSection() {
   return (
     <section className="bg-[linear-gradient(180deg,#e2e8fb_0%,#ccd6f2_100%)] text-[#0b0b0f]">
       <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-14 sm:py-20">
-        <h2 className="hl-partner-title text-center font-sans font-black italic text-4xl sm:text-5xl tracking-tight mb-7 sm:mb-8">
-          Partner
-        </h2>
-
-        {/* Ein durchgehender, gleichmäßiger vertikaler Rhythmus: der Abstand
-            Überschrift↔Logo ist überall gleich groß wie der Abstand zwischen
-            Hauptpartner und Bankpartner – clean, keine großen Lücken. */}
+        {/* Durchgehender, gleichmäßiger vertikaler Rhythmus (überall derselbe
+            Abstand). Reihenfolge: ganz oben die große „Hauptpartner"-Überschrift
+            + Logo, danach erst die lilane „Partner"-Überschrift mit Bankpartner
+            & weiteren Partnern darunter. */}
         <div className="flex flex-col items-center gap-7 sm:gap-8">
-          {/* Hauptpartner – hebt sich klar ab: größer, immer farbig & leuchtend,
-              eigene gold schimmernde Überschrift, ganz oben und für sich allein. */}
+          {/* Hauptüberschrift ganz oben: „Hauptpartner" – groß, kursiv und gold
+              schimmernd, im Stil des früheren „Partner"-Titels. Darunter das
+              immer farbige, leuchtende Hauptpartner-Logo (klickbar). */}
           {mains.length > 0 && (
-            <div className="flex flex-wrap items-end justify-center gap-x-16 sm:gap-x-24 gap-y-7 sm:gap-y-8">
-              {mains.map((p) => (
-                <div key={p.id} className="flex flex-col items-center gap-7 sm:gap-8">
-                  {p.label && (
-                    <span className="hl-partner-hero font-sans text-sm sm:text-lg font-black uppercase tracking-[0.18em]">
-                      {p.label}
-                    </span>
-                  )}
-                  <PartnerLogo partner={p} heightClass="h-48 sm:h-60" maxWClass="max-w-[90%] sm:max-w-[560px]" glow />
-                </div>
-              ))}
-            </div>
+            <>
+              <h2 className="hl-partner-hero text-center font-sans font-black italic text-4xl sm:text-5xl tracking-tight">
+                {mains[0].label.trim() || 'Hauptpartner'}
+              </h2>
+              <div className="flex flex-wrap items-end justify-center gap-x-16 sm:gap-x-24 gap-y-7 sm:gap-y-8">
+                {mains.map((p) => (
+                  <PartnerLogo key={p.id} partner={p} heightClass="h-48 sm:h-60" maxWClass="max-w-[90%] sm:max-w-[560px]" glow />
+                ))}
+              </div>
+            </>
           )}
 
-          {/* Bankpartner – mit eigener Überschrift, unter dem Hauptpartner
-              (Grau→Farbe beim Hovern, auf dem Handy dauerhaft farbig). */}
+          {/* Danach erst die lilane „Partner"-Überschrift – Überschrift für den
+              Bankpartner und die weiteren (normalen) Partner. */}
+          {(banks.length > 0 || rest.length > 0) && (
+            <h2 className="hl-partner-title text-center font-sans font-black italic text-4xl sm:text-5xl tracking-tight">
+              Partner
+            </h2>
+          )}
+
+          {/* Bankpartner – eigene blaue Überschrift + Logo (Grau→Farbe beim
+              Hovern, auf dem Handy dauerhaft farbig). */}
           {banks.length > 0 && (
             <div className="flex flex-wrap items-end justify-center gap-x-14 sm:gap-x-20 gap-y-7 sm:gap-y-8">
               {banks.map((p) => (
