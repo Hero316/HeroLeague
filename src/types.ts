@@ -105,6 +105,9 @@ export interface NewsConfig {
   items: NewsItem[];
 }
 
+// „Spieler des Spieltages" (früher „Spieler des Monats"). Der interne Schlüssel
+// (playerOfMonth) und der Typname bleiben aus Kompatibilitätsgründen erhalten;
+// die Auszeichnung ist jetzt auf einen einzelnen Spieltag bezogen.
 export interface PlayerOfMonth {
   name: string;
   club: string;
@@ -112,6 +115,8 @@ export interface PlayerOfMonth {
   goals: number;
   assists: number;
   image: string;
+  matchday?: number; // Spieltag-Nummer, ergibt „Spieler des Spieltages N" (0/leer = ohne Nummer)
+  sponsorId?: string; // ID eines Partners (aus PartnersConfig), der die Auszeichnung sponsert (leer = keiner)
 }
 
 export interface TwitchConfig {
