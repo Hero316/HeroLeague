@@ -349,7 +349,7 @@ export function PartnerSection() {
             Abstand). Reihenfolge: ganz oben die große „Hauptpartner"-Überschrift
             + Logo, danach erst die lilane „Partner"-Überschrift mit Bankpartner
             & weiteren Partnern darunter. */}
-        <div className="flex flex-col items-center gap-4 sm:gap-5">
+        <div className="flex flex-col items-center gap-3 sm:gap-4">
           {/* Hauptüberschrift ganz oben: „Hauptpartner" – groß, kursiv und gold
               schimmernd, im Stil des früheren „Partner"-Titels. Darunter das
               immer farbige, leuchtende Hauptpartner-Logo (klickbar). Das Logo hat
@@ -360,9 +360,9 @@ export function PartnerSection() {
               <h2 className="hl-partner-hero text-center font-sans font-black italic text-4xl sm:text-5xl tracking-tight px-3 sm:px-4">
                 {mains[0].label.trim() || 'Hauptpartner'}
               </h2>
-              <div className="flex flex-wrap items-end justify-center gap-x-16 sm:gap-x-24 gap-y-6 -my-10 sm:-my-14">
+              <div className="flex flex-wrap items-end justify-center gap-x-16 sm:gap-x-24 gap-y-6 -my-12 sm:-my-18">
                 {mains.map((p) => (
-                  <PartnerLogo key={p.id} partner={p} heightClass="h-48 sm:h-60" maxWClass="max-w-[90%] sm:max-w-[560px]" glow />
+                  <PartnerLogo key={p.id} partner={p} heightClass="h-56 sm:h-72" maxWClass="max-w-[95%] sm:max-w-[640px]" glow />
                 ))}
               </div>
             </>
@@ -371,7 +371,7 @@ export function PartnerSection() {
           {/* Danach erst die lilane „Partner"-Überschrift – Überschrift für den
               Bankpartner und die weiteren (normalen) Partner. */}
           {(banks.length > 0 || rest.length > 0) && (
-            <h2 className="hl-partner-title text-center font-sans font-black italic text-4xl sm:text-5xl tracking-tight px-3 sm:px-4">
+            <h2 className="hl-partner-title text-center font-sans font-black italic text-3xl sm:text-4xl tracking-tight px-3 sm:px-4">
               Partner
             </h2>
           )}
@@ -381,7 +381,7 @@ export function PartnerSection() {
           {banks.length > 0 && (
             <div className="flex flex-wrap items-end justify-center gap-x-14 sm:gap-x-20 gap-y-7 sm:gap-y-8">
               {banks.map((p) => (
-                <div key={p.id} className="flex flex-col items-center gap-4 sm:gap-5">
+                <div key={p.id} className="flex flex-col items-center gap-3 sm:gap-4">
                   {p.label && (
                     <span className="hl-partner-bank font-sans text-[13px] sm:text-base font-extrabold uppercase tracking-[0.16em]">
                       {p.label}
