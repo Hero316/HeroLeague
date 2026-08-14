@@ -357,7 +357,7 @@ export function PartnerSection() {
               näher heran, damit die Abstände nicht riesig wirken. */}
           {mains.length > 0 && (
             <>
-              <h2 className="hl-partner-hero text-center font-sans font-black italic text-4xl sm:text-5xl tracking-tight">
+              <h2 className="hl-partner-hero text-center font-sans font-black italic text-4xl sm:text-5xl tracking-tight px-3 sm:px-4">
                 {mains[0].label.trim() || 'Hauptpartner'}
               </h2>
               <div className="flex flex-wrap items-end justify-center gap-x-16 sm:gap-x-24 gap-y-6 -my-6 sm:-my-8">
@@ -371,7 +371,7 @@ export function PartnerSection() {
           {/* Danach erst die lilane „Partner"-Überschrift – Überschrift für den
               Bankpartner und die weiteren (normalen) Partner. */}
           {(banks.length > 0 || rest.length > 0) && (
-            <h2 className="hl-partner-title text-center font-sans font-black italic text-4xl sm:text-5xl tracking-tight">
+            <h2 className="hl-partner-title text-center font-sans font-black italic text-4xl sm:text-5xl tracking-tight px-3 sm:px-4">
               Partner
             </h2>
           )}
