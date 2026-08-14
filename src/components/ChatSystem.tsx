@@ -964,6 +964,7 @@ function ThreadModal({
   onClose,
   onReplyAdded,
   onParentChanged,
+  onOpenAttachment,
 }: {
   conversationId: string;
   parent: ChatMessage;
@@ -973,6 +974,7 @@ function ThreadModal({
   onClose: () => void;
   onReplyAdded: () => void;
   onParentChanged?: (m: ChatMessage) => void;
+  onOpenAttachment?: (type: 'ticket' | 'task', id: string) => void;
 }) {
   const [replies, setReplies] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1036,6 +1038,7 @@ function ThreadModal({
               colorSeed={conversationId}
               highlight={highlightId === parentMsg.id}
               currentUserId={currentUserId}
+              onOpenAttachment={onOpenAttachment}
               onChanged={(um) => { setParentMsg((p) => ({ ...p, ...um })); onParentChanged?.(um); }}
             />
           </div>
@@ -1057,6 +1060,7 @@ function ThreadModal({
                   colorSeed={conversationId}
                   highlight={highlightId === r.id}
                   currentUserId={currentUserId}
+                  onOpenAttachment={onOpenAttachment}
                   onChanged={(um) => setReplies((prev) => prev.map((x) => (x.id === um.id ? { ...x, ...um } : x)))}
                 />
               );
@@ -2152,6 +2156,7 @@ export default function ChatSystem({
             mentionable={activeMentionable}
             highlightId={threadHighlightId}
             onClose={goBackLayer}
+            onOpenAttachment={openAttachment}
             onReplyAdded={() => activeId && loadMessages(activeId, true)}
             onParentChanged={(um) => setMessages((prev) => prev.map((x) => (x.id === um.id ? { ...x, ...um } : x)))}
           />
