@@ -345,51 +345,56 @@ export function PartnerSection() {
   return (
     <section className="bg-[linear-gradient(180deg,#e2e8fb_0%,#ccd6f2_100%)] text-[#0b0b0f]">
       <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-14 sm:py-20">
-        <h2 className="hl-partner-title text-center font-sans font-black italic text-4xl sm:text-5xl tracking-tight mb-6 sm:mb-8">
+        <h2 className="hl-partner-title text-center font-sans font-black italic text-4xl sm:text-5xl tracking-tight mb-7 sm:mb-8">
           Partner
         </h2>
 
-        {/* Hauptpartner – hebt sich klar ab: größer, immer farbig & leuchtend,
-            eigene gold schimmernde Überschrift, ganz oben und für sich allein. */}
-        {mains.length > 0 && (
-          <div className="flex flex-wrap items-end justify-center gap-x-16 sm:gap-x-24 gap-y-10 mb-12 sm:mb-16">
-            {mains.map((p) => (
-              <div key={p.id} className="flex flex-col items-center gap-3.5">
-                {p.label && (
-                  <span className="hl-partner-hero font-sans text-sm sm:text-lg font-black uppercase tracking-[0.18em]">
-                    {p.label}
-                  </span>
-                )}
-                <PartnerLogo partner={p} heightClass="h-48 sm:h-60" maxWClass="max-w-[90%] sm:max-w-[560px]" glow />
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Ein durchgehender, gleichmäßiger vertikaler Rhythmus: der Abstand
+            Überschrift↔Logo ist überall gleich groß wie der Abstand zwischen
+            Hauptpartner und Bankpartner – clean, keine großen Lücken. */}
+        <div className="flex flex-col items-center gap-7 sm:gap-8">
+          {/* Hauptpartner – hebt sich klar ab: größer, immer farbig & leuchtend,
+              eigene gold schimmernde Überschrift, ganz oben und für sich allein. */}
+          {mains.length > 0 && (
+            <div className="flex flex-wrap items-end justify-center gap-x-16 sm:gap-x-24 gap-y-7 sm:gap-y-8">
+              {mains.map((p) => (
+                <div key={p.id} className="flex flex-col items-center gap-7 sm:gap-8">
+                  {p.label && (
+                    <span className="hl-partner-hero font-sans text-sm sm:text-lg font-black uppercase tracking-[0.18em]">
+                      {p.label}
+                    </span>
+                  )}
+                  <PartnerLogo partner={p} heightClass="h-48 sm:h-60" maxWClass="max-w-[90%] sm:max-w-[560px]" glow />
+                </div>
+              ))}
+            </div>
+          )}
 
-        {/* Bankpartner – weiterhin groß mit eigener Überschrift, aber unter dem
-            Hauptpartner (Grau→Farbe beim Hovern, auf dem Handy dauerhaft farbig). */}
-        {banks.length > 0 && (
-          <div className="flex flex-wrap items-end justify-center gap-x-14 sm:gap-x-20 gap-y-10 mb-12 sm:mb-16">
-            {banks.map((p) => (
-              <div key={p.id} className="flex flex-col items-center gap-3">
-                {p.label && (
-                  <span className="hl-partner-bank font-sans text-[13px] sm:text-base font-extrabold uppercase tracking-[0.16em]">
-                    {p.label}
-                  </span>
-                )}
-                <PartnerLogo partner={p} heightClass="h-12 sm:h-14" maxWClass="max-w-[190px]" />
-              </div>
-            ))}
-          </div>
-        )}
+          {/* Bankpartner – mit eigener Überschrift, unter dem Hauptpartner
+              (Grau→Farbe beim Hovern, auf dem Handy dauerhaft farbig). */}
+          {banks.length > 0 && (
+            <div className="flex flex-wrap items-end justify-center gap-x-14 sm:gap-x-20 gap-y-7 sm:gap-y-8">
+              {banks.map((p) => (
+                <div key={p.id} className="flex flex-col items-center gap-7 sm:gap-8">
+                  {p.label && (
+                    <span className="hl-partner-bank font-sans text-[13px] sm:text-base font-extrabold uppercase tracking-[0.16em]">
+                      {p.label}
+                    </span>
+                  )}
+                  <PartnerLogo partner={p} heightClass="h-12 sm:h-14" maxWClass="max-w-[190px]" />
+                </div>
+              ))}
+            </div>
+          )}
 
-        {rest.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-x-12 sm:gap-x-16 gap-y-10">
-            {rest.map((p) => (
-              <PartnerLogo key={p.id} partner={p} heightClass="h-12 sm:h-14" maxWClass="max-w-[190px]" />
-            ))}
-          </div>
-        )}
+          {rest.length > 0 && (
+            <div className="flex flex-wrap items-center justify-center gap-x-12 sm:gap-x-16 gap-y-8">
+              {rest.map((p) => (
+                <PartnerLogo key={p.id} partner={p} heightClass="h-12 sm:h-14" maxWClass="max-w-[190px]" />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </section>
   );
