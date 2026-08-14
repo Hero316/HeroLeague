@@ -191,10 +191,11 @@ function doAction(s: GState, o: GPlayer, type: 'pass' | 'through' | 'shoot') {
     const mates = s.players.filter((p) => p.side === o.side && p.id !== o.id && !p.gk);
     let target: GPlayer | null = null;
     if (type === 'through') {
-      // am weitesten vorne (in Angriffsrichtung)
+      // am weitesten vorne (in Angriffsrichtung). attack: me=-1 (hoch), ai=+1 (runter).
+      // „vorne" = Projektion auf die Angriffsrichtung: (m.y - o.y) * attack.
       let bestY = -Infinity;
       for (const m of mates) {
-        const adv = (m.y - o.y) * -attack; // positiv = weiter vorne
+        const adv = (m.y - o.y) * attack; // positiv = weiter vorne (Richtung gegn. Tor)
         if (adv > bestY) { bestY = adv; target = m; }
       }
     } else {
@@ -202,7 +203,7 @@ function doAction(s: GState, o: GPlayer, type: 'pass' | 'through' | 'shoot') {
       let bestScore = Infinity;
       for (const m of mates) {
         const d = dist(o.x, o.y, m.x, m.y);
-        const forward = (m.y - o.y) * -attack; // vorne = positiv
+        const forward = (m.y - o.y) * attack; // vorne = positiv
         const score = d - forward * 0.5;
         if (score < bestScore) { bestScore = score; target = m; }
       }
@@ -216,6 +217,10 @@ function doAction(s: GState, o: GPlayer, type: 'pass' | 'through' | 'shoot') {
       // kein Mitspieler → einfach nach vorne dreschen
       tx = o.x; ty = oppGoalY; speed = THROUGH_SPEED;
     }
+    // Sicherheits-Guard: Pass/Abschlag niemals Richtung eigenes Tor (verhindert
+    // „Eigentore" durch verunglückte Rückpässe/Torwart-Abschläge).
+    if (o.side === 'me') ty = Math.min(ty, o.y + 6);
+    else ty = Math.max(ty, o.y - 6);
   }
 
   let [ux, uy] = norm(tx - o.x, ty - o.y);
@@ -419,6 +424,12 @@ function draw(ctx: CanvasRenderingContext2D, s: GState, mine: Lineup, ai: Lineup
   ctx.fillStyle = 'rgba(255,255,255,0.04)';
   for (let i = 0; i < 8; i++) if (i % 2 === 0) ctx.fillRect(0, TOP + (i * (BOTTOM - TOP)) / 8, W, (BOTTOM - TOP) / 8);
 
+  // Orientierung: untere Hälfte = dein Team, obere = Gegner (dezente Tönung).
+  ctx.globalAlpha = 0.12;
+  ctx.fillStyle = mine.color; ctx.fillRect(LEFT, CY, RIGHT - LEFT, BOTTOM - CY);
+  ctx.fillStyle = ai.color; ctx.fillRect(LEFT, TOP, RIGHT - LEFT, CY - TOP);
+  ctx.globalAlpha = 1;
+
   ctx.strokeStyle = 'rgba(255,255,255,0.5)';
   ctx.lineWidth = 2;
   ctx.strokeRect(LEFT, TOP, RIGHT - LEFT, BOTTOM - TOP);
@@ -430,11 +441,23 @@ function draw(ctx: CanvasRenderingContext2D, s: GState, mine: Lineup, ai: Lineup
   const boxW = GOAL_W + 44, boxH = 54;
   ctx.strokeRect(CX - boxW / 2, TOP, boxW, boxH);
   ctx.strokeRect(CX - boxW / 2, BOTTOM - boxH, boxW, boxH);
-  // Tore
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 4;
+  // Tore – in der Farbe des VERTEIDIGENDEN Teams (unten = dein Tor, oben = Gegner).
+  ctx.lineWidth = 5; ctx.lineCap = 'round';
+  ctx.strokeStyle = ai.color;
   ctx.beginPath(); ctx.moveTo(CX - GOAL_W / 2, TOP); ctx.lineTo(CX + GOAL_W / 2, TOP); ctx.stroke();
+  ctx.strokeStyle = mine.color;
   ctx.beginPath(); ctx.moveTo(CX - GOAL_W / 2, BOTTOM); ctx.lineTo(CX + GOAL_W / 2, BOTTOM); ctx.stroke();
+  ctx.lineCap = 'butt';
+
+  // Seiten-Beschriftung + Angriffsrichtung (klare Orientierung).
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 12px system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.textBaseline = 'top';
+  ctx.fillText(`▲ DU · ${mine.name}`.slice(0, 22), CX, BOTTOM - 15);
+  ctx.textBaseline = 'bottom';
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.fillText(`▼ ${ai.name}`.slice(0, 22), CX, TOP + 15);
 
   // Spieler
   for (const p of s.players) {
