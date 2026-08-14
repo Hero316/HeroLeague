@@ -27,8 +27,8 @@ const TABS: { id: Tab; label: string; icon: typeof MessageSquare }[] = [
   { id: 'chats', label: 'Chats', icon: MessageSquare },
   { id: 'aufgaben', label: 'Aufgaben', icon: ListChecks },
   { id: 'kalender', label: 'Kalender', icon: CalendarDays },
-  { id: 'tickets', label: 'Tickets', icon: TicketIcon },
   { id: 'ideen', label: 'Ideen', icon: Lightbulb },
+  { id: 'tickets', label: 'Tickets', icon: TicketIcon },
 ];
 const SETTINGS_TAB = { id: 'mehr' as Tab, label: 'Einstellungen', icon: Settings };
 
