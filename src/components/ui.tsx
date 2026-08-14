@@ -360,7 +360,7 @@ export function PartnerSection() {
                     {p.label}
                   </span>
                 )}
-                <PartnerLogo partner={p} heightClass="h-28 sm:h-44" maxWClass="max-w-[420px]" glow />
+                <PartnerLogo partner={p} heightClass="h-48 sm:h-60" maxWClass="max-w-[90%] sm:max-w-[560px]" glow />
               </div>
             ))}
           </div>
