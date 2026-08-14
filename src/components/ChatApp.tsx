@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, MessageSquare, CalendarDays, ListChecks, Ticket as TicketIcon, Smartphone, X, Sun, Moon, Settings, Bell } from 'lucide-react';
+import { ArrowLeft, MessageSquare, CalendarDays, ListChecks, Ticket as TicketIcon, Smartphone, X, Sun, Moon, Settings, Bell, Lightbulb } from 'lucide-react';
 import ChatSystem from './ChatSystem';
 import TaskBoard from './TaskBoard';
 import TicketSystem from './TicketSystem';
+import IdeasBoard from './IdeasBoard';
 import TeamSettings from './TeamSettings';
 import DeepLinkModal from './DeepLinkModal';
 import { useInstall } from './InstallProvider';
@@ -17,15 +18,18 @@ import type { SessionUser, UserStatus } from '../types';
 // aufklappbaren Backoffice, damit sich der Chat wie eine echte App anfühlt und
 // zum Home-Bildschirm hinzugefügt werden kann (eigenes Manifest chat.webmanifest).
 
-type Tab = 'chats' | 'aufgaben' | 'kalender' | 'tickets' | 'mehr';
+type Tab = 'chats' | 'aufgaben' | 'kalender' | 'tickets' | 'ideen' | 'mehr';
 
+// Untere Leiste (5 Tabs). „Mehr"/Einstellungen ist bewusst NICHT hier, sondern
+// oben als Zahnrad neben Tag/Nacht.
 const TABS: { id: Tab; label: string; icon: typeof MessageSquare }[] = [
   { id: 'chats', label: 'Chats', icon: MessageSquare },
   { id: 'aufgaben', label: 'Aufgaben', icon: ListChecks },
   { id: 'kalender', label: 'Kalender', icon: CalendarDays },
   { id: 'tickets', label: 'Tickets', icon: TicketIcon },
-  { id: 'mehr', label: 'Mehr', icon: Settings },
+  { id: 'ideen', label: 'Ideen', icon: Lightbulb },
 ];
+const SETTINGS_TAB = { id: 'mehr' as Tab, label: 'Einstellungen', icon: Settings };
 
 export default function ChatApp({
   user,
@@ -51,8 +55,9 @@ export default function ChatApp({
   // Aktiven Tab in der URL halten (?tab=…), damit ein Reload auf derselben
   // Seite bleibt (Chats/Aufgaben/Tickets) statt immer auf „Chats" zu landen.
   const readTab = (): Tab => {
+    if (getUrlParam('openIdea')) return 'ideen'; // Deep-Link aus einer Benachrichtigung
     const t = getUrlParam('tab');
-    return t === 'aufgaben' || t === 'kalender' || t === 'tickets' || t === 'mehr' ? t : 'chats';
+    return t === 'aufgaben' || t === 'kalender' || t === 'tickets' || t === 'ideen' || t === 'mehr' ? t : 'chats';
   };
   const [tab, setTabState] = useState<Tab>(readTab);
   const setTab = (t: Tab) => {
@@ -62,7 +67,13 @@ export default function ChatApp({
   };
   const [showInstall, setShowInstall] = useState(true);
   const { isStandalone, isIos, canInstall, promptInstall } = useInstall();
-  const current = TABS.find((t) => t.id === tab)!;
+  const current = TABS.find((t) => t.id === tab) ?? SETTINGS_TAB;
+  // Deep-Link: aus einer Benachrichtigung direkt eine bestimmte Idee öffnen.
+  // Einmalig lesen und danach den Parameter aus der URL entfernen.
+  const [initialOpenIdeaId] = useState(() => getUrlParam('openIdea'));
+  useEffect(() => {
+    if (initialOpenIdeaId) setUrlParam('openIdea', null);
+  }, [initialOpenIdeaId]);
 
   // Reaktivierungs-Hinweis: Manche Handys setzen die Benachrichtigungs-Erlaubnis
   // beim Schließen der App zurück (Wunsch bleibt gemerkt, Erlaubnis geht weg).
@@ -157,25 +168,36 @@ export default function ChatApp({
           <img src="/assets/hero-league-logo.png" alt="Hero Team" className="h-6 w-auto ml-1 shrink-0 hl-applogo" />
           <span className="font-display font-black text-white uppercase tracking-tight text-sm truncate">{current.label}</span>
         </div>
-        {/* Sonne/Mond: Tag-/Nacht-Ansicht umschalten (merkt sich die Wahl).
-            Bewusst KEIN Abmelden-Knopf hier – man flog sonst zu leicht raus.
-            Abmelden geht weiterhin im Backoffice (über „Zurück"). */}
-        <button
-          onClick={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
-          title={theme === 'light' ? 'Dunkle Ansicht' : 'Helle Ansicht'}
-          aria-label={theme === 'light' ? 'Dunkle Ansicht' : 'Helle Ansicht'}
-          className="shrink-0 p-2.5 rounded-full text-hl-mute hover:text-brand-accent-light active:bg-white/10 cursor-pointer transition-colors"
-        >
-          <motion.span
-            key={theme}
-            initial={{ rotate: -90, scale: 0.6, opacity: 0 }}
-            animate={{ rotate: 0, scale: 1, opacity: 1 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 24 }}
-            className="block"
+        {/* Rechts oben: Einstellungen (Zahnrad) + Tag/Nacht. Abmelden bewusst
+            nicht hier – das steckt in den Einstellungen. */}
+        <div className="flex items-center gap-0.5 shrink-0">
+          <button
+            onClick={() => setTab('mehr')}
+            title="Einstellungen"
+            aria-label="Einstellungen"
+            className={`p-2.5 rounded-full active:bg-white/10 cursor-pointer transition-colors ${
+              tab === 'mehr' ? 'text-brand-accent-light' : 'text-hl-mute hover:text-brand-accent-light'
+            }`}
           >
-            {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
-          </motion.span>
-        </button>
+            <Settings className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
+            title={theme === 'light' ? 'Dunkle Ansicht' : 'Helle Ansicht'}
+            aria-label={theme === 'light' ? 'Dunkle Ansicht' : 'Helle Ansicht'}
+            className="p-2.5 rounded-full text-hl-mute hover:text-brand-accent-light active:bg-white/10 cursor-pointer transition-colors"
+          >
+            <motion.span
+              key={theme}
+              initial={{ rotate: -90, scale: 0.6, opacity: 0 }}
+              animate={{ rotate: 0, scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 24 }}
+              className="block"
+            >
+              {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+            </motion.span>
+          </button>
+        </div>
       </header>
 
       {/* Hinweis „Zum Home-Bildschirm hinzufügen" – nur wenn nicht schon als App gestartet */}
@@ -252,6 +274,8 @@ export default function ChatApp({
             <div className="h-full overflow-y-auto p-3">
               <TicketSystem currentUserId={currentUserId} canManage={canManageTickets} persist />
             </div>
+          ) : tab === 'ideen' ? (
+            <IdeasBoard currentUserId={currentUserId} isSuperadmin={isSuperadmin} initialOpenIdeaId={initialOpenIdeaId} />
           ) : (
             <TeamSettings
               user={user}

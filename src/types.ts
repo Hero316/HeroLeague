@@ -418,11 +418,41 @@ export interface Task {
   comments?: TaskComment[];
 }
 
-// In-App-Benachrichtigung (Erwähnung, Zuweisung, neuer Kommentar, Chat)
+// --- Ideen (Brainstorm) -----------------------------------------------------
+// Eine Idee ist ein eigener kleiner Brainstorm-Bereich: Titel + Verlauf
+// (jeder Teilnehmer schreibt Vorschläge) + ein manuelles Fazit. Ist sie fertig,
+// kann daraus eine Aufgabe/ein Termin erstellt werden (verknüpft).
+export type IdeaStatus = 'offen' | 'in_bearbeitung' | 'erledigt' | 'verworfen';
+
+export interface IdeaComment {
+  id: string;
+  ideaId: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface Idea {
+  id: string;
+  title: string;
+  summary: string; // manuelles Fazit / Zusammenfassung
+  status: IdeaStatus;
+  createdBy: string;
+  createdByName: string;
+  linkedTaskId: string | null; // gesetzt, wenn daraus eine Aufgabe/Termin wurde
+  createdAt: string;
+  updatedAt: string;
+  members: { userId: string; userName: string }[];
+  commentCount?: number;
+  comments?: IdeaComment[];
+}
+
+// In-App-Benachrichtigung (Erwähnung, Zuweisung, neuer Kommentar, Chat, Idee)
 export interface AppNotification {
   id: string;
-  kind: string; // 'ticket_assigned' | 'ticket_comment' | 'task_assigned' | 'task_comment' | 'mention' | 'chat'
-  refType: 'ticket' | 'task' | 'conversation';
+  kind: string; // 'ticket_assigned' | 'ticket_comment' | 'task_assigned' | 'task_comment' | 'mention' | 'chat' | 'idea'
+  refType: 'ticket' | 'task' | 'conversation' | 'idea';
   refId: string;
   body: string;
   isRead: boolean;

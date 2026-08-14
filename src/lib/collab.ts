@@ -12,6 +12,9 @@ import type {
   AppNotification,
   UserStatus,
   UserRole,
+  Idea,
+  IdeaComment,
+  IdeaStatus,
 } from '../types';
 
 // --- Team-Mitglieder & eigenes Profil ---------------------------------------
@@ -98,6 +101,28 @@ export const deleteTask = (id: string) =>
 
 export const addTaskComment = (taskId: string, body: string) =>
   apiFetch<TaskComment>('/api/tasks?sub=comment', { method: 'POST', body: JSON.stringify({ taskId, body }) });
+
+// --- Ideen (Brainstorm) -----------------------------------------------------
+export const fetchIdeas = () => apiFetch<Idea[]>('/api/team?resource=ideas');
+export const fetchIdea = (id: string) => apiFetch<Idea>(`/api/team?resource=idea&id=${encodeURIComponent(id)}`);
+
+export const createIdea = (input: { title: string; memberIds: string[] }) =>
+  apiFetch<Idea>('/api/team?resource=ideas', { method: 'POST', body: JSON.stringify(input) });
+
+export const updateIdea = (
+  id: string,
+  patch: { title?: string; status?: IdeaStatus; summary?: string; memberIds?: string[] }
+) => apiFetch<Idea>('/api/team?resource=idea', { method: 'POST', body: JSON.stringify({ id, ...patch }) });
+
+export const deleteIdea = (id: string) =>
+  apiFetch<{ ok: boolean }>('/api/team?resource=idea', { method: 'POST', body: JSON.stringify({ id, op: 'delete' }) });
+
+// Idee in Aufgabe/Termin umwandeln – gibt die aktualisierte Idee zurück (mit linkedTaskId).
+export const convertIdea = (id: string, convertType: 'termin' | 'aufgabe' | 'beides') =>
+  apiFetch<Idea>('/api/team?resource=idea', { method: 'POST', body: JSON.stringify({ id, op: 'convert', convertType }) });
+
+export const addIdeaComment = (ideaId: string, body: string) =>
+  apiFetch<IdeaComment>('/api/team?resource=idea-comment', { method: 'POST', body: JSON.stringify({ ideaId, body }) });
 
 // --- Benachrichtigungen -----------------------------------------------------
 export const fetchNotifications = () =>

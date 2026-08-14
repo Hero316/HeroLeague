@@ -13,7 +13,7 @@ function fmtDate(iso: string): string {
   }
 }
 
-export default function NotificationBell({ onOpen }: { onOpen?: (refType: 'ticket' | 'task' | 'conversation', refId: string) => void }) {
+export default function NotificationBell({ onOpen }: { onOpen?: (refType: 'ticket' | 'task' | 'conversation' | 'idea', refId: string) => void }) {
   const [items, setItems] = useState<AppNotification[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);

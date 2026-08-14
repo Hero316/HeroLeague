@@ -384,10 +384,11 @@ export default function App() {
     window.scrollTo({ top: 0 }); // neue Seite (z.B. Vereinsseite) immer oben starten
   };
 
-  // Ziel einer Benachrichtigung öffnen (Glocke): Chat → eigene Seite, Ticket/
-  // Aufgabe → Detail-Fenster direkt hier.
-  const openNotificationTarget = (refType: 'ticket' | 'task' | 'conversation', refId: string) => {
+  // Ziel einer Benachrichtigung öffnen (Glocke): Chat → eigene Seite, Idee →
+  // Ideen-Bereich der Team-App, Ticket/Aufgabe → Detail-Fenster direkt hier.
+  const openNotificationTarget = (refType: 'ticket' | 'task' | 'conversation' | 'idea', refId: string) => {
     if (refType === 'conversation') navigateTo(`/chat?c=${encodeURIComponent(refId)}`);
+    else if (refType === 'idea') navigateTo(`/chat?tab=ideen&openIdea=${encodeURIComponent(refId)}`);
     else setDeepOpen({ type: refType, id: refId });
   };
 

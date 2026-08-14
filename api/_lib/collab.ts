@@ -45,9 +45,10 @@ export function memberName(members: Map<string, AppUser>, id: string): string {
 // Team-App (/chat) – Chat direkt in die Unterhaltung, Ticket/Aufgabe als
 // Detail-Fenster obendrauf. So landet man einheitlich in der Team-App und
 // nicht mehr im Liga-Backoffice.
-function notifyUrl(refType: 'ticket' | 'task' | 'conversation', refId: string): string {
+function notifyUrl(refType: 'ticket' | 'task' | 'conversation' | 'idea', refId: string): string {
   if (refType === 'conversation') return `/chat?c=${encodeURIComponent(refId)}`;
   if (refType === 'ticket') return `/chat?openTicket=${encodeURIComponent(refId)}`;
+  if (refType === 'idea') return `/chat?tab=ideen&openIdea=${encodeURIComponent(refId)}`;
   return `/chat?openTask=${encodeURIComponent(refId)}`; // task (Aufgabe/Termin)
 }
 
@@ -55,7 +56,7 @@ export async function notify(
   recipientId: string | null | undefined,
   actorId: string,
   kind: string,
-  refType: 'ticket' | 'task' | 'conversation',
+  refType: 'ticket' | 'task' | 'conversation' | 'idea',
   refId: string,
   body: string
 ): Promise<void> {
@@ -590,4 +591,221 @@ export async function notifications(req: VercelRequest, res: VercelResponse) {
   }
 
   return res.status(405).json({ error: 'Nicht unterstützt' });
+}
+
+// --- Ideen (Brainstorm) -----------------------------------------------------
+// Eine Idee sehen/bearbeiten dürfen nur ihre Mitglieder (der Ersteller wählt sie
+// beim Anlegen). Verlauf = idea_comments (chat-artig), Fazit = ideas.summary.
+const IDEA_STATUS = ['offen', 'in_bearbeitung', 'erledigt', 'verworfen'];
+
+async function isIdeaMember(ideaId: string, userId: string): Promise<boolean> {
+  const rows = await sql`SELECT 1 FROM idea_members WHERE idea_id = ${ideaId} AND user_id = ${userId} LIMIT 1`;
+  return rows.length > 0;
+}
+
+async function fetchIdeaById(id: string) {
+  const rows = await sql`
+    SELECT i.id, i.title, i.summary, i.status,
+           i.created_by AS "createdBy", i.created_by_name AS "createdByName",
+           i.linked_task_id AS "linkedTaskId",
+           i.created_at AS "createdAt", i.updated_at AS "updatedAt",
+           COALESCE((SELECT json_agg(json_build_object('userId', m.user_id, 'userName', m.user_name))
+                     FROM idea_members m WHERE m.idea_id = i.id), '[]') AS members,
+           (SELECT count(*)::int FROM idea_comments c WHERE c.idea_id = i.id) AS "commentCount"
+    FROM ideas i WHERE i.id = ${id}`;
+  return rows[0] ?? null;
+}
+
+// Mitglieder einer Idee komplett setzen (Ersteller bleibt immer dabei).
+async function setIdeaMembers(ideaId: string, ownerId: string, wantedIds: string[], members: Map<string, AppUser>): Promise<string[]> {
+  const ids = new Set<string>([ownerId]);
+  for (const m of wantedIds) if (typeof m === 'string' && members.has(m)) ids.add(m);
+  const prev = (await sql`SELECT user_id AS "userId" FROM idea_members WHERE idea_id = ${ideaId}`) as { userId: string }[];
+  const prevSet = new Set(prev.map((r) => r.userId));
+  // Entfernte löschen, neue anlegen (Lesestand der Bleibenden bleibt erhalten).
+  for (const r of prev) if (!ids.has(r.userId)) await sql`DELETE FROM idea_members WHERE idea_id = ${ideaId} AND user_id = ${r.userId}`;
+  for (const uid of ids) {
+    if (prevSet.has(uid)) continue;
+    const nm = uid === ownerId ? memberName(members, ownerId) : memberName(members, uid);
+    await sql`INSERT INTO idea_members (idea_id, user_id, user_name) VALUES (${ideaId}, ${uid}, ${nm}) ON CONFLICT DO NOTHING`;
+  }
+  return [...ids].filter((id) => !prevSet.has(id)); // neu hinzugekommene
+}
+
+export async function ideas(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  const uid = session.userId;
+
+  if (req.method === 'GET') {
+    res.setHeader('Cache-Control', 'no-store');
+    const rows = await sql`
+      SELECT i.id, i.title, i.summary, i.status,
+             i.created_by AS "createdBy", i.created_by_name AS "createdByName",
+             i.linked_task_id AS "linkedTaskId",
+             i.created_at AS "createdAt", i.updated_at AS "updatedAt",
+             COALESCE((SELECT json_agg(json_build_object('userId', m.user_id, 'userName', m.user_name))
+                       FROM idea_members m WHERE m.idea_id = i.id), '[]') AS members,
+             (SELECT count(*)::int FROM idea_comments c WHERE c.idea_id = i.id) AS "commentCount"
+      FROM ideas i
+      JOIN idea_members me ON me.idea_id = i.id AND me.user_id = ${uid}
+      ORDER BY CASE i.status WHEN 'offen' THEN 0 WHEN 'in_bearbeitung' THEN 1 WHEN 'erledigt' THEN 2 ELSE 3 END,
+               i.updated_at DESC`;
+    return res.json(rows);
+  }
+
+  if (req.method === 'POST') {
+    const b = req.body ?? {};
+    if (!isNonEmptyString(b.title)) return badRequest(res, 'Bitte einen Titel für die Idee angeben.');
+    if (session.userId === 'bootstrap') return badRequest(res, 'Bitte mit einem echten Account anmelden.');
+    const members = await loadMembers();
+    const meName = sessionName(session);
+    const id = genId('idea');
+    const title = b.title.trim().slice(0, 200);
+    await sql`INSERT INTO ideas (id, title, created_by, created_by_name) VALUES (${id}, ${title}, ${uid}, ${meName})`;
+    const wanted = Array.isArray(b.memberIds) ? b.memberIds : [];
+    const added = await setIdeaMembers(id, uid, wanted, members);
+    for (const mid of added) {
+      if (mid === uid) continue;
+      await notify(mid, uid, 'idea', 'idea', id, `${meName} hat dich zur Idee „${title}“ hinzugefügt.`);
+    }
+    return res.json(await fetchIdeaById(id));
+  }
+
+  return res.status(405).json({ error: 'Nicht unterstützt' });
+}
+
+export async function idea(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  const uid = session.userId;
+
+  if (req.method === 'GET') {
+    res.setHeader('Cache-Control', 'no-store');
+    const id = String(req.query.id ?? '');
+    if (!id) return badRequest(res, 'Ideen-ID fehlt.');
+    if (!(await isIdeaMember(id, uid))) return res.status(403).json({ error: 'Kein Zugriff auf diese Idee.' });
+    const base = await fetchIdeaById(id);
+    if (!base) return res.status(404).json({ error: 'Idee nicht gefunden.' });
+    const comments = await sql`
+      SELECT id, idea_id AS "ideaId", author_id AS "authorId", author_name AS "authorName", body, created_at AS "createdAt"
+      FROM idea_comments WHERE idea_id = ${id} ORDER BY created_at`;
+    await sql`UPDATE idea_members SET last_read_at = now() WHERE idea_id = ${id} AND user_id = ${uid}`;
+    return res.json({ ...base, comments });
+  }
+
+  if (req.method === 'POST') {
+    const b = req.body ?? {};
+    const id = typeof b.id === 'string' ? b.id : '';
+    if (!id) return badRequest(res, 'Ideen-ID fehlt.');
+    if (!(await isIdeaMember(id, uid))) return res.status(403).json({ error: 'Kein Zugriff auf diese Idee.' });
+    const rows = await sql`SELECT created_by AS "createdBy", title, summary, status FROM ideas WHERE id = ${id}`;
+    if (rows.length === 0) return res.status(404).json({ error: 'Idee nicht gefunden.' });
+    const cur = rows[0] as { createdBy: string; title: string; summary: string; status: string };
+    const isOwner = cur.createdBy === uid || session.role === 'superadmin';
+
+    // Löschen (nur Ersteller oder Super-Admin).
+    if (b.op === 'delete') {
+      if (!isOwner) return res.status(403).json({ error: 'Nur der Ersteller darf die Idee löschen.' });
+      await sql`DELETE FROM ideas WHERE id = ${id}`;
+      return res.json({ ok: true, deleted: id });
+    }
+
+    // In Aufgabe/Termin umwandeln (verknüpft die Idee mit der neuen Aufgabe).
+    if (b.op === 'convert') {
+      const type = ['termin', 'aufgabe', 'beides'].includes(b.convertType) ? b.convertType : 'aufgabe';
+      const members = await loadMembers();
+      const mem = (await sql`SELECT user_id AS "userId" FROM idea_members WHERE idea_id = ${id}`) as { userId: string }[];
+      const taskId = genId('task');
+      const name = sessionName(session);
+      const notes = cur.summary
+        ? `Aus Idee „${cur.title}“:\n\n${cur.summary}`
+        : `Aus Idee „${cur.title}“.`;
+      await sql`
+        INSERT INTO tasks (id, title, notes, type, status, priority, created_by, created_by_name)
+        VALUES (${taskId}, ${cur.title}, ${notes}, ${type}, 'offen', 'mittel', ${uid}, ${name})`;
+      for (const m of mem) {
+        if (members.has(m.userId)) {
+          await sql`INSERT INTO task_assignees (task_id, user_id, user_name) VALUES (${taskId}, ${m.userId}, ${memberName(members, m.userId)})`;
+        }
+      }
+      await sql`UPDATE ideas SET linked_task_id = ${taskId}, status = 'erledigt', updated_at = now() WHERE id = ${id}`;
+      // Zugewiesene über die neue Aufgabe informieren.
+      for (const m of mem) {
+        if (m.userId !== uid) await notify(m.userId, uid, 'task_assigned', 'task', taskId, `Aus der Idee „${cur.title}“ wurde eine Aufgabe.`);
+      }
+      return res.json(await fetchIdeaById(id));
+    }
+
+    // Teil-Aktualisierung: Titel, Status, Fazit, Mitglieder.
+    if (b.status !== undefined && !IDEA_STATUS.includes(b.status)) return badRequest(res, 'Ungültiger Status.');
+    const title = b.title !== undefined ? String(b.title).trim().slice(0, 200) : undefined;
+    if (b.title !== undefined && !title) return badRequest(res, 'Titel darf nicht leer sein.');
+    const summary = b.summary !== undefined ? String(b.summary).slice(0, 8000) : undefined;
+
+    await sql`
+      UPDATE ideas SET
+        title = COALESCE(${title ?? null}, title),
+        status = COALESCE(${b.status ?? null}, status),
+        summary = CASE WHEN ${b.summary !== undefined} THEN ${summary ?? ''} ELSE summary END,
+        updated_at = now()
+      WHERE id = ${id}`;
+
+    // Mitglieder ändern darf nur der Ersteller.
+    if (Array.isArray(b.memberIds) && isOwner) {
+      const members = await loadMembers();
+      const added = await setIdeaMembers(id, cur.createdBy, b.memberIds, members);
+      const meName = sessionName(session);
+      for (const mid of added) {
+        if (mid === uid) continue;
+        await notify(mid, uid, 'idea', 'idea', id, `${meName} hat dich zur Idee „${cur.title}“ hinzugefügt.`);
+      }
+    }
+    return res.json(await fetchIdeaById(id));
+  }
+
+  return res.status(405).json({ error: 'Nicht unterstützt' });
+}
+
+// Beitrag zum Brainstorm einer Idee. Benachrichtigt die übrigen Mitglieder per
+// Handy-Push (wie im Chat), Erwähnungen zusätzlich über die Glocke.
+export async function ideaComment(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
+  const uid = session.userId;
+
+  const b = req.body ?? {};
+  const ideaId = typeof b.ideaId === 'string' ? b.ideaId : '';
+  if (!ideaId) return badRequest(res, 'Ideen-ID fehlt.');
+  if (!(await isIdeaMember(ideaId, uid))) return res.status(403).json({ error: 'Kein Zugriff auf diese Idee.' });
+  if (!isNonEmptyString(b.body)) return badRequest(res, 'Bitte einen Beitrag schreiben.');
+
+  const rows = await sql`SELECT title FROM ideas WHERE id = ${ideaId}`;
+  if (rows.length === 0) return res.status(404).json({ error: 'Idee nicht gefunden.' });
+  const title = (rows[0] as { title: string }).title;
+
+  const id = genId('ic');
+  const name = sessionName(session);
+  const inserted = await sql`
+    INSERT INTO idea_comments (id, idea_id, author_id, author_name, body)
+    VALUES (${id}, ${ideaId}, ${uid}, ${name}, ${b.body.slice(0, 8000)})
+    RETURNING id, idea_id AS "ideaId", author_id AS "authorId", author_name AS "authorName", body, created_at AS "createdAt"`;
+  await sql`UPDATE ideas SET updated_at = now() WHERE id = ${ideaId}`;
+
+  const members = await loadMembers();
+  const mem = (await sql`SELECT user_id AS "userId" FROM idea_members WHERE idea_id = ${ideaId}`) as { userId: string }[];
+  const mentioned = new Set<string>();
+  for (const mid of findMentions(b.body, members)) {
+    if (mid !== uid && mem.some((m) => m.userId === mid)) {
+      mentioned.add(mid);
+      await notify(mid, uid, 'mention', 'idea', ideaId, `${name} hat dich in der Idee „${title}“ erwähnt.`);
+    }
+  }
+  const preview = String(b.body).slice(0, 120);
+  for (const m of mem) {
+    if (m.userId === uid || mentioned.has(m.userId)) continue;
+    await sendPushToUser(m.userId, { title: `💡 ${title}`, body: `${name}: ${preview}`, url: `/chat?tab=ideen&openIdea=${encodeURIComponent(ideaId)}` });
+  }
+  return res.json(inserted[0]);
 }

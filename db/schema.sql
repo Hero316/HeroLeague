@@ -300,3 +300,34 @@ CREATE TABLE push_subscriptions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_push_user ON push_subscriptions(user_id);
+
+-- Ideen (Brainstorm): eine Idee = Titel + Verlauf (idea_comments) + Fazit
+-- (summary). Sichtbar nur für ihre Mitglieder (idea_members). Ist die Idee
+-- fertig, kann daraus eine Aufgabe/ein Termin werden (linked_task_id).
+CREATE TABLE ideas (
+  id              TEXT PRIMARY KEY,
+  title           TEXT NOT NULL,
+  summary         TEXT NOT NULL DEFAULT '',
+  status          TEXT NOT NULL DEFAULT 'offen',   -- offen | in_bearbeitung | erledigt | verworfen
+  created_by      TEXT NOT NULL,
+  created_by_name TEXT NOT NULL DEFAULT '',
+  linked_task_id  TEXT,                            -- gesetzt nach dem Umwandeln
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE idea_members (
+  idea_id      TEXT NOT NULL REFERENCES ideas(id) ON DELETE CASCADE,
+  user_id      TEXT NOT NULL,
+  user_name    TEXT NOT NULL DEFAULT '',
+  last_read_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (idea_id, user_id)
+);
+CREATE TABLE idea_comments (
+  id          TEXT PRIMARY KEY,
+  idea_id     TEXT NOT NULL REFERENCES ideas(id) ON DELETE CASCADE,
+  author_id   TEXT NOT NULL,
+  author_name TEXT NOT NULL DEFAULT '',
+  body        TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_idea_comments_idea ON idea_comments(idea_id, created_at);

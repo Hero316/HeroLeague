@@ -36,6 +36,8 @@ export async function ensureSchema(): Promise<void> {
     await sql`SELECT 1 FROM message_reactions LIMIT 1`;
     // Thread-Lesestand (ungelesene Thread-Antworten) mitprüfen.
     await sql`SELECT 1 FROM thread_reads LIMIT 1`;
+    // Ideen-Bereich (Brainstorm) mitprüfen.
+    await sql`SELECT 1 FROM ideas LIMIT 1`;
     ensured = true;
     return;
   } catch {
@@ -125,6 +127,23 @@ export async function ensureSchema(): Promise<void> {
     user_id TEXT PRIMARY KEY, last_seen TIMESTAMPTZ NOT NULL DEFAULT now(),
     typing_conv TEXT, typing_at TIMESTAMPTZ, typing_name TEXT)`);
   await run(sql`CREATE INDEX IF NOT EXISTS idx_chat_presence_seen ON chat_presence(last_seen)`);
+
+  // --- Ideen (Brainstorm) -------------------------------------------------
+  await run(sql`CREATE TABLE IF NOT EXISTS ideas (
+    id TEXT PRIMARY KEY, title TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'offen',
+    created_by TEXT NOT NULL, created_by_name TEXT NOT NULL DEFAULT '',
+    linked_task_id TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+  await run(sql`CREATE TABLE IF NOT EXISTS idea_members (
+    idea_id TEXT NOT NULL REFERENCES ideas(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL, user_name TEXT NOT NULL DEFAULT '',
+    last_read_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (idea_id, user_id))`);
+  await run(sql`CREATE TABLE IF NOT EXISTS idea_comments (
+    id TEXT PRIMARY KEY, idea_id TEXT NOT NULL REFERENCES ideas(id) ON DELETE CASCADE,
+    author_id TEXT NOT NULL, author_name TEXT NOT NULL DEFAULT '', body TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+  await run(sql`CREATE INDEX IF NOT EXISTS idx_idea_comments_idea ON idea_comments(idea_id, created_at)`);
 
   // --- Constraints ganz zuletzt (unkritisch; nur für Rollen-/Anhang-Checks) -
   await run(sql`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
