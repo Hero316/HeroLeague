@@ -299,6 +299,19 @@ body {
   }
 }
 
+/* Bankpartner-Logo: IMMER farbig (kein Grau), KEIN Dauer-Glow. Auf dem PC beim
+   Hovern nur ein dezentes Leuchten + minimales Vergrößern – deutlich schwächer
+   als der Hauptpartner. Auf Touch-Geräten schlicht farbig (kein Hover). */
+.hl-partner-color-logo {
+  transition: transform 0.3s ease, filter 0.3s ease;
+}
+@media (hover: hover) {
+  .hl-partner-color-logo:hover {
+    transform: scale(1.04);
+    filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 5px rgba(56, 189, 248, 0.35));
+  }
+}
+
 /* Touch-Geräte (Handy/Tablet) haben kein Hover -> normale Partner-Logos direkt
    farbig zeigen, statt dauerhaft grau. Auf Desktop bleibt der Grau→Farbe-Hover. */
 @media (hover: none) {

@@ -271,21 +271,32 @@ export function PageHeader({ kicker, title, text }: PageHeaderProps) {
 // alle Footer-Instanzen die Logos sofort (der Footer wird pro Route neu gemountet).
 let partnersCache: PartnersConfig | null = null;
 
-// Ein einzelnes Partner-Logo. Standard: farbig hochgeladen, per CSS grau
-// dargestellt und erst beim Hovern farbig (auf Touch-Geräten dauerhaft farbig).
-// `glow` = Hauptpartner: IMMER farbig (PC + Handy); auf dem Handy leuchtet es
-// dauerhaft, auf dem PC beim Hovern (dann auch etwas größer).
+// Ein einzelnes Partner-Logo. Drei Varianten:
+// - Standard: farbig hochgeladen, per CSS grau dargestellt und erst beim Hovern
+//   farbig (auf Touch-Geräten dauerhaft farbig).
+// - `glow` = Hauptpartner: IMMER farbig (PC + Handy); auf dem Handy leuchtet es
+//   dauerhaft, auf dem PC beim Hovern (dann auch etwas größer).
+// - `softColor` = Bankpartner: IMMER farbig (PC + Handy), KEIN Dauer-Glow; beim
+//   Hovern nur ein dezentes Leuchten (deutlich schwächer als der Hauptpartner).
 function PartnerLogo({
   partner,
   heightClass,
   maxWClass,
   glow = false,
+  softColor = false,
 }: {
   partner: Partner;
   heightClass: string;
   maxWClass: string;
   glow?: boolean;
+  softColor?: boolean;
 }) {
+  const base = `${heightClass} ${maxWClass} w-auto object-contain`;
+  const cls = glow
+    ? `hl-partner-main-logo ${base}`
+    : softColor
+      ? `hl-partner-color-logo ${base}`
+      : `hl-partner-logo ${base} grayscale brightness-[.45] contrast-[1.1] opacity-90 transition duration-300 ease-out hover:grayscale-0 hover:brightness-100 hover:contrast-100 hover:opacity-100 hover:scale-105`;
   const img = (
     <img
       src={partner.logoUrl}
@@ -293,11 +304,7 @@ function PartnerLogo({
       loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"
-      className={
-        glow
-          ? `hl-partner-main-logo ${heightClass} ${maxWClass} w-auto object-contain`
-          : `hl-partner-logo ${heightClass} ${maxWClass} w-auto object-contain grayscale brightness-[.45] contrast-[1.1] opacity-90 transition duration-300 ease-out hover:grayscale-0 hover:brightness-100 hover:contrast-100 hover:opacity-100 hover:scale-105`
-      }
+      className={cls}
     />
   );
   return partner.linkUrl ? (
@@ -387,7 +394,7 @@ export function PartnerSection() {
                       {p.label}
                     </span>
                   )}
-                  <PartnerLogo partner={p} heightClass="h-12 sm:h-14" maxWClass="max-w-[190px]" />
+                  <PartnerLogo partner={p} heightClass="h-12 sm:h-14" maxWClass="max-w-[190px]" softColor />
                 </div>
               ))}
             </div>
