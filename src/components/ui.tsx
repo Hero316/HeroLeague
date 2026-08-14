@@ -344,12 +344,12 @@ export function PartnerSection() {
 
   return (
     <section className="bg-[linear-gradient(180deg,#e2e8fb_0%,#ccd6f2_100%)] text-[#0b0b0f]">
-      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-14 sm:py-20">
+      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-8 sm:py-12">
         {/* Durchgehender, gleichmäßiger vertikaler Rhythmus (überall derselbe
             Abstand). Reihenfolge: ganz oben die große „Hauptpartner"-Überschrift
             + Logo, danach erst die lilane „Partner"-Überschrift mit Bankpartner
             & weiteren Partnern darunter. */}
-        <div className="flex flex-col items-center gap-5 sm:gap-6">
+        <div className="flex flex-col items-center gap-4 sm:gap-5">
           {/* Hauptüberschrift ganz oben: „Hauptpartner" – groß, kursiv und gold
               schimmernd, im Stil des früheren „Partner"-Titels. Darunter das
               immer farbige, leuchtende Hauptpartner-Logo (klickbar). Das Logo hat
@@ -360,7 +360,7 @@ export function PartnerSection() {
               <h2 className="hl-partner-hero text-center font-sans font-black italic text-4xl sm:text-5xl tracking-tight px-3 sm:px-4">
                 {mains[0].label.trim() || 'Hauptpartner'}
               </h2>
-              <div className="flex flex-wrap items-end justify-center gap-x-16 sm:gap-x-24 gap-y-6 -my-6 sm:-my-8">
+              <div className="flex flex-wrap items-end justify-center gap-x-16 sm:gap-x-24 gap-y-6 -my-10 sm:-my-14">
                 {mains.map((p) => (
                   <PartnerLogo key={p.id} partner={p} heightClass="h-48 sm:h-60" maxWClass="max-w-[90%] sm:max-w-[560px]" glow />
                 ))}
