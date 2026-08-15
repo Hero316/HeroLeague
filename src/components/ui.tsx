@@ -1,10 +1,11 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import { ChevronDown, X, Smartphone, Search } from 'lucide-react';
+import { ChevronDown, X, Smartphone, Search, LayoutDashboard, Star, Trophy, Home, Radio, KeyRound } from 'lucide-react';
 import { ActiveTab, Partner, PartnersConfig, Team } from '../types';
 import { apiFetch } from '../lib/api';
 import { trackSponsorClick } from '../lib/sponsors';
+import { useBackClose } from '../lib/backStack';
 import { useInstall } from './InstallProvider';
 
 // Gemeinsame Design-Bausteine des neuen Hero-League-Looks.
@@ -779,21 +780,43 @@ export interface AccordionCategory {
 // Standardmäßig ist alles zugeklappt (defaultOpenId = null). Werden `categories`
 // übergeben, erscheint oben eine Reiter-Leiste und es sind nur die Abschnitte der
 // aktiven Rubrik sichtbar – so bleibt das Backoffice übersichtlich.
+// Interne Kennung der „Übersicht“ (Backend-Startseite). Bewusst ein Sonderwert,
+// damit er nicht mit einer echten Rubrik kollidiert.
+const DASH_ID = '__start__';
+
+// Icon je Rubrik für das Handy-Dock (Team-App-Look). Fallback: Stern.
+const CAT_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  [DASH_ID]: LayoutDashboard,
+  team: Star,
+  spiele: Trophy,
+  startseite: Home,
+  kanaele: Radio,
+  zugaenge: KeyRound,
+};
+// Kurzlabel fürs Dock: „★ Intern“→„Intern“, „Spiele & Liga“→„Spiele“.
+const shortCatLabel = (label: string) => label.replace(/^★\s*/, '').split(' & ')[0];
+
 export function AccordionGroup({
   children,
   defaultOpenId = null,
   categories,
   searchable = false,
   searchPlaceholder = 'Was möchtest du tun? (z. B. „Tore eintragen“, „Kader“, „Highlights“)',
+  dashboard,
+  dashboardLabel = 'Übersicht',
 }: {
   children: React.ReactNode;
   defaultOpenId?: string | null;
   categories?: AccordionCategory[];
   searchable?: boolean; // zeigt oben ein Suchfeld, das direkt zum Menüpunkt springt
   searchPlaceholder?: string;
+  dashboard?: React.ReactNode; // Backend-Startseite (Übersicht) – erste Rubrik
+  dashboardLabel?: string;
 }) {
   const [openId, setOpenId] = React.useState<string | null>(defaultOpenId);
-  const [activeCategory, setActiveCategory] = React.useState<string | null>(categories?.[0]?.id ?? null);
+  const [activeCategory, setActiveCategory] = React.useState<string | null>(
+    dashboard ? DASH_ID : categories?.[0]?.id ?? null
+  );
   const [sections, setSections] = React.useState<AccordionSectionMeta[]>([]);
   const [scrollTargetId, setScrollTargetId] = React.useState<string | null>(null);
 
@@ -813,12 +836,24 @@ export function AccordionGroup({
   }, []);
   const clearScrollTarget = React.useCallback(() => setScrollTargetId(null), []);
 
-  const selectCategory = (id: string) => {
+  const selectCategory = React.useCallback((id: string) => {
     setActiveCategory(id);
     setOpenId(null); // Beim Reiter-Wechsel alles zuklappen – jeder Reiter startet frisch.
-  };
+  }, []);
 
-  const categoryLabel = (id?: string) => categories?.find((c) => c.id === id)?.label ?? '';
+  // Handy-Zurück (iPhone/Android): Ist man NICHT auf der Übersicht, führt „zurück“
+  // eine Ebene hoch – zurück auf die Backend-Startseite. Erst dort verlässt der
+  // nächste Zurück-Schritt das Backoffice (über die normale Browser-History).
+  useBackClose(!!dashboard && activeCategory !== DASH_ID, () => {
+    setActiveCategory(DASH_ID);
+    setOpenId(null);
+  });
+
+  const allCategories: AccordionCategory[] = dashboard
+    ? [{ id: DASH_ID, label: dashboardLabel }, ...(categories ?? [])]
+    : categories ?? [];
+  const categoryLabel = (id?: string) => allCategories.find((c) => c.id === id)?.label ?? '';
+  const isDash = !!dashboard && activeCategory === DASH_ID;
 
   return (
     <AccordionContext.Provider
@@ -832,31 +867,96 @@ export function AccordionGroup({
           placeholder={searchPlaceholder}
         />
       )}
-      {categories && categories.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-5">
-          {categories.map((c) => {
-            const active = c.id === activeCategory;
-            return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => selectCategory(c.id)}
-                aria-pressed={active}
-                className={`px-4 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider font-sans transition-colors cursor-pointer border ${
-                  active
-                    ? 'bg-brand-accent-light text-brand-dark border-brand-accent-light shadow-lg shadow-brand-accent-light/10'
-                    : 'bg-white/[.03] text-hl-mute border-white/10 hover:text-white hover:border-white/25'
-                }`}
-              >
-                {c.label}
-              </button>
-            );
-          })}
-        </div>
+
+      {allCategories.length > 0 && (
+        <>
+          {/* PC: Rubriken-Leiste oben (Text-Pills). Passt nicht alles nebeneinander,
+              lässt sie sich horizontal scrollen. */}
+          <nav className="hidden sm:block mb-5" aria-label="Backoffice-Bereiche">
+            <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              {allCategories.map((c) => {
+                const active = c.id === activeCategory;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => selectCategory(c.id)}
+                    aria-pressed={active}
+                    className={`shrink-0 whitespace-nowrap px-4 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider font-sans transition-colors cursor-pointer border ${
+                      active
+                        ? 'bg-brand-accent-light text-brand-dark border-brand-accent-light shadow-lg shadow-brand-accent-light/10'
+                        : 'bg-white/[.03] text-hl-mute border-white/10 hover:text-white hover:border-white/25'
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+
+          {/* Handy: Dock unten im Team-App-Look – dicker, mit fliegender Pille,
+              bündig am unteren Rand (nichts mehr darunter). Horizontal scrollbar
+              mit Rand-Fade, wenn nicht alles nebeneinander passt. */}
+          <nav
+            className="sm:hidden fixed inset-x-0 bottom-0 z-40 hl-app-dock backdrop-blur-xl border-t border-white/10 px-2 pt-2"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
+            aria-label="Backoffice-Bereiche"
+          >
+            <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,#000_14px,#000_calc(100%-14px),transparent)]">
+              {allCategories.map((c) => {
+                const active = c.id === activeCategory;
+                const Icon = CAT_ICON[c.id] ?? Star;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => selectCategory(c.id)}
+                    aria-pressed={active}
+                    className="relative shrink-0 min-w-[76px] flex flex-col items-center justify-center gap-1 py-2.5 rounded-2xl cursor-pointer active:scale-90 transition-transform"
+                  >
+                    {active && (
+                      <motion.span
+                        layoutId="admin-cat-pill"
+                        className="absolute inset-0 rounded-2xl bg-brand-accent-light/15 ring-1 ring-brand-accent-light/25"
+                        transition={{ type: 'spring', stiffness: 480, damping: 38 }}
+                      />
+                    )}
+                    <motion.span
+                      animate={{ scale: active ? 1.14 : 1, y: active ? -1 : 0 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 26 }}
+                      className={`relative z-10 transition-colors ${active ? 'text-brand-accent-light' : 'text-hl-mute'}`}
+                    >
+                      <Icon className="w-[22px] h-[22px]" />
+                    </motion.span>
+                    <span className={`relative z-10 text-[10px] font-sans font-bold uppercase tracking-wide transition-colors ${active ? 'text-brand-accent-light' : 'text-hl-mute'}`}>
+                      {shortCatLabel(c.label)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        </>
       )}
-      {children}
+
+      {/* Inhalt. Unten am Handy Platz lassen, damit nichts hinter dem Dock
+          verschwindet. */}
+      <div className="pb-32 sm:pb-0">
+        {isDash && dashboard}
+        {children}
+      </div>
     </AccordionContext.Provider>
   );
+}
+
+// Navigation aus der Übersicht heraus: direkt zu einem Menüpunkt springen.
+export function useAdminNav() {
+  const ctx = React.useContext(AccordionContext);
+  return {
+    openSection: ctx?.openSection ?? (() => {}),
+    activeCategory: ctx?.activeCategory ?? null,
+  };
 }
 
 // Admin-Schnellsuche: tippen, was man tun will → passenden Menüpunkt finden und

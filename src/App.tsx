@@ -11,6 +11,7 @@ import Spielplan from './components/Spielplan';
 import HeroOne from './components/HeroOne';
 import Statistiken from './components/Statistiken';
 import AdminPanel from './components/AdminPanel';
+import AdminDashboard from './components/AdminDashboard';
 import AdminLogin from './components/AdminLogin';
 import UserManager from './components/UserManager';
 import MatchManager from './components/MatchManager';
@@ -18,7 +19,6 @@ import RefereeMode from './components/RefereeMode';
 import TeamDetail from './components/TeamDetail';
 import LiveBanner from './components/LiveBanner';
 import LiveTicker from './components/LiveTicker';
-import LiveVisitors from './components/LiveVisitors';
 import InstallPrompt from './components/InstallPrompt';
 import Ergebniszettel from './components/Ergebniszettel';
 import LegalPage from './components/LegalPage';
@@ -919,13 +919,19 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Live-Besucher: ganz oben im Backoffice */}
-              <LiveVisitors />
-
-              {/* Aufgeräumtes Backoffice: Reiter nach Rubrik, darunter „dicke Tasten" */}
+              {/* Backend als eigener Bereich: Übersicht (Dashboard) als Startseite,
+                  darunter die Rubriken-Leiste (am Handy unten, am PC oben). */}
               <AccordionGroup
                 searchable
                 defaultOpenId="aufgaben"
+                dashboard={
+                  <AdminDashboard
+                    teamsCount={visibleTeams.length}
+                    matchesCount={currentSeasonMatches.length}
+                    canSeeSponsors={canManagePom}
+                    canManageClubs={canManageMatches}
+                  />
+                }
                 categories={[
                   { id: 'team', label: '★ Intern' },
                   ...(canSeeLeagueArea ? [{ id: 'spiele', label: 'Spiele & Liga' }] : []),
