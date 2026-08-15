@@ -157,17 +157,13 @@ export default function Navbar({
         </div>
       )}
       <div className="max-w-[1320px] mx-auto px-4 sm:px-10 h-[68px] sm:h-[76px] flex items-center gap-5 lg:gap-9">
-        {/* Logo + Claim */}
+        {/* Logo */}
         <button
           onClick={() => setActiveTab('home')}
           className="flex items-center gap-3 sm:gap-4 cursor-pointer shrink-0"
           aria-label="Zur Startseite"
         >
           <img src="/assets/hero-league-logo.png" alt="Hero League" className="h-8 sm:h-10 w-auto block" />
-          <div className="hidden sm:block w-px h-7 bg-white/[.13]" />
-          <div className="hidden sm:block font-sans font-semibold text-[9px] tracking-[2.6px] text-[#5b6560] leading-normal max-w-[92px] text-left">
-            THE ULTIMATE FOOTBALL ARENA
-          </div>
         </button>
 
         {/* Desktop-Navigation */}
