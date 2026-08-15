@@ -739,9 +739,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.json({ board: toGameBoard(rows[0]?.value) });
       }
       if (resource === 'sponsor-clicks') {
-        // Auswertung nur für eingeloggte Nutzer (interne Analytics).
+        // Auswertung nur für Super-Admin und Spiel-Admin (interne Analytics).
         const session = await getSession(req);
         if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+        if (session.role !== 'superadmin' && session.role !== 'match_admin') {
+          return res.status(403).json({ error: 'Keine Berechtigung für diese Auswertung.' });
+        }
         const rows = await sql`SELECT value FROM settings WHERE key = 'sponsor-clicks'`;
         return res.json(rows[0]?.value ?? {});
       }

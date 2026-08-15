@@ -602,14 +602,15 @@ export default function AdminPanel({
     }
   };
 
-  // Sponsoren-Klick-Statistik (nur Super-Admin sieht die Auswertung).
+  // Sponsoren-Klick-Statistik – sichtbar für Super-Admin UND Spiel-Admin
+  // (canManagePom = isSuperadmin || isMatchAdmin).
   const [sponsorClicks, setSponsorClicks] = useState<SponsorClicksMap>({});
   const loadSponsorClicks = React.useCallback(() => {
-    if (!canEditHomepage) return;
+    if (!canManagePom) return;
     fetchSponsorClicks()
       .then((data) => setSponsorClicks(data && typeof data === 'object' ? data : {}))
       .catch(() => { /* noch keine Klicks / kein Zugriff */ });
-  }, [canEditHomepage]);
+  }, [canManagePom]);
   useEffect(() => { loadSponsorClicks(); }, [loadSponsorClicks]);
 
   // Klick-Zeilen für die Übersicht: bekannte Partner (auch mit 0 Klicks) +
@@ -2264,8 +2265,8 @@ export default function AdminPanel({
         </AccordionSection>
       )}
 
-      {/* Sponsoren-Klicks – Auswertung (nur Super-Admin) */}
-      {canEditHomepage && (
+      {/* Sponsoren-Klicks – Auswertung (Super-Admin + Spiel-Admin) */}
+      {canManagePom && (
         <AccordionSection
           id="sponsor-clicks"
           category="startseite"
