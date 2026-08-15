@@ -165,6 +165,16 @@ export interface TeamSponsor {
 // Zuordnung Team-ID → Sponsoren dieses Teams.
 export type TeamSponsorsMap = Record<string, TeamSponsor[]>;
 
+// Klick-Statistik je Sponsor/Partner (Analytics). Legt sich beim ersten Klick
+// automatisch an – auch für neue Sponsoren und neue Platzierungen.
+export interface SponsorClickStat {
+  name: string; // zuletzt bekannter Anzeigename
+  total: number; // Klicks insgesamt
+  placements: Record<string, number>; // Klicks je Platzierung (z.B. 'partners', 'team-sponsor')
+  lastAt: string; // Zeitpunkt des letzten Klicks (ISO)
+}
+export type SponsorClicksMap = Record<string, SponsorClickStat>;
+
 // Highlights: eine gemischte, geordnete Medien-Liste aus Kamera-Fotos
 // (öffentliche Blob-URLs) und Video-Links (YouTube/Twitch, auch Shorts).
 export interface HighlightMedia {

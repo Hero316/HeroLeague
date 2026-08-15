@@ -4,7 +4,7 @@ import { apiFetch } from '../lib/api';
 import { MapPin } from 'lucide-react';
 import { calculateStandings } from '../lib/standings';
 import { numberWord } from '../lib/heroAward';
-import { TeamCrest, shortDate } from './ui';
+import { TeamCrest, shortDate, SponsorLink } from './ui';
 import PlayerOfMonthCard from './PlayerOfMonthCard';
 
 interface HeroProps {
@@ -340,19 +340,19 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                     Gesponsert von
                   </span>
                   {sponsor.logoUrl ? (
-                    sponsor.linkUrl ? (
-                      <a href={sponsor.linkUrl} target="_blank" rel="noopener noreferrer" title={sponsor.name} className="inline-flex items-center">
-                        <img src={sponsor.logoUrl} alt={sponsor.name || 'Sponsor'} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-8 sm:h-9 w-auto max-w-[150px] object-contain drop-shadow-[0_2px_10px_rgba(0,0,0,.5)]" />
-                      </a>
-                    ) : (
+                    <SponsorLink sponsorId={sponsor.id} sponsorName={sponsor.name} placement="spieler-des-spieltages" href={sponsor.linkUrl} title={sponsor.name} className="inline-flex items-center">
                       <img src={sponsor.logoUrl} alt={sponsor.name || 'Sponsor'} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-8 sm:h-9 w-auto max-w-[150px] object-contain drop-shadow-[0_2px_10px_rgba(0,0,0,.5)]" />
-                    )
-                  ) : sponsor.linkUrl ? (
-                    <a href={sponsor.linkUrl} target="_blank" rel="noopener noreferrer" className="font-display font-black text-lg text-white hover:text-brand-accent-light transition-colors">
-                      {sponsor.name}
-                    </a>
+                    </SponsorLink>
                   ) : (
-                    <span className="font-display font-black text-lg text-white">{sponsor.name}</span>
+                    <SponsorLink
+                      sponsorId={sponsor.id}
+                      sponsorName={sponsor.name}
+                      placement="spieler-des-spieltages"
+                      href={sponsor.linkUrl}
+                      className={`font-display font-black text-lg text-white${sponsor.linkUrl ? ' hover:text-brand-accent-light transition-colors' : ''}`}
+                    >
+                      {sponsor.name}
+                    </SponsorLink>
                   )}
                 </div>
               )}
