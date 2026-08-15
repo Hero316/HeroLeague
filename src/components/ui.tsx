@@ -906,7 +906,7 @@ export function AccordionGroup({
                 style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
                 aria-label="Backoffice-Bereiche"
               >
-                <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,#000_14px,#000_calc(100%-14px),transparent)]">
+                <div className="flex gap-1 py-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,#000_14px,#000_calc(100%-14px),transparent)]">
                   {allCategories.map((c) => {
                     const active = c.id === activeCategory;
                     const Icon = CAT_ICON[c.id] ?? Star;
