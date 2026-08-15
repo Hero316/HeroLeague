@@ -1,7 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
-import { ChevronDown, X, Smartphone, Search } from 'lucide-react';
+import { ChevronDown, X, Smartphone, Search, LayoutDashboard, Star, Trophy, Home, Radio, KeyRound } from 'lucide-react';
 import { ActiveTab, Partner, PartnersConfig, Team } from '../types';
 import { apiFetch } from '../lib/api';
 import { trackSponsorClick } from '../lib/sponsors';
@@ -784,6 +784,18 @@ export interface AccordionCategory {
 // damit er nicht mit einer echten Rubrik kollidiert.
 const DASH_ID = '__start__';
 
+// Icon je Rubrik für das Handy-Dock (Team-App-Look). Fallback: Stern.
+const CAT_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  [DASH_ID]: LayoutDashboard,
+  team: Star,
+  spiele: Trophy,
+  startseite: Home,
+  kanaele: Radio,
+  zugaenge: KeyRound,
+};
+// Kurzlabel fürs Dock: „★ Intern“→„Intern“, „Spiele & Liga“→„Spiele“.
+const shortCatLabel = (label: string) => label.replace(/^★\s*/, '').split(' & ')[0];
+
 export function AccordionGroup({
   children,
   defaultOpenId = null,
@@ -856,40 +868,81 @@ export function AccordionGroup({
         />
       )}
 
-      {/* Menüleiste: am PC oben, am Handy unten (Daumen-freundlich). Passt nicht
-          alles nebeneinander, lässt sie sich horizontal scrollen – der Rand-Fade
-          zeigt, dass es weitergeht. */}
       {allCategories.length > 0 && (
-        <nav
-          className="fixed inset-x-0 bottom-0 z-40 px-3 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] border-t border-white/10 bg-[rgba(7,10,8,.94)] backdrop-blur-xl sm:static sm:z-auto sm:px-0 sm:pt-0 sm:pb-0 sm:mb-5 sm:border-0 sm:bg-transparent sm:backdrop-blur-none"
-          aria-label="Backoffice-Bereiche"
-        >
-          <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,#000_16px,#000_calc(100%-16px),transparent)] sm:[mask-image:none]">
-            {allCategories.map((c) => {
-              const active = c.id === activeCategory;
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => selectCategory(c.id)}
-                  aria-pressed={active}
-                  className={`shrink-0 whitespace-nowrap px-4 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider font-sans transition-colors cursor-pointer border ${
-                    active
-                      ? 'bg-brand-accent-light text-brand-dark border-brand-accent-light shadow-lg shadow-brand-accent-light/10'
-                      : 'bg-white/[.03] text-hl-mute border-white/10 hover:text-white hover:border-white/25'
-                  }`}
-                >
-                  {c.label}
-                </button>
-              );
-            })}
-          </div>
-        </nav>
+        <>
+          {/* PC: Rubriken-Leiste oben (Text-Pills). Passt nicht alles nebeneinander,
+              lässt sie sich horizontal scrollen. */}
+          <nav className="hidden sm:block mb-5" aria-label="Backoffice-Bereiche">
+            <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              {allCategories.map((c) => {
+                const active = c.id === activeCategory;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => selectCategory(c.id)}
+                    aria-pressed={active}
+                    className={`shrink-0 whitespace-nowrap px-4 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider font-sans transition-colors cursor-pointer border ${
+                      active
+                        ? 'bg-brand-accent-light text-brand-dark border-brand-accent-light shadow-lg shadow-brand-accent-light/10'
+                        : 'bg-white/[.03] text-hl-mute border-white/10 hover:text-white hover:border-white/25'
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+
+          {/* Handy: Dock unten im Team-App-Look – dicker, mit fliegender Pille,
+              bündig am unteren Rand (nichts mehr darunter). Horizontal scrollbar
+              mit Rand-Fade, wenn nicht alles nebeneinander passt. */}
+          <nav
+            className="sm:hidden fixed inset-x-0 bottom-0 z-40 hl-app-dock backdrop-blur-xl border-t border-white/10 px-2 pt-2"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
+            aria-label="Backoffice-Bereiche"
+          >
+            <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,#000_14px,#000_calc(100%-14px),transparent)]">
+              {allCategories.map((c) => {
+                const active = c.id === activeCategory;
+                const Icon = CAT_ICON[c.id] ?? Star;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => selectCategory(c.id)}
+                    aria-pressed={active}
+                    className="relative shrink-0 min-w-[76px] flex flex-col items-center justify-center gap-1 py-2.5 rounded-2xl cursor-pointer active:scale-90 transition-transform"
+                  >
+                    {active && (
+                      <motion.span
+                        layoutId="admin-cat-pill"
+                        className="absolute inset-0 rounded-2xl bg-brand-accent-light/15 ring-1 ring-brand-accent-light/25"
+                        transition={{ type: 'spring', stiffness: 480, damping: 38 }}
+                      />
+                    )}
+                    <motion.span
+                      animate={{ scale: active ? 1.14 : 1, y: active ? -1 : 0 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 26 }}
+                      className={`relative z-10 transition-colors ${active ? 'text-brand-accent-light' : 'text-hl-mute'}`}
+                    >
+                      <Icon className="w-[22px] h-[22px]" />
+                    </motion.span>
+                    <span className={`relative z-10 text-[10px] font-sans font-bold uppercase tracking-wide transition-colors ${active ? 'text-brand-accent-light' : 'text-hl-mute'}`}>
+                      {shortCatLabel(c.label)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        </>
       )}
 
-      {/* Inhalt. Unten am Handy Platz lassen, damit nichts hinter der fixen
-          Leiste verschwindet. */}
-      <div className="pb-28 sm:pb-0">
+      {/* Inhalt. Unten am Handy Platz lassen, damit nichts hinter dem Dock
+          verschwindet. */}
+      <div className="pb-32 sm:pb-0">
         {isDash && dashboard}
         {children}
       </div>
