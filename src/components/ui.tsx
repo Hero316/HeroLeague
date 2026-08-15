@@ -895,48 +895,53 @@ export function AccordionGroup({
             </div>
           </nav>
 
-          {/* Handy: Dock unten im Team-App-Look – dicker, mit fliegender Pille,
-              bündig am unteren Rand (nichts mehr darunter). Horizontal scrollbar
-              mit Rand-Fade, wenn nicht alles nebeneinander passt. */}
-          <nav
-            className="sm:hidden fixed inset-x-0 bottom-0 z-40 hl-app-dock backdrop-blur-xl border-t border-white/10 px-2 pt-2"
-            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
-            aria-label="Backoffice-Bereiche"
-          >
-            <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,#000_14px,#000_calc(100%-14px),transparent)]">
-              {allCategories.map((c) => {
-                const active = c.id === activeCategory;
-                const Icon = CAT_ICON[c.id] ?? Star;
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => selectCategory(c.id)}
-                    aria-pressed={active}
-                    className="relative shrink-0 min-w-[76px] flex flex-col items-center justify-center gap-1 py-2.5 rounded-2xl cursor-pointer active:scale-90 transition-transform"
-                  >
-                    {active && (
-                      <motion.span
-                        layoutId="admin-cat-pill"
-                        className="absolute inset-0 rounded-2xl bg-brand-accent-light/15 ring-1 ring-brand-accent-light/25"
-                        transition={{ type: 'spring', stiffness: 480, damping: 38 }}
-                      />
-                    )}
-                    <motion.span
-                      animate={{ scale: active ? 1.14 : 1, y: active ? -1 : 0 }}
-                      transition={{ type: 'spring', stiffness: 500, damping: 26 }}
-                      className={`relative z-10 transition-colors ${active ? 'text-brand-accent-light' : 'text-hl-mute'}`}
-                    >
-                      <Icon className="w-[22px] h-[22px]" />
-                    </motion.span>
-                    <span className={`relative z-10 text-[10px] font-sans font-bold uppercase tracking-wide transition-colors ${active ? 'text-brand-accent-light' : 'text-hl-mute'}`}>
-                      {shortCatLabel(c.label)}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </nav>
+          {/* Handy: Dock unten im Team-App-Look – dicker, mit fliegender Pille.
+              Per Portal direkt an <body>, damit es WIRKLICH bildschirm-fest ganz
+              unten sitzt (kein Eltern-Element als Bezug) und voll deckend ist –
+              beim Scrollen sieht man nichts mehr darunter. */}
+          {typeof document !== 'undefined' &&
+            createPortal(
+              <nav
+                className="sm:hidden fixed inset-x-0 bottom-0 z-40 bg-[#0A1210] border-t border-white/10 px-2 pt-2 shadow-[0_-8px_24px_rgba(0,0,0,.45)]"
+                style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
+                aria-label="Backoffice-Bereiche"
+              >
+                <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,#000_14px,#000_calc(100%-14px),transparent)]">
+                  {allCategories.map((c) => {
+                    const active = c.id === activeCategory;
+                    const Icon = CAT_ICON[c.id] ?? Star;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => selectCategory(c.id)}
+                        aria-pressed={active}
+                        className="relative shrink-0 min-w-[76px] flex flex-col items-center justify-center gap-1 py-2.5 rounded-2xl cursor-pointer active:scale-90 transition-transform"
+                      >
+                        {active && (
+                          <motion.span
+                            layoutId="admin-cat-pill"
+                            className="absolute inset-0 rounded-2xl bg-brand-accent-light/15 ring-1 ring-brand-accent-light/25"
+                            transition={{ type: 'spring', stiffness: 480, damping: 38 }}
+                          />
+                        )}
+                        <motion.span
+                          animate={{ scale: active ? 1.14 : 1, y: active ? -1 : 0 }}
+                          transition={{ type: 'spring', stiffness: 500, damping: 26 }}
+                          className={`relative z-10 transition-colors ${active ? 'text-brand-accent-light' : 'text-hl-mute'}`}
+                        >
+                          <Icon className="w-[22px] h-[22px]" />
+                        </motion.span>
+                        <span className={`relative z-10 text-[10px] font-sans font-bold uppercase tracking-wide transition-colors ${active ? 'text-brand-accent-light' : 'text-hl-mute'}`}>
+                          {shortCatLabel(c.label)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </nav>,
+              document.body
+            )}
         </>
       )}
 
