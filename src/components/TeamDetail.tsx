@@ -6,7 +6,7 @@ import { calculateStandings } from '../lib/standings';
 import { apiFetch } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
 import BestLineup from './BestLineup';
-import { TeamCrest, FormPill, MatchStatusBadge, shortDate, shade, monogram, ImageZoom } from './ui';
+import { TeamCrest, FormPill, MatchStatusBadge, shortDate, shade, monogram, ImageZoom, SponsorLink } from './ui';
 
 // Modulweiter Cache der Team-Sponsoren: einmal je Seitenaufruf laden.
 let teamSponsorsCache: TeamSponsorsMap | null = null;
@@ -690,14 +690,10 @@ export default function TeamDetail({
                   const cls =
                     'flex items-center justify-center rounded-xl px-4 py-3 ring-1 ring-black/5 shadow-[0_2px_10px_rgba(0,0,0,.25)] transition-transform hover:scale-[1.03]';
                   const style = { background: s.bg || '#ffffff' };
-                  return s.linkUrl ? (
-                    <a key={s.id} href={s.linkUrl} target="_blank" rel="noopener noreferrer" title={s.name} className={cls} style={style}>
+                  return (
+                    <SponsorLink key={s.id} sponsorId={s.id} sponsorName={s.name} placement="team-sponsor" href={s.linkUrl} title={s.name} className={cls} style={style}>
                       {tile}
-                    </a>
-                  ) : (
-                    <span key={s.id} title={s.name} className={cls} style={style}>
-                      {tile}
-                    </span>
+                    </SponsorLink>
                   );
                 })}
               </div>

@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { ChevronDown, X, Smartphone, Search } from 'lucide-react';
 import { ActiveTab, Partner, PartnersConfig, Team } from '../types';
 import { apiFetch } from '../lib/api';
+import { trackSponsorClick } from '../lib/sponsors';
 import { useInstall } from './InstallProvider';
 
 // Gemeinsame Design-Bausteine des neuen Hero-League-Looks.
@@ -271,6 +272,53 @@ export function PageHeader({ kicker, title, text }: PageHeaderProps) {
 // alle Footer-Instanzen die Logos sofort (der Footer wird pro Route neu gemountet).
 let partnersCache: PartnersConfig | null = null;
 
+// Wiederverwendbarer Sponsor-/Partner-Link: rendert einen normalen Link und
+// zählt jeden Klick pro Sponsor (aufgeschlüsselt nach `placement`). Überall wo
+// ein Sponsor verlinkt wird, diesen Baustein nutzen – dann werden künftige
+// Platzierungen automatisch mitgezählt. Ohne `href` wird nur der Inhalt gerendert.
+export function SponsorLink({
+  sponsorId,
+  sponsorName,
+  placement,
+  href,
+  className,
+  title,
+  style,
+  children,
+}: {
+  sponsorId: string;
+  sponsorName?: string;
+  placement: string;
+  href?: string;
+  className?: string;
+  title?: string;
+  style?: React.CSSProperties;
+  children: React.ReactNode;
+}) {
+  if (!href) {
+    return (
+      <span title={title} className={className} style={style}>
+        {children}
+      </span>
+    );
+  }
+  const ping = () => trackSponsorClick(sponsorId, sponsorName ?? '', placement);
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={title}
+      className={className}
+      style={style}
+      onClick={ping}
+      onAuxClick={ping}
+    >
+      {children}
+    </a>
+  );
+}
+
 // Ein einzelnes Partner-Logo. Drei Varianten:
 // - Standard: farbig hochgeladen, per CSS grau dargestellt und erst beim Hovern
 //   farbig (auf Touch-Geräten dauerhaft farbig).
@@ -307,14 +355,17 @@ function PartnerLogo({
       className={cls}
     />
   );
-  return partner.linkUrl ? (
-    <a href={partner.linkUrl} target="_blank" rel="noopener noreferrer" title={partner.name} className="inline-flex items-center justify-center">
+  return (
+    <SponsorLink
+      sponsorId={partner.id}
+      sponsorName={partner.name}
+      placement="partners"
+      href={partner.linkUrl}
+      title={partner.name}
+      className="inline-flex items-center justify-center"
+    >
       {img}
-    </a>
-  ) : (
-    <span title={partner.name} className="inline-flex items-center justify-center">
-      {img}
-    </span>
+    </SponsorLink>
   );
 }
 

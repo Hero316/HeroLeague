@@ -643,10 +643,54 @@ const saveGame = async (req: VercelRequest, res: VercelResponse) => {
   return res.json({ me: { userId: session.userId, ...next, points: gamePoints(next) }, board: toGameBoard(map) });
 };
 
+// --- Sponsor-/Partner-Klicks (Analytics) -----------------------------------
+// Zählt, wie oft die einzelnen Sponsoren angeklickt werden – EGAL wo (Partner-
+// Leiste unten, „Spieler des Spieltages", Team-Seiten, künftige Platzierungen).
+// Alles in EINEM settings-Eintrag (key 'sponsor-clicks'), Schlüssel = Sponsor-ID.
+// Neue Sponsoren/Platzierungen legen sich beim ersten Klick automatisch selbst an.
+// WICHTIG: Der Zähl-POST ist bewusst ÖFFENTLICH (Website-Besucher sind nicht
+// eingeloggt). Er kann ausschließlich Zähler hochzählen; Größen- und Anzahl-
+// Limits schützen vor Missbrauch. Die Auswertung (GET) ist login-geschützt.
+const SPONSOR_MAX = 800; // max. verschiedene Sponsoren
+const PLACEMENT_MAX = 40; // max. Platzierungen je Sponsor
+
+const trackSponsorClick = async (req: VercelRequest, res: VercelResponse) => {
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const id = str(b.sponsorId).trim().slice(0, 80);
+  if (!id) return res.status(400).json({ error: 'sponsorId fehlt' });
+  const name = str(b.name).trim().slice(0, 80);
+  const placement = (str(b.placement).trim().slice(0, 40)) || 'unbekannt';
+
+  const rows = await sql`SELECT value FROM settings WHERE key = 'sponsor-clicks'`;
+  const map = (rows[0]?.value && typeof rows[0].value === 'object' ? rows[0].value : {}) as Record<
+    string,
+    { name: string; total: number; placements: Record<string, number>; lastAt: string }
+  >;
+  // Schutz vor Missbrauch: keine unbegrenzt neuen Schlüssel zulassen.
+  if (!map[id] && Object.keys(map).length >= SPONSOR_MAX) return res.json({ ok: true });
+
+  const e = map[id] && typeof map[id] === 'object' ? map[id] : { name: '', total: 0, placements: {}, lastAt: '' };
+  e.name = name || e.name || 'Sponsor';
+  e.total = (Number(e.total) || 0) + 1;
+  if (!e.placements || typeof e.placements !== 'object') e.placements = {};
+  if (e.placements[placement] !== undefined || Object.keys(e.placements).length < PLACEMENT_MAX) {
+    e.placements[placement] = (Number(e.placements[placement]) || 0) + 1;
+  }
+  e.lastAt = new Date().toISOString();
+  map[id] = e;
+
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('sponsor-clicks', ${JSON.stringify(map)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+  return res.json({ ok: true });
+};
+
 // Ein Endpunkt für alle Website-Einstellungen (Twitch + Social Media + Event +
 // Highlights + News), um unter dem Serverless-Funktionslimit (12) zu bleiben.
 // Angesprochen über ?resource=social | event | highlights | hero | countdown |
-// news | roster | game; Twitch ist die Vorgabe.
+// news | roster | game | sponsor-clicks (GET) | sponsor-click (POST);
+// Twitch ist die Vorgabe.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const resource = req.query.resource;
@@ -694,6 +738,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const rows = await sql`SELECT value FROM settings WHERE key = 'game'`;
         return res.json({ board: toGameBoard(rows[0]?.value) });
       }
+      if (resource === 'sponsor-clicks') {
+        // Auswertung nur für eingeloggte Nutzer (interne Analytics).
+        const session = await getSession(req);
+        if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+        const rows = await sql`SELECT value FROM settings WHERE key = 'sponsor-clicks'`;
+        return res.json(rows[0]?.value ?? {});
+      }
       const rows = await sql`SELECT value FROM settings WHERE key = 'twitch'`;
       return res.json(rows[0]?.value ?? DEFAULT_TWITCH);
     }
@@ -708,6 +759,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'news') return saveNews(req, res);
       if (resource === 'roster') return saveRoster(req, res);
       if (resource === 'game') return saveGame(req, res);
+      if (resource === 'sponsor-click') return trackSponsorClick(req, res);
       return saveTwitch(req, res);
     }
     return res.status(405).json({ error: 'Nicht unterstützt' });

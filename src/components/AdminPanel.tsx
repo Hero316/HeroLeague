@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone, Handshake, ChevronUp, ChevronDown, Star, Landmark } from 'lucide-react';
-import { Player, Team, Match, EventConfig, EventArchive, NewsItem, Partner, TeamSponsor, TeamSponsorsMap } from '../types';
+import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone, Handshake, ChevronUp, ChevronDown, Star, Landmark, BarChart3 } from 'lucide-react';
+import { Player, Team, Match, EventConfig, EventArchive, NewsItem, Partner, TeamSponsor, TeamSponsorsMap, SponsorClicksMap } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
+import { fetchSponsorClicks } from '../lib/sponsors';
 import PlayerAvatar from './PlayerAvatar';
 import { AccordionSection } from './ui';
 
@@ -600,6 +601,44 @@ export default function AdminPanel({
       alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
     }
   };
+
+  // Sponsoren-Klick-Statistik (nur Super-Admin sieht die Auswertung).
+  const [sponsorClicks, setSponsorClicks] = useState<SponsorClicksMap>({});
+  const loadSponsorClicks = React.useCallback(() => {
+    if (!canEditHomepage) return;
+    fetchSponsorClicks()
+      .then((data) => setSponsorClicks(data && typeof data === 'object' ? data : {}))
+      .catch(() => { /* noch keine Klicks / kein Zugriff */ });
+  }, [canEditHomepage]);
+  useEffect(() => { loadSponsorClicks(); }, [loadSponsorClicks]);
+
+  // Klick-Zeilen für die Übersicht: bekannte Partner (auch mit 0 Klicks) +
+  // alle sonst getrackten Sponsoren (z.B. Team-Sponsoren), nach Klicks sortiert.
+  const sponsorRows = useMemo(() => {
+    const labelFor = (k: string) =>
+      (({
+        partners: 'Partner-Leiste (unten)',
+        'spieler-des-spieltages': 'Spieler des Spieltages',
+        'team-sponsor': 'Team-Seite',
+        unbekannt: 'Sonstige',
+      }) as Record<string, string>)[k] || k;
+    const rows: { id: string; name: string; total: number; placements: { label: string; count: number }[]; lastAt: string }[] = [];
+    const seen = new Set<string>();
+    const push = (id: string, fallbackName: string) => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      const e = sponsorClicks[id];
+      const placements = e && e.placements
+        ? Object.entries(e.placements).map(([k, v]) => ({ label: labelFor(k), count: Number(v) || 0 })).sort((a, b) => b.count - a.count)
+        : [];
+      rows.push({ id, name: e?.name || fallbackName || 'Sponsor', total: Number(e?.total) || 0, placements, lastAt: e?.lastAt || '' });
+    };
+    partners.forEach((p) => push(p.id, p.name));
+    Object.keys(sponsorClicks).forEach((id) => push(id, sponsorClicks[id]?.name || ''));
+    rows.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+    return rows;
+  }, [sponsorClicks, partners]);
+  const sponsorClicksTotal = useMemo(() => sponsorRows.reduce((s, r) => s + r.total, 0), [sponsorRows]);
 
   // Partner laden (nur relevant für Super-Admin, schadet sonst aber nicht).
   // Altdaten mit `main:true` (statt `tier`) werden auf die neue Stufe migriert.
@@ -2221,6 +2260,70 @@ export default function AdminPanel({
                 <span>{partnersSaving ? 'Speichert…' : 'Partner speichern'}</span>
               </button>
             </div>
+          </div>
+        </AccordionSection>
+      )}
+
+      {/* Sponsoren-Klicks – Auswertung (nur Super-Admin) */}
+      {canEditHomepage && (
+        <AccordionSection
+          id="sponsor-clicks"
+          category="startseite"
+          title="Sponsoren-Klicks"
+          subtitle="Wie oft welcher Sponsor angeklickt wurde"
+          icon={<BarChart3 className="w-5 h-5" />}
+          accent="#E6238E"
+        >
+          <div>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <p className="text-xs text-gray-400 font-sans">
+                Zählt <strong className="text-gray-200">jeden Klick</strong> auf einen Sponsor – egal wo: Partner-Leiste unten,
+                „Spieler des Spieltages", Team-Seiten und alle künftigen Platzierungen. Neue Sponsoren erscheinen
+                <strong className="text-gray-200"> automatisch</strong>, sobald sie zum ersten Mal angeklickt werden.
+              </p>
+              <button
+                type="button"
+                onClick={loadSponsorClicks}
+                className="shrink-0 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 text-xs font-mono cursor-pointer transition-colors"
+              >
+                Aktualisieren
+              </button>
+            </div>
+
+            {sponsorRows.length === 0 ? (
+              <p className="text-xs text-gray-500 font-mono italic">Noch keine Klicks erfasst.</p>
+            ) : (
+              <>
+                <div className="text-[11px] font-mono text-gray-500 mb-2">
+                  Gesamt: <strong className="text-gray-300">{sponsorClicksTotal}</strong> Klicks · {sponsorRows.length} Sponsoren
+                </div>
+                <div className="space-y-2">
+                  {sponsorRows.map((r) => (
+                    <div key={r.id} className="rounded-xl border border-white/10 bg-[#060E0F]/40 p-3 flex items-center gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-bold text-white font-sans truncate">{r.name || 'Ohne Namen'}</div>
+                        <div className="text-[11px] text-gray-500 font-mono mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                          {r.placements.length ? (
+                            r.placements.map((p) => (
+                              <span key={p.label}>
+                                {p.label}: <span className="text-gray-400">{p.count}</span>
+                              </span>
+                            ))
+                          ) : (
+                            <span>noch keine Klicks</span>
+                          )}
+                          {r.lastAt && <span className="text-gray-600">zuletzt {new Date(r.lastAt).toLocaleDateString('de-DE')}</span>}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-xl font-black text-white tabular-nums leading-none">{r.total}</div>
+                        <div className="text-[10px] uppercase tracking-wider text-gray-500 font-mono">Klicks</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </AccordionSection>
       )}
