@@ -855,6 +855,26 @@ export function AccordionGroup({
   const categoryLabel = (id?: string) => allCategories.find((c) => c.id === id)?.label ?? '';
   const isDash = !!dashboard && activeCategory === DASH_ID;
 
+  // Aktive „Pille" im Handy-Dock: eine dauerhafte Kachel, die NUR horizontal zur
+  // aktiven Rubrik gleitet (Position gemessen). Bewusst kein layoutId – das
+  // konnte beim Umschalten mal schräg „von unten" reinspringen, wenn zwischen
+  // den Messungen gescrollt/umgebrochen wurde.
+  const dockScrollRef = React.useRef<HTMLDivElement>(null);
+  const [pill, setPill] = React.useState<{ x: number; width: number } | null>(null);
+  const measurePill = React.useCallback(() => {
+    const c = dockScrollRef.current;
+    if (!c || activeCategory == null) return;
+    const el = c.querySelector<HTMLElement>(`[data-cat="${activeCategory}"]`);
+    if (el) setPill({ x: el.offsetLeft, width: el.offsetWidth });
+  }, [activeCategory]);
+  React.useLayoutEffect(() => {
+    measurePill();
+  }, [measurePill, allCategories.length]);
+  React.useEffect(() => {
+    window.addEventListener('resize', measurePill);
+    return () => window.removeEventListener('resize', measurePill);
+  }, [measurePill]);
+
   return (
     <AccordionContext.Provider
       value={{ openId, toggle, activeCategory, register, unregister, openSection, scrollTargetId, clearScrollTarget }}
@@ -906,7 +926,19 @@ export function AccordionGroup({
                 style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
                 aria-label="Backoffice-Bereiche"
               >
-                <div className="flex gap-1 py-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,#000_14px,#000_calc(100%-14px),transparent)]">
+                <div
+                  ref={dockScrollRef}
+                  className="relative flex gap-1 py-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,#000_14px,#000_calc(100%-14px),transparent)]"
+                >
+                  {/* Eine dauerhafte Pille, gleitet nur horizontal zur aktiven Kachel */}
+                  {pill && (
+                    <motion.div
+                      className="absolute top-1.5 bottom-1.5 left-0 rounded-2xl bg-brand-accent-light/15 ring-1 ring-brand-accent-light/25 pointer-events-none"
+                      initial={false}
+                      animate={{ x: pill.x, width: pill.width }}
+                      transition={{ type: 'spring', stiffness: 480, damping: 40 }}
+                    />
+                  )}
                   {allCategories.map((c) => {
                     const active = c.id === activeCategory;
                     const Icon = CAT_ICON[c.id] ?? Star;
@@ -914,17 +946,11 @@ export function AccordionGroup({
                       <button
                         key={c.id}
                         type="button"
+                        data-cat={c.id}
                         onClick={() => selectCategory(c.id)}
                         aria-pressed={active}
                         className="relative shrink-0 min-w-[76px] flex flex-col items-center justify-center gap-1 py-2.5 rounded-2xl cursor-pointer active:scale-90 transition-transform"
                       >
-                        {active && (
-                          <motion.span
-                            layoutId="admin-cat-pill"
-                            className="absolute inset-0 rounded-2xl bg-brand-accent-light/15 ring-1 ring-brand-accent-light/25"
-                            transition={{ type: 'spring', stiffness: 480, damping: 38 }}
-                          />
-                        )}
                         <motion.span
                           animate={{ scale: active ? 1.14 : 1, y: active ? -1 : 0 }}
                           transition={{ type: 'spring', stiffness: 500, damping: 26 }}
