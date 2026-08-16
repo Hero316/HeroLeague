@@ -268,12 +268,34 @@ function AttachPicker({
   const backdrop = useBackdropDismiss(onClose);
 
   const title = kind === 'ticket' ? 'Ticket anhängen' : kind === 'task' ? 'Aufgabe anhängen' : 'Termin anhängen';
-  const emptyText = kind === 'ticket' ? 'Keine Tickets.' : kind === 'task' ? 'Keine Aufgaben.' : 'Keine Termine.';
+  const emptyText =
+    kind === 'ticket' ? 'Keine offenen Tickets.' : kind === 'task' ? 'Keine offenen Aufgaben.' : 'Keine anstehenden Termine.';
+
+  // Nur AKTUELLES anbieten: keine erledigten/abgelehnten Tickets, keine
+  // erledigten/abgebrochenen Aufgaben und keine abgelaufenen Termine.
+  const todayStr = (() => {
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  })();
+  const TICKET_DONE = new Set(['erledigt', 'abgelehnt']);
+  const TASK_DONE = new Set(['erledigt', 'abgebrochen']);
+
+  const activeTickets = tickets.filter((t) => !TICKET_DONE.has(t.status));
+
   // Termine (termin|beides) vs. Aufgaben (aufgabe|beides); fehlender Typ = Termin.
-  const filteredTasks =
-    kind === 'task'
-      ? tasks.filter((t) => (t.type ?? 'termin') !== 'termin')
-      : tasks.filter((t) => (t.type ?? 'termin') !== 'aufgabe');
+  const filteredTasks = (kind === 'task'
+    ? tasks.filter((t) => (t.type ?? 'termin') !== 'termin')
+    : tasks.filter((t) => (t.type ?? 'termin') !== 'aufgabe')
+  ).filter((t) => {
+    if (TASK_DONE.has(t.status)) return false;
+    // Termine zusätzlich: abgelaufene ausblenden (End- bzw. Starttag vor heute).
+    if (kind === 'termin') {
+      const end = t.endDate || t.dueDate;
+      if (end && end < todayStr) return false;
+    }
+    return true;
+  });
   const ItemIcon = kind === 'ticket' ? TicketIcon : kind === 'task' ? ListChecks : CalendarDays;
 
   return (
@@ -303,10 +325,10 @@ function AttachPicker({
               <Loader2 className="w-5 h-5 animate-spin" />
             </div>
           ) : kind === 'ticket' ? (
-            tickets.length === 0 ? (
+            activeTickets.length === 0 ? (
               <p className="text-center text-sm text-hl-mute py-6">{emptyText}</p>
             ) : (
-              tickets.map((t) => (
+              activeTickets.map((t) => (
                 <button
                   key={t.id}
                   onClick={() => onPick({ type: 'ticket', id: t.id, title: t.title })}
