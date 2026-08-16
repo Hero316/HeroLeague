@@ -282,7 +282,7 @@ function AttachPicker({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[70] bg-black/80 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[95] bg-black/80 flex items-center justify-center p-4"
       {...backdrop}
     >
       <motion.div
@@ -371,10 +371,11 @@ function PollCard({
     }
   };
 
-  const strong = mine ? 'text-white' : 'text-hl-text';
+  // Farben passen sich der Blase UND dem Hell/Dunkel-Modus an. In der eigenen
+  // (türkisen) Blase erbt der Text das inline gesetzte Weiß – daher KEINE
+  // text-white-Klasse (die würde im Hell-Modus per .hl-team zu dunkel gedreht).
+  const strong = mine ? '' : 'text-hl-text';
   const soft = mine ? 'text-white/70' : 'text-hl-mute';
-  const track = mine ? 'bg-white/20' : 'bg-black/[.08]';
-  const fill = mine ? 'bg-white/85' : 'bg-brand-accent-light';
 
   return (
     <div className="w-[min(74vw,300px)]">
@@ -408,7 +409,7 @@ function PollCard({
               className="w-full text-left cursor-pointer disabled:opacity-70"
             >
               <div className="flex items-center gap-2">
-                <OptIcon className={`w-5 h-5 shrink-0 ${o.mine ? (mine ? 'text-white' : 'text-brand-accent-light') : soft}`} />
+                <OptIcon className={`w-5 h-5 shrink-0 ${o.mine ? (mine ? '' : 'text-brand-accent-light') : soft}`} />
                 <span className={`flex-1 min-w-0 text-[14px] font-sans break-words ${strong} ${o.mine ? 'font-semibold' : ''}`}>{o.text}</span>
                 {!poll.anonymous && o.voters.length > 0 && (
                   <span className="flex -space-x-1.5 shrink-0">
@@ -421,15 +422,21 @@ function PollCard({
                 )}
                 <span className={`text-[12px] font-mono shrink-0 ${soft}`}>{o.count}</span>
               </div>
-              <div className={`mt-1 ml-7 h-1.5 rounded-full overflow-hidden ${track}`}>
-                <div className={`h-full rounded-full ${fill} transition-[width] duration-300`} style={{ width: `${pct}%` }} />
+              <div
+                className={`mt-1 ml-7 h-1.5 rounded-full overflow-hidden ${mine ? '' : 'bg-hl-text/10'}`}
+                style={mine ? { background: 'rgba(255,255,255,0.22)' } : undefined}
+              >
+                <div
+                  className={`h-full rounded-full transition-[width] duration-300 ${mine ? '' : 'bg-brand-accent-light'}`}
+                  style={mine ? { width: `${pct}%`, background: 'rgba(255,255,255,0.9)' } : { width: `${pct}%` }}
+                />
               </div>
             </button>
           );
         })}
       </div>
 
-      <div className={`mt-2.5 pt-2 border-t ${mine ? 'border-white/15' : 'border-black/10'} flex items-center justify-between`}>
+      <div className={`mt-2.5 pt-2 border-t ${mine ? 'border-white/15' : 'border-hl-text/10'} flex items-center justify-between`}>
         <span className={`text-[11px] font-mono ${soft}`}>
           {poll.totalVoters} {poll.totalVoters === 1 ? 'Person' : 'Personen'}
         </span>
@@ -593,8 +600,7 @@ function PollComposer({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[80] hl-surf-0 flex flex-col"
-        style={{ background: '#070d0c' }}
+        className="fixed inset-0 z-[80] hl-surf flex flex-col"
       >
         {/* Kopfzeile */}
         <div
@@ -698,7 +704,8 @@ function PollComposer({
             onClick={submit}
             disabled={!canSend}
             title="Abstimmung senden"
-            className="w-16 h-16 rounded-[22px] bg-brand-accent-light hover:bg-brand-accent text-white flex items-center justify-center shadow-lg shadow-brand-accent-light/30 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition"
+            style={{ color: '#fff' }}
+            className="w-16 h-16 rounded-[22px] bg-brand-accent-light hover:bg-brand-accent flex items-center justify-center shadow-lg shadow-brand-accent-light/30 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition"
           >
             {busy ? <Loader2 className="w-6 h-6 animate-spin" /> : <Send className="w-6 h-6" />}
           </button>
