@@ -344,6 +344,7 @@ function IdeaDetail({
   const [attach, setAttach] = useState<{ type: 'file' | 'audio'; url: string; mime: string; title: string } | null>(null);
   const [attachMenu, setAttachMenu] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const docRef = useRef<HTMLInputElement>(null);
   const recorder = useIdeaRecorder(async (file) => {
@@ -360,13 +361,15 @@ function IdeaDetail({
   const onFileChosen = async (file: File | undefined) => {
     if (!file) return;
     setUploading(true);
+    setUploadPct(null);
     try {
-      const { url, name, mime } = await uploadFile(file);
+      const { url, name, mime } = await uploadFile(file, (p) => setUploadPct(p));
       setAttach({ type: 'file', url, mime, title: name });
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Datei konnte nicht hochgeladen werden.');
     } finally {
       setUploading(false);
+      setUploadPct(null);
     }
   };
 
@@ -609,7 +612,7 @@ function IdeaDetail({
               )}
               {uploading && (
                 <div className="flex items-center gap-1.5 mt-2 text-[11px] text-hl-faint font-mono">
-                  <Loader2 className="w-3 h-3 animate-spin" /> lädt hoch…
+                  <Loader2 className="w-3 h-3 animate-spin" /> lädt hoch…{uploadPct != null ? ` ${uploadPct}%` : ''}
                 </div>
               )}
               {recorder.recording && (

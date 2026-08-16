@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { put } from '@vercel/blob';
-import { requireAuth } from './_lib/auth.js';
+import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
+import { requireAuth, getSession } from './_lib/auth.js';
 import { badRequest } from './_lib/validate.js';
 
 // Erlaubte Bildformate (kein SVG – Skript-Injektionsrisiko). Bilder werden
@@ -35,7 +36,43 @@ const FILE_TYPES: Record<string, string> = {
 
 const MAX_BYTES = 3 * 1024 * 1024; // 3 MB dekodiert (Vercel-Request-Limit ~4,5 MB inkl. Base64)
 
-export default requireAuth(async function handler(req: VercelRequest, res: VercelResponse) {
+// Große Uploads (v.a. Videos) gehen NICHT über die Serverless-Funktion (dort
+// gilt das ~4,5-MB-Request-Limit), sondern direkt vom Browser zu Vercel Blob.
+// Diese Funktion stellt nur ein kurzlebiges, signiertes Upload-Token aus
+// (?resource=blob) – die eigentlichen Daten fließen am Server vorbei.
+const BLOB_MAX_BYTES = 500 * 1024 * 1024; // 500 MB Obergrenze (reicht für Handy-Videos)
+const BLOB_ALLOWED = ['image/*', 'video/*', 'audio/*', 'application/pdf', 'application/zip'];
+
+async function blobClientUpload(req: VercelRequest, res: VercelResponse) {
+  try {
+    const json = await handleUpload({
+      body: req.body as HandleUploadBody,
+      request: req,
+      // Nur angemeldete Team-Mitglieder dürfen ein Upload-Token bekommen.
+      onBeforeGenerateToken: async () => {
+        const session = await getSession(req);
+        if (!session) throw new Error('Nicht angemeldet');
+        return {
+          allowedContentTypes: BLOB_ALLOWED,
+          maximumSizeInBytes: BLOB_MAX_BYTES,
+          addRandomSuffix: true,
+          validUntil: Date.now() + 60_000, // Token 60 s gültig
+        };
+      },
+      // Nach erfolgreichem Upload ruft Vercel diesen Endpunkt (Server-zu-Server)
+      // erneut auf; wir müssen nichts weiter tun.
+      onUploadCompleted: async () => {
+        /* nichts nötig – die URL kennt der Client bereits */
+      },
+    });
+    return res.json(json);
+  } catch (err) {
+    console.error('Blob-Client-Upload fehlgeschlagen:', err);
+    return res.status(400).json({ error: err instanceof Error ? err.message : 'Upload-Fehler' });
+  }
+}
+
+const legacyUpload = requireAuth(async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
 
@@ -77,3 +114,10 @@ export default requireAuth(async function handler(req: VercelRequest, res: Verce
     return res.status(500).json({ error: 'Upload-Fehler' });
   }
 });
+
+// Verteiler: ?resource=blob → direkter Blob-Upload (große Videos), sonst der
+// klassische Base64-Weg (kleine Bilder/Dateien/Audio, serverseitig geschützt).
+export default async function upload(req: VercelRequest, res: VercelResponse) {
+  if (req.query.resource === 'blob') return blobClientUpload(req, res);
+  return legacyUpload(req, res);
+}

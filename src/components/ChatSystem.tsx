@@ -848,6 +848,7 @@ function Composer({
   const [emoji, setEmoji] = useState(false);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const docRef = useRef<HTMLInputElement>(null);
@@ -895,13 +896,15 @@ function Composer({
   const onFileChosen = async (file: File | undefined) => {
     if (!file) return;
     setUploading(true);
+    setUploadPct(null);
     try {
-      const { url, name, mime } = await uploadFile(file);
+      const { url, name, mime } = await uploadFile(file, (p) => setUploadPct(p));
       setAttach({ kind: 'media', type: 'file', url, mime, title: name });
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Datei konnte nicht hochgeladen werden.');
     } finally {
       setUploading(false);
+      setUploadPct(null);
     }
   };
 
@@ -950,7 +953,7 @@ function Composer({
       {attach && <PendingAttach attach={attach} onRemove={() => setAttach(null)} />}
       {uploading && (
         <div className="flex items-center gap-1.5 mb-2 text-[11px] text-hl-faint font-mono">
-          <Loader2 className="w-3 h-3 animate-spin" /> lädt hoch…
+          <Loader2 className="w-3 h-3 animate-spin" /> lädt hoch…{uploadPct != null ? ` ${uploadPct}%` : ''}
         </div>
       )}
       {recorder.recording && (
