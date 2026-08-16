@@ -42,6 +42,8 @@ export async function ensureSchema(): Promise<void> {
     await sql`SELECT 1 FROM polls LIMIT 1`;
     // Ideen-Bereich (Brainstorm) mitprüfen.
     await sql`SELECT 1 FROM ideas LIMIT 1`;
+    // Medien-Anhänge im Ideen-Brainstorm (Bild/Video/Datei/Audio) mitprüfen.
+    await sql`SELECT attach_type FROM idea_comments LIMIT 1`;
     // Benannte Links („Link-Tasten") mitprüfen.
     await sql`SELECT links FROM tasks LIMIT 1`;
     ensured = true;
@@ -174,9 +176,14 @@ export async function ensureSchema(): Promise<void> {
     last_read_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (idea_id, user_id))`);
   await run(sql`CREATE TABLE IF NOT EXISTS idea_comments (
     id TEXT PRIMARY KEY, idea_id TEXT NOT NULL REFERENCES ideas(id) ON DELETE CASCADE,
-    author_id TEXT NOT NULL, author_name TEXT NOT NULL DEFAULT '', body TEXT NOT NULL,
+    author_id TEXT NOT NULL, author_name TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
   await run(sql`CREATE INDEX IF NOT EXISTS idx_idea_comments_idea ON idea_comments(idea_id, created_at)`);
+  // Chat-artiger Brainstorm: Medien-Anhänge (Bild/Video/Datei = 'file', 'audio').
+  await run(sql`ALTER TABLE idea_comments ADD COLUMN IF NOT EXISTS attach_type TEXT`);
+  await run(sql`ALTER TABLE idea_comments ADD COLUMN IF NOT EXISTS attach_url TEXT`);
+  await run(sql`ALTER TABLE idea_comments ADD COLUMN IF NOT EXISTS attach_mime TEXT`);
+  await run(sql`ALTER TABLE idea_comments ADD COLUMN IF NOT EXISTS attach_title TEXT`);
 
   // --- Benannte Links („Link-Tasten") auf Aufgaben/Terminen, Tickets, Ideen --
   await run(sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]'`);

@@ -129,8 +129,15 @@ export const deleteIdea = (id: string) =>
 export const convertIdea = (id: string, convertType: 'termin' | 'aufgabe' | 'beides') =>
   apiFetch<Idea>('/api/team?resource=idea', { method: 'POST', body: JSON.stringify({ id, op: 'convert', convertType }) });
 
-export const addIdeaComment = (ideaId: string, body: string) =>
-  apiFetch<IdeaComment>('/api/team?resource=idea-comment', { method: 'POST', body: JSON.stringify({ ideaId, body }) });
+export const addIdeaComment = (
+  ideaId: string,
+  body: string,
+  attach?: { attachType: 'file' | 'audio'; attachUrl: string; attachMime: string; attachTitle: string } | null,
+) =>
+  apiFetch<IdeaComment>('/api/team?resource=idea-comment', {
+    method: 'POST',
+    body: JSON.stringify({ ideaId, body, ...(attach ?? {}) }),
+  });
 
 // --- Benachrichtigungen -----------------------------------------------------
 export const fetchNotifications = () =>

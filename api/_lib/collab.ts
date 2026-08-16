@@ -719,7 +719,9 @@ export async function idea(req: VercelRequest, res: VercelResponse) {
     const base = await fetchIdeaById(id);
     if (!base) return res.status(404).json({ error: 'Idee nicht gefunden.' });
     const comments = await sql`
-      SELECT id, idea_id AS "ideaId", author_id AS "authorId", author_name AS "authorName", body, created_at AS "createdAt"
+      SELECT id, idea_id AS "ideaId", author_id AS "authorId", author_name AS "authorName", body,
+             attach_type AS "attachType", attach_url AS "attachUrl", attach_mime AS "attachMime", attach_title AS "attachTitle",
+             created_at AS "createdAt"
       FROM idea_comments WHERE idea_id = ${id} ORDER BY created_at`;
     await sql`UPDATE idea_members SET last_read_at = now() WHERE idea_id = ${id} AND user_id = ${uid}`;
     return res.json({ ...base, comments });
@@ -812,7 +814,17 @@ export async function ideaComment(req: VercelRequest, res: VercelResponse) {
   const ideaId = typeof b.ideaId === 'string' ? b.ideaId : '';
   if (!ideaId) return badRequest(res, 'Ideen-ID fehlt.');
   if (!(await isIdeaMember(ideaId, uid))) return res.status(403).json({ error: 'Kein Zugriff auf diese Idee.' });
-  if (!isNonEmptyString(b.body)) return badRequest(res, 'Bitte einen Beitrag schreiben.');
+
+  // Chat-artig: Beitrag kann Text UND/ODER einen Medien-Anhang tragen.
+  const hasBody = isNonEmptyString(b.body);
+  const attachType = b.attachType === 'file' || b.attachType === 'audio' ? b.attachType : null;
+  const attachUrl =
+    attachType && typeof b.attachUrl === 'string' && /^https?:\/\//i.test(b.attachUrl.trim()) ? b.attachUrl.trim() : null;
+  if (attachType && !attachUrl) return badRequest(res, 'Anhang-URL fehlt oder ist ungültig.');
+  if (!hasBody && !attachType) return badRequest(res, 'Bitte einen Beitrag schreiben oder etwas anhängen.');
+  const attachMime = attachType ? String(b.attachMime ?? '').slice(0, 120) || null : null;
+  const attachTitle = attachType ? String(b.attachTitle ?? '').slice(0, 200) || null : null;
+  const body = hasBody ? b.body.slice(0, 8000) : '';
 
   const rows = await sql`SELECT title FROM ideas WHERE id = ${ideaId}`;
   if (rows.length === 0) return res.status(404).json({ error: 'Idee nicht gefunden.' });
@@ -821,21 +833,33 @@ export async function ideaComment(req: VercelRequest, res: VercelResponse) {
   const id = genId('ic');
   const name = sessionName(session);
   const inserted = await sql`
-    INSERT INTO idea_comments (id, idea_id, author_id, author_name, body)
-    VALUES (${id}, ${ideaId}, ${uid}, ${name}, ${b.body.slice(0, 8000)})
-    RETURNING id, idea_id AS "ideaId", author_id AS "authorId", author_name AS "authorName", body, created_at AS "createdAt"`;
+    INSERT INTO idea_comments (id, idea_id, author_id, author_name, body, attach_type, attach_url, attach_mime, attach_title)
+    VALUES (${id}, ${ideaId}, ${uid}, ${name}, ${body}, ${attachType}, ${attachUrl}, ${attachMime}, ${attachTitle})
+    RETURNING id, idea_id AS "ideaId", author_id AS "authorId", author_name AS "authorName", body,
+              attach_type AS "attachType", attach_url AS "attachUrl", attach_mime AS "attachMime", attach_title AS "attachTitle",
+              created_at AS "createdAt"`;
   await sql`UPDATE ideas SET updated_at = now() WHERE id = ${ideaId}`;
 
   const members = await loadMembers();
   const mem = (await sql`SELECT user_id AS "userId" FROM idea_members WHERE idea_id = ${ideaId}`) as { userId: string }[];
   const mentioned = new Set<string>();
-  for (const mid of findMentions(b.body, members)) {
-    if (mid !== uid && mem.some((m) => m.userId === mid)) {
-      mentioned.add(mid);
-      await notify(mid, uid, 'mention', 'idea', ideaId, `${name} hat dich in der Idee „${title}“ erwähnt.`);
+  if (hasBody) {
+    for (const mid of findMentions(b.body, members)) {
+      if (mid !== uid && mem.some((m) => m.userId === mid)) {
+        mentioned.add(mid);
+        await notify(mid, uid, 'mention', 'idea', ideaId, `${name} hat dich in der Idee „${title}“ erwähnt.`);
+      }
     }
   }
-  const preview = String(b.body).slice(0, 120);
+  const preview = hasBody
+    ? String(b.body).slice(0, 120)
+    : attachType === 'audio'
+      ? '🎤 Sprachnachricht'
+      : (attachMime ?? '').startsWith('image/')
+        ? '🖼️ Bild'
+        : (attachMime ?? '').startsWith('video/')
+          ? '🎬 Video'
+          : '📎 Datei';
   for (const m of mem) {
     if (m.userId === uid || mentioned.has(m.userId)) continue;
     await sendPushToUser(m.userId, { title: `💡 ${title}`, body: `${name}: ${preview}`, url: `/chat?tab=ideen&openIdea=${encodeURIComponent(ideaId)}` });

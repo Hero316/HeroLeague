@@ -453,6 +453,11 @@ export interface IdeaComment {
   authorId: string;
   authorName: string;
   body: string;
+  // Chat-artige Medien-Anhänge im Brainstorm (Bild/Video/Datei = 'file', 'audio').
+  attachType?: 'file' | 'audio' | null;
+  attachUrl?: string | null;
+  attachMime?: string | null;
+  attachTitle?: string | null;
   createdAt: string;
 }
 
