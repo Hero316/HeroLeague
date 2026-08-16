@@ -54,18 +54,42 @@ export default function ChatApp({
   onGoWebsite: () => void;
   onLogout: () => void;
 }) {
-  // Aktiven Tab in der URL halten (?tab=…), damit ein Reload auf derselben
-  // Seite bleibt (Chats/Aufgaben/Tickets) statt immer auf „Chats" zu landen.
+  // Aktive Sektion nach einem Reload zuverlässig wiederherstellen.
+  // WICHTIG: Der URL-Parameter (?tab=…) allein ist auf dem Handy nicht
+  // verlässlich – history.replaceState „vergisst" die Änderung teils über einen
+  // Reload/PWA-Neustart hinweg, wodurch man vom Chat plötzlich bei „Aufgaben"
+  // landete. Deshalb ist localStorage die maßgebliche Quelle; die URL dient nur
+  // als Rückfall und für frische Deep-Links (Benachrichtigungen).
+  const TAB_KEY = 'hl-chat-tab';
+  const isTab = (v: unknown): v is Tab =>
+    v === 'chats' || v === 'aufgaben' || v === 'kalender' || v === 'tickets' || v === 'ideen' || v === 'mehr';
   const readTab = (): Tab => {
-    if (getUrlParam('openIdea')) return 'ideen'; // Deep-Link aus einer Benachrichtigung
-    const t = getUrlParam('tab');
-    return t === 'aufgaben' || t === 'kalender' || t === 'tickets' || t === 'ideen' || t === 'mehr' ? t : 'chats';
+    if (getUrlParam('openIdea')) return 'ideen'; // Deep-Link Idee (Benachrichtigung)
+    const urlTab = getUrlParam('tab');
+    // Frischer Konversations-Deep-Link (c ohne gültigen tab-Parameter) → Chats,
+    // damit der verlinkte Chat sicher sichtbar ist.
+    if (getUrlParam('c') && !isTab(urlTab)) return 'chats';
+    // Zuletzt genutzte Sektion (überlebt Reloads zuverlässig).
+    try {
+      const saved = localStorage.getItem(TAB_KEY);
+      if (isTab(saved)) return saved;
+    } catch {
+      /* localStorage evtl. blockiert */
+    }
+    // Rückfall: URL-Parameter, sonst Chats.
+    return isTab(urlTab) ? urlTab : 'chats';
   };
   const [tab, setTabState] = useState<Tab>(readTab);
   const setTab = (t: Tab) => {
     setTabState(t);
     // Nur den 'tab'-Parameter ändern – c/thread/av/ad usw. bleiben erhalten.
     setUrlParam('tab', t === 'chats' ? null : t);
+    // Zusätzlich zuverlässig merken (maßgeblich beim nächsten Laden).
+    try {
+      localStorage.setItem(TAB_KEY, t);
+    } catch {
+      /* localStorage evtl. blockiert – dann bleibt nur der URL-Parameter */
+    }
   };
   const [showInstall, setShowInstall] = useState(true);
   const [showGame, setShowGame] = useState(false);
