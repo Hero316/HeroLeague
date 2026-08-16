@@ -24,8 +24,13 @@ import {
   Pencil,
   Copy,
   Image as ImageIcon,
+  BarChart3,
+  CheckCircle2,
+  Circle,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
-import type { Conversation, ChatMessage, TeamMember, Ticket, Task, UserStatus } from '../types';
+import type { Conversation, ChatMessage, TeamMember, Ticket, Task, UserStatus, Poll } from '../types';
 import { USER_STATUS } from '../types';
 import {
   fetchConversations,
@@ -44,6 +49,8 @@ import {
   editMessage,
   deleteMessage,
   fetchThreads,
+  createPoll,
+  votePoll,
   type ChatSearchHit,
   type ThreadSummary,
 } from '../lib/chat';
@@ -104,6 +111,16 @@ function fmtClock(iso: string): string {
   } catch {
     return '';
   }
+}
+// Kurzvorschau für einen Anhang in Listen (Threads, Suche).
+function attachPreview(attachType: string | null | undefined): string {
+  return attachType === 'poll' ? '📊 Umfrage' : '📎 Anhang';
+}
+// Vorschautext der letzten Nachricht in der Chatliste (Poll/Anhang/Text).
+function lastMsgPreview(lm: { body: string; attachType: string | null }): string {
+  if (lm.attachType === 'poll') return '📊 Umfrage';
+  if (lm.attachType) return `📎 ${lm.body || 'Anhang'}`;
+  return lm.body || '';
 }
 // Tages-Schlüssel zum Erkennen eines Datumswechsels beim Scrollen.
 function dayKey(iso: string): string {
@@ -321,6 +338,389 @@ function AttachPicker({
   );
 }
 
+// --- Abstimmung (Umfrage) ---------------------------------------------------
+// Die Abstimmungs-Karte in der Nachricht (wie bei WhatsApp): Frage, Optionen
+// zum Antippen, Balken + Anzahl, optional Avatare der Abstimmenden und ein
+// optional verknüpftes Ticket/Aufgabe/Termin. Passt sich der Blasenfarbe an
+// (mine = türkis mit weißer Schrift, sonst helle Blase).
+function PollCard({
+  poll,
+  mine,
+  onVoted,
+  onOpenRef,
+}: {
+  poll: Poll;
+  mine: boolean;
+  onVoted: (p: Poll) => void;
+  onOpenRef?: (type: 'ticket' | 'task', id: string) => void;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [showVotes, setShowVotes] = useState(false);
+  const total = poll.options.reduce((s, o) => s + o.count, 0);
+
+  const vote = async (optionId: string) => {
+    if (busy) return;
+    setBusy(optionId);
+    try {
+      const updated = await votePoll(poll.id, optionId);
+      if (updated) onVoted(updated);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Abstimmen fehlgeschlagen.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const strong = mine ? 'text-white' : 'text-hl-text';
+  const soft = mine ? 'text-white/70' : 'text-hl-mute';
+  const track = mine ? 'bg-white/20' : 'bg-black/[.08]';
+  const fill = mine ? 'bg-white/85' : 'bg-brand-accent-light';
+
+  return (
+    <div className="w-[min(74vw,300px)]">
+      <div className={`text-[15px] font-sans font-bold leading-snug break-words ${strong}`}>{poll.question}</div>
+      <div className={`flex items-center gap-1.5 text-[11px] font-sans mt-0.5 mb-2 ${soft}`}>
+        <BarChart3 className="w-3.5 h-3.5 shrink-0" />
+        {poll.multiple ? 'Wähle mindestens eine Option aus' : 'Wähle eine Option'}
+      </div>
+
+      {/* Optional verknüpftes Ticket / Aufgabe / Termin – anklickbar */}
+      {poll.refType && poll.refId && (
+        <button
+          type="button"
+          onClick={() => onOpenRef?.(poll.refType as 'ticket' | 'task', poll.refId as string)}
+          className="mb-2 block text-left cursor-pointer hover:brightness-125 transition"
+        >
+          <AttachChip type={poll.refType} title={poll.refTitle} />
+        </button>
+      )}
+
+      <div className="space-y-2">
+        {poll.options.map((o) => {
+          const pct = total > 0 ? Math.round((o.count / total) * 100) : 0;
+          const OptIcon = o.mine ? CheckCircle2 : Circle;
+          return (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => vote(o.id)}
+              disabled={!!busy}
+              className="w-full text-left cursor-pointer disabled:opacity-70"
+            >
+              <div className="flex items-center gap-2">
+                <OptIcon className={`w-5 h-5 shrink-0 ${o.mine ? (mine ? 'text-white' : 'text-brand-accent-light') : soft}`} />
+                <span className={`flex-1 min-w-0 text-[14px] font-sans break-words ${strong} ${o.mine ? 'font-semibold' : ''}`}>{o.text}</span>
+                {!poll.anonymous && o.voters.length > 0 && (
+                  <span className="flex -space-x-1.5 shrink-0">
+                    {o.voters.slice(0, 3).map((v) => (
+                      <span key={v.userId} className="rounded-full ring-1 ring-black/10">
+                        <Avatar name={v.userName} size={18} />
+                      </span>
+                    ))}
+                  </span>
+                )}
+                <span className={`text-[12px] font-mono shrink-0 ${soft}`}>{o.count}</span>
+              </div>
+              <div className={`mt-1 ml-7 h-1.5 rounded-full overflow-hidden ${track}`}>
+                <div className={`h-full rounded-full ${fill} transition-[width] duration-300`} style={{ width: `${pct}%` }} />
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className={`mt-2.5 pt-2 border-t ${mine ? 'border-white/15' : 'border-black/10'} flex items-center justify-between`}>
+        <span className={`text-[11px] font-mono ${soft}`}>
+          {poll.totalVoters} {poll.totalVoters === 1 ? 'Person' : 'Personen'}
+        </span>
+        <button
+          type="button"
+          onClick={() => setShowVotes(true)}
+          className={`text-[13px] font-sans font-semibold cursor-pointer ${mine ? 'text-white/90 hover:text-white' : 'text-brand-accent-light hover:text-brand-accent'}`}
+        >
+          Stimmen ansehen
+        </button>
+      </div>
+
+      {showVotes && <PollVotesModal poll={poll} onClose={() => setShowVotes(false)} />}
+    </div>
+  );
+}
+
+// Wer hat wofür gestimmt? (Bei anonymer Abstimmung nur die Anzahl.)
+function PollVotesModal({ poll, onClose }: { poll: Poll; onClose: () => void }) {
+  const backdrop = useBackdropDismiss(onClose);
+  useBackClose(true, onClose);
+  return (
+    <ModalPortal>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[84] bg-black/70 flex items-end sm:items-center justify-center p-0 sm:p-4"
+        {...backdrop}
+      >
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 20, opacity: 0 }}
+          className="w-full sm:max-w-md hl-surf border-t sm:border border-white/10 rounded-t-2xl sm:rounded-2xl p-4 max-h-[70vh] overflow-y-auto"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-start justify-between mb-3 gap-2">
+            <h4 className="font-display font-bold text-white uppercase tracking-tight break-words">{poll.question}</h4>
+            <button onClick={onClose} className="p-1 text-hl-mute hover:text-white cursor-pointer shrink-0">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          {poll.anonymous && (
+            <p className="text-[12px] text-hl-mute mb-3">Anonyme Abstimmung – die Namen der Abstimmenden sind verborgen.</p>
+          )}
+          <div className="space-y-4">
+            {poll.options.map((o) => (
+              <div key={o.id}>
+                <div className="flex items-center justify-between mb-1.5 gap-2">
+                  <span className="text-sm font-sans font-semibold text-white break-words">{o.text}</span>
+                  <span className="text-[12px] font-mono text-hl-mute shrink-0">
+                    {o.count} {o.count === 1 ? 'Stimme' : 'Stimmen'}
+                  </span>
+                </div>
+                {poll.anonymous ? null : o.voters.length === 0 ? (
+                  <p className="text-[12px] text-hl-faint">Noch keine Stimmen.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {o.voters.map((v) => (
+                      <div key={v.userId} className="flex items-center gap-2">
+                        <Avatar name={v.userName} size={22} />
+                        <span className="text-sm text-hl-soft truncate">{v.userName}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      </motion.div>
+    </ModalPortal>
+  );
+}
+
+// Schalter (An/Aus) für die Abstimmungs-Einstellungen.
+function PollToggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={() => onChange(!on)}
+      className={`relative w-12 h-7 rounded-full transition-colors cursor-pointer shrink-0 ${on ? 'bg-brand-accent-light' : 'bg-white/15'}`}
+    >
+      <span
+        className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform flex items-center justify-center ${on ? 'translate-x-5' : ''}`}
+      >
+        {on && <Check className="w-3.5 h-3.5 text-brand-accent" />}
+      </span>
+    </button>
+  );
+}
+
+// Abstimmung erstellen (Vollbild-Blatt) – wie im WhatsApp-„+"-Menü.
+function PollComposer({
+  conversationId,
+  onClose,
+  onCreated,
+}: {
+  conversationId: string;
+  onClose: () => void;
+  onCreated: (m: ChatMessage) => void;
+}) {
+  const [question, setQuestion] = useState('');
+  const [options, setOptions] = useState<string[]>(['', '']);
+  const [multiple, setMultiple] = useState(false);
+  const [anonymous, setAnonymous] = useState(false);
+  const [ref, setRef] = useState<{ type: 'ticket' | 'task'; id: string; title: string } | null>(null);
+  const [picker, setPicker] = useState<null | 'ticket' | 'task' | 'termin'>(null);
+  const [busy, setBusy] = useState(false);
+  useBackClose(true, onClose);
+
+  const setOption = (i: number, val: string) => {
+    setOptions((prev) => {
+      const next = [...prev];
+      next[i] = val;
+      // Tippt man in die letzte Zeile, erscheint automatisch eine neue leere
+      // (bis maximal 12 Optionen) – wie bei WhatsApp.
+      if (i === next.length - 1 && val.trim() && next.length < 12) next.push('');
+      return next;
+    });
+  };
+  const removeOption = (i: number) => setOptions((prev) => (prev.length <= 2 ? prev : prev.filter((_, k) => k !== i)));
+
+  const validOptions = options.map((o) => o.trim()).filter(Boolean);
+  const canSend = question.trim().length > 0 && validOptions.length >= 2 && !busy;
+
+  const submit = async () => {
+    if (!canSend) return;
+    setBusy(true);
+    try {
+      const m = await createPoll({
+        conversationId,
+        question: question.trim(),
+        options: validOptions,
+        multiple,
+        anonymous,
+        refType: ref?.type ?? null,
+        refId: ref?.id ?? null,
+        refTitle: ref?.title ?? null,
+      });
+      onCreated(m);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Abstimmung konnte nicht erstellt werden.');
+      setBusy(false);
+    }
+  };
+
+  const attachTiles: { key: 'ticket' | 'task' | 'termin'; label: string; icon: typeof TicketIcon }[] = [
+    { key: 'ticket', label: 'Ticket', icon: TicketIcon },
+    { key: 'task', label: 'Aufgabe', icon: ListChecks },
+    { key: 'termin', label: 'Termin', icon: CalendarDays },
+  ];
+
+  return (
+    <ModalPortal>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[80] hl-surf-0 flex flex-col"
+        style={{ background: '#070d0c' }}
+      >
+        {/* Kopfzeile */}
+        <div
+          className="flex items-center gap-3 px-3 border-b border-white/5 shrink-0"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)', paddingBottom: '0.75rem' }}
+        >
+          <button onClick={onClose} className="p-1.5 text-hl-soft hover:text-white cursor-pointer" title="Zurück">
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <h3 className="font-display font-bold text-white text-lg uppercase tracking-tight">Abstimmung erstellen</h3>
+        </div>
+
+        {/* Inhalt */}
+        <div className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
+          {/* Frage */}
+          <div>
+            <label className="block text-[13px] font-sans font-semibold text-hl-mute mb-2">Frage</label>
+            <textarea
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              rows={1}
+              autoFocus
+              placeholder="Stelle eine Frage."
+              className="w-full hl-surf-0 border-2 border-brand-accent-light/70 rounded-2xl px-4 py-3.5 text-[16px] text-white placeholder:text-hl-faint focus:outline-none focus:border-brand-accent-light resize-none"
+            />
+          </div>
+
+          {/* Optionen */}
+          <div>
+            <label className="block text-[13px] font-sans font-semibold text-hl-mute mb-2">Optionen</label>
+            <div className="space-y-2.5">
+              {options.map((o, i) => (
+                <div key={i} className="relative flex items-center">
+                  <input
+                    value={o}
+                    onChange={(e) => setOption(i, e.target.value)}
+                    placeholder="+ Hinzufügen"
+                    maxLength={150}
+                    className="w-full hl-surf-0 border border-white/12 rounded-2xl px-4 py-3.5 pr-10 text-[16px] text-white placeholder:text-hl-faint focus:outline-none focus:border-brand-accent-light/60"
+                  />
+                  {options.length > 2 && o.trim() !== '' && (
+                    <button
+                      onClick={() => removeOption(i)}
+                      className="absolute right-3 p-1 text-hl-mute hover:text-white cursor-pointer"
+                      title="Option entfernen"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Anhängen (Ticket / Aufgabe / Termin) */}
+          <div>
+            <label className="block text-[13px] font-sans font-semibold text-hl-mute mb-2">
+              Ticket, Aufgabe oder Termin anhängen <span className="font-normal text-hl-faint">(optional)</span>
+            </label>
+            {ref ? (
+              <div className="flex items-center gap-2">
+                <AttachChip type={ref.type} title={ref.title} />
+                <button onClick={() => setRef(null)} className="text-hl-mute hover:text-white cursor-pointer" title="Entfernen">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {attachTiles.map((t) => (
+                  <button
+                    key={t.key}
+                    onClick={() => setPicker(t.key)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl hl-surf-soft border border-white/10 hover:border-white/25 text-sm text-hl-soft cursor-pointer"
+                  >
+                    <t.icon className="w-4 h-4 text-brand-accent-light" /> {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Einstellungen */}
+          <div>
+            <label className="block text-[13px] font-sans font-semibold text-hl-mute mb-2">Abstimmungseinstellungen</label>
+            <div className="hl-surf-soft border border-white/8 rounded-2xl divide-y divide-white/5">
+              <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+                <span className="text-[15px] font-sans text-white">Mehrere Antworten erlauben</span>
+                <PollToggle on={multiple} onChange={setMultiple} />
+              </div>
+              <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+                <span className="text-[15px] font-sans text-white">Namen der Abstimmenden verbergen</span>
+                <PollToggle on={anonymous} onChange={setAnonymous} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Senden (schwebender Knopf unten rechts) */}
+        <div className="shrink-0 px-4 flex justify-end" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}>
+          <button
+            onClick={submit}
+            disabled={!canSend}
+            title="Abstimmung senden"
+            className="w-16 h-16 rounded-[22px] bg-brand-accent-light hover:bg-brand-accent text-white flex items-center justify-center shadow-lg shadow-brand-accent-light/30 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition"
+          >
+            {busy ? <Loader2 className="w-6 h-6 animate-spin" /> : <Send className="w-6 h-6" />}
+          </button>
+        </div>
+      </motion.div>
+
+      <AnimatePresence>
+        {picker && (
+          <AttachPicker
+            kind={picker}
+            onPick={(a) => {
+              setRef({ type: a.type, id: a.id, title: a.title });
+              setPicker(null);
+            }}
+            onClose={() => setPicker(null)}
+          />
+        )}
+      </AnimatePresence>
+    </ModalPortal>
+  );
+}
+
 // --- Composer (wiederverwendet für Haupt-Chat und Threads) ------------------
 function PendingAttach({ attach, onRemove }: { attach: Attachment; onRemove: () => void }) {
   const isVideo = attach.kind === 'media' && attach.type === 'file' && attach.mime.startsWith('video/');
@@ -382,6 +782,7 @@ function Composer({
   const [body, setBody] = useState('');
   const [attach, setAttach] = useState<Attachment | null>(null);
   const [picker, setPicker] = useState<null | 'ticket' | 'task' | 'termin'>(null);
+  const [pollOpen, setPollOpen] = useState(false);
   const [sheet, setSheet] = useState(false);
   const [emoji, setEmoji] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -477,6 +878,10 @@ function Composer({
     { key: 'ticket', label: 'Ticket', color: '#22DFC9', icon: TicketIcon, onClick: () => { setSheet(false); setPicker('ticket'); } },
     { key: 'task', label: 'Aufgabe', color: '#E9C46A', icon: ListChecks, onClick: () => { setSheet(false); setPicker('task'); } },
     { key: 'termin', label: 'Kalender', color: '#E6238E', icon: CalendarDays, onClick: () => { setSheet(false); setPicker('termin'); } },
+    // Abstimmungen nur als eigenständige Nachricht (nicht innerhalb eines Threads).
+    ...(parentId
+      ? []
+      : [{ key: 'poll', label: 'Umfrage', color: '#34D399', icon: BarChart3, onClick: () => { setSheet(false); setPollOpen(true); } }]),
   ];
 
   return (
@@ -616,6 +1021,16 @@ function Composer({
           />
         )}
         {emoji && <EmojiPicker onPick={(e) => setBody((b) => b + e)} onClose={() => setEmoji(false)} />}
+        {pollOpen && (
+          <PollComposer
+            conversationId={conversationId}
+            onClose={() => setPollOpen(false)}
+            onCreated={(m) => {
+              setPollOpen(false);
+              onSent(m);
+            }}
+          />
+        )}
       </AnimatePresence>
     </div>
   );
@@ -803,7 +1218,16 @@ function MessageRow({
           ) : (
             <>
               {m.body && <p className="text-[15px] font-sans whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-snug">{m.body}</p>}
-              <MessageAttachment m={m} mine={mine} onOpen={onOpenAttachment} />
+              {m.attachType === 'poll' && m.poll ? (
+                <PollCard
+                  poll={m.poll}
+                  mine={mine}
+                  onVoted={(p) => onChanged?.({ ...m, poll: p })}
+                  onOpenRef={onOpenAttachment}
+                />
+              ) : (
+                <MessageAttachment m={m} mine={mine} onOpen={onOpenAttachment} />
+              )}
             </>
           )}
           {/* Uhrzeit klein in der Bubble, rechts unten (KEINE Lesebestätigung) */}
@@ -1429,7 +1853,7 @@ function ConvSearchResults({
                 )}
                 <span className="text-[10px] font-mono text-hl-faint ml-auto shrink-0">{fmtTime(h.createdAt)}</span>
               </div>
-              <div className="text-[13px] text-hl-soft truncate">{h.body || (h.attachType ? '📎 Anhang' : '')}</div>
+              <div className="text-[13px] text-hl-soft truncate">{h.body || (h.attachType ? attachPreview(h.attachType) : '')}</div>
             </div>
           </button>
         );
@@ -1489,7 +1913,7 @@ function ThreadsOverview({ threads, onOpen, onClose }: { threads: ThreadSummary[
                   </div>
                   <div className="text-sm text-white truncate">
                     <span className="text-hl-dim">{t.authorName}: </span>
-                    {t.body || (t.attachType ? '📎 Anhang' : '—')}
+                    {t.body || (t.attachType ? attachPreview(t.attachType) : '—')}
                   </div>
                   {t.lastReplyAuthor && (
                     <div className="text-[11px] text-hl-mute font-mono mt-0.5 flex items-center gap-1">
@@ -1945,7 +2369,7 @@ export default function ChatSystem({
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-[12px] text-hl-dim font-sans truncate block">
                           {c.lastMessage
-                            ? `${c.kind === 'group' ? `${firstName(c.lastMessage.authorName)}: ` : ''}${c.lastMessage.attachType ? '📎 ' : ''}${c.lastMessage.body || 'Anhang'}`
+                            ? `${c.kind === 'group' ? `${firstName(c.lastMessage.authorName)}: ` : ''}${lastMsgPreview(c.lastMessage)}`
                             : 'Noch keine Nachrichten'}
                         </span>
                         {c.unread > 0 && (
@@ -1980,7 +2404,7 @@ export default function ChatSystem({
                   </div>
                   <div className="text-sm text-hl-soft truncate">
                     <span className="text-white font-semibold">{h.authorName}: </span>
-                    {h.body || (h.attachType ? '📎 Anhang' : '')}
+                    {h.body || (h.attachType ? attachPreview(h.attachType) : '')}
                   </div>
                 </button>
               ))}

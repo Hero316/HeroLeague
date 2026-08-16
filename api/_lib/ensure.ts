@@ -36,6 +36,10 @@ export async function ensureSchema(): Promise<void> {
     await sql`SELECT 1 FROM message_reactions LIMIT 1`;
     // Thread-Lesestand (ungelesene Thread-Antworten) mitprüfen.
     await sql`SELECT 1 FROM thread_reads LIMIT 1`;
+    // Abstimmungen (Umfragen im Chat) mitprüfen – WICHTIG, damit auf bereits
+    // bestehenden Datenbanken die Poll-Tabellen UND die erweiterte
+    // attach_type-Prüfung ('poll') unten nachgezogen werden.
+    await sql`SELECT 1 FROM polls LIMIT 1`;
     // Ideen-Bereich (Brainstorm) mitprüfen.
     await sql`SELECT 1 FROM ideas LIMIT 1`;
     // Benannte Links („Link-Tasten") mitprüfen.
@@ -120,6 +124,33 @@ export async function ensureSchema(): Promise<void> {
   await run(sql`CREATE TABLE IF NOT EXISTS thread_reads (
     user_id TEXT NOT NULL, parent_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
     last_read_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (user_id, parent_id))`);
+  // Abstimmungen (Umfragen wie bei WhatsApp): eine Nachricht mit
+  // attach_type='poll' trägt die Abstimmung; Frage/Einstellungen in polls,
+  // Antwortmöglichkeiten in poll_options, Stimmen in poll_votes. Optional kann
+  // ein Ticket/Aufgabe/Termin verlinkt sein (ref_type/ref_id/ref_title).
+  await run(sql`CREATE TABLE IF NOT EXISTS polls (
+    id TEXT PRIMARY KEY,
+    message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    question TEXT NOT NULL,
+    multiple BOOLEAN NOT NULL DEFAULT false,
+    anonymous BOOLEAN NOT NULL DEFAULT false,
+    ref_type TEXT, ref_id TEXT, ref_title TEXT,
+    created_by TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+  await run(sql`CREATE INDEX IF NOT EXISTS idx_polls_message ON polls(message_id)`);
+  await run(sql`CREATE TABLE IF NOT EXISTS poll_options (
+    id TEXT PRIMARY KEY,
+    poll_id TEXT NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+    text TEXT NOT NULL, position INT NOT NULL DEFAULT 0)`);
+  await run(sql`CREATE INDEX IF NOT EXISTS idx_poll_options_poll ON poll_options(poll_id)`);
+  await run(sql`CREATE TABLE IF NOT EXISTS poll_votes (
+    poll_id TEXT NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+    option_id TEXT NOT NULL REFERENCES poll_options(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL, user_name TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (option_id, user_id))`);
+  await run(sql`CREATE INDEX IF NOT EXISTS idx_poll_votes_poll ON poll_votes(poll_id)`);
+
   await run(sql`CREATE TABLE IF NOT EXISTS push_subscriptions (
     endpoint TEXT PRIMARY KEY, user_id TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
@@ -156,5 +187,5 @@ export async function ensureSchema(): Promise<void> {
   await run(sql`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
   await run(sql`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('superadmin','match_admin','referee','ticket_manager','team_member'))`);
   await run(sql`ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_attach_type_check`);
-  await run(sql`ALTER TABLE messages ADD CONSTRAINT messages_attach_type_check CHECK (attach_type IN ('ticket','task','file','audio'))`);
+  await run(sql`ALTER TABLE messages ADD CONSTRAINT messages_attach_type_check CHECK (attach_type IN ('ticket','task','file','audio','poll'))`);
 }

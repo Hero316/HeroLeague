@@ -1,6 +1,6 @@
 // Client-Helfer für den internen Chat (Phase 3).
 import { apiFetch } from './api';
-import type { Conversation, ChatMessage, ChatPresence, MessageReaction } from '../types';
+import type { Conversation, ChatMessage, ChatPresence, MessageReaction, Poll } from '../types';
 
 export const fetchConversations = () =>
   apiFetch<Conversation[]>('/api/chat?resource=conversations');
@@ -33,6 +33,22 @@ export const sendMessage = (input: {
   attachUrl?: string | null;
   attachMime?: string | null;
 }) => apiFetch<ChatMessage>('/api/chat?resource=messages', { method: 'POST', body: JSON.stringify(input) });
+
+// Abstimmung (Umfrage) erstellen. Antwort = die neue (Träger-)Nachricht inkl. poll.
+export const createPoll = (input: {
+  conversationId: string;
+  question: string;
+  options: string[];
+  multiple?: boolean;
+  anonymous?: boolean;
+  refType?: 'ticket' | 'task' | null;
+  refId?: string | null;
+  refTitle?: string | null;
+}) => apiFetch<ChatMessage>('/api/chat?resource=poll', { method: 'POST', body: JSON.stringify(input) });
+
+// Stimme setzen/umschalten. Antwort = aktueller Poll-Zustand.
+export const votePoll = (pollId: string, optionId: string) =>
+  apiFetch<Poll>('/api/chat?resource=vote', { method: 'POST', body: JSON.stringify({ pollId, optionId }) });
 
 // Emoji-Reaktion setzen/umschalten. Antwort = aktuelle Reaktionsliste.
 export const reactMessage = (messageId: string, emoji: string) =>
@@ -82,7 +98,7 @@ export interface ChatSearchHit {
   authorId: string;
   authorName: string;
   body: string;
-  attachType: 'ticket' | 'task' | 'file' | 'audio' | null;
+  attachType: 'ticket' | 'task' | 'file' | 'audio' | 'poll' | null;
   createdAt: string;
   convKind: 'group' | 'dm';
   convTitle: string;
@@ -100,7 +116,7 @@ export interface ThreadSummary {
   conversationId: string;
   authorName: string; // Autor der Eltern-Nachricht
   body: string; // Eltern-Snippet (leer wenn gelöscht)
-  attachType: 'ticket' | 'task' | 'file' | 'audio' | null;
+  attachType: 'ticket' | 'task' | 'file' | 'audio' | 'poll' | null;
   convKind: 'group' | 'dm';
   source: string; // Gruppenname bzw. DM-Partnername
   unreadCount: number;

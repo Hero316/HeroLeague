@@ -493,7 +493,7 @@ export interface ChatLastMessage {
   body: string;
   authorName: string;
   createdAt: string;
-  attachType: 'ticket' | 'task' | 'file' | 'audio' | null;
+  attachType: 'ticket' | 'task' | 'file' | 'audio' | 'poll' | null;
   deleted?: boolean; // Nachricht wurde zurückgenommen
 }
 
@@ -521,7 +521,27 @@ export interface ChatPresence {
   typing: { userId: string; userName: string }[]; // tippt in der aktiven Unterhaltung
 }
 
-export type ChatAttachType = 'ticket' | 'task' | 'file' | 'audio';
+export type ChatAttachType = 'ticket' | 'task' | 'file' | 'audio' | 'poll';
+
+// Abstimmung (Umfrage) im Chat – wie bei WhatsApp.
+export interface PollOption {
+  id: string;
+  text: string;
+  count: number; // Anzahl Stimmen für diese Option
+  mine: boolean; // habe ich selbst diese Option gewählt?
+  voters: { userId: string; userName: string }[]; // leer bei anonymer Abstimmung
+}
+export interface Poll {
+  id: string;
+  question: string;
+  multiple: boolean; // mehrere Antworten erlaubt
+  anonymous: boolean; // Namen der Abstimmenden verbergen
+  refType: 'ticket' | 'task' | null; // optional verknüpftes Ticket/Aufgabe/Termin
+  refId: string | null;
+  refTitle: string | null;
+  totalVoters: number; // Anzahl verschiedener Abstimmender
+  options: PollOption[];
+}
 
 export interface ChatMessage {
   id: string;
@@ -541,4 +561,5 @@ export interface ChatMessage {
   reactions?: MessageReaction[]; // Emoji-Reaktionen
   replyCount?: number; // nur bei Top-Level-Nachrichten
   unreadReplies?: number; // ungelesene Thread-Antworten (Top-Level, für das Leuchten)
+  poll?: Poll | null; // gesetzt, wenn attachType === 'poll'
 }

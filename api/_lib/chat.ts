@@ -112,6 +112,81 @@ function safeUrl(v: unknown): string | null {
   return typeof v === 'string' && /^https?:\/\//i.test(v.trim()) ? v.trim() : null;
 }
 
+// --- Abstimmungen (Umfragen) ------------------------------------------------
+// Lädt die Poll-Daten für die übergebenen Nachrichten-IDs und liefert eine
+// Map messageId -> Poll (fertig für die Anzeige). Anonyme Abstimmungen geben
+// KEINE Namen preis (voters bleibt leer), zeigen aber weiterhin Anzahl + ob ich
+// selbst gestimmt habe.
+type PollOption = { id: string; text: string; count: number; mine: boolean; voters: { userId: string; userName: string }[] };
+type Poll = {
+  id: string;
+  question: string;
+  multiple: boolean;
+  anonymous: boolean;
+  refType: 'ticket' | 'task' | null;
+  refId: string | null;
+  refTitle: string | null;
+  totalVoters: number;
+  options: PollOption[];
+};
+
+async function loadPollsFor(messageIds: string[], uid: string): Promise<Map<string, Poll>> {
+  const out = new Map<string, Poll>();
+  if (messageIds.length === 0) return out;
+  const pollRows = (await sql`
+    SELECT id, message_id AS "messageId", question, multiple, anonymous,
+           ref_type AS "refType", ref_id AS "refId", ref_title AS "refTitle"
+    FROM polls WHERE message_id = ANY(${messageIds})
+  `) as {
+    id: string; messageId: string; question: string; multiple: boolean; anonymous: boolean;
+    refType: 'ticket' | 'task' | null; refId: string | null; refTitle: string | null;
+  }[];
+  if (pollRows.length === 0) return out;
+  const pollIds = pollRows.map((p) => p.id);
+  const optRows = (await sql`
+    SELECT o.id, o.poll_id AS "pollId", o.text,
+      COALESCE((SELECT count(*)::int FROM poll_votes v WHERE v.option_id = o.id), 0) AS count,
+      COALESCE((SELECT json_agg(json_build_object('userId', v.user_id, 'userName', v.user_name) ORDER BY v.created_at)
+                FROM poll_votes v WHERE v.option_id = o.id), '[]'::json) AS voters,
+      EXISTS(SELECT 1 FROM poll_votes v WHERE v.option_id = o.id AND v.user_id = ${uid}) AS mine
+    FROM poll_options o WHERE o.poll_id = ANY(${pollIds}) ORDER BY o.position, o.id
+  `) as { id: string; pollId: string; text: string; count: number; voters: { userId: string; userName: string }[]; mine: boolean }[];
+
+  for (const p of pollRows) {
+    const opts = optRows.filter((o) => o.pollId === p.id);
+    const voterSet = new Set<string>();
+    for (const o of opts) for (const v of o.voters ?? []) voterSet.add(v.userId);
+    const options: PollOption[] = opts.map((o) => ({
+      id: o.id,
+      text: o.text,
+      count: o.count,
+      mine: o.mine,
+      // Anonyme Abstimmung: Namen NICHT preisgeben.
+      voters: p.anonymous ? [] : (o.voters ?? []),
+    }));
+    out.set(p.messageId, {
+      id: p.id,
+      question: p.question,
+      multiple: p.multiple,
+      anonymous: p.anonymous,
+      refType: p.refType,
+      refId: p.refId,
+      refTitle: p.refTitle,
+      totalVoters: voterSet.size,
+      options,
+    });
+  }
+  return out;
+}
+
+// Nachrichten-Zeilen mit Poll-Daten anreichern (nur wo attachType='poll').
+async function attachPolls<T extends { id: string; attachType?: string | null }>(rows: T[], uid: string): Promise<T[]> {
+  const pollMsgIds = rows.filter((r) => r.attachType === 'poll').map((r) => r.id);
+  if (pollMsgIds.length === 0) return rows;
+  const map = await loadPollsFor(pollMsgIds, uid);
+  return rows.map((r) => (r.attachType === 'poll' ? { ...r, poll: map.get(r.id) ?? null } : r));
+}
+
 export async function messages(req: VercelRequest, res: VercelResponse) {
   const session = await getSession(req);
   if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
@@ -135,7 +210,7 @@ export async function messages(req: VercelRequest, res: VercelResponse) {
         INSERT INTO thread_reads (user_id, parent_id, last_read_at) VALUES (${uid}, ${parentId}, now())
         ON CONFLICT (user_id, parent_id) DO UPDATE SET last_read_at = now()
       `;
-      return res.json(replies);
+      return res.json(await attachPolls(replies as { id: string; attachType?: string | null }[], uid));
     }
 
     // Top-Level-Nachrichten inkl. Antwort-Zähler + ungelesene Thread-Antworten
@@ -151,7 +226,7 @@ export async function messages(req: VercelRequest, res: VercelResponse) {
     );
     // Beim Öffnen als gelesen markieren.
     await sql`UPDATE conversation_members SET last_read_at = now() WHERE conversation_id = ${conversationId} AND user_id = ${uid}`;
-    return res.json(rows);
+    return res.json(await attachPolls(rows as { id: string; attachType?: string | null }[], uid));
   }
 
   if (req.method === 'POST') {
@@ -269,6 +344,122 @@ export async function messages(req: VercelRequest, res: VercelResponse) {
   }
 
   return res.status(405).json({ error: 'Nicht unterstützt' });
+}
+
+// --- Abstimmung erstellen ---------------------------------------------------
+// POST /api/chat?resource=poll
+//   { conversationId, question, options[], multiple?, anonymous?,
+//     refType?, refId?, refTitle? }
+// Legt eine Nachricht (attach_type='poll') plus Poll + Optionen an und
+// benachrichtigt die Gruppe wie eine normale Nachricht.
+export async function createPoll(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
+  const uid = session.userId;
+  const b = req.body ?? {};
+
+  const conversationId = typeof b.conversationId === 'string' ? b.conversationId : '';
+  if (!conversationId) return badRequest(res, 'Unterhaltungs-ID fehlt.');
+  if (!(await isMember(conversationId, uid))) return res.status(403).json({ error: 'Kein Zugriff auf diese Unterhaltung.' });
+
+  const question = isNonEmptyString(b.question) ? b.question.trim().slice(0, 300) : '';
+  if (!question) return badRequest(res, 'Bitte eine Frage eingeben.');
+
+  const options = (Array.isArray(b.options) ? b.options : [])
+    .map((o: unknown) => (typeof o === 'string' ? o.trim() : ''))
+    .filter((o: string) => o.length > 0)
+    .slice(0, 12)
+    .map((o: string) => o.slice(0, 150));
+  if (options.length < 2) return badRequest(res, 'Bitte mindestens zwei Optionen angeben.');
+
+  const multiple = b.multiple === true;
+  const anonymous = b.anonymous === true;
+  // Optionaler Verweis (Ticket/Aufgabe/Termin – Termin ist technisch eine task).
+  const refType = b.refType === 'ticket' || b.refType === 'task' ? b.refType : null;
+  const refId = refType ? String(b.refId ?? '').slice(0, 80) : null;
+  const refTitle = refType ? String(b.refTitle ?? '').slice(0, 200) : null;
+  if (refType && !refId) return badRequest(res, 'Anhang ist ungültig.');
+
+  const name = sessionName(session);
+  const msgId = genId('msg');
+  const pollId = genId('poll');
+
+  // Träger-Nachricht: attach_id = pollId, attach_title = Frage (für Vorschauen).
+  await sql`
+    INSERT INTO messages (id, conversation_id, parent_id, author_id, author_name, body, attach_type, attach_id, attach_title)
+    VALUES (${msgId}, ${conversationId}, NULL, ${uid}, ${name}, '', 'poll', ${pollId}, ${question})
+  `;
+  await sql`
+    INSERT INTO polls (id, message_id, question, multiple, anonymous, ref_type, ref_id, ref_title, created_by)
+    VALUES (${pollId}, ${msgId}, ${question}, ${multiple}, ${anonymous}, ${refType}, ${refId}, ${refTitle}, ${uid})
+  `;
+  let pos = 0;
+  for (const text of options) {
+    await sql`INSERT INTO poll_options (id, poll_id, text, position) VALUES (${genId('popt')}, ${pollId}, ${text}, ${pos++})`;
+  }
+  await sql`UPDATE conversations SET updated_at = now() WHERE id = ${conversationId}`;
+
+  // Push an die übrigen Mitglieder (wie WhatsApp – nur Handy-Push, keine Glocke).
+  const convRows = await sql`SELECT kind, title FROM conversations WHERE id = ${conversationId}`;
+  const conv = (convRows[0] as { kind: string; title: string } | undefined) ?? { kind: 'group', title: '' };
+  const convMembers = (await sql`SELECT user_id AS "userId" FROM conversation_members WHERE conversation_id = ${conversationId}`) as { userId: string }[];
+  const pushTitle = conv.kind === 'group' ? conv.title || 'Gruppe' : name;
+  const pushBody = (conv.kind === 'group' ? `${name}: ` : '') + `📊 Umfrage: ${question}`;
+  const chatUrl = `/chat?c=${encodeURIComponent(conversationId)}`;
+  for (const { userId: rid } of convMembers) {
+    if (rid === uid) continue;
+    await sendPushToUser(rid, { title: pushTitle, body: pushBody, url: chatUrl });
+  }
+
+  // Angereicherte Nachricht (inkl. Poll) zurückgeben, damit der Client sie
+  // sofort anzeigen kann.
+  const rows = await sql.query(`SELECT ${MSG_COLS} FROM messages m WHERE m.id = $1`, [msgId]);
+  const [enriched] = await attachPolls(rows as { id: string; attachType?: string | null }[], uid);
+  return res.json({ ...enriched, replyCount: 0, unreadReplies: 0 });
+}
+
+// --- Abstimmen (Stimme setzen/umschalten) -----------------------------------
+// POST /api/chat?resource=vote { pollId, optionId }
+// Einzelwahl: setzt genau diese Option (ersetzt eine frühere). Mehrfachwahl:
+// schaltet die Option um. Antwort = aktueller Poll-Zustand.
+export async function votePoll(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
+  const uid = session.userId;
+  const b = req.body ?? {};
+  const pollId = typeof b.pollId === 'string' ? b.pollId : '';
+  const optionId = typeof b.optionId === 'string' ? b.optionId : '';
+  if (!pollId || !optionId) return badRequest(res, 'Angaben fehlen.');
+
+  const pr = await sql`
+    SELECT p.id, p.multiple, p.message_id AS "messageId", m.conversation_id AS "conversationId"
+    FROM polls p JOIN messages m ON m.id = p.message_id WHERE p.id = ${pollId} LIMIT 1
+  `;
+  const poll = pr[0] as { id: string; multiple: boolean; messageId: string; conversationId: string } | undefined;
+  if (!poll) return res.status(404).json({ error: 'Abstimmung nicht gefunden.' });
+  if (!(await isMember(poll.conversationId, uid))) return res.status(403).json({ error: 'Kein Zugriff auf diese Unterhaltung.' });
+
+  const opt = await sql`SELECT 1 FROM poll_options WHERE id = ${optionId} AND poll_id = ${pollId} LIMIT 1`;
+  if (opt.length === 0) return badRequest(res, 'Option ist ungültig.');
+
+  const name = sessionName(session);
+  const existing = await sql`SELECT 1 FROM poll_votes WHERE option_id = ${optionId} AND user_id = ${uid} LIMIT 1`;
+  if (existing.length) {
+    await sql`DELETE FROM poll_votes WHERE option_id = ${optionId} AND user_id = ${uid}`;
+  } else {
+    if (!poll.multiple) {
+      // Einzelwahl: bisherige Stimme(n) dieses Nutzers in dieser Abstimmung weg.
+      await sql`DELETE FROM poll_votes WHERE user_id = ${uid} AND option_id IN (SELECT id FROM poll_options WHERE poll_id = ${pollId})`;
+    }
+    await sql`
+      INSERT INTO poll_votes (poll_id, option_id, user_id, user_name) VALUES (${pollId}, ${optionId}, ${uid}, ${name})
+      ON CONFLICT (option_id, user_id) DO NOTHING
+    `;
+  }
+  const map = await loadPollsFor([poll.messageId], uid);
+  return res.json(map.get(poll.messageId) ?? null);
 }
 
 // --- Emoji-Reaktion setzen/umschalten ---------------------------------------

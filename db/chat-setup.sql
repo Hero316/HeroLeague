@@ -52,8 +52,45 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_parent ON messages(parent_id);
 
--- Falls die Tabelle aus einer früheren Version schon ohne file/audio existiert:
+-- Falls die Tabelle aus einer früheren Version schon ohne file/audio/poll existiert:
 ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_attach_type_check;
-ALTER TABLE messages ADD CONSTRAINT messages_attach_type_check CHECK (attach_type IN ('ticket','task','file','audio'));
+ALTER TABLE messages ADD CONSTRAINT messages_attach_type_check CHECK (attach_type IN ('ticket','task','file','audio','poll'));
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS attach_url TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS attach_mime TEXT;
+
+-- Abstimmungen (Umfragen wie bei WhatsApp). Eine Nachricht mit
+-- attach_type='poll' (attach_id = poll.id, attach_title = Frage) trägt die
+-- Abstimmung. Optionaler Verweis auf Ticket/Aufgabe/Termin über ref_*.
+CREATE TABLE IF NOT EXISTS polls (
+  id         TEXT PRIMARY KEY,
+  message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  question   TEXT NOT NULL,
+  multiple   BOOLEAN NOT NULL DEFAULT false,  -- mehrere Antworten erlaubt
+  anonymous  BOOLEAN NOT NULL DEFAULT false,  -- Namen der Abstimmenden verbergen
+  ref_type   TEXT,   -- 'ticket' | 'task' (Termin ist technisch eine task) | NULL
+  ref_id     TEXT,
+  ref_title  TEXT,
+  created_by TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_polls_message ON polls(message_id);
+
+CREATE TABLE IF NOT EXISTS poll_options (
+  id       TEXT PRIMARY KEY,
+  poll_id  TEXT NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+  text     TEXT NOT NULL,
+  position INT  NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_poll_options_poll ON poll_options(poll_id);
+
+-- Eine Zeile je (Option, Nutzer). Einzelwahl wird serverseitig erzwungen
+-- (andere Stimmen derselben Abstimmung werden vor dem Setzen entfernt).
+CREATE TABLE IF NOT EXISTS poll_votes (
+  poll_id    TEXT NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+  option_id  TEXT NOT NULL REFERENCES poll_options(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL,
+  user_name  TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (option_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_poll_votes_poll ON poll_votes(poll_id);

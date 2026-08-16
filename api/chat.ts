@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { conversations, messages, markRead, searchMessages, updateConversation, manageMember, presence, reactMessage, threads } from './_lib/chat.js';
+import { conversations, messages, markRead, searchMessages, updateConversation, manageMember, presence, reactMessage, threads, createPoll, votePoll } from './_lib/chat.js';
 import { ensureSchema } from './_lib/ensure.js';
 
 // Interner Chat (Phase 3). Eigener Endpunkt (Vercel Pro).
@@ -13,6 +13,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await ensureSchema();
     const resource = req.query.resource;
     if (resource === 'messages') return messages(req, res);
+    if (resource === 'poll') return createPoll(req, res);
+    if (resource === 'vote') return votePoll(req, res);
     if (resource === 'react') return reactMessage(req, res);
     if (resource === 'threads') return threads(req, res);
     if (resource === 'read') return markRead(req, res);
