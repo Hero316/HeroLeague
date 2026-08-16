@@ -398,11 +398,13 @@ function AttachPicker({
 function PollCard({
   poll,
   mine,
+  members,
   onVoted,
   onOpenRef,
 }: {
   poll: Poll;
   mine: boolean;
+  members?: Map<string, TeamMember>;
   onVoted: (p: Poll) => void;
   onOpenRef?: (type: 'ticket' | 'task', id: string) => void;
 }) {
@@ -467,7 +469,7 @@ function PollCard({
                   <span className="flex -space-x-1.5 shrink-0">
                     {o.voters.slice(0, 3).map((v) => (
                       <span key={v.userId} className="rounded-full ring-1 ring-black/10">
-                        <Avatar name={v.userName} size={18} />
+                        <Avatar name={v.userName} url={members?.get(v.userId)?.avatarUrl} size={18} />
                       </span>
                     ))}
                   </span>
@@ -501,13 +503,13 @@ function PollCard({
         </button>
       </div>
 
-      {showVotes && <PollVotesModal poll={poll} onClose={() => setShowVotes(false)} />}
+      {showVotes && <PollVotesModal poll={poll} members={members} onClose={() => setShowVotes(false)} />}
     </div>
   );
 }
 
 // Wer hat wofür gestimmt? (Bei anonymer Abstimmung nur die Anzahl.)
-function PollVotesModal({ poll, onClose }: { poll: Poll; onClose: () => void }) {
+function PollVotesModal({ poll, members, onClose }: { poll: Poll; members?: Map<string, TeamMember>; onClose: () => void }) {
   const backdrop = useBackdropDismiss(onClose);
   useBackClose(true, onClose);
   return (
@@ -551,7 +553,7 @@ function PollVotesModal({ poll, onClose }: { poll: Poll; onClose: () => void }) 
                   <div className="space-y-1.5">
                     {o.voters.map((v) => (
                       <div key={v.userId} className="flex items-center gap-2">
-                        <Avatar name={v.userName} size={22} />
+                        <Avatar name={v.userName} url={members?.get(v.userId)?.avatarUrl} size={22} />
                         <span className="text-sm text-hl-soft truncate">{v.userName}</span>
                       </div>
                     ))}
@@ -1177,6 +1179,7 @@ function MessageRow({
   colorSeed,
   displayName,
   avatarUrl,
+  members,
   highlight = false,
   currentUserId,
   onOpenThread,
@@ -1190,6 +1193,7 @@ function MessageRow({
   colorSeed: string;
   displayName?: string;
   avatarUrl?: string;
+  members?: Map<string, TeamMember>;
   highlight?: boolean;
   currentUserId?: string;
   onOpenThread?: (m: ChatMessage) => void;
@@ -1281,6 +1285,7 @@ function MessageRow({
                 <PollCard
                   poll={m.poll}
                   mine={mine}
+                  members={members}
                   onVoted={(p) => onChanged?.({ ...m, poll: p })}
                   onOpenRef={onOpenAttachment}
                 />
@@ -2586,6 +2591,7 @@ export default function ChatSystem({
                         colorSeed={active.id}
                         displayName={mem?.name}
                         avatarUrl={mem?.avatarUrl}
+                        members={members}
                         highlight={highlightId === m.id}
                         currentUserId={currentUserId}
                         onOpenThread={setThread}
