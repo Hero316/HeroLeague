@@ -29,6 +29,8 @@ import {
   Circle,
   CheckSquare,
   Square,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import type { Conversation, ChatMessage, TeamMember, Ticket, Task, UserStatus, Poll } from '../types';
 import { USER_STATUS } from '../types';
@@ -256,6 +258,8 @@ function AttachPicker({
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  // Standard: nur Aktuelles. Auf Wunsch (Taste) auch Erledigte/Abgelaufene.
+  const [showDone, setShowDone] = useState(false);
 
   useEffect(() => {
     Promise.all([fetchTickets().catch(() => []), fetchAllTasks().catch(() => [])])
@@ -280,23 +284,47 @@ function AttachPicker({
   })();
   const TICKET_DONE = new Set(['erledigt', 'abgelehnt']);
   const TASK_DONE = new Set(['erledigt', 'abgebrochen']);
+  const isTaskExpired = (t: Task) => {
+    if (kind !== 'termin') return false;
+    const end = t.endDate || t.dueDate;
+    return !!end && end < todayStr;
+  };
 
-  const activeTickets = tickets.filter((t) => !TICKET_DONE.has(t.status));
+  // Tickets als Zeilen mit „inaktiv"-Markierung + Kurz-Label.
+  const ticketRows = tickets
+    .map((t) => ({
+      t,
+      inactive: TICKET_DONE.has(t.status),
+      badge: t.status === 'abgelehnt' ? 'Abgelehnt' : t.status === 'erledigt' ? 'Erledigt' : '',
+    }))
+    .filter((r) => showDone || !r.inactive)
+    .sort((a, b) => Number(a.inactive) - Number(b.inactive)); // Aktive zuerst
 
   // Termine (termin|beides) vs. Aufgaben (aufgabe|beides); fehlender Typ = Termin.
-  const filteredTasks = (kind === 'task'
-    ? tasks.filter((t) => (t.type ?? 'termin') !== 'termin')
-    : tasks.filter((t) => (t.type ?? 'termin') !== 'aufgabe')
-  ).filter((t) => {
-    if (TASK_DONE.has(t.status)) return false;
-    // Termine zusätzlich: abgelaufene ausblenden (End- bzw. Starttag vor heute).
-    if (kind === 'termin') {
-      const end = t.endDate || t.dueDate;
-      if (end && end < todayStr) return false;
-    }
-    return true;
-  });
+  const baseTasks =
+    kind === 'task'
+      ? tasks.filter((t) => (t.type ?? 'termin') !== 'termin')
+      : tasks.filter((t) => (t.type ?? 'termin') !== 'aufgabe');
+  const taskRows = baseTasks
+    .map((t) => {
+      const expired = isTaskExpired(t);
+      const inactive = TASK_DONE.has(t.status) || expired;
+      const badge =
+        t.status === 'erledigt' ? 'Erledigt' : t.status === 'abgebrochen' ? 'Abgebrochen' : expired ? 'Abgelaufen' : '';
+      return { t, inactive, badge };
+    })
+    .filter((r) => showDone || !r.inactive)
+    .sort((a, b) => Number(a.inactive) - Number(b.inactive));
+
+  const rows = kind === 'ticket' ? ticketRows : taskRows;
+  // Gibt es überhaupt versteckte (inaktive) Einträge? Nur dann die Taste zeigen.
+  const hasHidden =
+    kind === 'ticket'
+      ? tickets.some((t) => TICKET_DONE.has(t.status))
+      : baseTasks.some((t) => TASK_DONE.has(t.status) || isTaskExpired(t));
+  const toggleWord = kind === 'termin' ? 'Abgelaufene' : 'Erledigte';
   const ItemIcon = kind === 'ticket' ? TicketIcon : kind === 'task' ? ListChecks : CalendarDays;
+  const pickType: 'ticket' | 'task' = kind === 'ticket' ? 'ticket' : 'task';
 
   return (
     <ModalPortal>
@@ -319,37 +347,39 @@ function AttachPicker({
             <X className="w-5 h-5" />
           </button>
         </div>
+        {/* Taste: Erledigte/Abgelaufene ein-/ausblenden (nur wenn es welche gibt). */}
+        {!loading && (hasHidden || showDone) && (
+          <button
+            onClick={() => setShowDone((v) => !v)}
+            className="mb-2.5 inline-flex items-center gap-1.5 self-start px-2.5 py-1.5 rounded-lg hl-surf-soft border border-white/10 hover:border-white/25 text-[12px] text-hl-soft cursor-pointer"
+          >
+            {showDone ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            {showDone ? `${toggleWord} ausblenden` : `${toggleWord} anzeigen`}
+          </button>
+        )}
         <div className="overflow-y-auto flex-1 space-y-1.5">
           {loading ? (
             <div className="flex justify-center py-8 text-hl-mute">
               <Loader2 className="w-5 h-5 animate-spin" />
             </div>
-          ) : kind === 'ticket' ? (
-            activeTickets.length === 0 ? (
-              <p className="text-center text-sm text-hl-mute py-6">{emptyText}</p>
-            ) : (
-              activeTickets.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => onPick({ type: 'ticket', id: t.id, title: t.title })}
-                  className="w-full text-left px-3 py-2 rounded-lg hl-surf-soft border border-white/5 hover:border-white/20 text-sm text-hl-soft cursor-pointer flex items-center gap-2"
-                >
-                  <ItemIcon className="w-4 h-4 text-brand-accent-light shrink-0" />
-                  <span className="truncate">{t.title}</span>
-                </button>
-              ))
-            )
-          ) : filteredTasks.length === 0 ? (
+          ) : rows.length === 0 ? (
             <p className="text-center text-sm text-hl-mute py-6">{emptyText}</p>
           ) : (
-            filteredTasks.map((t) => (
+            rows.map(({ t, inactive, badge }) => (
               <button
                 key={t.id}
-                onClick={() => onPick({ type: 'task', id: t.id, title: t.title })}
-                className="w-full text-left px-3 py-2 rounded-lg hl-surf-soft border border-white/5 hover:border-white/20 text-sm text-hl-soft cursor-pointer flex items-center gap-2"
+                onClick={() => onPick({ type: pickType, id: t.id, title: t.title })}
+                className={`w-full text-left px-3 py-2 rounded-lg hl-surf-soft border border-white/5 hover:border-white/20 text-sm cursor-pointer flex items-center gap-2 ${
+                  inactive ? 'text-hl-mute opacity-70' : 'text-hl-soft'
+                }`}
               >
-                <ItemIcon className="w-4 h-4 text-brand-accent-light shrink-0" />
-                <span className="truncate">{t.title}</span>
+                <ItemIcon className={`w-4 h-4 shrink-0 ${inactive ? 'text-hl-faint' : 'text-brand-accent-light'}`} />
+                <span className={`truncate flex-1 min-w-0 ${inactive ? 'line-through' : ''}`}>{t.title}</span>
+                {badge && (
+                  <span className="shrink-0 px-1.5 py-0.5 rounded-md text-[10px] font-sans font-semibold bg-white/10 text-hl-mute">
+                    {badge}
+                  </span>
+                )}
               </button>
             ))
           )}
