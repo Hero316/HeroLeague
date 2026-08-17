@@ -46,6 +46,11 @@ export function fetchPublicStats(seasonId?: string): Promise<{ rows: MatchPlayer
   return apiFetch(`/api/stats?resource=public${q}`);
 }
 
+// Verbindungstest zum Google Sheet (schreibt nichts).
+export function testSheet(): Promise<{ ok: boolean; title: string; sheets: string[] }> {
+  return apiFetch('/api/stats?resource=sheet-test', { method: 'POST', body: '{}' });
+}
+
 // Eine Spieler-Zeile (Zähler) speichern.
 export function saveTally(row: MatchPlayerStat): Promise<{ ok: boolean }> {
   return apiFetch('/api/stats?resource=tally', { method: 'POST', body: JSON.stringify(row) });

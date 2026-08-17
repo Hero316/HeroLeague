@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql } from './_lib/db.js';
 import { requireStaff, getSession } from './_lib/auth.js';
 import { badRequest, isNonEmptyString } from './_lib/validate.js';
+import { sheetInfo } from './_lib/gsheets.js';
 
 // ===========================================================================
 // Statistics Center — Roh-Zähler je Spieler & Spiel + Score-Einstellungen.
@@ -112,6 +113,16 @@ const saveTally = requireStaff(async (req: VercelRequest, res: VercelResponse) =
   return res.json({ ok: true });
 });
 
+// Verbindungstest zum Google Sheet (schreibt nichts – liest nur Titel/Blätter).
+const testSheet = requireStaff(async (_req: VercelRequest, res: VercelResponse) => {
+  try {
+    const info = await sheetInfo();
+    return res.json({ ok: true, ...info });
+  } catch (err) {
+    return res.status(400).json({ error: err instanceof Error ? err.message : 'Unbekannter Fehler' });
+  }
+});
+
 const savePublish = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
   const b = (req.body ?? {}) as { dayKey?: unknown; live?: unknown };
   if (!isNonEmptyString(b.dayKey)) return badRequest(res, 'dayKey ist Pflicht.');
@@ -188,6 +199,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'scoring') return saveScoring(req, res);
       if (resource === 'tally') return saveTally(req, res);
       if (resource === 'publish') return savePublish(req, res);
+      if (resource === 'sheet-test') return testSheet(req, res);
       return badRequest(res, 'Unbekannte Ressource.');
     }
 

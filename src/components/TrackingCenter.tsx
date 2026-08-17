@@ -37,6 +37,7 @@ import {
   publishDay,
   leagueDayKey,
   eventDayKey,
+  testSheet,
 } from '../lib/stats';
 
 // ===========================================================================
@@ -375,6 +376,19 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
     }
   }, []);
 
+  const [sheetTesting, setSheetTesting] = useState(false);
+  const runSheetTest = useCallback(async () => {
+    setSheetTesting(true);
+    try {
+      const info = await testSheet();
+      window.alert(`✅ Verbunden mit „${info.title}".\n\nBlätter: ${info.sheets.join(', ')}`);
+    } catch (e) {
+      window.alert('❌ ' + (e instanceof Error ? e.message : 'Verbindung fehlgeschlagen'));
+    } finally {
+      setSheetTesting(false);
+    }
+  }, []);
+
   const light = theme === 'light';
   const headerSub = selectedEvent
     ? selectedEvent.title || 'Testspiel'
@@ -416,6 +430,14 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
               </div>
             </div>
             <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={runSheetTest}
+                disabled={sheetTesting}
+                title="Excel-Verbindung testen (schreibt nichts)"
+                className="h-9 px-3 grid place-items-center rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {sheetTesting ? '…' : 'Excel testen'}
+              </button>
               {saveState !== 'idle' && (
                 <span className="text-[10px] uppercase tracking-wider text-hl-dim flex items-center gap-1">
                   {saveState === 'saving' ? (
