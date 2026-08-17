@@ -95,49 +95,49 @@ function num(v: unknown, fallback: number): number {
 
 // --- Aktions-Metadaten (für das Erfassungs-Raster und die Einstellungen) -----
 
-export type ActionGroup =
-  | 'Passspiel'
-  | 'Abschluss'
-  | 'Angriff'
-  | 'Dribbling'
-  | 'Defensive'
-  | 'Ballbesitz'
-  | 'Torwart'
-  | 'Sonderwert';
+export type ActionGroup = 'Pass' | 'Schuss' | 'Dribbling' | 'Defensive' | 'Sonstiges' | 'Torwart';
+export type ActionTone = 'positive' | 'negative' | 'special' | 'neutral' | 'goal';
 
 export interface ActionMeta {
   key: ActionKey;
   label: string; // volle Bezeichnung
-  short: string; // Kürzel für die Rasterspalte
+  short: string; // Kürzel
+  icon: string; // Symbol auf der Taste
   group: ActionGroup;
-  sign: 1 | 0 | -1; // positiv / neutral / negativ (für die Einfärbung)
-  keeperOnly?: boolean; // nur für Torwart-Zeilen relevant
+  tone: ActionTone; // Farbwelt der Taste
+  sign: 1 | 0 | -1; // positiv / neutral / negativ
+  keeperOnly?: boolean; // nur für Torwart relevant
 }
 
-// Reihenfolge = Reihenfolge im Tracking-Raster (wie im Excel-Blatt).
+// Reihenfolge & Gruppen wie im HERO Match Tracker.
 export const ACTION_META: ActionMeta[] = [
-  { key: 'pass_ok', label: 'Pass erfolgreich', short: 'Pass ✓', group: 'Passspiel', sign: 1 },
-  { key: 'pass_fail', label: 'Fehlpass', short: 'Pass ✕', group: 'Passspiel', sign: -1 },
-  { key: 'key_pass', label: 'Schlüsselpass', short: 'Schl.', group: 'Passspiel', sign: 1 },
-  { key: 'assist', label: 'Vorlage', short: 'Vorl.', group: 'Angriff', sign: 1 },
-  { key: 'shot_on', label: 'Torschuss gehalten', short: 'TS', group: 'Abschluss', sign: 1 },
-  { key: 'shot_miss', label: 'Fehlschuss', short: 'Fehl.', group: 'Abschluss', sign: -1 },
-  { key: 'shot_blocked_off', label: 'Schuss geblockt (Ang.)', short: 'Block A', group: 'Abschluss', sign: -1 },
-  { key: 'goal', label: 'Tor', short: 'Tor', group: 'Angriff', sign: 1 },
-  { key: 'dribble_won', label: 'Dribbling gewonnen', short: 'Drib ✓', group: 'Dribbling', sign: 1 },
-  { key: 'dribble_lost', label: 'Dribbling verloren', short: 'Drib ✕', group: 'Dribbling', sign: -1 },
-  { key: 'duel_won', label: 'Zweikampf gewonnen', short: 'ZK ✓', group: 'Defensive', sign: 1 },
-  { key: 'duel_lost', label: 'Zweikampf verloren', short: 'ZK ✕', group: 'Defensive', sign: -1 },
-  { key: 'interception', label: 'Interception', short: 'Abg.', group: 'Defensive', sign: 1 },
-  { key: 'shot_blocked_def', label: 'Schuss geblockt (Abw.)', short: 'Block D', group: 'Defensive', sign: 1 },
-  { key: 'turnover', label: 'Ballverlust', short: 'Ballv.', group: 'Ballbesitz', sign: -1 },
-  { key: 'save', label: 'Parade', short: 'Parade', group: 'Torwart', sign: 1, keeperOnly: true },
-  { key: 'gk_goal_against', label: 'Gegentor', short: 'Gegent.', group: 'Torwart', sign: -1, keeperOnly: true },
-  { key: 'gk_position_save', label: 'Standparade', short: 'Standp.', group: 'Torwart', sign: 1, keeperOnly: true },
-  { key: 'penalty_save', label: 'Gehaltener Strafstoß', short: 'Elfm. ✓', group: 'Torwart', sign: 1, keeperOnly: true },
-  { key: 'penalty_goal', label: 'Strafstoßtor', short: 'Elfm.', group: 'Sonderwert', sign: 0 },
-  { key: 'own_goal', label: 'Eigentor', short: 'ET', group: 'Sonderwert', sign: -1 },
+  { key: 'pass_ok', label: 'Pass erfolgreich', short: 'Pass ✓', icon: '✓', group: 'Pass', tone: 'positive', sign: 1 },
+  { key: 'pass_fail', label: 'Fehlpass', short: 'Fehlpass', icon: '✕', group: 'Pass', tone: 'negative', sign: -1 },
+  { key: 'key_pass', label: 'Schlüsselpass', short: 'Schl.', icon: '🔑', group: 'Pass', tone: 'special', sign: 1 },
+  { key: 'assist', label: 'Assist', short: 'Vorlage', icon: '🅰', group: 'Pass', tone: 'special', sign: 1 },
+  { key: 'shot_on', label: 'Torschuss', short: 'TS', icon: '🎯', group: 'Schuss', tone: 'positive', sign: 1 },
+  { key: 'shot_miss', label: 'Fehlschuss', short: 'Fehl.', icon: '↗', group: 'Schuss', tone: 'negative', sign: -1 },
+  { key: 'shot_blocked_off', label: 'Schuss geblockt', short: 'Block', icon: '🧱', group: 'Schuss', tone: 'neutral', sign: -1 },
+  { key: 'goal', label: 'Tor', short: 'Tor', icon: '⚽', group: 'Schuss', tone: 'goal', sign: 1 },
+  { key: 'dribble_won', label: 'Dribbling +', short: 'Drib ✓', icon: '✦', group: 'Dribbling', tone: 'positive', sign: 1 },
+  { key: 'dribble_lost', label: 'Dribbling −', short: 'Drib ✕', icon: '✕', group: 'Dribbling', tone: 'negative', sign: -1 },
+  { key: 'duel_won', label: 'Zweikampf +', short: 'ZK ✓', icon: '🛡', group: 'Defensive', tone: 'positive', sign: 1 },
+  { key: 'duel_lost', label: 'Zweikampf −', short: 'ZK ✕', icon: '⚔', group: 'Defensive', tone: 'negative', sign: -1 },
+  { key: 'interception', label: 'Interception', short: 'Abg.', icon: '✂', group: 'Defensive', tone: 'positive', sign: 1 },
+  { key: 'shot_blocked_def', label: 'Schuss geblockt', short: 'Block D', icon: '▣', group: 'Defensive', tone: 'positive', sign: 1 },
+  { key: 'turnover', label: 'Ballverlust', short: 'Ballv.', icon: '⚠', group: 'Sonstiges', tone: 'negative', sign: -1 },
+  { key: 'own_goal', label: 'Eigentor', short: 'ET', icon: '🙈', group: 'Sonstiges', tone: 'negative', sign: -1 },
+  { key: 'penalty_goal', label: 'Strafstoßtor', short: 'Elfm.', icon: 'P', group: 'Sonstiges', tone: 'special', sign: 0 },
+  { key: 'save', label: 'Parade', short: 'Parade', icon: '🧤', group: 'Torwart', tone: 'positive', sign: 1, keeperOnly: true },
+  { key: 'gk_goal_against', label: 'Gegentor', short: 'Gegent.', icon: '🥅', group: 'Torwart', tone: 'negative', sign: -1, keeperOnly: true },
+  { key: 'gk_position_save', label: 'Standparade', short: 'Standp.', icon: '🧍', group: 'Torwart', tone: 'positive', sign: 1, keeperOnly: true },
+  { key: 'penalty_save', label: 'Gehaltener Elfm.', short: 'Elfm. ✓', icon: '✋', group: 'Torwart', tone: 'special', sign: 1, keeperOnly: true },
 ];
 
 // Alle Aktions-Schlüssel in der Metadaten-Reihenfolge.
 export const ACTION_KEYS: ActionKey[] = ACTION_META.map((a) => a.key);
+
+// Sichtbare Gruppen je Rolle (wie im HERO Match Tracker).
+export const FIELD_GROUPS: ActionGroup[] = ['Pass', 'Schuss', 'Dribbling', 'Defensive', 'Sonstiges'];
+export const KEEPER_GROUPS: ActionGroup[] = ['Pass', 'Torwart'];
+export const KEEPER_PASS_KEYS: ActionKey[] = ['pass_ok', 'pass_fail'];

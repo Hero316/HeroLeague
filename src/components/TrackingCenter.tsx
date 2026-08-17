@@ -4,8 +4,6 @@ import {
   Sun,
   Moon,
   SlidersHorizontal,
-  Plus,
-  Minus,
   Radio,
   ChevronRight,
   Check,
@@ -29,7 +27,16 @@ import type {
   StatRole,
   Team,
 } from '../types';
-import { ACTION_META, DEFAULT_SCORING } from '../lib/scoring';
+import {
+  ACTION_META,
+  DEFAULT_SCORING,
+  FIELD_GROUPS,
+  KEEPER_GROUPS,
+  KEEPER_PASS_KEYS,
+  type ActionGroup,
+  type ActionMeta,
+  type ActionTone,
+} from '../lib/scoring';
 import { emptyCounts, matchNote, normalizeCounts, rohscore } from '../lib/rating';
 import { useBackClose, goBackLayer } from '../lib/backStack';
 import {
@@ -885,107 +892,176 @@ function MatchEditor({
         </button>
       </div>
 
-      {[match.homeTeamId, match.awayTeamId].map((teamId) => (
-        <div key={teamId} className="mb-6">
-          <div className="flex items-center gap-2 mb-2">
-            <TeamBadge team={resolveTeam(teamId)} />
-            <span className="font-display font-black uppercase tracking-tight">{resolveTeam(teamId)?.name ?? teamId}</span>
-          </div>
-          <div className="hl-card overflow-hidden p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-sm">
-                <thead>
-                  <tr>
-                    <th className="sticky left-0 z-10 hl-th-name text-left px-3 py-2 text-[10px] uppercase tracking-wider text-hl-dim font-semibold">Spieler</th>
-                    <th className="hl-th px-2 py-2 text-[10px] uppercase tracking-wider text-hl-dim font-semibold text-center">Note</th>
-                    {ACTION_META.map((a) => (
-                      <th key={a.key} className="hl-th px-1 py-2 text-[10px] uppercase tracking-wider font-semibold text-center whitespace-nowrap" title={a.label}>
-                        <span className={a.sign === 1 ? 'text-hl-green' : a.sign === -1 ? 'text-hl-red' : 'text-hl-dim'}>{a.short}</span>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {teamRows(teamId).map(({ k, r }) => {
-                    const note = matchNote(r.counts, cfg, r.role);
-                    const score = rohscore(r.counts, cfg, r.role);
-                    return (
-                      <tr key={k} className="border-t border-white/[.06]">
-                        <td className="sticky left-0 z-10 hl-td-name px-3 py-1.5">
-                          <div className="font-semibold whitespace-nowrap flex items-center gap-2">
-                            {r.playerName}
-                            <button
-                              onClick={() => onRole(k, match.id, r.role === 'keeper' ? 'field' : 'keeper')}
-                              title="Rolle wechseln (Feld/Torwart)"
-                              className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider cursor-pointer border ${
-                                r.role === 'keeper' ? 'bg-hl-gold/15 border-hl-gold/40 text-hl-gold' : 'bg-white/5 border-white/10 text-hl-faint'
-                              }`}
-                            >
-                              {r.role === 'keeper' ? 'TW' : 'Feld'}
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-2 py-1.5 text-center">
-                          <span className="font-display font-black tabular-nums text-[15px]" style={{ color: noteColor(note, cfg) }} title={`Rohscore ${score}`}>
-                            {note.toFixed(1)}
-                          </span>
-                        </td>
-                        {ACTION_META.map((a) => (
-                          <td key={a.key} className="px-1 py-1 text-center">
-                            <Stepper value={r.counts[a.key] || 0} sign={a.sign} dim={a.keeperOnly && r.role !== 'keeper'} onDelta={(d) => onDelta(k, match.id, a.key, d)} />
-                          </td>
-                        ))}
-                      </tr>
-                    );
-                  })}
-                  {teamRows(teamId).length === 0 && (
-                    <tr>
-                      <td colSpan={ACTION_META.length + 2} className="px-3 py-4 text-center text-hl-mute text-xs">
-                        Kein Kader hinterlegt. Für Testspiele muss der Team-Name mit einem Verein übereinstimmen (Kader kommt von dort).
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+      {[match.homeTeamId, match.awayTeamId].map((teamId) => {
+        const list = teamRows(teamId);
+        return (
+          <div key={teamId} className="mb-6">
+            <div className="flex items-center gap-2 mb-2">
+              <TeamBadge team={resolveTeam(teamId)} />
+              <span className="font-display font-black uppercase tracking-tight">{resolveTeam(teamId)?.name ?? teamId}</span>
             </div>
+            {list.length === 0 ? (
+              <div className="hl-card p-4 text-center text-hl-mute text-xs">
+                Kein Kader hinterlegt. Bei Testspielen muss der Team-Name mit einem Verein übereinstimmen.
+              </div>
+            ) : (
+              <div className="grid gap-2 hl-cascade-soft">
+                {list.map(({ k, r }, i) => (
+                  <PlayerCard
+                    key={k}
+                    slot={i + 1}
+                    row={r}
+                    cfg={cfg}
+                    onDelta={(action, delta) => onDelta(k, match.id, action, delta)}
+                    onToggleRole={() => onRole(k, match.id, r.role === 'keeper' ? 'field' : 'keeper')}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
       <p className="text-[11px] text-hl-dim mt-1">
-        Tipp: Zelle anklicken und mit <b>▲ / ▼</b> (oder + / −) zählen. „Tor" zählt automatisch als Torschuss.
+        <b>Linksklick +1 · Rechtsklick −1</b> · am Handy lang drücken = −1 · „Tor" zählt automatisch als Torschuss.
       </p>
     </div>
   );
 }
 
-function Stepper({ value, sign, dim, onDelta }: { value: number; sign: 1 | 0 | -1; dim?: boolean; onDelta: (delta: number) => void }) {
-  const active = value > 0;
-  const tint = active && sign === 1 ? 'text-hl-green' : active && sign === -1 ? 'text-hl-red' : dim ? 'text-hl-faint' : 'text-hl-text';
+// Eine Spieler-Karte: Identität (Slot, Name, Live-Note, Rolle) + Gruppen mit
+// farbigen Aktions-Pillen (wie im HERO Match Tracker).
+function PlayerCard({
+  slot,
+  row,
+  cfg,
+  onDelta,
+  onToggleRole,
+}: {
+  slot: number;
+  row: EditRow;
+  cfg: ScoringConfig;
+  onDelta: (action: keyof ActionCounts, delta: number) => void;
+  onToggleRole: () => void;
+}) {
+  const isKeeper = row.role === 'keeper';
+  const note = matchNote(row.counts, cfg, row.role);
+  const score = rohscore(row.counts, cfg, row.role);
+  const groups = isKeeper ? KEEPER_GROUPS : FIELD_GROUPS;
+  const actionsOf = (g: ActionGroup) =>
+    ACTION_META.filter((a) => a.group === g && (!isKeeper || g !== 'Pass' || KEEPER_PASS_KEYS.includes(a.key)));
+
   return (
-    <div
-      tabIndex={0}
-      role="spinbutton"
-      aria-valuenow={value}
-      onKeyDown={(e) => {
-        if (e.key === 'ArrowUp' || e.key === '+') {
-          e.preventDefault();
-          onDelta(1);
-        } else if (e.key === 'ArrowDown' || e.key === '-') {
-          e.preventDefault();
-          onDelta(-1);
-        }
-      }}
-      className={`inline-flex items-center gap-0.5 rounded-lg outline-none focus:ring-2 focus:ring-brand-accent/60 ${dim ? 'opacity-45' : ''}`}
-    >
-      <button onClick={() => onDelta(-1)} tabIndex={-1} className="w-4 h-5 grid place-items-center rounded text-hl-faint hover:text-hl-red hover:bg-white/5 cursor-pointer">
-        <Minus className="w-3 h-3" />
-      </button>
-      <span className={`w-6 text-center font-bold tabular-nums text-[13px] ${tint}`}>{value}</span>
-      <button onClick={() => onDelta(1)} tabIndex={-1} className="w-4 h-5 grid place-items-center rounded text-hl-faint hover:text-hl-green hover:bg-white/5 cursor-pointer">
-        <Plus className="w-3 h-3" />
-      </button>
+    <div className="hl-card p-2.5 flex flex-col lg:flex-row gap-2.5">
+      {/* Identität */}
+      <div className="lg:w-52 shrink-0 flex items-center gap-2.5 px-1">
+        <div className="w-8 h-8 rounded-full bg-brand-accent/12 border border-brand-accent/25 grid place-items-center text-brand-accent-light font-black text-sm shrink-0">
+          {slot}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-display font-black text-[15px] truncate leading-tight">{row.playerName}</div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span
+              className="font-display font-black tabular-nums text-[17px] leading-none"
+              style={{ color: noteColor(note, cfg) }}
+              title={`Rohscore ${score}`}
+            >
+              {note.toFixed(1)}
+            </span>
+            <button
+              onClick={onToggleRole}
+              title="Rolle wechseln (Feld/Torwart)"
+              className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider cursor-pointer border ${
+                isKeeper ? 'bg-hl-gold/15 border-hl-gold/40 text-hl-gold' : 'bg-white/5 border-white/10 text-hl-faint'
+              }`}
+            >
+              {isKeeper ? 'Torwart' : 'Feld'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Aktions-Gruppen */}
+      <div className="flex-1 min-w-0 flex flex-wrap gap-2.5">
+        {groups.map((g) => {
+          const acts = actionsOf(g);
+          if (!acts.length) return null;
+          return (
+            <div key={g} className="min-w-[138px] flex-1">
+              <div className="text-[9px] font-black uppercase tracking-[.14em] text-hl-dim mb-1 pl-0.5">{g}</div>
+              <div className="grid grid-cols-2 gap-1">
+                {acts.map((a) => (
+                  <ActionPill key={a.key} meta={a} value={row.counts[a.key] || 0} onDelta={(d) => onDelta(a.key, d)} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
+}
+
+// Eine große farbige Aktions-Taste: Linksklick +1, Rechtsklick −1, am Handy
+// lang drücken = −1.
+function ActionPill({ meta, value, onDelta }: { meta: ActionMeta; value: number; onDelta: (delta: number) => void }) {
+  const longPressed = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startTouch = () => {
+    longPressed.current = false;
+    timer.current = setTimeout(() => {
+      longPressed.current = true;
+      onDelta(-1);
+      if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(12);
+    }, 380);
+  };
+  const endTouch = () => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (longPressed.current) {
+          longPressed.current = false;
+          return;
+        }
+        onDelta(1);
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onDelta(-1);
+      }}
+      onTouchStart={startTouch}
+      onTouchEnd={endTouch}
+      onTouchMove={endTouch}
+      title={`${meta.label} · Linksklick +1 · Rechtsklick −1`}
+      className={`h-11 rounded-lg border px-2 grid grid-cols-[18px_1fr_auto] items-center gap-1 text-left select-none active:scale-95 transition outline-none focus:ring-2 focus:ring-brand-accent/50 ${toneClass(
+        meta.tone
+      )}`}
+    >
+      <span className="text-[15px] leading-none text-center">{meta.icon}</span>
+      <span className="text-[9px] font-bold leading-[1.05] uppercase tracking-wide overflow-hidden">{meta.label}</span>
+      <span className="font-display font-black tabular-nums text-[15px]">{value}</span>
+    </button>
+  );
+}
+
+function toneClass(tone: ActionTone): string {
+  switch (tone) {
+    case 'positive':
+      return 'bg-hl-green/12 border-hl-green/35 text-hl-green';
+    case 'negative':
+      return 'bg-hl-red/12 border-hl-red/35 text-hl-red';
+    case 'special':
+      return 'bg-hl-gold/12 border-hl-gold/35 text-hl-gold';
+    case 'goal':
+      return 'bg-lime-500/15 border-lime-500/55 text-lime-500';
+    default:
+      return 'bg-white/[.05] border-white/12 text-hl-soft';
+  }
 }
 
 function TeamBadge({ team }: { team?: Team }) {
