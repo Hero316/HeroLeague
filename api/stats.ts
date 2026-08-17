@@ -188,6 +188,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Website (Spieler-Karten, Spielbericht). Optional auf eine Saison gefiltert.
       if (resource === 'public') {
         const season = typeof req.query.season === 'string' ? req.query.season : '';
+        // Demo-Saison darf auch Entwürfe zeigen (all=1) – zum Testen ohne „Live schalten".
+        if (req.query.all === '1' && season) {
+          const demo = await readDemo();
+          if (demo?.active && season === demo.seasonId) {
+            const rows = (await sql`
+              SELECT day_key AS "dayKey", match_id AS "matchId", team_id AS "teamId",
+                     player_name AS "playerName", role, counts
+              FROM match_player_stats WHERE day_key LIKE ${'s:' + season + ':%'}`) as StatRow[];
+            return res.json({ rows, days: [] });
+          }
+        }
         const live = await readLiveDays();
         const days = season ? live.filter((d) => d.startsWith(`s:${season}:`)) : live;
         if (days.length === 0) return res.json({ rows: [], days: [] });

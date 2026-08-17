@@ -41,8 +41,15 @@ export function fetchMatchStats(matchId: string): Promise<{ rows: MatchPlayerSta
 }
 
 // ÖFFENTLICH: nur veröffentlichte Spieltage (für Spieler-Karten & Spielbericht).
-export function fetchPublicStats(seasonId?: string): Promise<{ rows: MatchPlayerStat[]; days: string[] }> {
-  const q = seasonId ? `&season=${encodeURIComponent(seasonId)}` : '';
+// includeAll=true zeigt auch Entwürfe – serverseitig NUR für die Demo-Saison erlaubt.
+export function fetchPublicStats(
+  seasonId?: string,
+  includeAll?: boolean
+): Promise<{ rows: MatchPlayerStat[]; days: string[] }> {
+  const params: string[] = [];
+  if (seasonId) params.push(`season=${encodeURIComponent(seasonId)}`);
+  if (includeAll) params.push('all=1');
+  const q = params.length ? `&${params.join('&')}` : '';
   return apiFetch(`/api/stats?resource=public${q}`);
 }
 

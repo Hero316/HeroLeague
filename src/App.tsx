@@ -460,12 +460,16 @@ export default function App() {
       setTrackingRows([]);
       return;
     }
-    fetchPublicStats(sid)
+    // Im Demo-Modus auch Entwürfe zeigen (ohne „Live schalten") – nur Demo-Saison.
+    fetchPublicStats(sid, demo.active)
       .then((r) => setTrackingRows(r.rows))
       .catch(() => {
         /* keine Daten – Karten bleiben verborgen */
       });
-  }, [currentSeason?.id]);
+  }, [currentSeason?.id, demo.active]);
+
+  // Spiele, für die es getrackte Werte gibt (→ Spielbericht anklickbar).
+  const reportMatchIds = useMemo(() => new Set(trackingRows.map((r) => r.matchId)), [trackingRows]);
 
   // Aufstellungen laden, sobald jemand angemeldet ist (für den Schiedsrichtermodus).
   useEffect(() => {
@@ -1427,6 +1431,8 @@ export default function App() {
               onUpdateMatchScore={handleUpdateMatchScore}
               onUpdateMatchMeta={handleUpdateMatchMeta}
               onSelectTeam={openTeamDetail}
+              onOpenReport={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
+              reportMatchIds={reportMatchIds}
               initialMatchday={spielplanMatchday}
               onInitialMatchdayConsumed={() => setSpielplanMatchday(null)}
             />

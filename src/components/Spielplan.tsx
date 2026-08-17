@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Play, Check, RotateCcw, Plus, Minus, Pencil, Save, AlertTriangle, Users, X, Star, Hand } from 'lucide-react';
+import { Play, Check, RotateCcw, Plus, Minus, Pencil, Save, AlertTriangle, Users, X, Star, Hand, BarChart3 } from 'lucide-react';
 import { Absence, BestPlayer, Goalkeeper, Match, Scorer, Team } from '../types';
 import { TeamCrest, shortDate, useLiveMinute, useCountdown, formatClock } from './ui';
 import { FadeIn } from './anim';
@@ -46,6 +46,8 @@ interface SpielplanProps {
     data: { matchday: number; date: string; time: string; homeTeamId: string; awayTeamId: string; venue: string }
   ) => void | Promise<unknown>;
   onSelectTeam?: (teamId: string) => void;
+  onOpenReport?: (matchId: string) => void; // Spielbericht (Einzelnoten) öffnen
+  reportMatchIds?: Set<string>; // Spiele, für die es getrackte Werte gibt
   initialMatchday?: number | null; // aus der Suche: diesen Spieltag direkt zeigen
   onInitialMatchdayConsumed?: () => void;
 }
@@ -57,6 +59,8 @@ export default function Spielplan({
   onUpdateMatchScore,
   onUpdateMatchMeta,
   onSelectTeam,
+  onOpenReport,
+  reportMatchIds,
   initialMatchday,
   onInitialMatchdayConsumed,
 }: SpielplanProps) {
@@ -1109,6 +1113,18 @@ export default function Spielplan({
                         </div>
                       </div>
                     </div>
+                  )}
+
+                  {/* Spielbericht: Einzelnoten (nur wenn getrackte Werte vorliegen) */}
+                  {onOpenReport && reportMatchIds?.has(match.id) && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenReport(match.id)}
+                      className="mt-3.5 w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[rgba(34,223,201,.1)] hover:bg-[rgba(34,223,201,.18)] border border-[rgba(34,223,201,.3)] text-[12px] font-sans font-bold uppercase tracking-wider text-brand-accent-light transition-colors cursor-pointer"
+                    >
+                      <BarChart3 className="w-3.5 h-3.5" />
+                      <span>Spielbericht · Einzelnoten</span>
+                    </button>
                   )}
 
                   {/* Admin: Verwalten-Button öffnet das Popup */}
