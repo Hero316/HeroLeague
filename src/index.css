@@ -849,3 +849,28 @@ body {
    Dunkel als Standard, weiß unter .hl-team. */
 .hl-avatar-ring { border-radius: 9999px; box-shadow: 0 0 0 2px #0a1110; }
 .hl-team .hl-avatar-ring { box-shadow: 0 0 0 2px #FFFFFF; }
+
+/* =====================================================================
+   Statistics Center (Erfassungs-Editor) – Formularfelder & Raster.
+   Trägt den Hell-/Dunkel-Modus über .hl-team automatisch mit.
+   ===================================================================== */
+.hl-input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--color-hl-text);
+  outline: none;
+}
+.hl-input:focus {
+  border-color: rgba(34, 223, 201, 0.6);
+}
+.hl-team .hl-input {
+  background: #F1F6F5;
+  border-color: rgba(16, 42, 38, 0.15);
+  color: #12211E;
+}
+/* Sticky-Kopfzeile und -Spieler-Spalte im Raster müssen DECKEND sein, damit
+   die seitlich durchscrollenden Zähler nicht dahinter durchscheinen. */
+.hl-th { background: rgba(255, 255, 255, 0.03); }
+.hl-th-name, .hl-td-name { background: #10201d; }
+.hl-team .hl-th { background: rgba(16, 42, 38, 0.04); }
+.hl-team .hl-th-name, .hl-team .hl-td-name { background: #FFFFFF; }

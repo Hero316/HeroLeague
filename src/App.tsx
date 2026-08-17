@@ -40,7 +40,8 @@ import NotificationBell from './components/NotificationBell';
 import DeepLinkModal from './components/DeepLinkModal';
 import ChatUnreadBadge from './components/ChatUnreadBadge';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, CalendarDays, MessageSquare, UserCircle, Bell } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, CalendarDays, MessageSquare, UserCircle, Bell, Trophy, ChevronRight } from 'lucide-react';
+import TrackingCenter from './components/TrackingCenter';
 
 // Öffentliche Tabs haben eigene URLs, damit man nach einem Reload dort bleibt, wo man war.
 const TAB_PATHS: Record<ActiveTab, string> = {
@@ -848,6 +849,43 @@ export default function App() {
     );
   }
 
+  // ROUTE: /tracking – Statistics Center (Erfassungs-Editor). Eigene, app-artige
+  // Vollbildseite. Nur für Spiel-Admins/Super-Admins; ohne Login: Anmeldemaske.
+  if (currentPath.startsWith('/tracking')) {
+    if (!isAdmin) {
+      return (
+        <div className="h-screen flex flex-col bg-[#060E0F] text-hl-text">
+          <div className="flex-1 flex items-center justify-center p-6">
+            <AdminLogin onLoginSuccess={(user) => setSessionUser(user)} />
+          </div>
+        </div>
+      );
+    }
+    if (!canManageMatches) {
+      return (
+        <div className="h-screen flex flex-col items-center justify-center gap-4 bg-[#060E0F] text-hl-text p-6 text-center">
+          <p className="text-hl-mute">Für das Statistics Center brauchst du Spiel-Admin-Rechte.</p>
+          <button
+            onClick={() => navigateTo('/admin')}
+            className="px-5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer"
+          >
+            Zurück zum Backoffice
+          </button>
+        </div>
+      );
+    }
+    return (
+      <TrackingCenter
+        teams={teams}
+        matches={matches}
+        seasons={seasons}
+        roster={roster}
+        eventArchive={eventArchive}
+        onBack={() => navigateTo('/admin')}
+      />
+    );
+  }
+
   // ROUTE: /admin – geschütztes Backoffice. Team-Mitglieder haben hier nichts zu
   // suchen (siehe Redirect-Effekt oben) – kurz nichts zeigen, bis er greift.
   if (currentPath === '/admin') {
@@ -918,6 +956,25 @@ export default function App() {
                   </button>
                 </div>
               </div>
+
+              {/* Statistics Center: eigene große Seite zum Auswerten der Spieltage. */}
+              {canManageMatches && (
+                <button
+                  onClick={() => navigateTo('/tracking')}
+                  className="hl-card p-5 w-full flex items-center gap-4 text-left hover:border-brand-accent/40 transition-colors cursor-pointer group"
+                >
+                  <div className="w-12 h-12 rounded-2xl bg-brand-accent/15 border border-brand-accent/30 grid place-items-center text-brand-accent-light shrink-0">
+                    <Trophy className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-display font-black uppercase tracking-tight text-lg text-white">Statistics Center</div>
+                    <div className="text-xs text-hl-mute mt-0.5">
+                      Spieltag Sekunde für Sekunde auswerten · Noten, Quoten &amp; FIFA-Karten
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-hl-faint group-hover:text-brand-accent-light transition-colors shrink-0" />
+                </button>
+              )}
 
               {/* Backend als eigener Bereich: Übersicht (Dashboard) als Startseite,
                   darunter die Rubriken-Leiste (am Handy unten, am PC oben). */}
