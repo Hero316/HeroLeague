@@ -54,7 +54,7 @@ export function testSheet(): Promise<{ ok: boolean; title: string; sheets: strin
 // Einen Liga-Spieltag ins Google Sheet kopieren (manuell).
 export function exportToSheet(
   dayKey: string
-): Promise<{ ok: boolean; written: number; matches: number; players: number; unmatched: string[] }> {
+): Promise<{ ok: boolean; written: number; matches: number; players: number; placedNew: number; unmatched: string[] }> {
   return apiFetch('/api/stats?resource=export', { method: 'POST', body: JSON.stringify({ dayKey }) });
 }
 

@@ -131,11 +131,12 @@ const exportDay = requireStaff(async (req: VercelRequest, res: VercelResponse) =
   if (!dayKey.startsWith('s:')) return res.status(400).json({ error: 'Excel-Kopie aktuell nur für Liga-Spieltage.' });
   try {
     const rows = (await sql`
-      SELECT match_id AS "matchId", team_id AS "teamId", player_name AS "playerName", counts
+      SELECT match_id AS "matchId", team_id AS "teamId", player_name AS "playerName", role, counts
       FROM match_player_stats WHERE day_key = ${dayKey}`) as {
       matchId: string;
       teamId: string;
       playerName: string;
+      role: string;
       counts: Record<string, number>;
     }[];
     const summary = await exportLeagueDay(dayKey, rows);

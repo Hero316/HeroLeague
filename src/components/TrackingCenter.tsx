@@ -398,7 +398,7 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
     setExporting(true);
     try {
       const r = await exportToSheet(dayKey);
-      let msg = `✅ In Excel kopiert.\n\nSpiele: ${r.matches}\nSpieler: ${r.players}\nGesetzte Werte: ${r.written}`;
+      let msg = `✅ In Excel kopiert.\n\nSpiele: ${r.matches}\nSpieler: ${r.players} (davon ${r.placedNew} neu ins Sheet eingetragen)\nGesetzte Werte: ${r.written}`;
       if (r.unmatched?.length) {
         msg += `\n\n⚠️ Nicht zugeordnet (${r.unmatched.length}):\n- ` + r.unmatched.slice(0, 12).join('\n- ');
         if (r.unmatched.length > 12) msg += `\n- … und ${r.unmatched.length - 12} weitere`;
