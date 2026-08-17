@@ -29,7 +29,7 @@ import type {
 } from '../types';
 import { ACTION_META, DEFAULT_SCORING } from '../lib/scoring';
 import { emptyCounts, matchNote, normalizeCounts, rohscore } from '../lib/rating';
-import { useBackClose } from '../lib/backStack';
+import { useBackClose, goBackLayer } from '../lib/backStack';
 import {
   fetchScoring,
   saveScoring as apiSaveScoring,
@@ -107,8 +107,11 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
   const dayActive = selectedMatchday !== null || selectedEventId !== null;
   const selectedEvent = events.find((e) => e.id === selectedEventId) ?? null;
 
+  // Zwei gestapelte Zurück-Ebenen: Spiel-Editor liegt ÜBER der Spieltag-Ansicht.
+  // Ein Zurück schließt immer nur die oberste Ebene (Spiel → Spiele → Auswahl).
   useBackClose(selectedMatchId !== null, () => setSelectedMatchId(null));
-  useBackClose(dayActive && selectedMatchId === null, () => {
+  useBackClose(dayActive, () => {
+    setSelectedMatchId(null);
     setSelectedMatchday(null);
     setSelectedEventId(null);
   });
@@ -427,16 +430,10 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
         >
           <div className="max-w-6xl mx-auto px-4 pb-3 flex items-center gap-3">
             <button
-              onClick={
-                selectedMatchId
-                  ? () => setSelectedMatchId(null)
-                  : dayActive
-                    ? () => {
-                        setSelectedMatchday(null);
-                        setSelectedEventId(null);
-                      }
-                    : onBack
-              }
+              onClick={() => {
+                if (selectedMatchId !== null || dayActive) goBackLayer();
+                else onBack();
+              }}
               className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-hl-mute hover:text-hl-text transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -500,7 +497,7 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
               onRole={setRole}
               onUndo={undo}
               undoCount={undoCount}
-              onBack={() => setSelectedMatchId(null)}
+              onBack={goBackLayer}
             />
           ) : dayActive ? (
             <DayView
