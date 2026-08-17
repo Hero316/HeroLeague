@@ -13,8 +13,19 @@ import {
   Trophy,
   Undo2,
   X,
+  FlaskConical,
 } from 'lucide-react';
-import type { ActionCounts, EventArchive, Match, RosterMap, ScoringConfig, Season, StatRole, Team } from '../types';
+import type {
+  ActionCounts,
+  EventArchive,
+  EventConfig,
+  Match,
+  RosterMap,
+  ScoringConfig,
+  Season,
+  StatRole,
+  Team,
+} from '../types';
 import { ACTION_META, DEFAULT_SCORING } from '../lib/scoring';
 import { emptyCounts, matchNote, normalizeCounts, rohscore } from '../lib/rating';
 import { useBackClose } from '../lib/backStack';
@@ -25,13 +36,15 @@ import {
   saveTally,
   publishDay,
   leagueDayKey,
+  eventDayKey,
 } from '../lib/stats';
 
 // ===========================================================================
-// Statistics Center — Erfassungs-Editor (Etappe 2)
-// Eigene, app-artige Seite: Spieltag → Spiel → Raster. Pro Spieler jede Aktion
-// per Klick (+1 / ▲▼ / Tastatur), Live-Note, Rückgängig, Entwurf → Live.
-// Hell-/Dunkelmodus über die bestehende .hl-team-Umschaltung (sicheres Theme).
+// Statistics Center — Erfassungs-Editor (Etappe 2 + 3)
+// Eigene, app-artige Seite. Wertet Liga-Spieltage UND Testspielabende aus:
+// Tag → Spiel → Raster. Pro Spieler jede Aktion per Klick (+1 / ▲▼ / Tastatur),
+// Live-Note, Rückgängig, Entwurf → Live. Testspiele sind namensbasiert und
+// bleiben vollständig von der Liga getrennt.
 // ===========================================================================
 
 interface Props {
@@ -43,9 +56,8 @@ interface Props {
   onBack: () => void;
 }
 
-// Eine bearbeitbare Zeile im Raster.
 interface EditRow {
-  teamId: string;
+  teamId: string; // Liga: Team-ID · Testspiel: Team-Name
   teamName: string;
   playerName: string;
   role: StatRole;
@@ -55,8 +67,9 @@ interface EditRow {
 type RowMap = Record<string, EditRow>; // Schlüssel: `${matchId}::${teamId}::${name}`
 
 const rowKey = (matchId: string, teamId: string, name: string) => `${matchId}::${teamId}::${name}`;
+const normName = (s: string) => s.toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
 
-export default function TrackingCenter({ teams, matches, seasons, roster, onBack }: Props) {
+export default function TrackingCenter({ teams, matches, seasons, roster, eventArchive, onBack }: Props) {
   // --- Theme (Hell/Dunkel), pro Gerät gespeichert -------------------------
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     try {
@@ -76,28 +89,37 @@ export default function TrackingCenter({ teams, matches, seasons, roster, onBack
   const [cfg, setCfg] = useState<ScoringConfig>(DEFAULT_SCORING);
   const [scoringOpen, setScoringOpen] = useState(false);
 
-  // Saison-Auswahl (Standard: aktuelle Saison).
   const currentSeason = seasons.find((s) => s.isCurrent) ?? seasons[0] ?? null;
   const [seasonId, setSeasonId] = useState<string>(currentSeason?.id ?? '');
   useEffect(() => {
     if (!seasonId && currentSeason) setSeasonId(currentSeason.id);
   }, [currentSeason, seasonId]);
 
+  const events = useMemo(() => eventArchive?.events ?? [], [eventArchive]);
+
+  // Auswahl: entweder ein Liga-Spieltag ODER ein Testspielabend.
   const [selectedMatchday, setSelectedMatchday] = useState<number | null>(null);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const dayActive = selectedMatchday !== null || selectedEventId !== null;
+  const selectedEvent = events.find((e) => e.id === selectedEventId) ?? null;
 
-  // Zurück-Gesten am Handy: eine Ebene je geöffneter Tiefe.
   useBackClose(selectedMatchId !== null, () => setSelectedMatchId(null));
-  useBackClose(selectedMatchday !== null && selectedMatchId === null, () => setSelectedMatchday(null));
+  useBackClose(dayActive && selectedMatchId === null, () => {
+    setSelectedMatchday(null);
+    setSelectedEventId(null);
+  });
 
-  // Roh-Daten des Spieltags + bearbeitbare Zeilen.
   const [rows, setRows] = useState<RowMap>({});
   const [dayLive, setDayLive] = useState(false);
   const [loadingDay, setLoadingDay] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
 
-  const dayKey = seasonId && selectedMatchday !== null ? leagueDayKey(seasonId, selectedMatchday) : '';
-  const rosterKey = seasonId && selectedMatchday !== null ? `${seasonId}:${selectedMatchday}` : '';
+  const dayKey = selectedEventId
+    ? eventDayKey(selectedEventId)
+    : selectedMatchday !== null && seasonId
+      ? leagueDayKey(seasonId, selectedMatchday)
+      : '';
 
   const teamById = useMemo(() => {
     const m: Record<string, Team> = {};
@@ -105,20 +127,28 @@ export default function TrackingCenter({ teams, matches, seasons, roster, onBack
     return m;
   }, [teams]);
 
-  // Score-Einstellungen laden.
+  // Schlüssel (Team-ID oder Team-Name) → echter Verein (für Wappen + Kader).
+  const resolveTeam = useCallback(
+    (key: string): Team | undefined => {
+      if (teamById[key]) return teamById[key];
+      const n = normName(key);
+      return teams.find((t) => normName(t.name) === n || normName(t.shortName) === n);
+    },
+    [teamById, teams]
+  );
+
   useEffect(() => {
     let alive = true;
     fetchScoring()
       .then((c) => alive && setCfg(c))
       .catch(() => {
-        /* Defaults bleiben */
+        /* Defaults */
       });
     return () => {
       alive = false;
     };
   }, []);
 
-  // Spieltage der gewählten Saison (gruppiert).
   const matchdays = useMemo(() => {
     const map = new Map<number, Match[]>();
     matches
@@ -133,69 +163,80 @@ export default function TrackingCenter({ teams, matches, seasons, roster, onBack
       .sort((a, b) => a.matchday - b.matchday);
   }, [matches, seasonId]);
 
-  const dayMatches = useMemo(
-    () =>
-      matches
-        .filter((m) => m.seasonId === seasonId && m.matchday === selectedMatchday)
-        .sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0) || (a.time || '').localeCompare(b.time || '')),
-    [matches, seasonId, selectedMatchday]
-  );
+  // Event-Spiele als Match-artige Objekte (namensbasiert).
+  const eventGamesAsMatches = useCallback((ev: EventConfig): Match[] => {
+    return (ev.matches || []).map(
+      (em) =>
+        ({
+          id: em.id,
+          seasonId: `event:${ev.id}`,
+          matchday: em.block ?? 0,
+          homeTeamId: em.home,
+          awayTeamId: em.away,
+          homeScore: em.homeScore,
+          awayScore: em.awayScore,
+          date: ev.date ?? '',
+          time: em.start ?? '',
+          status: em.status ?? 'geplant',
+        }) as Match
+    );
+  }, []);
 
-  // Kader eines Teams für diesen Spieltag: anwesende Spieler (Abend-Aufstellung),
-  // sonst der ganze Kader; Torwart aus der Aufstellung vorbelegt.
+  const dayMatches = useMemo(() => {
+    if (selectedEvent) return eventGamesAsMatches(selectedEvent);
+    if (selectedMatchday !== null)
+      return matches
+        .filter((m) => m.seasonId === seasonId && m.matchday === selectedMatchday)
+        .sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0) || (a.time || '').localeCompare(b.time || ''));
+    return [];
+  }, [selectedEvent, selectedMatchday, matches, seasonId, eventGamesAsMatches]);
+
+  // Kader eines Teams: aus dem echten Verein. Bei Liga zusätzlich auf die
+  // Abend-Aufstellung gefiltert (rk = Roster-Schlüssel); bei Events voller Kader.
   const squadFor = useCallback(
-    (teamId: string): { name: string; role: StatRole }[] => {
-      const team = teamById[teamId];
+    (key: string, rk: string | null): { name: string; role: StatRole }[] => {
+      const team = resolveTeam(key);
       if (!team) return [];
-      const rt = roster[rosterKey]?.teams?.[teamId];
+      const rt = rk ? roster[rk]?.teams?.[team.id] : undefined;
       const present = rt?.present;
       const keeper = rt?.goalkeeper;
-      const list = (team.spielerliste || [])
+      return (team.spielerliste || [])
         .filter((p) => (present && present.length ? present.includes(p.name) : true))
         .map((p) => ({
           name: p.name,
           role: (keeper ? p.name === keeper : p.goalkeeper) ? ('keeper' as StatRole) : ('field' as StatRole),
         }));
-      return list;
     },
-    [teamById, roster, rosterKey]
+    [resolveTeam, roster]
   );
 
-  // Spieltag öffnen: gespeicherte Zähler laden und Zeilen für alle Spiele bauen.
-  const openMatchday = useCallback(
-    async (md: number) => {
-      setSelectedMatchday(md);
-      setSelectedMatchId(null);
+  // Zeilen für einen Tag bauen (Liga oder Event) und gespeicherte Zähler laden.
+  const buildRows = useCallback(
+    async (key: string, games: Match[], rk: string | null) => {
       setLoadingDay(true);
-      const key = leagueDayKey(seasonId, md);
       try {
         const { rows: saved, live } = await fetchDayStats(key);
         const savedMap: Record<string, { role: string; counts: ActionCounts }> = {};
         saved.forEach((r) => {
-          savedMap[rowKey(r.matchId, r.teamId, r.playerName)] = {
-            role: r.role,
-            counts: normalizeCounts(r.counts),
-          };
+          savedMap[rowKey(r.matchId, r.teamId, r.playerName)] = { role: r.role, counts: normalizeCounts(r.counts) };
         });
         const next: RowMap = {};
-        matches
-          .filter((m) => m.seasonId === seasonId && m.matchday === md)
-          .forEach((m) => {
-            ([m.homeTeamId, m.awayTeamId] as const).forEach((tid) => {
-              const teamName = teamById[tid]?.name ?? tid;
-              squadFor(tid).forEach((pl) => {
-                const k = rowKey(m.id, tid, pl.name);
-                const sv = savedMap[k];
-                next[k] = {
-                  teamId: tid,
-                  teamName,
-                  playerName: pl.name,
-                  role: (sv?.role as StatRole) || pl.role,
-                  counts: sv?.counts ?? emptyCounts(),
-                };
-              });
+        games.forEach((m) => {
+          ([m.homeTeamId, m.awayTeamId] as const).forEach((tid) => {
+            const teamName = resolveTeam(tid)?.name ?? tid;
+            squadFor(tid, rk).forEach((pl) => {
+              const k = rowKey(m.id, tid, pl.name);
+              const sv = savedMap[k];
+              next[k] = {
+                teamId: tid,
+                teamName,
+                playerName: pl.name,
+                role: (sv?.role as StatRole) || pl.role,
+                counts: sv?.counts ?? emptyCounts(),
+              };
             });
           });
+        });
         setRows(next);
         setDayLive(live);
       } catch {
@@ -205,7 +246,30 @@ export default function TrackingCenter({ teams, matches, seasons, roster, onBack
         setLoadingDay(false);
       }
     },
-    [seasonId, matches, teamById, squadFor]
+    [resolveTeam, squadFor]
+  );
+
+  const openMatchday = useCallback(
+    (md: number) => {
+      setSelectedEventId(null);
+      setSelectedMatchday(md);
+      setSelectedMatchId(null);
+      const games = matches
+        .filter((m) => m.seasonId === seasonId && m.matchday === md)
+        .sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0) || (a.time || '').localeCompare(b.time || ''));
+      buildRows(leagueDayKey(seasonId, md), games, `${seasonId}:${md}`);
+    },
+    [matches, seasonId, buildRows]
+  );
+
+  const openEvent = useCallback(
+    (ev: EventConfig) => {
+      setSelectedMatchday(null);
+      setSelectedEventId(ev.id);
+      setSelectedMatchId(null);
+      buildRows(eventDayKey(ev.id), eventGamesAsMatches(ev), null);
+    },
+    [buildRows, eventGamesAsMatches]
   );
 
   // --- Speichern (debounced je Zeile) -------------------------------------
@@ -246,7 +310,6 @@ export default function TrackingCenter({ teams, matches, seasons, roster, onBack
     [flushRow]
   );
 
-  // Undo-Stapel (letzte Klicks dieser Sitzung).
   const undoStack = useRef<{ k: string; action: keyof ActionCounts; delta: number }[]>([]);
   const [undoCount, setUndoCount] = useState(0);
 
@@ -259,9 +322,8 @@ export default function TrackingCenter({ teams, matches, seasons, roster, onBack
         const nextVal = Math.max(0, Math.min(999, cur + delta));
         if (nextVal === cur) return prev;
         const updated: EditRow = { ...row, counts: { ...row.counts, [action]: nextVal } };
-        const nextRows = { ...prev, [k]: updated };
         scheduleSave(k, updated, matchId);
-        return nextRows;
+        return { ...prev, [k]: updated };
       });
       if (track) {
         undoStack.current.push({ k, action, delta });
@@ -300,7 +362,7 @@ export default function TrackingCenter({ teams, matches, seasons, roster, onBack
     try {
       await publishDay(dayKey, next);
     } catch {
-      setDayLive(!next); // zurückdrehen bei Fehler
+      setDayLive(!next);
     }
   }, [dayLive, dayKey]);
 
@@ -314,18 +376,31 @@ export default function TrackingCenter({ teams, matches, seasons, roster, onBack
   }, []);
 
   const light = theme === 'light';
+  const headerSub = selectedEvent
+    ? selectedEvent.title || 'Testspiel'
+    : selectedMatchday !== null
+      ? `Spieltag ${selectedMatchday}`
+      : 'Tag wählen';
 
   return (
     <div className={`min-h-screen font-sans text-hl-text ${light ? 'hl-team' : ''}`}>
       <div className="hl-app-bg min-h-screen flex flex-col">
-        {/* Kopfleiste */}
         <header
           className="hl-app-bar sticky top-0 z-30 backdrop-blur-xl border-b border-white/10"
           style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.6rem)' }}
         >
           <div className="max-w-6xl mx-auto px-4 pb-3 flex items-center gap-3">
             <button
-              onClick={selectedMatchId ? () => setSelectedMatchId(null) : selectedMatchday !== null ? () => setSelectedMatchday(null) : onBack}
+              onClick={
+                selectedMatchId
+                  ? () => setSelectedMatchId(null)
+                  : dayActive
+                    ? () => {
+                        setSelectedMatchday(null);
+                        setSelectedEventId(null);
+                      }
+                    : onBack
+              }
               className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-hl-mute hover:text-hl-text transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -337,9 +412,7 @@ export default function TrackingCenter({ teams, matches, seasons, roster, onBack
               </div>
               <div className="min-w-0">
                 <div className="font-display font-black uppercase tracking-tight leading-none text-[15px]">Statistics Center</div>
-                <div className="text-[10px] uppercase tracking-[2px] text-hl-dim leading-none mt-0.5 truncate">
-                  {selectedMatchday !== null ? `Spieltag ${selectedMatchday}` : 'Spieltag wählen'}
-                </div>
+                <div className="text-[10px] uppercase tracking-[2px] text-hl-dim leading-none mt-0.5 truncate">{headerSub}</div>
               </div>
             </div>
             <div className="ml-auto flex items-center gap-2">
@@ -376,7 +449,7 @@ export default function TrackingCenter({ teams, matches, seasons, roster, onBack
           {selectedMatchId ? (
             <MatchEditor
               match={dayMatches.find((m) => m.id === selectedMatchId)!}
-              teamById={teamById}
+              resolveTeam={resolveTeam}
               rows={rows}
               cfg={cfg}
               onDelta={applyDelta}
@@ -385,13 +458,13 @@ export default function TrackingCenter({ teams, matches, seasons, roster, onBack
               undoCount={undoCount}
               onBack={() => setSelectedMatchId(null)}
             />
-          ) : selectedMatchday !== null ? (
+          ) : dayActive ? (
             <DayView
-              matchday={selectedMatchday}
+              title={selectedEvent ? selectedEvent.title || 'Testspiel' : `Spieltag ${selectedMatchday}`}
+              isEvent={!!selectedEvent}
               dayMatches={dayMatches}
-              teamById={teamById}
+              resolveTeam={resolveTeam}
               rows={rows}
-              cfg={cfg}
               loading={loadingDay}
               live={dayLive}
               onTogglePublish={togglePublish}
@@ -403,7 +476,10 @@ export default function TrackingCenter({ teams, matches, seasons, roster, onBack
               seasonId={seasonId}
               onSeason={setSeasonId}
               matchdays={matchdays}
+              events={events}
+              activeEventId={eventArchive?.activeId ?? null}
               onOpen={openMatchday}
+              onOpenEvent={openEvent}
             />
           )}
         </main>
@@ -415,61 +491,91 @@ export default function TrackingCenter({ teams, matches, seasons, roster, onBack
 }
 
 // ---------------------------------------------------------------------------
-// Spieltag-Liste
+// Tag-Liste: Liga-Spieltage + Testspielabende
 // ---------------------------------------------------------------------------
 function DayList({
   seasons,
   seasonId,
   onSeason,
   matchdays,
+  events,
+  activeEventId,
   onOpen,
+  onOpenEvent,
 }: {
   seasons: Season[];
   seasonId: string;
   onSeason: (id: string) => void;
   matchdays: { matchday: number; games: Match[]; date: string }[];
+  events: EventConfig[];
+  activeEventId: string | null;
   onOpen: (md: number) => void;
+  onOpenEvent: (ev: EventConfig) => void;
 }) {
   return (
-    <div className="hl-fade">
-      <div className="flex items-center justify-between gap-3 mb-5">
-        <h1 className="font-display font-black text-2xl uppercase tracking-tight">Spieltag auswerten</h1>
-        {seasons.length > 0 && (
-          <select
-            value={seasonId}
-            onChange={(e) => onSeason(e.target.value)}
-            className="hl-input px-3 py-2 rounded-xl text-sm font-semibold"
-          >
-            {seasons.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
+    <div className="hl-fade space-y-8">
+      <div>
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <h1 className="font-display font-black text-2xl uppercase tracking-tight">Spieltag auswerten</h1>
+          {seasons.length > 0 && (
+            <select value={seasonId} onChange={(e) => onSeason(e.target.value)} className="hl-input px-3 py-2 rounded-xl text-sm font-semibold">
+              {seasons.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+        {matchdays.length === 0 ? (
+          <div className="hl-card p-8 text-center text-hl-mute">Keine Spiele in dieser Saison.</div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 hl-cascade-soft">
+            {matchdays.map((d) => (
+              <button
+                key={d.matchday}
+                onClick={() => onOpen(d.matchday)}
+                className="hl-card p-5 text-left hover:border-brand-accent/40 transition-colors cursor-pointer group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-[2px] text-hl-dim">Spieltag</span>
+                  <ChevronRight className="w-4 h-4 text-hl-faint group-hover:text-brand-accent-light transition-colors" />
+                </div>
+                <div className="font-display font-black text-4xl leading-none mt-1 tabular-nums">{d.matchday}</div>
+                <div className="mt-3 text-xs text-hl-mute flex items-center gap-3">
+                  <span>{d.games.length} Spiele</span>
+                  {d.date && <span className="text-hl-faint">{d.date}</span>}
+                </div>
+              </button>
             ))}
-          </select>
+          </div>
         )}
       </div>
 
-      {matchdays.length === 0 ? (
-        <div className="hl-card p-8 text-center text-hl-mute">Keine Spiele in dieser Saison.</div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 hl-cascade-soft">
-          {matchdays.map((d) => (
-            <button
-              key={d.matchday}
-              onClick={() => onOpen(d.matchday)}
-              className="hl-card p-5 text-left hover:border-brand-accent/40 transition-colors cursor-pointer group"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase tracking-[2px] text-hl-dim">Spieltag</span>
-                <ChevronRight className="w-4 h-4 text-hl-faint group-hover:text-brand-accent-light transition-colors" />
-              </div>
-              <div className="font-display font-black text-4xl leading-none mt-1 tabular-nums">{d.matchday}</div>
-              <div className="mt-3 text-xs text-hl-mute flex items-center gap-3">
-                <span>{d.games.length} Spiele</span>
-                {d.date && <span className="text-hl-faint">{d.date}</span>}
-              </div>
-            </button>
-          ))}
+      {events.length > 0 && (
+        <div>
+          <h2 className="font-display font-black text-lg uppercase tracking-tight mb-3 flex items-center gap-2">
+            <FlaskConical className="w-4 h-4 text-hl-magenta" /> Testspielabende
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 hl-cascade-soft">
+            {events.map((ev) => (
+              <button
+                key={ev.id}
+                onClick={() => onOpenEvent(ev)}
+                className="hl-card p-5 text-left hover:border-hl-magenta/50 transition-colors cursor-pointer group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-[2px] text-hl-magenta">{ev.id === activeEventId ? 'Aktiv' : 'Testspiel'}</span>
+                  <ChevronRight className="w-4 h-4 text-hl-faint group-hover:text-hl-magenta transition-colors" />
+                </div>
+                <div className="font-display font-black text-xl leading-tight mt-1">{ev.title || ev.label || 'Testspiel'}</div>
+                <div className="mt-2 text-xs text-hl-mute flex items-center gap-3">
+                  <span>{ev.teams?.length ?? 0} Teams</span>
+                  <span className="text-hl-faint">{ev.matches?.length ?? 0} Spiele</span>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -477,24 +583,24 @@ function DayList({
 }
 
 // ---------------------------------------------------------------------------
-// Spiel-Liste eines Spieltags + Live schalten
+// Spiel-Liste eines Tages + Live schalten
 // ---------------------------------------------------------------------------
 function DayView({
-  matchday,
+  title,
+  isEvent,
   dayMatches,
-  teamById,
+  resolveTeam,
   rows,
-  cfg,
   loading,
   live,
   onTogglePublish,
   onOpenMatch,
 }: {
-  matchday: number;
+  title: string;
+  isEvent: boolean;
   dayMatches: Match[];
-  teamById: Record<string, Team>;
+  resolveTeam: (key: string) => Team | undefined;
   rows: RowMap;
-  cfg: ScoringConfig;
   loading: boolean;
   live: boolean;
   onTogglePublish: () => void;
@@ -506,13 +612,14 @@ function DayView({
   return (
     <div className="hl-fade">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-        <h1 className="font-display font-black text-2xl uppercase tracking-tight">Spieltag {matchday}</h1>
+        <h1 className="font-display font-black text-2xl uppercase tracking-tight flex items-center gap-2">
+          {isEvent && <FlaskConical className="w-5 h-5 text-hl-magenta" />}
+          {title}
+        </h1>
         <button
           onClick={onTogglePublish}
           className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-colors cursor-pointer border ${
-            live
-              ? 'bg-hl-green/15 border-hl-green/40 text-hl-green'
-              : 'bg-white/5 border-white/10 text-hl-mute hover:text-hl-text'
+            live ? 'bg-hl-green/15 border-hl-green/40 text-hl-green' : 'bg-white/5 border-white/10 text-hl-mute hover:text-hl-text'
           }`}
         >
           <Radio className="w-3.5 h-3.5" />
@@ -525,8 +632,8 @@ function DayView({
       ) : (
         <div className="grid gap-3 hl-cascade-soft">
           {dayMatches.map((m) => {
-            const home = teamById[m.homeTeamId];
-            const away = teamById[m.awayTeamId];
+            const home = resolveTeam(m.homeTeamId);
+            const away = resolveTeam(m.awayTeamId);
             const tracked = trackedCount(m.id);
             return (
               <button
@@ -552,8 +659,8 @@ function DayView({
         </div>
       )}
       <p className="text-[11px] text-hl-dim mt-5 flex items-center gap-1.5">
-        <Shield className="w-3.5 h-3.5" /> „Live schalten" macht die Werte dieses Spieltags auf der Website sichtbar. Ohne
-        das bleiben sie interner Entwurf.
+        <Shield className="w-3.5 h-3.5" /> „Live schalten" macht die Werte {isEvent ? 'dieses Testspiels' : 'dieses Spieltags'} auf der
+        Website sichtbar. Ohne das bleiben sie interner Entwurf.
       </p>
     </div>
   );
@@ -564,7 +671,7 @@ function DayView({
 // ---------------------------------------------------------------------------
 function MatchEditor({
   match,
-  teamById,
+  resolveTeam,
   rows,
   cfg,
   onDelta,
@@ -574,7 +681,7 @@ function MatchEditor({
   onBack,
 }: {
   match: Match;
-  teamById: Record<string, Team>;
+  resolveTeam: (key: string) => Team | undefined;
   rows: RowMap;
   cfg: ScoringConfig;
   onDelta: (k: string, matchId: string, action: keyof ActionCounts, delta: number) => void;
@@ -583,8 +690,8 @@ function MatchEditor({
   undoCount: number;
   onBack: () => void;
 }) {
-  const home = teamById[match.homeTeamId];
-  const away = teamById[match.awayTeamId];
+  const home = resolveTeam(match.homeTeamId);
+  const away = resolveTeam(match.awayTeamId);
 
   const teamRows = (teamId: string) =>
     Object.entries(rows)
@@ -615,29 +722,19 @@ function MatchEditor({
       {[match.homeTeamId, match.awayTeamId].map((teamId) => (
         <div key={teamId} className="mb-6">
           <div className="flex items-center gap-2 mb-2">
-            <TeamBadge team={teamById[teamId]} />
-            <span className="font-display font-black uppercase tracking-tight">{teamById[teamId]?.name ?? teamId}</span>
+            <TeamBadge team={resolveTeam(teamId)} />
+            <span className="font-display font-black uppercase tracking-tight">{resolveTeam(teamId)?.name ?? teamId}</span>
           </div>
           <div className="hl-card overflow-hidden p-0">
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr>
-                    <th className="sticky left-0 z-10 hl-th-name text-left px-3 py-2 text-[10px] uppercase tracking-wider text-hl-dim font-semibold">
-                      Spieler
-                    </th>
-                    <th className="hl-th px-2 py-2 text-[10px] uppercase tracking-wider text-hl-dim font-semibold text-center">
-                      Note
-                    </th>
+                    <th className="sticky left-0 z-10 hl-th-name text-left px-3 py-2 text-[10px] uppercase tracking-wider text-hl-dim font-semibold">Spieler</th>
+                    <th className="hl-th px-2 py-2 text-[10px] uppercase tracking-wider text-hl-dim font-semibold text-center">Note</th>
                     {ACTION_META.map((a) => (
-                      <th
-                        key={a.key}
-                        className="hl-th px-1 py-2 text-[10px] uppercase tracking-wider font-semibold text-center whitespace-nowrap"
-                        title={a.label}
-                      >
-                        <span className={a.sign === 1 ? 'text-hl-green' : a.sign === -1 ? 'text-hl-red' : 'text-hl-dim'}>
-                          {a.short}
-                        </span>
+                      <th key={a.key} className="hl-th px-1 py-2 text-[10px] uppercase tracking-wider font-semibold text-center whitespace-nowrap" title={a.label}>
+                        <span className={a.sign === 1 ? 'text-hl-green' : a.sign === -1 ? 'text-hl-red' : 'text-hl-dim'}>{a.short}</span>
                       </th>
                     ))}
                   </tr>
@@ -655,9 +752,7 @@ function MatchEditor({
                               onClick={() => onRole(k, match.id, r.role === 'keeper' ? 'field' : 'keeper')}
                               title="Rolle wechseln (Feld/Torwart)"
                               className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider cursor-pointer border ${
-                                r.role === 'keeper'
-                                  ? 'bg-hl-gold/15 border-hl-gold/40 text-hl-gold'
-                                  : 'bg-white/5 border-white/10 text-hl-faint'
+                                r.role === 'keeper' ? 'bg-hl-gold/15 border-hl-gold/40 text-hl-gold' : 'bg-white/5 border-white/10 text-hl-faint'
                               }`}
                             >
                               {r.role === 'keeper' ? 'TW' : 'Feld'}
@@ -665,22 +760,13 @@ function MatchEditor({
                           </div>
                         </td>
                         <td className="px-2 py-1.5 text-center">
-                          <span
-                            className="font-display font-black tabular-nums text-[15px]"
-                            style={{ color: noteColor(note, cfg) }}
-                            title={`Rohscore ${score}`}
-                          >
+                          <span className="font-display font-black tabular-nums text-[15px]" style={{ color: noteColor(note, cfg) }} title={`Rohscore ${score}`}>
                             {note.toFixed(1)}
                           </span>
                         </td>
                         {ACTION_META.map((a) => (
                           <td key={a.key} className="px-1 py-1 text-center">
-                            <Stepper
-                              value={r.counts[a.key] || 0}
-                              sign={a.sign}
-                              dim={a.keeperOnly && r.role !== 'keeper'}
-                              onDelta={(d) => onDelta(k, match.id, a.key, d)}
-                            />
+                            <Stepper value={r.counts[a.key] || 0} sign={a.sign} dim={a.keeperOnly && r.role !== 'keeper'} onDelta={(d) => onDelta(k, match.id, a.key, d)} />
                           </td>
                         ))}
                       </tr>
@@ -689,7 +775,7 @@ function MatchEditor({
                   {teamRows(teamId).length === 0 && (
                     <tr>
                       <td colSpan={ACTION_META.length + 2} className="px-3 py-4 text-center text-hl-mute text-xs">
-                        Kein Kader für diesen Spieltag hinterlegt.
+                        Kein Kader hinterlegt. Für Testspiele muss der Team-Name mit einem Verein übereinstimmen (Kader kommt von dort).
                       </td>
                     </tr>
                   )}
@@ -706,21 +792,9 @@ function MatchEditor({
   );
 }
 
-// Ein Zähler-Feld: −  Zahl  +  (Klick, Tastatur ▲▼ / +−).
-function Stepper({
-  value,
-  sign,
-  dim,
-  onDelta,
-}: {
-  value: number;
-  sign: 1 | 0 | -1;
-  dim?: boolean;
-  onDelta: (delta: number) => void;
-}) {
+function Stepper({ value, sign, dim, onDelta }: { value: number; sign: 1 | 0 | -1; dim?: boolean; onDelta: (delta: number) => void }) {
   const active = value > 0;
-  const tint =
-    active && sign === 1 ? 'text-hl-green' : active && sign === -1 ? 'text-hl-red' : dim ? 'text-hl-faint' : 'text-hl-text';
+  const tint = active && sign === 1 ? 'text-hl-green' : active && sign === -1 ? 'text-hl-red' : dim ? 'text-hl-faint' : 'text-hl-text';
   return (
     <div
       tabIndex={0}
@@ -737,19 +811,11 @@ function Stepper({
       }}
       className={`inline-flex items-center gap-0.5 rounded-lg outline-none focus:ring-2 focus:ring-brand-accent/60 ${dim ? 'opacity-45' : ''}`}
     >
-      <button
-        onClick={() => onDelta(-1)}
-        tabIndex={-1}
-        className="w-4 h-5 grid place-items-center rounded text-hl-faint hover:text-hl-red hover:bg-white/5 cursor-pointer"
-      >
+      <button onClick={() => onDelta(-1)} tabIndex={-1} className="w-4 h-5 grid place-items-center rounded text-hl-faint hover:text-hl-red hover:bg-white/5 cursor-pointer">
         <Minus className="w-3 h-3" />
       </button>
       <span className={`w-6 text-center font-bold tabular-nums text-[13px] ${tint}`}>{value}</span>
-      <button
-        onClick={() => onDelta(1)}
-        tabIndex={-1}
-        className="w-4 h-5 grid place-items-center rounded text-hl-faint hover:text-hl-green hover:bg-white/5 cursor-pointer"
-      >
+      <button onClick={() => onDelta(1)} tabIndex={-1} className="w-4 h-5 grid place-items-center rounded text-hl-faint hover:text-hl-green hover:bg-white/5 cursor-pointer">
         <Plus className="w-3 h-3" />
       </button>
     </div>
@@ -761,32 +827,20 @@ function TeamBadge({ team }: { team?: Team }) {
   return team.logoUrl ? (
     <img src={team.logoUrl} alt="" className="w-8 h-8 rounded-lg object-contain shrink-0" />
   ) : (
-    <div
-      className="w-8 h-8 rounded-lg grid place-items-center text-sm shrink-0"
-      style={{ background: `${team.logoColor}22`, color: team.logoColor }}
-    >
+    <div className="w-8 h-8 rounded-lg grid place-items-center text-sm shrink-0" style={{ background: `${team.logoColor}22`, color: team.logoColor }}>
       {team.logoIcon || '⚽'}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Score-Einstellungen (Punkte, Rating-Regler, Stufen, Mindestwerte)
+// Score-Einstellungen
 // ---------------------------------------------------------------------------
-function ScoringPanel({
-  cfg,
-  onSave,
-  onClose,
-}: {
-  cfg: ScoringConfig;
-  onSave: (c: ScoringConfig) => void;
-  onClose: () => void;
-}) {
+function ScoringPanel({ cfg, onSave, onClose }: { cfg: ScoringConfig; onSave: (c: ScoringConfig) => void; onClose: () => void }) {
   const [draft, setDraft] = useState<ScoringConfig>(cfg);
   useBackClose(true, onClose);
 
-  const setPoint = (key: keyof ActionCounts, v: number) =>
-    setDraft((d) => ({ ...d, points: { ...d.points, [key]: v } }));
+  const setPoint = (key: keyof ActionCounts, v: number) => setDraft((d) => ({ ...d, points: { ...d.points, [key]: v } }));
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6" role="dialog" aria-modal="true">
@@ -876,23 +930,16 @@ function NumField({ label, value, step, onChange }: { label: string; value: numb
   return (
     <label className="flex flex-col gap-1">
       <span className="text-[10px] uppercase tracking-wider text-hl-dim">{label}</span>
-      <input
-        type="number"
-        step={step}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-        className="hl-input px-2 py-1.5 rounded-lg text-sm tabular-nums"
-      />
+      <input type="number" step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value) || 0)} className="hl-input px-2 py-1.5 rounded-lg text-sm tabular-nums" />
     </label>
   );
 }
 
-// --- kleine Helfer ----------------------------------------------------------
+// --- Helfer -----------------------------------------------------------------
 function anyCount(c: ActionCounts): boolean {
   return Object.values(c).some((v) => v > 0);
 }
 
-// Note-Farbe: rot (schwach) → gelb → grün (stark), relativ zur Skala.
 function noteColor(note: number, cfg: ScoringConfig): string {
   const span = cfg.rating.max - cfg.rating.min || 1;
   const t = Math.max(0, Math.min(1, (note - cfg.rating.min) / span));
