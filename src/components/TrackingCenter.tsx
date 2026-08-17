@@ -15,9 +15,11 @@ import {
   X,
   FlaskConical,
   FileSpreadsheet,
+  Users,
 } from 'lucide-react';
 import type {
   ActionCounts,
+  EveningRoster,
   EventArchive,
   EventConfig,
   Match,
@@ -40,6 +42,7 @@ import {
   eventDayKey,
   testSheet,
   exportToSheet,
+  saveAttendance,
 } from '../lib/stats';
 
 // ===========================================================================
@@ -56,6 +59,8 @@ interface Props {
   seasons: Season[];
   roster: RosterMap;
   eventArchive: EventArchive | null;
+  activeSeasonId: string; // real ODER Demo – bestimmt die Tracking-Schlüssel
+  demoActive?: boolean; // im Demo-Modus: kein Excel-Export
   onBack: () => void;
 }
 
@@ -72,7 +77,16 @@ type RowMap = Record<string, EditRow>; // Schlüssel: `${matchId}::${teamId}::${
 const rowKey = (matchId: string, teamId: string, name: string) => `${matchId}::${teamId}::${name}`;
 const normName = (s: string) => s.toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
 
-export default function TrackingCenter({ teams, matches, seasons, roster, eventArchive, onBack }: Props) {
+export default function TrackingCenter({
+  teams,
+  matches,
+  seasons,
+  roster,
+  eventArchive,
+  activeSeasonId,
+  demoActive,
+  onBack,
+}: Props) {
   // --- Theme (Hell/Dunkel), pro Gerät gespeichert -------------------------
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     try {
@@ -92,11 +106,12 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
   const [cfg, setCfg] = useState<ScoringConfig>(DEFAULT_SCORING);
   const [scoringOpen, setScoringOpen] = useState(false);
 
-  const currentSeason = seasons.find((s) => s.isCurrent) ?? seasons[0] ?? null;
-  const [seasonId, setSeasonId] = useState<string>(currentSeason?.id ?? '');
+  // Aktive Saison (echt ODER Demo) bestimmt alle Tracking-Schlüssel → automatische
+  // Trennung: Demo-Tracking landet unter der Demo-Saison-ID, nie bei echten Daten.
+  const [seasonId, setSeasonId] = useState<string>(activeSeasonId || seasons[0]?.id || '');
   useEffect(() => {
-    if (!seasonId && currentSeason) setSeasonId(currentSeason.id);
-  }, [currentSeason, seasonId]);
+    if (activeSeasonId) setSeasonId(activeSeasonId);
+  }, [activeSeasonId]);
 
   const events = useMemo(() => eventArchive?.events ?? [], [eventArchive]);
 
@@ -120,6 +135,12 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
   const [dayLive, setDayLive] = useState(false);
   const [loadingDay, setLoadingDay] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  // Lokaler Aufstellungs-Stand (Anwesenheit/Torwart) – wird beim Speichern im
+  // Tracker sofort aktualisiert; folgt sonst dem Prop.
+  const [rosterState, setRosterState] = useState<RosterMap>(roster);
+  useEffect(() => setRosterState(roster), [roster]);
+  const [attendanceOpen, setAttendanceOpen] = useState(false);
 
   const dayKey = selectedEventId
     ? eventDayKey(selectedEventId)
@@ -203,10 +224,10 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
   //    ausgeblendet (aus der Spiel-Verwaltung, `absent`).
   // Bei Events (kein rk) wird nicht nach Aufstellung gefiltert.
   const squadFor = useCallback(
-    (key: string, rk: string | null, absent?: Set<string>): { name: string; role: StatRole }[] => {
+    (key: string, rk: string | null, absent?: Set<string>, rmap?: RosterMap): { name: string; role: StatRole }[] => {
       const team = resolveTeam(key);
       if (!team) return [];
-      const rt = rk ? roster[rk]?.teams?.[team.id] : undefined;
+      const rt = rk ? (rmap ?? rosterState)[rk]?.teams?.[team.id] : undefined;
       const present = rt?.present;
       const keeper = rt?.goalkeeper;
       return (team.spielerliste || [])
@@ -217,12 +238,12 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
           role: (keeper ? p.name === keeper : p.goalkeeper) ? ('keeper' as StatRole) : ('field' as StatRole),
         }));
     },
-    [resolveTeam, roster]
+    [resolveTeam, rosterState]
   );
 
   // Zeilen für einen Tag bauen (Liga oder Event) und gespeicherte Zähler laden.
   const buildRows = useCallback(
-    async (key: string, games: Match[], rk: string | null) => {
+    async (key: string, games: Match[], rk: string | null, rmap?: RosterMap) => {
       setLoadingDay(true);
       try {
         const { rows: saved, live } = await fetchDayStats(key);
@@ -243,7 +264,7 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
         games.forEach((m) => {
           ([m.homeTeamId, m.awayTeamId] as const).forEach((tid) => {
             const teamName = resolveTeam(tid)?.name ?? tid;
-            squadFor(tid, rk, absentByTeam[tid]).forEach((pl) => {
+            squadFor(tid, rk, absentByTeam[tid], rmap).forEach((pl) => {
               const k = rowKey(m.id, tid, pl.name);
               const sv = savedMap[k];
               next[k] = {
@@ -443,6 +464,37 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
     }
   }, [dayKey, selectedEventId]);
 
+  // Teams des aktuell gewählten Spieltags (für die Anwesenheit).
+  const dayTeamIds = useMemo(() => {
+    const s = new Set<string>();
+    dayMatches.forEach((m) => {
+      s.add(m.homeTeamId);
+      s.add(m.awayTeamId);
+    });
+    return [...s];
+  }, [dayMatches]);
+
+  // Anwesenheit/Torwart für den Spieltag speichern und Raster neu aufbauen.
+  const applyAttendance = useCallback(
+    async (teams: EveningRoster['teams'], minutes: number) => {
+      if (selectedMatchday === null || !seasonId) return;
+      const rk = `${seasonId}:${selectedMatchday}`;
+      const nextRoster: RosterMap = { ...rosterState, [rk]: { minutes, teams } };
+      setRosterState(nextRoster);
+      setAttendanceOpen(false);
+      try {
+        await saveAttendance(seasonId, selectedMatchday, minutes, teams);
+      } catch {
+        /* lokal ist es schon aktualisiert */
+      }
+      const games = matches
+        .filter((m) => m.seasonId === seasonId && m.matchday === selectedMatchday)
+        .sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0) || (a.time || '').localeCompare(b.time || ''));
+      buildRows(leagueDayKey(seasonId, selectedMatchday), games, rk, nextRoster);
+    },
+    [selectedMatchday, seasonId, rosterState, matches, buildRows]
+  );
+
   const light = theme === 'light';
   const headerSub = selectedEvent
     ? selectedEvent.title || 'Testspiel'
@@ -478,14 +530,16 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
               </div>
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <button
-                onClick={runSheetTest}
-                disabled={sheetTesting}
-                title="Excel-Verbindung testen (schreibt nichts)"
-                className="h-9 px-3 grid place-items-center rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer disabled:opacity-50"
-              >
-                {sheetTesting ? '…' : 'Excel testen'}
-              </button>
+              {!demoActive && (
+                <button
+                  onClick={runSheetTest}
+                  disabled={sheetTesting}
+                  title="Excel-Verbindung testen (schreibt nichts)"
+                  className="h-9 px-3 grid place-items-center rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-[11px] font-bold uppercase tracking-wider transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {sheetTesting ? '…' : 'Excel testen'}
+                </button>
+              )}
               {saveState !== 'idle' && (
                 <span className="text-[10px] uppercase tracking-wider text-hl-dim flex items-center gap-1">
                   {saveState === 'saving' ? (
@@ -539,8 +593,9 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
               live={dayLive}
               onTogglePublish={togglePublish}
               onOpenMatch={setSelectedMatchId}
-              onExport={selectedEvent ? undefined : runExport}
+              onExport={selectedEvent || demoActive ? undefined : runExport}
               exporting={exporting}
+              onAttendance={selectedEvent ? undefined : () => setAttendanceOpen(true)}
             />
           ) : (
             <DayList
@@ -558,6 +613,16 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
       </div>
 
       {scoringOpen && <ScoringPanel cfg={cfg} onSave={saveScoring} onClose={() => setScoringOpen(false)} />}
+      {attendanceOpen && selectedMatchday !== null && (
+        <AttendancePanel
+          teamIds={dayTeamIds}
+          resolveTeam={resolveTeam}
+          roster={rosterState}
+          rk={`${seasonId}:${selectedMatchday}`}
+          onClose={() => setAttendanceOpen(false)}
+          onSave={applyAttendance}
+        />
+      )}
     </div>
   );
 }
@@ -669,6 +734,7 @@ function DayView({
   onOpenMatch,
   onExport,
   exporting,
+  onAttendance,
 }: {
   title: string;
   isEvent: boolean;
@@ -681,6 +747,7 @@ function DayView({
   onOpenMatch: (id: string) => void;
   onExport?: () => void;
   exporting?: boolean;
+  onAttendance?: () => void;
 }) {
   const trackedCount = (matchId: string) =>
     Object.entries(rows).filter(([k, r]) => k.startsWith(`${matchId}::`) && anyCount(r.counts)).length;
@@ -693,6 +760,16 @@ function DayView({
           {title}
         </h1>
         <div className="flex items-center gap-2">
+          {onAttendance && (
+            <button
+              onClick={onAttendance}
+              title="Wer war heute da?"
+              className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-colors cursor-pointer border border-white/10 bg-white/5 text-hl-mute hover:text-hl-text"
+            >
+              <Users className="w-3.5 h-3.5" />
+              Anwesenheit
+            </button>
+          )}
           {onExport && (
             <button
               onClick={onExport}
@@ -918,6 +995,139 @@ function TeamBadge({ team }: { team?: Team }) {
   ) : (
     <div className="w-8 h-8 rounded-lg grid place-items-center text-sm shrink-0" style={{ background: `${team.logoColor}22`, color: team.logoColor }}>
       {team.logoIcon || '⚽'}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Anwesenheit: wer war heute da? (schreibt in die Abend-Aufstellung)
+// ---------------------------------------------------------------------------
+function AttendancePanel({
+  teamIds,
+  resolveTeam,
+  roster,
+  rk,
+  onClose,
+  onSave,
+}: {
+  teamIds: string[];
+  resolveTeam: (key: string) => Team | undefined;
+  roster: RosterMap;
+  rk: string;
+  onClose: () => void;
+  onSave: (teams: EveningRoster['teams'], minutes: number) => void;
+}) {
+  useBackClose(true, onClose);
+  const minutes = roster[rk]?.minutes ?? 7;
+  const [sel, setSel] = useState<Record<string, { present: Set<string>; keeper?: string }>>(() => {
+    const init: Record<string, { present: Set<string>; keeper?: string }> = {};
+    teamIds.forEach((tid) => {
+      const squad = resolveTeam(tid)?.spielerliste ?? [];
+      const rt = roster[rk]?.teams?.[tid];
+      const present = rt?.present && rt.present.length ? new Set(rt.present) : new Set(squad.map((p) => p.name));
+      const keeper = rt?.goalkeeper ?? squad.find((p) => p.goalkeeper)?.name;
+      init[tid] = { present, keeper: keeper && present.has(keeper) ? keeper : undefined };
+    });
+    return init;
+  });
+
+  const toggle = (tid: string, name: string) =>
+    setSel((s) => {
+      const present = new Set(s[tid].present);
+      if (present.has(name)) present.delete(name);
+      else present.add(name);
+      let keeper = s[tid].keeper;
+      if (keeper && !present.has(keeper)) keeper = undefined;
+      return { ...s, [tid]: { present, keeper } };
+    });
+
+  const setKeeper = (tid: string, name: string) =>
+    setSel((s) => {
+      const present = new Set(s[tid].present);
+      present.add(name); // Torwart ist zwingend anwesend
+      return { ...s, [tid]: { present, keeper: s[tid].keeper === name ? undefined : name } };
+    });
+
+  const save = () => {
+    const teams: EveningRoster['teams'] = {};
+    teamIds.forEach((tid) => {
+      const cur = sel[tid];
+      teams[tid] = { present: [...cur.present], ...(cur.keeper ? { goalkeeper: cur.keeper } : {}) };
+    });
+    onSave(teams, minutes);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="hl-modal-card relative w-full sm:max-w-2xl max-h-[90vh] rounded-t-3xl sm:rounded-3xl border border-white/10 overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+          <div>
+            <h2 className="font-display font-black uppercase tracking-tight text-lg">Wer ist heute da?</h2>
+            <p className="text-[11px] text-hl-dim">Abwesende werden im Tracker ausgeblendet · TW = Torwart</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 grid place-items-center rounded-lg hover:bg-white/10 cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="overflow-y-auto px-5 py-4 space-y-6">
+          {teamIds.map((tid) => {
+            const team = resolveTeam(tid);
+            const squad = team?.spielerliste ?? [];
+            const cur = sel[tid];
+            return (
+              <section key={tid}>
+                <div className="flex items-center gap-2 mb-2">
+                  <TeamBadge team={team} />
+                  <span className="font-display font-black uppercase tracking-tight">{team?.name ?? tid}</span>
+                  <span className="text-[11px] text-hl-dim">
+                    {cur.present.size}/{squad.length} da
+                  </span>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-1.5">
+                  {squad.map((p) => {
+                    const on = cur.present.has(p.name);
+                    const isK = cur.keeper === p.name;
+                    return (
+                      <div
+                        key={p.name}
+                        className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 ${
+                          on ? 'border-white/10 bg-white/[.04]' : 'border-white/[.06] opacity-55'
+                        }`}
+                      >
+                        <button onClick={() => toggle(tid, p.name)} className="flex-1 text-left text-sm font-semibold truncate cursor-pointer">
+                          <span className={on ? 'text-hl-green' : 'text-hl-faint'}>{on ? '✓' : '–'}</span> {p.name}
+                        </button>
+                        <button
+                          onClick={() => setKeeper(tid, p.name)}
+                          title="Als Torwart"
+                          className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider cursor-pointer border ${
+                            isK ? 'bg-hl-gold/15 border-hl-gold/40 text-hl-gold' : 'bg-white/5 border-white/10 text-hl-faint'
+                          }`}
+                        >
+                          TW
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {squad.length === 0 && <div className="text-xs text-hl-mute">Kein Kader hinterlegt.</div>}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-white/10">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-hl-mute hover:text-hl-text cursor-pointer">
+            Abbrechen
+          </button>
+          <button
+            onClick={save}
+            className="px-5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-brand-accent text-brand-dark hover:bg-brand-accent-light transition-colors cursor-pointer flex items-center gap-1.5"
+          >
+            <Check className="w-3.5 h-3.5" /> Übernehmen
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -443,19 +443,29 @@ export default function App() {
     if (!canEditHighlights) setEditMode(false);
   }, [canEditHighlights]);
 
-  // Getrackte Werte (nur veröffentlichte) + Einstellungen einmalig laden.
+  // Score-Einstellungen einmalig laden.
   useEffect(() => {
-    fetchPublicStats()
-      .then((r) => setTrackingRows(r.rows))
-      .catch(() => {
-        /* keine Daten – Karten bleiben verborgen */
-      });
     fetchScoring()
       .then(setScoring)
       .catch(() => {
         /* Defaults bleiben */
       });
   }, []);
+
+  // Getrackte Werte (nur veröffentlichte) der AKTIVEN Saison laden – reagiert auf
+  // die Demo-Umschaltung, sodass die Website im Demo-Modus nur Demo-Tracking zeigt.
+  useEffect(() => {
+    const sid = currentSeason?.id;
+    if (!sid) {
+      setTrackingRows([]);
+      return;
+    }
+    fetchPublicStats(sid)
+      .then((r) => setTrackingRows(r.rows))
+      .catch(() => {
+        /* keine Daten – Karten bleiben verborgen */
+      });
+  }, [currentSeason?.id]);
 
   // Aufstellungen laden, sobald jemand angemeldet ist (für den Schiedsrichtermodus).
   useEffect(() => {
@@ -1015,11 +1025,13 @@ export default function App() {
     }
     return (
       <TrackingCenter
-        teams={teams}
-        matches={matches}
-        seasons={seasons}
+        teams={visibleTeams}
+        matches={demo.active ? currentSeasonMatches : matches}
+        seasons={demo.active && demoSeason ? [demoSeason] : visibleSeasons}
         roster={roster}
         eventArchive={eventArchive}
+        activeSeasonId={currentSeason?.id ?? ''}
+        demoActive={demo.active}
         onBack={() => navigateTo('/admin')}
       />
     );

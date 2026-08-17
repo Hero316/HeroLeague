@@ -4,6 +4,7 @@ import { requireStaff, getSession } from './_lib/auth.js';
 import { badRequest, isNonEmptyString } from './_lib/validate.js';
 import { sheetInfo } from './_lib/gsheets.js';
 import { exportLeagueDay } from './_lib/sheetExport.js';
+import { readDemo } from './_lib/demo.js';
 
 // ===========================================================================
 // Statistics Center — Roh-Zähler je Spieler & Spiel + Score-Einstellungen.
@@ -129,6 +130,11 @@ const exportDay = requireStaff(async (req: VercelRequest, res: VercelResponse) =
   const dayKey = (req.body ?? {}).dayKey;
   if (!isNonEmptyString(dayKey)) return badRequest(res, 'dayKey fehlt.');
   if (!dayKey.startsWith('s:')) return res.status(400).json({ error: 'Excel-Kopie aktuell nur für Liga-Spieltage.' });
+  // Harte Absicherung: Demo-Daten dürfen NIE ins echte Sheet.
+  const demo = await readDemo();
+  if (demo?.active && dayKey.startsWith(`s:${demo.seasonId}:`)) {
+    return res.status(400).json({ error: 'Excel-Kopie im Demo-Modus deaktiviert.' });
+  }
   try {
     const rows = (await sql`
       SELECT match_id AS "matchId", team_id AS "teamId", player_name AS "playerName", role, counts

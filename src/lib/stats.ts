@@ -1,6 +1,6 @@
 import { apiFetch } from './api';
 import { mergeScoring } from './scoring';
-import type { MatchPlayerStat, ScoringConfig } from '../types';
+import type { EveningRoster, MatchPlayerStat, ScoringConfig } from '../types';
 
 // ===========================================================================
 // Frontend-Anbindung ans Statistics Center (/api/stats).
@@ -61,6 +61,20 @@ export function exportToSheet(
 // Eine Spieler-Zeile (Zähler) speichern.
 export function saveTally(row: MatchPlayerStat): Promise<{ ok: boolean }> {
   return apiFetch('/api/stats?resource=tally', { method: 'POST', body: JSON.stringify(row) });
+}
+
+// Anwesenheit/Torwart eines Spieltags speichern (Abend-Aufstellung). Schreibt
+// zusätzlich die Abwesenden in die Einzelspiele zurück (für Einsätze/Excel).
+export function saveAttendance(
+  seasonId: string,
+  matchday: number,
+  minutes: number,
+  teams: EveningRoster['teams']
+): Promise<unknown> {
+  return apiFetch('/api/twitch?resource=roster', {
+    method: 'POST',
+    body: JSON.stringify({ seasonId, matchday, minutes, teams }),
+  });
 }
 
 // --- Spieltag-/Event-Schlüssel (eindeutig, stabil) --------------------------
