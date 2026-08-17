@@ -3,6 +3,7 @@ import { sql } from './_lib/db.js';
 import { requireStaff, getSession } from './_lib/auth.js';
 import { badRequest, isNonEmptyString } from './_lib/validate.js';
 import { sheetInfo } from './_lib/gsheets.js';
+import { exportLeagueDay } from './_lib/sheetExport.js';
 
 // ===========================================================================
 // Statistics Center — Roh-Zähler je Spieler & Spiel + Score-Einstellungen.
@@ -123,6 +124,27 @@ const testSheet = requireStaff(async (_req: VercelRequest, res: VercelResponse) 
   }
 });
 
+// Einen Liga-Spieltag aus der DB in das Google Sheet kopieren (manuell, per Knopf).
+const exportDay = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+  const dayKey = (req.body ?? {}).dayKey;
+  if (!isNonEmptyString(dayKey)) return badRequest(res, 'dayKey fehlt.');
+  if (!dayKey.startsWith('s:')) return res.status(400).json({ error: 'Excel-Kopie aktuell nur für Liga-Spieltage.' });
+  try {
+    const rows = (await sql`
+      SELECT match_id AS "matchId", team_id AS "teamId", player_name AS "playerName", counts
+      FROM match_player_stats WHERE day_key = ${dayKey}`) as {
+      matchId: string;
+      teamId: string;
+      playerName: string;
+      counts: Record<string, number>;
+    }[];
+    const summary = await exportLeagueDay(dayKey, rows);
+    return res.json({ ok: true, ...summary });
+  } catch (err) {
+    return res.status(400).json({ error: err instanceof Error ? err.message : 'Export-Fehler' });
+  }
+});
+
 const savePublish = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
   const b = (req.body ?? {}) as { dayKey?: unknown; live?: unknown };
   if (!isNonEmptyString(b.dayKey)) return badRequest(res, 'dayKey ist Pflicht.');
@@ -200,6 +222,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'tally') return saveTally(req, res);
       if (resource === 'publish') return savePublish(req, res);
       if (resource === 'sheet-test') return testSheet(req, res);
+      if (resource === 'export') return exportDay(req, res);
       return badRequest(res, 'Unbekannte Ressource.');
     }
 

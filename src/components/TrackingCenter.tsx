@@ -14,6 +14,7 @@ import {
   Undo2,
   X,
   FlaskConical,
+  FileSpreadsheet,
 } from 'lucide-react';
 import type {
   ActionCounts,
@@ -38,6 +39,7 @@ import {
   leagueDayKey,
   eventDayKey,
   testSheet,
+  exportToSheet,
 } from '../lib/stats';
 
 // ===========================================================================
@@ -389,6 +391,26 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
     }
   }, []);
 
+  const [exporting, setExporting] = useState(false);
+  const runExport = useCallback(async () => {
+    if (!dayKey || selectedEventId) return;
+    if (!window.confirm('Die getrackten Werte dieses Spieltags in das Google Sheet („Match-Tracking") kopieren?')) return;
+    setExporting(true);
+    try {
+      const r = await exportToSheet(dayKey);
+      let msg = `✅ In Excel kopiert.\n\nSpiele: ${r.matches}\nSpieler: ${r.players}\nGesetzte Werte: ${r.written}`;
+      if (r.unmatched?.length) {
+        msg += `\n\n⚠️ Nicht zugeordnet (${r.unmatched.length}):\n- ` + r.unmatched.slice(0, 12).join('\n- ');
+        if (r.unmatched.length > 12) msg += `\n- … und ${r.unmatched.length - 12} weitere`;
+      }
+      window.alert(msg);
+    } catch (e) {
+      window.alert('❌ ' + (e instanceof Error ? e.message : 'Kopieren fehlgeschlagen'));
+    } finally {
+      setExporting(false);
+    }
+  }, [dayKey, selectedEventId]);
+
   const light = theme === 'light';
   const headerSub = selectedEvent
     ? selectedEvent.title || 'Testspiel'
@@ -491,6 +513,8 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
               live={dayLive}
               onTogglePublish={togglePublish}
               onOpenMatch={setSelectedMatchId}
+              onExport={selectedEvent ? undefined : runExport}
+              exporting={exporting}
             />
           ) : (
             <DayList
@@ -617,6 +641,8 @@ function DayView({
   live,
   onTogglePublish,
   onOpenMatch,
+  onExport,
+  exporting,
 }: {
   title: string;
   isEvent: boolean;
@@ -627,6 +653,8 @@ function DayView({
   live: boolean;
   onTogglePublish: () => void;
   onOpenMatch: (id: string) => void;
+  onExport?: () => void;
+  exporting?: boolean;
 }) {
   const trackedCount = (matchId: string) =>
     Object.entries(rows).filter(([k, r]) => k.startsWith(`${matchId}::`) && anyCount(r.counts)).length;
@@ -638,15 +666,28 @@ function DayView({
           {isEvent && <FlaskConical className="w-5 h-5 text-hl-magenta" />}
           {title}
         </h1>
-        <button
-          onClick={onTogglePublish}
-          className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-colors cursor-pointer border ${
-            live ? 'bg-hl-green/15 border-hl-green/40 text-hl-green' : 'bg-white/5 border-white/10 text-hl-mute hover:text-hl-text'
-          }`}
-        >
-          <Radio className="w-3.5 h-3.5" />
-          {live ? 'Live · sichtbar' : 'Live schalten'}
-        </button>
+        <div className="flex items-center gap-2">
+          {onExport && (
+            <button
+              onClick={onExport}
+              disabled={exporting}
+              title="Diese Werte ins Google Sheet kopieren"
+              className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-colors cursor-pointer border border-white/10 bg-white/5 text-hl-mute hover:text-hl-text disabled:opacity-50"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              {exporting ? 'Kopiere…' : 'In Excel kopieren'}
+            </button>
+          )}
+          <button
+            onClick={onTogglePublish}
+            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-colors cursor-pointer border ${
+              live ? 'bg-hl-green/15 border-hl-green/40 text-hl-green' : 'bg-white/5 border-white/10 text-hl-mute hover:text-hl-text'
+            }`}
+          >
+            <Radio className="w-3.5 h-3.5" />
+            {live ? 'Live · sichtbar' : 'Live schalten'}
+          </button>
+        </div>
       </div>
 
       {loading ? (

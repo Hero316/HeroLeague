@@ -92,3 +92,49 @@ export async function sheetInfo(): Promise<{ title: string; sheets: string[] }> 
     sheets: (data.sheets ?? []).map((s) => s.properties?.title ?? '').filter(Boolean),
   };
 }
+
+// Spaltennummer → A1-Buchstabe (1→A, 27→AA, 46→AT).
+export function colLetter(n: number): string {
+  let s = '';
+  while (n > 0) {
+    const m = (n - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
+// Einen A1-Bereich lesen (Ergebnis: Zeilen × Spalten als Strings).
+export async function readRange(range: string): Promise<string[][]> {
+  const token = await getAccessToken();
+  const id = sheetId();
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(range)}?majorDimension=ROWS`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error('Lesen fehlgeschlagen (' + range + '): ' + t.slice(0, 160));
+  }
+  const data = (await res.json()) as { values?: string[][] };
+  return data.values ?? [];
+}
+
+// Mehrere Einzelzellen in EINEM Aufruf setzen (absolute Werte, RAW).
+export async function batchWriteCells(updates: { range: string; value: number | string }[]): Promise<void> {
+  if (!updates.length) return;
+  const token = await getAccessToken();
+  const id = sheetId();
+  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values:batchUpdate`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      valueInputOption: 'RAW',
+      data: updates.map((u) => ({ range: u.range, values: [[u.value]] })),
+    }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error('Schreiben fehlgeschlagen: ' + t.slice(0, 200));
+  }
+}
