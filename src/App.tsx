@@ -45,6 +45,7 @@ import { PageHeader, Footer, AccordionGroup, AccordionSection } from './componen
 import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, CalendarDays, MessageSquare, UserCircle, Bell, Trophy, ChevronRight } from 'lucide-react';
 import TrackingCenter from './components/TrackingCenter';
 import SpielberichtPage from './components/SpielberichtPage';
+import WertungenPage from './components/WertungenPage';
 
 // Öffentliche Tabs haben eigene URLs, damit man nach einem Reload dort bleibt, wo man war.
 const TAB_PATHS: Record<ActiveTab, string> = {
@@ -687,6 +688,56 @@ export default function App() {
         />
         <main className="flex-1">
           <LegalPage kind={kind} onBack={goBack} />
+        </main>
+        <Footer onNavigate={goToTab} onNavigatePath={navigateTo} />
+      </div>
+    );
+  }
+
+  // ROUTE: /wertungen – öffentliche Auszeichnungen aus getrackten Daten
+  if (currentPath.startsWith('/wertungen')) {
+    return (
+      <div className="min-h-screen text-hl-text font-sans flex flex-col overflow-x-clip">
+        <PageBackground page="heroone" />
+        {renderMobileDock()}
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={goToTab}
+          isAdmin={isAdmin}
+          canAccessBackoffice={canAccessBackoffice}
+          onLogout={handleLogout}
+          onOpenLogin={() => navigateTo('/admin')}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
+          onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
+          demoActive={demo.active}
+          seasonLabel={selectedSeasonName}
+          seasonNumber={currentSeasonNumber}
+          hasLiveMatch={hasLiveMatch}
+          eventActive={!!activeEvent}
+          eventTitle={activeEvent?.title}
+          onOpenEvent={() => navigateTo('/testspiel')}
+          hasHighlights={hasHighlights}
+          mobileMode={mobileMode}
+          onToggleMobileMode={toggleMobileMode}
+          teams={visibleTeams}
+          matches={currentSeasonMatches}
+          onSelectTeam={openTeamDetail}
+          onGoToMatchday={goToMatchday}
+          albums={highlights.albums}
+          onOpenAlbum={openHighlightsAlbum}
+        />
+        <main className="flex-1">
+          <WertungenPage
+            rows={trackingRows}
+            cfg={scoring}
+            teams={visibleTeams}
+            matches={currentSeasonMatches}
+            seasonLabel={selectedSeasonName}
+            onBack={goBack}
+            onSelectPlayer={(teamId, name) =>
+              navigateTo(`/verein/${encodeURIComponent(teamId)}/spieler/${encodeURIComponent(name)}`)
+            }
+          />
         </main>
         <Footer onNavigate={goToTab} onNavigatePath={navigateTo} />
       </div>
@@ -1398,6 +1449,7 @@ export default function App() {
             seasonNumber={selectedSeasonNumber}
             seasonLabel={selectedSeasonName}
             onSelectTeam={openTeamDetail}
+            onOpenWertungen={() => navigateTo('/wertungen')}
           />
         </>
       )}

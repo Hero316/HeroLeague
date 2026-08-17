@@ -1,4 +1,5 @@
 import React from 'react';
+import { Star } from 'lucide-react';
 import { PlayerStat, Team } from '../types';
 import PlayerCrest from './PlayerCrest';
 import { Reveal } from './anim';
@@ -10,12 +11,13 @@ interface HeroOneProps {
   seasonNumber?: number;
   seasonLabel?: string;
   onSelectTeam?: (teamId: string, playerName?: string) => void;
+  onOpenWertungen?: () => void; // öffnet die getrackten Wertungen (Statistics Center)
 }
 
 // HERO ONE – die höchste Auszeichnung der Liga (früher „Ballon d'Or").
 // Eigene Sektion mit Gold-Akzent. Wertung aus Toren, Vorlagen, „bester Spieler",
 // Team-Ergebnis und Torwart-zu-null – berechnet in api/_lib/league.ts.
-export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onSelectTeam }: HeroOneProps) {
+export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onSelectTeam, onOpenWertungen }: HeroOneProps) {
   const ranking = React.useMemo(
     () =>
       [...players]
@@ -52,6 +54,16 @@ export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onS
 
   return (
     <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-16">
+      {onOpenWertungen && (
+        <div className="flex justify-center pt-2">
+          <button
+            onClick={onOpenWertungen}
+            className="inline-flex items-center gap-1.5 text-[11px] font-sans font-bold uppercase tracking-wider text-brand-accent-light hover:text-white border border-brand-accent/30 hover:border-brand-accent/60 rounded-full px-4 py-1.5 transition-colors cursor-pointer"
+          >
+            <Star className="w-3.5 h-3.5" /> Getrackte Noten &amp; Wertungen
+          </button>
+        </div>
+      )}
       {/* Herausragender Titel: „HERO" kräftig, Zahlwort golden schimmernd */}
       <div className="relative pt-8 pb-7 sm:pt-12 sm:pb-9 text-center overflow-hidden">
         <div
