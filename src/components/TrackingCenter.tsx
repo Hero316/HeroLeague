@@ -197,10 +197,13 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
     return [];
   }, [selectedEvent, selectedMatchday, matches, seasonId, eventGamesAsMatches]);
 
-  // Kader eines Teams: aus dem echten Verein. Bei Liga zusätzlich auf die
-  // Abend-Aufstellung gefiltert (rk = Roster-Schlüssel); bei Events voller Kader.
+  // Kader eines Teams für den Spieltag – NUR anwesende Spieler:
+  //  • Ist eine Abend-Aufstellung gesetzt, gilt deren Anwesenheitsliste.
+  //  • Zusätzlich werden für den Spieltag als abwesend markierte Spieler
+  //    ausgeblendet (aus der Spiel-Verwaltung, `absent`).
+  // Bei Events (kein rk) wird nicht nach Aufstellung gefiltert.
   const squadFor = useCallback(
-    (key: string, rk: string | null): { name: string; role: StatRole }[] => {
+    (key: string, rk: string | null, absent?: Set<string>): { name: string; role: StatRole }[] => {
       const team = resolveTeam(key);
       if (!team) return [];
       const rt = rk ? roster[rk]?.teams?.[team.id] : undefined;
@@ -208,6 +211,7 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
       const keeper = rt?.goalkeeper;
       return (team.spielerliste || [])
         .filter((p) => (present && present.length ? present.includes(p.name) : true))
+        .filter((p) => !absent || !absent.has(p.name))
         .map((p) => ({
           name: p.name,
           role: (keeper ? p.name === keeper : p.goalkeeper) ? ('keeper' as StatRole) : ('field' as StatRole),
@@ -226,11 +230,20 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
         saved.forEach((r) => {
           savedMap[rowKey(r.matchId, r.teamId, r.playerName)] = { role: r.role, counts: normalizeCounts(r.counts) };
         });
+        // Für den Spieltag als abwesend markierte Spieler je Team (Union über alle
+        // Spiele des Tages) – so wirkt ein „Rausnehmen" im Backend spieltagsweit.
+        const absentByTeam: Record<string, Set<string>> = {};
+        games.forEach((m) => {
+          (m.absentees || []).forEach((a) => {
+            (absentByTeam[a.teamId] ??= new Set<string>()).add(a.playerName);
+          });
+        });
+
         const next: RowMap = {};
         games.forEach((m) => {
           ([m.homeTeamId, m.awayTeamId] as const).forEach((tid) => {
             const teamName = resolveTeam(tid)?.name ?? tid;
-            squadFor(tid, rk).forEach((pl) => {
+            squadFor(tid, rk, absentByTeam[tid]).forEach((pl) => {
               const k = rowKey(m.id, tid, pl.name);
               const sv = savedMap[k];
               next[k] = {
@@ -242,6 +255,22 @@ export default function TrackingCenter({ teams, matches, seasons, roster, eventA
               };
             });
           });
+        });
+
+        // Sicherheitsnetz: bereits getrackte Spieler immer sichtbar lassen,
+        // auch wenn sie inzwischen als abwesend markiert wurden (keine Daten „verstecken").
+        const dayGameIds = new Set(games.map((g) => g.id));
+        saved.forEach((r) => {
+          if (!dayGameIds.has(r.matchId)) return;
+          const k = rowKey(r.matchId, r.teamId, r.playerName);
+          if (next[k]) return;
+          next[k] = {
+            teamId: r.teamId,
+            teamName: resolveTeam(r.teamId)?.name ?? r.teamId,
+            playerName: r.playerName,
+            role: (r.role as StatRole) || 'field',
+            counts: normalizeCounts(r.counts),
+          };
         });
         setRows(next);
         setDayLive(live);
