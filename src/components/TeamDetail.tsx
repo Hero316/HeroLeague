@@ -1,12 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronDown } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Match, Player, PlayerStat, Team, TeamSponsorsMap } from '../types';
+import { Match, MatchPlayerStat, Player, PlayerStat, ScoringConfig, StatRole, Team, TeamSponsorsMap } from '../types';
 import { calculateStandings } from '../lib/standings';
+import { matchNote, normalizeCounts, playerCard, quotas, sumCounts } from '../lib/rating';
 import { apiFetch } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
 import BestLineup from './BestLineup';
+import FifaCard from './FifaCard';
 import { TeamCrest, FormPill, MatchStatusBadge, shortDate, shade, monogram, ImageZoom, SponsorLink } from './ui';
+
+// Note-Farbe (rot → gelb → grün) relativ zur Rating-Skala.
+function noteColorFor(note: number, cfg: ScoringConfig): string {
+  const span = cfg.rating.max - cfg.rating.min || 1;
+  const t = Math.max(0, Math.min(1, (note - cfg.rating.min) / span));
+  if (t < 0.5) return '#FF5442';
+  if (t < 0.7) return '#E9C46A';
+  return '#43E5A0';
+}
 
 // Modulweiter Cache der Team-Sponsoren: einmal je Seitenaufruf laden.
 let teamSponsorsCache: TeamSponsorsMap | null = null;
@@ -20,6 +31,9 @@ interface TeamDetailProps {
   initialPlayer?: string; // aus der URL/Suche vorausgewählter Spieler (Detail direkt offen)
   onBack: () => void;
   onSelectTeam: (teamId: string) => void;
+  trackingRows?: MatchPlayerStat[]; // veröffentlichte getrackte Zähler (Statistics Center)
+  scoringConfig?: ScoringConfig; // Score-Einstellungen (für Note/Quoten/Karte)
+  onOpenMatch?: (matchId: string) => void; // öffnet den Spielbericht
 }
 
 // Ein Kaderspieler mit den aus den Spieldaten berechneten Werten.
@@ -44,6 +58,9 @@ export default function TeamDetail({
   initialPlayer,
   onBack,
   onSelectTeam,
+  trackingRows = [],
+  scoringConfig,
+  onOpenMatch,
 }: TeamDetailProps) {
   const color = team.logoColor || '#22DFC9';
   const accentSoft = shade(color, 1.25); // hellere Variante für Text auf dunklem Grund
@@ -156,6 +173,35 @@ export default function TeamDetail({
   }, []);
   const positionLabel = (p: RosterEntry) =>
     p.gamesInGoal > 0 && p.gamesInGoal * 2 >= p.matchesPlayed ? 'Torwart' : 'Feldspieler';
+
+  // --- Statistics Center: getrackte Werte des ausgewählten Spielers ---------
+  const playerRows = useMemo(
+    () => trackingRows.filter((r) => r.teamId === team.id && r.playerName === selectedPlayerName),
+    [trackingRows, team.id, selectedPlayerName]
+  );
+  const trackedTotal = useMemo(() => sumCounts(playerRows.map((r) => normalizeCounts(r.counts))), [playerRows]);
+  const trackedRole: StatRole = selected && positionLabel(selected) === 'Torwart' ? 'keeper' : 'field';
+  const playerCardData = useMemo(
+    () =>
+      selected && playerRows.length > 0 && scoringConfig
+        ? playerCard(trackedTotal, playerRows.length, trackedRole, scoringConfig)
+        : null,
+    [selected, playerRows.length, trackedTotal, trackedRole, scoringConfig]
+  );
+  const trackedQuotas = useMemo(
+    () => (playerRows.length > 0 && scoringConfig ? quotas(trackedTotal, scoringConfig) : null),
+    [trackedTotal, playerRows.length, scoringConfig]
+  );
+  const perMatchNotes = useMemo(
+    () =>
+      scoringConfig
+        ? playerRows.map((r) => ({
+            matchId: r.matchId,
+            note: matchNote(normalizeCounts(r.counts), scoringConfig, r.role === 'keeper' ? 'keeper' : 'field'),
+          }))
+        : [],
+    [playerRows, scoringConfig]
+  );
 
   // Spieler-Panel bleibt IMMER gemountet (auch verdeckt), damit der Kopf konstant
   // hoch bleibt und beim Umschalten nichts springt. Ohne Auswahl dient der erste
@@ -292,7 +338,59 @@ export default function TeamDetail({
                     <span className="text-hl-red-soft font-bold">{sizingPlayer.losses}N</span>
                   </div>
                 )}
+
+                {/* Statistics Center: Quoten + Note je Spiel (aus getrackten Daten) */}
+                {playerCardData && scoringConfig && (
+                  <div className="mt-4">
+                    {trackedQuotas && (
+                      <div className="flex gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar">
+                        {trackedQuotas.passquote !== null && (
+                          <StatTile value={`${Math.round(trackedQuotas.passquote * 100)}%`} label="PASSQUOTE" accent />
+                        )}
+                        {trackedQuotas.schussquote !== null && (
+                          <StatTile value={`${Math.round(trackedQuotas.schussquote * 100)}%`} label="SCHUSSQ." accent />
+                        )}
+                        {trackedQuotas.zweikampfquote !== null && (
+                          <StatTile value={`${Math.round(trackedQuotas.zweikampfquote * 100)}%`} label="ZWEIKAMPF" accent />
+                        )}
+                        {trackedQuotas.dribblingquote !== null && (
+                          <StatTile value={`${Math.round(trackedQuotas.dribblingquote * 100)}%`} label="DRIBBLING" accent />
+                        )}
+                      </div>
+                    )}
+                    {perMatchNotes.length > 0 && (
+                      <div className="mt-3">
+                        <div className="font-sans font-bold text-[10px] tracking-[2px] uppercase text-hl-dim mb-1.5">Note je Spiel</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {perMatchNotes.map((pm, i) => (
+                            <button
+                              key={`${pm.matchId}-${i}`}
+                              onClick={() => onOpenMatch?.(pm.matchId)}
+                              className="px-2 py-1 rounded-lg text-xs font-display font-black tabular-nums border border-white/10 hover:border-white/25 transition-colors cursor-pointer"
+                              style={{ color: noteColorFor(pm.note, scoringConfig) }}
+                            >
+                              {pm.note.toFixed(1)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
+
+              {/* FIFA-Karte (Saison) – eigenes Flex-Kind, rutscht auf schmalen Screens darunter */}
+              {playerCardData && (
+                <div className="w-40 sm:w-48 shrink-0 mx-auto sm:mx-0">
+                  <FifaCard
+                    card={playerCardData}
+                    name={sizingPlayer.name}
+                    imageUrl={sizingPlayer.imageUrl}
+                    team={team}
+                    games={playerRows.length}
+                  />
+                </div>
+              )}
             </motion.div>
         )}
 

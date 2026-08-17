@@ -144,6 +144,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.json(await readLiveDays());
       }
 
+      // ÖFFENTLICH: nur veröffentlichte (live geschaltete) Spieltage. Für die
+      // Website (Spieler-Karten, Spielbericht). Optional auf eine Saison gefiltert.
+      if (resource === 'public') {
+        const season = typeof req.query.season === 'string' ? req.query.season : '';
+        const live = await readLiveDays();
+        const days = season ? live.filter((d) => d.startsWith(`s:${season}:`)) : live;
+        if (days.length === 0) return res.json({ rows: [], days: [] });
+        const rows = (await sql`
+          SELECT day_key AS "dayKey", match_id AS "matchId", team_id AS "teamId",
+                 player_name AS "playerName", role, counts
+          FROM match_player_stats WHERE day_key = ANY(${days}::text[])`) as StatRow[];
+        return res.json({ rows, days });
+      }
+
       // Roh-Daten je Spieltag/Spiel nur für eingeloggte Nutzer (Entwürfe sind intern).
       const session = await getSession(req);
       if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });

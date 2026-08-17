@@ -240,6 +240,7 @@ export function playerCard(total: ActionCounts, games: number, role: StatRole, c
 export function cardTier(ges: number, cfg: ScoringConfig): CardTier {
   if (ges >= cfg.tiers.tots) return 'tots';
   if (ges >= cfg.tiers.hero) return 'hero';
+  if (ges >= cfg.tiers.elite) return 'elite';
   if (ges >= cfg.tiers.gold) return 'gold';
   if (ges >= cfg.tiers.silber) return 'silber';
   return 'bronze';

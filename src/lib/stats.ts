@@ -40,6 +40,12 @@ export function fetchMatchStats(matchId: string): Promise<{ rows: MatchPlayerSta
   return apiFetch(`/api/stats?resource=match&matchId=${encodeURIComponent(matchId)}`);
 }
 
+// ÖFFENTLICH: nur veröffentlichte Spieltage (für Spieler-Karten & Spielbericht).
+export function fetchPublicStats(seasonId?: string): Promise<{ rows: MatchPlayerStat[]; days: string[] }> {
+  const q = seasonId ? `&season=${encodeURIComponent(seasonId)}` : '';
+  return apiFetch(`/api/stats?resource=public${q}`);
+}
+
 // Eine Spieler-Zeile (Zähler) speichern.
 export function saveTally(row: MatchPlayerStat): Promise<{ ok: boolean }> {
   return apiFetch('/api/stats?resource=tally', { method: 'POST', body: JSON.stringify(row) });

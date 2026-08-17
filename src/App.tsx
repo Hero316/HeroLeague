@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster, PlayerOfMonth } from './types';
+import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster, PlayerOfMonth, MatchPlayerStat, ScoringConfig } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
+import { fetchPublicStats, fetchScoring } from './lib/stats';
+import { DEFAULT_SCORING } from './lib/scoring';
 import { startPresence } from './lib/presence';
 import { syncPush } from './lib/push';
 import { seasonName } from './lib/heroAward';
@@ -42,6 +44,7 @@ import ChatUnreadBadge from './components/ChatUnreadBadge';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
 import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, CalendarDays, MessageSquare, UserCircle, Bell, Trophy, ChevronRight } from 'lucide-react';
 import TrackingCenter from './components/TrackingCenter';
+import SpielberichtPage from './components/SpielberichtPage';
 
 // Öffentliche Tabs haben eigene URLs, damit man nach einem Reload dort bleibt, wo man war.
 const TAB_PATHS: Record<ActiveTab, string> = {
@@ -68,6 +71,10 @@ export default function App() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [players, setPlayers] = useState<PlayerStat[]>([]);
+  // Statistics Center: veröffentlichte getrackte Zähler + Score-Einstellungen
+  // (für Spieler-FIFA-Karten und den Spielbericht). Öffentlich, ohne Login.
+  const [trackingRows, setTrackingRows] = useState<MatchPlayerStat[]>([]);
+  const [scoring, setScoring] = useState<ScoringConfig>(DEFAULT_SCORING);
   // Spieler des Monats schon beim Laden holen, damit der Hero direkt mit finaler
   // Höhe erscheint (sonst kommt der Slide asynchron dazu und der Hero „springt").
   const [pom, setPom] = useState<PlayerOfMonth | null>(null);
@@ -435,6 +442,20 @@ export default function App() {
     if (!canEditHighlights) setEditMode(false);
   }, [canEditHighlights]);
 
+  // Getrackte Werte (nur veröffentlichte) + Einstellungen einmalig laden.
+  useEffect(() => {
+    fetchPublicStats()
+      .then((r) => setTrackingRows(r.rows))
+      .catch(() => {
+        /* keine Daten – Karten bleiben verborgen */
+      });
+    fetchScoring()
+      .then(setScoring)
+      .catch(() => {
+        /* Defaults bleiben */
+      });
+  }, []);
+
   // Aufstellungen laden, sobald jemand angemeldet ist (für den Schiedsrichtermodus).
   useEffect(() => {
     if (sessionUser) fetchRoster();
@@ -672,6 +693,70 @@ export default function App() {
     );
   }
 
+  // ROUTE: /spiel/:id – öffentlicher Spielbericht (Einzelnoten aus getrackten Daten)
+  if (currentPath.startsWith('/spiel/')) {
+    const matchId = decodeURIComponent(currentPath.slice('/spiel/'.length).replace(/\/+$/, ''));
+    const match = matches.find((m) => m.id === matchId) ?? null;
+    return (
+      <div className="min-h-screen text-hl-text font-sans flex flex-col overflow-x-clip">
+        <PageBackground page="tabelle" />
+        {renderMobileDock()}
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={goToTab}
+          isAdmin={isAdmin}
+          canAccessBackoffice={canAccessBackoffice}
+          onLogout={handleLogout}
+          onOpenLogin={() => navigateTo('/admin')}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
+          onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
+          demoActive={demo.active}
+          seasonLabel={selectedSeasonName}
+          seasonNumber={currentSeasonNumber}
+          hasLiveMatch={hasLiveMatch}
+          eventActive={!!activeEvent}
+          eventTitle={activeEvent?.title}
+          onOpenEvent={() => navigateTo('/testspiel')}
+          hasHighlights={hasHighlights}
+          mobileMode={mobileMode}
+          onToggleMobileMode={toggleMobileMode}
+          teams={visibleTeams}
+          matches={currentSeasonMatches}
+          onSelectTeam={openTeamDetail}
+          onGoToMatchday={goToMatchday}
+          albums={highlights.albums}
+          onOpenAlbum={openHighlightsAlbum}
+        />
+        <main className="flex-1">
+          {match ? (
+            <SpielberichtPage
+              match={match}
+              teams={visibleTeams}
+              rows={trackingRows}
+              cfg={scoring}
+              onBack={goBack}
+              onSelectPlayer={(teamId, name) =>
+                navigateTo(`/verein/${encodeURIComponent(teamId)}/spieler/${encodeURIComponent(name)}`)
+              }
+            />
+          ) : (
+            <div className="text-center py-24 space-y-4">
+              <p className="text-hl-mute font-sans">Dieses Spiel gibt es nicht (mehr).</p>
+              <button
+                onClick={() => navigateTo('/')}
+                className="inline-flex items-center gap-1.5 text-xs font-sans font-bold uppercase tracking-wider text-brand-accent-light hover:underline cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Zurück zur Übersicht
+              </button>
+            </div>
+          )}
+        </main>
+        <Footer onNavigate={goToTab} onNavigatePath={navigateTo} />
+      </div>
+    );
+  }
+
   // ROUTE: /verein/:id – öffentliche Vereins-Detailseite
   if (currentPath.startsWith('/verein/')) {
     // Pfad: /verein/<id>  oder  /verein/<id>/spieler/<name> (Spieler direkt geöffnet)
@@ -721,6 +806,9 @@ export default function App() {
               initialPlayer={initialPlayer}
               onBack={goBack}
               onSelectTeam={openTeamDetail}
+              trackingRows={trackingRows}
+              scoringConfig={scoring}
+              onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
             />
           ) : (
             <div className="text-center py-24 space-y-4">

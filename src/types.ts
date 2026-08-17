@@ -638,10 +638,12 @@ export interface ScoringConfig {
     sic: CardAttrTarget; // Torwart: Sicherheit (Gegentore/zu null)
     stl: CardAttrTarget; // Torwart: Stellungsspiel (Standparade/Elfmeter)
   };
-  tiers: { silber: number; gold: number; hero: number; tots: number }; // Untergrenzen der Stufen
+  // Untergrenzen der Kartenstufen: Silber 65 · Gold 75 · Elite 85 (schwarze
+  // Karte) · Hero 90 (neongrüne Umrandung) · TOTS 95 (Sonderkarte).
+  tiers: { silber: number; gold: number; elite: number; hero: number; tots: number };
 }
 
-export type CardTier = 'bronze' | 'silber' | 'gold' | 'hero' | 'tots';
+export type CardTier = 'bronze' | 'silber' | 'gold' | 'elite' | 'hero' | 'tots';
 
 // Ergebnis der Quotenberechnung (null = unter dem Mindestwert, zählt nicht fürs Leaderboard).
 export interface Quotas {

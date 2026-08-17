@@ -59,7 +59,7 @@ export const DEFAULT_SCORING: ScoringConfig = {
     sic: { zielQuote: 0.5, zielMenge: 1.5, gewQuote: 0.6, gewMenge: 0.4 },
     stl: { zielQuote: 0.6, zielMenge: 1, gewQuote: 0.5, gewMenge: 0.5 },
   },
-  tiers: { silber: 65, gold: 80, hero: 90, tots: 95 },
+  tiers: { silber: 65, gold: 75, elite: 85, hero: 90, tots: 95 },
 };
 
 // Tief zusammenführen: gespeicherte (Teil-)Config über die Defaults legen, damit
