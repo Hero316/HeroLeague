@@ -65,6 +65,13 @@ export function exportToSheet(
   return apiFetch('/api/stats?resource=export', { method: 'POST', body: JSON.stringify({ dayKey }) });
 }
 
+// Die Score-Einstellungen (Punkte/Regler/Minimums) ins Google Sheet kopieren.
+export function exportScoringToSheet(
+  cfg: ScoringConfig
+): Promise<{ ok: boolean; sheet: string; written: number; matched: number; unmatched: string[] }> {
+  return apiFetch('/api/stats?resource=export-scoring', { method: 'POST', body: JSON.stringify(cfg) });
+}
+
 // Eine Spieler-Zeile (Zähler) speichern.
 export function saveTally(row: MatchPlayerStat): Promise<{ ok: boolean }> {
   return apiFetch('/api/stats?resource=tally', { method: 'POST', body: JSON.stringify(row) });

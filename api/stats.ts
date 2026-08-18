@@ -3,7 +3,7 @@ import { sql } from './_lib/db.js';
 import { requireStaff, getSession } from './_lib/auth.js';
 import { badRequest, isNonEmptyString } from './_lib/validate.js';
 import { sheetInfo } from './_lib/gsheets.js';
-import { exportLeagueDay } from './_lib/sheetExport.js';
+import { exportLeagueDay, exportScoringConfig } from './_lib/sheetExport.js';
 import { readDemo } from './_lib/demo.js';
 
 // ===========================================================================
@@ -152,6 +152,21 @@ const exportDay = requireStaff(async (req: VercelRequest, res: VercelResponse) =
   }
 });
 
+// Score-Einstellungen (Punkte/Regler/Minimums) aus dem Backend ins Google Sheet
+// kopieren (manuell, per Knopf). Nutzt die im Body übergebene Konfiguration.
+const exportScoring = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+  const cfg = req.body;
+  if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) {
+    return badRequest(res, 'Ungültige Einstellungen.');
+  }
+  try {
+    const summary = await exportScoringConfig(cfg);
+    return res.json({ ok: true, ...summary });
+  } catch (err) {
+    return res.status(400).json({ error: err instanceof Error ? err.message : 'Export-Fehler' });
+  }
+});
+
 const savePublish = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
   const b = (req.body ?? {}) as { dayKey?: unknown; live?: unknown };
   if (!isNonEmptyString(b.dayKey)) return badRequest(res, 'dayKey ist Pflicht.');
@@ -241,6 +256,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'publish') return savePublish(req, res);
       if (resource === 'sheet-test') return testSheet(req, res);
       if (resource === 'export') return exportDay(req, res);
+      if (resource === 'export-scoring') return exportScoring(req, res);
       return badRequest(res, 'Unbekannte Ressource.');
     }
 

@@ -1,6 +1,6 @@
-import { batchWriteCells, colLetter, readRange } from './gsheets.js';
+import { batchWriteCells, colLetter, readRange, sheetInfo } from './gsheets.js';
 import { getMatches, getTeams } from './db.js';
-import type { Team } from '../../src/types';
+import type { ScoringConfig, Team } from '../../src/types';
 
 // ===========================================================================
 // Kopie eines Liga-Spieltags aus unserer DB → Blatt „Match-Tracking".
@@ -163,4 +163,94 @@ export async function exportLeagueDay(dayKey: string, rows: ExportRow[]): Promis
 
   await batchWriteCells(updates);
   return { written: updates.length, matches: matchesTouched, players: playersTouched, placedNew, unmatched };
+}
+
+// ===========================================================================
+// Kopie der Score-Einstellungen (Punkte je Aktion, Rating-Regler, Mindestwerte)
+// aus unserem Backend → Blatt „Score-Einstellungen". So bleibt die Excel-Rechnung
+// im Gleichtakt mit dem, was wir im Backend justieren. Rein über die CODE-Spalte
+// zugeordnet (Spalte A = Aktions-Code, Spalte I = Minimum-Code) – also robust,
+// selbst wenn sich Zeilen verschieben. Werte gehen nach Spalte D (Performance)
+// UND E (Torwart); Mindestwerte nach Spalte K. Nichts anderes wird angefasst.
+// ===========================================================================
+
+const SCORING_SHEET_MATCH = /score.?einstellung/i;
+const SCORE_COL = 4; // D „Performance"
+const SCORE_COL_GK = 5; // E „Torwart"
+const MIN_VALUE_COL = 11; // K „Minimum"
+
+export interface ScoringExportSummary {
+  sheet: string;
+  written: number; // gesetzte Zellen
+  matched: number; // zugeordnete Codes
+  unmatched: string[]; // Codes ohne Zeile im Blatt
+}
+
+const fin = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+
+export async function exportScoringConfig(cfgRaw: unknown): Promise<ScoringExportSummary> {
+  const cfg = (cfgRaw ?? {}) as Partial<ScoringConfig>;
+  const p = (cfg.points ?? {}) as Record<string, unknown>;
+  const rating = (cfg.rating ?? {}) as Record<string, unknown>;
+  const mins = (cfg.minimums ?? {}) as Record<string, unknown>;
+
+  // Blatt finden (Name kann leicht abweichen – per Muster suchen).
+  const info = await sheetInfo();
+  const sheet = info.sheets.find((s) => SCORING_SHEET_MATCH.test(s));
+  if (!sheet) throw new Error('Blatt „Score-Einstellungen" nicht gefunden. Vorhandene Blätter: ' + info.sheets.join(', '));
+
+  // Code-Spalten lesen: A (Aktionen/Rating) und I (Mindestwerte).
+  const [colA, colI] = await Promise.all([readRange(`${sheet}!A1:A200`), readRange(`${sheet}!I1:I200`)]);
+  const rowOf = (rows: string[][]) => {
+    const m = new Map<string, number>();
+    rows.forEach((r, i) => {
+      const c = String(r[0] ?? '').trim().toUpperCase();
+      if (c) m.set(c, i + 1); // 1-basierte Blattzeile
+    });
+    return m;
+  };
+  const aRow = rowOf(colA);
+  const iRow = rowOf(colI);
+
+  // CODE → Wert (nur endliche Zahlen; alles andere wird übersprungen).
+  const main: Record<string, number | undefined> = {
+    GOAL: fin(p.goal), ASSIST: fin(p.assist), SHOT_ON: fin(p.shot_on), SHOT_MISS: fin(p.shot_miss),
+    PASS_OK: fin(p.pass_ok), PASS_FAIL: fin(p.pass_fail), KEY_PASS: fin(p.key_pass),
+    DRIBBLE_WON: fin(p.dribble_won), DRIBBLE_LOST: fin(p.dribble_lost),
+    DUEL_WON: fin(p.duel_won), DUEL_LOST: fin(p.duel_lost), INTERCEPTION: fin(p.interception),
+    TURNOVER: fin(p.turnover), OWN_GOAL: fin(p.own_goal), PENALTY_GOAL: fin(p.penalty_goal),
+    SAVE: fin(p.save), GK_GOAL_AGAINST: fin(p.gk_goal_against), PENALTY_SAVE: fin(p.penalty_save),
+    SHOT_BLOCKED_OFF: fin(p.shot_blocked_off), SHOT_BLOCKED_DEF: fin(p.shot_blocked_def),
+    GK_POSITION_SAVE: fin(p.gk_position_save),
+    CLEAN_SHEET: fin(cfg.cleanSheetBonus), SCH_BLOCK_FACTOR: fin(cfg.shotBlockFactor),
+    RATING_BASE: fin(rating.base), RATING_FACTOR: fin(rating.factor),
+    RATING_MIN: fin(rating.min), RATING_MAX: fin(rating.max),
+  };
+  const minCodes: Record<string, number | undefined> = {
+    MIN_APPS: fin(mins.apps), MIN_PASSES: fin(mins.passes),
+    MIN_SHOTS: fin(mins.shots), MIN_DUELS: fin(mins.duels), MIN_GK: fin(mins.gk),
+  };
+
+  const updates: { range: string; value: number | string }[] = [];
+  const unmatched: string[] = [];
+  let matched = 0;
+
+  for (const [code, val] of Object.entries(main)) {
+    if (val === undefined) continue;
+    const row = aRow.get(code);
+    if (!row) { unmatched.push(code); continue; }
+    matched++;
+    updates.push({ range: `${sheet}!${colLetter(SCORE_COL)}${row}`, value: val });
+    updates.push({ range: `${sheet}!${colLetter(SCORE_COL_GK)}${row}`, value: val });
+  }
+  for (const [code, val] of Object.entries(minCodes)) {
+    if (val === undefined) continue;
+    const row = iRow.get(code);
+    if (!row) { unmatched.push(code); continue; }
+    matched++;
+    updates.push({ range: `${sheet}!${colLetter(MIN_VALUE_COL)}${row}`, value: val });
+  }
+
+  await batchWriteCells(updates);
+  return { sheet, written: updates.length, matched, unmatched };
 }

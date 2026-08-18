@@ -50,6 +50,7 @@ import {
   eventDayKey,
   testSheet,
   exportToSheet,
+  exportScoringToSheet,
   saveAttendance,
 } from '../lib/stats';
 
@@ -1276,9 +1277,28 @@ function AttendancePanel({
 // ---------------------------------------------------------------------------
 function ScoringPanel({ cfg, onSave, onClose }: { cfg: ScoringConfig; onSave: (c: ScoringConfig) => void; onClose: () => void }) {
   const [draft, setDraft] = useState<ScoringConfig>(cfg);
+  const [exporting, setExporting] = useState(false);
   useBackClose(true, onClose);
 
   const setPoint = (key: keyof ActionCounts, v: number) => setDraft((d) => ({ ...d, points: { ...d.points, [key]: v } }));
+
+  // Diese Einstellungen zusätzlich ins Google Sheet („Score-Einstellungen") kopieren,
+  // damit die Excel-Rechnung mit unserer übereinstimmt. Speichert vorher für die Website.
+  const pushToSheet = async () => {
+    if (!window.confirm('Diese Score-Einstellungen ins Google Sheet („Score-Einstellungen") übernehmen?\n\nDie Punkte, Rating-Regler und Mindestwerte werden dort überschrieben.')) return;
+    setExporting(true);
+    try {
+      onSave(draft); // gleiche Werte auch für die Website übernehmen
+      const r = await exportScoringToSheet(draft);
+      let msg = `✅ In Excel übernommen (Blatt „${r.sheet}").\n\nGesetzte Zellen: ${r.written}\nZugeordnete Werte: ${r.matched}`;
+      if (r.unmatched?.length) msg += `\n\n⚠️ Nicht gefunden: ${r.unmatched.join(', ')}`;
+      window.alert(msg);
+    } catch (e) {
+      window.alert('❌ ' + (e instanceof Error ? e.message : 'Übernahme fehlgeschlagen'));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6" role="dialog" aria-modal="true">
@@ -1320,6 +1340,10 @@ function ScoringPanel({ cfg, onSave, onClose }: { cfg: ScoringConfig; onSave: (c
               <NumField label="Minimum" value={draft.rating.min} step={0.5} onChange={(v) => setDraft((d) => ({ ...d, rating: { ...d.rating, min: v } }))} />
               <NumField label="Maximum" value={draft.rating.max} step={0.5} onChange={(v) => setDraft((d) => ({ ...d, rating: { ...d.rating, max: v } }))} />
             </div>
+            <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
+              Zu viele 9–10er? <b>„je Punkt"</b> senken (z.&nbsp;B. 0,20 → 0,12) – dann steigt die Note langsamer. Oder einzelne Aktionen oben
+              weniger Punkte geben (z.&nbsp;B. „Pass erfolgreich" 0,10 → 0,05). Wirkt sofort auf alle Noten.
+            </p>
           </section>
 
           <section>
@@ -1345,9 +1369,17 @@ function ScoringPanel({ cfg, onSave, onClose }: { cfg: ScoringConfig; onSave: (c
           </section>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-white/10">
+        <div className="flex flex-wrap items-center justify-end gap-2 px-5 py-4 border-t border-white/10">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-hl-mute hover:text-hl-text cursor-pointer">
             Abbrechen
+          </button>
+          <button
+            onClick={pushToSheet}
+            disabled={exporting}
+            title="Diese Einstellungen ins Google Sheet kopieren"
+            className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider border border-white/10 bg-white/5 text-hl-soft hover:text-white transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" /> {exporting ? 'Übernehme…' : 'In Excel übernehmen'}
           </button>
           <button
             onClick={() => {
