@@ -97,15 +97,15 @@ export default function SpielberichtPage({ match, teams, rows, cfg, onBack, onSe
           onOpenCard={() => onSelectPlayer(selected.teamId, selected.playerName)}
         />
       ) : (
-        <div className="hl-card p-6 mb-6 flex items-center justify-center gap-5">
-          <TeamHead team={home} align="right" />
-          <div className="text-center shrink-0">
-            <div className="font-display font-black text-4xl tabular-nums leading-none">
-              {match.homeScore ?? '–'}<span className="text-hl-faint mx-1">:</span>{match.awayScore ?? '–'}
+        <div className="hl-card p-4 sm:p-6 mb-6 flex items-center justify-center gap-2 sm:gap-5">
+          <TeamHead team={home} />
+          <div className="text-center shrink-0 px-1">
+            <div className="font-display font-black text-3xl sm:text-4xl tabular-nums leading-none">
+              {match.homeScore ?? '–'}<span className="text-hl-faint mx-0.5 sm:mx-1">:</span>{match.awayScore ?? '–'}
             </div>
-            <div className="text-[10px] uppercase tracking-[2px] text-hl-dim mt-1">Spieltag {match.matchday}</div>
+            <div className="text-[9px] sm:text-[10px] uppercase tracking-[2px] text-hl-dim mt-1 whitespace-nowrap">Spieltag {match.matchday}</div>
           </div>
-          <TeamHead team={away} align="left" />
+          <TeamHead team={away} />
         </div>
       )}
 
@@ -246,12 +246,15 @@ function PlayerMatchDetail({
   );
 }
 
-function TeamHead({ team, align }: { team?: Team; align: 'left' | 'right' }) {
+// Team im Ergebnis-Kopf: Wappen oben, Name darunter mittig – so bekommt der Name
+// die volle Spaltenbreite und wird am Handy NICHT abgeschnitten (bricht bei Bedarf um).
+function TeamHead({ team }: { team?: Team }) {
   return (
-    <div className={`flex items-center gap-2.5 flex-1 min-w-0 ${align === 'right' ? 'justify-end text-right' : 'justify-start'}`}>
-      {align === 'left' && <Crest team={team} />}
-      <span className="font-display font-black uppercase tracking-tight truncate">{team?.name ?? '—'}</span>
-      {align === 'right' && <Crest team={team} />}
+    <div className="flex flex-col items-center gap-2 flex-1 min-w-0">
+      <Crest team={team} />
+      <span className="font-display font-black uppercase tracking-tight text-center leading-tight text-[13px] sm:text-[15px] break-words w-full">
+        {team?.name ?? '—'}
+      </span>
     </div>
   );
 }
