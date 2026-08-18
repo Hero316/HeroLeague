@@ -29,6 +29,14 @@
   --color-hl-magenta-soft: #F79AC4;
 }
 
+/* Kein automatisches „Font-Boosting" auf Android/iOS: sonst vergrößern manche
+   Browser Textblöcke eigenmächtig – die Seite wirkt dann leicht „reingezoomt".
+   Pinch-Zoom des Nutzers bleibt erlaubt (kein user-scalable=no). */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   background: #0A1415;
 }

@@ -38,6 +38,7 @@ import {
   type ActionTone,
 } from '../lib/scoring';
 import { emptyCounts, matchNote, normalizeCounts, rohscore } from '../lib/rating';
+import { shortDate } from './ui';
 import { useBackClose, goBackLayer } from '../lib/backStack';
 import {
   fetchScoring,
@@ -83,6 +84,11 @@ type RowMap = Record<string, EditRow>; // Schlüssel: `${matchId}::${teamId}::${
 
 const rowKey = (matchId: string, teamId: string, name: string) => `${matchId}::${teamId}::${name}`;
 const normName = (s: string) => s.toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
+
+// Reihenfolge der Spiele exakt wie im Spielplan (DB-Reihenfolge):
+// Datum, Uhrzeit, ID. So steht ein Spiel im Tracker an derselben Stelle wie dort.
+const cmpMatches = (a: Match, b: Match) =>
+  (a.date || '').localeCompare(b.date || '') || (a.time || '').localeCompare(b.time || '') || a.id.localeCompare(b.id);
 
 export default function TrackingCenter({
   teams,
@@ -219,9 +225,7 @@ export default function TrackingCenter({
   const dayMatches = useMemo(() => {
     if (selectedEvent) return eventGamesAsMatches(selectedEvent);
     if (selectedMatchday !== null)
-      return matches
-        .filter((m) => m.seasonId === seasonId && m.matchday === selectedMatchday)
-        .sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0) || (a.time || '').localeCompare(b.time || ''));
+      return matches.filter((m) => m.seasonId === seasonId && m.matchday === selectedMatchday).sort(cmpMatches);
     return [];
   }, [selectedEvent, selectedMatchday, matches, seasonId, eventGamesAsMatches]);
 
@@ -317,9 +321,7 @@ export default function TrackingCenter({
       setSelectedEventId(null);
       setSelectedMatchday(md);
       setSelectedMatchId(null);
-      const games = matches
-        .filter((m) => m.seasonId === seasonId && m.matchday === md)
-        .sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0) || (a.time || '').localeCompare(b.time || ''));
+      const games = matches.filter((m) => m.seasonId === seasonId && m.matchday === md).sort(cmpMatches);
       buildRows(leagueDayKey(seasonId, md), games, `${seasonId}:${md}`);
     },
     [matches, seasonId, buildRows]
@@ -494,9 +496,7 @@ export default function TrackingCenter({
       } catch {
         /* lokal ist es schon aktualisiert */
       }
-      const games = matches
-        .filter((m) => m.seasonId === seasonId && m.matchday === selectedMatchday)
-        .sort((a, b) => (a.slot ?? 0) - (b.slot ?? 0) || (a.time || '').localeCompare(b.time || ''));
+      const games = matches.filter((m) => m.seasonId === seasonId && m.matchday === selectedMatchday).sort(cmpMatches);
       buildRows(leagueDayKey(seasonId, selectedMatchday), games, rk, nextRoster);
     },
     [selectedMatchday, seasonId, rosterState, matches, buildRows]
@@ -688,7 +688,7 @@ function DayList({
                 <div className="font-display font-black text-4xl leading-none mt-1 tabular-nums">{d.matchday}</div>
                 <div className="mt-3 text-xs text-hl-mute flex items-center gap-3">
                   <span>{d.games.length} Spiele</span>
-                  {d.date && <span className="text-hl-faint">{d.date}</span>}
+                  {d.date && <span className="text-hl-faint">{shortDate(d.date)}</span>}
                 </div>
               </button>
             ))}
@@ -816,6 +816,13 @@ function DayView({
               >
                 <TeamBadge team={home} />
                 <div className="flex-1 min-w-0">
+                  {(m.time || m.date) && (
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-hl-faint mb-0.5">
+                      {m.date ? shortDate(m.date) : ''}
+                      {m.date && m.time ? ' · ' : ''}
+                      {m.time ? `${m.time} Uhr` : ''}
+                    </div>
+                  )}
                   <div className="font-semibold truncate">
                     {home?.name ?? m.homeTeamId} <span className="text-hl-faint">vs</span> {away?.name ?? m.awayTeamId}
                   </div>
