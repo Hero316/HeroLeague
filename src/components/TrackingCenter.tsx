@@ -706,7 +706,7 @@ function DayList({
   return (
     <div className="hl-fade space-y-8">
       <div>
-        <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <h1 className="font-display font-black text-2xl uppercase tracking-tight">Spieltag auswerten</h1>
           {seasons.length > 0 && (
             <select value={seasonId} onChange={(e) => onSeason(e.target.value)} className="hl-input px-3 py-2 rounded-xl text-sm font-semibold">
@@ -813,7 +813,7 @@ function DayView({
           {isEvent && <FlaskConical className="w-5 h-5 text-hl-magenta" />}
           {title}
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2 min-w-0">
           {onAttendance && (
             <button
               onClick={onAttendance}
