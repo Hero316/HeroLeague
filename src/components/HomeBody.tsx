@@ -11,10 +11,12 @@ interface HomeBodyProps {
   seasonLabel: string;
   onNavigate: (tab: ActiveTab) => void;
   onSelectTeam: (teamId: string) => void;
+  onOpenMatch?: (matchId: string) => void; // öffnet den Spielbericht
+  reportMatchIds?: Set<string>; // Spiele mit veröffentlichten Einzelnoten
 }
 
 // Inhalt der Startseite unter dem Hero: Tabelle + Spielplan-Karte und Abschluss-CTA.
-export default function HomeBody({ teams, matches, players, seasonLabel, onNavigate, onSelectTeam }: HomeBodyProps) {
+export default function HomeBody({ teams, matches, players, seasonLabel, onNavigate, onSelectTeam, onOpenMatch, reportMatchIds }: HomeBodyProps) {
   const getTeam = (id: string) => teams.find((t) => t.id === id);
 
   // Spieltage & aktueller Spieltag (erster mit offenen Spielen, sonst letzter)
@@ -154,16 +156,19 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
                 if (!home || !away) return null;
                 const isLive = m.status === 'live';
                 const upcoming = m.status === 'geplant';
+                // Klick öffnet den Spielbericht, wenn Einzelnoten vorliegen – sonst der Spielplan.
+                const openMatch = () =>
+                  onOpenMatch && reportMatchIds?.has(m.id) ? onOpenMatch(m.id) : onNavigate('spielplan');
                 return (
                   <div
                     key={m.id}
                     role="button"
                     tabIndex={0}
-                    onClick={() => onNavigate('spielplan')}
+                    onClick={openMatch}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        onNavigate('spielplan');
+                        openMatch();
                       }
                     }}
                     className={`block w-full text-left rounded-[14px] px-4 py-3.5 mb-3 last:mb-0 cursor-pointer transition-all hover:-translate-y-0.5 hover:border-[rgba(34,223,201,.45)] ${
@@ -181,7 +186,13 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
                     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2.5">
                       <div className="flex items-center gap-2 min-w-0">
                         <TeamCrest name={home.name} shortName={home.shortName} color={home.logoColor} logoUrl={home.logoUrl} size="sm" onSelect={onSelectTeam ? () => onSelectTeam(home.id) : undefined} />
-                        <span className="font-sans font-semibold text-[13px] sm:text-[13.5px] text-hl-text leading-tight break-words min-w-0">{home.name}</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onSelectTeam(home.id); }}
+                          title={`${home.name} – Vereinsseite öffnen`}
+                          className="font-sans font-semibold text-[13px] sm:text-[13.5px] text-hl-text leading-tight break-words min-w-0 hover:text-brand-accent-light transition-colors cursor-pointer text-left"
+                        >
+                          {home.name}
+                        </button>
                       </div>
                       {upcoming ? (
                         <div className="min-w-[60px] text-center font-sans font-extrabold text-sm tracking-[2px] text-hl-faint">VS</div>
@@ -195,7 +206,13 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
                         </div>
                       )}
                       <div className="flex items-center gap-2 justify-end min-w-0">
-                        <span className="font-sans font-semibold text-[13px] sm:text-[13.5px] text-hl-text leading-tight break-words min-w-0 text-right">{away.name}</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onSelectTeam(away.id); }}
+                          title={`${away.name} – Vereinsseite öffnen`}
+                          className="font-sans font-semibold text-[13px] sm:text-[13.5px] text-hl-text leading-tight break-words min-w-0 text-right hover:text-brand-accent-light transition-colors cursor-pointer"
+                        >
+                          {away.name}
+                        </button>
                         <TeamCrest name={away.name} shortName={away.shortName} color={away.logoColor} logoUrl={away.logoUrl} size="sm" onSelect={onSelectTeam ? () => onSelectTeam(away.id) : undefined} />
                       </div>
                     </div>

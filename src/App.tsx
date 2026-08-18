@@ -1384,7 +1384,7 @@ export default function App() {
       {activeTab === 'home' && (
         <>
           {countdown.active && <Countdown target={countdown.target} title={countdown.title} />}
-          <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
+          <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} />
           <HighlightsHome
             highlights={highlights}
             editMode={editMode && canEditHighlights}

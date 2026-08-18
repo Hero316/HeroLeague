@@ -17,11 +17,13 @@ interface HeroProps {
   pom?: PlayerOfMonth | null; // von oben vorgeladen (verhindert nachträglichen Slide → kein „Springen")
   onNavigate: (tab: ActiveTab) => void;
   onSelectTeam?: (teamId: string, playerName?: string) => void;
+  onOpenMatch?: (matchId: string) => void; // öffnet den Spielbericht
+  reportMatchIds?: Set<string>; // Spiele mit veröffentlichten Einzelnoten
 }
 
 // Vollflächiges Hero-Carousel (Magenta-TV-Stil) mit drei Slides:
 // 1. Nächster Spieltag / Live-Spiel  2. Spieler des Monats  3. Tabellenführer
-export default function Hero({ teams, matches, players, seasonLabel, seasonNumber, heroImages, pom: pomProp, onNavigate, onSelectTeam }: HeroProps) {
+export default function Hero({ teams, matches, players, seasonLabel, seasonNumber, heroImages, pom: pomProp, onNavigate, onSelectTeam, onOpenMatch, reportMatchIds }: HeroProps) {
   // pom kommt bevorzugt von oben (vorgeladen); nur ohne Prop selbst nachladen.
   const [pomState, setPomState] = useState<PlayerOfMonth | null>(null);
   const pom = pomProp !== undefined ? pomProp : pomState;
@@ -222,10 +224,28 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                       if (!h || !a) return null;
                       const isL = m.status === 'live';
                       const isF = m.status === 'beendet';
+                      const canOpen = !!(onOpenMatch && reportMatchIds?.has(m.id));
                       return (
-                        <div key={m.id} className="flex items-center gap-1.5 py-2 border-b border-white/[.06] last:border-0">
+                        <div
+                          key={m.id}
+                          onClick={canOpen ? () => onOpenMatch!(m.id) : undefined}
+                          role={canOpen ? 'button' : undefined}
+                          tabIndex={canOpen ? 0 : undefined}
+                          onKeyDown={canOpen ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenMatch!(m.id); } } : undefined}
+                          className={`flex items-center gap-1.5 py-2 border-b border-white/[.06] last:border-0 rounded-md ${canOpen ? 'cursor-pointer hover:bg-white/[.04]' : ''}`}
+                        >
                           <div className="flex items-center gap-1 flex-1 min-w-0 justify-end">
-                            <span title={h.name} className="font-sans font-bold text-[11px] text-hl-text truncate">{h.name}</span>
+                            {onSelectTeam ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onSelectTeam(h.id); }}
+                                title={`${h.name} – Vereinsseite öffnen`}
+                                className="font-sans font-bold text-[11px] text-hl-text truncate hover:text-brand-accent-light transition-colors cursor-pointer"
+                              >
+                                {h.name}
+                              </button>
+                            ) : (
+                              <span title={h.name} className="font-sans font-bold text-[11px] text-hl-text truncate">{h.name}</span>
+                            )}
                             <TeamCrest name={h.name} shortName={h.shortName} color={h.logoColor} logoUrl={h.logoUrl} size="sm" onSelect={onSelectTeam ? () => onSelectTeam(h.id) : undefined} />
                           </div>
                           <div className="w-[46px] shrink-0 flex flex-col items-center">
@@ -246,7 +266,17 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                           </div>
                           <div className="flex items-center gap-1 flex-1 min-w-0">
                             <TeamCrest name={a.name} shortName={a.shortName} color={a.logoColor} logoUrl={a.logoUrl} size="sm" onSelect={onSelectTeam ? () => onSelectTeam(a.id) : undefined} />
-                            <span title={a.name} className="font-sans font-bold text-[11px] text-hl-text truncate">{a.name}</span>
+                            {onSelectTeam ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onSelectTeam(a.id); }}
+                                title={`${a.name} – Vereinsseite öffnen`}
+                                className="font-sans font-bold text-[11px] text-hl-text truncate hover:text-brand-accent-light transition-colors cursor-pointer text-left"
+                              >
+                                {a.name}
+                              </button>
+                            ) : (
+                              <span title={a.name} className="font-sans font-bold text-[11px] text-hl-text truncate">{a.name}</span>
+                            )}
                           </div>
                         </div>
                       );

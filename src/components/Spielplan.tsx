@@ -1020,11 +1020,19 @@ export default function Spielplan({
               const isCompleted = match.status === 'beendet';
               const isLive = match.status === 'live';
               const isUpcoming = match.status === 'geplant' && match.homeScore === null;
+              // Ganze Karte anklickbar → Spielbericht, wenn getrackte Werte vorliegen.
+              const canOpenReport = !!(onOpenReport && reportMatchIds?.has(match.id));
 
               return (
                 <FadeIn key={match.id} className="h-full" delay={Math.min(mIdx, 5) * 0.05}>
                 <div
+                  onClick={canOpenReport ? () => onOpenReport!(match.id) : undefined}
+                  role={canOpenReport ? 'button' : undefined}
+                  tabIndex={canOpenReport ? 0 : undefined}
+                  onKeyDown={canOpenReport ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenReport!(match.id); } } : undefined}
                   className={`h-full rounded-2xl px-5 py-[17px] transition-all flex flex-col ${
+                    canOpenReport ? 'cursor-pointer hover:border-[rgba(34,223,201,.35)]' : ''
+                  } ${
                     isLive
                       ? 'bg-[linear-gradient(135deg,rgba(34,223,201,.08),rgba(255,255,255,.02))] border border-[rgba(34,223,201,.3)] shadow-[0_0_30px_rgba(34,223,201,.08)]'
                       : 'bg-[linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012))] border border-white/[.09] backdrop-blur-md'
@@ -1050,7 +1058,7 @@ export default function Spielplan({
                       <TeamCrest name={home.name} shortName={home.shortName} color={home.logoColor} logoUrl={home.logoUrl} size="lg" onSelect={onSelectTeam ? () => onSelectTeam(home.id) : undefined} />
                       {onSelectTeam ? (
                         <button
-                          onClick={() => onSelectTeam(home.id)}
+                          onClick={(e) => { e.stopPropagation(); onSelectTeam(home.id); }}
                           className="font-sans font-semibold text-sm sm:text-[15px] text-hl-text leading-tight break-words min-w-0 hover:text-brand-accent-light transition-colors cursor-pointer text-left"
                           title={`${home.name} – Vereinsseite öffnen`}
                         >
@@ -1076,7 +1084,7 @@ export default function Spielplan({
                     <div className="flex items-center gap-[11px] justify-end min-w-0">
                       {onSelectTeam ? (
                         <button
-                          onClick={() => onSelectTeam(away.id)}
+                          onClick={(e) => { e.stopPropagation(); onSelectTeam(away.id); }}
                           className="font-sans font-semibold text-sm sm:text-[15px] text-hl-text leading-tight break-words min-w-0 hover:text-brand-accent-light transition-colors cursor-pointer text-right"
                           title={`${away.name} – Vereinsseite öffnen`}
                         >
@@ -1119,7 +1127,7 @@ export default function Spielplan({
                   {onOpenReport && reportMatchIds?.has(match.id) && (
                     <button
                       type="button"
-                      onClick={() => onOpenReport(match.id)}
+                      onClick={(e) => { e.stopPropagation(); onOpenReport(match.id); }}
                       className="mt-3.5 w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[rgba(34,223,201,.1)] hover:bg-[rgba(34,223,201,.18)] border border-[rgba(34,223,201,.3)] text-[12px] font-sans font-bold uppercase tracking-wider text-brand-accent-light transition-colors cursor-pointer"
                     >
                       <BarChart3 className="w-3.5 h-3.5" />
@@ -1131,7 +1139,7 @@ export default function Spielplan({
                   {isAdmin && (
                     <button
                       type="button"
-                      onClick={() => openManage(match)}
+                      onClick={(e) => { e.stopPropagation(); openManage(match); }}
                       className="mt-3.5 w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-white/[.04] hover:bg-white/[.08] border border-white/10 text-[12px] font-sans font-bold uppercase tracking-wider text-hl-soft hover:text-white transition-colors cursor-pointer"
                     >
                       <Pencil className="w-3.5 h-3.5" />
