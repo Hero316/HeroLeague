@@ -84,6 +84,7 @@ type RowMap = Record<string, EditRow>; // Schlüssel: `${matchId}::${teamId}::${
 
 const rowKey = (matchId: string, teamId: string, name: string) => `${matchId}::${teamId}::${name}`;
 const normName = (s: string) => s.toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
+const NAV_KEY = 'hl-tracking-nav'; // gemerkte Position (Spieltag/Spiel) für Seiten-Neuladen
 
 // Reihenfolge der Spiele exakt wie im Spielplan (DB-Reihenfolge):
 // Datum, Uhrzeit, ID. So steht ein Spiel im Tracker an derselben Stelle wie dort.
@@ -143,6 +144,23 @@ export default function TrackingCenter({
     setSelectedMatchday(null);
     setSelectedEventId(null);
   });
+
+  // Position im Tracker merken (Spieltag/Spiel), damit ein Neuladen der Seite
+  // NICHT zurück auf die Auswahl springt. Wird beim Verlassen wieder geleert.
+  useEffect(() => {
+    try {
+      if (selectedMatchday === null && selectedEventId === null) {
+        sessionStorage.removeItem(NAV_KEY);
+      } else {
+        sessionStorage.setItem(
+          NAV_KEY,
+          JSON.stringify({ md: selectedMatchday, ev: selectedEventId, mid: selectedMatchId })
+        );
+      }
+    } catch {
+      /* egal */
+    }
+  }, [selectedMatchday, selectedEventId, selectedMatchId]);
 
   const [rows, setRows] = useState<RowMap>({});
   const [dayLive, setDayLive] = useState(false);
@@ -336,6 +354,35 @@ export default function TrackingCenter({
     },
     [buildRows, eventGamesAsMatches]
   );
+
+  // Nach einem Neuladen die zuletzt offene Position wiederherstellen (Spieltag →
+  // ggf. Spiel). Läuft genau EINMAL, sobald die Grunddaten geladen sind. So
+  // landet man nach „Aktualisieren" wieder dort, wo man war – nicht auf der Auswahl.
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current) return;
+    if (matches.length === 0 && events.length === 0) return; // erst mit Daten
+    let saved: { md?: number | null; ev?: string | null; mid?: string | null } | null = null;
+    try {
+      const raw = sessionStorage.getItem(NAV_KEY);
+      if (raw) saved = JSON.parse(raw);
+    } catch {
+      saved = null;
+    }
+    restoredRef.current = true;
+    if (!saved) return;
+    if (saved.ev) {
+      const ev = events.find((e) => e.id === saved!.ev);
+      if (!ev) return;
+      openEvent(ev);
+      if (saved.mid && (ev.matches || []).some((m) => m.id === saved!.mid)) setSelectedMatchId(saved.mid);
+      return;
+    }
+    if (saved.md != null && matches.some((m) => m.seasonId === seasonId && m.matchday === saved!.md)) {
+      openMatchday(saved.md);
+      if (saved.mid && matches.some((m) => m.id === saved!.mid)) setSelectedMatchId(saved.mid);
+    }
+  }, [matches, events, seasonId, openMatchday, openEvent]);
 
   // --- Speichern (debounced je Zeile) -------------------------------------
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -674,7 +721,7 @@ function DayList({
         {matchdays.length === 0 ? (
           <div className="hl-card p-8 text-center text-hl-mute">Keine Spiele in dieser Saison.</div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 hl-cascade-soft">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 hl-cascade-soft">
             {matchdays.map((d) => (
               <button
                 key={d.matchday}
@@ -701,7 +748,7 @@ function DayList({
           <h2 className="font-display font-black text-lg uppercase tracking-tight mb-3 flex items-center gap-2">
             <FlaskConical className="w-4 h-4 text-hl-magenta" /> Testspielabende
           </h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 hl-cascade-soft">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 hl-cascade-soft">
             {events.map((ev) => (
               <button
                 key={ev.id}
@@ -803,7 +850,7 @@ function DayView({
       {loading ? (
         <div className="hl-card p-8 text-center text-hl-mute">Lade Daten…</div>
       ) : (
-        <div className="grid gap-3 hl-cascade-soft">
+        <div className="grid grid-cols-1 gap-3 hl-cascade-soft">
           {dayMatches.map((m) => {
             const home = resolveTeam(m.homeTeamId);
             const away = resolveTeam(m.awayTeamId);
@@ -812,7 +859,7 @@ function DayView({
               <button
                 key={m.id}
                 onClick={() => onOpenMatch(m.id)}
-                className="hl-card p-4 flex items-center gap-3 text-left hover:border-brand-accent/40 transition-colors cursor-pointer"
+                className="hl-card p-4 flex items-center gap-3 text-left min-w-0 hover:border-brand-accent/40 transition-colors cursor-pointer"
               >
                 <TeamBadge team={home} />
                 <div className="flex-1 min-w-0">
@@ -912,7 +959,7 @@ function MatchEditor({
                 Kein Kader hinterlegt. Bei Testspielen muss der Team-Name mit einem Verein übereinstimmen.
               </div>
             ) : (
-              <div className="grid gap-2 hl-cascade-soft">
+              <div className="grid grid-cols-1 gap-2 hl-cascade-soft">
                 {list.map(({ k, r }, i) => (
                   <PlayerCard
                     key={k}
@@ -958,7 +1005,7 @@ function PlayerCard({
     ACTION_META.filter((a) => a.group === g && (!isKeeper || g !== 'Pass' || KEEPER_PASS_KEYS.includes(a.key)));
 
   return (
-    <div className="hl-card p-2.5 flex flex-col lg:flex-row gap-2.5">
+    <div className="hl-card p-2.5 flex flex-col lg:flex-row gap-2.5 min-w-0">
       {/* Identität */}
       <div className="lg:w-52 shrink-0 flex items-center gap-2.5 px-1">
         <div className="w-8 h-8 rounded-full bg-brand-accent/12 border border-brand-accent/25 grid place-items-center text-brand-accent-light font-black text-sm shrink-0">
