@@ -3,6 +3,7 @@ import { ArrowLeft, ChevronRight, IdCard } from 'lucide-react';
 import type { ActionCounts, Match, MatchPlayerStat, ScoringConfig, Team } from '../types';
 import { notesForMatch, type MatchNoteEntry } from '../lib/trackingView';
 import { ACTION_META, type ActionTone } from '../lib/scoring';
+import { useBackClose, goBackLayer } from '../lib/backStack';
 
 // ===========================================================================
 // Spielbericht: Ergebnis + Einzelnoten aller Spieler beider Teams für EIN Spiel.
@@ -55,6 +56,10 @@ export default function SpielberichtPage({ match, teams, rows, cfg, onBack, onSe
     [entries, openKey]
   );
 
+  // Handy-Zurück (Geste/Taste) schließt zuerst die geöffnete Einzelwertung,
+  // statt gleich die ganze Spielseite zu verlassen.
+  useBackClose(selected !== null, () => setOpenKey(null));
+
   const photoFor = (teamId: string, name: string) =>
     teams.find((t) => t.id === teamId)?.spielerliste?.find((p) => p.name === name)?.imageUrl;
 
@@ -88,7 +93,7 @@ export default function SpielberichtPage({ match, teams, rows, cfg, onBack, onSe
           photo={photoFor(selected.teamId, selected.playerName)}
           homeName={home?.name ?? '—'}
           awayName={away?.name ?? '—'}
-          onClose={() => setOpenKey(null)}
+          onClose={goBackLayer}
           onOpenCard={() => onSelectPlayer(selected.teamId, selected.playerName)}
         />
       ) : (

@@ -5,6 +5,7 @@ import { Match, MatchPlayerStat, Player, PlayerStat, ScoringConfig, StatRole, Te
 import { calculateStandings } from '../lib/standings';
 import { matchNote, normalizeCounts, playerCard, quotas, sumCounts } from '../lib/rating';
 import { apiFetch } from '../lib/api';
+import { useBackClose } from '../lib/backStack';
 import PlayerAvatar from './PlayerAvatar';
 import BestLineup from './BestLineup';
 import FifaCard from './FifaCard';
@@ -171,6 +172,14 @@ export default function TeamDetail({
     // Zum Kopf scrollen, damit die Umblendung sichtbar ist.
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
+
+  // Handy-Zurück (Geste/Taste) schließt zuerst die geöffnete Spieler-Detailansicht
+  // und verlässt nicht gleich die ganze Teamseite. Nur für IM Blick angeklickte
+  // Spieler – ein per URL (/verein/…/spieler/…) direkt geöffneter Spieler bleibt
+  // Teil der Adresse, dort navigiert „Zurück" ganz normal weg.
+  useBackClose(selectedPlayerName !== null && selectedPlayerName !== initialPlayer, () =>
+    setSelectedPlayerName(null)
+  );
   const positionLabel = (p: RosterEntry) =>
     p.gamesInGoal > 0 && p.gamesInGoal * 2 >= p.matchesPlayed ? 'Torwart' : 'Feldspieler';
 
