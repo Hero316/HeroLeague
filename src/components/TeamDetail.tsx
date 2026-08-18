@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ChevronDown } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Match, MatchPlayerStat, Player, PlayerStat, ScoringConfig, StatRole, Team, TeamSponsorsMap } from '../types';
@@ -159,18 +159,53 @@ export default function TeamDetail({
     return [...list].sort((a, b) => b.goals - a.goals || b.assists - a.assists)[0] ?? null;
   }, [players, team.id]);
 
+  // Offenen Spieler + „Note je Spiel"-Zustand pro Team merken, damit ein Sprung
+  // in ein Spiel und wieder ZURÜCK die Ansicht so lässt, wie sie war (Karte offen,
+  // Noten ausgeklappt) – man will ja weitere Spiele des Spielers ansehen.
+  const PANEL_KEY = 'hl-teamdetail-panel';
+  const readPanel = (): { team?: string; player?: string; notesOpen?: boolean } | null => {
+    try {
+      const r = JSON.parse(sessionStorage.getItem(PANEL_KEY) || 'null');
+      return r && r.team === team.id ? r : null;
+    } catch {
+      return null;
+    }
+  };
+
   // Ausgewählter Spieler für die animierte Detail-Umblendung im Kopf.
-  const [selectedPlayerName, setSelectedPlayerName] = useState<string | null>(initialPlayer ?? null);
+  const [selectedPlayerName, setSelectedPlayerName] = useState<string | null>(
+    () => initialPlayer ?? readPanel()?.player ?? null
+  );
   // „Note je Spiel": eingeklappt, bis man drauf tippt (bei vielen Spielen sonst zu voll).
-  const [notesOpen, setNotesOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState<boolean>(() => (initialPlayer ? false : readPanel()?.notesOpen ?? false));
   const selected = useMemo(
     () => roster.find((p) => p.name === selectedPlayerName) ?? null,
     [roster, selectedPlayerName]
   );
+
   // Beim Teamwechsel bzw. neuer Vorauswahl (Suche) das Detail passend setzen.
-  useEffect(() => setSelectedPlayerName(initialPlayer ?? null), [team.id, initialPlayer]);
-  // Beim Spielerwechsel die Noten wieder einklappen.
-  useEffect(() => setNotesOpen(false), [selectedPlayerName]);
+  // ERSTdurchlauf überspringen, sonst würde der aus sessionStorage wieder-
+  // hergestellte Spieler sofort überschrieben.
+  const firstSel = useRef(true);
+  useEffect(() => {
+    if (firstSel.current) { firstSel.current = false; return; }
+    setSelectedPlayerName(initialPlayer ?? null);
+  }, [team.id, initialPlayer]);
+  // Beim Spielerwechsel die Noten wieder einklappen (Erstdurchlauf überspringen).
+  const firstNotes = useRef(true);
+  useEffect(() => {
+    if (firstNotes.current) { firstNotes.current = false; return; }
+    setNotesOpen(false);
+  }, [selectedPlayerName]);
+  // Zustand sichern (für „zurück" aus einem Spiel).
+  useEffect(() => {
+    try {
+      if (selectedPlayerName) sessionStorage.setItem(PANEL_KEY, JSON.stringify({ team: team.id, player: selectedPlayerName, notesOpen }));
+      else sessionStorage.removeItem(PANEL_KEY);
+    } catch {
+      /* egal */
+    }
+  }, [team.id, selectedPlayerName, notesOpen]);
   const selectPlayer = useCallback((name: string) => {
     setSelectedPlayerName(name);
     // Zum Kopf scrollen, damit die Umblendung sichtbar ist.
@@ -381,21 +416,28 @@ export default function TeamDetail({
                           <span className="text-hl-faint">({perMatchNotes.length})</span>
                           <ChevronDown className={`w-3.5 h-3.5 transition-transform ${notesOpen ? 'rotate-180' : ''}`} />
                         </button>
-                        {notesOpen && (
-                          <div key={selectedPlayerName ?? 'none'} className="flex flex-wrap gap-1.5 mt-2">
-                            {perMatchNotes.map((pm, i) => (
-                              <button
-                                key={`${pm.matchId}-${i}`}
-                                onClick={() => onOpenMatch?.(pm.matchId)}
-                                title={`Spieltag ${i + 1} · Note ${pm.note.toFixed(1)} – zum Spiel`}
-                                className="hl-note-in px-2.5 py-1 rounded-lg text-xs font-display font-black tabular-nums border border-white/10 bg-white/[.02] hover:border-white/30 hover:bg-white/[.06] active:scale-95 transition cursor-pointer"
-                                style={{ color: noteColorFor(pm.note, scoringConfig), animationDelay: `${i * 0.045}s` }}
-                              >
-                                {pm.note.toFixed(1)}
-                              </button>
-                            ))}
+                        {/* Sanftes Auf-/Zuklappen: die Reihe wächst weich mit (grid-rows 0fr→1fr),
+                            dadurch rutscht die FIFA-Karte darunter smooth mit statt zu springen. */}
+                        <div
+                          className="grid transition-[grid-template-rows] duration-300 ease-out"
+                          style={{ gridTemplateRows: notesOpen ? '1fr' : '0fr' }}
+                        >
+                          <div className="overflow-hidden">
+                            <div key={`${selectedPlayerName}-${notesOpen}`} className="flex flex-wrap gap-1.5 pt-2">
+                              {perMatchNotes.map((pm, i) => (
+                                <button
+                                  key={`${pm.matchId}-${i}`}
+                                  onClick={() => onOpenMatch?.(pm.matchId)}
+                                  title={`Spieltag ${i + 1} · Note ${pm.note.toFixed(1)} – zum Spiel`}
+                                  className="hl-note-in px-2.5 py-1 rounded-lg text-xs font-display font-black tabular-nums border border-white/10 bg-white/[.02] hover:border-white/30 hover:bg-white/[.06] active:scale-95 transition cursor-pointer"
+                                  style={{ color: noteColorFor(pm.note, scoringConfig), animationDelay: `${notesOpen ? i * 0.04 : 0}s` }}
+                                >
+                                  {pm.note.toFixed(1)}
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                        )}
+                        </div>
                       </div>
                     )}
                   </div>

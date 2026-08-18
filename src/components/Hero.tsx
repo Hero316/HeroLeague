@@ -152,7 +152,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
     return (
       <>
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -inset-[5%] hl-zoom">
+          <div className="absolute left-[-5%] right-[-5%] top-0 h-[112lvh] hl-zoom">
             <img src={heroImages?.match || '/assets/hero-stadium.png'} alt="" className="absolute inset-0 w-full h-full object-cover" />
           </div>
           <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_78%_30%,rgba(232,62,140,.22),transparent_55%)]" />
@@ -328,7 +328,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
             gestaltete Standard-Design – so bleiben Text und Karte gut lesbar. */}
         {heroImages?.pom ? (
           <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute -inset-[5%] hl-zoom">
+            <div className="absolute left-[-5%] right-[-5%] top-0 h-[112lvh] hl-zoom">
               <img src={heroImages.pom} alt="" className="absolute inset-0 w-full h-full object-cover" />
             </div>
             <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_78%_30%,rgba(233,196,106,.2),transparent_55%)]" />
@@ -428,7 +428,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
     return (
       <>
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -inset-[5%] hl-zoom">
+          <div className="absolute left-[-5%] right-[-5%] top-0 h-[112lvh] hl-zoom">
             <img src={heroImages?.table || '/assets/hero-crowd.png'} alt="" className="absolute inset-0 w-full h-full object-cover" />
           </div>
           <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_80%_30%,rgba(34,223,201,.2),transparent_55%)]" />
