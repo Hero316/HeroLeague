@@ -35,6 +35,10 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  /* Nie horizontal scrollen/„reinzoomen": die Seite darf nie breiter als der
+     Bildschirm werden. Innere Scroll-Bereiche (z. B. Spieltag-Leiste) haben ihr
+     eigenes overflow und bleiben davon unberührt. */
+  overflow-x: hidden;
 }
 
 body {

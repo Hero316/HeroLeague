@@ -1214,24 +1214,24 @@ function AttendancePanel({
                     {cur.present.size}/{squad.length} da
                   </span>
                 </div>
-                <div className="grid sm:grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                   {squad.map((p) => {
                     const on = cur.present.has(p.name);
                     const isK = cur.keeper === p.name;
                     return (
                       <div
                         key={p.name}
-                        className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 ${
+                        className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 min-w-0 ${
                           on ? 'border-white/10 bg-white/[.04]' : 'border-white/[.06] opacity-55'
                         }`}
                       >
-                        <button onClick={() => toggle(tid, p.name)} className="flex-1 text-left text-sm font-semibold truncate cursor-pointer">
+                        <button onClick={() => toggle(tid, p.name)} className="flex-1 min-w-0 text-left text-sm font-semibold truncate cursor-pointer">
                           <span className={on ? 'text-hl-green' : 'text-hl-faint'}>{on ? '✓' : '–'}</span> {p.name}
                         </button>
                         <button
                           onClick={() => setKeeper(tid, p.name)}
                           title="Als Torwart"
-                          className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider cursor-pointer border ${
+                          className={`shrink-0 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider cursor-pointer border ${
                             isK ? 'bg-hl-gold/15 border-hl-gold/40 text-hl-gold' : 'bg-white/5 border-white/10 text-hl-faint'
                           }`}
                         >
@@ -1287,8 +1287,8 @@ function ScoringPanel({ cfg, onSave, onClose }: { cfg: ScoringConfig; onSave: (c
             <h3 className="text-[11px] uppercase tracking-[2px] text-hl-dim mb-2">Punkte je Aktion</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {ACTION_META.map((a) => (
-                <label key={a.key} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[.03] px-2.5 py-1.5">
-                  <span className="text-[11px] text-hl-soft truncate" title={a.label}>
+                <label key={a.key} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[.03] px-2.5 py-1.5 min-w-0">
+                  <span className="text-[11px] text-hl-soft truncate min-w-0" title={a.label}>
                     {a.label}
                   </span>
                   <input
