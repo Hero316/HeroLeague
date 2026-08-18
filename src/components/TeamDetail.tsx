@@ -1,11 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronDown } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Match, MatchPlayerStat, Player, PlayerStat, ScoringConfig, StatRole, Team, TeamSponsorsMap } from '../types';
 import { calculateStandings } from '../lib/standings';
 import { matchNote, normalizeCounts, playerCard, quotas, sumCounts } from '../lib/rating';
 import { apiFetch } from '../lib/api';
-import { useBackClose } from '../lib/backStack';
 import PlayerAvatar from './PlayerAvatar';
 import BestLineup from './BestLineup';
 import FifaCard from './FifaCard';
@@ -35,6 +34,7 @@ interface TeamDetailProps {
   trackingRows?: MatchPlayerStat[]; // veröffentlichte getrackte Zähler (Statistics Center)
   scoringConfig?: ScoringConfig; // Score-Einstellungen (für Note/Quoten/Karte)
   onOpenMatch?: (matchId: string) => void; // öffnet den Spielbericht
+  onOpenPlayer?: (name: string) => void; // öffnet einen Spieler über die URL (/verein/…/spieler/…)
 }
 
 // Ein Kaderspieler mit den aus den Spieldaten berechneten Werten.
@@ -62,6 +62,7 @@ export default function TeamDetail({
   trackingRows = [],
   scoringConfig,
   onOpenMatch,
+  onOpenPlayer,
 }: TeamDetailProps) {
   const color = team.logoColor || '#22DFC9';
   const accentSoft = shade(color, 1.25); // hellere Variante für Text auf dunklem Grund
@@ -159,66 +160,51 @@ export default function TeamDetail({
     return [...list].sort((a, b) => b.goals - a.goals || b.assists - a.assists)[0] ?? null;
   }, [players, team.id]);
 
-  // Offenen Spieler + „Note je Spiel"-Zustand pro Team merken, damit ein Sprung
-  // in ein Spiel und wieder ZURÜCK die Ansicht so lässt, wie sie war (Karte offen,
-  // Noten ausgeklappt) – man will ja weitere Spiele des Spielers ansehen.
-  const PANEL_KEY = 'hl-teamdetail-panel';
-  const readPanel = (): { team?: string; player?: string; notesOpen?: boolean } | null => {
-    try {
-      const r = JSON.parse(sessionStorage.getItem(PANEL_KEY) || 'null');
-      return r && r.team === team.id ? r : null;
-    } catch {
-      return null;
-    }
-  };
-
-  // Ausgewählter Spieler für die animierte Detail-Umblendung im Kopf.
-  const [selectedPlayerName, setSelectedPlayerName] = useState<string | null>(
-    () => initialPlayer ?? readPanel()?.player ?? null
-  );
-  // „Note je Spiel": eingeklappt, bis man drauf tippt (bei vielen Spielen sonst zu voll).
-  const [notesOpen, setNotesOpen] = useState<boolean>(() => (initialPlayer ? false : readPanel()?.notesOpen ?? false));
+  // Der geöffnete Spieler steckt in der URL (/verein/<id>/spieler/<name>). Dadurch
+  // funktioniert „Zurück" (Geste/Taste) von selbst: aus einem Spiel zurück landet
+  // man wieder bei GENAU diesem Spieler – die FIFA-Karte bleibt offen.
+  const selectedPlayerName = initialPlayer ?? null;
   const selected = useMemo(
     () => roster.find((p) => p.name === selectedPlayerName) ?? null,
     [roster, selectedPlayerName]
   );
 
-  // Beim Teamwechsel bzw. neuer Vorauswahl (Suche) das Detail passend setzen.
-  // ERSTdurchlauf überspringen, sonst würde der aus sessionStorage wieder-
-  // hergestellte Spieler sofort überschrieben.
-  const firstSel = useRef(true);
+  // „Note je Spiel"-Auf/Zu je Spieler merken, damit auch DAS nach dem Rücksprung
+  // aus einem Spiel erhalten bleibt (man will ja weitere Spiele ansehen).
+  const NOTES_KEY = 'hl-teamdetail-notes';
+  const readNotesOpen = (): boolean => {
+    try {
+      const r = JSON.parse(sessionStorage.getItem(NOTES_KEY) || 'null');
+      return !!(r && r.team === team.id && r.player === selectedPlayerName && r.open);
+    } catch {
+      return false;
+    }
+  };
+  const [notesOpen, setNotesOpen] = useState<boolean>(() => readNotesOpen());
+  // Bei Spielerwechsel Noten passend setzen (offen NUR, wenn für den Spieler gemerkt).
   useEffect(() => {
-    if (firstSel.current) { firstSel.current = false; return; }
-    setSelectedPlayerName(initialPlayer ?? null);
-  }, [team.id, initialPlayer]);
-  // Beim Spielerwechsel die Noten wieder einklappen (Erstdurchlauf überspringen).
-  const firstNotes = useRef(true);
-  useEffect(() => {
-    if (firstNotes.current) { firstNotes.current = false; return; }
-    setNotesOpen(false);
-  }, [selectedPlayerName]);
-  // Zustand sichern (für „zurück" aus einem Spiel).
+    setNotesOpen(readNotesOpen());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [team.id, selectedPlayerName]);
   useEffect(() => {
     try {
-      if (selectedPlayerName) sessionStorage.setItem(PANEL_KEY, JSON.stringify({ team: team.id, player: selectedPlayerName, notesOpen }));
-      else sessionStorage.removeItem(PANEL_KEY);
+      if (selectedPlayerName) sessionStorage.setItem(NOTES_KEY, JSON.stringify({ team: team.id, player: selectedPlayerName, open: notesOpen }));
     } catch {
       /* egal */
     }
   }, [team.id, selectedPlayerName, notesOpen]);
-  const selectPlayer = useCallback((name: string) => {
-    setSelectedPlayerName(name);
-    // Zum Kopf scrollen, damit die Umblendung sichtbar ist.
-    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
 
-  // Handy-Zurück (Geste/Taste) schließt zuerst die geöffnete Spieler-Detailansicht
-  // und verlässt nicht gleich die ganze Teamseite. Nur für IM Blick angeklickte
-  // Spieler – ein per URL (/verein/…/spieler/…) direkt geöffneter Spieler bleibt
-  // Teil der Adresse, dort navigiert „Zurück" ganz normal weg.
-  useBackClose(selectedPlayerName !== null && selectedPlayerName !== initialPlayer, () =>
-    setSelectedPlayerName(null)
+  // Einen Spieler öffnen = in die URL navigieren (History-Eintrag → „Zurück" führt
+  // sauber hierher zurück). Danach zum Kopf scrollen für die Umblendung.
+  const selectPlayer = useCallback(
+    (name: string) => {
+      if (onOpenPlayer) onOpenPlayer(name);
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    [onOpenPlayer]
   );
+  // Spieler-Detail schließen = zurück auf die reine Teamseite (ohne Spieler in der URL).
+  const closePlayer = useCallback(() => onSelectTeam(team.id), [onSelectTeam, team.id]);
   const positionLabel = (p: RosterEntry) =>
     p.gamesInGoal > 0 && p.gamesInGoal * 2 >= p.matchesPlayed ? 'Torwart' : 'Feldspieler';
 
@@ -357,7 +343,7 @@ export default function TeamDetail({
 
               <div className="flex-1 w-full sm:w-auto min-w-0 sm:min-w-[260px]">
                 <button
-                  onClick={() => setSelectedPlayerName(null)}
+                  onClick={closePlayer}
                   className="inline-flex items-center gap-1.5 font-sans font-bold text-[11px] tracking-wider uppercase text-hl-dim hover:text-white transition-colors cursor-pointer mb-2"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />

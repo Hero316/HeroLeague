@@ -874,6 +874,7 @@ export default function App() {
               trackingRows={trackingRows}
               scoringConfig={scoring}
               onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
+              onOpenPlayer={(name) => navigateTo(`/verein/${encodeURIComponent(teamId)}/spieler/${encodeURIComponent(name)}`)}
             />
           ) : (
             <div className="text-center py-24 space-y-4">
