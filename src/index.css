@@ -182,6 +182,15 @@ body {
 }
 .hl-swipe-in { animation: hlSwipeIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+/* Note-je-Spiel: die einzelnen Noten fahren nacheinander von rechts herein
+   (Reihe für Reihe). Verzögerung wird pro Element inline gesetzt. */
+@keyframes hlNoteIn {
+  0% { opacity: 0; transform: translateX(20px) scale(0.9); }
+  60% { opacity: 1; }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+.hl-note-in { animation: hlNoteIn 0.44s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
 /* Pulsierender Titel-Glow. */
 .hl-title-glow { animation: hlTitleGlow 3.8s ease-in-out infinite; }
 

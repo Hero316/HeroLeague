@@ -369,14 +369,17 @@ export default function TeamDetail({
                     )}
                     {perMatchNotes.length > 0 && (
                       <div className="mt-3">
-                        <div className="font-sans font-bold text-[10px] tracking-[2px] uppercase text-hl-dim mb-1.5">Note je Spiel</div>
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="font-sans font-bold text-[10px] tracking-[2px] uppercase text-hl-dim mb-1.5">
+                          Note je Spiel <span className="text-hl-faint normal-case tracking-normal font-semibold">· tippen für das Spiel</span>
+                        </div>
+                        <div key={selectedPlayerName ?? 'none'} className="flex flex-wrap gap-1.5">
                           {perMatchNotes.map((pm, i) => (
                             <button
                               key={`${pm.matchId}-${i}`}
                               onClick={() => onOpenMatch?.(pm.matchId)}
-                              className="px-2 py-1 rounded-lg text-xs font-display font-black tabular-nums border border-white/10 hover:border-white/25 transition-colors cursor-pointer"
-                              style={{ color: noteColorFor(pm.note, scoringConfig) }}
+                              title={`Spieltag ${i + 1} · Note ${pm.note.toFixed(1)} – zum Spiel`}
+                              className="hl-note-in px-2.5 py-1 rounded-lg text-xs font-display font-black tabular-nums border border-white/10 bg-white/[.02] hover:border-white/30 hover:bg-white/[.06] active:scale-95 transition cursor-pointer"
+                              style={{ color: noteColorFor(pm.note, scoringConfig), animationDelay: `${i * 0.05}s` }}
                             >
                               {pm.note.toFixed(1)}
                             </button>
