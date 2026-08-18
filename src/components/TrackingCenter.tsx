@@ -138,16 +138,26 @@ export default function TrackingCenter({
 
   // Zwei gestapelte Zurück-Ebenen: Spiel-Editor liegt ÜBER der Spieltag-Ansicht.
   // Ein Zurück schließt immer nur die oberste Ebene (Spiel → Spiele → Auswahl).
-  useBackClose(selectedMatchId !== null, () => setSelectedMatchId(null));
+  // WICHTIG die Reihenfolge: Die Spieltag-Ebene MUSS zuerst registriert werden,
+  // damit sie beim Wiederherstellen (beide Ebenen entstehen gleichzeitig) UNTEN
+  // liegt und der Spiel-Editor oben – sonst schließt „Zurück" gleich alles.
   useBackClose(dayActive, () => {
     setSelectedMatchId(null);
     setSelectedMatchday(null);
     setSelectedEventId(null);
   });
+  useBackClose(selectedMatchId !== null, () => setSelectedMatchId(null));
+
+  // Merkt sich, ob die Wiederherstellung nach einem Neuladen bereits gelaufen ist.
+  // Erst DANACH darf die Position gespeichert werden – sonst würde der erste
+  // (leere) Render die gemerkte Position sofort wieder löschen, bevor sie beim
+  // Neuladen gelesen werden kann.
+  const restoredRef = useRef(false);
 
   // Position im Tracker merken (Spieltag/Spiel), damit ein Neuladen der Seite
   // NICHT zurück auf die Auswahl springt. Wird beim Verlassen wieder geleert.
   useEffect(() => {
+    if (!restoredRef.current) return; // vor der Wiederherstellung nichts anfassen
     try {
       if (selectedMatchday === null && selectedEventId === null) {
         sessionStorage.removeItem(NAV_KEY);
@@ -358,7 +368,6 @@ export default function TrackingCenter({
   // Nach einem Neuladen die zuletzt offene Position wiederherstellen (Spieltag →
   // ggf. Spiel). Läuft genau EINMAL, sobald die Grunddaten geladen sind. So
   // landet man nach „Aktualisieren" wieder dort, wo man war – nicht auf der Auswahl.
-  const restoredRef = useRef(false);
   useEffect(() => {
     if (restoredRef.current) return;
     if (matches.length === 0 && events.length === 0) return; // erst mit Daten
