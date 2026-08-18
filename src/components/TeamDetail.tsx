@@ -161,12 +161,16 @@ export default function TeamDetail({
 
   // Ausgewählter Spieler für die animierte Detail-Umblendung im Kopf.
   const [selectedPlayerName, setSelectedPlayerName] = useState<string | null>(initialPlayer ?? null);
+  // „Note je Spiel": eingeklappt, bis man drauf tippt (bei vielen Spielen sonst zu voll).
+  const [notesOpen, setNotesOpen] = useState(false);
   const selected = useMemo(
     () => roster.find((p) => p.name === selectedPlayerName) ?? null,
     [roster, selectedPlayerName]
   );
   // Beim Teamwechsel bzw. neuer Vorauswahl (Suche) das Detail passend setzen.
   useEffect(() => setSelectedPlayerName(initialPlayer ?? null), [team.id, initialPlayer]);
+  // Beim Spielerwechsel die Noten wieder einklappen.
+  useEffect(() => setNotesOpen(false), [selectedPlayerName]);
   const selectPlayer = useCallback((name: string) => {
     setSelectedPlayerName(name);
     // Zum Kopf scrollen, damit die Umblendung sichtbar ist.
@@ -369,22 +373,29 @@ export default function TeamDetail({
                     )}
                     {perMatchNotes.length > 0 && (
                       <div className="mt-3">
-                        <div className="font-sans font-bold text-[10px] tracking-[2px] uppercase text-hl-dim mb-1.5">
-                          Note je Spiel <span className="text-hl-faint normal-case tracking-normal font-semibold">· tippen für das Spiel</span>
-                        </div>
-                        <div key={selectedPlayerName ?? 'none'} className="flex flex-wrap gap-1.5">
-                          {perMatchNotes.map((pm, i) => (
-                            <button
-                              key={`${pm.matchId}-${i}`}
-                              onClick={() => onOpenMatch?.(pm.matchId)}
-                              title={`Spieltag ${i + 1} · Note ${pm.note.toFixed(1)} – zum Spiel`}
-                              className="hl-note-in px-2.5 py-1 rounded-lg text-xs font-display font-black tabular-nums border border-white/10 bg-white/[.02] hover:border-white/30 hover:bg-white/[.06] active:scale-95 transition cursor-pointer"
-                              style={{ color: noteColorFor(pm.note, scoringConfig), animationDelay: `${i * 0.05}s` }}
-                            >
-                              {pm.note.toFixed(1)}
-                            </button>
-                          ))}
-                        </div>
+                        <button
+                          onClick={() => setNotesOpen((v) => !v)}
+                          className="flex items-center gap-1.5 font-sans font-bold text-[10px] tracking-[2px] uppercase text-hl-dim hover:text-hl-soft transition-colors cursor-pointer"
+                        >
+                          Note je Spiel
+                          <span className="text-hl-faint">({perMatchNotes.length})</span>
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${notesOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                        {notesOpen && (
+                          <div key={selectedPlayerName ?? 'none'} className="flex flex-wrap gap-1.5 mt-2">
+                            {perMatchNotes.map((pm, i) => (
+                              <button
+                                key={`${pm.matchId}-${i}`}
+                                onClick={() => onOpenMatch?.(pm.matchId)}
+                                title={`Spieltag ${i + 1} · Note ${pm.note.toFixed(1)} – zum Spiel`}
+                                className="hl-note-in px-2.5 py-1 rounded-lg text-xs font-display font-black tabular-nums border border-white/10 bg-white/[.02] hover:border-white/30 hover:bg-white/[.06] active:scale-95 transition cursor-pointer"
+                                style={{ color: noteColorFor(pm.note, scoringConfig), animationDelay: `${i * 0.045}s` }}
+                              >
+                                {pm.note.toFixed(1)}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

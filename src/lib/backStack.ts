@@ -42,17 +42,24 @@ function install() {
 
 // Öffnet eine Ebene: History-Eintrag anlegen + Schließen-Funktion registrieren.
 // Gibt eine Aufräumfunktion zurück, falls die Ebene ohne „zurück" verschwindet.
+let layerSeq = 0;
 function registerLayer(close: () => void): () => void {
   install();
   const layer: Layer = { close };
-  window.history.pushState({ __hlLayer: true }, '');
+  const id = ++layerSeq;
+  window.history.pushState({ __hlLayer: true, __hlId: id }, '');
   stack.push(layer);
   return () => {
     const idx = stack.indexOf(layer);
     if (idx === -1) return; // bereits per „zurück" entfernt – nichts zu tun
     stack.splice(idx, 1);
-    // Programmatisch geschlossen ⇒ unseren Extra-Eintrag aufbrauchen, ohne dass
-    // der ausgelöste popstate eine darunterliegende Ebene schließt.
+    // Unseren Extra-Eintrag nur „aufbrauchen", wenn wir NOCH auf ihm stehen.
+    // Wurde inzwischen VORWÄRTS navigiert (neue Seite/URL via pushState), liegt
+    // unser Eintrag in der Historie hinter der aktuellen Seite – dann NICHT
+    // zurückgehen, sonst springt man fälschlich auf die vorherige Seite zurück
+    // (z. B. Klick auf eine Note → Spielbericht, statt auf der Teamseite zu landen).
+    const st = window.history.state as { __hlId?: number } | null;
+    if (!st || st.__hlId !== id) return;
     ignoreNextPop = true;
     window.history.back();
   };
