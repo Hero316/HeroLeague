@@ -793,14 +793,14 @@ export default function TeamDetail({
                 <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
                   <div className="flex flex-col items-center gap-2">
                     <TeamCrest name={home.name} shortName={home.shortName} color={home.logoColor} logoUrl={home.logoUrl} size="lg" onSelect={() => onSelectTeam(home.id)} />
-                    <span className="font-sans font-semibold text-xs text-hl-text text-center">{home.name}</span>
+                    <button onClick={() => onSelectTeam(home.id)} className="font-sans font-semibold text-xs text-hl-text text-center hover:text-brand-accent-light transition-colors cursor-pointer">{home.name}</button>
                   </div>
                   <span className="font-display font-black text-xl" style={{ color: accentSoft }}>
                     {nextMatch.status === 'live' ? `${nextMatch.homeScore ?? 0}:${nextMatch.awayScore ?? 0}` : 'VS'}
                   </span>
                   <div className="flex flex-col items-center gap-2">
                     <TeamCrest name={away.name} shortName={away.shortName} color={away.logoColor} logoUrl={away.logoUrl} size="lg" onSelect={() => onSelectTeam(away.id)} />
-                    <span className="font-sans font-semibold text-xs text-hl-text text-center">{away.name}</span>
+                    <button onClick={() => onSelectTeam(away.id)} className="font-sans font-semibold text-xs text-hl-text text-center hover:text-brand-accent-light transition-colors cursor-pointer">{away.name}</button>
                   </div>
                 </div>
               </div>

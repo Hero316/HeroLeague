@@ -86,6 +86,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
 
   const renderTeam = (name: string, align: 'left' | 'right') => {
     const crest = crestFor(name);
+    const click = crestClick(name);
     return (
       <div className={`flex items-center gap-2 min-w-0 ${align === 'right' ? 'flex-row-reverse text-right' : ''}`}>
         <span className="shrink-0">
@@ -95,10 +96,14 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
             color={crest?.logoColor ?? '#E6238E'}
             logoUrl={crest?.logoUrl}
             size="sm"
-            onSelect={crestClick(name)}
+            onSelect={click}
           />
         </span>
-        <span className="font-sans font-semibold text-sm text-white truncate min-w-0">{name}</span>
+        {click ? (
+          <button onClick={click} className="font-sans font-semibold text-sm text-white truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer">{name}</button>
+        ) : (
+          <span className="font-sans font-semibold text-sm text-white truncate min-w-0">{name}</span>
+        )}
       </div>
     );
   };
@@ -193,7 +198,11 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                             size="sm"
                             onSelect={crestClick(row.team)}
                           />
-                          <span className="font-sans font-semibold text-white truncate min-w-0">{row.team}</span>
+                          {crestClick(row.team) ? (
+                            <button onClick={crestClick(row.team)} className="font-sans font-semibold text-white truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{row.team}</button>
+                          ) : (
+                            <span className="font-sans font-semibold text-white truncate min-w-0">{row.team}</span>
+                          )}
                         </div>
                       </td>
                       <td className="py-2.5 px-2 text-center text-hl-soft">{row.played}</td>
@@ -419,7 +428,11 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                     <div key={`${s.team}-${s.player}`} className="flex items-center gap-3 px-4 py-2.5 text-sm">
                       <span className="w-5 shrink-0 text-center font-display font-black text-hl-mute">{i + 1}</span>
                       <span className="font-sans font-semibold text-white truncate min-w-0">{s.player}</span>
-                      <span className="text-xs text-hl-mute truncate min-w-0">{s.team}</span>
+                      {crestClick(s.team) ? (
+                        <button onClick={crestClick(s.team)} className="text-xs text-hl-mute truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{s.team}</button>
+                      ) : (
+                        <span className="text-xs text-hl-mute truncate min-w-0">{s.team}</span>
+                      )}
                       <span className="ml-auto shrink-0 font-display font-black text-white">{s.count}</span>
                     </div>
                   ))}
@@ -461,7 +474,11 @@ function StatTile({
             <TeamCrest name={crest.name} shortName={crest.shortName} color={crest.logoColor} logoUrl={crest.logoUrl} size="sm" onSelect={onSelect} />
           </span>
         )}
-        <span className="font-display font-black text-white text-lg leading-tight truncate min-w-0">{value}</span>
+        {onSelect ? (
+          <button onClick={onSelect} className="font-display font-black text-white text-lg leading-tight truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{value}</button>
+        ) : (
+          <span className="font-display font-black text-white text-lg leading-tight truncate min-w-0">{value}</span>
+        )}
       </div>
       <div className="mt-1 text-xs font-sans text-hl-soft">{sub}</div>
     </div>
