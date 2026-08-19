@@ -474,7 +474,11 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                   return (
                     <div
                       key={s.teamId}
-                      className={`flex items-center gap-3 px-3 py-3 rounded-xl mb-2 last:mb-0 ${
+                      onClick={onSelectTeam ? () => onSelectTeam(s.teamId) : undefined}
+                      role={onSelectTeam ? 'button' : undefined}
+                      tabIndex={onSelectTeam ? 0 : undefined}
+                      onKeyDown={onSelectTeam ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectTeam(s.teamId); } } : undefined}
+                      className={`flex items-center gap-3 px-3 py-3 rounded-xl mb-2 last:mb-0 transition-colors ${onSelectTeam ? 'cursor-pointer hover:border-white/25' : ''} ${
                         rank === 1
                           ? 'bg-[rgba(34,223,201,.08)] border border-[rgba(34,223,201,.2)]'
                           : 'bg-white/[.025] border border-white/[.06]'
