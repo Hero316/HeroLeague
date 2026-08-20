@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ChevronDown } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Match, MatchPlayerStat, Player, PlayerStat, ScoringConfig, StatRole, Team, TeamSponsorsMap } from '../types';
@@ -242,6 +242,32 @@ export default function TeamDetail({
   // Kaderspieler nur zum Reservieren der Höhe (unsichtbar).
   const sizingPlayer = selected ?? roster[0] ?? null;
 
+  // Kopf-Höhe sanft animieren: die beiden Panels (Team / Spieler) liegen absolut
+  // übereinander; wir messen das jeweils aktive und lassen die Container-Höhe weich
+  // mitwachsen – so springt beim Umschalten (und beim Bild-Nachladen) nichts.
+  const playerPanelRef = useRef<HTMLDivElement>(null);
+  const teamPanelRef = useRef<HTMLDivElement>(null);
+  const [headH, setHeadH] = useState<number | undefined>(undefined);
+  // Erst nach der ersten Messung animieren – sonst „wächst" der Kopf beim Öffnen von 0.
+  const [headAnim, setHeadAnim] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => setHeadAnim(true), 60);
+    return () => clearTimeout(id);
+  }, []);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = selected ? playerPanelRef.current : teamPanelRef.current;
+      if (el) setHeadH(el.offsetHeight);
+    };
+    measure();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    if (ro) {
+      if (playerPanelRef.current) ro.observe(playerPanelRef.current);
+      if (teamPanelRef.current) ro.observe(teamPanelRef.current);
+    }
+    return () => ro?.disconnect();
+  }, [selected, selectedPlayerName, notesOpen, roster.length, standing]);
+
   // Lange „Spiele"-Liste standardmäßig eingeklappt (weniger Scrollen).
   const [showAllMatches, setShowAllMatches] = useState(false);
   // Spiele mit veröffentlichten Einzelnoten → deren Balken führen zum Spielbericht.
@@ -301,7 +327,16 @@ export default function TeamDetail({
           Partner-/Footer-Bereich bleibt an Ort und Stelle). Kein overflow-hidden am
           Container, damit das Spielerbild beim Hover sanft über die Kante ragen darf –
           der Farb-Glow wird separat geklemmt. */}
-      <div className="relative mt-4 grid">
+      <div className="mt-4 flex flex-col gap-6 lg:grid lg:grid-cols-[1.55fr_1fr] lg:gap-6 lg:items-start">
+      {/* Kopf (Spieler-Detail bzw. Team) sitzt jetzt in Spalte 1 / Reihe 1 – dadurch
+          startet die Sidebar (Beste Aufstellung · Star) rechts OBEN auf gleicher Höhe.
+          Höhe wird weich animiert (Panels liegen absolut übereinander). */}
+      <motion.div
+        className="order-0 lg:col-start-1 lg:row-start-1 relative"
+        initial={false}
+        animate={{ height: headH }}
+        transition={{ duration: headAnim ? 0.4 : 0, ease: [0.22, 0.61, 0.36, 1] }}
+      >
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div
             className="absolute -top-40 -left-32 w-[560px] h-[560px] opacity-60 transition-colors"
@@ -313,11 +348,12 @@ export default function TeamDetail({
             konstant bleibt und beim Umschalten nichts springt. */}
         {sizingPlayer && (
             <motion.div
+              ref={playerPanelRef}
               aria-hidden={!selected}
               initial={false}
-              animate={{ opacity: selected ? 1 : 0, x: selected ? 0 : 18 }}
-              transition={{ duration: 0.32, ease: [0.22, 0.61, 0.36, 1] }}
-              className={`[grid-area:1/1] self-center relative flex flex-col lg:flex-row items-start lg:items-center gap-6 lg:gap-10 py-6 ${selected ? '' : 'pointer-events-none'}`}
+              animate={{ opacity: selected ? 1 : 0, x: selected ? 0 : 16 }}
+              transition={{ duration: 0.4, ease: [0.22, 0.61, 0.36, 1] }}
+              className={`absolute inset-x-0 top-0 flex flex-col lg:flex-row items-start lg:items-center gap-6 lg:gap-10 py-6 ${selected ? '' : 'pointer-events-none'}`}
             >
               {/* Große FIFA-Karte links – ersetzt das doppelte Foto. Getrackte
                   Spieler bekommen die Karte; ohne Werte zeigen wir das Porträt. */}
@@ -449,11 +485,12 @@ export default function TeamDetail({
 
         {/* Team-Panel – immer gemountet */}
         <motion.div
+          ref={teamPanelRef}
           aria-hidden={!!selected}
           initial={false}
-          animate={{ opacity: selected ? 0 : 1, x: selected ? -18 : 0 }}
-          transition={{ duration: 0.32, ease: [0.22, 0.61, 0.36, 1] }}
-          className={`[grid-area:1/1] self-center relative flex flex-col sm:flex-row items-start sm:items-center gap-6 flex-wrap py-6 ${selected ? 'pointer-events-none' : ''}`}
+          animate={{ opacity: selected ? 0 : 1, x: selected ? -16 : 0 }}
+          transition={{ duration: 0.4, ease: [0.22, 0.61, 0.36, 1] }}
+          className={`absolute inset-x-0 top-0 flex flex-col sm:flex-row items-start sm:items-center gap-6 flex-wrap py-6 ${selected ? 'pointer-events-none' : ''}`}
         >
               {/* Logo + (nur auf dem Handy) kleiner Captain rechts daneben – wie bei der
                   ICON League. sm:contents ⇒ auf Desktop fließt das Logo wieder als
@@ -611,13 +648,10 @@ export default function TeamDetail({
                 </button>
               )}
             </motion.div>
-      </div>
+      </motion.div>
 
-      {/* Body: Kader · Sidebar · Spiele. Auf dem Handy per order: Kader → Sidebar → Spiele
-          (die lange Spiele-Liste ganz nach unten). Auf Desktop: links Kader + Spiele, rechts Sidebar. */}
-      <div className="mt-6 flex flex-col gap-6 lg:grid lg:grid-cols-[1.55fr_1fr] lg:gap-6 lg:items-start">
-        {/* Kader */}
-        <div className="order-1 lg:col-start-1 lg:row-start-1">
+      {/* Kader (Spalte 1 · Reihe 2) */}
+        <div className="order-1 lg:col-start-1 lg:row-start-2">
           <div className="font-display font-black text-2xl lg:text-3xl uppercase text-white mb-4">Kader</div>
           {roster.length === 0 ? (
             <div className="hl-card p-8 text-center text-hl-mute font-sans text-sm">Noch keine Spieler hinterlegt.</div>
@@ -697,7 +731,7 @@ export default function TeamDetail({
         </div>
 
         {/* Spiele – auf dem Handy ganz unten (order-3), auf Desktop unter dem Kader */}
-        <div className="order-3 lg:col-start-1 lg:row-start-2">
+        <div className="order-3 lg:col-start-1 lg:row-start-3">
           {/* Spiele – standardmäßig eingeklappt, per Klick alle anzeigen */}
           <button
             type="button"
@@ -716,8 +750,13 @@ export default function TeamDetail({
           </button>
           {teamMatches.length === 0 ? (
             <div className="hl-card p-8 text-center text-hl-mute font-sans text-sm">Noch keine Spiele in dieser Saison.</div>
-          ) : showAllMatches ? (
-            <div className="space-y-2">
+          ) : (
+            <div
+              className="grid transition-[grid-template-rows] duration-300 ease-out"
+              style={{ gridTemplateRows: showAllMatches ? '1fr' : '0fr' }}
+            >
+              <div className="overflow-hidden">
+                <div className="space-y-2 pt-0.5">
               {teamMatches.map((m) => {
                 const opp = opponent(m);
                 const isHome = m.homeTeamId === team.id;
@@ -770,20 +809,14 @@ export default function TeamDetail({
                   </div>
                 );
               })}
+                </div>
+              </div>
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowAllMatches(true)}
-              className="w-full hl-card p-4 text-center text-hl-mute hover:text-white font-sans text-sm transition-colors cursor-pointer"
-            >
-              {teamMatches.length} Spiele der Saison anzeigen
-            </button>
           )}
         </div>
 
         {/* Sidebar */}
-        <div className="order-2 lg:col-start-2 lg:row-start-1 lg:row-span-2 flex flex-col gap-[18px]">
+        <div className="order-2 lg:col-start-2 lg:row-start-1 lg:row-span-3 flex flex-col gap-[18px]">
           {/* Nächstes Spiel */}
           {nextMatch && (() => {
             const home = teams.find((t) => t.id === nextMatch.homeTeamId);

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ChevronRight, IdCard } from 'lucide-react';
 import type { ActionCounts, Match, MatchPlayerStat, ScoringConfig, Team } from '../types';
 import { notesForMatch, type MatchNoteEntry } from '../lib/trackingView';
@@ -90,14 +90,19 @@ export default function SpielberichtPage({ match, teams, rows, cfg, onBack, onSe
   const homeAgg = useMemo(() => aggFor(match.homeTeamId), [entries, match.homeTeamId]); // eslint-disable-line react-hooks/exhaustive-deps
   const awayAgg = useMemo(() => aggFor(match.awayTeamId), [entries, match.awayTeamId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const open = (teamId: string, name: string) => {
-    setOpenKey(`${teamId}::${name}`);
-    try {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch {
-      /* egal */
+  // Detail taucht smooth zwischen Team-Statistik und Notenliste auf; sanft dorthin scrollen.
+  const detailRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (openKey && detailRef.current) {
+      try {
+        detailRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch {
+        /* egal */
+      }
     }
-  };
+  }, [openKey]);
+
+  const open = (teamId: string, name: string) => setOpenKey(`${teamId}::${name}`);
 
   return (
     <div className="max-w-4xl xl:max-w-[1200px] 2xl:max-w-[1360px] mx-auto px-4 py-8">
@@ -108,34 +113,41 @@ export default function SpielberichtPage({ match, teams, rows, cfg, onBack, onSe
         <ArrowLeft className="w-4 h-4" /> Zurück
       </button>
 
-      {/* Kopf: entweder das Ergebnis ODER (mit Wisch) die Einzelwertung eines Spielers */}
-      {selected ? (
-        <PlayerMatchDetail
-          key={openKey ?? ''}
-          entry={selected}
-          cfg={cfg}
-          photo={photoFor(selected.teamId, selected.playerName)}
-          homeName={home?.name ?? '—'}
-          awayName={away?.name ?? '—'}
-          onClose={goBackLayer}
-          onOpenCard={() => onSelectPlayer(selected.teamId, selected.playerName)}
-        />
-      ) : (
-        <div className="hl-card p-4 sm:p-6 mb-6 flex items-center justify-center gap-2 sm:gap-5">
-          <TeamHead team={home} />
-          <div className="text-center shrink-0 px-1">
-            <div className="font-display font-black text-3xl sm:text-4xl lg:text-5xl tabular-nums leading-none">
-              {match.homeScore ?? '–'}<span className="text-hl-faint mx-0.5 sm:mx-1">:</span>{match.awayScore ?? '–'}
-            </div>
-            <div className="text-[9px] sm:text-[10px] lg:text-[11px] uppercase tracking-[2px] text-hl-dim mt-1 whitespace-nowrap">Spieltag {match.matchday}</div>
+      {/* Ergebnis-Kopf bleibt immer stehen */}
+      <div className="hl-card p-4 sm:p-6 mb-6 flex items-center justify-center gap-2 sm:gap-5">
+        <TeamHead team={home} />
+        <div className="text-center shrink-0 px-1">
+          <div className="font-display font-black text-3xl sm:text-4xl lg:text-5xl tabular-nums leading-none">
+            {match.homeScore ?? '–'}<span className="text-hl-faint mx-0.5 sm:mx-1">:</span>{match.awayScore ?? '–'}
           </div>
-          <TeamHead team={away} />
+          <div className="text-[9px] sm:text-[10px] lg:text-[11px] uppercase tracking-[2px] text-hl-dim mt-1 whitespace-nowrap">Spieltag {match.matchday}</div>
         </div>
-      )}
+        <TeamHead team={away} />
+      </div>
 
-      {!selected && hasData && (
-        <TeamCompare home={home} away={away} homeAgg={homeAgg} awayAgg={awayAgg} />
-      )}
+      {hasData && <TeamCompare home={home} away={away} homeAgg={homeAgg} awayAgg={awayAgg} />}
+
+      {/* Angeklickter Spieler taucht smooth darunter auf – die Notenliste rutscht runter. */}
+      <div
+        ref={detailRef}
+        className="grid transition-[grid-template-rows] duration-300 ease-out"
+        style={{ gridTemplateRows: selected ? '1fr' : '0fr' }}
+      >
+        <div className="overflow-hidden">
+          {selected && (
+            <PlayerMatchDetail
+              key={openKey ?? ''}
+              entry={selected}
+              cfg={cfg}
+              photo={photoFor(selected.teamId, selected.playerName)}
+              homeName={home?.name ?? '—'}
+              awayName={away?.name ?? '—'}
+              onClose={goBackLayer}
+              onOpenCard={() => onSelectPlayer(selected.teamId, selected.playerName)}
+            />
+          )}
+        </div>
+      </div>
 
       {!hasData ? (
         <div className="hl-card p-8 text-center text-hl-mute">Für dieses Spiel sind noch keine Werte veröffentlicht.</div>
@@ -217,12 +229,12 @@ function PlayerMatchDetail({
   }, [entry.counts]);
 
   return (
-    <div className="hl-card p-5 mb-6 hl-swipe-in">
+    <div className="hl-card p-5 mb-6">
       <button
         onClick={onClose}
         className="mb-4 text-[11px] font-bold uppercase tracking-wider text-hl-mute hover:text-white flex items-center gap-1.5 cursor-pointer"
       >
-        <ArrowLeft className="w-3.5 h-3.5" /> Ergebnis
+        <ArrowLeft className="w-3.5 h-3.5" /> Schließen
       </button>
 
       <div className="flex items-center gap-4 min-w-0">
