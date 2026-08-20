@@ -17,11 +17,13 @@ interface HeroProps {
   pom?: PlayerOfMonth | null; // von oben vorgeladen (verhindert nachträglichen Slide → kein „Springen")
   onNavigate: (tab: ActiveTab) => void;
   onSelectTeam?: (teamId: string, playerName?: string) => void;
+  onOpenMatch?: (matchId: string) => void; // öffnet den Spielbericht
+  reportMatchIds?: Set<string>; // Spiele mit veröffentlichten Einzelnoten
 }
 
 // Vollflächiges Hero-Carousel (Magenta-TV-Stil) mit drei Slides:
 // 1. Nächster Spieltag / Live-Spiel  2. Spieler des Monats  3. Tabellenführer
-export default function Hero({ teams, matches, players, seasonLabel, seasonNumber, heroImages, pom: pomProp, onNavigate, onSelectTeam }: HeroProps) {
+export default function Hero({ teams, matches, players, seasonLabel, seasonNumber, heroImages, pom: pomProp, onNavigate, onSelectTeam, onOpenMatch, reportMatchIds }: HeroProps) {
   // pom kommt bevorzugt von oben (vorgeladen); nur ohne Prop selbst nachladen.
   const [pomState, setPomState] = useState<PlayerOfMonth | null>(null);
   const pom = pomProp !== undefined ? pomProp : pomState;
@@ -139,18 +141,10 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
       ? 'NÄCHSTER SPIELTAG'
       : 'LETZTER SPIELTAG';
 
-    const intro = !featuredDay
-      ? ''
-      : featuredDay.kind === 'live'
-      ? `Der ${featuredDay.day}. Spieltag läuft gerade${venue ? ` in ${venue}` : ''} — ${cnt} ${games} an einem Abend. Verfolge die Ergebnisse live.`
-      : featuredDay.kind === 'upcoming'
-      ? `Der ${featuredDay.day}. Spieltag der Hero League steigt am ${dateLong}${first ? ` ab ${first.time} Uhr` : ''}${venue ? ` in ${venue}` : ''} — ${cnt} ${games} an einem Abend.`
-      : `Der ${featuredDay.day}. Spieltag ist gespielt${venue ? ` in ${venue}` : ''} — alle Ergebnisse und die Tabelle findest du hier.`;
-
     return (
       <>
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -inset-[5%] hl-zoom">
+          <div className="absolute left-[-5%] right-[-5%] top-0 h-[112lvh] hl-zoom">
             <img src={heroImages?.match || '/assets/hero-stadium.png'} alt="" className="absolute inset-0 w-full h-full object-cover" />
           </div>
           <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_78%_30%,rgba(232,62,140,.22),transparent_55%)]" />
@@ -173,7 +167,6 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                     <br />
                     <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">Spieltag</span>
                   </h1>
-                  <p className="mt-5 max-w-[460px] hidden sm:block text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">{intro}</p>
                 </>
               ) : (
                 <>
@@ -182,9 +175,6 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                     <br />
                     <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">League</span>
                   </h1>
-                  <p className="mt-5 max-w-[440px] hidden sm:block text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
-                    Die Saison startet in Kürze — sobald Spiele angesetzt sind, findest du hier alles live.
-                  </p>
                 </>
               )}
               <div className="hidden lg:flex gap-3 mt-7 flex-wrap">
@@ -222,10 +212,28 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                       if (!h || !a) return null;
                       const isL = m.status === 'live';
                       const isF = m.status === 'beendet';
+                      const canOpen = !!(onOpenMatch && reportMatchIds?.has(m.id));
                       return (
-                        <div key={m.id} className="flex items-center gap-1.5 py-2 border-b border-white/[.06] last:border-0">
+                        <div
+                          key={m.id}
+                          onClick={canOpen ? () => onOpenMatch!(m.id) : undefined}
+                          role={canOpen ? 'button' : undefined}
+                          tabIndex={canOpen ? 0 : undefined}
+                          onKeyDown={canOpen ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenMatch!(m.id); } } : undefined}
+                          className={`flex items-center gap-1.5 py-2 border-b border-white/[.06] last:border-0 rounded-md ${canOpen ? 'cursor-pointer hover:bg-white/[.04]' : ''}`}
+                        >
                           <div className="flex items-center gap-1 flex-1 min-w-0 justify-end">
-                            <span title={h.name} className="font-sans font-bold text-[11px] text-hl-text truncate">{h.name}</span>
+                            {onSelectTeam ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onSelectTeam(h.id); }}
+                                title={`${h.name} – Vereinsseite öffnen`}
+                                className="font-sans font-bold text-[11px] text-hl-text truncate hover:text-brand-accent-light transition-colors cursor-pointer"
+                              >
+                                {h.name}
+                              </button>
+                            ) : (
+                              <span title={h.name} className="font-sans font-bold text-[11px] text-hl-text truncate">{h.name}</span>
+                            )}
                             <TeamCrest name={h.name} shortName={h.shortName} color={h.logoColor} logoUrl={h.logoUrl} size="sm" onSelect={onSelectTeam ? () => onSelectTeam(h.id) : undefined} />
                           </div>
                           <div className="w-[46px] shrink-0 flex flex-col items-center">
@@ -246,7 +254,17 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                           </div>
                           <div className="flex items-center gap-1 flex-1 min-w-0">
                             <TeamCrest name={a.name} shortName={a.shortName} color={a.logoColor} logoUrl={a.logoUrl} size="sm" onSelect={onSelectTeam ? () => onSelectTeam(a.id) : undefined} />
-                            <span title={a.name} className="font-sans font-bold text-[11px] text-hl-text truncate">{a.name}</span>
+                            {onSelectTeam ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onSelectTeam(a.id); }}
+                                title={`${a.name} – Vereinsseite öffnen`}
+                                className="font-sans font-bold text-[11px] text-hl-text truncate hover:text-brand-accent-light transition-colors cursor-pointer text-left"
+                              >
+                                {a.name}
+                              </button>
+                            ) : (
+                              <span title={a.name} className="font-sans font-bold text-[11px] text-hl-text truncate">{a.name}</span>
+                            )}
                           </div>
                         </div>
                       );
@@ -298,7 +316,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
             gestaltete Standard-Design – so bleiben Text und Karte gut lesbar. */}
         {heroImages?.pom ? (
           <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute -inset-[5%] hl-zoom">
+            <div className="absolute left-[-5%] right-[-5%] top-0 h-[112lvh] hl-zoom">
               <img src={heroImages.pom} alt="" className="absolute inset-0 w-full h-full object-cover" />
             </div>
             <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_78%_30%,rgba(233,196,106,.2),transparent_55%)]" />
@@ -329,15 +347,12 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                   Spieltages{pom.matchday ? ` ${pom.matchday}` : ''}
                 </span>
               </h1>
-              <p className="mt-5 max-w-[430px] mx-auto lg:mx-0 hidden sm:block text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
-                Die herausragende Leistung des Spieltags in der Hero League.
-              </p>
               {/* Sponsor der Auszeichnung – Logo/Name mit Link, aktualisiert sich
                   automatisch mit der Partner-Auswahl im Admin. Auch auf dem Handy sichtbar. */}
               {sponsor && (sponsor.logoUrl || sponsor.name) && (
                 <div className="mt-5 flex items-center justify-center lg:justify-start gap-2.5">
                   <span className="font-sans font-bold text-[10.5px] tracking-[2px] uppercase text-hl-gold/90 whitespace-nowrap">
-                    Gesponsert von
+                    Präsentiert von
                   </span>
                   {sponsor.logoUrl ? (
                     <SponsorLink sponsorId={sponsor.id} sponsorName={sponsor.name} placement="spieler-des-spieltages" href={sponsor.linkUrl} title={sponsor.name} className="inline-flex items-center">
@@ -398,7 +413,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
     return (
       <>
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -inset-[5%] hl-zoom">
+          <div className="absolute left-[-5%] right-[-5%] top-0 h-[112lvh] hl-zoom">
             <img src={heroImages?.table || '/assets/hero-crowd.png'} alt="" className="absolute inset-0 w-full h-full object-cover" />
           </div>
           <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_80%_30%,rgba(34,223,201,.2),transparent_55%)]" />
@@ -419,10 +434,6 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                 <br />
                 <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">Spitze</span>
               </h1>
-              <p className="mt-5 max-w-[430px] hidden sm:block text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
-                {leader.teamName} führt die Hero League mit {leader.points} Punkten an
-                {standings[1] ? ` — dicht gefolgt von ${standings[1].teamName}` : ''}. Das Titelrennen ist eröffnet.
-              </p>
               <div className="hidden lg:flex gap-3 mt-7 flex-wrap">
                 <button onClick={() => onNavigate('tabelle')} className={primaryBtn}>
                   ▸ TABELLE ANSEHEN
@@ -444,7 +455,11 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                   return (
                     <div
                       key={s.teamId}
-                      className={`flex items-center gap-3 px-3 py-3 rounded-xl mb-2 last:mb-0 ${
+                      onClick={onSelectTeam ? () => onSelectTeam(s.teamId) : undefined}
+                      role={onSelectTeam ? 'button' : undefined}
+                      tabIndex={onSelectTeam ? 0 : undefined}
+                      onKeyDown={onSelectTeam ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectTeam(s.teamId); } } : undefined}
+                      className={`flex items-center gap-3 px-3 py-3 rounded-xl mb-2 last:mb-0 transition-colors ${onSelectTeam ? 'cursor-pointer hover:border-white/25' : ''} ${
                         rank === 1
                           ? 'bg-[rgba(34,223,201,.08)] border border-[rgba(34,223,201,.2)]'
                           : 'bg-white/[.025] border border-white/[.06]'

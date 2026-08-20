@@ -568,3 +568,126 @@ export interface ChatMessage {
   unreadReplies?: number; // ungelesene Thread-Antworten (Top-Level, für das Leuchten)
   poll?: Poll | null; // gesetzt, wenn attachType === 'poll'
 }
+
+// ===========================================================================
+// Statistics Center — per-Aktion getrackte Spielerwertung (Fundament)
+// Nur die Roh-Zähler jeder Aktion werden gespeichert. Note, Quoten und
+// Kartenwerte rechnen sich IMMER daraus (nie fest gespeichert) – genau wie die
+// Liga-Tabelle sich aus den Ergebnissen ergibt. Alle Gewichte sind Testwerte
+// und im Admin frei justierbar (ScoringConfig).
+// ===========================================================================
+
+// Alle zählbaren Aktionen eines Spielers in EINEM Spiel.
+export interface ActionCounts {
+  pass_ok: number; // angekommener Pass
+  pass_fail: number; // Fehlpass
+  key_pass: number; // Schlüsselpass (Teilmenge der erfolgreichen Pässe)
+  assist: number; // Vorlage (letzter Pass vor dem Tor)
+  shot_on: number; // Torschuss aufs Tor, gehalten
+  shot_miss: number; // Fehlschuss (vorbei / Pfosten)
+  shot_blocked_off: number; // eigener Schuss geblockt (offensiv)
+  goal: number; // Tor – zählt automatisch als Torschuss, NICHT zusätzlich als shot_on
+  dribble_won: number;
+  dribble_lost: number;
+  duel_won: number; // Zweikampf/Defensivduell gewonnen
+  duel_lost: number; // Zweikampf verloren
+  interception: number; // abgefangener Pass
+  shot_blocked_def: number; // gegnerischen Schuss geblockt (defensiv)
+  turnover: number; // Ballverlust
+  own_goal: number; // Eigentor
+  penalty_goal: number; // Strafstoßtor (Teilmenge der Tore, kein Zusatzbonus)
+  save: number; // Parade (Torwart)
+  gk_goal_against: number; // Gegentor als Torwart
+  penalty_save: number; // gehaltener Strafstoß
+  gk_position_save: number; // Standparade
+}
+
+export type ActionKey = keyof ActionCounts;
+
+export type StatRole = 'field' | 'keeper';
+
+// Eine gespeicherte Zeile: die Zähler eines Spielers in einem Spiel.
+export interface MatchPlayerStat {
+  dayKey: string; // Spieltag-/Event-Schlüssel, z.B. "s1:3" oder "event:testspiel-1"
+  matchId: string; // Liga-Spiel-ID oder Event-Match-ID
+  teamId: string; // Team-ID (Liga) oder Team-Name (Event)
+  playerName: string;
+  role: StatRole; // Feldspieler oder (für dieses Spiel) Torwart
+  counts: ActionCounts;
+}
+
+// Rating-Regler: Note = clamp(base + factor · Rohscore, min, max).
+export interface RatingRegler {
+  base: number; // neutraler Startwert (6,00)
+  factor: number; // Note-Änderung je Rohscore-Punkt (0,20)
+  min: number; // Untergrenze (1,00)
+  max: number; // Obergrenze (10,00)
+}
+
+// Elite-Index eines Kartenattributs: Ziel-Quote und Ziel-Menge (Index 1,00),
+// dazu die Gewichte, wie stark Quote vs. Menge in den Index eingehen.
+export interface CardAttrTarget {
+  zielQuote: number; // Elite-Quote (z.B. 0,72 Zweikampfquote)
+  zielMenge: number; // Elite-Menge pro Spiel (Index 1,00)
+  gewQuote: number; // Gewicht Quote im Index
+  gewMenge: number; // Gewicht Menge im Index
+}
+
+// Score-Einstellungen (Testversion – jede Zelle frei justierbar).
+export interface ScoringConfig {
+  points: Record<ActionKey, number>; // Rohscore-Gewicht je Aktion
+  cleanSheetBonus: number; // Zu-null-Bonus für den Torwart (abgeleitet, nicht gezählt)
+  rating: RatingRegler;
+  shotBlockFactor: number; // geblockter Offensiv-Schuss zählt als halber gehaltener Schuss
+  minimums: { apps: number; passes: number; shots: number; duels: number; gk: number };
+  card: {
+    basis: number; // Kartenwert-Untergrenze (40)
+    elite: number; // Index 1,00 entspricht diesem Wert (94)
+    totsStart: number; // ab hier TOTS (95) – nur Sonderkarten, nicht automatisch
+    fullGames: number; // ab dieser Spielzahl volle Wertung (8)
+    caps: { g1_2: number; g3_4: number; g5_7: number; g8plus: number }; // Kappen je Spielzahl
+    pas: {
+      zielPassquote: number;
+      zielPaesseSpiel: number;
+      zielKeySpiel: number;
+      zielAssistsSpiel: number;
+      gewPassindex: number;
+      gewKey: number;
+      gewAssist: number;
+      indexGewQuote: number;
+      indexGewMenge: number;
+    };
+    sch: CardAttrTarget;
+    dri: CardAttrTarget;
+    def: CardAttrTarget;
+    par: CardAttrTarget; // Torwart: Paraden
+    sic: CardAttrTarget; // Torwart: Sicherheit (Gegentore/zu null)
+    stl: CardAttrTarget; // Torwart: Stellungsspiel (Standparade/Elfmeter)
+  };
+  // Untergrenzen der Kartenstufen: Bronze (Standard) · Silber 65 · Gold 75 ·
+  // Hero 90 (neongrüne Umrandung) · TOTS (Sonderkarte, wird manuell gesteuert –
+  // automatisch max. 94, also nicht erreichbar).
+  tiers: { silber: number; gold: number; hero: number; tots: number };
+}
+
+export type CardTier = 'bronze' | 'silber' | 'gold' | 'hero' | 'tots';
+
+// Ergebnis der Quotenberechnung (null = unter dem Mindestwert, zählt nicht fürs Leaderboard).
+export interface Quotas {
+  passquote: number | null;
+  passversuche: number;
+  schussquote: number | null; // Schussqualität
+  chancenverwertung: number | null;
+  gesamtschuesse: number;
+  zweikampfquote: number | null;
+  dribblingquote: number | null;
+  torwartquote: number | null;
+}
+
+// Kartenwerte eines Spielers (Saison, über alle Spiele).
+export interface PlayerCard {
+  role: StatRole;
+  ges: number; // Gesamtwert (gerundeter Schnitt der Teilwerte)
+  tier: CardTier;
+  attrs: { key: string; label: string; value: number }[]; // PAS/SCH/DRI/DEF bzw. STL/PAR/PAS/SIC
+}

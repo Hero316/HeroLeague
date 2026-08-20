@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster, PlayerOfMonth } from './types';
+import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster, PlayerOfMonth, MatchPlayerStat, ScoringConfig } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
+import { fetchPublicStats, fetchScoring } from './lib/stats';
+import { DEFAULT_SCORING } from './lib/scoring';
 import { startPresence } from './lib/presence';
 import { syncPush } from './lib/push';
 import { seasonName } from './lib/heroAward';
@@ -40,7 +42,10 @@ import NotificationBell from './components/NotificationBell';
 import DeepLinkModal from './components/DeepLinkModal';
 import ChatUnreadBadge from './components/ChatUnreadBadge';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, CalendarDays, MessageSquare, UserCircle, Bell } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, CalendarDays, MessageSquare, UserCircle, Bell, Trophy, ChevronRight } from 'lucide-react';
+import TrackingCenter from './components/TrackingCenter';
+import SpielberichtPage from './components/SpielberichtPage';
+import WertungenPage from './components/WertungenPage';
 
 // Öffentliche Tabs haben eigene URLs, damit man nach einem Reload dort bleibt, wo man war.
 const TAB_PATHS: Record<ActiveTab, string> = {
@@ -67,6 +72,10 @@ export default function App() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [players, setPlayers] = useState<PlayerStat[]>([]);
+  // Statistics Center: veröffentlichte getrackte Zähler + Score-Einstellungen
+  // (für Spieler-FIFA-Karten und den Spielbericht). Öffentlich, ohne Login.
+  const [trackingRows, setTrackingRows] = useState<MatchPlayerStat[]>([]);
+  const [scoring, setScoring] = useState<ScoringConfig>(DEFAULT_SCORING);
   // Spieler des Monats schon beim Laden holen, damit der Hero direkt mit finaler
   // Höhe erscheint (sonst kommt der Slide asynchron dazu und der Hero „springt").
   const [pom, setPom] = useState<PlayerOfMonth | null>(null);
@@ -434,6 +443,34 @@ export default function App() {
     if (!canEditHighlights) setEditMode(false);
   }, [canEditHighlights]);
 
+  // Score-Einstellungen einmalig laden.
+  useEffect(() => {
+    fetchScoring()
+      .then(setScoring)
+      .catch(() => {
+        /* Defaults bleiben */
+      });
+  }, []);
+
+  // Getrackte Werte (nur veröffentlichte) der AKTIVEN Saison laden – reagiert auf
+  // die Demo-Umschaltung, sodass die Website im Demo-Modus nur Demo-Tracking zeigt.
+  useEffect(() => {
+    const sid = currentSeason?.id;
+    if (!sid) {
+      setTrackingRows([]);
+      return;
+    }
+    // Im Demo-Modus auch Entwürfe zeigen (ohne „Live schalten") – nur Demo-Saison.
+    fetchPublicStats(sid, demo.active)
+      .then((r) => setTrackingRows(r.rows))
+      .catch(() => {
+        /* keine Daten – Karten bleiben verborgen */
+      });
+  }, [currentSeason?.id, demo.active]);
+
+  // Spiele, für die es getrackte Werte gibt (→ Spielbericht anklickbar).
+  const reportMatchIds = useMemo(() => new Set(trackingRows.map((r) => r.matchId)), [trackingRows]);
+
   // Aufstellungen laden, sobald jemand angemeldet ist (für den Schiedsrichtermodus).
   useEffect(() => {
     if (sessionUser) fetchRoster();
@@ -671,6 +708,121 @@ export default function App() {
     );
   }
 
+  // ROUTE: /wertungen – öffentliche Auszeichnungen aus getrackten Daten
+  if (currentPath.startsWith('/wertungen')) {
+    return (
+      <div className="min-h-screen text-hl-text font-sans flex flex-col overflow-x-clip">
+        <PageBackground page="heroone" />
+        {renderMobileDock()}
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={goToTab}
+          isAdmin={isAdmin}
+          canAccessBackoffice={canAccessBackoffice}
+          onLogout={handleLogout}
+          onOpenLogin={() => navigateTo('/admin')}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
+          onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
+          demoActive={demo.active}
+          seasonLabel={selectedSeasonName}
+          seasonNumber={currentSeasonNumber}
+          hasLiveMatch={hasLiveMatch}
+          eventActive={!!activeEvent}
+          eventTitle={activeEvent?.title}
+          onOpenEvent={() => navigateTo('/testspiel')}
+          hasHighlights={hasHighlights}
+          mobileMode={mobileMode}
+          onToggleMobileMode={toggleMobileMode}
+          teams={visibleTeams}
+          matches={currentSeasonMatches}
+          onSelectTeam={openTeamDetail}
+          onGoToMatchday={goToMatchday}
+          albums={highlights.albums}
+          onOpenAlbum={openHighlightsAlbum}
+        />
+        <main className="flex-1">
+          <WertungenPage
+            rows={trackingRows}
+            cfg={scoring}
+            teams={visibleTeams}
+            matches={currentSeasonMatches}
+            seasonLabel={selectedSeasonName}
+            onBack={goBack}
+            onSelectPlayer={(teamId, name) =>
+              navigateTo(`/verein/${encodeURIComponent(teamId)}/spieler/${encodeURIComponent(name)}`)
+            }
+          />
+        </main>
+        <Footer onNavigate={goToTab} onNavigatePath={navigateTo} />
+      </div>
+    );
+  }
+
+  // ROUTE: /spiel/:id – öffentlicher Spielbericht (Einzelnoten aus getrackten Daten)
+  if (currentPath.startsWith('/spiel/')) {
+    const matchId = decodeURIComponent(currentPath.slice('/spiel/'.length).replace(/\/+$/, ''));
+    const match = matches.find((m) => m.id === matchId) ?? null;
+    return (
+      <div className="min-h-screen text-hl-text font-sans flex flex-col overflow-x-clip">
+        <PageBackground page="tabelle" />
+        {renderMobileDock()}
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={goToTab}
+          isAdmin={isAdmin}
+          canAccessBackoffice={canAccessBackoffice}
+          onLogout={handleLogout}
+          onOpenLogin={() => navigateTo('/admin')}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
+          onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
+          demoActive={demo.active}
+          seasonLabel={selectedSeasonName}
+          seasonNumber={currentSeasonNumber}
+          hasLiveMatch={hasLiveMatch}
+          eventActive={!!activeEvent}
+          eventTitle={activeEvent?.title}
+          onOpenEvent={() => navigateTo('/testspiel')}
+          hasHighlights={hasHighlights}
+          mobileMode={mobileMode}
+          onToggleMobileMode={toggleMobileMode}
+          teams={visibleTeams}
+          matches={currentSeasonMatches}
+          onSelectTeam={openTeamDetail}
+          onGoToMatchday={goToMatchday}
+          albums={highlights.albums}
+          onOpenAlbum={openHighlightsAlbum}
+        />
+        <main className="flex-1">
+          {match ? (
+            <SpielberichtPage
+              match={match}
+              teams={visibleTeams}
+              rows={trackingRows}
+              cfg={scoring}
+              onBack={goBack}
+              onSelectPlayer={(teamId, name) =>
+                navigateTo(`/verein/${encodeURIComponent(teamId)}/spieler/${encodeURIComponent(name)}`)
+              }
+              onSelectTeam={openTeamDetail}
+            />
+          ) : (
+            <div className="text-center py-24 space-y-4">
+              <p className="text-hl-mute font-sans">Dieses Spiel gibt es nicht (mehr).</p>
+              <button
+                onClick={() => navigateTo('/')}
+                className="inline-flex items-center gap-1.5 text-xs font-sans font-bold uppercase tracking-wider text-brand-accent-light hover:underline cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Zurück zur Übersicht
+              </button>
+            </div>
+          )}
+        </main>
+        <Footer onNavigate={goToTab} onNavigatePath={navigateTo} />
+      </div>
+    );
+  }
+
   // ROUTE: /verein/:id – öffentliche Vereins-Detailseite
   if (currentPath.startsWith('/verein/')) {
     // Pfad: /verein/<id>  oder  /verein/<id>/spieler/<name> (Spieler direkt geöffnet)
@@ -720,6 +872,10 @@ export default function App() {
               initialPlayer={initialPlayer}
               onBack={goBack}
               onSelectTeam={openTeamDetail}
+              trackingRows={trackingRows}
+              scoringConfig={scoring}
+              onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
+              onOpenPlayer={(name) => navigateTo(`/verein/${encodeURIComponent(teamId)}/spieler/${encodeURIComponent(name)}`)}
             />
           ) : (
             <div className="text-center py-24 space-y-4">
@@ -787,7 +943,7 @@ export default function App() {
           {previewEvent ? (
             <>
               {isPreviewOnly && (
-                <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pt-4">
+                <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pt-4">
                   <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-2.5 text-xs font-sans text-yellow-200">
                     Vorschau: Dieses Event ist noch <strong>nicht aktiv</strong> und für Besucher unsichtbar. Im Backoffice
                     unter „Testspiel / Event" aktivieren.
@@ -844,6 +1000,45 @@ export default function App() {
         onUpdateUser={(p) => setSessionUser((u) => (u ? { ...u, ...p } : u))}
         onGoWebsite={() => navigateTo('/')}
         onLogout={handleLogout}
+      />
+    );
+  }
+
+  // ROUTE: /tracking – Statistics Center (Erfassungs-Editor). Eigene, app-artige
+  // Vollbildseite. Nur für Spiel-Admins/Super-Admins; ohne Login: Anmeldemaske.
+  if (currentPath.startsWith('/tracking')) {
+    if (!isAdmin) {
+      return (
+        <div className="h-screen flex flex-col bg-[#060E0F] text-hl-text">
+          <div className="flex-1 flex items-center justify-center p-6">
+            <AdminLogin onLoginSuccess={(user) => setSessionUser(user)} />
+          </div>
+        </div>
+      );
+    }
+    if (!canManageMatches) {
+      return (
+        <div className="h-screen flex flex-col items-center justify-center gap-4 bg-[#060E0F] text-hl-text p-6 text-center">
+          <p className="text-hl-mute">Für das Statistics Center brauchst du Spiel-Admin-Rechte.</p>
+          <button
+            onClick={() => navigateTo('/admin')}
+            className="px-5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer"
+          >
+            Zurück zum Backoffice
+          </button>
+        </div>
+      );
+    }
+    return (
+      <TrackingCenter
+        teams={visibleTeams}
+        matches={demo.active ? currentSeasonMatches : matches}
+        seasons={demo.active && demoSeason ? [demoSeason] : visibleSeasons}
+        roster={roster}
+        eventArchive={eventArchive}
+        activeSeasonId={currentSeason?.id ?? ''}
+        demoActive={demo.active}
+        onBack={() => navigateTo('/admin')}
       />
     );
   }
@@ -918,6 +1113,25 @@ export default function App() {
                   </button>
                 </div>
               </div>
+
+              {/* Statistics Center: eigene große Seite zum Auswerten der Spieltage. */}
+              {canManageMatches && (
+                <button
+                  onClick={() => navigateTo('/tracking')}
+                  className="hl-card p-5 w-full flex items-center gap-4 text-left hover:border-brand-accent/40 transition-colors cursor-pointer group"
+                >
+                  <div className="w-12 h-12 rounded-2xl bg-brand-accent/15 border border-brand-accent/30 grid place-items-center text-brand-accent-light shrink-0">
+                    <Trophy className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-display font-black uppercase tracking-tight text-lg text-white">Statistics Center</div>
+                    <div className="text-xs text-hl-mute mt-0.5">
+                      Spieltag Sekunde für Sekunde auswerten · Noten, Quoten &amp; FIFA-Karten
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-hl-faint group-hover:text-brand-accent-light transition-colors shrink-0" />
+                </button>
+              )}
 
               {/* Backend als eigener Bereich: Übersicht (Dashboard) als Startseite,
                   darunter die Rubriken-Leiste (am Handy unten, am PC oben). */}
@@ -1114,7 +1328,7 @@ export default function App() {
   const showSeasonSwitcher = visibleSeasons.length > 1 && activeTab !== 'home';
 
   const seasonSwitcher = showSeasonSwitcher && (
-    <div className="max-w-[1320px] mx-auto px-4 sm:px-10 flex items-center justify-end gap-2 pb-4">
+    <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 flex items-center justify-end gap-2 pb-4">
       <History className="w-4 h-4 text-hl-dim" />
       <label className="text-xs font-sans font-bold text-hl-dim uppercase tracking-wider">Saison:</label>
       <select
@@ -1172,7 +1386,7 @@ export default function App() {
       {activeTab === 'home' && (
         <>
           {countdown.active && <Countdown target={countdown.target} title={countdown.title} />}
-          <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
+          <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} />
           <HighlightsHome
             highlights={highlights}
             editMode={editMode && canEditHighlights}
@@ -1201,7 +1415,7 @@ export default function App() {
           />
           {seasonSwitcher}
           {canManageMatches && (
-            <div className="max-w-[1320px] mx-auto px-4 sm:px-10 flex justify-end pb-4">
+            <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 flex justify-end pb-4">
               <button
                 onClick={() => navigateTo('/ergebniszettel')}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-brand-accent-light/30 bg-[rgba(34,223,201,.08)] text-brand-accent-light hover:bg-[rgba(34,223,201,.16)] text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
@@ -1211,7 +1425,7 @@ export default function App() {
               </button>
             </div>
           )}
-          <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
+          <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-10">
             <Spielplan
               teams={visibleTeams}
               matches={seasonMatches}
@@ -1219,6 +1433,8 @@ export default function App() {
               onUpdateMatchScore={handleUpdateMatchScore}
               onUpdateMatchMeta={handleUpdateMatchMeta}
               onSelectTeam={openTeamDetail}
+              onOpenReport={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
+              reportMatchIds={reportMatchIds}
               initialMatchday={spielplanMatchday}
               onInitialMatchdayConsumed={() => setSpielplanMatchday(null)}
             />
@@ -1233,7 +1449,7 @@ export default function App() {
             title="Ligatabelle"
           />
           {seasonSwitcher}
-          <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
+          <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-10">
             <Tabelle
               teams={visibleTeams}
               matches={seasonMatches}
@@ -1253,6 +1469,7 @@ export default function App() {
             seasonNumber={selectedSeasonNumber}
             seasonLabel={selectedSeasonName}
             onSelectTeam={openTeamDetail}
+            onOpenWertungen={() => navigateTo('/wertungen')}
           />
         </>
       )}

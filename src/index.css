@@ -29,6 +29,18 @@
   --color-hl-magenta-soft: #F79AC4;
 }
 
+/* Kein automatisches „Font-Boosting" auf Android/iOS: sonst vergrößern manche
+   Browser Textblöcke eigenmächtig – die Seite wirkt dann leicht „reingezoomt".
+   Pinch-Zoom des Nutzers bleibt erlaubt (kein user-scalable=no). */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Nie horizontal scrollen/„reinzoomen": die Seite darf nie breiter als der
+     Bildschirm werden. Innere Scroll-Bereiche (z. B. Spieltag-Leiste) haben ihr
+     eigenes overflow und bleiben davon unberührt. */
+  overflow-x: hidden;
+}
+
 body {
   background: #0A1415;
 }
@@ -161,6 +173,23 @@ body {
 
 /* Einzel-Pop (z. B. eine Karte) – smooth mit sanftem Nachschwingen. */
 .hl-pop { animation: hlPop 0.9s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* „Wisch"-Einblendung: von rechts hereinfahren + aufblenden. Für das
+   Öffnen einer Spieler-Einzelwertung im Spielbericht. */
+@keyframes hlSwipeIn {
+  0% { opacity: 0; transform: translateX(26px) scale(0.985); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+.hl-swipe-in { animation: hlSwipeIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Note-je-Spiel: die einzelnen Noten fahren nacheinander von rechts herein
+   (Reihe für Reihe). Verzögerung wird pro Element inline gesetzt. */
+@keyframes hlNoteIn {
+  0% { opacity: 0; transform: translateX(20px) scale(0.9); }
+  60% { opacity: 1; }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+.hl-note-in { animation: hlNoteIn 0.44s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
 /* Pulsierender Titel-Glow. */
 .hl-title-glow { animation: hlTitleGlow 3.8s ease-in-out infinite; }
@@ -849,3 +878,28 @@ body {
    Dunkel als Standard, weiß unter .hl-team. */
 .hl-avatar-ring { border-radius: 9999px; box-shadow: 0 0 0 2px #0a1110; }
 .hl-team .hl-avatar-ring { box-shadow: 0 0 0 2px #FFFFFF; }
+
+/* =====================================================================
+   Statistics Center (Erfassungs-Editor) – Formularfelder & Raster.
+   Trägt den Hell-/Dunkel-Modus über .hl-team automatisch mit.
+   ===================================================================== */
+.hl-input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--color-hl-text);
+  outline: none;
+}
+.hl-input:focus {
+  border-color: rgba(34, 223, 201, 0.6);
+}
+.hl-team .hl-input {
+  background: #F1F6F5;
+  border-color: rgba(16, 42, 38, 0.15);
+  color: #12211E;
+}
+/* Sticky-Kopfzeile und -Spieler-Spalte im Raster müssen DECKEND sein, damit
+   die seitlich durchscrollenden Zähler nicht dahinter durchscheinen. */
+.hl-th { background: rgba(255, 255, 255, 0.03); }
+.hl-th-name, .hl-td-name { background: #10201d; }
+.hl-team .hl-th { background: rgba(16, 42, 38, 0.04); }
+.hl-team .hl-th-name, .hl-team .hl-td-name { background: #FFFFFF; }

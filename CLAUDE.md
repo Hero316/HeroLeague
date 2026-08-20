@@ -94,6 +94,8 @@ Erstes Setup / Env-Variablen holen: `npx vercel link` → `npx vercel env pull .
 - **Schema-Änderung:** `db/schema.sql` anpassen **und** das passende `ALTER TABLE` von Hand im Neon SQL-Editor ausführen (bewusst kein Migrations-Framework).
 - Neue ESM-Imports in `api/` mit **`.js`-Endung** schreiben (z.B. `from './_lib/db.js'`) — Vercel-Node-Runtime.
 - Wenige Abhängigkeiten. Vor dem Hinzufügen einer neuen Library überlegen, ob es ohne geht.
+- **Handy-Zurück IMMER von Anfang an einbauen.** Jede Ebene, die per React-State geöffnet wird (Modal, Detail-Panel, aufgeklappte Spieler-/Spielansicht, Overlay), MUSS `useBackClose(offen, () => schließen())` aus `src/lib/backStack.ts` bekommen — sonst verlässt die Zurück-Geste/-Taste am iPhone/Android gleich die ganze Seite. Sichtbare Zurück-/X-Knöpfe rufen `goBackLayer()` (oder setzen den State auf zu; `useBackClose` räumt den History-Eintrag selbst auf). Reine URL-Routen (`navigateTo`) brauchen das nicht – da funktioniert „Zurück" ohnehin.
+- **Kein horizontales Überlaufen am Handy.** Karten-/Listen-Grids brauchen eine feste Basis-Spalte (`grid-cols-1`, nicht nur `grid`), Flex-Kinder mit langem Text `min-w-0` + `truncate`, fixe Elemente `shrink-0`, Button-Reihen `flex-wrap`. Faustregel: alles muss bei 360 px Breite passen.
 
 ---
 

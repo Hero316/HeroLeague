@@ -258,7 +258,7 @@ interface PageHeaderProps {
 export function PageHeader({ kicker, title, text }: PageHeaderProps) {
   return (
     <div className="relative">
-      <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-10 sm:pt-13 pb-6">
+      <div className="relative max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pt-10 sm:pt-13 pb-6">
         <div className="font-sans font-extrabold text-xs tracking-[3px] text-brand-accent-light uppercase hl-fade">{kicker}</div>
         <h1 className="mt-3 font-display font-black text-5xl sm:text-7xl leading-[.86] tracking-tight uppercase text-white hl-fade">
           {title}

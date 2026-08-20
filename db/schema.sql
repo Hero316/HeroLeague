@@ -337,3 +337,25 @@ CREATE INDEX idx_idea_comments_idea ON idea_comments(idea_id, created_at);
 ALTER TABLE tasks   ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]';
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]';
 ALTER TABLE ideas   ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]';
+
+-- ===========================================================================
+-- Statistics Center: Roh-Zähler je Spieler & Spiel (getracktes Rating-Fundament)
+-- Eine Zeile pro Spiel × Spieler. `counts` hält alle Aktions-Zähler als JSONB,
+-- damit neue Aktionsarten KEINE Schema-Migration brauchen. Note, Quoten und
+-- Kartenwerte werden nie gespeichert, sondern immer aus `counts` gerechnet.
+-- day_key gruppiert einen Spieltag/Testspielabend ("s<season>:<matchday>" bzw.
+-- "event:<eventId>"). Wird von api/stats.ts bei Bedarf automatisch angelegt.
+-- Die Score-Einstellungen liegen in settings(key='scoring'), der Veröffentlicht-
+-- Status je Spieltag in settings(key='tracking-live').
+-- ===========================================================================
+CREATE TABLE match_player_stats (
+  day_key     TEXT NOT NULL,
+  match_id    TEXT NOT NULL,
+  team_id     TEXT NOT NULL,
+  player_name TEXT NOT NULL,
+  role        TEXT NOT NULL DEFAULT 'field' CHECK (role IN ('field','keeper')),
+  counts      JSONB NOT NULL DEFAULT '{}',
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (match_id, team_id, player_name)
+);
+CREATE INDEX idx_match_player_stats_day ON match_player_stats(day_key);

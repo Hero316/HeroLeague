@@ -150,7 +150,7 @@ export default function HighlightsPage({
   if (openAlbum) {
     return (
       <>
-        <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pt-8 sm:pt-10">
+        <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pt-8 sm:pt-10">
           <button
             onClick={() => goAlbum(null)}
             className="inline-flex items-center gap-1.5 text-xs font-sans font-bold uppercase tracking-wider text-brand-accent-light hover:underline cursor-pointer mb-4"
@@ -178,7 +178,7 @@ export default function HighlightsPage({
           )}
         </div>
 
-        <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-8 pb-16">
+        <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 py-8 pb-16">
           {openAlbum.items.length === 0 && !editMode ? (
             <div className="text-center py-16 flex flex-col items-center gap-3">
               <ImageIcon className="w-10 h-10 text-hl-faint" />
@@ -202,7 +202,7 @@ export default function HighlightsPage({
     <>
       <PageHeader kicker="HERO LEAGUE" title="Highlights" />
 
-      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-16 space-y-12">
+      <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-16 space-y-12">
         {nothing ? (
           <div className="text-center py-20 flex flex-col items-center gap-3">
             <ImageIcon className="w-10 h-10 text-hl-faint" />
