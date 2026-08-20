@@ -32,17 +32,11 @@ import EventBanner from './components/EventBanner';
 import EventErgebniszettel from './components/EventErgebniszettel';
 import HighlightsHome from './components/HighlightsHome';
 import HighlightsPage from './components/HighlightsPage';
-import TicketSystem from './components/TicketSystem';
-import TaskBoard from './components/TaskBoard';
 import ChatApp from './components/ChatApp';
-import ProfileEditor from './components/ProfileEditor';
-import NotificationSettings from './components/NotificationSettings';
 import Avatar from './components/Avatar';
-import NotificationBell from './components/NotificationBell';
 import DeepLinkModal from './components/DeepLinkModal';
-import ChatUnreadBadge from './components/ChatUnreadBadge';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, CalendarDays, MessageSquare, UserCircle, Bell, Trophy, ChevronRight } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight } from 'lucide-react';
 import TrackingCenter from './components/TrackingCenter';
 import SpielberichtPage from './components/SpielberichtPage';
 import WertungenPage from './components/WertungenPage';
@@ -480,15 +474,17 @@ export default function App() {
   // die App wieder in den Vordergrund kommt – ein zuvor gewünschtes (aber vom
   // Browser evtl. verworfenes) Abo wiederherstellen und serverseitig auffrischen.
   // Best-effort – ohne Wunsch/Erlaubnis passiert nichts.
+  // WICHTIG: Nur in der Team-App (/chat). Das Backend/die Hero-League-App legt
+  // bewusst KEIN Push-Abo mehr an – so kommen dort keine Benachrichtigungen an.
   useEffect(() => {
-    if (!sessionUser) return;
+    if (!sessionUser || !currentPath.startsWith('/chat')) return;
     const beat = () => {
       if (document.visibilityState === 'visible') syncPush().catch(() => {});
     };
     beat();
     document.addEventListener('visibilitychange', beat);
     return () => document.removeEventListener('visibilitychange', beat);
-  }, [sessionUser]);
+  }, [sessionUser, currentPath]);
 
   // Highlights speichern (optimistisch): erst lokal setzen, dann serverseitig
   // schützen lassen. Schlägt das Speichern fehl, wird zurückgerollt.
@@ -1102,8 +1098,14 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <ChatUnreadBadge onClick={() => navigateTo('/chat')} />
-                  <NotificationBell onOpen={openNotificationTarget} />
+                  <button
+                    onClick={() => navigateTo('/chat')}
+                    className="px-4 py-2 bg-brand-accent-light/10 border border-brand-accent-light/30 hover:bg-brand-accent-light/20 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 text-brand-accent-light cursor-pointer"
+                    title="Team-App öffnen"
+                  >
+                    <img src="/assets/hero-league-logo.png" alt="Hero Team" className="w-5 h-5 rounded" />
+                    <span>Team-App</span>
+                  </button>
                   <button
                     onClick={handleLogout}
                     className="px-5 py-2 bg-[rgba(255,84,66,.15)] border border-[rgba(255,84,66,.3)] hover:bg-[rgba(255,84,66,.25)] rounded-xl text-xs font-bold uppercase transition-all flex items-center gap-1.5 text-hl-red-soft cursor-pointer"
@@ -1137,7 +1139,6 @@ export default function App() {
                   darunter die Rubriken-Leiste (am Handy unten, am PC oben). */}
               <AccordionGroup
                 searchable
-                defaultOpenId="aufgaben"
                 dashboard={
                   <AdminDashboard
                     teamsCount={visibleTeams.length}
@@ -1147,7 +1148,6 @@ export default function App() {
                   />
                 }
                 categories={[
-                  { id: 'team', label: '★ Intern' },
                   ...(canSeeLeagueArea ? [{ id: 'spiele', label: 'Spiele & Liga' }] : []),
                   ...(canSeeStartseiteArea ? [{ id: 'startseite', label: 'Startseite' }] : []),
                   ...(canSeeChannelsArea ? [{ id: 'kanaele', label: 'Kanäle & Event' }] : []),
@@ -1210,78 +1210,6 @@ export default function App() {
                       onToggleDemo={handleToggleDemo}
                     />
                   )}
-
-                  {/* Team-Zusammenarbeit: Profil, Tickets, Aufgaben, Chat (für jeden eingeloggten Nutzer) */}
-                  <AccordionSection
-                    id="profil"
-                    category="team"
-                    title="Mein Profil"
-                    subtitle="Name, Profilbild & Status (online, Urlaub, außer Haus …)"
-                    icon={<UserCircle className="w-5 h-5" />}
-                    accent="#22DFC9"
-                  >
-                    {sessionUser && (
-                      <ProfileEditor user={sessionUser} onSaved={(p) => setSessionUser((u) => (u ? { ...u, ...p } : u))} />
-                    )}
-                  </AccordionSection>
-
-                  <AccordionSection
-                    id="benachrichtigungen"
-                    category="team"
-                    title="Benachrichtigungen"
-                    subtitle="Handy-Push aktivieren, Nicht-stören (Wochenende/Urlaub)"
-                    icon={<Bell className="w-5 h-5" />}
-                    accent="#22DFC9"
-                  >
-                    {sessionUser && <NotificationSettings user={sessionUser} />}
-                  </AccordionSection>
-
-                  <AccordionSection
-                    id="tickets"
-                    category="team"
-                    title="Tickets"
-                    subtitle="Ideen & Aufgaben melden, priorisieren, mit Screenshots – und bearbeiten"
-                    icon={<Ticket className="w-5 h-5" />}
-                    accent="#22DFC9"
-                  >
-                    <TicketSystem currentUserId={sessionUser?.id ?? ''} canManage={canManageTickets} />
-                  </AccordionSection>
-
-                  <AccordionSection
-                    id="chat"
-                    category="team"
-                    title="Chat & Team-App"
-                    subtitle="Vollbild-App: Chats, Aufgaben & Tickets – zum Home-Bildschirm hinzufügbar"
-                    icon={<MessageSquare className="w-5 h-5" />}
-                    accent="#22DFC9"
-                  >
-                    <button
-                      onClick={() => navigateTo('/chat')}
-                      className="w-full flex items-center gap-4 p-4 rounded-2xl bg-brand-accent-light/10 border border-brand-accent-light/30 hover:bg-brand-accent-light/15 cursor-pointer text-left transition-colors"
-                    >
-                      <span className="grid place-items-center w-12 h-12 rounded-xl bg-brand-accent-light text-[#04120f] shrink-0">
-                        <MessageSquare className="w-6 h-6" />
-                      </span>
-                      <span className="flex-1 min-w-0">
-                        <span className="block font-display font-black text-white uppercase tracking-tight">Team-App öffnen</span>
-                        <span className="block text-[12px] text-hl-mute font-sans mt-0.5">
-                          Chat im Vollbild – mit Aufgaben & Tickets. Fühlt sich wie eine eigene App an.
-                        </span>
-                      </span>
-                      <ArrowLeft className="w-5 h-5 text-brand-accent-light rotate-180 shrink-0" />
-                    </button>
-                  </AccordionSection>
-
-                  <AccordionSection
-                    id="aufgaben"
-                    category="team"
-                    title="Aufgaben-Board"
-                    subtitle="Kalender (Monat & Woche), Personen zuweisen, Status – Monday-Style"
-                    icon={<CalendarDays className="w-5 h-5" />}
-                    accent="#22DFC9"
-                  >
-                    <TaskBoard currentUserId={sessionUser?.id ?? ''} isSuperadmin={isSuperadmin} />
-                  </AccordionSection>
 
                   {isSuperadmin && (
                     <AccordionSection
