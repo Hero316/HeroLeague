@@ -956,10 +956,12 @@ function MatchEditor({
         </button>
       </div>
 
+      {/* Am PC beide Mannschaften nebeneinander (2 Spalten) – kompakter, kein Scrollen. */}
+      <div className="grid xl:grid-cols-2 gap-x-5 items-start">
       {[match.homeTeamId, match.awayTeamId].map((teamId) => {
         const list = teamRows(teamId);
         return (
-          <div key={teamId} className="mb-6">
+          <div key={teamId} className="mb-6 min-w-0">
             <div className="flex items-center gap-2 mb-2">
               <TeamBadge team={resolveTeam(teamId)} />
               <span className="font-display font-black uppercase tracking-tight">{resolveTeam(teamId)?.name ?? teamId}</span>
@@ -985,6 +987,7 @@ function MatchEditor({
           </div>
         );
       })}
+      </div>
       <p className="text-[11px] text-hl-dim mt-1">
         <b>Linksklick +1 · Rechtsklick −1</b> · am Handy lang drücken = −1 · „Tor" zählt automatisch als Torschuss.
       </p>
@@ -1015,9 +1018,9 @@ function PlayerCard({
     ACTION_META.filter((a) => a.group === g && (!isKeeper || g !== 'Pass' || KEEPER_PASS_KEYS.includes(a.key)));
 
   return (
-    <div className="hl-card p-2.5 flex flex-col lg:flex-row gap-2.5 min-w-0">
+    <div className="hl-card p-2 flex flex-col lg:flex-row gap-2 min-w-0">
       {/* Identität */}
-      <div className="lg:w-52 shrink-0 flex items-center gap-2.5 px-1">
+      <div className="lg:w-40 shrink-0 flex items-center gap-2.5 px-1">
         <div className="w-8 h-8 rounded-full bg-brand-accent/12 border border-brand-accent/25 grid place-items-center text-brand-accent-light font-black text-sm shrink-0">
           {slot}
         </div>
@@ -1045,12 +1048,12 @@ function PlayerCard({
       </div>
 
       {/* Aktions-Gruppen */}
-      <div className="flex-1 min-w-0 flex flex-wrap gap-2.5">
+      <div className="flex-1 min-w-0 flex flex-wrap gap-x-2 gap-y-1.5">
         {groups.map((g) => {
           const acts = actionsOf(g);
           if (!acts.length) return null;
           return (
-            <div key={g} className="min-w-[138px] flex-1">
+            <div key={g} className="min-w-[116px] flex-1">
               <div className="text-[9px] font-black uppercase tracking-[.14em] text-hl-dim mb-1 pl-0.5">{g}</div>
               <div className="grid grid-cols-2 gap-1">
                 {acts.map((a) => (
@@ -1102,7 +1105,7 @@ function ActionPill({ meta, value, onDelta }: { meta: ActionMeta; value: number;
       onTouchEnd={endTouch}
       onTouchMove={endTouch}
       title={`${meta.label} · Linksklick +1 · Rechtsklick −1`}
-      className={`h-11 rounded-lg border px-2 grid grid-cols-[18px_1fr_auto] items-center gap-1 text-left select-none active:scale-95 transition outline-none focus:ring-2 focus:ring-brand-accent/50 ${toneClass(
+      className={`h-10 rounded-lg border px-2 grid grid-cols-[16px_1fr_auto] items-center gap-1 text-left select-none active:scale-95 transition outline-none focus:ring-2 focus:ring-brand-accent/50 ${toneClass(
         meta.tone
       )}`}
     >
