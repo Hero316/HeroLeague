@@ -8,7 +8,7 @@ interface AdminLoginProps {
   onLoginSuccess: (user: SessionUser) => void;
 }
 
-type Mode = 'email' | 'code' | 'password';
+type Mode = 'email' | 'code' | 'password' | 'master-code';
 
 const inputClass =
   'w-full bg-[#060E0F] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-brand-accent-light';
@@ -87,20 +87,58 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
   const loginWithPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setInfo('');
     if (!password) {
       setError('Bitte Passwort eingeben.');
       return;
     }
     setIsSubmitting(true);
     try {
-      const res = await apiFetch<{ ok: boolean; user: SessionUser }>('/api/auth/login', {
+      const res = await apiFetch<{ ok: boolean; user?: SessionUser; twoFactor?: boolean; devCode?: string }>(
+        '/api/auth/login',
+        {
+          method: 'POST',
+          body: JSON.stringify({ password }),
+        }
+      );
+      if (res.twoFactor) {
+        // Zweiter Faktor aktiv: Passwort war richtig, jetzt Code aus der E-Mail eingeben.
+        setPassword('');
+        setCode(res.devCode ?? '');
+        setInfo(
+          res.devCode
+            ? `Test-Modus (noch kein Mailversand): dein Code lautet ${res.devCode}`
+            : 'Wir haben dir einen 6-stelligen Bestätigungscode per E-Mail geschickt. Prüfe ggf. den Spam-Ordner.'
+        );
+        setMode('master-code');
+      } else if (res.user) {
+        onLoginSuccess(res.user);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falsches Passwort.');
+      setPassword('');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const verifyMasterCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!/^\d{6}$/.test(code.trim())) {
+      setError('Bitte den 6-stelligen Code eingeben.');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const res = await apiFetch<{ ok: boolean; user: SessionUser }>('/api/auth/verify-login', {
         method: 'POST',
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ code: code.trim() }),
       });
       onLoginSuccess(res.user);
-    } catch {
-      setError('Falsches Passwort.');
-      setPassword('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Anmeldung fehlgeschlagen.');
+      setCode('');
     } finally {
       setIsSubmitting(false);
     }
@@ -113,7 +151,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
           <div className="w-14 h-14 rounded-2xl bg-brand-accent-light/15 border border-brand-accent-light/30 flex items-center justify-center mb-4">
             {mode === 'password' ? (
               <Lock className="w-6 h-6 text-brand-accent-light" />
-            ) : mode === 'code' ? (
+            ) : mode === 'code' || mode === 'master-code' ? (
               <KeyRound className="w-6 h-6 text-brand-accent-light" />
             ) : (
               <Mail className="w-6 h-6 text-brand-accent-light" />
@@ -123,6 +161,8 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
           <p className="text-xs text-gray-400 font-sans mt-2">
             {mode === 'password'
               ? 'Notzugang mit Master-Passwort'
+              : mode === 'master-code'
+              ? 'Bestätige die Anmeldung mit dem Code aus deiner E-Mail'
               : mode === 'code'
               ? 'Gib den Code aus deiner E-Mail ein'
               : 'Anmeldung per E-Mail-Code'}
@@ -242,6 +282,47 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
               className="w-full text-center text-[11px] font-sans text-hl-dim hover:text-hl-soft transition-colors cursor-pointer flex items-center justify-center gap-1"
             >
               <ArrowLeft className="w-3 h-3" /> Zurück zur E-Mail-Anmeldung
+            </button>
+          </form>
+        )}
+
+        {/* Zweiter Faktor nach dem Master-Passwort */}
+        {mode === 'master-code' && (
+          <form onSubmit={verifyMasterCode} className="space-y-5">
+            {info && (
+              <div className="text-xs text-brand-accent-light bg-brand-accent-light/10 border border-brand-accent-light/20 rounded-xl px-3 py-2.5">
+                {info}
+              </div>
+            )}
+            <div>
+              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">6-stelliger Code</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoFocus
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="••••••"
+                className={`${inputClass} text-center text-2xl tracking-[10px] font-mono`}
+              />
+            </div>
+            {error && <ErrorBox text={error} />}
+            <button type="submit" disabled={isSubmitting} className={primaryBtn}>
+              <LogIn className="w-4 h-4" />
+              <span>{isSubmitting ? 'Prüfe...' : 'Anmelden'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode('password');
+                setCode('');
+                setError('');
+                setInfo('');
+              }}
+              className="w-full text-center text-[11px] font-sans text-hl-dim hover:text-hl-soft transition-colors cursor-pointer flex items-center justify-center gap-1"
+            >
+              <ArrowLeft className="w-3 h-3" /> Zurück
             </button>
           </form>
         )}
