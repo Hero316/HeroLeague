@@ -942,7 +942,7 @@ export default function App() {
           {previewEvent ? (
             <>
               {isPreviewOnly && (
-                <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pt-4">
+                <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pt-4">
                   <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-2.5 text-xs font-sans text-yellow-200">
                     Vorschau: Dieses Event ist noch <strong>nicht aktiv</strong> und für Besucher unsichtbar. Im Backoffice
                     unter „Testspiel / Event" aktivieren.
@@ -1327,7 +1327,7 @@ export default function App() {
   const showSeasonSwitcher = visibleSeasons.length > 1 && activeTab !== 'home';
 
   const seasonSwitcher = showSeasonSwitcher && (
-    <div className="max-w-[1320px] mx-auto px-4 sm:px-10 flex items-center justify-end gap-2 pb-4">
+    <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 flex items-center justify-end gap-2 pb-4">
       <History className="w-4 h-4 text-hl-dim" />
       <label className="text-xs font-sans font-bold text-hl-dim uppercase tracking-wider">Saison:</label>
       <select
@@ -1414,7 +1414,7 @@ export default function App() {
           />
           {seasonSwitcher}
           {canManageMatches && (
-            <div className="max-w-[1320px] mx-auto px-4 sm:px-10 flex justify-end pb-4">
+            <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 flex justify-end pb-4">
               <button
                 onClick={() => navigateTo('/ergebniszettel')}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-brand-accent-light/30 bg-[rgba(34,223,201,.08)] text-brand-accent-light hover:bg-[rgba(34,223,201,.16)] text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
@@ -1424,7 +1424,7 @@ export default function App() {
               </button>
             </div>
           )}
-          <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
+          <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-10">
             <Spielplan
               teams={visibleTeams}
               matches={seasonMatches}
@@ -1448,7 +1448,7 @@ export default function App() {
             title="Ligatabelle"
           />
           {seasonSwitcher}
-          <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
+          <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-10">
             <Tabelle
               teams={visibleTeams}
               matches={seasonMatches}

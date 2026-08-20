@@ -112,7 +112,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
     <div className="relative overflow-x-clip">
       {/* Kopf mit eigener Farbwelt */}
       <div className="relative overflow-hidden border-b border-[rgba(230,35,142,.25)] bg-[radial-gradient(120%_140%_at_50%_-10%,rgba(230,35,142,.28),transparent_60%)]">
-        <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-10 sm:py-14">
+        <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 py-10 sm:py-14">
           <button
             onClick={onBack}
             className="flex w-fit items-center gap-1.5 text-xs font-sans font-bold uppercase tracking-wider text-hl-mute hover:text-white transition-colors cursor-pointer mb-6"
@@ -160,7 +160,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
         </div>
       </div>
 
-      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-8 sm:py-12 grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] gap-8 lg:gap-12">
+      <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 py-8 sm:py-12 grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] gap-8 lg:gap-12">
         {/* Tabelle */}
         <section className="min-w-0">
           <div className="flex items-center gap-2 mb-4">
@@ -317,7 +317,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
       </div>
 
       {/* Statistiken vom Abend */}
-      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-12">
+      <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-12">
         <div className="flex items-center gap-2 mb-4">
           <BarChart3 className="w-5 h-5 text-[#ff7ac4]" />
           <h2 className="font-display font-black text-xl uppercase tracking-tight text-white">Statistiken vom Abend</h2>

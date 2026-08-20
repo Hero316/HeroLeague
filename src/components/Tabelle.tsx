@@ -89,14 +89,14 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
             <span className="flex items-center gap-1 sm:gap-1.5">
               {rankColors[rank] ? (
                 <span
-                  className="grid place-items-center w-[22px] h-[22px] sm:w-6 sm:h-6 rounded-[7px] font-display font-black text-[13px] sm:text-sm text-[#0b0f0b] shrink-0"
+                  className="grid place-items-center w-[22px] h-[22px] sm:w-6 sm:h-6 lg:w-7 lg:h-7 rounded-[7px] font-display font-black text-[13px] sm:text-sm lg:text-base text-[#0b0f0b] shrink-0"
                   style={{ background: rankColors[rank] }}
                 >
                   {rank}
                 </span>
               ) : (
                 <span
-                  className={`grid place-items-center w-[22px] h-[22px] sm:w-6 sm:h-6 font-sans font-bold text-[13px] sm:text-sm shrink-0 ${
+                  className={`grid place-items-center w-[22px] h-[22px] sm:w-6 sm:h-6 lg:w-7 lg:h-7 font-sans font-bold text-[13px] sm:text-sm lg:text-base shrink-0 ${
                     isReleg ? 'text-hl-red-soft' : 'text-hl-dim'
                   }`}
                 >
@@ -129,17 +129,17 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
               </span>
             </span>
 
-            <span className="text-center font-sans text-xs sm:text-[13px] text-hl-mute">
+            <span className="text-center font-sans text-xs sm:text-[13px] lg:text-[15px] text-hl-mute">
               {standing.played}
             </span>
-            <span className={`text-center font-sans text-[13px] text-hl-mute ${sunCls}`}>{standing.won}</span>
-            <span className={`text-center font-sans text-[13px] text-hl-mute ${sunCls}`}>{standing.drawn}</span>
-            <span className={`text-center font-sans text-[13px] text-hl-mute ${sunCls}`}>{standing.lost}</span>
-            <span className={`text-center font-sans text-[13px] text-hl-soft ${goalsCls}`}>
+            <span className={`text-center font-sans text-[13px] lg:text-[15px] text-hl-mute ${sunCls}`}>{standing.won}</span>
+            <span className={`text-center font-sans text-[13px] lg:text-[15px] text-hl-mute ${sunCls}`}>{standing.drawn}</span>
+            <span className={`text-center font-sans text-[13px] lg:text-[15px] text-hl-mute ${sunCls}`}>{standing.lost}</span>
+            <span className={`text-center font-sans text-[13px] lg:text-[15px] text-hl-soft ${goalsCls}`}>
               {standing.goalsFor}:{standing.goalsAgainst}
             </span>
             <span
-              className={`text-center font-sans font-bold text-xs sm:text-[13px] ${
+              className={`text-center font-sans font-bold text-xs sm:text-[13px] lg:text-[15px] ${
                 standing.goalDifference > 0
                   ? 'text-hl-green-soft'
                   : standing.goalDifference < 0
@@ -149,7 +149,7 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
             >
               {standing.goalDifference > 0 ? '+' : ''}{standing.goalDifference}
             </span>
-            <span className="text-center font-display font-black text-base sm:text-lg text-white">
+            <span className="text-center font-display font-black text-base sm:text-lg lg:text-xl text-white">
               {standing.points}
             </span>
             <span className={`gap-1 justify-end ${formCls}`}>

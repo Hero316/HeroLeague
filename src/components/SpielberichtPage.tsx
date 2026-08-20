@@ -100,10 +100,10 @@ export default function SpielberichtPage({ match, teams, rows, cfg, onBack, onSe
         <div className="hl-card p-4 sm:p-6 mb-6 flex items-center justify-center gap-2 sm:gap-5">
           <TeamHead team={home} />
           <div className="text-center shrink-0 px-1">
-            <div className="font-display font-black text-3xl sm:text-4xl tabular-nums leading-none">
+            <div className="font-display font-black text-3xl sm:text-4xl lg:text-5xl tabular-nums leading-none">
               {match.homeScore ?? '–'}<span className="text-hl-faint mx-0.5 sm:mx-1">:</span>{match.awayScore ?? '–'}
             </div>
-            <div className="text-[9px] sm:text-[10px] uppercase tracking-[2px] text-hl-dim mt-1 whitespace-nowrap">Spieltag {match.matchday}</div>
+            <div className="text-[9px] sm:text-[10px] lg:text-[11px] uppercase tracking-[2px] text-hl-dim mt-1 whitespace-nowrap">Spieltag {match.matchday}</div>
           </div>
           <TeamHead team={away} />
         </div>
@@ -141,7 +141,7 @@ export default function SpielberichtPage({ match, teams, rows, cfg, onBack, onSe
                         {e.playerName}
                         {e.role === 'keeper' && <span className="ml-1.5 text-[9px] uppercase tracking-wider text-hl-gold">TW</span>}
                       </span>
-                      <span className="font-display font-black tabular-nums text-lg" style={{ color: noteColor(e.note, cfg) }}>
+                      <span className="font-display font-black tabular-nums text-lg lg:text-xl" style={{ color: noteColor(e.note, cfg) }}>
                         {e.note.toFixed(1)}
                       </span>
                       <ChevronRight className={`w-4 h-4 shrink-0 transition-colors ${isOpen ? 'text-brand-accent-light' : 'text-hl-faint'}`} />
@@ -199,9 +199,9 @@ function PlayerMatchDetail({
 
       <div className="flex items-center gap-4 min-w-0">
         {photo ? (
-          <img src={photo} alt="" className="w-20 h-20 rounded-2xl object-cover shrink-0 border border-white/10" />
+          <img src={photo} alt="" className="w-20 h-20 lg:w-24 lg:h-24 rounded-2xl object-cover shrink-0 border border-white/10" />
         ) : (
-          <div className="w-20 h-20 rounded-2xl bg-white/5 grid place-items-center text-2xl font-black text-hl-faint shrink-0">
+          <div className="w-20 h-20 lg:w-24 lg:h-24 rounded-2xl bg-white/5 grid place-items-center text-2xl font-black text-hl-faint shrink-0">
             {entry.playerName.charAt(0)}
           </div>
         )}
@@ -213,10 +213,10 @@ function PlayerMatchDetail({
           </div>
         </div>
         <div className="text-right shrink-0">
-          <div className="font-display font-black tabular-nums text-4xl leading-none" style={{ color: noteColor(entry.note, cfg) }}>
+          <div className="font-display font-black tabular-nums text-4xl lg:text-5xl leading-none" style={{ color: noteColor(entry.note, cfg) }}>
             {entry.note.toFixed(1)}
           </div>
-          <div className="text-[9px] uppercase tracking-[2px] text-hl-dim mt-1">Note</div>
+          <div className="text-[9px] lg:text-[11px] uppercase tracking-[2px] text-hl-dim mt-1">Note</div>
         </div>
       </div>
 
@@ -226,7 +226,7 @@ function PlayerMatchDetail({
             <div key={c.key} className="rounded-xl border border-white/10 bg-white/[.03] px-3 py-2 flex items-center gap-2 min-w-0">
               <span className="text-base leading-none shrink-0">{c.icon}</span>
               <span className="flex-1 min-w-0 text-[11px] text-hl-soft leading-tight">{c.label}</span>
-              <span className="font-display font-black tabular-nums text-base shrink-0" style={{ color: c.color }}>
+              <span className="font-display font-black tabular-nums text-base lg:text-lg shrink-0" style={{ color: c.color }}>
                 {c.value}
               </span>
             </div>
@@ -260,11 +260,11 @@ function TeamHead({ team }: { team?: Team }) {
 }
 
 function Crest({ team }: { team?: Team }) {
-  if (!team) return <div className="w-10 h-10 rounded-xl bg-white/5 shrink-0" />;
+  if (!team) return <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-white/5 shrink-0" />;
   return team.logoUrl ? (
-    <img src={team.logoUrl} alt="" className="w-10 h-10 object-contain shrink-0" />
+    <img src={team.logoUrl} alt="" className="w-10 h-10 lg:w-12 lg:h-12 object-contain shrink-0" />
   ) : (
-    <div className="w-10 h-10 rounded-xl grid place-items-center text-xl shrink-0" style={{ background: `${team.logoColor}22`, color: team.logoColor }}>
+    <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl grid place-items-center text-xl shrink-0" style={{ background: `${team.logoColor}22`, color: team.logoColor }}>
       {team.logoIcon || '⚽'}
     </div>
   );

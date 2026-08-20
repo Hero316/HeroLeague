@@ -48,7 +48,7 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
 
   if (scorers.length === 0) {
     return (
-      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
+      <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-10">
         <div className="hl-card text-center py-12 text-hl-mute font-sans text-sm">
           Noch keine Tore eingetragen. Sobald Ergebnisse mit Torschützen erfasst sind, erscheint hier die Rangliste.
         </div>
@@ -107,7 +107,7 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
   };
 
   return (
-    <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
+    <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-10">
       {/* Podium (Top 3) */}
       <Reveal className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end pt-3.5 pb-2">
         {podium.map((p, i) => {
@@ -123,7 +123,7 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
               }`}
             >
               <span
-                className="absolute top-3.5 left-3.5 grid place-items-center w-7 h-7 rounded-lg font-display font-black text-[15px] text-[#0b0f0b]"
+                className="absolute top-3.5 left-3.5 grid place-items-center w-7 h-7 rounded-lg font-display font-black text-[15px] lg:text-lg text-[#0b0f0b]"
                 style={{ background: rankColors[rank] }}
               >
                 {rank}
@@ -133,7 +133,7 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
               <div className="mt-2">{clubChip(p)}</div>
               <div className="flex items-baseline gap-1.5 mt-3.5">
                 <span
-                  className={`font-display font-black leading-[.9] ${lead ? 'text-[54px] text-brand-accent-light' : 'text-[44px] text-white'}`}
+                  className={`font-display font-black leading-[.9] ${lead ? 'text-[54px] lg:text-[68px] text-brand-accent-light' : 'text-[44px] lg:text-[56px] text-white'}`}
                 >
                   <CountUp value={p.goals} />
                 </span>
@@ -165,7 +165,7 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
               className="flex items-center gap-3 px-2 sm:px-3 py-2.5 rounded-[13px] border-b border-white/[.04] transition-colors hover:bg-white/5"
             >
               {/* Rang (schlicht) */}
-              <span className="w-6 text-center font-display font-black text-lg text-hl-dim shrink-0">{i + 4}</span>
+              <span className="w-6 text-center font-display font-black text-lg lg:text-xl text-hl-dim shrink-0">{i + 4}</span>
               {/* Ein Bild: Spielerfoto falls vorhanden, sonst Vereinslogo */}
               {playerOrTeamAvatar(p)}
               {/* Name + gespielte Spiele */}
@@ -174,11 +174,11 @@ export default function Torschuetzenliste({ players, teams, onSelectTeam }: Tors
                 <div className="font-sans text-[11.5px] text-hl-mute">{p.matchesPlayed} Spiele</div>
               </div>
               {/* Tore (groß) */}
-              <span className="w-9 text-center font-display font-black text-[22px] sm:text-2xl leading-none text-brand-accent-light shrink-0">
+              <span className="w-9 text-center font-display font-black text-[22px] sm:text-2xl lg:text-3xl leading-none text-brand-accent-light shrink-0">
                 <CountUp value={p.goals} />
               </span>
               {/* Assists */}
-              <span className="w-8 text-center font-sans font-bold text-[15px] text-hl-soft shrink-0">{p.assists}</span>
+              <span className="w-8 text-center font-sans font-bold text-[15px] lg:text-[19px] text-hl-soft shrink-0">{p.assists}</span>
             </motion.div>
           ))}
         </div>

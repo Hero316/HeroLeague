@@ -53,7 +53,7 @@ export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onS
   const rest = ranking.slice(1, 10);
 
   return (
-    <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-16">
+    <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-16">
       {onOpenWertungen && (
         <div className="flex justify-center pt-2">
           <button
@@ -101,7 +101,7 @@ export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onS
                 />
                 <div className="relative flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
                   <div className="relative shrink-0">
-                    <span className="absolute -top-2 -left-2 z-10 grid place-items-center w-9 h-9 rounded-xl bg-hl-gold text-[#0b0f0b] font-display font-black text-lg shadow-[0_6px_18px_rgba(233,196,106,.5)]">
+                    <span className="absolute -top-2 -left-2 z-10 grid place-items-center w-9 h-9 rounded-xl bg-hl-gold text-[#0b0f0b] font-display font-black text-lg lg:text-xl shadow-[0_6px_18px_rgba(233,196,106,.5)]">
                       1
                     </span>
                     <PlayerCrest player={leader} teams={teams} photoSize="xl" crestSize="hero" onSelectTeam={onSelectTeam} />
@@ -122,7 +122,7 @@ export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onS
                     )}
                   </div>
                   <div className="shrink-0 text-center">
-                    <div className="font-display font-black text-6xl sm:text-7xl leading-none text-hl-gold drop-shadow-[0_0_18px_rgba(233,196,106,.4)] tabular-nums">
+                    <div className="font-display font-black text-6xl sm:text-7xl lg:text-8xl leading-none text-hl-gold drop-shadow-[0_0_18px_rgba(233,196,106,.4)] tabular-nums">
                       {leader.points.toFixed(1)}
                     </div>
                     <div className="font-sans font-bold text-[11px] tracking-[2px] text-hl-dim mt-1">PUNKTE</div>
@@ -144,7 +144,7 @@ export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onS
                     key={p.id}
                     className="flex items-center gap-3 sm:gap-3.5 px-2 sm:px-4 py-3.5 border-b border-white/[.05] last:border-0"
                   >
-                    <div className="w-7 sm:w-8 text-center font-display font-black text-xl sm:text-3xl text-hl-dim shrink-0">
+                    <div className="w-7 sm:w-8 text-center font-display font-black text-xl sm:text-3xl lg:text-4xl text-hl-dim shrink-0">
                       {rank}
                     </div>
                     <div className="shrink-0">
@@ -163,7 +163,7 @@ export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onS
                       )}
                     </div>
                     <div className="flex items-baseline gap-1 shrink-0 pl-2">
-                      <span className="font-display font-black text-2xl sm:text-3xl leading-none text-hl-gold tabular-nums">
+                      <span className="font-display font-black text-2xl sm:text-3xl lg:text-4xl leading-none text-hl-gold tabular-nums">
                         {p.points.toFixed(1)}
                       </span>
                       <span className="font-sans font-bold text-[10px] tracking-wider text-hl-dim">PKT</span>

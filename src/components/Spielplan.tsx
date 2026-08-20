@@ -1059,21 +1059,21 @@ export default function Spielplan({
                       {onSelectTeam ? (
                         <button
                           onClick={(e) => { e.stopPropagation(); onSelectTeam(home.id); }}
-                          className="font-sans font-semibold text-sm sm:text-[15px] text-hl-text leading-tight break-words min-w-0 hover:text-brand-accent-light transition-colors cursor-pointer text-left"
+                          className="font-sans font-semibold text-sm sm:text-[15px] lg:text-[17px] text-hl-text leading-tight break-words min-w-0 hover:text-brand-accent-light transition-colors cursor-pointer text-left"
                           title={`${home.name} – Vereinsseite öffnen`}
                         >
                           {home.name}
                         </button>
                       ) : (
-                        <span className="font-sans font-semibold text-sm sm:text-[15px] text-hl-text leading-tight break-words min-w-0">{home.name}</span>
+                        <span className="font-sans font-semibold text-sm sm:text-[15px] lg:text-[17px] text-hl-text leading-tight break-words min-w-0">{home.name}</span>
                       )}
                     </div>
 
                     {isUpcoming ? (
-                      <div className="min-w-[48px] sm:min-w-[64px] text-center font-sans font-extrabold text-sm sm:text-[15px] tracking-[2px] text-hl-faint">VS</div>
+                      <div className="min-w-[48px] sm:min-w-[64px] text-center font-sans font-extrabold text-sm sm:text-[15px] lg:text-[17px] tracking-[2px] text-hl-faint">VS</div>
                     ) : (
                       <div
-                        className={`min-w-[48px] sm:min-w-[64px] text-center font-display font-black text-2xl sm:text-3xl leading-none ${
+                        className={`min-w-[48px] sm:min-w-[64px] text-center font-display font-black text-2xl sm:text-3xl lg:text-4xl leading-none ${
                           isLive ? 'text-brand-accent-light' : 'text-white'
                         }`}
                       >
@@ -1085,13 +1085,13 @@ export default function Spielplan({
                       {onSelectTeam ? (
                         <button
                           onClick={(e) => { e.stopPropagation(); onSelectTeam(away.id); }}
-                          className="font-sans font-semibold text-sm sm:text-[15px] text-hl-text leading-tight break-words min-w-0 hover:text-brand-accent-light transition-colors cursor-pointer text-right"
+                          className="font-sans font-semibold text-sm sm:text-[15px] lg:text-[17px] text-hl-text leading-tight break-words min-w-0 hover:text-brand-accent-light transition-colors cursor-pointer text-right"
                           title={`${away.name} – Vereinsseite öffnen`}
                         >
                           {away.name}
                         </button>
                       ) : (
-                        <span className="font-sans font-semibold text-sm sm:text-[15px] text-hl-text leading-tight break-words min-w-0 text-right">{away.name}</span>
+                        <span className="font-sans font-semibold text-sm sm:text-[15px] lg:text-[17px] text-hl-text leading-tight break-words min-w-0 text-right">{away.name}</span>
                       )}
                       <TeamCrest name={away.name} shortName={away.shortName} color={away.logoColor} logoUrl={away.logoUrl} size="lg" onSelect={onSelectTeam ? () => onSelectTeam(away.id) : undefined} />
                     </div>

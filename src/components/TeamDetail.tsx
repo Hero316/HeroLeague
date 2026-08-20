@@ -277,16 +277,16 @@ export default function TeamDetail({
   // Mobil teilen sich die Kacheln die Breite (eine Reihe, kein Umbruch), ab sm
   // wieder natürliche Breite.
   const StatTile = ({ value, label, accent }: { value: React.ReactNode; label: string; accent?: boolean }) => (
-    <div className="flex-1 min-w-0 sm:flex-none sm:min-w-[70px] bg-white/[.04] border border-white/[.08] rounded-xl px-1.5 sm:px-3 py-2.5 text-center">
-      <div className="font-display font-black text-[19px] sm:text-[26px] leading-none" style={accent ? { color: accentSoft } : { color: '#fff' }}>
+    <div className="flex-1 min-w-0 sm:flex-none sm:min-w-[70px] lg:min-w-[92px] bg-white/[.04] border border-white/[.08] rounded-xl px-1.5 sm:px-3 lg:px-4 py-2.5 lg:py-3.5 text-center">
+      <div className="font-display font-black text-[19px] sm:text-[26px] lg:text-[34px] leading-none" style={accent ? { color: accentSoft } : { color: '#fff' }}>
         {value}
       </div>
-      <div className="font-sans font-bold text-[8px] sm:text-[9px] tracking-[1px] sm:tracking-[1.5px] text-hl-dim mt-1.5">{label}</div>
+      <div className="font-sans font-bold text-[8px] sm:text-[9px] lg:text-[11px] tracking-[1px] sm:tracking-[1.5px] text-hl-dim mt-1.5 lg:mt-2">{label}</div>
     </div>
   );
 
   return (
-    <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-11">
+    <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-11">
       <button
         onClick={onBack}
         className="inline-flex items-center gap-1.5 mt-8 font-sans font-bold text-xs tracking-wider uppercase text-hl-dim hover:text-white transition-colors cursor-pointer"
@@ -618,7 +618,7 @@ export default function TeamDetail({
       <div className="mt-6 flex flex-col gap-6 lg:grid lg:grid-cols-[1.55fr_1fr] lg:gap-6 lg:items-start">
         {/* Kader */}
         <div className="order-1 lg:col-start-1 lg:row-start-1">
-          <div className="font-display font-black text-2xl uppercase text-white mb-4">Kader</div>
+          <div className="font-display font-black text-2xl lg:text-3xl uppercase text-white mb-4">Kader</div>
           {roster.length === 0 ? (
             <div className="hl-card p-8 text-center text-hl-mute font-sans text-sm">Noch keine Spieler hinterlegt.</div>
           ) : (
@@ -644,12 +644,12 @@ export default function TeamDetail({
                         loading="lazy"
                         decoding="async"
                         referrerPolicy="no-referrer"
-                        className="w-11 h-11 rounded-[13px] object-cover border shrink-0"
+                        className="w-11 h-11 lg:w-[52px] lg:h-[52px] rounded-[13px] object-cover border shrink-0"
                         style={{ borderColor: color }}
                       />
                     ) : (
                       <span
-                        className="grid place-items-center w-11 h-11 rounded-[13px] font-display font-black text-white shrink-0 text-base shadow-[inset_0_0_0_1px_rgba(255,255,255,.18)]"
+                        className="grid place-items-center w-11 h-11 lg:w-[52px] lg:h-[52px] rounded-[13px] font-display font-black text-white shrink-0 text-base lg:text-xl shadow-[inset_0_0_0_1px_rgba(255,255,255,.18)]"
                         style={{ background: `linear-gradient(140deg, ${color}, ${shade(color, 0.45)})` }}
                       >
                         {monogram(player.name)}
@@ -657,7 +657,7 @@ export default function TeamDetail({
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-sans font-semibold text-sm text-hl-text truncate">{player.name}</span>
+                        <span className="font-sans font-semibold text-sm lg:text-[15px] text-hl-text truncate">{player.name}</span>
                         {typeof player.number === 'number' && (
                           <span
                             className="flex-none font-sans font-bold text-[9.5px] px-1 py-[1px] rounded bg-white/[.06] text-hl-mute tabular-nums"
@@ -676,14 +676,14 @@ export default function TeamDetail({
                           </span>
                         )}
                       </div>
-                      <div className="font-sans text-[11px] text-hl-dim">
+                      <div className="font-sans text-[11px] lg:text-[13px] text-hl-dim">
                         {player.matchesPlayed} Sp. · {player.assists} Assists
                         {player.winRate !== null ? ` · ${player.winRate}% Siege` : ''}
                       </div>
                     </div>
                     {player.goals > 0 && (
                       <span
-                        className="flex-none font-sans font-extrabold text-[11px] px-2 py-[3px] rounded-md"
+                        className="flex-none font-sans font-extrabold text-[11px] lg:text-[13px] px-2 lg:px-2.5 py-[3px] rounded-md"
                         style={{ color: accentSoft, background: `${color}22` }}
                       >
                         {player.goals} ⚽
@@ -706,7 +706,7 @@ export default function TeamDetail({
             className="w-full flex items-center justify-between gap-3 mb-4 cursor-pointer disabled:cursor-default group"
             aria-expanded={showAllMatches}
           >
-            <span className="font-display font-black text-2xl uppercase text-white">Spiele</span>
+            <span className="font-display font-black text-2xl lg:text-3xl uppercase text-white">Spiele</span>
             {teamMatches.length > 0 && (
               <span className="inline-flex items-center gap-1.5 font-sans font-bold text-xs tracking-wider uppercase text-hl-dim group-hover:text-white transition-colors">
                 {showAllMatches ? 'Einklappen' : `Alle ${teamMatches.length} anzeigen`}
@@ -733,9 +733,9 @@ export default function TeamDetail({
                     className={`flex items-center justify-between gap-3 px-3.5 py-[11px] rounded-[13px] bg-[linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012))] border border-white/[.08] transition-colors ${canOpen ? 'cursor-pointer hover:border-white/25' : ''}`}
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="text-[10px] font-sans font-bold text-hl-faint shrink-0">{m.matchday}. Sp.</span>
-                        <span className="text-[10px] font-sans font-bold text-hl-faint shrink-0 uppercase">{isHome ? 'H' : 'A'}</span>
+                      <div className="flex items-center gap-2 text-sm lg:text-[15px]">
+                        <span className="text-[10px] lg:text-[11px] font-sans font-bold text-hl-faint shrink-0">{m.matchday}. Sp.</span>
+                        <span className="text-[10px] lg:text-[11px] font-sans font-bold text-hl-faint shrink-0 uppercase">{isHome ? 'H' : 'A'}</span>
                         {opp ? (
                           <button
                             onClick={(e) => { e.stopPropagation(); onSelectTeam(opp.id); }}
@@ -755,7 +755,7 @@ export default function TeamDetail({
                     <div className="flex items-center gap-2 shrink-0">
                       {m.status === 'live' && <MatchStatusBadge status="live" />}
                       {m.status === 'beendet' && m.homeScore !== null ? (
-                        <span className="font-display font-black text-white text-base px-2.5 py-1 rounded-lg bg-white/[.04] border border-white/10">
+                        <span className="font-display font-black text-white text-base lg:text-lg px-2.5 lg:px-3 py-1 rounded-lg bg-white/[.04] border border-white/10">
                           {isHome ? `${m.homeScore}:${m.awayScore}` : `${m.awayScore}:${m.homeScore}`}
                         </span>
                       ) : m.status !== 'live' ? (
@@ -800,14 +800,14 @@ export default function TeamDetail({
                 <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
                   <div className="flex flex-col items-center gap-2">
                     <TeamCrest name={home.name} shortName={home.shortName} color={home.logoColor} logoUrl={home.logoUrl} size="lg" onSelect={() => onSelectTeam(home.id)} />
-                    <button onClick={() => onSelectTeam(home.id)} className="font-sans font-semibold text-xs text-hl-text text-center hover:text-brand-accent-light transition-colors cursor-pointer">{home.name}</button>
+                    <button onClick={() => onSelectTeam(home.id)} className="font-sans font-semibold text-xs lg:text-sm text-hl-text text-center hover:text-brand-accent-light transition-colors cursor-pointer">{home.name}</button>
                   </div>
-                  <span className="font-display font-black text-xl" style={{ color: accentSoft }}>
+                  <span className="font-display font-black text-xl lg:text-2xl" style={{ color: accentSoft }}>
                     {nextMatch.status === 'live' ? `${nextMatch.homeScore ?? 0}:${nextMatch.awayScore ?? 0}` : 'VS'}
                   </span>
                   <div className="flex flex-col items-center gap-2">
                     <TeamCrest name={away.name} shortName={away.shortName} color={away.logoColor} logoUrl={away.logoUrl} size="lg" onSelect={() => onSelectTeam(away.id)} />
-                    <button onClick={() => onSelectTeam(away.id)} className="font-sans font-semibold text-xs text-hl-text text-center hover:text-brand-accent-light transition-colors cursor-pointer">{away.name}</button>
+                    <button onClick={() => onSelectTeam(away.id)} className="font-sans font-semibold text-xs lg:text-sm text-hl-text text-center hover:text-brand-accent-light transition-colors cursor-pointer">{away.name}</button>
                   </div>
                 </div>
               </div>
@@ -885,18 +885,18 @@ export default function TeamDetail({
                   </span>
                 )}
                 <div>
-                  <div className="font-display font-black text-[22px] uppercase text-white leading-[.95] group-hover:opacity-90">{star.name}</div>
-                  <div className="font-sans font-semibold text-xs text-hl-mute mt-1">{star.matchesPlayed} Einsätze</div>
+                  <div className="font-display font-black text-[22px] lg:text-[27px] uppercase text-white leading-[.95] group-hover:opacity-90">{star.name}</div>
+                  <div className="font-sans font-semibold text-xs lg:text-[13px] text-hl-mute mt-1">{star.matchesPlayed} Einsätze</div>
                 </div>
               </button>
               <div className="grid grid-cols-2 gap-2.5 mt-4">
-                <div className="bg-white/[.03] border border-white/[.07] rounded-xl p-3 text-center">
-                  <div className="font-display font-black text-[26px]" style={{ color: accentSoft }}>{star.goals}</div>
-                  <div className="font-sans font-bold text-[9px] tracking-[1.5px] text-hl-dim mt-[3px]">TORE</div>
+                <div className="bg-white/[.03] border border-white/[.07] rounded-xl p-3 lg:p-4 text-center">
+                  <div className="font-display font-black text-[26px] lg:text-[34px]" style={{ color: accentSoft }}>{star.goals}</div>
+                  <div className="font-sans font-bold text-[9px] lg:text-[11px] tracking-[1.5px] text-hl-dim mt-[3px]">TORE</div>
                 </div>
-                <div className="bg-white/[.03] border border-white/[.07] rounded-xl p-3 text-center">
-                  <div className="font-display font-black text-[26px] text-white">{star.assists}</div>
-                  <div className="font-sans font-bold text-[9px] tracking-[1.5px] text-hl-dim mt-[3px]">ASSISTS</div>
+                <div className="bg-white/[.03] border border-white/[.07] rounded-xl p-3 lg:p-4 text-center">
+                  <div className="font-display font-black text-[26px] lg:text-[34px] text-white">{star.assists}</div>
+                  <div className="font-sans font-bold text-[9px] lg:text-[11px] tracking-[1.5px] text-hl-dim mt-[3px]">ASSISTS</div>
                 </div>
               </div>
             </div>
