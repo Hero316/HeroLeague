@@ -82,7 +82,7 @@ export default function FifaCard({ card, name, imageUrl, team, className = '' }:
 
       {/* Name senkrecht am linken Rand, von unten (knapp über der Linie) nach oben
           lesbar – z-30, damit ihn der dunkle Streifen unten NICHT verdeckt. */}
-      <div className="absolute left-0 z-30 flex items-end" style={{ top: '16cqw', bottom: '30cqw', paddingLeft: '3.5cqw' }}>
+      <div className="absolute left-0 z-30 flex items-center" style={{ top: '16cqw', bottom: '30cqw', paddingLeft: '3.5cqw' }}>
         <span
           className="font-display font-black uppercase tracking-tight whitespace-nowrap"
           style={{
