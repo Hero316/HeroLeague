@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Users, Plus, Trash2, Check, ShieldCheck, ClipboardList } from 'lucide-react';
+import { Users, Plus, Trash2, Check, ShieldCheck, ClipboardList, LogOut } from 'lucide-react';
 import { AppUser, UserRole } from '../types';
 import { apiFetch } from '../lib/api';
 
@@ -15,6 +15,8 @@ export default function UserManager() {
   const [newRole, setNewRole] = useState<UserRole>('match_admin');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [logoutAllBusy, setLogoutAllBusy] = useState(false);
+  const [logoutAllDone, setLogoutAllDone] = useState(false);
 
   const load = async () => {
     try {
@@ -64,6 +66,25 @@ export default function UserManager() {
       alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const handleLogoutAll = async () => {
+    if (
+      !confirm(
+        'Alle anderen Geräte und Nutzer abmelden?\n\nAlle müssen sich danach neu anmelden. Du selbst bleibst auf diesem Gerät angemeldet.'
+      )
+    )
+      return;
+    setLogoutAllBusy(true);
+    try {
+      await apiFetch('/api/auth/logout-all', { method: 'POST' });
+      setLogoutAllDone(true);
+      setTimeout(() => setLogoutAllDone(false), 4000);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler beim Abmelden.');
+    } finally {
+      setLogoutAllBusy(false);
     }
   };
 
@@ -239,6 +260,37 @@ export default function UserManager() {
           ))}
         </div>
       )}
+
+      {/* Sicherheit: alle anderen abmelden */}
+      <div className="mt-8 pt-6 border-t border-white/10">
+        <h4 className="font-display font-bold text-sm uppercase tracking-tight text-white mb-1.5 flex items-center gap-2">
+          <LogOut className="w-4 h-4 text-hl-red-soft" />
+          Sicherheit
+        </h4>
+        <p className="text-xs text-gray-400 font-sans mb-3">
+          Meldet <strong className="text-hl-soft">alle anderen</strong> Geräte und Nutzer ab – jeder muss sich danach neu anmelden.
+          Nützlich, wenn jemand das Team verlässt oder ein Gerät verloren geht. Du selbst bleibst auf diesem Gerät angemeldet.
+          Die Abmeldung greift innerhalb von etwa einer Minute überall.
+        </p>
+        <button
+          type="button"
+          disabled={logoutAllBusy}
+          onClick={handleLogoutAll}
+          className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider border border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>{logoutAllBusy ? 'Melde ab…' : 'Alle anderen abmelden'}</span>
+        </button>
+        {logoutAllDone && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-3 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-400 uppercase tracking-wider"
+          >
+            ✓ Alle anderen wurden abgemeldet
+          </motion.div>
+        )}
+      </div>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import {
   clearSessionCookie,
   createSessionToken,
   getSession,
+  primeSessionsValidFrom,
   sessionCookie,
 } from '../_lib/auth.js';
 import { getUserByEmail, sql } from '../_lib/db.js';
@@ -377,6 +378,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // --- Abmelden -------------------------------------------------------------
     if (action === 'logout' && req.method === 'POST') {
       res.setHeader('Set-Cookie', clearSessionCookie());
+      return res.json({ ok: true });
+    }
+
+    // --- Alle abmelden (nur Super-Admin) --------------------------------------
+    // Setzt einen „Stichtag": alle Tokens, die davor ausgestellt wurden, werden ab
+    // sofort abgelehnt (siehe getSession). Der ausführende Super-Admin bleibt auf
+    // diesem Gerät angemeldet – er bekommt ein frisches Cookie mit neuem iat.
+    if (action === 'logout-all' && req.method === 'POST') {
+      const session = await getSession(req);
+      if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+      if (session.role !== 'superadmin') return res.status(403).json({ error: 'Keine Berechtigung für diese Aktion.' });
+
+      const validFrom = Math.floor(Date.now() / 1000);
+      await sql`
+        INSERT INTO settings (key, value) VALUES ('auth', ${JSON.stringify({ sessionsValidFrom: validFrom })}::jsonb)
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+      `;
+      // Diese Instanz sofort auf den neuen Stichtag heben (ohne Cache-Ablauf).
+      primeSessionsValidFrom(validFrom);
+
+      // Frisches Token für den Klickenden (iat >= validFrom ⇒ bleibt gültig).
+      const token = await createSessionToken(session);
+      res.setHeader('Set-Cookie', sessionCookie(token));
       return res.json({ ok: true });
     }
 
