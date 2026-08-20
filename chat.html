@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Hero Team</title>
+    <meta name="description" content="Hero League – interner Team-Bereich: Chat, Aufgaben, Kalender & Tickets." />
+    <!-- Interner Bereich: nicht von Suchmaschinen indexieren. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#070d0c" />
+
+    <!-- App-Identität der Team-App – FEST im HTML (nicht per JavaScript), damit
+         das iPhone beim „Zum Home-Bildschirm" von Anfang an „Hero Team" +
+         türkises Symbol + Start-URL /chat liest. Diese Seite wird über einen
+         Rewrite für /chat ausgeliefert (siehe vercel.json). -->
+    <link rel="manifest" href="/chat.webmanifest" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/png" href="/assets/chat-icon-192.png" />
+    <link rel="apple-touch-icon" href="/assets/chat-apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Hero Team" />
+
+    <!-- Selbstheilung: Bleibt die Seite nach einem Deploy leer (Haupt-Skript
+         konnte nicht geladen werden, z. B. veralteter Service-Worker-Cache),
+         dann SW abmelden, Caches leeren und EINMAL sauber neu laden. -->
+    <script>
+      (function () {
+        var recovered = false;
+        function hlRecover() {
+          if (recovered) return;
+          recovered = true;
+          try {
+            if (sessionStorage.getItem('hl-recovered')) return; // pro Sitzung nur 1x
+            sessionStorage.setItem('hl-recovered', '1');
+          } catch (e) {}
+          var reload = function () { try { location.reload(); } catch (e) {} };
+          var tasks = [];
+          try {
+            if ('serviceWorker' in navigator) {
+              tasks.push(
+                navigator.serviceWorker.getRegistrations().then(function (rs) {
+                  return Promise.all(rs.map(function (r) { return r.unregister(); }));
+                })
+              );
+            }
+            if (window.caches && caches.keys) {
+              tasks.push(
+                caches.keys().then(function (keys) {
+                  return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+                })
+              );
+            }
+          } catch (e) {}
+          Promise.all(tasks).then(reload, reload);
+          setTimeout(reload, 2500); // Sicherheitsnetz
+        }
+        window.addEventListener(
+          'error',
+          function (e) {
+            var t = e && e.target;
+            if (t && (t.tagName === 'SCRIPT' || t.tagName === 'LINK') && (t.src || t.href) &&
+                String(t.src || t.href).indexOf('/assets/') !== -1) {
+              hlRecover();
+            }
+          },
+          true
+        );
+        window.addEventListener('load', function () {
+          setTimeout(function () {
+            var root = document.getElementById('root');
+            if (root && root.childElementCount === 0) hlRecover();
+          }, 7000);
+        });
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

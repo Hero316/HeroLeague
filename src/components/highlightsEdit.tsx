@@ -6,10 +6,21 @@ import { toEmbed, youtubeThumb } from '../lib/videoEmbed';
 export const genMediaId = () => `hl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 export const genAlbumId = () => `alb-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
-// Neueste zuerst: die Medien/Ordner werden chronologisch gespeichert (neu ans
-// Ende), für die Anzeige aber umgedreht – so steht der jüngste Beitrag immer
-// ganz vorne (Startseite + Galerie). Reine Anzeige, ändert die Speicherung nicht.
-export const newestFirst = <T,>(list: T[]): T[] => [...list].reverse();
+// Erstellzeit aus der ID lesen: IDs haben die Form `hl-<timestamp>-<zufall>`
+// bzw. `alb-<timestamp>-<zufall>` (siehe genMediaId/genAlbumId). Der Zeitstempel
+// (Date.now(), 13-stellig) steckt zwischen den ersten beiden Bindestrichen.
+const createdAt = (id: string): number => {
+  const m = /-(\d{10,})-/.exec(id);
+  return m ? Number(m[1]) : 0;
+};
+
+// Neueste zuerst – strikt nach Erstellzeit (aus der ID), NICHT nur nach
+// Speicher-Reihenfolge. Wichtig, weil auf der Startseite mit Stern markierte
+// Medien aus mehreren Quellen (lose Highlights + Ordner) zusammengeführt werden:
+// Nur so steht der jüngste Beitrag – egal ob Bild oder Link – immer ganz vorne.
+// Sortierung ist stabil (gleiche Zeit ⇒ ursprüngliche Reihenfolge bleibt).
+export const newestFirst = <T extends { id: string }>(list: T[]): T[] =>
+  [...list].sort((a, b) => createdAt(b.id) - createdAt(a.id));
 
 // Baut die Standard-Handler (Bild/Video hinzufügen, löschen, beschriften,
 // Stern setzen) für eine Medienliste – wiederverwendet für die losen Highlights

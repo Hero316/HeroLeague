@@ -105,6 +105,9 @@ export interface NewsConfig {
   items: NewsItem[];
 }
 
+// „Spieler des Spieltages" (früher „Spieler des Monats"). Der interne Schlüssel
+// (playerOfMonth) und der Typname bleiben aus Kompatibilitätsgründen erhalten;
+// die Auszeichnung ist jetzt auf einen einzelnen Spieltag bezogen.
 export interface PlayerOfMonth {
   name: string;
   club: string;
@@ -112,6 +115,8 @@ export interface PlayerOfMonth {
   goals: number;
   assists: number;
   image: string;
+  matchday?: number; // Spieltag-Nummer, ergibt „Spieler des Spieltages N" (0/leer = ohne Nummer)
+  sponsorId?: string; // ID eines Partners (aus PartnersConfig), der die Auszeichnung sponsert (leer = keiner)
 }
 
 export interface TwitchConfig {
@@ -159,6 +164,16 @@ export interface TeamSponsor {
 
 // Zuordnung Team-ID → Sponsoren dieses Teams.
 export type TeamSponsorsMap = Record<string, TeamSponsor[]>;
+
+// Klick-Statistik je Sponsor/Partner (Analytics). Legt sich beim ersten Klick
+// automatisch an – auch für neue Sponsoren und neue Platzierungen.
+export interface SponsorClickStat {
+  name: string; // zuletzt bekannter Anzeigename
+  total: number; // Klicks insgesamt
+  placements: Record<string, number>; // Klicks je Platzierung (z.B. 'partners', 'team-sponsor')
+  lastAt: string; // Zeitpunkt des letzten Klicks (ISO)
+}
+export type SponsorClicksMap = Record<string, SponsorClickStat>;
 
 // Highlights: eine gemischte, geordnete Medien-Liste aus Kamera-Fotos
 // (öffentliche Blob-URLs) und Video-Links (YouTube/Twitch, auch Shorts).
@@ -221,7 +236,8 @@ export interface EventConfig {
   label: string; // Anzeigename in der Verwaltung, z.B. "Testspiel 1"
   title: string; // z.B. "Testspieltag"
   tagline: string; // kurzer Untertitel fürs Banner
-  dateLabel: string; // z.B. "Sonntag, 2. August 2026"
+  dateLabel: string; // z.B. "Sonntag, 2. August 2026" (Anzeige-Text)
+  date?: string; // 'YYYY-MM-DD' – echtes Datum für den Kalender (optional)
   location: string; // z.B. "Soccer Center Königsfeld"
   teams: string[]; // Teamnamen (für die Tabelle, auch ohne Ergebnisse)
   matches: EventMatch[];
@@ -237,22 +253,48 @@ export interface EventArchive {
 
 // Rollen: superadmin darf alles; match_admin darf Spiele/Live/Ticker pflegen;
 // referee (Schiedsrichter) darf ausschließlich im Schiedsrichtermodus Spiele
-// pfeifen und die Abend-Aufstellung setzen – sonst nichts.
-export type UserRole = 'superadmin' | 'match_admin' | 'referee';
+// pfeifen und die Abend-Aufstellung setzen; team_member sieht NUR den
+// Team-Bereich (Tickets/Aufgaben/Chat mitarbeiten) – keinen Liga-Admin.
+// Tickets VERWALTEN dürfen ausschließlich Super-Admins (keine eigene Rolle mehr).
+export type UserRole = 'superadmin' | 'match_admin' | 'referee' | 'team_member';
+
+// Zusätzliche, frei kombinierbare Rechte (unabhängig von der Basis-Rolle).
+// Aktuell keine – bewusst leer gelassen (erweiterbar). Tickets verwalten hängt
+// allein an der Super-Admin-Rolle, daher kein „Tickets bearbeiten"-Recht mehr.
+export type AdminPermission = never;
+export const ALL_ADMIN_PERMISSIONS: { id: AdminPermission; label: string }[] = [];
+
+// Präsenz-Status (Slack-artig) mit Emoji + Farbe. Erweiterbar.
+export type UserStatus = 'online' | 'away' | 'busy' | 'vacation' | 'out';
+export const USER_STATUS: Record<UserStatus, { emoji: string; label: string; dot: string }> = {
+  online: { emoji: '🟢', label: 'Online', dot: 'bg-emerald-400' },
+  away: { emoji: '🌙', label: 'Abwesend', dot: 'bg-amber-400' },
+  busy: { emoji: '⛔', label: 'Beschäftigt', dot: 'bg-rose-500' },
+  vacation: { emoji: '🌴', label: 'Urlaub', dot: 'bg-sky-400' },
+  out: { emoji: '🏠', label: 'Außer Haus', dot: 'bg-slate-400' },
+};
+export const USER_STATUS_LIST = Object.keys(USER_STATUS) as UserStatus[];
 
 export interface AppUser {
   id: string;
   email: string;
   name: string;
   role: UserRole;
+  permissions: AdminPermission[];
+  avatarUrl: string;
+  status: UserStatus;
   isActive: boolean;
 }
 
 // Die im Frontend bekannte Identität der aktiven Sitzung
 export interface SessionUser {
+  id: string; // 'bootstrap' beim Master-Passwort-Login
   email: string;
   name: string;
   role: UserRole;
+  permissions: AdminPermission[];
+  avatarUrl: string;
+  status: UserStatus;
 }
 
 // Abend-Aufstellung (Schiedsrichtermodus): pro Team wird EINMAL für den ganzen
@@ -311,3 +353,341 @@ export interface PlayerStat {
 }
 
 export type ActiveTab = 'home' | 'spielplan' | 'tabelle' | 'heroone' | 'statistiken' | 'highlights';
+
+// --- Team-Zusammenarbeit: Tickets, Aufgaben, Benachrichtigungen -------------
+
+// Mitglied des internen Teams (für Zuweisungen/Erwähnungen). Reduzierte, für
+// jeden eingeloggten Nutzer lesbare Nutzerliste (nicht die volle AppUser-Liste).
+export interface TeamMember {
+  id: string;
+  name: string; // Anzeigename (fällt auf E-Mail zurück, falls kein Name)
+  role: UserRole;
+  avatarUrl: string;
+  status: UserStatus;
+}
+
+export type TicketPriority = 'niedrig' | 'mittel' | 'hoch' | 'dringend';
+export type TicketStatus = 'offen' | 'in_bearbeitung' | 'erledigt' | 'abgelehnt';
+
+// Benannter Link („Link-Taste"): url = Ziel, label = Anzeigetext (leer = Host).
+export interface LinkItem {
+  url: string;
+  label: string;
+}
+
+export interface TicketComment {
+  id: string;
+  ticketId: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  images: string[];
+  createdAt: string;
+}
+
+export interface Ticket {
+  id: string;
+  title: string;
+  description: string;
+  priority: TicketPriority;
+  status: TicketStatus;
+  category: string;
+  images: string[]; // Screenshot-URLs (Vercel Blob)
+  links: LinkItem[]; // benannte Link-Tasten
+  createdBy: string;
+  createdByName: string;
+  assignedTo: string | null;
+  assignedToName: string | null;
+  createdAt: string;
+  updatedAt: string;
+  commentCount?: number; // nur in der Listenansicht
+  comments?: TicketComment[]; // nur in der Detailansicht
+}
+
+// Aufgaben-Board (Monday-Style)
+export type TaskStatus = 'leer' | 'offen' | 'in_bearbeitung' | 'erledigt' | 'abgebrochen';
+
+export interface TaskComment {
+  id: string;
+  taskId: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
+// Termin (Kalender-Eintrag) · Aufgabe (To-do mit Frist) · beides.
+export type TaskKind = 'termin' | 'aufgabe' | 'beides';
+
+export interface Task {
+  id: string;
+  title: string;
+  notes: string;
+  type: TaskKind; // termin = im Kalender, aufgabe = To-do mit Frist, beides = beides
+  dueDate: string | null; // YYYY-MM-DD – START-Tag der Aufgabe (oder null)
+  endDate: string | null; // YYYY-MM-DD – END-Tag (null = eintägig, Balken über mehrere Tage möglich)
+  startTime: string | null; // "HH:MM" – Startzeit (null = ganztägig)
+  endTime: string | null; // "HH:MM" – Endzeit (nur mit startTime sinnvoll)
+  isoWeek: string | null; // z.B. "2026-W33" (Wochenansicht) oder null
+  status: TaskStatus;
+  priority: TicketPriority; // gleiche Stufen wie Tickets (niedrig…dringend)
+  links: LinkItem[]; // benannte Link-Tasten (z.B. Google-Drive-Ordner)
+  createdBy: string;
+  createdByName: string;
+  createdAt: string;
+  updatedAt: string;
+  assignees: { userId: string; userName: string }[];
+  commentCount?: number;
+  comments?: TaskComment[];
+}
+
+// --- Ideen (Brainstorm) -----------------------------------------------------
+// Eine Idee ist ein eigener kleiner Brainstorm-Bereich: Titel + Verlauf
+// (jeder Teilnehmer schreibt Vorschläge) + ein manuelles Fazit. Ist sie fertig,
+// kann daraus eine Aufgabe/ein Termin erstellt werden (verknüpft).
+export type IdeaStatus = 'offen' | 'in_bearbeitung' | 'erledigt' | 'verworfen';
+
+export interface IdeaComment {
+  id: string;
+  ideaId: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  // Chat-artige Medien-Anhänge im Brainstorm (Bild/Video/Datei = 'file', 'audio').
+  attachType?: 'file' | 'audio' | null;
+  attachUrl?: string | null;
+  attachMime?: string | null;
+  attachTitle?: string | null;
+  createdAt: string;
+}
+
+export interface Idea {
+  id: string;
+  title: string;
+  summary: string; // manuelles Fazit / Zusammenfassung
+  status: IdeaStatus;
+  links: LinkItem[]; // benannte Link-Tasten
+  createdBy: string;
+  createdByName: string;
+  linkedTaskId: string | null; // gesetzt, wenn daraus eine Aufgabe/Termin wurde
+  createdAt: string;
+  updatedAt: string;
+  members: { userId: string; userName: string }[];
+  commentCount?: number;
+  comments?: IdeaComment[];
+}
+
+// In-App-Benachrichtigung (Erwähnung, Zuweisung, neuer Kommentar, Chat, Idee)
+export interface AppNotification {
+  id: string;
+  kind: string; // 'ticket_assigned' | 'ticket_comment' | 'task_assigned' | 'task_comment' | 'mention' | 'chat' | 'idea'
+  refType: 'ticket' | 'task' | 'conversation' | 'idea';
+  refId: string;
+  body: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+// --- Phase 3: Chat ----------------------------------------------------------
+export interface ConversationMember {
+  userId: string;
+  userName: string;
+}
+
+export interface ChatLastMessage {
+  body: string;
+  authorName: string;
+  createdAt: string;
+  attachType: 'ticket' | 'task' | 'file' | 'audio' | 'poll' | null;
+  deleted?: boolean; // Nachricht wurde zurückgenommen
+}
+
+export interface MessageReaction {
+  userId: string;
+  emoji: string;
+}
+
+export interface Conversation {
+  id: string;
+  kind: 'group' | 'dm';
+  title: string;
+  avatarUrl: string; // Gruppenbild (leer = Standard-Icon)
+  createdBy: string;
+  updatedAt: string;
+  members: ConversationMember[];
+  unread: number;
+  lastMessage: ChatLastMessage | null;
+}
+
+// Präsenz-Schnappschuss für den Chat: wer ist gerade online + wer tippt in der
+// geöffneten Unterhaltung. Bewusst ohne Lesebestätigung.
+export interface ChatPresence {
+  online: string[]; // User-IDs mit frischem Heartbeat
+  typing: { userId: string; userName: string }[]; // tippt in der aktiven Unterhaltung
+}
+
+export type ChatAttachType = 'ticket' | 'task' | 'file' | 'audio' | 'poll';
+
+// Abstimmung (Umfrage) im Chat – wie bei WhatsApp.
+export interface PollOption {
+  id: string;
+  text: string;
+  count: number; // Anzahl Stimmen für diese Option
+  mine: boolean; // habe ich selbst diese Option gewählt?
+  voters: { userId: string; userName: string }[]; // leer bei anonymer Abstimmung
+}
+export interface Poll {
+  id: string;
+  question: string;
+  multiple: boolean; // mehrere Antworten erlaubt
+  anonymous: boolean; // Namen der Abstimmenden verbergen
+  refType: 'ticket' | 'task' | null; // optional verknüpftes Ticket/Aufgabe/Termin
+  refId: string | null;
+  refTitle: string | null;
+  totalVoters: number; // Anzahl verschiedener Abstimmender
+  options: PollOption[];
+}
+
+export interface ChatMessage {
+  id: string;
+  conversationId: string;
+  parentId: string | null;
+  authorId: string;
+  authorName: string;
+  body: string;
+  attachType: ChatAttachType | null;
+  attachId: string | null; // ticket/task: Entity-ID
+  attachTitle: string | null; // Titel bzw. Dateiname
+  attachUrl: string | null; // file/audio: Blob-URL
+  attachMime: string | null; // file: MIME-Typ (für Vorschau/Icon)
+  createdAt: string;
+  editedAt?: string | null; // gesetzt = nachträglich bearbeitet
+  deletedAt?: string | null; // gesetzt = für alle zurückgenommen
+  reactions?: MessageReaction[]; // Emoji-Reaktionen
+  replyCount?: number; // nur bei Top-Level-Nachrichten
+  unreadReplies?: number; // ungelesene Thread-Antworten (Top-Level, für das Leuchten)
+  poll?: Poll | null; // gesetzt, wenn attachType === 'poll'
+}
+
+// ===========================================================================
+// Statistics Center — per-Aktion getrackte Spielerwertung (Fundament)
+// Nur die Roh-Zähler jeder Aktion werden gespeichert. Note, Quoten und
+// Kartenwerte rechnen sich IMMER daraus (nie fest gespeichert) – genau wie die
+// Liga-Tabelle sich aus den Ergebnissen ergibt. Alle Gewichte sind Testwerte
+// und im Admin frei justierbar (ScoringConfig).
+// ===========================================================================
+
+// Alle zählbaren Aktionen eines Spielers in EINEM Spiel.
+export interface ActionCounts {
+  pass_ok: number; // angekommener Pass
+  pass_fail: number; // Fehlpass
+  key_pass: number; // Schlüsselpass (Teilmenge der erfolgreichen Pässe)
+  assist: number; // Vorlage (letzter Pass vor dem Tor)
+  shot_on: number; // Torschuss aufs Tor, gehalten
+  shot_miss: number; // Fehlschuss (vorbei / Pfosten)
+  shot_blocked_off: number; // eigener Schuss geblockt (offensiv)
+  goal: number; // Tor – zählt automatisch als Torschuss, NICHT zusätzlich als shot_on
+  dribble_won: number;
+  dribble_lost: number;
+  duel_won: number; // Zweikampf/Defensivduell gewonnen
+  duel_lost: number; // Zweikampf verloren
+  interception: number; // abgefangener Pass
+  shot_blocked_def: number; // gegnerischen Schuss geblockt (defensiv)
+  turnover: number; // Ballverlust
+  own_goal: number; // Eigentor
+  penalty_goal: number; // Strafstoßtor (Teilmenge der Tore, kein Zusatzbonus)
+  save: number; // Parade (Torwart)
+  gk_goal_against: number; // Gegentor als Torwart
+  penalty_save: number; // gehaltener Strafstoß
+  gk_position_save: number; // Standparade
+}
+
+export type ActionKey = keyof ActionCounts;
+
+export type StatRole = 'field' | 'keeper';
+
+// Eine gespeicherte Zeile: die Zähler eines Spielers in einem Spiel.
+export interface MatchPlayerStat {
+  dayKey: string; // Spieltag-/Event-Schlüssel, z.B. "s1:3" oder "event:testspiel-1"
+  matchId: string; // Liga-Spiel-ID oder Event-Match-ID
+  teamId: string; // Team-ID (Liga) oder Team-Name (Event)
+  playerName: string;
+  role: StatRole; // Feldspieler oder (für dieses Spiel) Torwart
+  counts: ActionCounts;
+}
+
+// Rating-Regler: Note = clamp(base + factor · Rohscore, min, max).
+export interface RatingRegler {
+  base: number; // neutraler Startwert (6,00)
+  factor: number; // Note-Änderung je Rohscore-Punkt (0,20)
+  min: number; // Untergrenze (1,00)
+  max: number; // Obergrenze (10,00)
+}
+
+// Elite-Index eines Kartenattributs: Ziel-Quote und Ziel-Menge (Index 1,00),
+// dazu die Gewichte, wie stark Quote vs. Menge in den Index eingehen.
+export interface CardAttrTarget {
+  zielQuote: number; // Elite-Quote (z.B. 0,72 Zweikampfquote)
+  zielMenge: number; // Elite-Menge pro Spiel (Index 1,00)
+  gewQuote: number; // Gewicht Quote im Index
+  gewMenge: number; // Gewicht Menge im Index
+}
+
+// Score-Einstellungen (Testversion – jede Zelle frei justierbar).
+export interface ScoringConfig {
+  points: Record<ActionKey, number>; // Rohscore-Gewicht je Aktion
+  cleanSheetBonus: number; // Zu-null-Bonus für den Torwart (abgeleitet, nicht gezählt)
+  rating: RatingRegler;
+  shotBlockFactor: number; // geblockter Offensiv-Schuss zählt als halber gehaltener Schuss
+  minimums: { apps: number; passes: number; shots: number; duels: number; gk: number };
+  card: {
+    basis: number; // Kartenwert-Untergrenze (40)
+    elite: number; // Index 1,00 entspricht diesem Wert (94)
+    totsStart: number; // ab hier TOTS (95) – nur Sonderkarten, nicht automatisch
+    fullGames: number; // ab dieser Spielzahl volle Wertung (8)
+    caps: { g1_2: number; g3_4: number; g5_7: number; g8plus: number }; // Kappen je Spielzahl
+    pas: {
+      zielPassquote: number;
+      zielPaesseSpiel: number;
+      zielKeySpiel: number;
+      zielAssistsSpiel: number;
+      gewPassindex: number;
+      gewKey: number;
+      gewAssist: number;
+      indexGewQuote: number;
+      indexGewMenge: number;
+    };
+    sch: CardAttrTarget;
+    dri: CardAttrTarget;
+    def: CardAttrTarget;
+    par: CardAttrTarget; // Torwart: Paraden
+    sic: CardAttrTarget; // Torwart: Sicherheit (Gegentore/zu null)
+    stl: CardAttrTarget; // Torwart: Stellungsspiel (Standparade/Elfmeter)
+  };
+  // Untergrenzen der Kartenstufen: Bronze (Standard) · Silber 65 · Gold 75 ·
+  // Hero 90 (neongrüne Umrandung) · TOTS (Sonderkarte, wird manuell gesteuert –
+  // automatisch max. 94, also nicht erreichbar).
+  tiers: { silber: number; gold: number; hero: number; tots: number };
+}
+
+export type CardTier = 'bronze' | 'silber' | 'gold' | 'hero' | 'tots';
+
+// Ergebnis der Quotenberechnung (null = unter dem Mindestwert, zählt nicht fürs Leaderboard).
+export interface Quotas {
+  passquote: number | null;
+  passversuche: number;
+  schussquote: number | null; // Schussqualität
+  chancenverwertung: number | null;
+  gesamtschuesse: number;
+  zweikampfquote: number | null;
+  dribblingquote: number | null;
+  torwartquote: number | null;
+}
+
+// Kartenwerte eines Spielers (Saison, über alle Spiele).
+export interface PlayerCard {
+  role: StatRole;
+  ges: number; // Gesamtwert (gerundeter Schnitt der Teilwerte)
+  tier: CardTier;
+  attrs: { key: string; label: string; value: number }[]; // PAS/SCH/DRI/DEF bzw. STL/PAR/PAS/SIC
+}

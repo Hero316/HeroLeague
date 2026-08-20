@@ -15,7 +15,7 @@
 // Version bei Bedarf erhöhen: beim Aktivieren löscht der SW alle Caches mit
 // abweichendem Namen → ein hängengebliebener/kaputter Asset-Cache (z. B. schwarze
 // Seite nach einem Deploy) wird beim nächsten Laden automatisch bereinigt.
-const CACHE = 'hl-static-v3';
+const CACHE = 'hl-static-v8';
 
 // App-Shell für den Offline-Fallback. Bewusst minimal.
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/assets/icon-192.png'];
@@ -62,14 +62,19 @@ self.addEventListener('fetch', (event) => {
   if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) return;
 
   // Statische Assets: cache-first (Dateinamen sind durch Hashing eindeutig).
+  // WICHTIG: NUR erfolgreiche (200, same-origin) Antworten cachen. Sonst würde
+  // eine 404/Fehlerseite – z. B. wenn während eines Deploys ein JS-Chunk kurz
+  // fehlt – dauerhaft gecacht und die Seite bliebe leer hängen.
   if (isStaticAsset(url)) {
     event.respondWith(
       caches.match(request).then(
         (cached) =>
           cached ||
           fetch(request).then((res) => {
-            const copy = res.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => undefined);
+            if (res && res.ok && res.status === 200 && res.type === 'basic') {
+              const copy = res.clone();
+              caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => undefined);
+            }
             return res;
           }),
       ),
@@ -78,12 +83,15 @@ self.addEventListener('fetch', (event) => {
   }
 
   // HTML/Navigationen: network-first, damit online immer die aktuelle Seite kommt.
+  // Ebenfalls nur erfolgreiche Antworten als Offline-Fallback ablegen.
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((cache) => cache.put('/index.html', copy)).catch(() => undefined);
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((cache) => cache.put('/index.html', copy)).catch(() => undefined);
+          }
           return res;
         })
         .catch(() => caches.match(request).then((cached) => cached || caches.match('/index.html'))),
@@ -92,4 +100,161 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Alles andere: normal ans Netz.
+});
+
+// Base64url (VAPID public key) -> Uint8Array für pushManager.subscribe.
+function urlB64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+// --- Web-Push: Abo-Wechsel durch den Browser auffangen ----------------------
+// Browser tauschen ein Push-Abo gelegentlich von selbst aus (Rotation/Ablauf).
+// Passiert das, während die App zu ist, würden ohne diesen Handler ab da keine
+// Push-Nachrichten mehr ankommen. Wir legen sofort ein neues Abo an und melden
+// es am Server an (Session-Cookie wird mitgeschickt). Best-effort.
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    (async () => {
+      try {
+        const res = await fetch('/api/push?resource=key', { credentials: 'include' });
+        if (!res.ok) return;
+        const { key } = await res.json();
+        if (!key) return;
+        const sub = await self.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlB64ToUint8Array(key),
+        });
+        await fetch('/api/push', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ subscription: sub.toJSON() }),
+        });
+      } catch (e) {
+        /* nichts zu tun – beim nächsten App-Start heilt syncPush nach */
+      }
+    })(),
+  );
+});
+
+// --- Web-Push: eingehende Push-Nachricht anzeigen ---------------------------
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = {};
+  }
+  const title = data.title || 'Hero League';
+  const body = data.body || '';
+  const url = data.url || '/admin';
+
+  // Ziel-Chat aus der URL (?c=…) herauslesen – nur bei Chat-Pushs gesetzt.
+  let convId = null;
+  try {
+    convId = new URL(url, self.location.origin).searchParams.get('c');
+  } catch (e) {
+    convId = null;
+  }
+
+  event.waitUntil(
+    (async () => {
+      // „Bin ich eh schon drin?" – Wenn genau dieser Chat gerade sichtbar offen
+      // ist (gleiches Gerät, App im Vordergrund), KEINE Push-Benachrichtigung
+      // zeigen (wie WhatsApp). Erkennung über die offene Unterhaltung in der URL
+      // (?c=…), die der Chat live mitführt. Nur relevant für Chat-Pushs.
+      if (convId) {
+        try {
+          const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+          const openHere = wins.some((c) => {
+            if (c.visibilityState !== 'visible') return false;
+            try {
+              return new URL(c.url).searchParams.get('c') === convId;
+            } catch (e) {
+              return false;
+            }
+          });
+          if (openHere) return; // still: kein Banner, Badge unverändert lassen
+        } catch (e) {
+          /* im Zweifel Benachrichtigung zeigen */
+        }
+      }
+
+      await self.registration.showNotification(title, {
+        body,
+        icon: '/assets/icon-192.png',
+        badge: '/assets/icon-192.png',
+        tag: 'hl-chat',
+        renotify: true,
+        data: { url },
+      });
+
+      // Zahl am App-Icon setzen (iOS 16.4+/Android, installierte PWA).
+      try {
+        if (self.navigator && self.navigator.setAppBadge) {
+          if (typeof data.badge === 'number' && data.badge > 0) self.navigator.setAppBadge(data.badge);
+          else if (self.navigator.clearAppBadge) self.navigator.clearAppBadge();
+          else self.navigator.setAppBadge();
+        }
+      } catch (e) {
+        /* ignoriert */
+      }
+    })(),
+  );
+});
+
+// Klick auf die Benachrichtigung: im PASSENDEN Fenster öffnen. Da fast alle
+// Benachrichtigungen jetzt in die Team-App (/chat) führen, bevorzugen wir ein
+// bereits offenes Team-App-Fenster und schicken es per Deep-Link ans Ziel –
+// sonst neu öffnen (Android öffnet /chat automatisch in der installierten
+// Team-App, weil deren Scope /chat ist). So landet man nicht mal in der App,
+// mal auf der Website.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/chat';
+  let wantsChat = true;
+  try {
+    wantsChat = new URL(url, self.location.origin).pathname.startsWith('/chat');
+  } catch (e) {
+    wantsChat = true;
+  }
+  event.waitUntil(
+    (async () => {
+      const list = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      // Fenster im passenden Bereich bevorzugen (Team-App für /chat-Ziele).
+      let target = null;
+      for (const client of list) {
+        let path = '/';
+        try {
+          path = new URL(client.url).pathname;
+        } catch (e) {
+          /* ignorieren */
+        }
+        const inScope = wantsChat ? path.startsWith('/chat') : !path.startsWith('/chat');
+        if (inScope) {
+          target = client;
+          break;
+        }
+      }
+      if (!target && list.length) target = list[0];
+      if (target) {
+        if ('navigate' in target) {
+          try {
+            const c = await target.navigate(url);
+            return c && c.focus ? c.focus() : target.focus && target.focus();
+          } catch (e) {
+            return target.focus && target.focus();
+          }
+        }
+        return target.focus && target.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url);
+      return undefined;
+    })(),
+  );
 });

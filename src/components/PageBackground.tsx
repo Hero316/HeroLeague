@@ -23,6 +23,9 @@ const PAGE_GLOWS: Record<string, Glow[]> = {
     { anim: 'hl-drift-a', style: { top: '-16%', left: '-10%', width: '66vw', height: '66vw', background: rad(`${TEAL}0.20)`) } },
     { anim: 'hl-drift-b', style: { bottom: '-24%', right: '-12%', width: '58vw', height: '58vw', background: rad(`${ACCENT}0.15)`) } },
     { anim: 'hl-drift-c', style: { top: '34%', right: '24%', width: '38vw', height: '38vw', background: rad(`${GREEN}0.08)`) } },
+    // Warmer Gold-Schein oben rechts – bricht das Teal-Einerlei, ohne den Stil zu sprengen.
+    { anim: 'hl-drift-b', style: { top: '2%', right: '-6%', width: '44vw', height: '44vw', background: rad(`${GOLD}0.10)`) } },
+    { anim: 'hl-drift-c', style: { bottom: '6%', left: '10%', width: '34vw', height: '34vw', background: rad(`${GOLD}0.06)`) } },
   ],
   spielplan: [
     { anim: 'hl-drift-b', style: { top: '-14%', right: '-8%', width: '60vw', height: '60vw', background: rad(`${TEAL}0.18)`) } },

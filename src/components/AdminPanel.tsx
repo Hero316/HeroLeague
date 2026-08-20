@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone, Handshake, ChevronUp, ChevronDown, Star, Landmark } from 'lucide-react';
-import { Player, Team, Match, EventConfig, EventArchive, NewsItem, Partner, TeamSponsor, TeamSponsorsMap } from '../types';
+import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone, Handshake, ChevronUp, ChevronDown, Star, Landmark, BarChart3 } from 'lucide-react';
+import { Player, Team, Match, EventConfig, EventArchive, NewsItem, Partner, TeamSponsor, TeamSponsorsMap, SponsorClicksMap } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
+import { fetchSponsorClicks } from '../lib/sponsors';
 import PlayerAvatar from './PlayerAvatar';
 import { AccordionSection } from './ui';
 
@@ -250,6 +251,12 @@ interface AdminPanelProps {
   currentSeasonLabel: string;
   nextSeasonLabel: string;
   isSuperadmin: boolean;
+  // Granulare Sichtbarkeit einzelner Sektionen (Spiel-Admin sieht nur einen Teil).
+  canManageClubs: boolean; // Klubs/Kader
+  canManageSeason: boolean; // Saison verwalten
+  canEditHomepage: boolean; // Startseite (Hero/Countdown), News-Ticker, Partner
+  canManagePom: boolean; // Spieler des Monats
+  canManageChannels: boolean; // Twitch/Social, Event/Testspiel
   onAddTeam: (team: Omit<Team, 'id'>) => Promise<boolean>;
   onEditTeam: (teamId: string, updatedData: Partial<Team>) => Promise<boolean>;
   onDeleteTeam: (teamId: string) => Promise<boolean>;
@@ -328,6 +335,11 @@ export default function AdminPanel({
   currentSeasonLabel,
   nextSeasonLabel,
   isSuperadmin,
+  canManageClubs,
+  canManageSeason,
+  canEditHomepage,
+  canManagePom,
+  canManageChannels,
   onAddTeam,
   onEditTeam,
   onDeleteTeam,
@@ -377,6 +389,8 @@ export default function AdminPanel({
   const [pomGoals, setPomGoals] = useState(0);
   const [pomAssists, setPomAssists] = useState(0);
   const [pomImage, setPomImage] = useState('');
+  const [pomMatchday, setPomMatchday] = useState(0); // Spieltag-Nummer für „Spieler des Spieltages N"
+  const [pomSponsorId, setPomSponsorId] = useState(''); // Partner-ID des Sponsors
   const [pomSuccess, setPomSuccess] = useState(false);
   const [pomAutoNote, setPomAutoNote] = useState('');
 
@@ -446,7 +460,7 @@ export default function AdminPanel({
   const [isStartingSeason, setIsStartingSeason] = useState(false);
 
   useEffect(() => {
-    apiFetch<{ name: string; club: string; teamId?: string; goals: number; assists: number; image: string }>('/api/player-of-the-month')
+    apiFetch<{ name: string; club: string; teamId?: string; goals: number; assists: number; image: string; matchday?: number; sponsorId?: string }>('/api/player-of-the-month')
       .then((data) => {
         setPomName(data.name || '');
         setPomClub(data.club || '');
@@ -454,9 +468,11 @@ export default function AdminPanel({
         setPomGoals(data.goals || 0);
         setPomAssists(data.assists || 0);
         setPomImage(data.image || '');
+        setPomMatchday(data.matchday || 0);
+        setPomSponsorId(data.sponsorId || '');
       })
       .catch(() => {
-        // Noch kein Spieler des Monats gepflegt
+        // Noch kein Spieler des Spieltages gepflegt
       });
   }, []);
 
@@ -475,6 +491,8 @@ export default function AdminPanel({
           goals: Number(pomGoals),
           assists: Number(pomAssists),
           image: pomImage,
+          matchday: Number(pomMatchday),
+          sponsorId: pomSponsorId,
         }),
       });
       setPomSuccess(true);
@@ -486,7 +504,7 @@ export default function AdminPanel({
 
   // Auszeichnung komplett entfernen: leert Formular + Datenbank -> Karte verschwindet von der Startseite.
   const handleClearPom = async () => {
-    if (!window.confirm('Spieler des Monats wirklich entfernen? Die Karte verschwindet dann von der Startseite.')) return;
+    if (!window.confirm('Spieler des Spieltages wirklich entfernen? Die Karte verschwindet dann von der Startseite.')) return;
     try {
       await apiFetch('/api/player-of-the-month', { method: 'DELETE' });
       setPomName('');
@@ -495,6 +513,8 @@ export default function AdminPanel({
       setPomGoals(0);
       setPomAssists(0);
       setPomImage('');
+      setPomMatchday(0);
+      setPomSponsorId('');
       setPomAutoNote('');
       setPomSuccess(true);
       setTimeout(() => setPomSuccess(false), 3000);
@@ -582,10 +602,51 @@ export default function AdminPanel({
     }
   };
 
+  // Sponsoren-Klick-Statistik – sichtbar für Super-Admin UND Spiel-Admin
+  // (canManagePom = isSuperadmin || isMatchAdmin).
+  const [sponsorClicks, setSponsorClicks] = useState<SponsorClicksMap>({});
+  const loadSponsorClicks = React.useCallback(() => {
+    if (!canManagePom) return;
+    fetchSponsorClicks()
+      .then((data) => setSponsorClicks(data && typeof data === 'object' ? data : {}))
+      .catch(() => { /* noch keine Klicks / kein Zugriff */ });
+  }, [canManagePom]);
+  useEffect(() => { loadSponsorClicks(); }, [loadSponsorClicks]);
+
+  // Klick-Zeilen für die Übersicht: bekannte Partner (auch mit 0 Klicks) +
+  // alle sonst getrackten Sponsoren (z.B. Team-Sponsoren), nach Klicks sortiert.
+  const sponsorRows = useMemo(() => {
+    const labelFor = (k: string) =>
+      (({
+        partners: 'Partner-Leiste (unten)',
+        'spieler-des-spieltages': 'Spieler des Spieltages',
+        'team-sponsor': 'Team-Seite',
+        unbekannt: 'Sonstige',
+      }) as Record<string, string>)[k] || k;
+    const rows: { id: string; name: string; total: number; placements: { label: string; count: number }[]; lastAt: string }[] = [];
+    const seen = new Set<string>();
+    const push = (id: string, fallbackName: string) => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      const e = sponsorClicks[id];
+      const placements = e && e.placements
+        ? Object.entries(e.placements).map(([k, v]) => ({ label: labelFor(k), count: Number(v) || 0 })).sort((a, b) => b.count - a.count)
+        : [];
+      rows.push({ id, name: e?.name || fallbackName || 'Sponsor', total: Number(e?.total) || 0, placements, lastAt: e?.lastAt || '' });
+    };
+    partners.forEach((p) => push(p.id, p.name));
+    Object.keys(sponsorClicks).forEach((id) => push(id, sponsorClicks[id]?.name || ''));
+    rows.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+    return rows;
+  }, [sponsorClicks, partners]);
+  const sponsorClicksTotal = useMemo(() => sponsorRows.reduce((s, r) => s + r.total, 0), [sponsorRows]);
+
   // Partner laden (nur relevant für Super-Admin, schadet sonst aber nicht).
   // Altdaten mit `main:true` (statt `tier`) werden auf die neue Stufe migriert.
+  // Partner werden für die Partner-Sektion (Super-Admin) UND für die
+  // Sponsor-Auswahl beim „Spieler des Spieltages" (auch Spiel-Admins) gebraucht.
   useEffect(() => {
-    if (!isSuperadmin) return;
+    if (!isSuperadmin && !canManagePom) return;
     apiFetch<{ items: Partner[] }>('/api/twitch?resource=partners')
       .then((data) => {
         const items = (Array.isArray(data.items) ? data.items : []).map((p) => ({
@@ -598,7 +659,7 @@ export default function AdminPanel({
       .catch(() => {
         /* noch nicht konfiguriert */
       });
-  }, [isSuperadmin]);
+  }, [isSuperadmin, canManagePom]);
 
   const addPartner = () => {
     setPartners((prev) => [
@@ -858,6 +919,7 @@ export default function AdminPanel({
       title: 'Testspieltag',
       tagline: '',
       dateLabel: '',
+      date: '',
       location: '',
       teams: [],
       matches: [],
@@ -1154,8 +1216,8 @@ export default function AdminPanel({
         )}
       </AnimatePresence>
 
-      {/* Klubs registrieren & bearbeiten (nur Super-Admin) */}
-      {isSuperadmin && (
+      {/* Klubs registrieren & bearbeiten (Super-Admin + Spiel-Admin) */}
+      {canManageClubs && (
       <AccordionSection
         id="clubs"
         category="spiele"
@@ -1506,19 +1568,21 @@ export default function AdminPanel({
       </AccordionSection>
       )}
 
-      {/* Spieler des Monats */}
+      {/* Spieler des Spieltages */}
       <AccordionSection
         id="pom"
+        show={canManagePom}
         category="startseite"
-        title="Spieler des Monats konfigurieren"
-        subtitle="Auszeichnung, Verein, Leistungsdaten & Portraitfoto"
+        title="Spieler des Spieltages konfigurieren"
+        subtitle="Auszeichnung, Spieltag-Nr., Sponsor, Leistungsdaten & Portraitfoto"
         icon={<Award className="w-5 h-5" />}
         accent="#E9C46A"
       >
         <div>
           <p className="text-xs text-gray-400 font-sans mb-4">
-            Bestimme den ausgezeichneten Spieler, seinen Verein, die Leistungsdaten und lade sein Portraitfoto hoch —
-            erscheint prominent auf der Startseite.
+            Bestimme den ausgezeichneten Spieler, seinen Verein, die Spieltag-Nummer, den Sponsor, die Leistungsdaten
+            und lade sein Portraitfoto hoch — erscheint prominent auf der Startseite (z.&nbsp;B. „Spieler des Spieltages 1,
+            gesponsert von …").
           </p>
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
@@ -1528,7 +1592,7 @@ export default function AdminPanel({
               className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 bg-brand-accent-light/15 hover:bg-brand-accent-light/25 border border-brand-accent-light/40 text-brand-accent-light rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
             >
               <Sparkles className="w-4 h-4" />
-              <span>Aus Monatsdaten berechnen</span>
+              <span>Automatisch berechnen</span>
             </button>
             {pomAutoNote && (
               <span className="text-xs text-emerald-400 font-sans">{pomAutoNote}</span>
@@ -1536,6 +1600,34 @@ export default function AdminPanel({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div>
+              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">SPIELTAG-NR.</label>
+              <input
+                type="number"
+                min={0}
+                value={pomMatchday}
+                onChange={(e) => setPomMatchday(Number(e.target.value))}
+                placeholder="z. B. 1"
+                className={inputClass}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">SPONSOR</label>
+              <select
+                value={pomSponsorId}
+                onChange={(e) => setPomSponsorId(e.target.value)}
+                className={`${inputClass} cursor-pointer`}
+              >
+                <option value="">-- Kein Sponsor --</option>
+                {partners.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name || p.label || 'Partner ohne Namen'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">VEREIN</label>
               <select
@@ -1579,12 +1671,12 @@ export default function AdminPanel({
             </div>
 
             <div>
-              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">TORE IM MONAT</label>
+              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">TORE</label>
               <input type="number" min={0} value={pomGoals} onChange={(e) => setPomGoals(Number(e.target.value))} className={inputClass} />
             </div>
 
             <div>
-              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">VORLAGEN IM MONAT</label>
+              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">VORLAGEN</label>
               <input type="number" min={0} value={pomAssists} onChange={(e) => setPomAssists(Number(e.target.value))} className={inputClass} />
             </div>
 
@@ -1626,6 +1718,7 @@ export default function AdminPanel({
       {/* Startseite: eigene Hero-Hintergrundbilder */}
       <AccordionSection
         id="hero"
+        show={canEditHomepage}
         category="startseite"
         title="Startseite · Hero-Bilder & Countdown"
         subtitle="Hintergrundbilder der drei Slides + Countdown bis zum Anstoß"
@@ -1647,7 +1740,7 @@ export default function AdminPanel({
               maxDimension={1920}
             />
             <ImageUploader
-              label="Slide 2 · Spieler des Monats"
+              label="Slide 2 · Spieler des Spieltages"
               value={heroImages.pom}
               onChange={(url) => setHeroImages((h) => ({ ...h, pom: url }))}
               maxDimension={1920}
@@ -1767,6 +1860,7 @@ export default function AdminPanel({
       {/* News-Laufband (Ticker unter der Navigation) */}
       <AccordionSection
         id="news"
+        show={canEditHomepage}
         category="startseite"
         title="News-Laufband (Ticker)"
         subtitle="Eigene Kurz-Nachrichten für das Laufband oben auf der Seite"
@@ -1850,6 +1944,7 @@ export default function AdminPanel({
       {/* Twitch-Livestream & Social Media */}
       <AccordionSection
         id="twitch"
+        show={canManageChannels}
         category="kanaele"
         title="Twitch & Social Media"
         subtitle="Twitch-Kanal, Live-Banner & Social-Media-Links"
@@ -1984,7 +2079,7 @@ export default function AdminPanel({
       </AccordionSection>
 
       {/* Partner / Sponsoren-Logos – nur Super-Admin */}
-      {isSuperadmin && (
+      {canEditHomepage && (
         <AccordionSection
           id="partners"
           category="startseite"
@@ -2003,10 +2098,10 @@ export default function AdminPanel({
               Logo bitte <strong className="text-gray-300">farbig</strong> und mit{' '}
               <strong className="text-gray-300">transparentem Hintergrund</strong> (PNG/WebP) hochladen — kein zweites
               Schwarz-Weiß-Bild nötig. Über die <strong className="text-gray-300">Anzeige-Stufe</strong> bestimmst du die
-              Größe: <strong className="text-gray-300">Hauptpartner</strong> und{' '}
-              <strong className="text-gray-300">Bankpartner</strong> erscheinen groß nebeneinander ganz oben — jeweils mit
-              eigener Überschrift darüber (z. B. „Offizieller Bankpartner"). <strong className="text-gray-300">Normal</strong>{' '}
-              landet im kleinen Raster darunter. Reihenfolge über die Pfeile.
+              Größe: Der <strong className="text-gray-300">Hauptpartner</strong> steht ganz oben — am größten, immer farbig
+              und leuchtend (auch am Handy), mit gold schimmernder Überschrift. Darunter der{' '}
+              <strong className="text-gray-300">Bankpartner</strong> mit eigener Überschrift (z. B. „Offizieller Bankpartner").
+              <strong className="text-gray-300"> Normal</strong> landet im kleinen Raster darunter. Reihenfolge über die Pfeile.
             </p>
 
             <div className="space-y-4">
@@ -2170,9 +2265,74 @@ export default function AdminPanel({
         </AccordionSection>
       )}
 
+      {/* Sponsoren-Klicks – Auswertung (Super-Admin + Spiel-Admin) */}
+      {canManagePom && (
+        <AccordionSection
+          id="sponsor-clicks"
+          category="startseite"
+          title="Sponsoren-Klicks"
+          subtitle="Wie oft welcher Sponsor angeklickt wurde"
+          icon={<BarChart3 className="w-5 h-5" />}
+          accent="#E6238E"
+        >
+          <div>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <p className="text-xs text-gray-400 font-sans">
+                Zählt <strong className="text-gray-200">jeden Klick</strong> auf einen Sponsor – egal wo: Partner-Leiste unten,
+                „Spieler des Spieltages", Team-Seiten und alle künftigen Platzierungen. Neue Sponsoren erscheinen
+                <strong className="text-gray-200"> automatisch</strong>, sobald sie zum ersten Mal angeklickt werden.
+              </p>
+              <button
+                type="button"
+                onClick={loadSponsorClicks}
+                className="shrink-0 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 border border-white/10 text-xs font-mono cursor-pointer transition-colors"
+              >
+                Aktualisieren
+              </button>
+            </div>
+
+            {sponsorRows.length === 0 ? (
+              <p className="text-xs text-gray-500 font-mono italic">Noch keine Klicks erfasst.</p>
+            ) : (
+              <>
+                <div className="text-[11px] font-mono text-gray-500 mb-2">
+                  Gesamt: <strong className="text-gray-300">{sponsorClicksTotal}</strong> Klicks · {sponsorRows.length} Sponsoren
+                </div>
+                <div className="space-y-2">
+                  {sponsorRows.map((r) => (
+                    <div key={r.id} className="rounded-xl border border-white/10 bg-[#060E0F]/40 p-3 flex items-center gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-bold text-white font-sans truncate">{r.name || 'Ohne Namen'}</div>
+                        <div className="text-[11px] text-gray-500 font-mono mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                          {r.placements.length ? (
+                            r.placements.map((p) => (
+                              <span key={p.label}>
+                                {p.label}: <span className="text-gray-400">{p.count}</span>
+                              </span>
+                            ))
+                          ) : (
+                            <span>noch keine Klicks</span>
+                          )}
+                          {r.lastAt && <span className="text-gray-600">zuletzt {new Date(r.lastAt).toLocaleDateString('de-DE')}</span>}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-xl font-black text-white tabular-nums leading-none">{r.total}</div>
+                        <div className="text-[10px] uppercase tracking-wider text-gray-500 font-mono">Klicks</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </AccordionSection>
+      )}
+
       {/* Testspiel / Sonder-Event */}
       <AccordionSection
         id="event"
+        show={canManageChannels}
         category="kanaele"
         title="Testspiel / Event"
         subtitle="Spontanes Event ein-/ausblenden, Ergebnisse pflegen"
@@ -2268,6 +2428,11 @@ export default function AdminPanel({
                     <div>
                       <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">DATUM (TEXT)</label>
                       <input type="text" value={selectedEvent.dateLabel} onChange={(e) => patchEvent({ dateLabel: e.target.value })} placeholder="z.B. Sonntag, 2. August 2026" className={inputClass} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">DATUM (KALENDER)</label>
+                      <input type="date" value={selectedEvent.date ?? ''} onChange={(e) => patchEvent({ date: e.target.value })} className={inputClass} />
+                      <p className="text-[10px] text-gray-500 mt-1">Für die leuchtende Markierung im Aufgaben-Kalender.</p>
                     </div>
                     <div>
                       <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">ORT</label>
@@ -2559,7 +2724,7 @@ export default function AdminPanel({
       </AccordionSection>
 
       {/* Saison verwalten (nur Super-Admin) */}
-      {isSuperadmin && (
+      {canManageSeason && (
       <AccordionSection
         id="season"
         category="spiele"

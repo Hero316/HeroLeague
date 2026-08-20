@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { SignJWT, jwtVerify } from 'jose';
-import type { UserRole } from '../../src/types';
+import type { UserRole, AdminPermission, UserStatus } from '../../src/types';
 
 const COOKIE_NAME = 'hl_session';
 const SESSION_DAYS = 7;
@@ -11,6 +11,20 @@ export interface SessionPayload {
   email: string;
   name: string;
   role: UserRole;
+  permissions: AdminPermission[]; // zusätzliche, frei kombinierbare Rechte
+  avatarUrl: string;
+  status: UserStatus;
+}
+
+const KNOWN_STATUS: UserStatus[] = ['online', 'away', 'busy', 'vacation', 'out'];
+export function normalizeStatus(value: unknown): UserStatus {
+  return KNOWN_STATUS.includes(value as UserStatus) ? (value as UserStatus) : 'online';
+}
+
+// Aktuell gibt es keine frei kombinierbaren Zusatzrechte mehr (Tickets verwalten
+// hängt allein an der Super-Admin-Rolle). Immer leer normalisieren.
+export function normalizePermissions(_value: unknown): AdminPermission[] {
+  return [];
 }
 
 function getSecret(): Uint8Array {
@@ -26,7 +40,15 @@ function isSecureContext(): boolean {
 }
 
 export async function createSessionToken(user: SessionPayload): Promise<string> {
-  return new SignJWT({ userId: user.userId, email: user.email, name: user.name, role: user.role })
+  return new SignJWT({
+    userId: user.userId,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    permissions: normalizePermissions(user.permissions),
+    avatarUrl: typeof user.avatarUrl === 'string' ? user.avatarUrl : '',
+    status: normalizeStatus(user.status),
+  })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime(`${SESSION_DAYS}d`)
@@ -67,13 +89,27 @@ export async function getSession(req: VercelRequest): Promise<SessionPayload | n
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, getSecret());
+    // Rolle explizit normalisieren. WICHTIG: Jede NICHT ausdrücklich bekannte
+    // Rolle fällt bewusst auf 'superadmin' zurück (Alt-Sessions mit role 'admin').
+    // Neue, eingeschränkte Rollen MÜSSEN hier explizit stehen – sonst würde ein
+    // solches Token fälschlich zu Super-Admin-Rechten eskalieren.
     const role: UserRole =
-      payload.role === 'match_admin' ? 'match_admin' : payload.role === 'referee' ? 'referee' : 'superadmin';
+      payload.role === 'match_admin'
+        ? 'match_admin'
+        : payload.role === 'referee'
+          ? 'referee'
+          : // Alt-Rolle „ticket_manager" gibt es nicht mehr → wie Team-Mitglied behandeln.
+            payload.role === 'team_member' || payload.role === 'ticket_manager'
+            ? 'team_member'
+            : 'superadmin';
     return {
       userId: typeof payload.userId === 'string' ? payload.userId : 'bootstrap',
       email: typeof payload.email === 'string' ? payload.email : '',
       name: typeof payload.name === 'string' ? payload.name : '',
       role,
+      permissions: normalizePermissions(payload.permissions),
+      avatarUrl: typeof payload.avatarUrl === 'string' ? payload.avatarUrl : '',
+      status: normalizeStatus(payload.status),
     };
   } catch {
     return null;
@@ -116,6 +152,12 @@ export const requireStaff = requireRoles(['superadmin', 'match_admin']);
 // Wrapper: Spiele + Abend-Aufstellung schreiben. Zusätzlich zum Staff darf hier
 // auch der Schiedsrichter (referee) ran – das ist sein einziger Schreibzugriff.
 export const requireMatchWrite = requireRoles(['superadmin', 'match_admin', 'referee']);
+
+// Wrapper: Tickets verwalten (Status setzen, zuweisen, Priorität ändern,
+// löschen). Der Super-Admin darf immer, der Ticket-Manager ist die spezialisierte
+// Rolle nur dafür. Tickets STELLEN und kommentieren darf jeder eingeloggte Nutzer
+// (dafür reicht requireAuth) – nur das Verwalten ist hier eingeschränkt.
+export const requireTicketManage = requireRoles(['superadmin']);
 
 // Rückwärtskompatibler Alias für reine Lese-Endpunkte hinter Login (jede Rolle).
 export const requireAdmin = requireAuth;

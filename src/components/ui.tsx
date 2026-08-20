@@ -1,11 +1,144 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, X, Smartphone, Search } from 'lucide-react';
+import { motion } from 'motion/react';
+import { ChevronDown, X, Smartphone, Search, LayoutDashboard, Star, Trophy, Home, Radio, KeyRound } from 'lucide-react';
 import { ActiveTab, Partner, PartnersConfig, Team } from '../types';
 import { apiFetch } from '../lib/api';
+import { trackSponsorClick } from '../lib/sponsors';
+import { useBackClose } from '../lib/backStack';
 import { useInstall } from './InstallProvider';
 
 // Gemeinsame Design-Bausteine des neuen Hero-League-Looks.
+
+// Schließt ein Overlay NUR, wenn der Druck wirklich auf dem dunklen Hintergrund
+// begann (nicht innerhalb der Karte). Behebt zwei iOS-Ärgernisse:
+//  1) Beim Öffnen eines Modals landet der nachgelagerte „Ghost-Click" von iOS
+//     sonst auf dem frisch erschienenen Hintergrund → das Modal blitzt nur kurz
+//     auf und schließt sofort wieder (wirkt wie „schwarz + rauszoomen").
+//  2) Text im Modal markieren und außerhalb loslassen schließt es nicht mehr.
+// Auf den dunklen Hintergrund (motion.div) anwenden statt onClick={onClose}.
+export function useBackdropDismiss(onClose: () => void) {
+  const downOnBackdrop = React.useRef(false);
+  return {
+    onPointerDown: (e: React.PointerEvent) => {
+      downOnBackdrop.current = e.target === e.currentTarget;
+    },
+    onClick: (e: React.MouseEvent) => {
+      if (downOnBackdrop.current && e.target === e.currentTarget) onClose();
+      downOnBackdrop.current = false;
+    },
+  };
+}
+
+// Zählt offene Modals, damit der Hintergrund-Scroll erst wieder frei ist, wenn
+// das LETZTE Modal geschlossen wurde (Modals können sich stapeln).
+let modalLockCount = 0;
+function lockBodyScroll() {
+  if (modalLockCount === 0) {
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+  }
+  modalLockCount++;
+}
+function unlockBodyScroll() {
+  modalLockCount = Math.max(0, modalLockCount - 1);
+  if (modalLockCount === 0) {
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
+  }
+}
+
+// Hängt ein Modal-Overlay direkt an <body> (Portal) und sperrt den
+// Hintergrund-Scroll. WICHTIG für iOS: nur so ist `position: fixed` wirklich
+// bildschirmfest. Liegt das Overlay dagegen im scrollbaren Kalender-/Chat-
+// Container, „scheint der Hintergrund durch", verschiebt sich beim Tippen in ein
+// Eingabefeld nach oben oder man tippt versehentlich in den Hintergrund.
+export function ModalPortal({ children }: { children: React.ReactNode }) {
+  React.useEffect(() => {
+    lockBodyScroll();
+    return () => unlockBodyScroll();
+  }, []);
+  if (typeof document === 'undefined') return null;
+  return createPortal(children, document.body);
+}
+
+// Freundlicher Leer-Zustand: Icon in weicher Kachel, Titel und optionaler
+// Hinweis – statt einer nackten grauen Textzeile. Theme-fähig (hell & dunkel).
+export function EmptyState({
+  icon: Icon,
+  title,
+  hint,
+  className = '',
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  hint?: string;
+  className?: string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: 'easeOut' }}
+      className={`flex flex-col items-center justify-center text-center py-14 px-6 ${className}`}
+    >
+      <div className="w-14 h-14 rounded-2xl hl-surf-soft border border-white/10 flex items-center justify-center mb-3.5 shadow-sm">
+        <Icon className="w-7 h-7 text-hl-mute" />
+      </div>
+      <p className="text-sm font-sans font-semibold text-hl-soft">{title}</p>
+      {hint && <p className="text-[13px] font-sans text-hl-mute mt-1 max-w-[16rem] leading-snug">{hint}</p>}
+    </motion.div>
+  );
+}
+
+// Animierter Umschalter (Segmented Control) mit gleitender Pille – wie bei
+// hochwertigen Apps. Die aktive Pille „fliegt" per layoutId sanft an die neue
+// Stelle, statt hart umzuspringen. groupId muss je Instanz eindeutig sein.
+export function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+  groupId,
+  className = '',
+  fill = false,
+}: {
+  options: { value: T; label: string; icon?: React.ComponentType<{ className?: string }> }[];
+  value: T;
+  onChange: (v: T) => void;
+  groupId: string;
+  className?: string;
+  fill?: boolean;
+}) {
+  return (
+    <div className={`relative flex items-center gap-0.5 hl-surf-soft border border-white/10 rounded-2xl p-1 max-w-full ${fill ? 'w-full' : 'overflow-x-auto no-scrollbar'} ${className}`}>
+      {options.map((o) => {
+        const active = o.value === value;
+        const Icon = o.icon;
+        return (
+          <button
+            key={o.value}
+            onClick={() => onChange(o.value)}
+            className={`relative py-2 rounded-xl text-xs font-sans font-bold uppercase tracking-wider cursor-pointer flex items-center justify-center whitespace-nowrap transition-colors duration-200 active:scale-95 ${
+              fill ? 'flex-1 min-w-0 px-2' : 'shrink-0 px-3.5'
+            } ${active ? 'text-white' : 'text-hl-mute hover:text-white'}`}
+          >
+            {active && (
+              <motion.span
+                layoutId={`seg-${groupId}`}
+                className="absolute inset-0 rounded-xl bg-brand-accent-light shadow-sm shadow-brand-accent-light/30"
+                transition={{ type: 'spring', stiffness: 520, damping: 40 }}
+              />
+            )}
+            <span className={`relative z-10 flex items-center min-w-0 ${fill ? 'gap-1' : 'gap-1.5'}`}>
+              {Icon && <Icon className={`shrink-0 ${fill ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />}
+              <span className="truncate">{o.label}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 // Hex-Farbe abdunkeln (für die Verlaufs-Wappen)
 export function shade(hex: string, factor: number): string {
@@ -125,7 +258,7 @@ interface PageHeaderProps {
 export function PageHeader({ kicker, title, text }: PageHeaderProps) {
   return (
     <div className="relative">
-      <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-10 sm:pt-13 pb-6">
+      <div className="relative max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pt-10 sm:pt-13 pb-6">
         <div className="font-sans font-extrabold text-xs tracking-[3px] text-brand-accent-light uppercase hl-fade">{kicker}</div>
         <h1 className="mt-3 font-display font-black text-5xl sm:text-7xl leading-[.86] tracking-tight uppercase text-white hl-fade">
           {title}
@@ -140,9 +273,79 @@ export function PageHeader({ kicker, title, text }: PageHeaderProps) {
 // alle Footer-Instanzen die Logos sofort (der Footer wird pro Route neu gemountet).
 let partnersCache: PartnersConfig | null = null;
 
-// Ein einzelnes Partner-Logo: farbig hochgeladen, per CSS grau dargestellt und
-// erst beim Hovern farbig. Mit Link ⇒ anklickbar (neuer Tab), sonst reines Bild.
-function PartnerLogo({ partner, heightClass, maxWClass }: { partner: Partner; heightClass: string; maxWClass: string }) {
+// Wiederverwendbarer Sponsor-/Partner-Link: rendert einen normalen Link und
+// zählt jeden Klick pro Sponsor (aufgeschlüsselt nach `placement`). Überall wo
+// ein Sponsor verlinkt wird, diesen Baustein nutzen – dann werden künftige
+// Platzierungen automatisch mitgezählt. Ohne `href` wird nur der Inhalt gerendert.
+export function SponsorLink({
+  sponsorId,
+  sponsorName,
+  placement,
+  href,
+  className,
+  title,
+  style,
+  children,
+}: {
+  sponsorId: string;
+  sponsorName?: string;
+  placement: string;
+  href?: string;
+  className?: string;
+  title?: string;
+  style?: React.CSSProperties;
+  children: React.ReactNode;
+}) {
+  if (!href) {
+    return (
+      <span title={title} className={className} style={style}>
+        {children}
+      </span>
+    );
+  }
+  const ping = () => trackSponsorClick(sponsorId, sponsorName ?? '', placement);
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={title}
+      className={className}
+      style={style}
+      onClick={ping}
+      onAuxClick={ping}
+    >
+      {children}
+    </a>
+  );
+}
+
+// Ein einzelnes Partner-Logo. Drei Varianten:
+// - Standard: farbig hochgeladen, per CSS grau dargestellt und erst beim Hovern
+//   farbig (auf Touch-Geräten dauerhaft farbig).
+// - `glow` = Hauptpartner: IMMER farbig (PC + Handy); auf dem Handy leuchtet es
+//   dauerhaft, auf dem PC beim Hovern (dann auch etwas größer).
+// - `softColor` = Bankpartner: IMMER farbig (PC + Handy), KEIN Dauer-Glow; beim
+//   Hovern nur ein dezentes Leuchten (deutlich schwächer als der Hauptpartner).
+function PartnerLogo({
+  partner,
+  heightClass,
+  maxWClass,
+  glow = false,
+  softColor = false,
+}: {
+  partner: Partner;
+  heightClass: string;
+  maxWClass: string;
+  glow?: boolean;
+  softColor?: boolean;
+}) {
+  const base = `${heightClass} ${maxWClass} w-auto object-contain`;
+  const cls = glow
+    ? `hl-partner-main-logo ${base}`
+    : softColor
+      ? `hl-partner-color-logo ${base}`
+      : `hl-partner-logo ${base} grayscale brightness-[.45] contrast-[1.1] opacity-90 transition duration-300 ease-out hover:grayscale-0 hover:brightness-100 hover:contrast-100 hover:opacity-100 hover:scale-105`;
   const img = (
     <img
       src={partner.logoUrl}
@@ -150,29 +353,33 @@ function PartnerLogo({ partner, heightClass, maxWClass }: { partner: Partner; he
       loading="lazy"
       decoding="async"
       referrerPolicy="no-referrer"
-      className={`hl-partner-logo ${heightClass} ${maxWClass} w-auto object-contain grayscale brightness-[.45] contrast-[1.1] opacity-90 transition duration-300 ease-out hover:grayscale-0 hover:brightness-100 hover:contrast-100 hover:opacity-100 hover:scale-105`}
+      className={cls}
     />
   );
-  return partner.linkUrl ? (
-    <a href={partner.linkUrl} target="_blank" rel="noopener noreferrer" title={partner.name} className="inline-flex items-center justify-center">
+  return (
+    <SponsorLink
+      sponsorId={partner.id}
+      sponsorName={partner.name}
+      placement="partners"
+      href={partner.linkUrl}
+      title={partner.name}
+      className="inline-flex items-center justify-center"
+    >
       {img}
-    </a>
-  ) : (
-    <span title={partner.name} className="inline-flex items-center justify-center">
-      {img}
-    </span>
+    </SponsorLink>
   );
 }
 
-// Große Partner (Hauptpartner/Bankpartner) auch aus Altdaten erkennen, die noch
-// `main:true` statt `tier` gespeichert haben.
-function isBigPartner(p: Partner): boolean {
-  return p.tier === 'main' || p.tier === 'bank' || (p as unknown as { main?: boolean }).main === true;
+// Hauptpartner auch aus Altdaten erkennen, die noch `main:true` statt `tier`
+// gespeichert haben.
+function isMainPartner(p: Partner): boolean {
+  return p.tier === 'main' || (p as unknown as { main?: boolean }).main === true;
 }
 
-// Partner-/Sponsoren-Sektion ganz unten auf jeder öffentlichen Seite. Hauptpartner
-// und Bankpartner stehen groß oben nebeneinander – jeweils mit eigener Überschrift
-// darüber. Darunter das normale Raster. Leere Liste ⇒ die Sektion wird nicht gerendert.
+// Partner-/Sponsoren-Sektion ganz unten auf jeder öffentlichen Seite. Der
+// Hauptpartner steht ganz oben – am größten, immer farbig und leuchtend, hebt
+// sich klar ab. Darunter der Bankpartner (mit eigener Überschrift), darunter das
+// normale Raster. Leere Liste ⇒ die Sektion wird nicht gerendert.
 export function PartnerSection() {
   const [partners, setPartners] = React.useState<Partner[]>(partnersCache?.items ?? []);
 
@@ -190,40 +397,69 @@ export function PartnerSection() {
 
   const withLogo = partners.filter((p) => p.logoUrl);
   if (withLogo.length === 0) return null;
-  const bigs = withLogo.filter(isBigPartner);
-  const rest = withLogo.filter((p) => !isBigPartner(p));
+  const mains = withLogo.filter(isMainPartner);
+  const banks = withLogo.filter((p) => p.tier === 'bank');
+  const rest = withLogo.filter((p) => !isMainPartner(p) && p.tier !== 'bank');
 
   return (
     <section className="bg-[linear-gradient(180deg,#e2e8fb_0%,#ccd6f2_100%)] text-[#0b0b0f]">
-      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-14 sm:py-20">
-        <h2 className="hl-partner-title text-center font-sans font-black italic text-4xl sm:text-5xl tracking-tight mb-6 sm:mb-8">
-          Partner
-        </h2>
-
-        {bigs.length > 0 && (
-          <div className="flex flex-wrap items-end justify-center gap-x-14 sm:gap-x-20 gap-y-10 mb-12 sm:mb-16">
-            {bigs.map((p) => (
-              <div key={p.id} className="flex flex-col items-center gap-3">
-                {p.label && (
-                  <span
-                    className={`${p.tier === 'bank' ? 'hl-partner-bank' : 'hl-partner-main'} font-sans text-[13px] sm:text-base font-extrabold uppercase tracking-[0.16em]`}
-                  >
-                    {p.label}
-                  </span>
-                )}
-                <PartnerLogo partner={p} heightClass="h-16 sm:h-20" maxWClass="max-w-[240px]" />
+      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-8 sm:py-12">
+        {/* Durchgehender, gleichmäßiger vertikaler Rhythmus (überall derselbe
+            Abstand). Reihenfolge: ganz oben die große „Hauptpartner"-Überschrift
+            + Logo, danach erst die lilane „Partner"-Überschrift mit Bankpartner
+            & weiteren Partnern darunter. */}
+        <div className="flex flex-col items-center gap-3 sm:gap-4">
+          {/* Hauptüberschrift ganz oben: „Hauptpartner" – groß, kursiv und gold
+              schimmernd, im Stil des früheren „Partner"-Titels. Darunter das
+              immer farbige, leuchtende Hauptpartner-Logo (klickbar). Das Logo hat
+              oft eingebackenen Rand → negative Margin zieht Überschrift & „Partner"
+              näher heran, damit die Abstände nicht riesig wirken. */}
+          {mains.length > 0 && (
+            <>
+              <h2 className="hl-partner-hero text-center font-sans font-black italic text-4xl sm:text-5xl tracking-tight px-3 sm:px-4">
+                {mains[0].label.trim() || 'Hauptpartner'}
+              </h2>
+              <div className="flex flex-wrap items-end justify-center gap-x-16 sm:gap-x-24 gap-y-6 -my-12 sm:-my-18">
+                {mains.map((p) => (
+                  <PartnerLogo key={p.id} partner={p} heightClass="h-56 sm:h-72" maxWClass="max-w-[95%] sm:max-w-[640px]" glow />
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            </>
+          )}
 
-        {rest.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-x-12 sm:gap-x-16 gap-y-10">
-            {rest.map((p) => (
-              <PartnerLogo key={p.id} partner={p} heightClass="h-12 sm:h-14" maxWClass="max-w-[190px]" />
-            ))}
-          </div>
-        )}
+          {/* Danach erst die lilane „Partner"-Überschrift – Überschrift für den
+              Bankpartner und die weiteren (normalen) Partner. */}
+          {(banks.length > 0 || rest.length > 0) && (
+            <h2 className="hl-partner-title text-center font-sans font-black italic text-3xl sm:text-4xl tracking-tight px-3 sm:px-4">
+              Partner
+            </h2>
+          )}
+
+          {/* Bankpartner – eigene blaue Überschrift + Logo (Grau→Farbe beim
+              Hovern, auf dem Handy dauerhaft farbig). */}
+          {banks.length > 0 && (
+            <div className="flex flex-wrap items-end justify-center gap-x-14 sm:gap-x-20 gap-y-7 sm:gap-y-8">
+              {banks.map((p) => (
+                <div key={p.id} className="flex flex-col items-center gap-3 sm:gap-4">
+                  {p.label && (
+                    <span className="hl-partner-bank font-sans text-[13px] sm:text-base font-extrabold uppercase tracking-[0.16em]">
+                      {p.label}
+                    </span>
+                  )}
+                  <PartnerLogo partner={p} heightClass="h-12 sm:h-14" maxWClass="max-w-[190px]" softColor />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {rest.length > 0 && (
+            <div className="flex flex-wrap items-center justify-center gap-x-12 sm:gap-x-16 gap-y-8">
+              {rest.map((p) => (
+                <PartnerLogo key={p.id} partner={p} heightClass="h-12 sm:h-14" maxWClass="max-w-[190px]" />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </section>
   );
@@ -544,21 +780,43 @@ export interface AccordionCategory {
 // Standardmäßig ist alles zugeklappt (defaultOpenId = null). Werden `categories`
 // übergeben, erscheint oben eine Reiter-Leiste und es sind nur die Abschnitte der
 // aktiven Rubrik sichtbar – so bleibt das Backoffice übersichtlich.
+// Interne Kennung der „Übersicht“ (Backend-Startseite). Bewusst ein Sonderwert,
+// damit er nicht mit einer echten Rubrik kollidiert.
+const DASH_ID = '__start__';
+
+// Icon je Rubrik für das Handy-Dock (Team-App-Look). Fallback: Stern.
+const CAT_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  [DASH_ID]: LayoutDashboard,
+  team: Star,
+  spiele: Trophy,
+  startseite: Home,
+  kanaele: Radio,
+  zugaenge: KeyRound,
+};
+// Kurzlabel fürs Dock: „★ Intern“→„Intern“, „Spiele & Liga“→„Spiele“.
+const shortCatLabel = (label: string) => label.replace(/^★\s*/, '').split(' & ')[0];
+
 export function AccordionGroup({
   children,
   defaultOpenId = null,
   categories,
   searchable = false,
   searchPlaceholder = 'Was möchtest du tun? (z. B. „Tore eintragen“, „Kader“, „Highlights“)',
+  dashboard,
+  dashboardLabel = 'Übersicht',
 }: {
   children: React.ReactNode;
   defaultOpenId?: string | null;
   categories?: AccordionCategory[];
   searchable?: boolean; // zeigt oben ein Suchfeld, das direkt zum Menüpunkt springt
   searchPlaceholder?: string;
+  dashboard?: React.ReactNode; // Backend-Startseite (Übersicht) – erste Rubrik
+  dashboardLabel?: string;
 }) {
   const [openId, setOpenId] = React.useState<string | null>(defaultOpenId);
-  const [activeCategory, setActiveCategory] = React.useState<string | null>(categories?.[0]?.id ?? null);
+  const [activeCategory, setActiveCategory] = React.useState<string | null>(
+    dashboard ? DASH_ID : categories?.[0]?.id ?? null
+  );
   const [sections, setSections] = React.useState<AccordionSectionMeta[]>([]);
   const [scrollTargetId, setScrollTargetId] = React.useState<string | null>(null);
 
@@ -578,12 +836,44 @@ export function AccordionGroup({
   }, []);
   const clearScrollTarget = React.useCallback(() => setScrollTargetId(null), []);
 
-  const selectCategory = (id: string) => {
+  const selectCategory = React.useCallback((id: string) => {
     setActiveCategory(id);
     setOpenId(null); // Beim Reiter-Wechsel alles zuklappen – jeder Reiter startet frisch.
-  };
+  }, []);
 
-  const categoryLabel = (id?: string) => categories?.find((c) => c.id === id)?.label ?? '';
+  // Handy-Zurück (iPhone/Android): Ist man NICHT auf der Übersicht, führt „zurück“
+  // eine Ebene hoch – zurück auf die Backend-Startseite. Erst dort verlässt der
+  // nächste Zurück-Schritt das Backoffice (über die normale Browser-History).
+  useBackClose(!!dashboard && activeCategory !== DASH_ID, () => {
+    setActiveCategory(DASH_ID);
+    setOpenId(null);
+  });
+
+  const allCategories: AccordionCategory[] = dashboard
+    ? [{ id: DASH_ID, label: dashboardLabel }, ...(categories ?? [])]
+    : categories ?? [];
+  const categoryLabel = (id?: string) => allCategories.find((c) => c.id === id)?.label ?? '';
+  const isDash = !!dashboard && activeCategory === DASH_ID;
+
+  // Aktive „Pille" im Handy-Dock: eine dauerhafte Kachel, die NUR horizontal zur
+  // aktiven Rubrik gleitet (Position gemessen). Bewusst kein layoutId – das
+  // konnte beim Umschalten mal schräg „von unten" reinspringen, wenn zwischen
+  // den Messungen gescrollt/umgebrochen wurde.
+  const dockScrollRef = React.useRef<HTMLDivElement>(null);
+  const [pill, setPill] = React.useState<{ x: number; width: number } | null>(null);
+  const measurePill = React.useCallback(() => {
+    const c = dockScrollRef.current;
+    if (!c || activeCategory == null) return;
+    const el = c.querySelector<HTMLElement>(`[data-cat="${activeCategory}"]`);
+    if (el) setPill({ x: el.offsetLeft, width: el.offsetWidth });
+  }, [activeCategory]);
+  React.useLayoutEffect(() => {
+    measurePill();
+  }, [measurePill, allCategories.length]);
+  React.useEffect(() => {
+    window.addEventListener('resize', measurePill);
+    return () => window.removeEventListener('resize', measurePill);
+  }, [measurePill]);
 
   return (
     <AccordionContext.Provider
@@ -597,31 +887,107 @@ export function AccordionGroup({
           placeholder={searchPlaceholder}
         />
       )}
-      {categories && categories.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-5">
-          {categories.map((c) => {
-            const active = c.id === activeCategory;
-            return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => selectCategory(c.id)}
-                aria-pressed={active}
-                className={`px-4 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider font-sans transition-colors cursor-pointer border ${
-                  active
-                    ? 'bg-brand-accent-light text-brand-dark border-brand-accent-light shadow-lg shadow-brand-accent-light/10'
-                    : 'bg-white/[.03] text-hl-mute border-white/10 hover:text-white hover:border-white/25'
-                }`}
+
+      {allCategories.length > 0 && (
+        <>
+          {/* PC: Rubriken-Leiste oben (Text-Pills). Passt nicht alles nebeneinander,
+              lässt sie sich horizontal scrollen. */}
+          <nav className="hidden sm:block mb-5" aria-label="Backoffice-Bereiche">
+            <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              {allCategories.map((c) => {
+                const active = c.id === activeCategory;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => selectCategory(c.id)}
+                    aria-pressed={active}
+                    className={`shrink-0 whitespace-nowrap px-4 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider font-sans transition-colors cursor-pointer border ${
+                      active
+                        ? 'bg-brand-accent-light text-brand-dark border-brand-accent-light shadow-lg shadow-brand-accent-light/10'
+                        : 'bg-white/[.03] text-hl-mute border-white/10 hover:text-white hover:border-white/25'
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+
+          {/* Handy: Dock unten im Team-App-Look – dicker, mit fliegender Pille.
+              Per Portal direkt an <body>, damit es WIRKLICH bildschirm-fest ganz
+              unten sitzt (kein Eltern-Element als Bezug) und voll deckend ist –
+              beim Scrollen sieht man nichts mehr darunter. */}
+          {typeof document !== 'undefined' &&
+            createPortal(
+              <nav
+                className="sm:hidden fixed inset-x-0 bottom-0 z-40 bg-[#0A1210] border-t border-white/10 px-2 pt-2 shadow-[0_-8px_24px_rgba(0,0,0,.45)]"
+                style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
+                aria-label="Backoffice-Bereiche"
               >
-                {c.label}
-              </button>
-            );
-          })}
-        </div>
+                <div
+                  ref={dockScrollRef}
+                  className="relative flex gap-1 py-1.5 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden [mask-image:linear-gradient(to_right,transparent,#000_14px,#000_calc(100%-14px),transparent)]"
+                >
+                  {/* Eine dauerhafte Pille, gleitet nur horizontal zur aktiven Kachel */}
+                  {pill && (
+                    <motion.div
+                      className="absolute top-1.5 bottom-1.5 left-0 rounded-2xl bg-brand-accent-light/15 ring-1 ring-brand-accent-light/25 pointer-events-none"
+                      initial={false}
+                      animate={{ x: pill.x, width: pill.width }}
+                      transition={{ type: 'spring', stiffness: 480, damping: 40 }}
+                    />
+                  )}
+                  {allCategories.map((c) => {
+                    const active = c.id === activeCategory;
+                    const Icon = CAT_ICON[c.id] ?? Star;
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        data-cat={c.id}
+                        onClick={() => selectCategory(c.id)}
+                        aria-pressed={active}
+                        className="relative shrink-0 min-w-[76px] flex flex-col items-center justify-center gap-1 py-2.5 rounded-2xl cursor-pointer active:scale-90 transition-transform"
+                      >
+                        <motion.span
+                          animate={{ scale: active ? 1.14 : 1, y: active ? -1 : 0 }}
+                          transition={{ type: 'spring', stiffness: 500, damping: 26 }}
+                          className={`relative z-10 transition-colors ${active ? 'text-brand-accent-light' : 'text-hl-mute'}`}
+                        >
+                          <Icon className="w-[22px] h-[22px]" />
+                        </motion.span>
+                        <span className={`relative z-10 text-[10px] font-sans font-bold uppercase tracking-wide transition-colors ${active ? 'text-brand-accent-light' : 'text-hl-mute'}`}>
+                          {shortCatLabel(c.label)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </nav>,
+              document.body
+            )}
+        </>
       )}
-      {children}
+
+      {/* Inhalt. Unten am Handy Platz lassen, damit nichts hinter dem Dock
+          verschwindet. */}
+      <div className="pb-32 sm:pb-0">
+        {isDash && dashboard}
+        {children}
+      </div>
     </AccordionContext.Provider>
   );
+}
+
+// Navigation aus der Übersicht heraus: direkt zu einem Menüpunkt springen.
+export function useAdminNav() {
+  const ctx = React.useContext(AccordionContext);
+  return {
+    openSection: ctx?.openSection ?? (() => {}),
+    activeCategory: ctx?.activeCategory ?? null,
+  };
 }
 
 // Admin-Schnellsuche: tippen, was man tun will → passenden Menüpunkt finden und
@@ -717,6 +1083,7 @@ export function AccordionSection({
   subtitle,
   accent = '#22DFC9',
   category,
+  show = true,
   children,
 }: {
   id: string;
@@ -725,6 +1092,7 @@ export function AccordionSection({
   subtitle?: string;
   accent?: string; // Farbe des Symbol-Kästchens
   category?: string; // Rubrik/Reiter – nur sichtbar, wenn dieser Reiter aktiv ist
+  show?: boolean; // false = Sektion für diese Rolle komplett ausblenden (auch aus der Suche)
   children: React.ReactNode;
 }) {
   const ctx = React.useContext(AccordionContext);
@@ -732,13 +1100,15 @@ export function AccordionSection({
   const open = ctx?.openId === id;
 
   // Selbst bei der Gruppe registrieren, damit die Admin-Suche diesen Menüpunkt
-  // kennt (register/unregister sind stabil → kein erneutes Auslösen).
+  // kennt (register/unregister sind stabil → kein erneutes Auslösen). Ausgeblendete
+  // Sektionen (show=false) werden NICHT registriert – die Suche findet sie nicht.
   const register = ctx?.register;
   const unregister = ctx?.unregister;
   React.useEffect(() => {
+    if (!show) return;
     register?.({ id, title, subtitle, category });
     return () => unregister?.(id);
-  }, [id, title, subtitle, category, register, unregister]);
+  }, [id, title, subtitle, category, register, unregister, show]);
 
   // Wenn dieser Abschnitt per Suche geöffnet wurde: sanft dorthin scrollen.
   const scrollTargetId = ctx?.scrollTargetId;
@@ -750,6 +1120,8 @@ export function AccordionSection({
     }
   }, [open, scrollTargetId, id, clearScrollTarget]);
 
+  // Für diese Rolle ausgeblendet.
+  if (!show) return null;
   // Bei aktiver Reiter-Leiste nur die Abschnitte der gewählten Rubrik zeigen.
   if (ctx?.activeCategory != null && category != null && category !== ctx.activeCategory) return null;
   const panelId = `acc-panel-${id}`;

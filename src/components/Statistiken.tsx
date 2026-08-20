@@ -234,7 +234,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
   }
 
   return (
-    <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
+    <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-10">
       {/* Liga-Kennzahlen */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 pt-2 hl-cascade">
         {leagueTiles.map((tile) => (
@@ -242,7 +242,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
             key={tile.label}
             className="relative rounded-2xl overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,.012))] border border-white/10 p-5 backdrop-blur-md"
           >
-            <div className="font-display font-black text-[42px] leading-[.9] text-brand-accent-light">
+            <div className="font-display font-black text-[42px] lg:text-[54px] leading-[.9] text-brand-accent-light">
               <CountUp value={tile.value} decimals={tile.decimals} />
             </div>
             <div className="font-sans font-bold text-[11px] tracking-[1.5px] text-hl-dim mt-1.5">{tile.label}</div>
@@ -287,7 +287,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
                   </div>
                 </div>
                 <div className="flex items-baseline gap-2 mt-5">
-                  <span className={`font-display font-black text-[52px] leading-[.9] ${VALUE_COLOR[c.accent]}`}>
+                  <span className={`font-display font-black text-[52px] lg:text-[66px] leading-[.9] ${VALUE_COLOR[c.accent]}`}>
                     <CountUp value={c.value} decimals={c.decimals ?? 0} />
                   </span>
                   <span className="font-sans font-bold text-[13px] tracking-wider text-hl-dim">{c.unit}</span>
@@ -330,7 +330,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
                         key={p.id}
                         className="flex items-center gap-3.5 px-4 sm:px-6 py-3.5"
                       >
-                        <div className={`font-display font-black text-2xl sm:text-3xl w-7 sm:w-8 text-center shrink-0 ${rankColor}`}>
+                        <div className={`font-display font-black text-2xl sm:text-3xl lg:text-[40px] w-7 sm:w-8 text-center shrink-0 ${rankColor}`}>
                           {idx + 1}
                         </div>
                         <div className="shrink-0">
@@ -347,7 +347,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
                           <div className="font-sans text-[11.5px] text-hl-dim truncate mt-0.5">{sub}</div>
                         </div>
                         <div className="flex items-baseline gap-1 shrink-0 pl-2">
-                          <span className="font-display font-black text-2xl sm:text-3xl leading-none text-hl-gold tabular-nums">
+                          <span className="font-display font-black text-2xl sm:text-3xl lg:text-[40px] leading-none text-hl-gold tabular-nums">
                             <CountUp value={p.goals} />
                           </span>
                           <span className="font-sans font-bold text-[10px] tracking-wider text-hl-dim">TORE</span>
@@ -391,7 +391,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
                         key={p.id}
                         className="flex items-center gap-3.5 px-4 sm:px-6 py-3.5"
                       >
-                        <div className={`font-display font-black text-2xl sm:text-3xl w-7 sm:w-8 text-center shrink-0 ${rankColor}`}>
+                        <div className={`font-display font-black text-2xl sm:text-3xl lg:text-[40px] w-7 sm:w-8 text-center shrink-0 ${rankColor}`}>
                           {idx + 1}
                         </div>
                         <div className="shrink-0">
@@ -408,7 +408,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
                           <div className="font-sans text-[11.5px] text-hl-dim truncate mt-0.5">{sub}</div>
                         </div>
                         <div className="flex items-baseline gap-1 shrink-0 pl-2">
-                          <span className="font-display font-black text-2xl sm:text-3xl leading-none text-brand-accent-light tabular-nums">
+                          <span className="font-display font-black text-2xl sm:text-3xl lg:text-[40px] leading-none text-brand-accent-light tabular-nums">
                             <CountUp value={p.score} decimals={1} />
                           </span>
                           <span className="font-sans font-bold text-[10px] tracking-wider text-hl-dim">PKT</span>

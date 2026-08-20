@@ -4,7 +4,7 @@ import type { HighlightsConfig } from '../types';
 import { PageHeader } from './ui';
 import { Reveal } from './anim';
 import HighlightsLightbox from './HighlightsLightbox';
-import HighlightsMosaic, { interleaveMedia } from './HighlightsMosaic';
+import HighlightsMosaic from './HighlightsMosaic';
 import HighlightsEditor from './HighlightsEditor';
 import { mediaListHandlers, genAlbumId, useCoverUpload, albumCoverInfo, newestFirst } from './highlightsEdit';
 
@@ -103,11 +103,9 @@ export default function HighlightsPage({
 
   const openAlbum = albums.find((a) => a.id === openAlbumId) ?? null;
   const activeItems = openAlbum ? openAlbum.items : items;
-  // Neueste zuerst; im View-Modus zusätzlich Videos gleichmäßig verteilt.
-  const display = useMemo(
-    () => (editMode ? newestFirst(activeItems) : interleaveMedia(newestFirst(activeItems))),
-    [activeItems, editMode]
-  );
+  // Strikt neueste zuerst – egal ob Bild oder Video. Kein Umsortieren nach
+  // Medientyp mehr, damit ein frisch hinzugefügter Beitrag immer ganz vorne steht.
+  const display = useMemo(() => newestFirst(activeItems), [activeItems]);
   const open = (i: number) => setLightbox({ index: i, dir: 0 });
 
   // Medien-Handler für die gerade aktive Liste (lose Highlights ODER offener Ordner).
@@ -152,7 +150,7 @@ export default function HighlightsPage({
   if (openAlbum) {
     return (
       <>
-        <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pt-8 sm:pt-10">
+        <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pt-8 sm:pt-10">
           <button
             onClick={() => goAlbum(null)}
             className="inline-flex items-center gap-1.5 text-xs font-sans font-bold uppercase tracking-wider text-brand-accent-light hover:underline cursor-pointer mb-4"
@@ -180,7 +178,7 @@ export default function HighlightsPage({
           )}
         </div>
 
-        <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-8 pb-16">
+        <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 py-8 pb-16">
           {openAlbum.items.length === 0 && !editMode ? (
             <div className="text-center py-16 flex flex-col items-center gap-3">
               <ImageIcon className="w-10 h-10 text-hl-faint" />
@@ -204,7 +202,7 @@ export default function HighlightsPage({
     <>
       <PageHeader kicker="HERO LEAGUE" title="Highlights" />
 
-      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-16 space-y-12">
+      <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-16 space-y-12">
         {nothing ? (
           <div className="text-center py-20 flex flex-col items-center gap-3">
             <ImageIcon className="w-10 h-10 text-hl-faint" />

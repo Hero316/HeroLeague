@@ -218,7 +218,7 @@ export default function LegalPage({ kind, onBack }: LegalPageProps) {
             : 'Informationen zur Verarbeitung personenbezogener Daten nach Art. 13 DSGVO.'
         }
       />
-      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-14">
+      <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-14">
         <div className="hl-card p-6 sm:p-8 space-y-3">{isImpressum ? <Impressum /> : <Datenschutz />}</div>
         <button
           onClick={onBack}

@@ -18,6 +18,54 @@ export function isStatus(value: unknown): value is 'geplant' | 'live' | 'beendet
   return value === 'geplant' || value === 'live' || value === 'beendet';
 }
 
+// --- Team-Zusammenarbeit (Tickets/Aufgaben) --------------------------------
+export function isTicketPriority(value: unknown): value is 'niedrig' | 'mittel' | 'hoch' | 'dringend' {
+  return value === 'niedrig' || value === 'mittel' || value === 'hoch' || value === 'dringend';
+}
+
+export function isTicketStatus(value: unknown): value is 'offen' | 'in_bearbeitung' | 'erledigt' | 'abgelehnt' {
+  return value === 'offen' || value === 'in_bearbeitung' || value === 'erledigt' || value === 'abgelehnt';
+}
+
+export function isTaskStatus(
+  value: unknown
+): value is 'leer' | 'offen' | 'in_bearbeitung' | 'erledigt' | 'abgebrochen' {
+  return (
+    value === 'leer' ||
+    value === 'offen' ||
+    value === 'in_bearbeitung' ||
+    value === 'erledigt' ||
+    value === 'abgebrochen'
+  );
+}
+
+// Array von http(s)-Bild-URLs säubern (max. `limit` Einträge).
+export function sanitizeImageUrls(value: unknown, limit = 10): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u.trim()))
+    .map((u) => u.trim())
+    .slice(0, limit);
+}
+
+// Benannte Links („Link-Tasten"): nur http(s), optionaler Name (Anzeigetext).
+// Ergebnis: [{ url, label }]. Bewusst begrenzt (Länge/Anzahl).
+export function sanitizeLinks(value: unknown, limit = 20): { url: string; label: string }[] {
+  if (!Array.isArray(value)) return [];
+  const out: { url: string; label: string }[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const rawUrl = (item as { url?: unknown }).url;
+    const url = typeof rawUrl === 'string' ? rawUrl.trim() : '';
+    if (!/^https?:\/\//i.test(url)) continue;
+    const rawLabel = (item as { label?: unknown }).label;
+    const label = typeof rawLabel === 'string' ? rawLabel.trim().slice(0, 80) : '';
+    out.push({ url: url.slice(0, 2000), label });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 export function isRoster(value: unknown): value is Player[] {
   return (
     Array.isArray(value) &&

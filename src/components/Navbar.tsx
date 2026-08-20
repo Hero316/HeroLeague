@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Menu, X, LogOut, LayoutDashboard, Instagram, Youtube, Zap, Smartphone, Shield } from 'lucide-react';
+import { Menu, X, LogOut, LayoutDashboard, Instagram, Youtube, Zap, Smartphone, Shield, MessageSquare } from 'lucide-react';
 import { ActiveTab, HighlightAlbum, Match, SocialLinks, Team } from '../types';
 import { numberWord } from '../lib/heroAward';
 import { apiFetch } from '../lib/api';
@@ -22,10 +22,12 @@ interface NavbarProps {
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
   isAdmin: boolean;
+  canAccessBackoffice?: boolean; // Backoffice-Eintrag zeigen? (team_member = nein)
   onLogout: () => void;
   onOpenLogin: () => void;
   onOpenBackoffice: () => void;
   onOpenReferee?: () => void; // Admin: direkt in den Schiedsrichtermodus wechseln
+  onOpenChat?: () => void; // Admin: direkt in die Team-App (/chat) springen
   seasonLabel?: string;
   seasonNumber?: number; // für den HERO-Award-Titel (HERO ONE/TWO …)
   demoActive?: boolean; // Demo-Modus aktiv? -> rot pulsierende Warnleiste ganz oben
@@ -49,9 +51,11 @@ export default function Navbar({
   activeTab,
   setActiveTab,
   isAdmin,
+  canAccessBackoffice = true,
   onLogout,
   onOpenBackoffice,
   onOpenReferee,
+  onOpenChat,
   seasonLabel,
   seasonNumber,
   demoActive,
@@ -153,17 +157,13 @@ export default function Navbar({
         </div>
       )}
       <div className="max-w-[1320px] mx-auto px-4 sm:px-10 h-[68px] sm:h-[76px] flex items-center gap-5 lg:gap-9">
-        {/* Logo + Claim */}
+        {/* Logo */}
         <button
           onClick={() => setActiveTab('home')}
           className="flex items-center gap-3 sm:gap-4 cursor-pointer shrink-0"
           aria-label="Zur Startseite"
         >
           <img src="/assets/hero-league-logo.png" alt="Hero League" className="h-8 sm:h-10 w-auto block" />
-          <div className="hidden sm:block w-px h-7 bg-white/[.13]" />
-          <div className="hidden sm:block font-sans font-semibold text-[9px] tracking-[2.6px] text-[#5b6560] leading-normal max-w-[92px] text-left">
-            THE ULTIMATE FOOTBALL ARENA
-          </div>
         </button>
 
         {/* Desktop-Navigation */}
@@ -236,7 +236,7 @@ export default function Navbar({
               {seasonShort}
             </div>
           )}
-          {isAdmin && (
+          {isAdmin && canAccessBackoffice && (
             <button
               onClick={onOpenBackoffice}
               className="hidden lg:flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.3)] text-brand-accent-light font-sans font-bold text-[11px] tracking-wider uppercase hover:bg-[rgba(34,223,201,.2)] transition-colors cursor-pointer"
@@ -352,7 +352,7 @@ export default function Navbar({
             </button>
           )}
 
-          {isAdmin && (
+          {isAdmin && canAccessBackoffice && (
             <button
               onClick={() => {
                 onOpenBackoffice();
@@ -362,6 +362,18 @@ export default function Navbar({
             >
               <LayoutDashboard className="w-4 h-4" />
               Backoffice öffnen
+            </button>
+          )}
+          {isAdmin && onOpenChat && (
+            <button
+              onClick={() => {
+                onOpenChat();
+                setIsOpen(false);
+              }}
+              className="w-full flex items-center justify-center gap-1.5 mt-2 bg-[rgba(34,223,201,.12)] border border-[rgba(34,223,201,.3)] text-brand-accent-light py-2.5 rounded-xl text-sm font-bold transition-colors cursor-pointer"
+            >
+              <MessageSquare className="w-4 h-4" />
+              Team-App öffnen
             </button>
           )}
           {isAdmin && onOpenReferee && (

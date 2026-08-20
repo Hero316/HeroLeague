@@ -58,7 +58,7 @@ const Chip = React.memo(function Chip({
   badge?: string; // z. B. "TW" oder Rang
   onSelect?: (name: string) => void;
 }) {
-  const av = size === 'bench' ? 'w-9 h-9' : 'w-11 h-11';
+  const av = size === 'bench' ? 'w-9 h-9 lg:w-11 lg:h-11' : 'w-11 h-11 lg:w-14 lg:h-14';
   return (
     <motion.button
       type="button"
@@ -68,7 +68,7 @@ const Chip = React.memo(function Chip({
       transition={{ delay: 0.05 * index, type: 'spring', stiffness: 260, damping: 20 }}
       whileHover={onSelect ? { scale: 1.09, y: -2 } : undefined}
       whileTap={onSelect ? { scale: 0.96 } : undefined}
-      className={`relative flex flex-col items-center gap-0.5 ${size === 'bench' ? 'w-[54px]' : 'w-[64px]'} focus:outline-none ${onSelect ? 'cursor-pointer' : 'cursor-default'}`}
+      className={`relative flex flex-col items-center gap-0.5 ${size === 'bench' ? 'w-[54px] lg:w-[68px]' : 'w-[64px] lg:w-[84px]'} focus:outline-none ${onSelect ? 'cursor-pointer' : 'cursor-default'}`}
       title={onSelect ? `${name} – Details anzeigen` : name}
     >
       <div className="relative">
@@ -92,17 +92,22 @@ const Chip = React.memo(function Chip({
         )}
         {badge && (
           <span
-            className="absolute -top-1 -left-1 grid place-items-center min-w-[15px] h-[15px] px-[3px] rounded-full font-display font-black text-[8px] text-[#0b0f10]"
+            className="absolute -top-1 -left-1 grid place-items-center min-w-[15px] h-[15px] lg:min-w-[18px] lg:h-[18px] px-[3px] rounded-full font-display font-black text-[8px] lg:text-[10px] text-[#0b0f10]"
             style={{ background: accent }}
           >
             {badge}
           </span>
         )}
       </div>
-      <span className="font-sans font-semibold text-[10px] leading-tight text-white text-center truncate max-w-full drop-shadow-[0_1px_2px_rgba(0,0,0,.9)]">
+      <span className="font-sans font-semibold text-[10px] lg:text-[12px] leading-tight text-white text-center truncate max-w-full drop-shadow-[0_1px_2px_rgba(0,0,0,.9)]">
         {firstName}
       </span>
-      <span className="font-display font-black text-[10px] leading-none" style={{ color: accent }}>
+      <span
+        className={`font-display font-black leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,.95)] ${
+          size === 'bench' ? 'text-[12px] lg:text-[15px]' : 'text-[14px] lg:text-[18px]'
+        }`}
+        style={{ color: accent }}
+      >
         {winRate === null ? '–' : `${winRate}%`}
       </span>
     </motion.button>
@@ -120,17 +125,17 @@ export default function BestLineup({ goalkeeper, field, bench, team, onSelectPla
 
   return (
     <div className="hl-card rounded-[20px] p-[22px]">
-      <div className="font-sans font-extrabold text-[11px] tracking-[2px] mb-1.5" style={{ color: accent }}>
+      <div className="font-sans font-extrabold text-[11px] lg:text-[13px] tracking-[2px] mb-1.5" style={{ color: accent }}>
         BESTE AUFSTELLUNG
       </div>
-      <p className="font-sans text-[11px] text-hl-dim mb-4">
+      <p className="font-sans text-[11px] lg:text-[12px] text-hl-dim mb-4">
         Beste Spieler nach Siegquote · fester Torwart – automatisch aus den Ergebnissen.
       </p>
 
       <div className="flex gap-2 items-stretch">
         {/* Fußballfeld */}
         <div
-          className="relative flex-1 min-w-0 rounded-2xl overflow-hidden border border-white/10 px-2 py-4"
+          className="relative flex-1 min-w-0 rounded-2xl overflow-hidden border border-white/10 px-2 py-4 lg:px-3 lg:py-6"
           style={{ background: `linear-gradient(180deg, ${shade(color, 0.5)}, ${shade(color, 0.22)})` }}
         >
           {/* Feldmarkierungen */}
@@ -141,7 +146,7 @@ export default function BestLineup({ goalkeeper, field, bench, team, onSelectPla
             <div className="absolute left-1/2 -translate-x-1/2 top-0 w-24 h-9 border-2 border-t-0 border-white/50 rounded-b-md" />
           </div>
 
-          <div className="relative flex flex-col gap-5">
+          <div className="relative flex flex-col gap-5 lg:gap-7">
             {topRow.length > 0 && (
               <div className="flex justify-around gap-2">
                 {topRow.map((p) => (
@@ -176,8 +181,8 @@ export default function BestLineup({ goalkeeper, field, bench, team, onSelectPla
 
         {/* Auswechselbank (5./6. bester) – seitlich am Feld */}
         {bench.length > 0 && (
-          <div className="w-[70px] shrink-0 rounded-2xl border border-white/10 bg-white/[.03] flex flex-col items-center gap-3 py-3 px-1">
-            <span className="font-sans font-bold text-[8px] tracking-[1.5px] text-hl-dim uppercase">Bank</span>
+          <div className="w-[70px] lg:w-[92px] shrink-0 rounded-2xl border border-white/10 bg-white/[.03] flex flex-col items-center gap-3 lg:gap-4 py-3 lg:py-5 px-1">
+            <span className="font-sans font-bold text-[8px] lg:text-[10px] tracking-[1.5px] text-hl-dim uppercase">Bank</span>
             {bench.map((p, i) => (
               <Chip
                 key={p.name}

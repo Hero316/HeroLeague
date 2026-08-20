@@ -110,14 +110,14 @@ function HelpDialog() {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
       onClick={closeHelp}
       role="dialog"
       aria-modal="true"
       aria-label="Hero League als App installieren"
     >
       <div
-        className="relative hl-card rounded-[20px] p-6 w-full max-w-[440px]"
+        className="relative hl-card hl-modal-card rounded-[20px] p-6 w-full max-w-[440px]"
         onClick={(e) => e.stopPropagation()}
       >
         <button

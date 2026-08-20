@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster, PlayerOfMonth } from './types';
+import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster, PlayerOfMonth, MatchPlayerStat, ScoringConfig } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
+import { fetchPublicStats, fetchScoring } from './lib/stats';
+import { DEFAULT_SCORING } from './lib/scoring';
 import { startPresence } from './lib/presence';
+import { syncPush } from './lib/push';
 import { seasonName } from './lib/heroAward';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
@@ -10,6 +13,7 @@ import Spielplan from './components/Spielplan';
 import HeroOne from './components/HeroOne';
 import Statistiken from './components/Statistiken';
 import AdminPanel from './components/AdminPanel';
+import AdminDashboard from './components/AdminDashboard';
 import AdminLogin from './components/AdminLogin';
 import UserManager from './components/UserManager';
 import MatchManager from './components/MatchManager';
@@ -17,7 +21,6 @@ import RefereeMode from './components/RefereeMode';
 import TeamDetail from './components/TeamDetail';
 import LiveBanner from './components/LiveBanner';
 import LiveTicker from './components/LiveTicker';
-import LiveVisitors from './components/LiveVisitors';
 import InstallPrompt from './components/InstallPrompt';
 import Ergebniszettel from './components/Ergebniszettel';
 import LegalPage from './components/LegalPage';
@@ -29,8 +32,20 @@ import EventBanner from './components/EventBanner';
 import EventErgebniszettel from './components/EventErgebniszettel';
 import HighlightsHome from './components/HighlightsHome';
 import HighlightsPage from './components/HighlightsPage';
+import TicketSystem from './components/TicketSystem';
+import TaskBoard from './components/TaskBoard';
+import ChatApp from './components/ChatApp';
+import ProfileEditor from './components/ProfileEditor';
+import NotificationSettings from './components/NotificationSettings';
+import Avatar from './components/Avatar';
+import NotificationBell from './components/NotificationBell';
+import DeepLinkModal from './components/DeepLinkModal';
+import ChatUnreadBadge from './components/ChatUnreadBadge';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, CalendarDays, MessageSquare, UserCircle, Bell, Trophy, ChevronRight } from 'lucide-react';
+import TrackingCenter from './components/TrackingCenter';
+import SpielberichtPage from './components/SpielberichtPage';
+import WertungenPage from './components/WertungenPage';
 
 // Öffentliche Tabs haben eigene URLs, damit man nach einem Reload dort bleibt, wo man war.
 const TAB_PATHS: Record<ActiveTab, string> = {
@@ -57,6 +72,10 @@ export default function App() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [seasons, setSeasons] = useState<Season[]>([]);
   const [players, setPlayers] = useState<PlayerStat[]>([]);
+  // Statistics Center: veröffentlichte getrackte Zähler + Score-Einstellungen
+  // (für Spieler-FIFA-Karten und den Spielbericht). Öffentlich, ohne Login.
+  const [trackingRows, setTrackingRows] = useState<MatchPlayerStat[]>([]);
+  const [scoring, setScoring] = useState<ScoringConfig>(DEFAULT_SCORING);
   // Spieler des Monats schon beim Laden holen, damit der Hero direkt mit finaler
   // Höhe erscheint (sonst kommt der Slide asynchron dazu und der Hero „springt").
   const [pom, setPom] = useState<PlayerOfMonth | null>(null);
@@ -96,9 +115,31 @@ export default function App() {
   // Läuft gerade ein Spiel im aktiven Event?
   const eventHasLive = !!activeEvent?.matches?.some((m) => m.status === 'live');
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
+  // Aus einer Benachrichtigung direkt geöffnetes Ticket/Aufgabe (Deep-Link).
+  const [deepOpen, setDeepOpen] = useState<{ type: 'ticket' | 'task'; id: string } | null>(null);
   const isAdmin = sessionUser !== null;
   const isSuperadmin = sessionUser?.role === 'superadmin';
   const isReferee = sessionUser?.role === 'referee';
+  const isMatchAdmin = sessionUser?.role === 'match_admin';
+  const isTeamMember = sessionUser?.role === 'team_member';
+  // Reine Team-Mitglieder (Chat/Aufgaben/Tickets) haben KEIN Liga-Backoffice –
+  // sie erreichen nur die Team-App (über das Hamburger-Menü). Backoffice bleibt
+  // Super-Admins, Spiel-Admins und Schiedsrichtern vorbehalten.
+  const canAccessBackoffice = isAdmin && !isTeamMember;
+  // Tickets verwalten (Status/Zuweisung/Löschen) dürfen nur Super-Admins.
+  const canManageTickets = isSuperadmin;
+  // Granulare Rechte – der Spiel-Admin bekommt bewusst nur einen Teil:
+  const canManageMatches = isSuperadmin || isMatchAdmin; // Spielplan, Ergebnisse, Klubs, Ergebniszettel, Schiedsrichtermodus
+  const canManageSeason = isSuperadmin; // Saison verwalten
+  const canManagePom = isSuperadmin || isMatchAdmin; // Spieler des Monats
+  const canEditHighlights = isSuperadmin || isMatchAdmin; // Highlights (öffentlich, inline)
+  const canEditHomepage = isSuperadmin; // Startseite (Hero/Countdown), News-Ticker, Partner & Sponsoren
+  const canManageChannels = isSuperadmin; // Twitch/Social, Event/Testspiel
+  const canManageUsers = isSuperadmin; // Benutzerverwaltung
+  // Backoffice-Rubriken sichtbar, wenn mind. eine Sektion darin zugänglich ist:
+  const canSeeLeagueArea = canManageMatches || canManageSeason;
+  const canSeeStartseiteArea = canEditHomepage || canManagePom;
+  const canSeeChannelsArea = canManageChannels;
   // Admin hat den Schiedsrichtermodus manuell geöffnet (per Navbar-Schnellzugang).
   const [refereeView, setRefereeView] = useState(false);
   // Abend-Aufstellungen (Schiedsrichtermodus), Schlüssel `${seasonId}:${matchday}`.
@@ -256,7 +297,8 @@ export default function App() {
 
   // Anonyme Besucherzählung: nur echte Website-Besucher melden, nicht das
   // Backoffice oder den Ergebniszettel. Speist die Live-Anzeige im Backend.
-  const isPublicPath = !currentPath.startsWith('/admin') && !currentPath.startsWith('/ergebniszettel');
+  const isPublicPath =
+    !currentPath.startsWith('/admin') && !currentPath.startsWith('/ergebniszettel') && !currentPath.startsWith('/chat');
   useEffect(() => {
     if (!isPublicPath) return;
     return startPresence();
@@ -299,6 +341,48 @@ export default function App() {
     return () => clearInterval(iv);
   }, []);
 
+  // App-Identität je nach Bereich umschalten: unter /chat ist es die eigene
+  // „Hero Team"-App (eigenes Manifest, eigenes Symbol, startet direkt im Chat),
+  // sonst die Hauptseite „Hero League". Wichtig fürs Installieren:
+  //  • Android/Chrome liest das Manifest (eigenes `id` → getrennte App).
+  //  • iPhone/iPad liest apple-touch-icon + Titel aus dem <head> im Moment des
+  //    „Zum Home-Bildschirm". Deshalb hier dynamisch mitsetzen, damit die
+  //    Team-App auf dem iPhone ihr eigenes Symbol und ihren eigenen Namen bekommt.
+  useEffect(() => {
+    const inChat = currentPath.startsWith('/chat');
+    const setAttr = (selector: string, attr: string, value: string) => {
+      const el = document.querySelector(selector);
+      if (el) el.setAttribute(attr, value);
+    };
+    setAttr('link[rel="manifest"]', 'href', inChat ? '/chat.webmanifest' : '/manifest.webmanifest');
+    setAttr('link[rel="apple-touch-icon"]', 'href', inChat ? '/assets/chat-apple-touch-icon.png' : '/assets/apple-touch-icon.png');
+    setAttr('meta[name="apple-mobile-web-app-title"]', 'content', inChat ? 'Hero Team' : 'Hero League');
+    setAttr('meta[name="theme-color"]', 'content', inChat ? '#070d0c' : '#060E0F');
+  }, [currentPath]);
+
+  // Team-Mitglieder haben kein Backoffice: Wer als team_member auf /admin landet
+  // (z.B. nach dem Login über die Anmeldemaske dort), wird auf die normale
+  // Startseite geschickt – von dort geht es über das Hamburger-Menü in die
+  // Team-App. Andere Rollen (Super-Admin, Spiel-Admin, Schiri) bleiben.
+  useEffect(() => {
+    if (isTeamMember && currentPath === '/admin') navigateTo('/');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTeamMember, currentPath]);
+
+  // Deep-Link aus einer Handy-Benachrichtigung: /admin?open=ticket&id=… bzw.
+  // …?open=task&id=… → das Ticket/die Aufgabe direkt als Fenster öffnen. Danach
+  // die URL säubern, damit ein Neuladen nicht erneut öffnet. (Chat-Deep-Links
+  // laufen über /chat?c=… und werden dort direkt geöffnet.)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const open = params.get('open');
+    const id = params.get('id');
+    if ((open === 'ticket' || open === 'task') && id) {
+      setDeepOpen({ type: open, id });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [currentPath]);
+
   // Merkt sich, ob innerhalb der App navigiert wurde (für „Zurück").
   const navigatedInApp = useRef(false);
 
@@ -307,6 +391,14 @@ export default function App() {
     navigatedInApp.current = true;
     setCurrentPath(path);
     window.scrollTo({ top: 0 }); // neue Seite (z.B. Vereinsseite) immer oben starten
+  };
+
+  // Ziel einer Benachrichtigung öffnen (Glocke): Chat → eigene Seite, Idee →
+  // Ideen-Bereich der Team-App, Ticket/Aufgabe → Detail-Fenster direkt hier.
+  const openNotificationTarget = (refType: 'ticket' | 'task' | 'conversation' | 'idea', refId: string) => {
+    if (refType === 'conversation') navigateTo(`/chat?c=${encodeURIComponent(refId)}`);
+    else if (refType === 'idea') navigateTo(`/chat?tab=ideen&openIdea=${encodeURIComponent(refId)}`);
+    else setDeepOpen({ type: refType, id: refId });
   };
 
   // Zurück zur zuletzt besuchten Seite (statt fest zur Startseite). Wurde die
@@ -348,13 +440,55 @@ export default function App() {
 
   // Bearbeiten-Modus nur für Admins – beim Abmelden automatisch verlassen.
   useEffect(() => {
-    if (!isAdmin) setEditMode(false);
-  }, [isAdmin]);
+    if (!canEditHighlights) setEditMode(false);
+  }, [canEditHighlights]);
+
+  // Score-Einstellungen einmalig laden.
+  useEffect(() => {
+    fetchScoring()
+      .then(setScoring)
+      .catch(() => {
+        /* Defaults bleiben */
+      });
+  }, []);
+
+  // Getrackte Werte (nur veröffentlichte) der AKTIVEN Saison laden – reagiert auf
+  // die Demo-Umschaltung, sodass die Website im Demo-Modus nur Demo-Tracking zeigt.
+  useEffect(() => {
+    const sid = currentSeason?.id;
+    if (!sid) {
+      setTrackingRows([]);
+      return;
+    }
+    // Im Demo-Modus auch Entwürfe zeigen (ohne „Live schalten") – nur Demo-Saison.
+    fetchPublicStats(sid, demo.active)
+      .then((r) => setTrackingRows(r.rows))
+      .catch(() => {
+        /* keine Daten – Karten bleiben verborgen */
+      });
+  }, [currentSeason?.id, demo.active]);
+
+  // Spiele, für die es getrackte Werte gibt (→ Spielbericht anklickbar).
+  const reportMatchIds = useMemo(() => new Set(trackingRows.map((r) => r.matchId)), [trackingRows]);
 
   // Aufstellungen laden, sobald jemand angemeldet ist (für den Schiedsrichtermodus).
   useEffect(() => {
     if (sessionUser) fetchRoster();
   }, [sessionUser, fetchRoster]);
+
+  // Push-Abo lebendig halten: Sobald jemand angemeldet ist – und jedes Mal, wenn
+  // die App wieder in den Vordergrund kommt – ein zuvor gewünschtes (aber vom
+  // Browser evtl. verworfenes) Abo wiederherstellen und serverseitig auffrischen.
+  // Best-effort – ohne Wunsch/Erlaubnis passiert nichts.
+  useEffect(() => {
+    if (!sessionUser) return;
+    const beat = () => {
+      if (document.visibilityState === 'visible') syncPush().catch(() => {});
+    };
+    beat();
+    document.addEventListener('visibilitychange', beat);
+    return () => document.removeEventListener('visibilitychange', beat);
+  }, [sessionUser]);
 
   // Highlights speichern (optimistisch): erst lokal setzen, dann serverseitig
   // schützen lassen. Schlägt das Speichern fehl, wird zurückgerollt.
@@ -378,7 +512,7 @@ export default function App() {
 
   // Menüpunkt „Highlights“ zeigen, sobald Medien/Ordner vorhanden sind – Admins
   // sehen ihn immer (auch leer), um die Galerie pflegen zu können.
-  const hasHighlights = highlights.items.length > 0 || highlights.albums.length > 0 || isAdmin;
+  const hasHighlights = highlights.items.length > 0 || highlights.albums.length > 0 || canEditHighlights;
 
   const handleUpdateMatchScore = (
     matchId: string,
@@ -544,10 +678,11 @@ export default function App() {
           activeTab={activeTab}
           setActiveTab={goToTab}
           isAdmin={isAdmin}
+          canAccessBackoffice={canAccessBackoffice}
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
-          onOpenBackoffice={() => navigateTo('/admin')}
-          onOpenReferee={() => setRefereeView(true)}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
+          onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
           demoActive={demo.active}
           seasonLabel={selectedSeasonName}
           seasonNumber={currentSeasonNumber}
@@ -573,6 +708,121 @@ export default function App() {
     );
   }
 
+  // ROUTE: /wertungen – öffentliche Auszeichnungen aus getrackten Daten
+  if (currentPath.startsWith('/wertungen')) {
+    return (
+      <div className="min-h-screen text-hl-text font-sans flex flex-col overflow-x-clip">
+        <PageBackground page="heroone" />
+        {renderMobileDock()}
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={goToTab}
+          isAdmin={isAdmin}
+          canAccessBackoffice={canAccessBackoffice}
+          onLogout={handleLogout}
+          onOpenLogin={() => navigateTo('/admin')}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
+          onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
+          demoActive={demo.active}
+          seasonLabel={selectedSeasonName}
+          seasonNumber={currentSeasonNumber}
+          hasLiveMatch={hasLiveMatch}
+          eventActive={!!activeEvent}
+          eventTitle={activeEvent?.title}
+          onOpenEvent={() => navigateTo('/testspiel')}
+          hasHighlights={hasHighlights}
+          mobileMode={mobileMode}
+          onToggleMobileMode={toggleMobileMode}
+          teams={visibleTeams}
+          matches={currentSeasonMatches}
+          onSelectTeam={openTeamDetail}
+          onGoToMatchday={goToMatchday}
+          albums={highlights.albums}
+          onOpenAlbum={openHighlightsAlbum}
+        />
+        <main className="flex-1">
+          <WertungenPage
+            rows={trackingRows}
+            cfg={scoring}
+            teams={visibleTeams}
+            matches={currentSeasonMatches}
+            seasonLabel={selectedSeasonName}
+            onBack={goBack}
+            onSelectPlayer={(teamId, name) =>
+              navigateTo(`/verein/${encodeURIComponent(teamId)}/spieler/${encodeURIComponent(name)}`)
+            }
+          />
+        </main>
+        <Footer onNavigate={goToTab} onNavigatePath={navigateTo} />
+      </div>
+    );
+  }
+
+  // ROUTE: /spiel/:id – öffentlicher Spielbericht (Einzelnoten aus getrackten Daten)
+  if (currentPath.startsWith('/spiel/')) {
+    const matchId = decodeURIComponent(currentPath.slice('/spiel/'.length).replace(/\/+$/, ''));
+    const match = matches.find((m) => m.id === matchId) ?? null;
+    return (
+      <div className="min-h-screen text-hl-text font-sans flex flex-col overflow-x-clip">
+        <PageBackground page="tabelle" />
+        {renderMobileDock()}
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={goToTab}
+          isAdmin={isAdmin}
+          canAccessBackoffice={canAccessBackoffice}
+          onLogout={handleLogout}
+          onOpenLogin={() => navigateTo('/admin')}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
+          onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
+          demoActive={demo.active}
+          seasonLabel={selectedSeasonName}
+          seasonNumber={currentSeasonNumber}
+          hasLiveMatch={hasLiveMatch}
+          eventActive={!!activeEvent}
+          eventTitle={activeEvent?.title}
+          onOpenEvent={() => navigateTo('/testspiel')}
+          hasHighlights={hasHighlights}
+          mobileMode={mobileMode}
+          onToggleMobileMode={toggleMobileMode}
+          teams={visibleTeams}
+          matches={currentSeasonMatches}
+          onSelectTeam={openTeamDetail}
+          onGoToMatchday={goToMatchday}
+          albums={highlights.albums}
+          onOpenAlbum={openHighlightsAlbum}
+        />
+        <main className="flex-1">
+          {match ? (
+            <SpielberichtPage
+              match={match}
+              teams={visibleTeams}
+              rows={trackingRows}
+              cfg={scoring}
+              onBack={goBack}
+              onSelectPlayer={(teamId, name) =>
+                navigateTo(`/verein/${encodeURIComponent(teamId)}/spieler/${encodeURIComponent(name)}`)
+              }
+              onSelectTeam={openTeamDetail}
+            />
+          ) : (
+            <div className="text-center py-24 space-y-4">
+              <p className="text-hl-mute font-sans">Dieses Spiel gibt es nicht (mehr).</p>
+              <button
+                onClick={() => navigateTo('/')}
+                className="inline-flex items-center gap-1.5 text-xs font-sans font-bold uppercase tracking-wider text-brand-accent-light hover:underline cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Zurück zur Übersicht
+              </button>
+            </div>
+          )}
+        </main>
+        <Footer onNavigate={goToTab} onNavigatePath={navigateTo} />
+      </div>
+    );
+  }
+
   // ROUTE: /verein/:id – öffentliche Vereins-Detailseite
   if (currentPath.startsWith('/verein/')) {
     // Pfad: /verein/<id>  oder  /verein/<id>/spieler/<name> (Spieler direkt geöffnet)
@@ -589,10 +839,11 @@ export default function App() {
           activeTab={activeTab}
           setActiveTab={goToTab}
           isAdmin={isAdmin}
+          canAccessBackoffice={canAccessBackoffice}
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
-          onOpenBackoffice={() => navigateTo('/admin')}
-          onOpenReferee={() => setRefereeView(true)}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
+          onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
           demoActive={demo.active}
           seasonLabel={selectedSeasonName}
           seasonNumber={currentSeasonNumber}
@@ -621,6 +872,10 @@ export default function App() {
               initialPlayer={initialPlayer}
               onBack={goBack}
               onSelectTeam={openTeamDetail}
+              trackingRows={trackingRows}
+              scoringConfig={scoring}
+              onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
+              onOpenPlayer={(name) => navigateTo(`/verein/${encodeURIComponent(teamId)}/spieler/${encodeURIComponent(name)}`)}
             />
           ) : (
             <div className="text-center py-24 space-y-4">
@@ -643,7 +898,7 @@ export default function App() {
   // ROUTE: /testspiel-zettel – Ergebniszettel zum Ausdrucken (nur Admin)
   if (currentPath.startsWith('/testspiel-zettel')) {
     const printEvent = activeEvent ?? eventArchive?.events?.[(eventArchive.events?.length ?? 0) - 1] ?? null;
-    if (isAdmin && printEvent) {
+    if (canManageChannels && printEvent) {
       return <EventErgebniszettel event={printEvent} teams={visibleTeams} onBack={() => navigateTo('/testspiel')} />;
     }
     // Kein Admin / kein Event -> fällt auf die normale Event-Seite zurück
@@ -653,7 +908,7 @@ export default function App() {
   // zuletzt angelegte Event vorab prüfen, auch wenn keins aktiv ist)
   if (currentPath.startsWith('/testspiel')) {
     const previewEvent =
-      activeEvent ?? (isAdmin ? eventArchive?.events?.[(eventArchive.events?.length ?? 0) - 1] ?? null : null);
+      activeEvent ?? (canManageChannels ? eventArchive?.events?.[(eventArchive.events?.length ?? 0) - 1] ?? null : null);
     const isPreviewOnly = !activeEvent && !!previewEvent;
     return (
       <div className="min-h-screen bg-brand-dark text-hl-text font-sans flex flex-col">
@@ -662,10 +917,11 @@ export default function App() {
           activeTab={activeTab}
           setActiveTab={goToTab}
           isAdmin={isAdmin}
+          canAccessBackoffice={canAccessBackoffice}
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
-          onOpenBackoffice={() => navigateTo('/admin')}
-          onOpenReferee={() => setRefereeView(true)}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
+          onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
           demoActive={demo.active}
           seasonLabel={currentSeasonName}
           seasonNumber={currentSeasonNumber}
@@ -687,7 +943,7 @@ export default function App() {
           {previewEvent ? (
             <>
               {isPreviewOnly && (
-                <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pt-4">
+                <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pt-4">
                   <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-2.5 text-xs font-sans text-yellow-200">
                     Vorschau: Dieses Event ist noch <strong>nicht aktiv</strong> und für Besucher unsichtbar. Im Backoffice
                     unter „Testspiel / Event" aktivieren.
@@ -699,7 +955,7 @@ export default function App() {
                 teams={visibleTeams}
                 onBack={goBack}
                 onSelectTeam={openTeamDetail}
-                isAdmin={isAdmin}
+                isAdmin={canManageChannels}
                 onPrint={() => navigateTo('/testspiel-zettel')}
               />
             </>
@@ -721,12 +977,83 @@ export default function App() {
     );
   }
 
-  // ROUTE: /admin – geschütztes Backoffice
+  // ROUTE: /chat – eigenständige „Team-App" (installierbar, Vollbild mit
+  // unterer Tab-Leiste Chats · Aufgaben · Tickets). Ohne Login: Anmeldemaske.
+  if (currentPath.startsWith('/chat')) {
+    if (!isAdmin) {
+      return (
+        <div className="h-screen flex flex-col bg-[#060E0F] text-hl-text">
+          <div className="flex-1 flex items-center justify-center p-6">
+            <AdminLogin onLoginSuccess={(user) => setSessionUser(user)} />
+          </div>
+        </div>
+      );
+    }
+    return (
+      <ChatApp
+        user={sessionUser!}
+        currentUserId={sessionUser?.id ?? ''}
+        canManageTickets={canManageTickets}
+        isSuperadmin={isSuperadmin}
+        initialConversationId={new URLSearchParams(window.location.search).get('c')}
+        onBack={() => navigateTo(canAccessBackoffice ? '/admin' : '/')}
+        onUpdateUser={(p) => setSessionUser((u) => (u ? { ...u, ...p } : u))}
+        onGoWebsite={() => navigateTo('/')}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // ROUTE: /tracking – Statistics Center (Erfassungs-Editor). Eigene, app-artige
+  // Vollbildseite. Nur für Spiel-Admins/Super-Admins; ohne Login: Anmeldemaske.
+  if (currentPath.startsWith('/tracking')) {
+    if (!isAdmin) {
+      return (
+        <div className="h-screen flex flex-col bg-[#060E0F] text-hl-text">
+          <div className="flex-1 flex items-center justify-center p-6">
+            <AdminLogin onLoginSuccess={(user) => setSessionUser(user)} />
+          </div>
+        </div>
+      );
+    }
+    if (!canManageMatches) {
+      return (
+        <div className="h-screen flex flex-col items-center justify-center gap-4 bg-[#060E0F] text-hl-text p-6 text-center">
+          <p className="text-hl-mute">Für das Statistics Center brauchst du Spiel-Admin-Rechte.</p>
+          <button
+            onClick={() => navigateTo('/admin')}
+            className="px-5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer"
+          >
+            Zurück zum Backoffice
+          </button>
+        </div>
+      );
+    }
+    return (
+      <TrackingCenter
+        teams={visibleTeams}
+        matches={demo.active ? currentSeasonMatches : matches}
+        seasons={demo.active && demoSeason ? [demoSeason] : visibleSeasons}
+        roster={roster}
+        eventArchive={eventArchive}
+        activeSeasonId={currentSeason?.id ?? ''}
+        demoActive={demo.active}
+        onBack={() => navigateTo('/admin')}
+      />
+    );
+  }
+
+  // ROUTE: /admin – geschütztes Backoffice. Team-Mitglieder haben hier nichts zu
+  // suchen (siehe Redirect-Effekt oben) – kurz nichts zeigen, bis er greift.
   if (currentPath === '/admin') {
+    if (isAdmin && isTeamMember) return null;
     return (
       <div className="min-h-screen text-hl-text font-sans flex flex-col justify-between">
         <PageBackground page="default" />
-        <header className="border-b border-white/[.07] bg-[rgba(7,10,8,.72)] backdrop-blur-xl px-6 py-4">
+        <header
+          className="border-b border-white/[.07] bg-[rgba(7,10,8,.72)] backdrop-blur-xl px-6 py-4"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}
+        >
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <img src="/assets/hero-league-logo.png" alt="Hero League" className="h-9 w-auto" />
@@ -750,12 +1077,22 @@ export default function App() {
             <div className="w-full max-w-7xl mx-auto space-y-8 py-4">
               <div className="hl-card p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-full bg-[rgba(67,229,160,.1)] flex items-center justify-center text-hl-green border border-[rgba(67,229,160,.2)]">
-                    <Shield className="w-5 h-5" />
-                  </div>
+                  {sessionUser ? (
+                    <Avatar name={sessionUser.name || sessionUser.email || 'Admin'} url={sessionUser.avatarUrl} status={sessionUser.status} size={40} showStatus ring="#0b1210" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-[rgba(67,229,160,.1)] flex items-center justify-center text-hl-green border border-[rgba(67,229,160,.2)]">
+                      <Shield className="w-5 h-5" />
+                    </div>
+                  )}
                   <div>
                     <h2 className="font-display font-black text-lg text-white uppercase tracking-tight">
-                      {isSuperadmin ? 'Eingeloggt als Super-Admin' : 'Eingeloggt als Spiel-Admin'}
+                      {isSuperadmin
+                        ? 'Eingeloggt als Super-Admin'
+                        : isReferee
+                          ? 'Eingeloggt als Schiedsrichter'
+                          : sessionUser?.role === 'team_member'
+                            ? 'Eingeloggt als Team-Mitglied'
+                            : 'Eingeloggt als Spiel-Admin'}
                     </h2>
                     <p className="text-xs text-hl-green-soft font-sans mt-0.5">
                       {sessionUser?.name || sessionUser?.email ? `${sessionUser?.name || sessionUser?.email} · ` : ''}
@@ -764,73 +1101,187 @@ export default function App() {
                   </div>
                 </div>
 
-                <button
-                  onClick={handleLogout}
-                  className="px-5 py-2 bg-[rgba(255,84,66,.15)] border border-[rgba(255,84,66,.3)] hover:bg-[rgba(255,84,66,.25)] rounded-xl text-xs font-bold uppercase transition-all flex items-center gap-1.5 text-hl-red-soft cursor-pointer"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span>Abmelden</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <ChatUnreadBadge onClick={() => navigateTo('/chat')} />
+                  <NotificationBell onOpen={openNotificationTarget} />
+                  <button
+                    onClick={handleLogout}
+                    className="px-5 py-2 bg-[rgba(255,84,66,.15)] border border-[rgba(255,84,66,.3)] hover:bg-[rgba(255,84,66,.25)] rounded-xl text-xs font-bold uppercase transition-all flex items-center gap-1.5 text-hl-red-soft cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Abmelden</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Live-Besucher: ganz oben im Backoffice */}
-              <LiveVisitors />
+              {/* Statistics Center: eigene große Seite zum Auswerten der Spieltage. */}
+              {canManageMatches && (
+                <button
+                  onClick={() => navigateTo('/tracking')}
+                  className="hl-card p-5 w-full flex items-center gap-4 text-left hover:border-brand-accent/40 transition-colors cursor-pointer group"
+                >
+                  <div className="w-12 h-12 rounded-2xl bg-brand-accent/15 border border-brand-accent/30 grid place-items-center text-brand-accent-light shrink-0">
+                    <Trophy className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-display font-black uppercase tracking-tight text-lg text-white">Statistics Center</div>
+                    <div className="text-xs text-hl-mute mt-0.5">
+                      Spieltag Sekunde für Sekunde auswerten · Noten, Quoten &amp; FIFA-Karten
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-hl-faint group-hover:text-brand-accent-light transition-colors shrink-0" />
+                </button>
+              )}
 
-              {/* Aufgeräumtes Backoffice: Reiter nach Rubrik, darunter „dicke Tasten" */}
+              {/* Backend als eigener Bereich: Übersicht (Dashboard) als Startseite,
+                  darunter die Rubriken-Leiste (am Handy unten, am PC oben). */}
               <AccordionGroup
                 searchable
+                defaultOpenId="aufgaben"
+                dashboard={
+                  <AdminDashboard
+                    teamsCount={visibleTeams.length}
+                    matchesCount={currentSeasonMatches.length}
+                    canSeeSponsors={canManagePom}
+                    canManageClubs={canManageMatches}
+                  />
+                }
                 categories={[
-                  { id: 'spiele', label: 'Spiele & Liga' },
-                  { id: 'startseite', label: 'Startseite' },
-                  { id: 'kanaele', label: 'Kanäle & Event' },
-                  ...(isSuperadmin ? [{ id: 'zugaenge', label: 'Zugänge' }] : []),
+                  { id: 'team', label: '★ Intern' },
+                  ...(canSeeLeagueArea ? [{ id: 'spiele', label: 'Spiele & Liga' }] : []),
+                  ...(canSeeStartseiteArea ? [{ id: 'startseite', label: 'Startseite' }] : []),
+                  ...(canSeeChannelsArea ? [{ id: 'kanaele', label: 'Kanäle & Event' }] : []),
+                  ...(canManageUsers ? [{ id: 'zugaenge', label: 'Zugänge' }] : []),
                 ]}
               >
                 <div className="space-y-4">
-                  <AccordionSection
-                    id="results"
-                    category="spiele"
-                    title="Spielplan-Ergebnisse eintragen"
-                    subtitle="Ergebnisse, Torschützen & Vorlagen zuweisen, Spiele LIVE stellen"
-                    icon={<Sparkles className="w-5 h-5" />}
-                  >
-                    <Spielplan
+                  {canManageMatches && (
+                    <>
+                      <AccordionSection
+                        id="results"
+                        category="spiele"
+                        title="Spielplan-Ergebnisse eintragen"
+                        subtitle="Ergebnisse, Torschützen & Vorlagen zuweisen, Spiele LIVE stellen"
+                        icon={<Sparkles className="w-5 h-5" />}
+                      >
+                        <Spielplan
+                          teams={visibleTeams}
+                          matches={currentSeasonMatches}
+                          isAdmin={isAdmin}
+                          onUpdateMatchScore={handleUpdateMatchScore}
+                          onUpdateMatchMeta={handleUpdateMatchMeta}
+                        />
+                      </AccordionSection>
+
+                      <AccordionSection
+                        id="schedule"
+                        category="spiele"
+                        title="Spielplan verwalten"
+                        subtitle="Spiele anlegen oder löschen"
+                        icon={<CalendarPlus className="w-5 h-5" />}
+                      >
+                        <MatchManager
+                          teams={visibleTeams}
+                          matches={currentSeasonMatches}
+                          onAddMatch={handleAddMatch}
+                          onDeleteMatch={handleDeleteMatch}
+                        />
+                      </AccordionSection>
+                    </>
+                  )}
+
+                  {(canManageMatches || canManageSeason || canEditHomepage || canManagePom || canManageChannels) && (
+                    <AdminPanel
                       teams={visibleTeams}
                       matches={currentSeasonMatches}
-                      isAdmin={isAdmin}
-                      onUpdateMatchScore={handleUpdateMatchScore}
-                      onUpdateMatchMeta={handleUpdateMatchMeta}
+                      currentSeasonLabel={currentSeasonName}
+                      nextSeasonLabel={nextSeasonName}
+                      isSuperadmin={isSuperadmin}
+                      canManageClubs={canManageMatches}
+                      canManageSeason={canManageSeason}
+                      canEditHomepage={canEditHomepage}
+                      canManagePom={canManagePom}
+                      canManageChannels={canManageChannels}
+                      onAddTeam={handleAddTeam}
+                      onEditTeam={handleEditTeam}
+                      onDeleteTeam={handleDeleteTeam}
+                      onStartSeason={handleStartSeason}
+                      demoActive={demo.active}
+                      onToggleDemo={handleToggleDemo}
                     />
+                  )}
+
+                  {/* Team-Zusammenarbeit: Profil, Tickets, Aufgaben, Chat (für jeden eingeloggten Nutzer) */}
+                  <AccordionSection
+                    id="profil"
+                    category="team"
+                    title="Mein Profil"
+                    subtitle="Name, Profilbild & Status (online, Urlaub, außer Haus …)"
+                    icon={<UserCircle className="w-5 h-5" />}
+                    accent="#22DFC9"
+                  >
+                    {sessionUser && (
+                      <ProfileEditor user={sessionUser} onSaved={(p) => setSessionUser((u) => (u ? { ...u, ...p } : u))} />
+                    )}
                   </AccordionSection>
 
                   <AccordionSection
-                    id="schedule"
-                    category="spiele"
-                    title="Spielplan verwalten"
-                    subtitle="Spiele anlegen oder löschen"
-                    icon={<CalendarPlus className="w-5 h-5" />}
+                    id="benachrichtigungen"
+                    category="team"
+                    title="Benachrichtigungen"
+                    subtitle="Handy-Push aktivieren, Nicht-stören (Wochenende/Urlaub)"
+                    icon={<Bell className="w-5 h-5" />}
+                    accent="#22DFC9"
                   >
-                    <MatchManager
-                      teams={visibleTeams}
-                      matches={currentSeasonMatches}
-                      onAddMatch={handleAddMatch}
-                      onDeleteMatch={handleDeleteMatch}
-                    />
+                    {sessionUser && <NotificationSettings user={sessionUser} />}
                   </AccordionSection>
 
-                  <AdminPanel
-                    teams={visibleTeams}
-                    matches={currentSeasonMatches}
-                    currentSeasonLabel={currentSeasonName}
-                    nextSeasonLabel={nextSeasonName}
-                    isSuperadmin={isSuperadmin}
-                    onAddTeam={handleAddTeam}
-                    onEditTeam={handleEditTeam}
-                    onDeleteTeam={handleDeleteTeam}
-                    onStartSeason={handleStartSeason}
-                    demoActive={demo.active}
-                    onToggleDemo={handleToggleDemo}
-                  />
+                  <AccordionSection
+                    id="tickets"
+                    category="team"
+                    title="Tickets"
+                    subtitle="Ideen & Aufgaben melden, priorisieren, mit Screenshots – und bearbeiten"
+                    icon={<Ticket className="w-5 h-5" />}
+                    accent="#22DFC9"
+                  >
+                    <TicketSystem currentUserId={sessionUser?.id ?? ''} canManage={canManageTickets} />
+                  </AccordionSection>
+
+                  <AccordionSection
+                    id="chat"
+                    category="team"
+                    title="Chat & Team-App"
+                    subtitle="Vollbild-App: Chats, Aufgaben & Tickets – zum Home-Bildschirm hinzufügbar"
+                    icon={<MessageSquare className="w-5 h-5" />}
+                    accent="#22DFC9"
+                  >
+                    <button
+                      onClick={() => navigateTo('/chat')}
+                      className="w-full flex items-center gap-4 p-4 rounded-2xl bg-brand-accent-light/10 border border-brand-accent-light/30 hover:bg-brand-accent-light/15 cursor-pointer text-left transition-colors"
+                    >
+                      <span className="grid place-items-center w-12 h-12 rounded-xl bg-brand-accent-light text-[#04120f] shrink-0">
+                        <MessageSquare className="w-6 h-6" />
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block font-display font-black text-white uppercase tracking-tight">Team-App öffnen</span>
+                        <span className="block text-[12px] text-hl-mute font-sans mt-0.5">
+                          Chat im Vollbild – mit Aufgaben & Tickets. Fühlt sich wie eine eigene App an.
+                        </span>
+                      </span>
+                      <ArrowLeft className="w-5 h-5 text-brand-accent-light rotate-180 shrink-0" />
+                    </button>
+                  </AccordionSection>
+
+                  <AccordionSection
+                    id="aufgaben"
+                    category="team"
+                    title="Aufgaben-Board"
+                    subtitle="Kalender (Monat & Woche), Personen zuweisen, Status – Monday-Style"
+                    icon={<CalendarDays className="w-5 h-5" />}
+                    accent="#22DFC9"
+                  >
+                    <TaskBoard currentUserId={sessionUser?.id ?? ''} isSuperadmin={isSuperadmin} />
+                  </AccordionSection>
 
                   {isSuperadmin && (
                     <AccordionSection
@@ -853,12 +1304,23 @@ export default function App() {
         <footer className="border-t border-white/5 bg-[#080b09] py-6 text-center text-xs text-hl-faint font-sans">
           <p>© 2026 Hero League. Geschützter Administrationsbereich.</p>
         </footer>
+
+        {/* Aus einer Benachrichtigung direkt geöffnetes Ticket/Aufgabe */}
+        {deepOpen && (
+          <DeepLinkModal
+            target={deepOpen}
+            currentUserId={sessionUser?.id ?? ''}
+            isSuperadmin={isSuperadmin}
+            canManageTickets={canManageTickets}
+            onClose={() => setDeepOpen(null)}
+          />
+        )}
       </div>
     );
   }
 
   // ROUTE: /ergebniszettel – druckbare Ergebnis-Vorlage (nur für angemeldete Admins)
-  if (currentPath === '/ergebniszettel' && isAdmin) {
+  if (currentPath === '/ergebniszettel' && canManageMatches) {
     return <Ergebniszettel teams={visibleTeams} matches={currentSeasonMatches} onBack={() => navigateTo('/')} />;
   }
 
@@ -866,7 +1328,7 @@ export default function App() {
   const showSeasonSwitcher = visibleSeasons.length > 1 && activeTab !== 'home';
 
   const seasonSwitcher = showSeasonSwitcher && (
-    <div className="max-w-[1320px] mx-auto px-4 sm:px-10 flex items-center justify-end gap-2 pb-4">
+    <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 flex items-center justify-end gap-2 pb-4">
       <History className="w-4 h-4 text-hl-dim" />
       <label className="text-xs font-sans font-bold text-hl-dim uppercase tracking-wider">Saison:</label>
       <select
@@ -893,9 +1355,10 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={goToTab}
         isAdmin={isAdmin}
+        canAccessBackoffice={canAccessBackoffice}
         onLogout={handleLogout}
         onOpenLogin={() => navigateTo('/admin')}
-        onOpenBackoffice={() => navigateTo('/admin')}
+        onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
         onOpenReferee={() => setRefereeView(true)}
         demoActive={demo.active}
         seasonLabel={currentSeasonName}
@@ -923,10 +1386,10 @@ export default function App() {
       {activeTab === 'home' && (
         <>
           {countdown.active && <Countdown target={countdown.target} title={countdown.title} />}
-          <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} />
+          <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} />
           <HighlightsHome
             highlights={highlights}
-            editMode={editMode && isAdmin}
+            editMode={editMode && canEditHighlights}
             onOpenGallery={() => goToTab('highlights')}
             onOpenAlbum={openHighlightsAlbum}
             onSave={persistHighlights}
@@ -937,7 +1400,7 @@ export default function App() {
       {activeTab === 'highlights' && (
         <HighlightsPage
           highlights={highlights}
-          editMode={editMode && isAdmin}
+          editMode={editMode && canEditHighlights}
           onSave={persistHighlights}
           initialAlbumId={highlightsAlbumId}
           onInitialAlbumConsumed={() => setHighlightsAlbumId(null)}
@@ -951,8 +1414,8 @@ export default function App() {
             title="Spielplan"
           />
           {seasonSwitcher}
-          {isAdmin && (
-            <div className="max-w-[1320px] mx-auto px-4 sm:px-10 flex justify-end pb-4">
+          {canManageMatches && (
+            <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 flex justify-end pb-4">
               <button
                 onClick={() => navigateTo('/ergebniszettel')}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-brand-accent-light/30 bg-[rgba(34,223,201,.08)] text-brand-accent-light hover:bg-[rgba(34,223,201,.16)] text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
@@ -962,14 +1425,16 @@ export default function App() {
               </button>
             </div>
           )}
-          <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
+          <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-10">
             <Spielplan
               teams={visibleTeams}
               matches={seasonMatches}
-              isAdmin={isAdmin && isCurrentSeasonSelected}
+              isAdmin={canManageMatches && isCurrentSeasonSelected}
               onUpdateMatchScore={handleUpdateMatchScore}
               onUpdateMatchMeta={handleUpdateMatchMeta}
               onSelectTeam={openTeamDetail}
+              onOpenReport={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
+              reportMatchIds={reportMatchIds}
               initialMatchday={spielplanMatchday}
               onInitialMatchdayConsumed={() => setSpielplanMatchday(null)}
             />
@@ -984,7 +1449,7 @@ export default function App() {
             title="Ligatabelle"
           />
           {seasonSwitcher}
-          <div className="max-w-[1320px] mx-auto px-4 sm:px-10 pb-10">
+          <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-10">
             <Tabelle
               teams={visibleTeams}
               matches={seasonMatches}
@@ -1004,6 +1469,7 @@ export default function App() {
             seasonNumber={selectedSeasonNumber}
             seasonLabel={selectedSeasonName}
             onSelectTeam={openTeamDetail}
+            onOpenWertungen={() => navigateTo('/wertungen')}
           />
         </>
       )}
@@ -1039,7 +1505,7 @@ export default function App() {
         </section>
       )}
 
-      {isAdmin && (activeTab === 'home' || activeTab === 'highlights') && (
+      {canEditHighlights && (activeTab === 'home' || activeTab === 'highlights') && (
         <button
           onClick={() => setEditMode((v) => !v)}
           title="Highlights direkt auf der Seite bearbeiten"

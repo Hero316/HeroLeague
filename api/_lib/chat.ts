@@ -1,0 +1,684 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { sql } from './db.js';
+import { getSession } from './auth.js';
+import { badRequest, isNonEmptyString } from './validate.js';
+import { genId, sessionName, loadMembers, memberName, notify, findMentions } from './collab.js';
+import { sendPushToUser } from './push.js';
+
+// Phase 3: Interner Chat – Gruppen, DMs, Slack-Threads, Ticket-/Aufgaben-Anhänge.
+// Dispatch aus api/chat.ts über ?resource=conversations|messages|read.
+
+async function isMember(conversationId: string, userId: string): Promise<boolean> {
+  const rows = await sql`
+    SELECT 1 FROM conversation_members WHERE conversation_id = ${conversationId} AND user_id = ${userId} LIMIT 1
+  `;
+  return rows.length > 0;
+}
+
+// --- Unterhaltungen ---------------------------------------------------------
+export async function conversations(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  const uid = session.userId;
+
+  if (req.method === 'GET') {
+    res.setHeader('Cache-Control', 'no-store');
+    const rows = await sql`
+      SELECT c.id, c.kind, c.title, COALESCE(c.avatar_url, '') AS "avatarUrl", c.created_by AS "createdBy", c.updated_at AS "updatedAt",
+        (SELECT count(*)::int FROM messages m
+           WHERE m.conversation_id = c.id AND m.parent_id IS NULL
+             AND m.created_at > cm.last_read_at AND m.author_id <> ${uid}) AS unread,
+        (SELECT json_agg(json_build_object('userId', x.user_id, 'userName', x.user_name))
+           FROM conversation_members x WHERE x.conversation_id = c.id) AS members,
+        (SELECT json_build_object(
+                  'body', CASE WHEN m.deleted_at IS NULL THEN m.body ELSE '' END,
+                  'authorName', m.author_name, 'createdAt', m.created_at,
+                  'attachType', CASE WHEN m.deleted_at IS NULL THEN m.attach_type END,
+                  'deleted', m.deleted_at IS NOT NULL)
+           FROM messages m WHERE m.conversation_id = c.id AND m.parent_id IS NULL
+           ORDER BY m.created_at DESC LIMIT 1) AS "lastMessage"
+      FROM conversations c
+      JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = ${uid}
+      ORDER BY c.updated_at DESC
+    `;
+    return res.json(rows);
+  }
+
+  if (req.method === 'POST') {
+    const b = req.body ?? {};
+    const members = await loadMembers();
+    const meName = sessionName(session);
+
+    if (b.kind === 'dm') {
+      const otherId = typeof b.userId === 'string' ? b.userId : '';
+      if (!otherId || otherId === uid || !members.has(otherId)) {
+        return badRequest(res, 'Bitte eine gültige Person auswählen.');
+      }
+      const key = [uid, otherId].sort().join('|');
+      const existing = await sql`SELECT id FROM conversations WHERE dm_key = ${key} LIMIT 1`;
+      if (existing.length) return res.json({ id: (existing[0] as { id: string }).id, existing: true });
+
+      const id = genId('conv');
+      await sql`INSERT INTO conversations (id, kind, title, dm_key, created_by) VALUES (${id}, 'dm', '', ${key}, ${uid})`;
+      await sql`INSERT INTO conversation_members (conversation_id, user_id, user_name) VALUES (${id}, ${uid}, ${meName})`;
+      await sql`INSERT INTO conversation_members (conversation_id, user_id, user_name) VALUES (${id}, ${otherId}, ${memberName(members, otherId)})`;
+      return res.json({ id });
+    }
+
+    if (b.kind === 'group') {
+      if (!isNonEmptyString(b.title)) return badRequest(res, 'Bitte einen Gruppennamen angeben.');
+      const wanted = Array.isArray(b.memberIds) ? b.memberIds : [];
+      const ids = new Set<string>([uid]);
+      for (const m of wanted) if (typeof m === 'string' && members.has(m)) ids.add(m);
+
+      const id = genId('conv');
+      await sql`INSERT INTO conversations (id, kind, title, created_by) VALUES (${id}, 'group', ${b.title.trim().slice(0, 80)}, ${uid})`;
+      for (const memberId of ids) {
+        const nm = memberId === uid ? meName : memberName(members, memberId);
+        await sql`INSERT INTO conversation_members (conversation_id, user_id, user_name) VALUES (${id}, ${memberId}, ${nm})`;
+      }
+      // Andere Mitglieder über die neue Gruppe informieren.
+      for (const memberId of ids) {
+        if (memberId !== uid) {
+          await notify(memberId, uid, 'chat', 'conversation', id, `${meName} hat dich zur Gruppe „${b.title.trim()}“ hinzugefügt.`);
+        }
+      }
+      return res.json({ id });
+    }
+
+    return badRequest(res, 'Unbekannter Unterhaltungstyp.');
+  }
+
+  return res.status(405).json({ error: 'Nicht unterstützt' });
+}
+
+// --- Nachrichten ------------------------------------------------------------
+const MSG_COLS = `
+  m.id, m.conversation_id AS "conversationId", m.parent_id AS "parentId",
+  m.author_id AS "authorId", m.author_name AS "authorName",
+  CASE WHEN m.deleted_at IS NULL THEN m.body ELSE '' END AS body,
+  CASE WHEN m.deleted_at IS NULL THEN m.attach_type END AS "attachType",
+  CASE WHEN m.deleted_at IS NULL THEN m.attach_id END AS "attachId",
+  CASE WHEN m.deleted_at IS NULL THEN m.attach_title END AS "attachTitle",
+  CASE WHEN m.deleted_at IS NULL THEN m.attach_url END AS "attachUrl",
+  CASE WHEN m.deleted_at IS NULL THEN m.attach_mime END AS "attachMime",
+  m.edited_at AS "editedAt", m.deleted_at AS "deletedAt", m.created_at AS "createdAt",
+  COALESCE((SELECT json_agg(json_build_object('userId', r.user_id, 'emoji', r.emoji) ORDER BY r.created_at)
+            FROM message_reactions r WHERE r.message_id = m.id), '[]'::json) AS reactions
+`;
+
+// Nur http(s)-URLs als Anhang zulassen (kein javascript:/data:).
+function safeUrl(v: unknown): string | null {
+  return typeof v === 'string' && /^https?:\/\//i.test(v.trim()) ? v.trim() : null;
+}
+
+// --- Abstimmungen (Umfragen) ------------------------------------------------
+// Lädt die Poll-Daten für die übergebenen Nachrichten-IDs und liefert eine
+// Map messageId -> Poll (fertig für die Anzeige). Anonyme Abstimmungen geben
+// KEINE Namen preis (voters bleibt leer), zeigen aber weiterhin Anzahl + ob ich
+// selbst gestimmt habe.
+type PollOption = { id: string; text: string; count: number; mine: boolean; voters: { userId: string; userName: string }[] };
+type Poll = {
+  id: string;
+  question: string;
+  multiple: boolean;
+  anonymous: boolean;
+  refType: 'ticket' | 'task' | null;
+  refId: string | null;
+  refTitle: string | null;
+  totalVoters: number;
+  options: PollOption[];
+};
+
+async function loadPollsFor(messageIds: string[], uid: string): Promise<Map<string, Poll>> {
+  const out = new Map<string, Poll>();
+  if (messageIds.length === 0) return out;
+  const pollRows = (await sql`
+    SELECT id, message_id AS "messageId", question, multiple, anonymous,
+           ref_type AS "refType", ref_id AS "refId", ref_title AS "refTitle"
+    FROM polls WHERE message_id = ANY(${messageIds})
+  `) as {
+    id: string; messageId: string; question: string; multiple: boolean; anonymous: boolean;
+    refType: 'ticket' | 'task' | null; refId: string | null; refTitle: string | null;
+  }[];
+  if (pollRows.length === 0) return out;
+  const pollIds = pollRows.map((p) => p.id);
+  const optRows = (await sql`
+    SELECT o.id, o.poll_id AS "pollId", o.text,
+      COALESCE((SELECT count(*)::int FROM poll_votes v WHERE v.option_id = o.id), 0) AS count,
+      COALESCE((SELECT json_agg(json_build_object('userId', v.user_id, 'userName', v.user_name) ORDER BY v.created_at)
+                FROM poll_votes v WHERE v.option_id = o.id), '[]'::json) AS voters,
+      EXISTS(SELECT 1 FROM poll_votes v WHERE v.option_id = o.id AND v.user_id = ${uid}) AS mine
+    FROM poll_options o WHERE o.poll_id = ANY(${pollIds}) ORDER BY o.position, o.id
+  `) as { id: string; pollId: string; text: string; count: number; voters: { userId: string; userName: string }[]; mine: boolean }[];
+
+  for (const p of pollRows) {
+    const opts = optRows.filter((o) => o.pollId === p.id);
+    const voterSet = new Set<string>();
+    for (const o of opts) for (const v of o.voters ?? []) voterSet.add(v.userId);
+    const options: PollOption[] = opts.map((o) => ({
+      id: o.id,
+      text: o.text,
+      count: o.count,
+      mine: o.mine,
+      // Anonyme Abstimmung: Namen NICHT preisgeben.
+      voters: p.anonymous ? [] : (o.voters ?? []),
+    }));
+    out.set(p.messageId, {
+      id: p.id,
+      question: p.question,
+      multiple: p.multiple,
+      anonymous: p.anonymous,
+      refType: p.refType,
+      refId: p.refId,
+      refTitle: p.refTitle,
+      totalVoters: voterSet.size,
+      options,
+    });
+  }
+  return out;
+}
+
+// Nachrichten-Zeilen mit Poll-Daten anreichern (nur wo attachType='poll').
+async function attachPolls<T extends { id: string; attachType?: string | null }>(rows: T[], uid: string): Promise<T[]> {
+  const pollMsgIds = rows.filter((r) => r.attachType === 'poll').map((r) => r.id);
+  if (pollMsgIds.length === 0) return rows;
+  const map = await loadPollsFor(pollMsgIds, uid);
+  return rows.map((r) => (r.attachType === 'poll' ? { ...r, poll: map.get(r.id) ?? null } : r));
+}
+
+export async function messages(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  const uid = session.userId;
+
+  if (req.method === 'GET') {
+    res.setHeader('Cache-Control', 'no-store');
+    const conversationId = String(req.query.conversationId ?? '');
+    if (!conversationId) return badRequest(res, 'Unterhaltungs-ID fehlt.');
+    if (!(await isMember(conversationId, uid))) return res.status(403).json({ error: 'Kein Zugriff auf diese Unterhaltung.' });
+
+    const parentId = typeof req.query.parentId === 'string' ? req.query.parentId : '';
+    if (parentId) {
+      // Thread-Antworten
+      const replies = await sql.query(
+        `SELECT ${MSG_COLS} FROM messages m WHERE m.conversation_id = $1 AND m.parent_id = $2 ORDER BY m.created_at`,
+        [conversationId, parentId]
+      );
+      // Thread als gelesen markieren (für „ungelesene Threads" + Leuchten).
+      await sql`
+        INSERT INTO thread_reads (user_id, parent_id, last_read_at) VALUES (${uid}, ${parentId}, now())
+        ON CONFLICT (user_id, parent_id) DO UPDATE SET last_read_at = now()
+      `;
+      return res.json(await attachPolls(replies as { id: string; attachType?: string | null }[], uid));
+    }
+
+    // Top-Level-Nachrichten inkl. Antwort-Zähler + ungelesene Thread-Antworten
+    // (Antworten von anderen, die neuer sind als mein letzter Blick in den Thread).
+    const rows = await sql.query(
+      `SELECT ${MSG_COLS},
+         (SELECT count(*)::int FROM messages r WHERE r.parent_id = m.id AND r.deleted_at IS NULL) AS "replyCount",
+         (SELECT count(*)::int FROM messages r
+            WHERE r.parent_id = m.id AND r.author_id <> $2 AND r.deleted_at IS NULL
+              AND r.created_at > COALESCE((SELECT tr.last_read_at FROM thread_reads tr WHERE tr.user_id = $2 AND tr.parent_id = m.id), to_timestamp(0))) AS "unreadReplies"
+       FROM messages m WHERE m.conversation_id = $1 AND m.parent_id IS NULL ORDER BY m.created_at`,
+      [conversationId, uid]
+    );
+    // Beim Öffnen als gelesen markieren.
+    await sql`UPDATE conversation_members SET last_read_at = now() WHERE conversation_id = ${conversationId} AND user_id = ${uid}`;
+    return res.json(await attachPolls(rows as { id: string; attachType?: string | null }[], uid));
+  }
+
+  if (req.method === 'POST') {
+    const b = req.body ?? {};
+    const conversationId = typeof b.conversationId === 'string' ? b.conversationId : '';
+    if (!conversationId) return badRequest(res, 'Unterhaltungs-ID fehlt.');
+    if (!(await isMember(conversationId, uid))) return res.status(403).json({ error: 'Kein Zugriff auf diese Unterhaltung.' });
+
+    const hasBody = isNonEmptyString(b.body);
+    const ATTACH = ['ticket', 'task', 'file', 'audio'];
+    const attachType = ATTACH.includes(b.attachType) ? b.attachType : null;
+    if (!hasBody && !attachType) return badRequest(res, 'Nachricht darf nicht leer sein.');
+
+    const parentId = typeof b.parentId === 'string' && b.parentId ? b.parentId : null;
+    if (parentId) {
+      const p = await sql`SELECT 1 FROM messages WHERE id = ${parentId} AND conversation_id = ${conversationId} LIMIT 1`;
+      if (p.length === 0) return badRequest(res, 'Ungültige Thread-Nachricht.');
+    }
+    // Ticket/Aufgabe: Verweis via attachId. Datei/Audio: Blob-URL + MIME.
+    const isRef = attachType === 'ticket' || attachType === 'task';
+    const isMedia = attachType === 'file' || attachType === 'audio';
+    const attachId = isRef ? String(b.attachId ?? '').slice(0, 80) : null;
+    const attachTitle = attachType ? String(b.attachTitle ?? '').slice(0, 200) : null;
+    const attachUrl = isMedia ? safeUrl(b.attachUrl) : null;
+    const attachMime = isMedia ? String(b.attachMime ?? '').slice(0, 120) || null : null;
+    if (isMedia && !attachUrl) return badRequest(res, 'Anhang-URL fehlt oder ist ungültig.');
+    const body = hasBody ? b.body.slice(0, 8000) : '';
+    const id = genId('msg');
+    const name = sessionName(session);
+
+    const inserted = await sql`
+      INSERT INTO messages (id, conversation_id, parent_id, author_id, author_name, body, attach_type, attach_id, attach_title, attach_url, attach_mime)
+      VALUES (${id}, ${conversationId}, ${parentId}, ${uid}, ${name}, ${body}, ${attachType}, ${attachId}, ${attachTitle}, ${attachUrl}, ${attachMime})
+      RETURNING id, conversation_id AS "conversationId", parent_id AS "parentId",
+        author_id AS "authorId", author_name AS "authorName", body,
+        attach_type AS "attachType", attach_id AS "attachId", attach_title AS "attachTitle",
+        attach_url AS "attachUrl", attach_mime AS "attachMime",
+        edited_at AS "editedAt", deleted_at AS "deletedAt", created_at AS "createdAt"
+    `;
+    await sql`UPDATE conversations SET updated_at = now() WHERE id = ${conversationId}`;
+
+    // Benachrichtigungen: @Erwähnungen (Glocke + Push) und Handy-Push an die
+    // übrigen Mitglieder (wie WhatsApp – nur Push, keine Glocken-Flut).
+    const convRows = await sql`SELECT kind, title FROM conversations WHERE id = ${conversationId}`;
+    const conv = (convRows[0] as { kind: string; title: string } | undefined) ?? { kind: 'group', title: '' };
+    const convMembers = (await sql`SELECT user_id AS "userId" FROM conversation_members WHERE conversation_id = ${conversationId}`) as { userId: string }[];
+    const memberSet = new Set(convMembers.map((m) => m.userId));
+    const mentioned = new Set<string>();
+    if (hasBody) {
+      const allMembers = await loadMembers();
+      for (const mid of findMentions(b.body, allMembers)) {
+        if (memberSet.has(mid) && mid !== uid) {
+          mentioned.add(mid);
+          await notify(mid, uid, 'mention', 'conversation', conversationId, `${name} hat dich im Chat erwähnt.`);
+        }
+      }
+    }
+    const preview = hasBody
+      ? String(b.body).slice(0, 120)
+      : attachType === 'audio'
+        ? '🎤 Sprachnachricht'
+        : attachType === 'file'
+          ? '📎 Datei'
+          : '📎 Anhang';
+    const pushTitle = conv.kind === 'group' ? conv.title || 'Gruppe' : name;
+    // Thread-Antworten benachrichtigen NUR die Thread-Beteiligten (Eltern-Autor
+    // + bisherige Antwortende) – nicht die ganze Gruppe. Top-Level wie bisher alle.
+    let recipients: string[] = convMembers.map((m) => m.userId);
+    if (parentId) {
+      const parts = (await sql`
+        SELECT DISTINCT author_id AS "userId" FROM messages WHERE id = ${parentId} OR parent_id = ${parentId}
+      `) as { userId: string }[];
+      recipients = parts.map((p) => p.userId).filter((x) => memberSet.has(x));
+    }
+    const pushBody = (conv.kind === 'group' ? `${name}: ${preview}` : preview) + (parentId ? ' (Thread)' : '');
+    // Klick auf die Handy-Benachrichtigung öffnet direkt DIESEN Chat (Deep-Link
+    // via /chat?c=…) – nicht mehr allgemein das Backoffice. Der Service Worker
+    // unterdrückt den Banner zudem, wenn der Chat gerade sichtbar offen ist.
+    const chatUrl = `/chat?c=${encodeURIComponent(conversationId)}`;
+    for (const rid of recipients) {
+      if (rid === uid || mentioned.has(rid)) continue;
+      await sendPushToUser(rid, { title: pushTitle, body: pushBody, url: chatUrl });
+    }
+    return res.json({ ...(inserted[0] as object), reactions: [], replyCount: 0, unreadReplies: 0 });
+  }
+
+  // --- Nachricht bearbeiten (nur eigene, nicht gelöschte) -------------------
+  if (req.method === 'PATCH') {
+    const b = req.body ?? {};
+    const messageId = typeof b.messageId === 'string' ? b.messageId : '';
+    if (!messageId) return badRequest(res, 'Nachrichten-ID fehlt.');
+    if (!isNonEmptyString(b.body)) return badRequest(res, 'Nachricht darf nicht leer sein.');
+    const own = await sql`SELECT author_id, deleted_at FROM messages WHERE id = ${messageId} LIMIT 1`;
+    const row = own[0] as { author_id: string; deleted_at: string | null } | undefined;
+    if (!row) return res.status(404).json({ error: 'Nachricht nicht gefunden.' });
+    if (row.author_id !== uid) return res.status(403).json({ error: 'Nur eigene Nachrichten können bearbeitet werden.' });
+    if (row.deleted_at) return badRequest(res, 'Gelöschte Nachricht kann nicht bearbeitet werden.');
+    await sql`UPDATE messages SET body = ${b.body.slice(0, 8000)}, edited_at = now() WHERE id = ${messageId}`;
+    const updated = await sql.query(`SELECT ${MSG_COLS} FROM messages m WHERE m.id = $1`, [messageId]);
+    return res.json(updated[0] ?? { ok: true });
+  }
+
+  // --- Nachricht für alle löschen (nur eigene) ------------------------------
+  if (req.method === 'DELETE') {
+    const messageId = typeof req.body?.messageId === 'string' ? req.body.messageId : String(req.query.messageId ?? '');
+    if (!messageId) return badRequest(res, 'Nachrichten-ID fehlt.');
+    const own = await sql`SELECT author_id FROM messages WHERE id = ${messageId} LIMIT 1`;
+    const row = own[0] as { author_id: string } | undefined;
+    if (!row) return res.status(404).json({ error: 'Nachricht nicht gefunden.' });
+    if (row.author_id !== uid) return res.status(403).json({ error: 'Nur eigene Nachrichten können gelöscht werden.' });
+    // Inhalt tatsächlich leeren (nicht nur ausblenden) + als gelöscht markieren.
+    await sql`UPDATE messages SET deleted_at = now(), body = '', attach_type = NULL, attach_id = NULL, attach_title = NULL, attach_url = NULL, attach_mime = NULL WHERE id = ${messageId}`;
+    await sql`DELETE FROM message_reactions WHERE message_id = ${messageId}`;
+    return res.json({ ok: true, id: messageId });
+  }
+
+  return res.status(405).json({ error: 'Nicht unterstützt' });
+}
+
+// --- Abstimmung erstellen ---------------------------------------------------
+// POST /api/chat?resource=poll
+//   { conversationId, question, options[], multiple?, anonymous?,
+//     refType?, refId?, refTitle? }
+// Legt eine Nachricht (attach_type='poll') plus Poll + Optionen an und
+// benachrichtigt die Gruppe wie eine normale Nachricht.
+export async function createPoll(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
+  const uid = session.userId;
+  const b = req.body ?? {};
+
+  const conversationId = typeof b.conversationId === 'string' ? b.conversationId : '';
+  if (!conversationId) return badRequest(res, 'Unterhaltungs-ID fehlt.');
+  if (!(await isMember(conversationId, uid))) return res.status(403).json({ error: 'Kein Zugriff auf diese Unterhaltung.' });
+
+  const question = isNonEmptyString(b.question) ? b.question.trim().slice(0, 300) : '';
+  if (!question) return badRequest(res, 'Bitte eine Frage eingeben.');
+
+  const options = (Array.isArray(b.options) ? b.options : [])
+    .map((o: unknown) => (typeof o === 'string' ? o.trim() : ''))
+    .filter((o: string) => o.length > 0)
+    .slice(0, 12)
+    .map((o: string) => o.slice(0, 150));
+  if (options.length < 2) return badRequest(res, 'Bitte mindestens zwei Optionen angeben.');
+
+  const multiple = b.multiple === true;
+  const anonymous = b.anonymous === true;
+  // Optionaler Verweis (Ticket/Aufgabe/Termin – Termin ist technisch eine task).
+  const refType = b.refType === 'ticket' || b.refType === 'task' ? b.refType : null;
+  const refId = refType ? String(b.refId ?? '').slice(0, 80) : null;
+  const refTitle = refType ? String(b.refTitle ?? '').slice(0, 200) : null;
+  if (refType && !refId) return badRequest(res, 'Anhang ist ungültig.');
+
+  const name = sessionName(session);
+  const msgId = genId('msg');
+  const pollId = genId('poll');
+
+  // Träger-Nachricht: attach_id = pollId, attach_title = Frage (für Vorschauen).
+  await sql`
+    INSERT INTO messages (id, conversation_id, parent_id, author_id, author_name, body, attach_type, attach_id, attach_title)
+    VALUES (${msgId}, ${conversationId}, NULL, ${uid}, ${name}, '', 'poll', ${pollId}, ${question})
+  `;
+  await sql`
+    INSERT INTO polls (id, message_id, question, multiple, anonymous, ref_type, ref_id, ref_title, created_by)
+    VALUES (${pollId}, ${msgId}, ${question}, ${multiple}, ${anonymous}, ${refType}, ${refId}, ${refTitle}, ${uid})
+  `;
+  let pos = 0;
+  for (const text of options) {
+    await sql`INSERT INTO poll_options (id, poll_id, text, position) VALUES (${genId('popt')}, ${pollId}, ${text}, ${pos++})`;
+  }
+  await sql`UPDATE conversations SET updated_at = now() WHERE id = ${conversationId}`;
+
+  // Push an die übrigen Mitglieder (wie WhatsApp – nur Handy-Push, keine Glocke).
+  const convRows = await sql`SELECT kind, title FROM conversations WHERE id = ${conversationId}`;
+  const conv = (convRows[0] as { kind: string; title: string } | undefined) ?? { kind: 'group', title: '' };
+  const convMembers = (await sql`SELECT user_id AS "userId" FROM conversation_members WHERE conversation_id = ${conversationId}`) as { userId: string }[];
+  const pushTitle = conv.kind === 'group' ? conv.title || 'Gruppe' : name;
+  const pushBody = (conv.kind === 'group' ? `${name}: ` : '') + `📊 Umfrage: ${question}`;
+  const chatUrl = `/chat?c=${encodeURIComponent(conversationId)}`;
+  for (const { userId: rid } of convMembers) {
+    if (rid === uid) continue;
+    await sendPushToUser(rid, { title: pushTitle, body: pushBody, url: chatUrl });
+  }
+
+  // Angereicherte Nachricht (inkl. Poll) zurückgeben, damit der Client sie
+  // sofort anzeigen kann.
+  const rows = await sql.query(`SELECT ${MSG_COLS} FROM messages m WHERE m.id = $1`, [msgId]);
+  const [enriched] = await attachPolls(rows as { id: string; attachType?: string | null }[], uid);
+  return res.json({ ...enriched, replyCount: 0, unreadReplies: 0 });
+}
+
+// --- Abstimmen (Stimme setzen/umschalten) -----------------------------------
+// POST /api/chat?resource=vote { pollId, optionId }
+// Einzelwahl: setzt genau diese Option (ersetzt eine frühere). Mehrfachwahl:
+// schaltet die Option um. Antwort = aktueller Poll-Zustand.
+export async function votePoll(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
+  const uid = session.userId;
+  const b = req.body ?? {};
+  const pollId = typeof b.pollId === 'string' ? b.pollId : '';
+  const optionId = typeof b.optionId === 'string' ? b.optionId : '';
+  if (!pollId || !optionId) return badRequest(res, 'Angaben fehlen.');
+
+  const pr = await sql`
+    SELECT p.id, p.multiple, p.message_id AS "messageId", m.conversation_id AS "conversationId"
+    FROM polls p JOIN messages m ON m.id = p.message_id WHERE p.id = ${pollId} LIMIT 1
+  `;
+  const poll = pr[0] as { id: string; multiple: boolean; messageId: string; conversationId: string } | undefined;
+  if (!poll) return res.status(404).json({ error: 'Abstimmung nicht gefunden.' });
+  if (!(await isMember(poll.conversationId, uid))) return res.status(403).json({ error: 'Kein Zugriff auf diese Unterhaltung.' });
+
+  const opt = await sql`SELECT 1 FROM poll_options WHERE id = ${optionId} AND poll_id = ${pollId} LIMIT 1`;
+  if (opt.length === 0) return badRequest(res, 'Option ist ungültig.');
+
+  const name = sessionName(session);
+  const existing = await sql`SELECT 1 FROM poll_votes WHERE option_id = ${optionId} AND user_id = ${uid} LIMIT 1`;
+  if (existing.length) {
+    await sql`DELETE FROM poll_votes WHERE option_id = ${optionId} AND user_id = ${uid}`;
+  } else {
+    if (!poll.multiple) {
+      // Einzelwahl: bisherige Stimme(n) dieses Nutzers in dieser Abstimmung weg.
+      await sql`DELETE FROM poll_votes WHERE user_id = ${uid} AND option_id IN (SELECT id FROM poll_options WHERE poll_id = ${pollId})`;
+    }
+    await sql`
+      INSERT INTO poll_votes (poll_id, option_id, user_id, user_name) VALUES (${pollId}, ${optionId}, ${uid}, ${name})
+      ON CONFLICT (option_id, user_id) DO NOTHING
+    `;
+  }
+  const map = await loadPollsFor([poll.messageId], uid);
+  return res.json(map.get(poll.messageId) ?? null);
+}
+
+// --- Emoji-Reaktion setzen/umschalten ---------------------------------------
+// POST /api/chat?resource=react { messageId, emoji }
+// Eine Reaktion pro Nutzer & Nachricht: gleicher Emoji = weg (Toggle), anderer
+// Emoji = ersetzt. Antwort: aktuelle Reaktionsliste der Nachricht.
+export async function reactMessage(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
+  const uid = session.userId;
+  const b = req.body ?? {};
+  const messageId = typeof b.messageId === 'string' ? b.messageId : '';
+  const emoji = typeof b.emoji === 'string' ? b.emoji.slice(0, 16) : '';
+  if (!messageId || !emoji) return badRequest(res, 'Angaben fehlen.');
+
+  const rows = await sql`SELECT conversation_id, deleted_at FROM messages WHERE id = ${messageId} LIMIT 1`;
+  const msg = rows[0] as { conversation_id: string; deleted_at: string | null } | undefined;
+  if (!msg || msg.deleted_at) return res.status(404).json({ error: 'Nachricht nicht gefunden.' });
+  if (!(await isMember(msg.conversation_id, uid))) return res.status(403).json({ error: 'Kein Zugriff auf diese Unterhaltung.' });
+
+  const existing = await sql`SELECT emoji FROM message_reactions WHERE message_id = ${messageId} AND user_id = ${uid} LIMIT 1`;
+  const current = (existing[0] as { emoji: string } | undefined)?.emoji;
+  if (current === emoji) {
+    await sql`DELETE FROM message_reactions WHERE message_id = ${messageId} AND user_id = ${uid}`;
+  } else {
+    await sql`
+      INSERT INTO message_reactions (message_id, user_id, emoji) VALUES (${messageId}, ${uid}, ${emoji})
+      ON CONFLICT (message_id, user_id) DO UPDATE SET emoji = EXCLUDED.emoji, created_at = now()
+    `;
+  }
+  const reactions = await sql`
+    SELECT user_id AS "userId", emoji FROM message_reactions WHERE message_id = ${messageId} ORDER BY created_at
+  `;
+  return res.json({ messageId, reactions });
+}
+
+// --- Ungelesene Threads (Übersicht „damit nichts untergeht") ----------------
+// GET /api/chat?resource=threads -> Threads mit neuen Antworten (von anderen,
+// neuer als mein letzter Blick), quer über alle meine Unterhaltungen.
+export async function threads(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Nicht unterstützt' });
+  res.setHeader('Cache-Control', 'no-store');
+  const uid = session.userId;
+  const rows = await sql.query(
+    `SELECT m.id AS "parentId", m.conversation_id AS "conversationId",
+            m.author_name AS "authorName",
+            CASE WHEN m.deleted_at IS NULL THEN m.body ELSE '' END AS body,
+            m.attach_type AS "attachType", c.kind AS "convKind",
+            CASE WHEN c.kind = 'dm'
+                 THEN (SELECT x.user_name FROM conversation_members x WHERE x.conversation_id = c.id AND x.user_id <> $1 LIMIT 1)
+                 ELSE c.title END AS source,
+            (SELECT count(*)::int FROM messages r WHERE r.parent_id = m.id AND r.author_id <> $1 AND r.deleted_at IS NULL
+               AND r.created_at > COALESCE(tr.last_read_at, to_timestamp(0))) AS "unreadCount",
+            (SELECT max(r.created_at) FROM messages r WHERE r.parent_id = m.id) AS "lastReplyAt",
+            (SELECT r.author_name FROM messages r WHERE r.parent_id = m.id AND r.deleted_at IS NULL ORDER BY r.created_at DESC LIMIT 1) AS "lastReplyAuthor"
+     FROM messages m
+     JOIN conversations c ON c.id = m.conversation_id
+     JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = $1
+     LEFT JOIN thread_reads tr ON tr.parent_id = m.id AND tr.user_id = $1
+     WHERE m.parent_id IS NULL
+       AND EXISTS (SELECT 1 FROM messages r WHERE r.parent_id = m.id AND r.author_id <> $1 AND r.deleted_at IS NULL
+                     AND r.created_at > COALESCE(tr.last_read_at, to_timestamp(0)))
+     ORDER BY "lastReplyAt" DESC NULLS LAST LIMIT 50`,
+    [uid]
+  );
+  return res.json(rows);
+}
+
+// --- Globale Suche (nur eigene Unterhaltungen) ------------------------------
+export async function searchMessages(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Nicht unterstützt' });
+  res.setHeader('Cache-Control', 'no-store');
+  const q = String(req.query.q ?? '').trim();
+  if (q.length < 2) return res.json([]);
+  const like = `%${q}%`;
+  // Optional auf eine Unterhaltung eingrenzen (Lupe innerhalb eines Chats).
+  // Es werden bewusst AUCH Thread-Antworten (parent_id gesetzt) durchsucht;
+  // parentId wird mitgeliefert, damit der Client den Thread öffnen kann.
+  const conversationId = typeof req.query.conversationId === 'string' ? req.query.conversationId : '';
+  const params: unknown[] = [session.userId, like];
+  let extra = '';
+  if (conversationId) {
+    params.push(conversationId);
+    extra = ` AND m.conversation_id = $${params.length}`;
+  }
+  const rows = await sql.query(
+    `SELECT m.id, m.conversation_id AS "conversationId", m.parent_id AS "parentId", m.author_id AS "authorId",
+            m.author_name AS "authorName", m.body, m.attach_type AS "attachType",
+            m.created_at AS "createdAt", c.kind AS "convKind", c.title AS "convTitle"
+     FROM messages m
+     JOIN conversations c ON c.id = m.conversation_id
+     JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = $1
+     WHERE (m.body ILIKE $2 OR m.author_name ILIKE $2)${extra}
+     ORDER BY m.created_at DESC LIMIT 40`,
+    params
+  );
+  return res.json(rows);
+}
+
+// --- Gruppe verwalten (nur Super-Admin): Name & Bild ------------------------
+export async function updateConversation(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
+  if (session.role !== 'superadmin') return res.status(403).json({ error: 'Nur Super-Admins dürfen Gruppen verwalten.' });
+
+  const b = req.body ?? {};
+  const id = typeof b.conversationId === 'string' ? b.conversationId : '';
+  if (!id) return badRequest(res, 'Unterhaltungs-ID fehlt.');
+  const rows = await sql`SELECT kind FROM conversations WHERE id = ${id}`;
+  if (rows.length === 0) return res.status(404).json({ error: 'Gruppe nicht gefunden.' });
+  if ((rows[0] as { kind: string }).kind !== 'group') return badRequest(res, 'Nur Gruppen können bearbeitet werden.');
+
+  const title = typeof b.title === 'string' && b.title.trim() ? b.title.trim().slice(0, 80) : undefined;
+  const avatarUrl =
+    b.avatarUrl !== undefined &&
+    typeof b.avatarUrl === 'string' &&
+    (b.avatarUrl === '' || /^https?:\/\//i.test(b.avatarUrl))
+      ? b.avatarUrl
+      : undefined;
+  await sql`UPDATE conversations SET title = COALESCE(${title ?? null}, title), avatar_url = COALESCE(${avatarUrl ?? null}, avatar_url) WHERE id = ${id}`;
+  return res.json({ ok: true });
+}
+
+// --- Gruppenmitglied hinzufügen/entfernen (nur Super-Admin) ------------------
+export async function manageMember(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
+  if (session.role !== 'superadmin') return res.status(403).json({ error: 'Nur Super-Admins dürfen Mitglieder verwalten.' });
+
+  const b = req.body ?? {};
+  const id = typeof b.conversationId === 'string' ? b.conversationId : '';
+  const userId = typeof b.userId === 'string' ? b.userId : '';
+  const op = b.op === 'remove' ? 'remove' : 'add';
+  if (!id || !userId) return badRequest(res, 'Angaben fehlen.');
+  const rows = await sql`SELECT kind FROM conversations WHERE id = ${id}`;
+  if (rows.length === 0) return res.status(404).json({ error: 'Gruppe nicht gefunden.' });
+  if ((rows[0] as { kind: string }).kind !== 'group') return badRequest(res, 'Mitglieder gibt es nur in Gruppen.');
+
+  if (op === 'remove') {
+    await sql`DELETE FROM conversation_members WHERE conversation_id = ${id} AND user_id = ${userId}`;
+    return res.json({ ok: true });
+  }
+  const members = await loadMembers();
+  if (!members.has(userId)) return badRequest(res, 'Kein aktives Team-Mitglied.');
+  await sql`
+    INSERT INTO conversation_members (conversation_id, user_id, user_name)
+    VALUES (${id}, ${userId}, ${memberName(members, userId)})
+    ON CONFLICT (conversation_id, user_id) DO NOTHING
+  `;
+  await notify(userId, session.userId, 'chat', 'conversation', id, 'Du wurdest zu einer Gruppe hinzugefügt.');
+  return res.json({ ok: true });
+}
+
+// --- Präsenz: echter Online-Status + „tippt gerade" -------------------------
+// Bewusst leichtgewichtig und ephemer (kein Verlauf, keine Lesebestätigung –
+// das würde nur Antwortdruck erzeugen). Ein Eintrag pro Nutzer.
+//   POST /api/chat?resource=presence {typingConversationId?}  -> Heartbeat (+Tippen)
+//   GET  /api/chat?resource=presence[&conversationId=X]       -> {online[],typing[]}
+export async function presence(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  const uid = session.userId;
+
+  if (req.method === 'POST') {
+    const b = req.body ?? {};
+    const typingConv = typeof b.typingConversationId === 'string' && b.typingConversationId ? b.typingConversationId : null;
+    const name = sessionName(session);
+    // Heartbeat aktualisiert immer last_seen; Tipp-Status wird gesetzt bzw.
+    // gelöscht (typing_at nur, wenn tatsächlich in einer Unterhaltung getippt).
+    await sql`
+      INSERT INTO chat_presence (user_id, last_seen, typing_conv, typing_at, typing_name)
+      VALUES (${uid}, now(), ${typingConv},
+              CASE WHEN ${typingConv}::text IS NULL THEN NULL ELSE now() END, ${name})
+      ON CONFLICT (user_id) DO UPDATE SET
+        last_seen = now(),
+        typing_conv = EXCLUDED.typing_conv,
+        typing_at = EXCLUDED.typing_at,
+        typing_name = EXCLUDED.typing_name
+    `;
+    return res.json({ ok: true });
+  }
+
+  if (req.method === 'GET') {
+    res.setHeader('Cache-Control', 'no-store');
+    const conversationId = String(req.query.conversationId ?? '');
+    // Online = Heartbeat jünger als 35 s (Client sendet alle ~18 s).
+    const onlineRows = (await sql`
+      SELECT user_id AS "userId" FROM chat_presence WHERE last_seen > now() - interval '35 seconds'
+    `) as { userId: string }[];
+    let typing: { userId: string; userName: string }[] = [];
+    if (conversationId && (await isMember(conversationId, uid))) {
+      typing = (await sql`
+        SELECT user_id AS "userId", COALESCE(typing_name, '') AS "userName"
+        FROM chat_presence
+        WHERE typing_conv = ${conversationId}
+          AND typing_at > now() - interval '6 seconds'
+          AND user_id <> ${uid}
+      `) as { userId: string; userName: string }[];
+    }
+    return res.json({ online: onlineRows.map((o) => o.userId), typing });
+  }
+
+  return res.status(405).json({ error: 'Nicht unterstützt' });
+}
+
+// --- Als gelesen markieren --------------------------------------------------
+export async function markRead(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
+  const conversationId = typeof req.body?.conversationId === 'string' ? req.body.conversationId : '';
+  if (!conversationId) return badRequest(res, 'Unterhaltungs-ID fehlt.');
+  await sql`UPDATE conversation_members SET last_read_at = now() WHERE conversation_id = ${conversationId} AND user_id = ${session.userId}`;
+  return res.json({ ok: true });
+}

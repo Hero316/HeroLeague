@@ -1,4 +1,5 @@
 // Zentraler Fetch-Helfer: JSON-Header, Fehlertexte vom Server, 401-Behandlung
+import { upload as blobUpload } from '@vercel/blob/client';
 
 let onUnauthorized: (() => void) | null = null;
 
@@ -98,4 +99,68 @@ export async function uploadImage(file: File, opts?: { maxDimension?: number }):
     body: JSON.stringify({ image: dataUrl, filename: upload.name }),
   });
   return result.url;
+}
+
+// Kleiner Upload (Bild/Datei/Audio ≤ 3 MB) über die Serverless-Funktion (Base64).
+async function uploadSmallFile(file: File): Promise<{ url: string; name: string; mime: string }> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
+    reader.readAsDataURL(file);
+  });
+  return apiFetch<{ url: string; name: string; mime: string }>('/api/upload', {
+    method: 'POST',
+    body: JSON.stringify({ kind: 'file', file: dataUrl, filename: file.name || 'datei' }),
+  });
+}
+
+// Direkter Upload vom Browser zu Vercel Blob – umgeht das ~3-MB-Request-Limit
+// der Serverless-Funktion. Für große Dateien, v.a. Videos. Der Server stellt
+// nur ein kurzlebiges Token aus (/api/upload?resource=blob), die Daten fließen
+// direkt (inkl. Multipart bei großen Dateien). Bis 500 MB.
+const BLOB_MAX_BYTES = 500 * 1024 * 1024;
+export async function uploadViaBlob(
+  file: File,
+  onProgress?: (pct: number) => void,
+): Promise<{ url: string; name: string; mime: string }> {
+  if (file.size > BLOB_MAX_BYTES) {
+    throw new Error('Datei ist zu groß (max. 500 MB).');
+  }
+  const safe = (file.name || 'datei').replace(/[^a-zA-Z0-9._-]/g, '').slice(0, 60) || 'datei';
+  const result = await blobUpload(`uploads/${Date.now()}-${safe}`, file, {
+    access: 'public',
+    handleUploadUrl: '/api/upload?resource=blob',
+    contentType: file.type || undefined,
+    multipart: true, // große Videos in Teilen, parallel + mit Wiederholung
+    onUploadProgress: onProgress ? (e) => onProgress(Math.round(e.percentage)) : undefined,
+  });
+  return { url: result.url, name: file.name || 'datei', mime: file.type || '' };
+}
+
+// Beliebige Datei / Audio / Video hochladen (Chat- & Ideen-Anhänge).
+// - Bilder: im Browser verkleinert + zu WebP komprimiert (wie die Website).
+// - Videos & große Dateien: direkt zu Vercel Blob (kein 3-MB-Limit).
+// - Kleine Dateien/Audio: klassisch über die Serverless-Funktion.
+// onProgress meldet den Fortschritt (0–100) beim direkten Blob-Upload.
+export async function uploadFile(
+  file: File,
+  onProgress?: (pct: number) => void,
+): Promise<{ url: string; name: string; mime: string }> {
+  // Bilder immer komprimieren (spart Speicher/Ladezeit – wie auf der Website).
+  if (file.type.startsWith('image/')) {
+    let img = file;
+    try {
+      img = await compressImage(file, GALLERY_MAX_DIMENSION);
+    } catch {
+      /* Original behalten */
+    }
+    // Nach der Komprimierung meist winzig → einfacher Weg; nur im Ausnahmefall Blob.
+    return img.size <= MAX_UPLOAD_BYTES ? uploadSmallFile(img) : uploadViaBlob(img, onProgress);
+  }
+  // Videos und alles > 3 MB: direkt zu Blob. Kleine Dateien/Audio: klassisch.
+  if (file.type.startsWith('video/') || file.size > MAX_UPLOAD_BYTES) {
+    return uploadViaBlob(file, onProgress);
+  }
+  return uploadSmallFile(file);
 }

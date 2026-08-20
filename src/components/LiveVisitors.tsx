@@ -94,8 +94,8 @@ export default function LiveVisitors() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
         <StatTile icon={<Users className="w-3.5 h-3.5" />} label="Heute" value={stats?.today ?? 0} />
         <StatTile icon={<CalendarDays className="w-3.5 h-3.5" />} label="Ø / Tag" value={stats?.perDay ?? 0} />
-        <StatTile icon={<CalendarRange className="w-3.5 h-3.5" />} label="Ø / Woche" value={stats?.perWeek ?? 0} />
-        <StatTile icon={<CalendarClock className="w-3.5 h-3.5" />} label="Ø / Monat" value={stats?.perMonth ?? 0} />
+        <StatTile icon={<CalendarRange className="w-3.5 h-3.5" />} label="7 Tage" value={stats?.perWeek ?? 0} />
+        <StatTile icon={<CalendarClock className="w-3.5 h-3.5" />} label="30 Tage" value={stats?.perMonth ?? 0} />
       </div>
 
       {stats && stats.daily.length > 1 && (

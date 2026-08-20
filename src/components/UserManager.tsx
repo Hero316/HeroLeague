@@ -7,12 +7,6 @@ import { apiFetch } from '../lib/api';
 const inputClass =
   'w-full bg-[#060E0F] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-accent-light';
 
-const ROLE_LABEL: Record<UserRole, string> = {
-  superadmin: 'Super-Admin',
-  match_admin: 'Spiel-Admin',
-  referee: 'Schiedsrichter',
-};
-
 export default function UserManager() {
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,8 +88,10 @@ export default function UserManager() {
       </h3>
       <p className="text-xs text-gray-400 font-sans mb-6">
         Lege Zugänge an und vergib Rollen. <strong className="text-hl-soft">Super-Admins</strong> dürfen alles,{' '}
-        <strong className="text-hl-soft">Spiel-Admins</strong> nur Ergebnisse, Live-Ticker und Spielplan pflegen,{' '}
-        <strong className="text-hl-soft">Schiedsrichter</strong> ausschließlich den Schiedsrichtermodus (Spiele pfeifen).
+        <strong className="text-hl-soft">Spiel-Admins</strong> pflegen Spielplan/Ergebnisse/Klubs, Spieler des Spieltages & Highlights
+        (keine Startseite, Kanäle, Saison oder Zugänge),{' '}
+        <strong className="text-hl-soft">Schiedsrichter</strong> nur den Schiedsrichtermodus,{' '}
+        <strong className="text-hl-soft">Team-Mitglieder</strong> nur den Team-Bereich (Chat, Aufgaben, Tickets).
         Angemeldet wird passwortlos per Code an die hinterlegte E-Mail.
       </p>
 
@@ -127,6 +123,7 @@ export default function UserManager() {
         <div>
           <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">Rolle</label>
           <select value={newRole} onChange={(e) => setNewRole(e.target.value as UserRole)} className={`${inputClass} cursor-pointer`}>
+            <option value="team_member">Team-Mitglied</option>
             <option value="referee">Schiedsrichter</option>
             <option value="match_admin">Spiel-Admin</option>
             <option value="superadmin">Super-Admin</option>
@@ -135,7 +132,7 @@ export default function UserManager() {
         <button
           type="submit"
           disabled={busyId === 'new'}
-          className="px-4 py-2.5 bg-brand-accent-light hover:bg-brand-accent disabled:opacity-50 rounded-xl text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center justify-center gap-1.5 cursor-pointer"
+          className="px-4 py-2.5 bg-brand-accent-light hover:bg-brand-accent disabled:opacity-50 rounded-xl text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center justify-center gap-1.5 cursor-pointer self-end"
         >
           <Plus className="w-4 h-4" />
           <span>Anlegen</span>
@@ -196,10 +193,17 @@ export default function UserManager() {
                   className="bg-brand-dark border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-brand-accent-light cursor-pointer disabled:opacity-50"
                   title="Rolle ändern"
                 >
+                  <option value="team_member">Team-Mitglied</option>
                   <option value="referee">Schiedsrichter</option>
                   <option value="match_admin">Spiel-Admin</option>
                   <option value="superadmin">Super-Admin</option>
                 </select>
+
+                {u.role === 'superadmin' && (
+                  <span className="px-2 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.25)] text-brand-accent-light">
+                    alle Rechte
+                  </span>
+                )}
 
                 <button
                   type="button"

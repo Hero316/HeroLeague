@@ -51,14 +51,60 @@ function makeScorers(goals: number, teamId: string, names: string[]) {
 
 // Aktiviert die Demo: raeumt eine evtl. bestehende Demo weg, kopiert Teams/Kader,
 // legt eine Demo-Saison an und fuellt alle Spiele der echten aktiven Saison per Zufall.
+// --- Demo-Tracking: plausible getrackte Zähler, damit FIFA-Karten, Noten und
+//     Wertungen in der Demo automatisch gefüllt sind (ohne echtes Tracking) ----
+async function ensureDemoStatsTable(): Promise<void> {
+  await sql`CREATE TABLE IF NOT EXISTS match_player_stats (
+    day_key TEXT NOT NULL, match_id TEXT NOT NULL, team_id TEXT NOT NULL,
+    player_name TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'field',
+    counts JSONB NOT NULL DEFAULT '{}', updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (match_id, team_id, player_name))`;
+}
+function stripZero(o: Record<string, number>): Record<string, number> {
+  const r: Record<string, number> = {};
+  for (const k in o) if (o[k] > 0) r[k] = o[k];
+  return r;
+}
+function demoFieldCounts(): Record<string, number> {
+  return stripZero({
+    pass_ok: rand(6, 26),
+    pass_fail: rand(0, 8),
+    key_pass: rand(0, 4),
+    assist: rand(0, 2),
+    shot_on: rand(0, 5),
+    shot_miss: rand(0, 4),
+    shot_blocked_off: rand(0, 2),
+    goal: rand(0, 3),
+    dribble_won: rand(0, 8),
+    dribble_lost: rand(0, 5),
+    duel_won: rand(2, 12),
+    duel_lost: rand(0, 8),
+    interception: rand(0, 6),
+    shot_blocked_def: rand(0, 3),
+    turnover: rand(0, 6),
+  });
+}
+function demoKeeperCounts(conceded: number): Record<string, number> {
+  return stripZero({
+    pass_ok: rand(8, 22),
+    pass_fail: rand(0, 5),
+    save: rand(1, 9),
+    gk_goal_against: Math.max(0, conceded),
+    gk_position_save: rand(0, 4),
+    penalty_save: rand(0, 1),
+  });
+}
+
 export async function activateDemo(): Promise<DemoState> {
   const prev = await readDemo();
+  await ensureDemoStatsTable();
 
   // 1) Alte Demo restlos entfernen + Flag aus (falls der naechste Schritt scheitert, ist alles sauber aus)
   const cleanup = [] as ReturnType<typeof sql>[];
   if (prev.seasonId) {
     cleanup.push(sql`DELETE FROM matches WHERE season_id = ${prev.seasonId}`);
     cleanup.push(sql`DELETE FROM seasons WHERE id = ${prev.seasonId}`);
+    cleanup.push(sql`DELETE FROM match_player_stats WHERE day_key LIKE ${'s:' + prev.seasonId + ':%'}`);
   }
   if (prev.teamIds.length > 0) {
     cleanup.push(sql`DELETE FROM teams WHERE id = ANY(${prev.teamIds})`);
@@ -200,6 +246,48 @@ export async function activateDemo(): Promise<DemoState> {
              ${JSON.stringify(m.scorers)}::jsonb, ${JSON.stringify(m.absentees)}::jsonb, ${JSON.stringify(m.bestPlayers)}::jsonb, ${JSON.stringify(m.goalkeepers)}::jsonb)`
     );
   }
+  // Getrackte Demo-Statistiken je anwesendem Spieler generieren – so sind FIFA-
+  // Karten, Einzelnoten, Spielbericht und Wertungen in der Demo sofort gefüllt.
+  const statRows: {
+    day_key: string;
+    match_id: string;
+    team_id: string;
+    player_name: string;
+    role: string;
+    counts: Record<string, number>;
+  }[] = [];
+  for (const m of demoMatches) {
+    const sides = [
+      { teamId: m.homeTeamId, conceded: m.awayScore },
+      { teamId: m.awayTeamId, conceded: m.homeScore },
+    ];
+    for (const side of sides) {
+      const team = demoTeamById.get(side.teamId);
+      if (!team) continue;
+      const absent = new Set(m.absentees.filter((a) => a.teamId === side.teamId).map((a) => a.playerName));
+      const keeper = m.goalkeepers.find((g) => g.teamId === side.teamId)?.playerName;
+      for (const name of rosterNames(team).filter((n) => !absent.has(n))) {
+        const isK = name === keeper;
+        statRows.push({
+          day_key: `s:${demoSeasonId}:${m.matchday}`,
+          match_id: m.id,
+          team_id: side.teamId,
+          player_name: name,
+          role: isK ? 'keeper' : 'field',
+          counts: isK ? demoKeeperCounts(side.conceded) : demoFieldCounts(),
+        });
+      }
+    }
+  }
+  if (statRows.length > 0) {
+    build.push(sql`
+      INSERT INTO match_player_stats (day_key, match_id, team_id, player_name, role, counts)
+      SELECT day_key, match_id, team_id, player_name, role, counts
+      FROM jsonb_to_recordset(${JSON.stringify(statRows)}::jsonb)
+        AS x(day_key text, match_id text, team_id text, player_name text, role text, counts jsonb)
+      ON CONFLICT (match_id, team_id, player_name) DO NOTHING`);
+  }
+
   const state: DemoState = { active: true, seasonId: demoSeasonId, teamIds: demoTeams.map((t) => t.id) };
   build.push(
     sql`INSERT INTO settings (key, value) VALUES ('demo', ${JSON.stringify(state)}::jsonb)
@@ -213,10 +301,12 @@ export async function activateDemo(): Promise<DemoState> {
 // Deaktiviert die Demo: entfernt alle Demo-Zeilen restlos, Flag aus. Echte Daten bleiben unberuehrt.
 export async function deactivateDemo(): Promise<DemoState> {
   const prev = await readDemo();
+  await ensureDemoStatsTable();
   const stmts = [] as ReturnType<typeof sql>[];
   if (prev.seasonId) {
     stmts.push(sql`DELETE FROM matches WHERE season_id = ${prev.seasonId}`);
     stmts.push(sql`DELETE FROM seasons WHERE id = ${prev.seasonId}`);
+    stmts.push(sql`DELETE FROM match_player_stats WHERE day_key LIKE ${'s:' + prev.seasonId + ':%'}`);
   }
   if (prev.teamIds.length > 0) {
     stmts.push(sql`DELETE FROM teams WHERE id = ANY(${prev.teamIds})`);

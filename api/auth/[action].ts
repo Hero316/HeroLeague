@@ -8,6 +8,7 @@ import {
 } from '../_lib/auth.js';
 import { getUserByEmail, sql } from '../_lib/db.js';
 import { isMailConfigured, sendLoginCode } from '../_lib/mail.js';
+import { ensureSchema } from '../_lib/ensure.js';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -117,14 +118,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const action = req.query.action;
 
   try {
+    await ensureSchema();
     // --- Aktuelle Sitzung abfragen -------------------------------------------
     if (action === 'session' && req.method === 'GET') {
       res.setHeader('Cache-Control', 'no-store');
       const session = await getSession(req);
-      return res.json({
-        isAdmin: Boolean(session),
-        user: session ? { email: session.email, name: session.name, role: session.role } : null,
-      });
+      if (!session) return res.json({ isAdmin: false, user: null });
+
+      // Werte aus dem Token als Basis …
+      let user = {
+        id: session.userId,
+        email: session.email,
+        name: session.name,
+        role: session.role,
+        permissions: session.permissions,
+        avatarUrl: session.avatarUrl,
+        status: session.status,
+      };
+      // … aber FRISCH aus der DB überschreiben (Profilbild/Name/Status/Rolle/
+      // Rechte können sich seit dem Login geändert haben – sonst „springt" alles
+      // beim Neuladen auf den alten Token-Stand zurück).
+      if (session.email) {
+        try {
+          const fresh = await getUserByEmail(session.email);
+          if (fresh) {
+            user = {
+              id: fresh.id,
+              email: fresh.email,
+              name: fresh.name,
+              role: fresh.role,
+              permissions: fresh.permissions,
+              avatarUrl: fresh.avatarUrl,
+              status: fresh.status,
+            };
+          }
+        } catch {
+          /* DB nicht erreichbar – Token-Werte behalten */
+        }
+      }
+      return res.json({ isAdmin: true, user });
     }
 
     // --- Login-Code anfordern -------------------------------------------------
@@ -213,9 +245,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         email: user.email,
         name: user.name,
         role: user.role,
+        permissions: user.permissions,
+        avatarUrl: user.avatarUrl,
+        status: user.status,
       });
       res.setHeader('Set-Cookie', sessionCookie(token));
-      return res.json({ ok: true, user: { email: user.email, name: user.name, role: user.role } });
+      return res.json({
+        ok: true,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          permissions: user.permissions,
+          avatarUrl: user.avatarUrl,
+          status: user.status,
+        },
+      });
     }
 
     // --- Notzugang per Master-Passwort (mit Sperre + optional 2-Faktor) -------
@@ -270,9 +316,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         email: '',
         name: 'Super-Admin',
         role: 'superadmin',
+        permissions: [],
+        avatarUrl: '',
+        status: 'online',
       });
       res.setHeader('Set-Cookie', sessionCookie(token));
-      return res.json({ ok: true, user: { email: '', name: 'Super-Admin', role: 'superadmin' } });
+      return res.json({
+        ok: true,
+        user: { id: 'bootstrap', email: '', name: 'Super-Admin', role: 'superadmin', permissions: [], avatarUrl: '', status: 'online' },
+      });
     }
 
     // --- Master-Passwort: zweiten Faktor (E-Mail-Code) prüfen & anmelden ------
@@ -311,9 +363,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         email: '',
         name: 'Super-Admin',
         role: 'superadmin',
+        permissions: [],
+        avatarUrl: '',
+        status: 'online',
       });
       res.setHeader('Set-Cookie', sessionCookie(token));
-      return res.json({ ok: true, user: { email: '', name: 'Super-Admin', role: 'superadmin' } });
+      return res.json({
+        ok: true,
+        user: { id: 'bootstrap', email: '', name: 'Super-Admin', role: 'superadmin', permissions: [], avatarUrl: '', status: 'online' },
+      });
     }
 
     // --- Abmelden -------------------------------------------------------------

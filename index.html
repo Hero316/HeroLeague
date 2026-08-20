@@ -18,6 +18,10 @@
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
+    <!-- Hero-Schrift (Saira Condensed 900) vorab laden: sonst tauscht der Browser
+         die große Überschrift erst spät aus, die Kopfzeile springt in der Höhe und
+         das Hero-Bild „ploppt" beim (Neu-)Start kurz von klein auf groß. -->
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/EJRLQgErUN8XuHNEtX81i9TmEkrnIcxQ962f.woff2" crossorigin />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" type="image/png" href="/assets/icon-192.png" />
@@ -25,6 +29,28 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Hero League" />
+
+    <!-- App-Identität passend zum Pfad setzen – SYNCHRON beim Laden, VOR React.
+         Wichtig fürs iPhone: Beim „Zum Home-Bildschirm" liest iOS die Start-URL
+         aus dem Manifest, das beim ersten Laden geholt wurde. Öffnet man /chat
+         frisch, muss also sofort das Chat-Manifest (start_url /chat) verlinkt
+         sein, sonst startet die installierte App auf der normalen Startseite.
+         Der spätere React-Effekt behandelt zusätzlich die In-App-Navigation. -->
+    <script>
+      (function () {
+        try {
+          if (location.pathname.indexOf('/chat') !== 0) return; // nur im Team-App-Bereich
+          var set = function (sel, attr, val) {
+            var el = document.querySelector(sel);
+            if (el) el.setAttribute(attr, val);
+          };
+          set('link[rel="manifest"]', 'href', '/chat.webmanifest');
+          set('link[rel="apple-touch-icon"]', 'href', '/assets/chat-apple-touch-icon.png');
+          set('meta[name="apple-mobile-web-app-title"]', 'content', 'Hero Team');
+          set('meta[name="theme-color"]', 'content', '#070d0c');
+        } catch (e) {}
+      })();
+    </script>
 
     <!-- Strukturierte Daten für Google: Name, Website und Logo (hilft für Knowledge-Panel/Logo in der Suche) -->
     <script type="application/ld+json">
@@ -46,6 +72,62 @@
         "name": "Hero League",
         "url": "https://www.hero-league.de/"
       }
+    </script>
+    <!-- Selbstheilung: Bleibt die Seite nach einem Deploy leer (Haupt-Skript
+         konnte nicht geladen werden, z. B. veralteter Service-Worker-Cache),
+         dann SW abmelden, Caches leeren und EINMAL sauber neu laden. Verhindert
+         den "leeren/dunklen Bildschirm", ohne dass man x-mal aktualisieren muss. -->
+    <script>
+      (function () {
+        var recovered = false;
+        function hlRecover() {
+          if (recovered) return;
+          recovered = true;
+          try {
+            if (sessionStorage.getItem('hl-recovered')) return; // pro Sitzung nur 1x
+            sessionStorage.setItem('hl-recovered', '1');
+          } catch (e) {}
+          var reload = function () { try { location.reload(); } catch (e) {} };
+          var tasks = [];
+          try {
+            if ('serviceWorker' in navigator) {
+              tasks.push(
+                navigator.serviceWorker.getRegistrations().then(function (rs) {
+                  return Promise.all(rs.map(function (r) { return r.unregister(); }));
+                })
+              );
+            }
+            if (window.caches && caches.keys) {
+              tasks.push(
+                caches.keys().then(function (keys) {
+                  return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+                })
+              );
+            }
+          } catch (e) {}
+          Promise.all(tasks).then(reload, reload);
+          setTimeout(reload, 2500); // Sicherheitsnetz
+        }
+        // 1) Haupt-Skript/CSS konnte nicht laden (404/MIME) -> sofort heilen.
+        window.addEventListener(
+          'error',
+          function (e) {
+            var t = e && e.target;
+            if (t && (t.tagName === 'SCRIPT' || t.tagName === 'LINK') && (t.src || t.href) &&
+                String(t.src || t.href).indexOf('/assets/') !== -1) {
+              hlRecover();
+            }
+          },
+          true
+        );
+        // 2) Wächter: Ist #root nach ein paar Sekunden noch leer, ebenfalls heilen.
+        window.addEventListener('load', function () {
+          setTimeout(function () {
+            var root = document.getElementById('root');
+            if (root && root.childElementCount === 0) hlRecover();
+          }, 7000);
+        });
+      })();
     </script>
   </head>
   <body>

@@ -29,6 +29,18 @@
   --color-hl-magenta-soft: #F79AC4;
 }
 
+/* Kein automatisches „Font-Boosting" auf Android/iOS: sonst vergrößern manche
+   Browser Textblöcke eigenmächtig – die Seite wirkt dann leicht „reingezoomt".
+   Pinch-Zoom des Nutzers bleibt erlaubt (kein user-scalable=no). */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Nie horizontal scrollen/„reinzoomen": die Seite darf nie breiter als der
+     Bildschirm werden. Innere Scroll-Bereiche (z. B. Spieltag-Leiste) haben ihr
+     eigenes overflow und bleiben davon unberührt. */
+  overflow-x: hidden;
+}
+
 body {
   background: #0A1415;
 }
@@ -130,6 +142,13 @@ body {
   100% { opacity: 1; transform: scale(1); }
 }
 
+/* Sanft pulsierender Neon-Glow für große Section-Titel (z. B. „Momente der
+   Liga"): atmet dezent auf und ab – lebendig, aber nicht kitschig. */
+@keyframes hlTitleGlow {
+  0%, 100% { text-shadow: 0 0 20px rgba(34, 223, 201, 0.25), 0 0 4px rgba(34, 223, 201, 0.15); }
+  50% { text-shadow: 0 0 48px rgba(34, 223, 201, 0.55), 0 0 12px rgba(34, 223, 201, 0.35); }
+}
+
 .hl-fade {
   animation: hlFade 0.6s both;
 }
@@ -154,6 +173,26 @@ body {
 
 /* Einzel-Pop (z. B. eine Karte) – smooth mit sanftem Nachschwingen. */
 .hl-pop { animation: hlPop 0.9s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* „Wisch"-Einblendung: von rechts hereinfahren + aufblenden. Für das
+   Öffnen einer Spieler-Einzelwertung im Spielbericht. */
+@keyframes hlSwipeIn {
+  0% { opacity: 0; transform: translateX(26px) scale(0.985); }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+.hl-swipe-in { animation: hlSwipeIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Note-je-Spiel: die einzelnen Noten fahren nacheinander von rechts herein
+   (Reihe für Reihe). Verzögerung wird pro Element inline gesetzt. */
+@keyframes hlNoteIn {
+  0% { opacity: 0; transform: translateX(20px) scale(0.9); }
+  60% { opacity: 1; }
+  100% { opacity: 1; transform: translateX(0) scale(1); }
+}
+.hl-note-in { animation: hlNoteIn 0.44s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Pulsierender Titel-Glow. */
+.hl-title-glow { animation: hlTitleGlow 3.8s ease-in-out infinite; }
 
 /* Kaskade: direkte Kinder poppen weich verzögert nacheinander auf
    („die Daten nacheinander"). Läuft einmal beim Einblenden.
@@ -257,9 +296,53 @@ body {
   filter: drop-shadow(0 0 12px rgba(37, 99, 235, 0.5));
   animation-duration: 6s;
 }
+/* Hauptpartner-Überschrift: kräftiger Gold-Schimmer mit warmem Glow – hebt den
+   Hauptpartner deutlich von Titel (Violett) und Bankpartner (Blau) ab. */
+.hl-partner-hero {
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background-image: linear-gradient(100deg, #B8860B 0%, #E9C46A 28%, #FFF3CC 50%, #E9C46A 72%, #B8860B 100%);
+  filter: drop-shadow(0 0 16px rgba(233, 196, 106, 0.78));
+  animation: hlGoldShimmer 3.5s linear infinite;
+}
 
-/* Touch-Geräte (Handy/Tablet) haben kein Hover -> Partner-Logos direkt farbig
-   zeigen, statt dauerhaft grau. Auf Desktop bleibt der Grau→Farbe-Hover. */
+/* Hauptpartner-Logo: IMMER farbig (kein Grau), auf jedem Gerät. Auf dem PC ohne
+   Hover schlicht farbig, beim Hovern etwas größer + leuchtend. Auf Touch-Geräten
+   (Handy/Tablet, kein Hover) leuchtet es dauerhaft. */
+.hl-partner-main-logo {
+  filter: drop-shadow(0 6px 16px rgba(15, 23, 42, 0.18));
+  transition: transform 0.3s ease, filter 0.3s ease;
+}
+@media (hover: hover) {
+  .hl-partner-main-logo:hover {
+    transform: scale(1.09);
+    filter: drop-shadow(0 0 26px rgba(233, 196, 106, 0.9)) drop-shadow(0 0 10px rgba(255, 255, 255, 0.7));
+  }
+}
+@media (hover: none) {
+  .hl-partner-main-logo {
+    filter: drop-shadow(0 0 20px rgba(233, 196, 106, 0.85)) drop-shadow(0 0 8px rgba(255, 255, 255, 0.55));
+  }
+}
+
+/* Bankpartner-Logo: IMMER farbig (kein Grau), KEIN Dauer-Glow. Auf dem PC beim
+   Hovern nur ein dezentes Leuchten + minimales Vergrößern – deutlich schwächer
+   als der Hauptpartner. Auf Touch-Geräten schlicht farbig (kein Hover). */
+.hl-partner-color-logo {
+  transition: transform 0.3s ease, filter 0.3s ease;
+}
+@media (hover: hover) {
+  .hl-partner-color-logo:hover {
+    transform: scale(1.04);
+    filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.6)) drop-shadow(0 0 5px rgba(56, 189, 248, 0.35));
+  }
+}
+
+/* Touch-Geräte (Handy/Tablet) haben kein Hover -> normale Partner-Logos direkt
+   farbig zeigen, statt dauerhaft grau. Auf Desktop bleibt der Grau→Farbe-Hover. */
 @media (hover: none) {
   .hl-partner-logo {
     filter: none;
@@ -276,6 +359,7 @@ body {
   .hl-zoom,
   .hl-pulse,
   .hl-gold-text,
+  .hl-title-glow,
   .hl-drift-a,
   .hl-drift-b,
   .hl-drift-c {
@@ -375,6 +459,30 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.11),
     inset 0 0 40px rgba(255, 255, 255, 0.015),
     0 24px 64px rgba(0, 0, 0, 0.42);
+}
+
+/* Modal-/Dialog-Karten: DECKEND und OHNE backdrop-filter.
+   Grund: Die normale .hl-card ist eine Glas-Fläche, die auf backdrop-filter
+   angewiesen ist. Liegt so eine Karte in einem abgedunkelten Overlay, das
+   SELBST einen backdrop-filter (Blur) hat, bricht iOS/Safari das Compositing
+   der verschachtelten Filter – die Karte wird komplett SCHWARZ (nur Felder
+   mit eigenem Hintergrund bleiben sichtbar). Deshalb bekommen Modal-Karten
+   einen soliden Hintergrund und keinen eigenen Filter. */
+.hl-modal-card {
+  background: #12211f !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* iOS zoomt beim Antippen in ein Eingabefeld mit Schrift < 16px hinein – das
+   ist das „plötzlich so groß". 16px auf echten Text-Eingaben (input/textarea)
+   verhindert das zuverlässig. Kleine Status-Auswahlen (select) bleiben
+   unberührt, damit die Pillen klein bleiben. Nur auf Handy-Breite. */
+@media (max-width: 640px) {
+  input:not([type='checkbox']):not([type='radio']),
+  textarea {
+    font-size: 16px;
+  }
 }
 
 /* =====================================================================
@@ -596,3 +704,202 @@ body {
     margin: 10mm;
   }
 }
+
+/* =====================================================================
+   Interner Chat (Hero Chat) – WhatsApp-artige, ruhige Optik
+   ===================================================================== */
+
+/* Ruhiger Chat-Hintergrund: dunkle Basis + sehr dezentes Punkte-Raster.
+   Bewusst zurückhaltend, damit Nachrichten im Vordergrund stehen. */
+.hl-chat-bg {
+  background-color: #0a1210;
+  background-image:
+    radial-gradient(rgba(34, 223, 201, 0.05) 0.5px, transparent 0.5px),
+    radial-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 26px 26px, 26px 26px;
+  background-position: 0 0, 13px 13px;
+}
+
+/* „Tippt gerade" – drei sanft wippende Punkte (wie WhatsApp). */
+@keyframes hlTyping {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+.hl-typing-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: hlTyping 1.3s infinite ease-in-out;
+}
+
+/* Nachrichten-Bubbles: kleiner „Zipfel" (Tail) an der jeweiligen Seite,
+   erzeugt über ein gedrehtes Quadrat – robust ohne SVG. */
+.hl-bubble { position: relative; }
+.hl-bubble-in::before,
+.hl-bubble-out::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 12px;
+  height: 12px;
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+}
+.hl-bubble-in::before {
+  left: -6px;
+  background: inherit;
+  border-top-left-radius: 3px;
+  transform: scaleX(-1);
+}
+.hl-bubble-out::before {
+  right: -6px;
+  background: inherit;
+  border-top-right-radius: 3px;
+}
+
+/* Leuchtende Kalender-Marker (Spieltage/Testspieltage): sanftes Pulsieren.
+   Die Farbe kommt per Inline-Style (tonabhängig) – hier nur die Helligkeit. */
+@keyframes hlCalGlow {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.28); }
+}
+.hl-cal-glow {
+  animation: hlCalGlow 2.6s ease-in-out infinite;
+}
+
+/* =====================================================================
+   Team-App (Chats · Aufgaben · Kalender · Tickets) – heller, cleaner Look.
+   Scoped auf .hl-team, damit die öffentliche Website unberührt dunkel bleibt.
+   Bewusst so gebaut, dass der schlimmste Fall KOSMETISCH ist (nie unsichtbarer
+   Text): text-white -> dunkle Tinte, helle Ränder/Overlays -> dunkle Pendants.
+   ===================================================================== */
+.hl-team {
+  /* Text-Tokens: dunkel auf hell – alle text-hl-* ziehen automatisch mit. */
+  --color-hl-text: #12211E;
+  --color-hl-soft: #384A46;
+  --color-hl-mute: #5C716E;
+  --color-hl-dim: #7C8F8B;
+  --color-hl-faint: #A4B2AF;
+  color: var(--color-hl-text);
+}
+/* Voll-deckendes text-white -> dunkle Tinte (nie unsichtbar). Die /xx-Varianten
+   (z. B. Bubble-Zeit auf Farbe) bleiben bewusst weiß. */
+.hl-team .text-white { color: #12211E; }
+/* Akzent-TEXT auf Weiß lesbarer machen (Hintergründe bleiben hell/bunt!).
+   Die hellen Marken-/Statusfarben sind für dunklen Grund gedacht und wären als
+   Text auf Weiß zu kontrastarm – hier nur die Text-Nutzungen abdunkeln. */
+.hl-team .text-brand-accent-light { color: #0AA79A; }
+.hl-team .text-brand-accent { color: #0C8F86; }
+.hl-team .text-hl-green, .hl-team .text-hl-green-soft { color: #0E9D6A; }
+.hl-team .text-hl-red, .hl-team .text-hl-red-soft { color: #D63D2C; }
+.hl-team .text-hl-gold { color: #B07D0A; }
+.hl-team .text-hl-magenta, .hl-team .text-hl-magenta-soft { color: #C41E76; }
+/* Helle Ränder -> dezente dunkle Haarlinien (Trennkanten bleiben sichtbar). */
+.hl-team [class*="border-white"] { border-color: rgba(16, 42, 38, 0.10); }
+/* Subtile weiße Overlays (Hover/Fill) -> subtile dunkle Overlays. */
+.hl-team [class*="bg-white/"] { background-color: rgba(16, 42, 38, 0.05); }
+/* Heller Chat-Hintergrund mit zartem Punktraster. */
+.hl-team .hl-chat-bg {
+  background-color: #F1F6F5;
+  background-image:
+    radial-gradient(rgba(18, 174, 198, 0.10) 0.5px, transparent 0.5px),
+    radial-gradient(rgba(16, 42, 38, 0.03) 1px, transparent 1px);
+  background-size: 26px 26px, 26px 26px;
+  background-position: 0 0, 13px 13px;
+}
+/* Karten & Modals hell. */
+.hl-team .hl-card {
+  background: #FFFFFF;
+  border: 1px solid rgba(16, 42, 38, 0.08);
+  box-shadow: 0 18px 44px -22px rgba(16, 42, 40, 0.30);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.hl-team .hl-modal-card { background: #FFFFFF !important; }
+/* Einstellungen/Profil in der Team-App (heller Modus): die wiederverwendeten
+   Editoren (Profil, Benachrichtigungen) haben fest dunkle Eingabefelder – hier
+   auf hell drehen, sonst wäre der Text dunkel-auf-dunkel und unlesbar. */
+.hl-team .hl-settings input,
+.hl-team .hl-settings textarea,
+.hl-team .hl-settings select {
+  background-color: #F1F6F5;
+  color: #12211E;
+  border-color: rgba(16, 42, 38, 0.15);
+}
+/* Glas-Chrome hell (falls im Team-Bereich verwendet). */
+.hl-team .hl-glass-nav,
+.hl-team .hl-glass-dock,
+.hl-team .hl-glass-panel {
+  background: rgba(255, 255, 255, 0.85) !important;
+}
+/* Weiße Scrollbars -> dunkle, dezente Scrollbars im hellen Bereich. */
+.hl-team ::-webkit-scrollbar-thumb { background: rgba(16, 42, 38, 0.14); }
+.hl-team ::-webkit-scrollbar-thumb:hover { background: rgba(16, 42, 38, 0.24); }
+/* Weißes Hero-League-Logo in der hellen Kopfzeile einfärben (sonst unsichtbar). */
+.hl-team .hl-applogo { filter: brightness(0) saturate(100%); opacity: 0.9; }
+
+/* Neutrale Flächen für die GETEILTEN Komponenten (Aufgaben/Kalender/Tickets),
+   die AUCH im dunklen Backoffice laufen: dunkel als Standard, hell nur unter
+   .hl-team (Team-App). So bleibt das Backoffice unberührt dunkel. */
+.hl-surf { background: #0a1110; }
+.hl-team .hl-surf { background: #FFFFFF; }
+.hl-surf-0 { background: #060E0F; }
+.hl-team .hl-surf-0 { background: #EEF3F4; }
+.hl-surf-soft { background: rgba(6, 14, 15, 0.4); }
+.hl-team .hl-surf-soft { background: rgba(255, 255, 255, 0.6); }
+
+/* Fremde Nachrichten-Bubble (Gegenüber): dunkle Fläche im Dunkelmodus,
+   weiß im Hellmodus. Der Bubble-Zipfel erbt die Farbe (background: inherit). */
+.hl-bubble-other { background: #17211F; }
+.hl-team .hl-bubble-other { background: #FFFFFF; }
+
+/* App-Rahmen der Team-App (Hintergrund, Kopf- und Fußleiste). Dunkel als
+   Standard, hell unter .hl-team – so trägt der Sonne/Mond-Schalter alles mit. */
+.hl-app-bg {
+  background:
+    radial-gradient(1100px 600px at 8% -8%, rgba(34, 223, 201, 0.08) 0%, transparent 55%),
+    radial-gradient(900px 560px at 108% 0%, rgba(139, 124, 255, 0.08) 0%, transparent 52%),
+    #0a1210;
+}
+.hl-team .hl-app-bg {
+  background:
+    radial-gradient(1100px 600px at 8% -8%, #DDF4EF 0%, transparent 55%),
+    radial-gradient(900px 560px at 108% 0%, #ECEAFF 0%, transparent 52%),
+    #EAF0F1;
+}
+.hl-app-bar { background: rgba(10, 18, 16, 0.82); }
+.hl-team .hl-app-bar { background: rgba(255, 255, 255, 0.82); }
+.hl-app-dock { background: rgba(10, 18, 16, 0.92); }
+.hl-team .hl-app-dock { background: rgba(255, 255, 255, 0.92); }
+
+/* Trenn-Ring um (überlappende) Avatare: nimmt die Farbe der Karte dahinter an,
+   damit gestapelte Profilbilder sauber getrennt wirken statt „verbacken".
+   Dunkel als Standard, weiß unter .hl-team. */
+.hl-avatar-ring { border-radius: 9999px; box-shadow: 0 0 0 2px #0a1110; }
+.hl-team .hl-avatar-ring { box-shadow: 0 0 0 2px #FFFFFF; }
+
+/* =====================================================================
+   Statistics Center (Erfassungs-Editor) – Formularfelder & Raster.
+   Trägt den Hell-/Dunkel-Modus über .hl-team automatisch mit.
+   ===================================================================== */
+.hl-input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--color-hl-text);
+  outline: none;
+}
+.hl-input:focus {
+  border-color: rgba(34, 223, 201, 0.6);
+}
+.hl-team .hl-input {
+  background: #F1F6F5;
+  border-color: rgba(16, 42, 38, 0.15);
+  color: #12211E;
+}
+/* Sticky-Kopfzeile und -Spieler-Spalte im Raster müssen DECKEND sein, damit
+   die seitlich durchscrollenden Zähler nicht dahinter durchscheinen. */
+.hl-th { background: rgba(255, 255, 255, 0.03); }
+.hl-th-name, .hl-td-name { background: #10201d; }
+.hl-team .hl-th { background: rgba(16, 42, 38, 0.04); }
+.hl-team .hl-th-name, .hl-team .hl-td-name { background: #FFFFFF; }

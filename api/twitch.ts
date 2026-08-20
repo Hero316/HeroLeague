@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql, getTeams } from './_lib/db.js';
-import { requireStaff, requireMatchWrite, requireSuperadmin } from './_lib/auth.js';
+import { requireStaff, requireMatchWrite, requireSuperadmin, getSession } from './_lib/auth.js';
 
 const DEFAULT_TWITCH = { channel: '', isLive: false };
 const DEFAULT_SOCIAL = { instagram: '', tiktok: '', youtube: '' };
@@ -58,6 +58,7 @@ const DEFAULT_EVENT = {
   title: 'Testspieltag',
   tagline: '6 Teams · jeder gegen jeden · ab 20:30 Uhr',
   dateLabel: 'Sonntag, 2. August 2026',
+  date: '2026-08-02',
   location: 'Soccer Center Königsfeld',
   teams: ['New Way F.C.', 'Süss FC', 'Phalanx United', 'Trossingen F.C.', 'FC Apex', 'FC Patchwork'],
   matches: [
@@ -286,6 +287,8 @@ function normalizeEvent(body: unknown, index = 0) {
     title: str(b.title, 'Testspieltag').trim() || 'Testspieltag',
     tagline: str(b.tagline).trim(),
     dateLabel: str(b.dateLabel).trim(),
+    // Echtes Kalenderdatum (YYYY-MM-DD) für die Aufgaben-Kalender-Markierung.
+    date: /^\d{4}-\d{2}-\d{2}$/.test(str(b.date).trim()) ? str(b.date).trim() : '',
     location: str(b.location).trim(),
     teams: Array.isArray(b.teams) ? b.teams.map((t) => str(t).trim()).filter(Boolean) : [],
     matches: matches.map((raw, i) => {
@@ -554,10 +557,140 @@ const saveRoster = requireMatchWrite(async (req: VercelRequest, res: VercelRespo
   return res.json({ ok: true, minutes, teams });
 });
 
+// --- Mini-Game „Hero Kicker" – Bestenliste ---------------------------------
+// Pro Nutzer eine Bilanz gegen die KI (Spiele/Siege/Tore), abgelegt in EINEM
+// settings-Eintrag (key 'game'), Schlüssel = userId. Identität kommt aus der
+// Login-Session (nicht aus dem Body) – niemand kann sich als jemand anderes
+// eintragen. Gelesen wird als sortierte Rangliste, jeder sieht die Scores der
+// anderen.
+type GameStat = {
+  name: string;
+  plays: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  gf: number; // erzielte Tore gesamt
+  ga: number; // kassierte Tore gesamt
+  bestWin: number; // größte Tordifferenz in einem Sieg
+  updatedAt: string;
+};
+
+function emptyGameStat(name: string): GameStat {
+  return { name, plays: 0, wins: 0, draws: 0, losses: 0, gf: 0, ga: 0, bestWin: 0, updatedAt: '' };
+}
+
+// Punkte für die Rangliste: 3 pro Sieg, 1 pro Remis; Tordifferenz als Feinsortierung.
+function gamePoints(s: GameStat): number {
+  return s.wins * 3 + s.draws;
+}
+
+// Gespeicherte Map (userId → GameStat) in eine sortierte Rangliste umwandeln.
+function toGameBoard(stored: unknown) {
+  const map = (stored && typeof stored === 'object' ? stored : {}) as Record<string, Partial<GameStat>>;
+  const rows = Object.entries(map).map(([userId, v]) => {
+    const s = { ...emptyGameStat(str(v?.name)), ...v } as GameStat;
+    return {
+      userId,
+      name: str(s.name) || 'Spieler',
+      plays: Math.max(0, Math.floor(Number(s.plays) || 0)),
+      wins: Math.max(0, Math.floor(Number(s.wins) || 0)),
+      draws: Math.max(0, Math.floor(Number(s.draws) || 0)),
+      losses: Math.max(0, Math.floor(Number(s.losses) || 0)),
+      gf: Math.max(0, Math.floor(Number(s.gf) || 0)),
+      ga: Math.max(0, Math.floor(Number(s.ga) || 0)),
+      bestWin: Math.max(0, Math.floor(Number(s.bestWin) || 0)),
+      points: 0,
+    };
+  });
+  rows.forEach((r) => (r.points = r.wins * 3 + r.draws));
+  rows.sort(
+    (a, b) => b.points - a.points || b.wins - a.wins || (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf
+  );
+  return rows;
+}
+
+const saveGame = async (req: VercelRequest, res: VercelResponse) => {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const result = b.result === 'win' || b.result === 'draw' || b.result === 'loss' ? b.result : null;
+  const gf = toScore(b.gf) ?? 0;
+  const ga = toScore(b.ga) ?? 0;
+  if (!result) return res.status(400).json({ error: 'Ungültiges Ergebnis.' });
+
+  const rows = await sql`SELECT value FROM settings WHERE key = 'game'`;
+  const map = (rows[0]?.value && typeof rows[0].value === 'object' ? rows[0].value : {}) as Record<string, GameStat>;
+  const prev = map[session.userId] ?? emptyGameStat(session.name);
+  const next: GameStat = {
+    name: session.name || prev.name || 'Spieler',
+    plays: (Number(prev.plays) || 0) + 1,
+    wins: (Number(prev.wins) || 0) + (result === 'win' ? 1 : 0),
+    draws: (Number(prev.draws) || 0) + (result === 'draw' ? 1 : 0),
+    losses: (Number(prev.losses) || 0) + (result === 'loss' ? 1 : 0),
+    gf: (Number(prev.gf) || 0) + gf,
+    ga: (Number(prev.ga) || 0) + ga,
+    bestWin: Math.max(Number(prev.bestWin) || 0, result === 'win' ? gf - ga : 0),
+    updatedAt: new Date().toISOString(),
+  };
+  map[session.userId] = next;
+
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('game', ${JSON.stringify(map)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+
+  return res.json({ me: { userId: session.userId, ...next, points: gamePoints(next) }, board: toGameBoard(map) });
+};
+
+// --- Sponsor-/Partner-Klicks (Analytics) -----------------------------------
+// Zählt, wie oft die einzelnen Sponsoren angeklickt werden – EGAL wo (Partner-
+// Leiste unten, „Spieler des Spieltages", Team-Seiten, künftige Platzierungen).
+// Alles in EINEM settings-Eintrag (key 'sponsor-clicks'), Schlüssel = Sponsor-ID.
+// Neue Sponsoren/Platzierungen legen sich beim ersten Klick automatisch selbst an.
+// WICHTIG: Der Zähl-POST ist bewusst ÖFFENTLICH (Website-Besucher sind nicht
+// eingeloggt). Er kann ausschließlich Zähler hochzählen; Größen- und Anzahl-
+// Limits schützen vor Missbrauch. Die Auswertung (GET) ist login-geschützt.
+const SPONSOR_MAX = 800; // max. verschiedene Sponsoren
+const PLACEMENT_MAX = 40; // max. Platzierungen je Sponsor
+
+const trackSponsorClick = async (req: VercelRequest, res: VercelResponse) => {
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const id = str(b.sponsorId).trim().slice(0, 80);
+  if (!id) return res.status(400).json({ error: 'sponsorId fehlt' });
+  const name = str(b.name).trim().slice(0, 80);
+  const placement = (str(b.placement).trim().slice(0, 40)) || 'unbekannt';
+
+  const rows = await sql`SELECT value FROM settings WHERE key = 'sponsor-clicks'`;
+  const map = (rows[0]?.value && typeof rows[0].value === 'object' ? rows[0].value : {}) as Record<
+    string,
+    { name: string; total: number; placements: Record<string, number>; lastAt: string }
+  >;
+  // Schutz vor Missbrauch: keine unbegrenzt neuen Schlüssel zulassen.
+  if (!map[id] && Object.keys(map).length >= SPONSOR_MAX) return res.json({ ok: true });
+
+  const e = map[id] && typeof map[id] === 'object' ? map[id] : { name: '', total: 0, placements: {}, lastAt: '' };
+  e.name = name || e.name || 'Sponsor';
+  e.total = (Number(e.total) || 0) + 1;
+  if (!e.placements || typeof e.placements !== 'object') e.placements = {};
+  if (e.placements[placement] !== undefined || Object.keys(e.placements).length < PLACEMENT_MAX) {
+    e.placements[placement] = (Number(e.placements[placement]) || 0) + 1;
+  }
+  e.lastAt = new Date().toISOString();
+  map[id] = e;
+
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('sponsor-clicks', ${JSON.stringify(map)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+  return res.json({ ok: true });
+};
+
 // Ein Endpunkt für alle Website-Einstellungen (Twitch + Social Media + Event +
 // Highlights + News), um unter dem Serverless-Funktionslimit (12) zu bleiben.
 // Angesprochen über ?resource=social | event | highlights | hero | countdown |
-// news | roster; Twitch ist die Vorgabe.
+// news | roster | game | sponsor-clicks (GET) | sponsor-click (POST);
+// Twitch ist die Vorgabe.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const resource = req.query.resource;
@@ -601,6 +734,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const rows = await sql`SELECT value FROM settings WHERE key = 'roster'`;
         return res.json(rows[0]?.value ?? {});
       }
+      if (resource === 'game') {
+        const rows = await sql`SELECT value FROM settings WHERE key = 'game'`;
+        return res.json({ board: toGameBoard(rows[0]?.value) });
+      }
+      if (resource === 'sponsor-clicks') {
+        // Auswertung nur für Super-Admin und Spiel-Admin (interne Analytics).
+        const session = await getSession(req);
+        if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+        if (session.role !== 'superadmin' && session.role !== 'match_admin') {
+          return res.status(403).json({ error: 'Keine Berechtigung für diese Auswertung.' });
+        }
+        const rows = await sql`SELECT value FROM settings WHERE key = 'sponsor-clicks'`;
+        return res.json(rows[0]?.value ?? {});
+      }
       const rows = await sql`SELECT value FROM settings WHERE key = 'twitch'`;
       return res.json(rows[0]?.value ?? DEFAULT_TWITCH);
     }
@@ -614,6 +761,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'countdown') return saveCountdown(req, res);
       if (resource === 'news') return saveNews(req, res);
       if (resource === 'roster') return saveRoster(req, res);
+      if (resource === 'game') return saveGame(req, res);
+      if (resource === 'sponsor-click') return trackSponsorClick(req, res);
       return saveTwitch(req, res);
     }
     return res.status(405).json({ error: 'Nicht unterstützt' });

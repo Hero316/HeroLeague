@@ -1,5 +1,5 @@
 import { neon } from '@neondatabase/serverless';
-import type { AppUser, Match, Player, Season, Team } from '../../src/types';
+import type { AppUser, AdminPermission, UserRole, UserStatus, Match, Player, Season, Team } from '../../src/types';
 
 export const sql = neon(process.env.DATABASE_URL!);
 
@@ -61,18 +61,33 @@ export async function getCurrentSeason(): Promise<Season | null> {
   return (rows[0] as Season) ?? null;
 }
 
+// Aus dem kompletten Zeilen-JSON einen AppUser bauen. Bewusst über to_jsonb,
+// damit fehlende (noch nicht migrierte) Spalten wie avatar_url/status/
+// permissions/notify_prefs NICHT die ganze Abfrage crashen – sie fallen einfach
+// auf sinnvolle Standardwerte zurück. So funktioniert Login/Team/Chat auch,
+// bevor die Migration durch ist.
+function userFromJson(j: Record<string, unknown>): AppUser {
+  // Alt-Rolle „ticket_manager" gibt es nicht mehr → wie Team-Mitglied behandeln.
+  const raw = typeof j.role === 'string' ? j.role : '';
+  const role: UserRole = raw === 'ticket_manager' ? 'team_member' : ((raw as UserRole) || 'match_admin');
+  return {
+    id: String(j.id),
+    email: typeof j.email === 'string' ? j.email : '',
+    name: typeof j.name === 'string' ? j.name : '',
+    role,
+    permissions: Array.isArray(j.permissions) ? (j.permissions as AdminPermission[]) : [],
+    avatarUrl: typeof j.avatar_url === 'string' ? j.avatar_url : '',
+    status: typeof j.status === 'string' ? (j.status as UserStatus) : 'online',
+    isActive: j.is_active !== false,
+  };
+}
+
 export async function getUsers(): Promise<AppUser[]> {
-  const rows = await sql`
-    SELECT id, email, name, role, is_active AS "isActive"
-    FROM users ORDER BY created_at
-  `;
-  return rows as AppUser[];
+  const rows = await sql`SELECT to_jsonb(u) AS j FROM users u ORDER BY created_at`;
+  return rows.map((r) => userFromJson((r as { j: Record<string, unknown> }).j));
 }
 
 export async function getUserByEmail(email: string): Promise<AppUser | null> {
-  const rows = await sql`
-    SELECT id, email, name, role, is_active AS "isActive"
-    FROM users WHERE email = ${email.trim().toLowerCase()} LIMIT 1
-  `;
-  return (rows[0] as AppUser) ?? null;
+  const rows = await sql`SELECT to_jsonb(u) AS j FROM users u WHERE email = ${email.trim().toLowerCase()} LIMIT 1`;
+  return rows[0] ? userFromJson((rows[0] as { j: Record<string, unknown> }).j) : null;
 }
