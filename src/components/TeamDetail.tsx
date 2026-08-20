@@ -244,6 +244,8 @@ export default function TeamDetail({
 
   // Lange „Spiele"-Liste standardmäßig eingeklappt (weniger Scrollen).
   const [showAllMatches, setShowAllMatches] = useState(false);
+  // Spiele mit veröffentlichten Einzelnoten → deren Balken führen zum Spielbericht.
+  const reportMatchIds = useMemo(() => new Set(trackingRows.map((r) => r.matchId)), [trackingRows]);
 
   // Team-/Trikot-Sponsoren dieses Vereins laden (modulweit gecacht).
   const [sponsorsMap, setSponsorsMap] = useState<TeamSponsorsMap>(teamSponsorsCache ?? {});
@@ -720,10 +722,15 @@ export default function TeamDetail({
                 const opp = opponent(m);
                 const isHome = m.homeTeamId === team.id;
                 const badge = resultBadge(m);
+                const canOpen = !!(onOpenMatch && reportMatchIds.has(m.id));
                 return (
                   <div
                     key={m.id}
-                    className="flex items-center justify-between gap-3 px-3.5 py-[11px] rounded-[13px] bg-[linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012))] border border-white/[.08]"
+                    onClick={canOpen ? () => onOpenMatch!(m.id) : undefined}
+                    role={canOpen ? 'button' : undefined}
+                    tabIndex={canOpen ? 0 : undefined}
+                    onKeyDown={canOpen ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenMatch!(m.id); } } : undefined}
+                    className={`flex items-center justify-between gap-3 px-3.5 py-[11px] rounded-[13px] bg-[linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.012))] border border-white/[.08] transition-colors ${canOpen ? 'cursor-pointer hover:border-white/25' : ''}`}
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 text-sm">
@@ -731,7 +738,7 @@ export default function TeamDetail({
                         <span className="text-[10px] font-sans font-bold text-hl-faint shrink-0 uppercase">{isHome ? 'H' : 'A'}</span>
                         {opp ? (
                           <button
-                            onClick={() => onSelectTeam(opp.id)}
+                            onClick={(e) => { e.stopPropagation(); onSelectTeam(opp.id); }}
                             className="font-sans font-semibold text-hl-text truncate hover:text-white transition-colors cursor-pointer"
                             title={`${opp.name} – Vereinsseite öffnen`}
                           >
