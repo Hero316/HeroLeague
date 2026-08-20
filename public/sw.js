@@ -15,10 +15,10 @@
 // Version bei Bedarf erhöhen: beim Aktivieren löscht der SW alle Caches mit
 // abweichendem Namen → ein hängengebliebener/kaputter Asset-Cache (z. B. schwarze
 // Seite nach einem Deploy) wird beim nächsten Laden automatisch bereinigt.
-const CACHE = 'hl-static-v8';
+const CACHE = 'hl-static-v9';
 
 // App-Shell für den Offline-Fallback. Bewusst minimal.
-const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/assets/icon-192.png'];
+const SHELL = ['/', '/index.html', '/chat.html', '/manifest.webmanifest', '/assets/icon-192.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -83,18 +83,22 @@ self.addEventListener('fetch', (event) => {
   }
 
   // HTML/Navigationen: network-first, damit online immer die aktuelle Seite kommt.
-  // Ebenfalls nur erfolgreiche Antworten als Offline-Fallback ablegen.
+  // Ebenfalls nur erfolgreiche Antworten als Offline-Fallback ablegen. WICHTIG:
+  // /chat ist eine EIGENE App-Hülle (chat.html) – sie darf NICHT unter dem
+  // gleichen Schlüssel wie die Haupt-App (/index.html) landen, sonst bekommt man
+  // nach einem Deploy die falsche/leere Hülle (schwarze Seite).
   if (request.mode === 'navigate') {
+    const shellKey = url.pathname.startsWith('/chat') ? '/chat.html' : '/index.html';
     event.respondWith(
       fetch(request)
         .then((res) => {
           if (res && res.ok) {
             const copy = res.clone();
-            caches.open(CACHE).then((cache) => cache.put('/index.html', copy)).catch(() => undefined);
+            caches.open(CACHE).then((cache) => cache.put(shellKey, copy)).catch(() => undefined);
           }
           return res;
         })
-        .catch(() => caches.match(request).then((cached) => cached || caches.match('/index.html'))),
+        .catch(() => caches.match(shellKey).then((cached) => cached || caches.match('/index.html'))),
     );
     return;
   }
