@@ -10,6 +10,8 @@ import TeamSettings from './TeamSettings';
 import DeepLinkModal from './DeepLinkModal';
 import { useInstall } from './InstallProvider';
 import { pushDebug, enablePush } from '../lib/push';
+import { fetchNotifications } from '../lib/collab';
+import { setNotifUnread } from '../lib/badge';
 import { getUrlParam, setUrlParam } from '../lib/urlState';
 import { useBackClose } from '../lib/backStack';
 import { AudioPlayerProvider, MiniPlayer } from './AudioPlayer';
@@ -145,6 +147,29 @@ export default function ChatApp({
       setReactivating(false);
     }
   };
+
+  // Benachrichtigungs-Zähler (Aufgaben/Tickets/Ideen) in die App-Icon-Zahl einrechnen.
+  // Der Chat-Anteil kommt aus ChatSystem; seit die Glocke im Backoffice weg ist, muss
+  // die Team-App den Benachrichtigungs-Anteil selbst pflegen.
+  useEffect(() => {
+    let alive = true;
+    const tick = () => {
+      if (document.visibilityState !== 'visible') return;
+      fetchNotifications()
+        .then((r) => {
+          if (alive) setNotifUnread(r.unreadCount);
+        })
+        .catch(() => {});
+    };
+    tick();
+    const iv = setInterval(tick, 20000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      alive = false;
+      clearInterval(iv);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, []);
 
   // Deep-Link aus einer Benachrichtigung: /chat?openTicket=… bzw. …?openTask=…
   // öffnet das Ticket/die Aufgabe direkt als Detail-Fenster – unabhängig vom
