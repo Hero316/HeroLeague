@@ -1351,13 +1351,17 @@ function ScoringPanel({ cfg, onSave, onClose }: { cfg: ScoringConfig; onSave: (c
 
           <section>
             <h3 className="text-[11px] uppercase tracking-[2px] text-hl-dim mb-2">Kartenstufen (ab Wert)</h3>
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <NumField label="Silber" value={draft.tiers.silber} step={1} onChange={(v) => setDraft((d) => ({ ...d, tiers: { ...d.tiers, silber: v } }))} />
               <NumField label="Gold" value={draft.tiers.gold} step={1} onChange={(v) => setDraft((d) => ({ ...d, tiers: { ...d.tiers, gold: v } }))} />
-              <NumField label="Elite" value={draft.tiers.elite} step={1} onChange={(v) => setDraft((d) => ({ ...d, tiers: { ...d.tiers, elite: v } }))} />
               <NumField label="Hero" value={draft.tiers.hero} step={1} onChange={(v) => setDraft((d) => ({ ...d, tiers: { ...d.tiers, hero: v } }))} />
               <NumField label="TOTS" value={draft.tiers.tots} step={1} onChange={(v) => setDraft((d) => ({ ...d, tiers: { ...d.tiers, tots: v } }))} />
             </div>
+            <p className="text-[11px] leading-relaxed text-hl-dim mt-2">
+              Bronze ist die Standardstufe (unter Silber). TOTS wird von euch manuell vergeben – automatisch
+              erreicht niemand mehr als <span className="text-hl-soft font-semibold">94</span>, TOTS bleibt also den
+              handverlesenen Sonderkarten vorbehalten.
+            </p>
           </section>
 
           <section>

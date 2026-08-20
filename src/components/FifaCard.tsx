@@ -29,7 +29,6 @@ const TIER: Record<CardTier, { label: string; accent: string; border: string; bg
   bronze: { label: 'Bronze', accent: '#EABF93', border: '#C98A5A', bg1: '#C98A5A', bg2: '#3E2314' },
   silber: { label: 'Silber', accent: '#EAEFEC', border: '#CBD3CE', bg1: '#8B958F', bg2: '#3A413E' },
   gold: { label: 'Gold', accent: '#F4D588', border: '#E9C46A', bg1: '#C9A24B', bg2: '#4E3B0E' },
-  elite: { label: 'Elite', accent: '#E7ECEA', border: '#3B3B42', bg1: '#2A2A30', bg2: '#08080A' },
   hero: { label: 'Hero', accent: '#5CFFAE', border: '#3DFF9E', bg1: '#0E3D2B', bg2: '#05130D', glow: '#3DFF9E' },
   tots: { label: 'TOTS', accent: '#F6E8AC', border: '#F3E4A6', bg1: '#C9AE52', bg2: '#4A390C' },
 };

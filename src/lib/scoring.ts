@@ -59,7 +59,7 @@ export const DEFAULT_SCORING: ScoringConfig = {
     sic: { zielQuote: 0.5, zielMenge: 1.5, gewQuote: 0.6, gewMenge: 0.4 },
     stl: { zielQuote: 0.6, zielMenge: 1, gewQuote: 0.5, gewMenge: 0.5 },
   },
-  tiers: { silber: 65, gold: 75, elite: 85, hero: 90, tots: 95 },
+  tiers: { silber: 65, gold: 75, hero: 90, tots: 95 },
 };
 
 // Tief zusammenführen: gespeicherte (Teil-)Config über die Defaults legen, damit
@@ -85,7 +85,12 @@ export function mergeScoring(saved: unknown): ScoringConfig {
       sic: { ...d.card.sic, ...(s.card?.sic ?? {}) },
       stl: { ...d.card.stl, ...(s.card?.stl ?? {}) },
     },
-    tiers: { ...d.tiers, ...(s.tiers ?? {}) },
+    tiers: {
+      silber: num(s.tiers?.silber, d.tiers.silber),
+      gold: num(s.tiers?.gold, d.tiers.gold),
+      hero: num(s.tiers?.hero, d.tiers.hero),
+      tots: num(s.tiers?.tots, d.tiers.tots),
+    },
   };
 }
 
