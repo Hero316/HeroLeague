@@ -573,7 +573,7 @@ export default function TrackingCenter({
           className="hl-app-bar sticky top-0 z-30 backdrop-blur-xl border-b border-white/10"
           style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.6rem)' }}
         >
-          <div className="max-w-6xl mx-auto px-4 pb-3 flex items-center gap-3">
+          <div className={`${selectedMatchId ? 'max-w-[2600px]' : 'max-w-6xl'} mx-auto px-4 pb-3 flex items-center gap-3`}>
             <button
               onClick={() => {
                 if (selectedMatchId !== null || dayActive) goBackLayer();
@@ -633,7 +633,7 @@ export default function TrackingCenter({
           </div>
         </header>
 
-        <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-5">
+        <main className={`flex-1 ${selectedMatchId ? 'max-w-[2600px]' : 'max-w-6xl'} w-full mx-auto px-4 py-5`}>
           {selectedMatchId ? (
             <MatchEditor
               match={dayMatches.find((m) => m.id === selectedMatchId)!}
@@ -1053,7 +1053,7 @@ function PlayerCard({
           const acts = actionsOf(g);
           if (!acts.length) return null;
           return (
-            <div key={g} className="min-w-[116px] flex-1">
+            <div key={g} className="min-w-[116px] lg:min-w-[280px] flex-1">
               <div className="text-[9px] font-black uppercase tracking-[.14em] text-hl-dim mb-1 pl-0.5">{g}</div>
               <div className="grid grid-cols-2 gap-1">
                 {acts.map((a) => (
@@ -1110,7 +1110,7 @@ function ActionPill({ meta, value, onDelta }: { meta: ActionMeta; value: number;
       )}`}
     >
       <span className="text-[15px] leading-none text-center">{meta.icon}</span>
-      <span className="text-[9px] font-bold leading-[1.05] uppercase tracking-wide overflow-hidden">{meta.label}</span>
+      <span className="text-[9px] font-bold leading-[1.05] uppercase tracking-wide overflow-hidden line-clamp-2">{meta.label}</span>
       <span className="font-display font-black tabular-nums text-[15px]">{value}</span>
     </button>
   );
