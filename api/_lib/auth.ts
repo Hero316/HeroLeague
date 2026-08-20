@@ -1,9 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { SignJWT, jwtVerify } from 'jose';
 import type { UserRole, AdminPermission, UserStatus } from '../../src/types';
+import { sql } from './db.js';
 
 const COOKIE_NAME = 'hl_session';
-const SESSION_DAYS = 7;
+const SESSION_DAYS = 30;
 
 // Die in der Session gespeicherte Identität
 export interface SessionPayload {
@@ -83,12 +84,47 @@ function readCookie(req: VercelRequest, name: string): string | null {
   return null;
 }
 
+// „Stichtag" für Zwangs-Abmeldung: Alle Tokens, die VOR diesem Zeitpunkt ausgestellt
+// wurden (payload.iat < sessionsValidFrom), gelten als ungültig. Der Wert steht im
+// settings-Key 'auth' und wird über die Aktion 'logout-all' auf jetzt gesetzt.
+// Kurzer In-Instance-Cache, damit nicht jeder Request Postgres trifft; eine erzwungene
+// Abmeldung greift dadurch instanzweit innerhalb von ≤ EPOCH_TTL_MS.
+const EPOCH_TTL_MS = 30_000;
+let epochCache = { value: 0, fetchedAt: 0 };
+
+async function getSessionsValidFrom(): Promise<number> {
+  const now = Date.now();
+  if (now - epochCache.fetchedAt < EPOCH_TTL_MS) return epochCache.value;
+  try {
+    const rows = await sql`SELECT value FROM settings WHERE key = 'auth'`;
+    const raw = (rows[0]?.value as { sessionsValidFrom?: number } | undefined)?.sessionsValidFrom;
+    const value = Number.isFinite(Number(raw)) ? Number(raw) : 0;
+    epochCache = { value, fetchedAt: now };
+  } catch {
+    // DB-Fehler: niemanden aussperren – letzten bekannten Wert behalten, aber die Zeit
+    // aktualisieren, damit wir nicht bei jedem Request erneut scheitern.
+    epochCache = { value: epochCache.value, fetchedAt: now };
+  }
+  return epochCache.value;
+}
+
+// Von der 'logout-all'-Aktion aufgerufen, damit die ausführende Instanz den neuen
+// Stichtag sofort kennt (ohne auf den Cache-Ablauf zu warten).
+export function primeSessionsValidFrom(validFrom: number): void {
+  epochCache = { value: validFrom, fetchedAt: Date.now() };
+}
+
 // Aktive Sitzung auslesen (oder null). Alt-Sessions mit role 'admin' gelten als Super-Admin.
 export async function getSession(req: VercelRequest): Promise<SessionPayload | null> {
   const token = readCookie(req, COOKIE_NAME);
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, getSecret());
+
+    // Zwangs-Abmeldung: vor dem Stichtag ausgestellte Tokens verwerfen.
+    const validFrom = await getSessionsValidFrom();
+    const iat = typeof payload.iat === 'number' ? payload.iat : 0;
+    if (validFrom > 0 && iat < validFrom) return null;
     // Rolle explizit normalisieren. WICHTIG: Jede NICHT ausdrücklich bekannte
     // Rolle fällt bewusst auf 'superadmin' zurück (Alt-Sessions mit role 'admin').
     // Neue, eingeschränkte Rollen MÜSSEN hier explizit stehen – sonst würde ein
