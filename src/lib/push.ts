@@ -24,6 +24,24 @@ function urlB64ToUint8Array(base64String: string): Uint8Array {
   return arr;
 }
 
+// Wurde ein bestehendes Abo mit dem AKTUELLEN Server-Schlüssel erstellt? Nach
+// einem VAPID-Schlüsselwechsel zeigt ein altes Abo auf einen toten Endpunkt
+// (Server-Push scheitert dann mit 410/404). In dem Fall muss frisch neu
+// abonniert werden – sonst „heilt" sich das Gerät nie und bleibt stumm.
+function subMatchesKey(sub: PushSubscription, serverKey: string): boolean {
+  try {
+    const applied = sub.options?.applicationServerKey;
+    if (!applied) return false;
+    const current = new Uint8Array(applied);
+    const expected = urlB64ToUint8Array(serverKey);
+    if (current.length !== expected.length) return false;
+    for (let i = 0; i < current.length; i++) if (current[i] !== expected[i]) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function pushSupported(): boolean {
   return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
@@ -123,7 +141,16 @@ export async function enablePush(): Promise<void> {
   setPushIntent(true);
   const { key } = await getPushKey();
   if (!key) throw new Error('Push ist serverseitig noch nicht eingerichtet (VAPID-Schlüssel fehlen).');
-  const existing = await reg.pushManager.getSubscription();
+  let existing = await reg.pushManager.getSubscription();
+  // Veraltetes Abo (alter/anderer VAPID-Schlüssel) verwerfen und frisch neu anlegen.
+  if (existing && !subMatchesKey(existing, key)) {
+    try {
+      await existing.unsubscribe();
+    } catch {
+      /* egal – wir legen gleich ein neues an */
+    }
+    existing = null;
+  }
   const sub =
     existing ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8Array(key) }));
   await savePushSubscription(sub.toJSON());
@@ -150,19 +177,29 @@ export async function syncPush(): Promise<boolean> {
   try {
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
-    // Besteht schon ein Abo, dieses IMMER serverseitig auffrischen (heilt vom
-    // Server entfernte Zeilen) und den Wunsch-Merker setzen – sonst zeigt der
-    // Schalter „an", der Server kennt das Gerät aber nicht mehr.
     if (sub) {
-      try {
-        await savePushSubscription(sub.toJSON());
-      } catch {
-        /* z.B. kurz nicht angemeldet – Abo bleibt lokal bestehen */
+      // Passt das Abo noch zum aktuellen Server-Schlüssel? Falls NICHT (VAPID
+      // gewechselt) -> verwerfen und unten frisch neu abonnieren. Sonst IMMER
+      // serverseitig auffrischen (heilt vom Server entfernte Zeilen).
+      const { key } = await getPushKey().catch(() => ({ key: '' }));
+      if (key && !subMatchesKey(sub, key)) {
+        try {
+          await sub.unsubscribe();
+        } catch {
+          /* egal */
+        }
+        sub = null;
+      } else {
+        try {
+          await savePushSubscription(sub.toJSON());
+        } catch {
+          /* z.B. kurz nicht angemeldet – Abo bleibt lokal bestehen */
+        }
+        setPushIntent(true);
+        return true;
       }
-      setPushIntent(true);
-      return true;
     }
-    // Kein Abo vorhanden: nur wiederherstellen, wenn gewünscht UND erlaubt.
+    // Kein (gültiges) Abo vorhanden: nur wiederherstellen, wenn gewünscht UND erlaubt.
     if (Notification.permission !== 'granted' || !pushIntended()) return false;
     const { key } = await getPushKey();
     if (!key) return false;

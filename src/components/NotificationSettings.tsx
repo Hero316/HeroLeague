@@ -68,8 +68,12 @@ export default function NotificationSettings({ user }: { user: SessionUser }) {
         { method: 'POST' }
       );
       if (!r.configured) setTestMsg('⚠️ Der Server kann noch nicht senden (VAPID-Schlüssel fehlen in Vercel).');
-      else if (r.subscriptions === 0) setTestMsg('Kein Gerät registriert – bitte oben zuerst „Push aktivieren".');
+      else if (r.subscriptions === 0) setTestMsg('Kein Gerät registriert – bitte oben „Push aktivieren" tippen und erneut testen.');
       else if (r.sent > 0 && !r.error) setTestMsg('✅ Gesendet – die Test-Meldung müsste gleich ankommen.');
+      else if (r.error && /\b(410|404)\b/.test(r.error))
+        setTestMsg(
+          'Die Push-Anmeldung dieses Geräts war veraltet und wurde entfernt. Bitte oben „Push deaktivieren", dann „Push aktivieren" (die App erneuert die Anmeldung jetzt automatisch) und noch einmal testen.'
+        );
       else setTestMsg(`Senden fehlgeschlagen (${r.error ?? 'unbekannt'}). Bitte die VAPID-Schlüssel prüfen.`);
     } catch (err) {
       setTestMsg(err instanceof Error ? err.message : 'Test fehlgeschlagen.');
