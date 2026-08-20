@@ -2,11 +2,12 @@ import React from 'react';
 import type { CardTier, PlayerCard } from '../types';
 
 // ===========================================================================
-// FC-/FIFA-artige Spielerkarte. Das Porträt füllt die ganze Karte und wird leicht
-// herangezoomt, damit der Spieler GROSS und klar erkennbar ist (die Studiofotos
-// sind zentriert mit viel Rand). Wert + Stufe sitzen klein oben links, das Wappen
-// oben rechts, Name und die vier Werte klein unten auf einem dunklen Streifen –
-// nie im Gesicht. Stufe (Bronze…TOTS) bestimmt die Farbwelt; Hero = neon + Glow.
+// FC-/FIFA-artige Spielerkarte. Das Porträt füllt die ganze Karte. Der Name
+// steht senkrecht am linken Rand (von unten nach oben lesbar), das Wappen oben
+// rechts. Unten – auf einem dunklen Streifen – sitzt die Gesamtwertung mittig
+// ÜBER den vier Einzelwerten, damit klar ist, dass sie zusammengehören.
+// Alle Größen skalieren mit der Kartenbreite (cqw), damit die Karte klein wie
+// groß identisch proportioniert aussieht. Stufe (Bronze…TOTS) = Farbwelt.
 // ===========================================================================
 
 interface TeamLike {
@@ -21,7 +22,7 @@ interface Props {
   name: string;
   imageUrl?: string;
   team?: TeamLike;
-  games: number;
+  games?: number; // nicht mehr angezeigt – bleibt für bestehende Aufrufer erhalten
   className?: string;
 }
 
@@ -33,10 +34,9 @@ const TIER: Record<CardTier, { label: string; accent: string; border: string; bg
   tots: { label: 'TOTS', accent: '#F6E8AC', border: '#F3E4A6', bg1: '#C9AE52', bg2: '#4A390C' },
 };
 
-export default function FifaCard({ card, name, imageUrl, team, games, className = '' }: Props) {
+export default function FifaCard({ card, name, imageUrl, team, className = '' }: Props) {
   const t = TIER[card.tier];
   const parts = name.trim().split(/\s+/);
-  const firstName = parts.length > 1 ? parts.slice(0, -1).join(' ') : '';
   const lastName = parts.length > 1 ? parts[parts.length - 1] : name;
 
   return (
@@ -44,6 +44,7 @@ export default function FifaCard({ card, name, imageUrl, team, games, className 
       className={`relative rounded-3xl overflow-hidden select-none ${className}`}
       style={{
         aspectRatio: '0.70',
+        containerType: 'inline-size',
         background: `linear-gradient(165deg, ${t.bg1} 0%, ${t.bg2} 50%, #050607 100%)`,
         border: `1.5px solid ${t.border}`,
         boxShadow: t.glow
@@ -58,68 +59,76 @@ export default function FifaCard({ card, name, imageUrl, team, games, className 
             src={imageUrl}
             alt={name}
             className="w-full h-full object-cover"
-            style={{ objectPosition: 'center 24%', transform: 'scale(1.35)', transformOrigin: 'center 26%' }}
+            style={{ objectPosition: 'center 22%', transform: 'scale(1.34)', transformOrigin: 'center 24%' }}
           />
         ) : (
           <div className="w-full h-full grid place-items-center">
-            <span className="font-display font-black" style={{ fontSize: 150, color: `${t.accent}20` }}>
+            <span className="font-display font-black" style={{ fontSize: '46cqw', color: `${t.accent}20` }}>
               {lastName.charAt(0)}
             </span>
           </div>
         )}
       </div>
 
-      {/* leichte Vignette oben, damit Wert & Wappen klar stehen */}
-      <div className="absolute inset-x-0 top-0 h-1/5 z-10" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,.55), transparent)' }} />
+      {/* Vignette links (für den Namen) + oben (fürs Wappen) */}
+      <div className="absolute inset-y-0 left-0 w-1/3 z-10" style={{ background: 'linear-gradient(90deg, rgba(0,0,0,.55), transparent)' }} />
+      <div className="absolute inset-x-0 top-0 h-1/5 z-10" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,.5), transparent)' }} />
 
-      {/* Gesamtwert + Stufe (klein, oben links – nicht im Gesicht) */}
-      <div className="absolute top-2.5 left-3 z-20 leading-none">
-        <div className="font-display font-black tabular-nums" style={{ fontSize: 34, color: t.accent, textShadow: '0 2px 12px rgba(0,0,0,.9)' }}>
-          {card.ges}
-        </div>
-        <div className="font-display font-black uppercase tracking-[2px]" style={{ fontSize: 9, marginTop: 2, color: t.accent, textShadow: '0 1px 8px rgba(0,0,0,.9)' }}>
-          {t.label}
-        </div>
+      {/* Name senkrecht am linken Rand, von unten nach oben lesbar */}
+      <div className="absolute left-0 inset-y-0 z-20 flex items-center" style={{ paddingLeft: '3cqw' }}>
+        <span
+          className="font-display font-black uppercase tracking-tight whitespace-nowrap"
+          style={{
+            writingMode: 'vertical-rl',
+            transform: 'rotate(180deg)',
+            fontSize: '6cqw',
+            lineHeight: 1,
+            color: t.accent,
+            textShadow: '0 2px 10px rgba(0,0,0,.95)',
+          }}
+        >
+          {name}
+        </span>
       </div>
 
       {/* Wappen (oben rechts) */}
-      <div className="absolute top-2.5 right-3 z-20">
+      <div className="absolute z-20" style={{ top: '3cqw', right: '3.5cqw' }}>
         {team &&
           (team.logoUrl ? (
-            <img src={team.logoUrl} alt="" className="w-9 h-9 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,.7)]" />
+            <img src={team.logoUrl} alt="" style={{ width: '15cqw', height: '15cqw' }} className="object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,.7)]" />
           ) : (
-            <div className="w-9 h-9 rounded-lg grid place-items-center text-base" style={{ background: `${team.logoColor || '#16BDA9'}33`, color: team.logoColor || '#22DFC9' }}>
+            <div className="rounded-lg grid place-items-center" style={{ width: '15cqw', height: '15cqw', fontSize: '7cqw', background: `${team.logoColor || '#16BDA9'}33`, color: team.logoColor || '#22DFC9' }}>
               {team.logoIcon || '⚽'}
             </div>
           ))}
       </div>
 
-      {/* Unterer Streifen: Name + Werte (klein), über den Schultern – nie im Gesicht */}
+      {/* Unterer Streifen: Gesamtwertung mittig ÜBER den vier Werten */}
       <div
-        className="absolute bottom-0 inset-x-0 z-20 px-3.5 pb-3 pt-9"
-        style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(2,7,5,.80) 38%, rgba(2,7,5,.97) 68%)' }}
+        className="absolute bottom-0 inset-x-0 z-20"
+        style={{ padding: '14cqw 5cqw 5.5cqw', background: 'linear-gradient(180deg, transparent 0%, rgba(2,7,5,.82) 40%, rgba(2,7,5,.98) 70%)' }}
       >
-        <div className="text-center mb-2">
-          {firstName && <div className="text-white/65 uppercase tracking-[2px] leading-none" style={{ fontSize: 8.5, marginBottom: 2 }}>{firstName}</div>}
-          <div className="font-display font-black uppercase tracking-tight leading-none" style={{ fontSize: 19, color: t.accent, textShadow: '0 2px 8px rgba(0,0,0,.8)' }}>
-            {lastName}
+        {/* Gesamtwertung + Stufe – mittig, als Kopf der Werte-Gruppe */}
+        <div className="flex flex-col items-center" style={{ marginBottom: '4cqw' }}>
+          <div className="font-display font-black tabular-nums leading-none" style={{ fontSize: '26cqw', color: t.accent, textShadow: '0 3px 14px rgba(0,0,0,.9)' }}>
+            {card.ges}
+          </div>
+          <div className="font-display font-black uppercase leading-none" style={{ fontSize: '4.6cqw', letterSpacing: '0.18em', marginTop: '1.5cqw', color: t.accent }}>
+            {t.label}
           </div>
         </div>
-        <div className="h-px w-full mb-2" style={{ background: `${t.accent}44` }} />
-        <div className="grid grid-cols-4 gap-1">
+        <div className="w-full" style={{ height: '1px', marginBottom: '4cqw', background: `${t.accent}55` }} />
+        <div className="grid grid-cols-4" style={{ gap: '2cqw' }}>
           {card.attrs.map((a) => (
             <div key={a.key} className="text-center">
-              <div className="font-display font-black tabular-nums text-white leading-none" style={{ fontSize: 16 }}>
+              <div className="font-display font-black tabular-nums text-white leading-none" style={{ fontSize: '11cqw' }}>
                 {a.value}
               </div>
-              <div className="uppercase tracking-wider text-white/55" style={{ fontSize: 8, marginTop: 2 }} title={a.label}>
+              <div className="uppercase text-white/60" style={{ fontSize: '4cqw', letterSpacing: '0.08em', marginTop: '1.5cqw' }} title={a.label}>
                 {a.key}
               </div>
             </div>
           ))}
-        </div>
-        <div className="text-center text-white/35 uppercase tracking-[2px]" style={{ fontSize: 7, marginTop: 8 }}>
-          {games} {games === 1 ? 'Spiel' : 'Spiele'} · Season One
         </div>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { ArrowLeft, ChevronRight, IdCard } from 'lucide-react';
 import type { ActionCounts, Match, MatchPlayerStat, ScoringConfig, Team } from '../types';
 import { notesForMatch, type MatchNoteEntry } from '../lib/trackingView';
 import { ACTION_META, type ActionTone } from '../lib/scoring';
+import { sumCounts, gesamtschuesse, passversuche } from '../lib/rating';
 import { useBackClose, goBackLayer } from '../lib/backStack';
 
 // ===========================================================================
@@ -66,6 +67,29 @@ export default function SpielberichtPage({ match, teams, rows, cfg, onBack, onSe
   const teamEntries = (teamId: string) => entries.filter((e) => e.teamId === teamId);
   const hasData = entries.length > 0;
 
+  // Team-Aggregate aus den Einzelspieler-Daten (nur getrackte Spieler dieses Spiels).
+  const aggFor = (teamId: string): TeamAgg => {
+    const es = entries.filter((e) => e.teamId === teamId);
+    const c = sumCounts(es.map((e) => e.counts as ActionCounts));
+    const passAtt = passversuche(c);
+    const duels = c.duel_won + c.duel_lost;
+    return {
+      shots: gesamtschuesse(c),
+      shotsOn: c.shot_on + c.goal,
+      assists: c.assist,
+      passPct: passAtt > 0 ? Math.round((100 * c.pass_ok) / passAtt) : null,
+      duelWon: c.duel_won,
+      duelPct: duels > 0 ? Math.round((100 * c.duel_won) / duels) : null,
+      dribbles: c.dribble_won,
+      interceptions: c.interception,
+      turnovers: c.turnover,
+      saves: c.save,
+      avgNote: es.length ? es.reduce((s, e) => s + e.note, 0) / es.length : null,
+    };
+  };
+  const homeAgg = useMemo(() => aggFor(match.homeTeamId), [entries, match.homeTeamId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const awayAgg = useMemo(() => aggFor(match.awayTeamId), [entries, match.awayTeamId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const open = (teamId: string, name: string) => {
     setOpenKey(`${teamId}::${name}`);
     try {
@@ -76,7 +100,7 @@ export default function SpielberichtPage({ match, teams, rows, cfg, onBack, onSe
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="max-w-4xl xl:max-w-[1200px] 2xl:max-w-[1360px] mx-auto px-4 py-8">
       <button
         onClick={onBack}
         className="mb-6 text-xs font-bold uppercase tracking-wider text-hl-mute hover:text-white flex items-center gap-1.5 cursor-pointer"
@@ -107,6 +131,10 @@ export default function SpielberichtPage({ match, teams, rows, cfg, onBack, onSe
           </div>
           <TeamHead team={away} />
         </div>
+      )}
+
+      {!selected && hasData && (
+        <TeamCompare home={home} away={away} homeAgg={homeAgg} awayAgg={awayAgg} />
       )}
 
       {!hasData ? (
@@ -266,6 +294,120 @@ function Crest({ team }: { team?: Team }) {
   ) : (
     <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl grid place-items-center text-xl shrink-0" style={{ background: `${team.logoColor}22`, color: team.logoColor }}>
       {team.logoIcon || '⚽'}
+    </div>
+  );
+}
+
+// Aggregierte Team-Werte für EIN Spiel (aus den Einzelspieler-Daten summiert).
+interface TeamAgg {
+  shots: number;
+  shotsOn: number;
+  assists: number;
+  passPct: number | null;
+  duelWon: number;
+  duelPct: number | null;
+  dribbles: number;
+  interceptions: number;
+  turnovers: number;
+  saves: number;
+  avgNote: number | null;
+}
+
+// Mini-Wappen für die Vergleichs-Kopfzeile.
+function MiniCrest({ team }: { team?: Team }) {
+  if (team?.logoUrl) return <img src={team.logoUrl} alt="" className="w-7 h-7 lg:w-8 lg:h-8 object-contain shrink-0" />;
+  return (
+    <div
+      className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg grid place-items-center text-sm shrink-0"
+      style={{ background: `${team?.logoColor || '#22DFC9'}22`, color: team?.logoColor || '#22DFC9' }}
+    >
+      {team?.logoIcon || '⚽'}
+    </div>
+  );
+}
+
+// Team-Statistiken als Kopf-an-Kopf-Vergleich (heim links, gast rechts). Jede
+// Zeile: große Zahlen beider Teams + ein zweifarbiger Balken, der den Anteil zeigt.
+// Der bessere Wert wird grün hervorgehoben. Direkt „unter" den beiden Teams.
+function TeamCompare({
+  home,
+  away,
+  homeAgg,
+  awayAgg,
+}: {
+  home?: Team;
+  away?: Team;
+  homeAgg: TeamAgg;
+  awayAgg: TeamAgg;
+}) {
+  const hc = home?.logoColor || '#22DFC9';
+  const ac = away?.logoColor || '#E9C46A';
+
+  type Metric = { label: string; icon: string; h: number | null; a: number | null; pct?: boolean; decimal?: boolean; lowerBetter?: boolean };
+  const metrics: Metric[] = [
+    { label: 'Torschüsse', icon: '⚽', h: homeAgg.shots, a: awayAgg.shots },
+    { label: 'Schüsse aufs Tor', icon: '🎯', h: homeAgg.shotsOn, a: awayAgg.shotsOn },
+    { label: 'Vorlagen', icon: '🅰️', h: homeAgg.assists, a: awayAgg.assists },
+    { label: 'Passquote', icon: '✅', h: homeAgg.passPct, a: awayAgg.passPct, pct: true },
+    { label: 'Zweikämpfe gewonnen', icon: '🛡️', h: homeAgg.duelWon, a: awayAgg.duelWon },
+    { label: 'Dribblings', icon: '✨', h: homeAgg.dribbles, a: awayAgg.dribbles },
+    { label: 'Balleroberungen', icon: '🧲', h: homeAgg.interceptions, a: awayAgg.interceptions },
+    { label: 'Ballverluste', icon: '⚠️', h: homeAgg.turnovers, a: awayAgg.turnovers, lowerBetter: true },
+    { label: 'Paraden', icon: '🧤', h: homeAgg.saves, a: awayAgg.saves },
+    { label: 'Ø Note', icon: '⭐', h: homeAgg.avgNote, a: awayAgg.avgNote, decimal: true },
+  ].filter((m) => (m.h ?? 0) + (m.a ?? 0) > 0);
+
+  const fmt = (v: number | null, m: Metric) => (v === null ? '–' : m.pct ? `${v}%` : m.decimal ? v.toFixed(1) : `${v}`);
+
+  return (
+    <div className="hl-card p-4 sm:p-6 lg:p-8 mb-6">
+      <div className="grid grid-cols-3 items-center mb-5 lg:mb-7 gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <MiniCrest team={home} />
+          <span className="font-display font-black uppercase tracking-tight text-[13px] lg:text-[15px] truncate">{home?.name ?? '—'}</span>
+        </div>
+        <div className="text-center text-[10px] sm:text-[11px] lg:text-xs uppercase tracking-[2px] text-hl-dim">Team-Statistiken</div>
+        <div className="flex items-center gap-2 min-w-0 justify-end">
+          <span className="font-display font-black uppercase tracking-tight text-[13px] lg:text-[15px] truncate text-right">{away?.name ?? '—'}</span>
+          <MiniCrest team={away} />
+        </div>
+      </div>
+
+      <div className="space-y-3.5 lg:space-y-5">
+        {metrics.map((m) => {
+          const h = m.h ?? 0;
+          const a = m.a ?? 0;
+          const total = h + a;
+          const hw = total > 0 ? (h / total) * 100 : 50;
+          const better = m.lowerBetter ? (h < a ? 'h' : a < h ? 'a' : '') : h > a ? 'h' : a > h ? 'a' : '';
+          return (
+            <div key={m.label}>
+              <div className="flex items-center justify-between gap-3">
+                <span
+                  className="font-display font-black tabular-nums text-xl sm:text-2xl lg:text-[30px] leading-none shrink-0 w-14 lg:w-20"
+                  style={{ color: better === 'h' ? '#43E5A0' : '#d7ded9' }}
+                >
+                  {fmt(m.h, m)}
+                </span>
+                <span className="flex items-center gap-1.5 text-[10px] sm:text-[11px] lg:text-[13px] uppercase tracking-wider text-hl-dim text-center whitespace-nowrap min-w-0">
+                  <span aria-hidden className="hidden sm:inline">{m.icon}</span>
+                  <span className="truncate">{m.label}</span>
+                </span>
+                <span
+                  className="font-display font-black tabular-nums text-xl sm:text-2xl lg:text-[30px] leading-none shrink-0 w-14 lg:w-20 text-right"
+                  style={{ color: better === 'a' ? '#43E5A0' : '#d7ded9' }}
+                >
+                  {fmt(m.a, m)}
+                </span>
+              </div>
+              <div className="mt-1.5 lg:mt-2 flex h-1.5 lg:h-2 rounded-full overflow-hidden bg-white/[.06]">
+                <div style={{ width: `${hw}%`, background: hc }} className="h-full" />
+                <div style={{ width: `${100 - hw}%`, background: ac }} className="h-full" />
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

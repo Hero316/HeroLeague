@@ -317,31 +317,43 @@ export default function TeamDetail({
               initial={false}
               animate={{ opacity: selected ? 1 : 0, x: selected ? 0 : 18 }}
               transition={{ duration: 0.32, ease: [0.22, 0.61, 0.36, 1] }}
-              className={`[grid-area:1/1] self-center relative flex flex-col sm:flex-row items-start sm:items-center gap-6 flex-wrap py-6 ${selected ? '' : 'pointer-events-none'}`}
+              className={`[grid-area:1/1] self-center relative flex flex-col lg:flex-row items-start lg:items-center gap-6 lg:gap-10 py-6 ${selected ? '' : 'pointer-events-none'}`}
             >
-              {/* Spielerbild */}
-              <div className="relative shrink-0">
-                <div
-                  className="absolute -inset-3 rounded-[34px] blur-xl opacity-50"
-                  style={{ background: `radial-gradient(circle, ${color}, transparent 70%)` }}
-                />
-                {sizingPlayer.imageUrl ? (
-                  <ImageZoom
-                    src={sizingPlayer.imageUrl}
-                    alt={sizingPlayer.name}
-                    className="relative w-[118px] h-[118px] object-cover rounded-[32px] border-2"
-                    style={{ borderColor: color }}
-                    zoomClassName="w-72 sm:w-96 max-w-[85vw] max-h-[80vh] object-contain"
+              {/* Große FIFA-Karte links – ersetzt das doppelte Foto. Getrackte
+                  Spieler bekommen die Karte; ohne Werte zeigen wir das Porträt. */}
+              {playerCardData ? (
+                <div className="w-[200px] sm:w-[220px] lg:w-[240px] shrink-0 mx-auto lg:mx-0">
+                  <FifaCard
+                    card={playerCardData}
+                    name={sizingPlayer.name}
+                    imageUrl={sizingPlayer.imageUrl}
+                    team={team}
                   />
-                ) : (
-                  <span
-                    className="relative grid place-items-center w-[118px] h-[118px] rounded-[32px] font-display font-black text-5xl text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.18)]"
-                    style={{ background: `linear-gradient(140deg, ${color}, ${shade(color, 0.45)})` }}
-                  >
-                    {monogram(sizingPlayer.name)}
-                  </span>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="relative shrink-0 mx-auto lg:mx-0">
+                  <div
+                    className="absolute -inset-3 rounded-[34px] blur-xl opacity-50"
+                    style={{ background: `radial-gradient(circle, ${color}, transparent 70%)` }}
+                  />
+                  {sizingPlayer.imageUrl ? (
+                    <ImageZoom
+                      src={sizingPlayer.imageUrl}
+                      alt={sizingPlayer.name}
+                      className="relative w-[150px] h-[150px] object-cover rounded-[32px] border-2"
+                      style={{ borderColor: color }}
+                      zoomClassName="w-72 sm:w-96 max-w-[85vw] max-h-[80vh] object-contain"
+                    />
+                  ) : (
+                    <span
+                      className="relative grid place-items-center w-[150px] h-[150px] rounded-[32px] font-display font-black text-6xl text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.18)]"
+                      style={{ background: `linear-gradient(140deg, ${color}, ${shade(color, 0.45)})` }}
+                    >
+                      {monogram(sizingPlayer.name)}
+                    </span>
+                  )}
+                </div>
+              )}
 
               <div className="flex-1 w-full sm:w-auto min-w-0 sm:min-w-[260px]">
                 <button
@@ -432,18 +444,6 @@ export default function TeamDetail({
                 )}
               </div>
 
-              {/* FIFA-Karte (Saison) – eigenes Flex-Kind, rutscht auf schmalen Screens darunter */}
-              {playerCardData && (
-                <div className="w-40 sm:w-48 shrink-0 mx-auto sm:mx-0">
-                  <FifaCard
-                    card={playerCardData}
-                    name={sizingPlayer.name}
-                    imageUrl={sizingPlayer.imageUrl}
-                    team={team}
-                    games={playerRows.length}
-                  />
-                </div>
-              )}
             </motion.div>
         )}
 
