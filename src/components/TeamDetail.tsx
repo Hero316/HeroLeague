@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ChevronDown } from 'lucide-react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { Match, MatchPlayerStat, Player, PlayerStat, ScoringConfig, StatRole, Team, TeamSponsorsMap } from '../types';
 import { calculateStandings } from '../lib/standings';
 import { matchNote, normalizeCounts, playerCard, quotas, sumCounts } from '../lib/rating';
@@ -752,12 +752,18 @@ export default function TeamDetail({
             <div className="hl-card p-8 text-center text-hl-mute font-sans text-sm">Noch keine Spiele in dieser Saison.</div>
           ) : (
             <>
-              {/* Liste + Balken laufen GLEICHZEITIG gegenläufig (kein hoch-dann-runter). */}
-              <div
-                className="grid transition-[grid-template-rows] duration-300 ease-out"
-                style={{ gridTemplateRows: showAllMatches ? '1fr' : '0fr' }}
-              >
-                <div className="overflow-hidden">
+              {/* Liste und Balken sind je eine eigene, GLEICHZEITIG laufende
+                  Höhen-Animation – smooth in beide Richtungen, kein Springen. */}
+              <AnimatePresence initial={false}>
+                {showAllMatches && (
+                  <motion.div
+                    key="list"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.34, ease: [0.4, 0, 0.2, 1] }}
+                    style={{ overflow: 'hidden' }}
+                  >
                 <div className="space-y-2 pt-0.5">
               {teamMatches.map((m) => {
                 const opp = opponent(m);
@@ -812,22 +818,29 @@ export default function TeamDetail({
                 );
               })}
                 </div>
-                </div>
-              </div>
-              <div
-                className="grid transition-[grid-template-rows] duration-300 ease-out"
-                style={{ gridTemplateRows: showAllMatches ? '0fr' : '1fr' }}
-              >
-                <div className="overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setShowAllMatches(true)}
-                    className="w-full hl-card p-4 text-center text-hl-mute hover:text-white font-sans text-sm transition-colors cursor-pointer"
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              <AnimatePresence initial={false}>
+                {!showAllMatches && (
+                  <motion.div
+                    key="cta"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.34, ease: [0.4, 0, 0.2, 1] }}
+                    style={{ overflow: 'hidden' }}
                   >
-                    {teamMatches.length} Spiele der Saison anzeigen
-                  </button>
-                </div>
-              </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowAllMatches(true)}
+                      className="w-full hl-card p-4 text-center text-hl-mute hover:text-white font-sans text-sm transition-colors cursor-pointer"
+                    >
+                      {teamMatches.length} Spiele der Saison anzeigen
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </>
           )}
         </div>

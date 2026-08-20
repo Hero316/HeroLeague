@@ -43,7 +43,7 @@ export default function FifaCard({ card, name, imageUrl, team, className = '' }:
   // grünen Linie: je länger der Name, desto kleiner die Schrift (in cqw, damit es
   // mit der Kartengröße mitskaliert). Kurze Namen werden nach oben gedeckelt.
   const nameLen = Math.max(3, name.trim().length);
-  const nameFontCqw = Math.max(5.5, Math.min(13.5, 101 / (nameLen * 0.6)));
+  const nameFontCqw = Math.max(5.5, Math.min(13, 97 / (nameLen * 0.6)));
 
   return (
     <div
@@ -82,7 +82,7 @@ export default function FifaCard({ card, name, imageUrl, team, className = '' }:
 
       {/* Name senkrecht am linken Rand, von unten (knapp über der Linie) nach oben
           lesbar – z-30, damit ihn der dunkle Streifen unten NICHT verdeckt. */}
-      <div className="absolute left-0 z-30 flex items-end" style={{ top: '16cqw', bottom: '26cqw', paddingLeft: '3.5cqw' }}>
+      <div className="absolute left-0 z-30 flex items-end" style={{ top: '16cqw', bottom: '30cqw', paddingLeft: '3.5cqw' }}>
         <span
           className="font-display font-black uppercase tracking-tight whitespace-nowrap"
           style={{

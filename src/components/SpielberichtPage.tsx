@@ -116,19 +116,21 @@ export default function SpielberichtPage({ match, teams, rows, cfg, onBack, onSe
         <ArrowLeft className="w-4 h-4" /> Zurück
       </button>
 
-      {/* Ergebnis-Kopf bleibt immer stehen */}
-      <div className="hl-card p-4 sm:p-6 mb-6 flex items-center justify-center gap-2 sm:gap-5">
-        <TeamHead team={home} onSelect={onSelectTeam} />
-        <div className="text-center shrink-0 px-1">
-          <div className="font-display font-black text-3xl sm:text-4xl lg:text-5xl tabular-nums leading-none">
-            {match.homeScore ?? '–'}<span className="text-hl-faint mx-0.5 sm:mx-1">:</span>{match.awayScore ?? '–'}
+      {/* Ergebnis-Kopf UND Team-Statistiken in EINEM Block – die Wappen stehen nur
+          einmal (außen), darunter direkt die Statistik. */}
+      <div className="hl-card p-4 sm:p-6 lg:p-8 mb-6">
+        <div className={`flex items-center justify-center gap-2 sm:gap-6 lg:gap-10 ${hasData ? 'pb-5 lg:pb-7 mb-5 lg:mb-7 border-b border-white/[.07]' : ''}`}>
+          <TeamHead team={home} onSelect={onSelectTeam} />
+          <div className="text-center shrink-0 px-1">
+            <div className="font-display font-black text-3xl sm:text-4xl lg:text-5xl tabular-nums leading-none">
+              {match.homeScore ?? '–'}<span className="text-hl-faint mx-0.5 sm:mx-1">:</span>{match.awayScore ?? '–'}
+            </div>
+            <div className="text-[9px] sm:text-[10px] lg:text-[11px] uppercase tracking-[2px] text-hl-dim mt-1 whitespace-nowrap">Spieltag {match.matchday}</div>
           </div>
-          <div className="text-[9px] sm:text-[10px] lg:text-[11px] uppercase tracking-[2px] text-hl-dim mt-1 whitespace-nowrap">Spieltag {match.matchday}</div>
+          <TeamHead team={away} onSelect={onSelectTeam} />
         </div>
-        <TeamHead team={away} onSelect={onSelectTeam} />
+        {hasData && <TeamCompare home={home} away={away} homeAgg={homeAgg} awayAgg={awayAgg} />}
       </div>
-
-      {hasData && <TeamCompare home={home} away={away} homeAgg={homeAgg} awayAgg={awayAgg} onSelect={onSelectTeam} />}
 
       {/* Angeklickter Spieler taucht smooth darunter auf – die Notenliste rutscht runter.
           AnimatePresence animiert AUCH das Schließen und den Wechsel auf einen anderen Spieler. */}
@@ -352,19 +354,6 @@ interface TeamAgg {
   avgNote: number | null;
 }
 
-// Mini-Wappen für die Vergleichs-Kopfzeile.
-function MiniCrest({ team }: { team?: Team }) {
-  if (team?.logoUrl) return <img src={team.logoUrl} alt="" className="w-7 h-7 lg:w-8 lg:h-8 object-contain shrink-0" />;
-  return (
-    <div
-      className="w-7 h-7 lg:w-8 lg:h-8 rounded-lg grid place-items-center text-sm shrink-0"
-      style={{ background: `${team?.logoColor || '#22DFC9'}22`, color: team?.logoColor || '#22DFC9' }}
-    >
-      {team?.logoIcon || '⚽'}
-    </div>
-  );
-}
-
 // Team-Statistiken als Kopf-an-Kopf-Vergleich (heim links, gast rechts). Jede
 // Zeile: große Zahlen beider Teams + ein zweifarbiger Balken, der den Anteil zeigt.
 // Der bessere Wert wird grün hervorgehoben. Direkt „unter" den beiden Teams.
@@ -373,13 +362,11 @@ function TeamCompare({
   away,
   homeAgg,
   awayAgg,
-  onSelect,
 }: {
   home?: Team;
   away?: Team;
   homeAgg: TeamAgg;
   awayAgg: TeamAgg;
-  onSelect?: (teamId: string) => void;
 }) {
   const hc = home?.logoColor || '#22DFC9';
   const ac = away?.logoColor || '#E9C46A';
@@ -401,32 +388,7 @@ function TeamCompare({
   const fmt = (v: number | null, m: Metric) => (v === null ? '–' : m.pct ? `${v}%` : m.decimal ? v.toFixed(1) : `${v}`);
 
   return (
-    <div className="hl-card p-4 sm:p-6 lg:p-8 mb-6">
-      <div className="grid grid-cols-3 items-center mb-5 lg:mb-7 gap-2">
-        <button
-          type="button"
-          onClick={onSelect && home ? () => onSelect(home.id) : undefined}
-          disabled={!(onSelect && home)}
-          className={`flex items-center gap-2 min-w-0 text-left ${onSelect && home ? 'cursor-pointer group' : 'cursor-default'}`}
-          title={onSelect && home ? `${home.name} – Vereinsseite öffnen` : undefined}
-        >
-          <MiniCrest team={home} />
-          <span className={`font-display font-black uppercase tracking-tight text-[13px] lg:text-[15px] truncate ${onSelect && home ? 'group-hover:text-brand-accent-light transition-colors' : ''}`}>{home?.name ?? '—'}</span>
-        </button>
-        <div className="text-center text-[10px] sm:text-[11px] lg:text-xs uppercase tracking-[2px] text-hl-dim">Team-Statistiken</div>
-        <button
-          type="button"
-          onClick={onSelect && away ? () => onSelect(away.id) : undefined}
-          disabled={!(onSelect && away)}
-          className={`flex items-center gap-2 min-w-0 justify-end text-right ${onSelect && away ? 'cursor-pointer group' : 'cursor-default'}`}
-          title={onSelect && away ? `${away.name} – Vereinsseite öffnen` : undefined}
-        >
-          <span className={`font-display font-black uppercase tracking-tight text-[13px] lg:text-[15px] truncate ${onSelect && away ? 'group-hover:text-brand-accent-light transition-colors' : ''}`}>{away?.name ?? '—'}</span>
-          <MiniCrest team={away} />
-        </button>
-      </div>
-
-      <div className="space-y-3.5 lg:space-y-5">
+    <div className="space-y-3.5 lg:space-y-5">
         {metrics.map((m) => {
           const h = m.h ?? 0;
           const a = m.a ?? 0;
@@ -460,7 +422,6 @@ function TeamCompare({
             </div>
           );
         })}
-      </div>
     </div>
   );
 }
