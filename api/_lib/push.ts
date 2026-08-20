@@ -129,3 +129,39 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
   }
 }
 
+// Kann der Server Push VERSENDEN? Beide VAPID-Schlüssel müssen gesetzt sein.
+export function pushSendConfigured(): boolean {
+  return !!(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
+}
+
+// Diagnose: schickt eine Test-Meldung an alle Geräte des Nutzers und meldet in
+// Klartext zurück, was passiert ist (ohne Secrets) – damit ein stummer Ausfall
+// (fehlende/mismatchte VAPID-Schlüssel, keine Geräte) sofort sichtbar wird.
+export async function sendTestToUser(
+  userId: string
+): Promise<{ configured: boolean; subscriptions: number; sent: number; error?: string }> {
+  const subs = (await sql`SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ${userId}`) as {
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+  }[];
+  const wp = await getWebpush();
+  if (!wp) return { configured: false, subscriptions: subs.length, sent: 0 };
+
+  const badge = await badgeCount(userId);
+  const body = JSON.stringify({ title: 'Test ✅', body: 'Push funktioniert – du bist erreichbar.', url: '/chat', badge });
+  let sent = 0;
+  let error: string | undefined;
+  for (const s of subs) {
+    try {
+      await wp.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, body);
+      sent++;
+    } catch (err) {
+      const code = (err as { statusCode?: number })?.statusCode;
+      if (code === 404 || code === 410) await sql`DELETE FROM push_subscriptions WHERE endpoint = ${s.endpoint}`;
+      if (!error) error = `Code ${code ?? '?'}${err instanceof Error ? `: ${err.message}` : ''}`;
+    }
+  }
+  return { configured: true, subscriptions: subs.length, sent, error };
+}
+

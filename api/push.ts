@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getSession } from './_lib/auth.js';
 import { sql } from './_lib/db.js';
-import { saveSubscription, removeSubscription, pushPublicKey } from './_lib/push.js';
+import { saveSubscription, removeSubscription, pushPublicKey, pushSendConfigured, sendTestToUser } from './_lib/push.js';
 import { badRequest } from './_lib/validate.js';
 import { ensureSchema } from './_lib/ensure.js';
 
@@ -21,6 +21,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'GET' && resource === 'key') {
       res.setHeader('Cache-Control', 'no-store');
       return res.json({ key: pushPublicKey() });
+    }
+    // Diagnose: Kann der Server senden, und wie viele Geräte sind für diesen Nutzer registriert?
+    if (req.method === 'GET' && resource === 'status') {
+      res.setHeader('Cache-Control', 'no-store');
+      const rows = (await sql`SELECT count(*)::int AS c FROM push_subscriptions WHERE user_id = ${session.userId}`) as { c: number }[];
+      return res.json({ canSend: pushSendConfigured(), subscriptions: rows[0]?.c ?? 0 });
+    }
+    // Test-Benachrichtigung an die eigenen Geräte schicken (Selbst-Diagnose).
+    if (req.method === 'POST' && resource === 'test') {
+      if (session.userId === 'bootstrap') return badRequest(res, 'Bitte mit einem echten Account anmelden.');
+      const result = await sendTestToUser(session.userId);
+      return res.json(result);
     }
     if (req.method === 'GET' && resource === 'prefs') {
       res.setHeader('Cache-Control', 'no-store');

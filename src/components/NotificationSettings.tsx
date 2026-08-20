@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Bell, BellOff, Loader2, Check } from 'lucide-react';
+import { Bell, BellOff, Loader2, Check, Send, AlertTriangle } from 'lucide-react';
 import type { SessionUser } from '../types';
+import { apiFetch } from '../lib/api';
 import {
   pushSupported,
   pushIntended,
@@ -19,12 +20,18 @@ export default function NotificationSettings({ user }: { user: SessionUser }) {
   const [muteWeekends, setMuteWeekends] = useState(false);
   const [muteUntil, setMuteUntil] = useState('');
   const [savedOk, setSavedOk] = useState(false);
+  const [serverStatus, setServerStatus] = useState<{ canSend: boolean; subscriptions: number } | null>(null);
+  const [testMsg, setTestMsg] = useState('');
   const isBootstrap = user.id === 'bootstrap';
 
   useEffect(() => {
     // Beim Öffnen den echten Zustand ermitteln UND ein evtl. vom Browser
     // verworfenes Abo automatisch wiederherstellen (wenn zuvor gewünscht).
     syncPush().then(setEnabled).catch(() => {});
+    // Server-Diagnose: Kann überhaupt gesendet werden (VAPID gesetzt)?
+    apiFetch<{ canSend: boolean; subscriptions: number }>('/api/push?resource=status')
+      .then(setServerStatus)
+      .catch(() => {});
     if (!isBootstrap) {
       getNotifyPrefs()
         .then((p) => {
@@ -52,6 +59,25 @@ export default function NotificationSettings({ user }: { user: SessionUser }) {
     }
   };
 
+  const sendTest = async () => {
+    setBusy(true);
+    setTestMsg('');
+    try {
+      const r = await apiFetch<{ configured: boolean; subscriptions: number; sent: number; error?: string }>(
+        '/api/push?resource=test',
+        { method: 'POST' }
+      );
+      if (!r.configured) setTestMsg('⚠️ Der Server kann noch nicht senden (VAPID-Schlüssel fehlen in Vercel).');
+      else if (r.subscriptions === 0) setTestMsg('Kein Gerät registriert – bitte oben zuerst „Push aktivieren".');
+      else if (r.sent > 0 && !r.error) setTestMsg('✅ Gesendet – die Test-Meldung müsste gleich ankommen.');
+      else setTestMsg(`Senden fehlgeschlagen (${r.error ?? 'unbekannt'}). Bitte die VAPID-Schlüssel prüfen.`);
+    } catch (err) {
+      setTestMsg(err instanceof Error ? err.message : 'Test fehlgeschlagen.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const savePrefs = async () => {
     setBusy(true);
     try {
@@ -74,6 +100,16 @@ export default function NotificationSettings({ user }: { user: SessionUser }) {
           Erhalte Push-Nachrichten auf dieses Gerät – bei Chat-Nachrichten in deinen Gruppen, Erwähnungen und Zuweisungen.
           {' '}Am besten die <strong className="text-hl-soft">App installieren</strong> (Zum Home-Bildschirm hinzufügen), dann klappt auch die Zahl am App-Icon.
         </p>
+        {serverStatus && !serverStatus.canSend && (
+          <div className="flex items-start gap-2 mb-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>
+              Der Server kann aktuell <strong>keine</strong> Benachrichtigungen versenden – die VAPID-Schlüssel fehlen
+              in Vercel (<code>VAPID_PUBLIC_KEY</code> / <code>VAPID_PRIVATE_KEY</code>). Bis die gesetzt sind, kommt
+              trotz „aktiv" nichts an.
+            </span>
+          </div>
+        )}
         {!supported ? (
           <p className="text-sm text-hl-faint">Dieser Browser unterstützt keine Push-Benachrichtigungen.</p>
         ) : (
@@ -89,6 +125,18 @@ export default function NotificationSettings({ user }: { user: SessionUser }) {
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : enabled ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
             {enabled ? 'Push auf diesem Gerät deaktivieren' : 'Push auf diesem Gerät aktivieren'}
           </button>
+        )}
+        {supported && (
+          <div className="mt-3">
+            <button
+              onClick={sendTest}
+              disabled={busy}
+              className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider border border-white/15 bg-white/5 hover:bg-white/10 text-hl-soft cursor-pointer disabled:opacity-50 flex items-center gap-2"
+            >
+              <Send className="w-4 h-4" /> Test-Benachrichtigung an mich senden
+            </button>
+            {testMsg && <p className="mt-2 text-xs text-hl-soft font-sans">{testMsg}</p>}
+          </div>
         )}
       </div>
 
