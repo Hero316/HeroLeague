@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { ArrowLeft, ChevronRight, IdCard } from 'lucide-react';
 import type { ActionCounts, Match, MatchPlayerStat, ScoringConfig, Team } from '../types';
 import { notesForMatch, type MatchNoteEntry } from '../lib/trackingView';
@@ -20,6 +21,7 @@ interface Props {
   cfg: ScoringConfig;
   onBack: () => void;
   onSelectPlayer: (teamId: string, name: string) => void;
+  onSelectTeam?: (teamId: string) => void;
 }
 
 function noteColor(note: number, cfg: ScoringConfig): string {
@@ -45,7 +47,7 @@ function toneColor(tone: ActionTone): string {
   }
 }
 
-export default function SpielberichtPage({ match, teams, rows, cfg, onBack, onSelectPlayer }: Props) {
+export default function SpielberichtPage({ match, teams, rows, cfg, onBack, onSelectPlayer, onSelectTeam }: Props) {
   const home = teams.find((t) => t.id === match.homeTeamId);
   const away = teams.find((t) => t.id === match.awayTeamId);
   const entries = useMemo(() => notesForMatch(rows, cfg, match.id), [rows, cfg, match.id]);
@@ -115,38 +117,43 @@ export default function SpielberichtPage({ match, teams, rows, cfg, onBack, onSe
 
       {/* Ergebnis-Kopf bleibt immer stehen */}
       <div className="hl-card p-4 sm:p-6 mb-6 flex items-center justify-center gap-2 sm:gap-5">
-        <TeamHead team={home} />
+        <TeamHead team={home} onSelect={onSelectTeam} />
         <div className="text-center shrink-0 px-1">
           <div className="font-display font-black text-3xl sm:text-4xl lg:text-5xl tabular-nums leading-none">
             {match.homeScore ?? '–'}<span className="text-hl-faint mx-0.5 sm:mx-1">:</span>{match.awayScore ?? '–'}
           </div>
           <div className="text-[9px] sm:text-[10px] lg:text-[11px] uppercase tracking-[2px] text-hl-dim mt-1 whitespace-nowrap">Spieltag {match.matchday}</div>
         </div>
-        <TeamHead team={away} />
+        <TeamHead team={away} onSelect={onSelectTeam} />
       </div>
 
-      {hasData && <TeamCompare home={home} away={away} homeAgg={homeAgg} awayAgg={awayAgg} />}
+      {hasData && <TeamCompare home={home} away={away} homeAgg={homeAgg} awayAgg={awayAgg} onSelect={onSelectTeam} />}
 
-      {/* Angeklickter Spieler taucht smooth darunter auf – die Notenliste rutscht runter. */}
-      <div
-        ref={detailRef}
-        className="grid transition-[grid-template-rows] duration-300 ease-out"
-        style={{ gridTemplateRows: selected ? '1fr' : '0fr' }}
-      >
-        <div className="overflow-hidden">
+      {/* Angeklickter Spieler taucht smooth darunter auf – die Notenliste rutscht runter.
+          AnimatePresence animiert AUCH das Schließen und den Wechsel auf einen anderen Spieler. */}
+      <div ref={detailRef}>
+        <AnimatePresence initial={false} mode="wait">
           {selected && (
-            <PlayerMatchDetail
+            <motion.div
               key={openKey ?? ''}
-              entry={selected}
-              cfg={cfg}
-              photo={photoFor(selected.teamId, selected.playerName)}
-              homeName={home?.name ?? '—'}
-              awayName={away?.name ?? '—'}
-              onClose={goBackLayer}
-              onOpenCard={() => onSelectPlayer(selected.teamId, selected.playerName)}
-            />
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.3, ease: [0.22, 0.61, 0.36, 1] }}
+              style={{ overflow: 'hidden' }}
+            >
+              <PlayerMatchDetail
+                entry={selected}
+                cfg={cfg}
+                photo={photoFor(selected.teamId, selected.playerName)}
+                homeName={home?.name ?? '—'}
+                awayName={away?.name ?? '—'}
+                onClose={goBackLayer}
+                onOpenCard={() => onSelectPlayer(selected.teamId, selected.playerName)}
+              />
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
       </div>
 
       {!hasData ? (
@@ -288,14 +295,21 @@ function PlayerMatchDetail({
 
 // Team im Ergebnis-Kopf: Wappen oben, Name darunter mittig – so bekommt der Name
 // die volle Spaltenbreite und wird am Handy NICHT abgeschnitten (bricht bei Bedarf um).
-function TeamHead({ team }: { team?: Team }) {
+function TeamHead({ team, onSelect }: { team?: Team; onSelect?: (teamId: string) => void }) {
+  const clickable = !!(onSelect && team);
   return (
-    <div className="flex flex-col items-center gap-2 flex-1 min-w-0">
+    <button
+      type="button"
+      onClick={clickable ? () => onSelect!(team!.id) : undefined}
+      disabled={!clickable}
+      className={`flex flex-col items-center gap-2 flex-1 min-w-0 ${clickable ? 'cursor-pointer group' : 'cursor-default'}`}
+      title={clickable ? `${team?.name} – Vereinsseite öffnen` : undefined}
+    >
       <Crest team={team} />
-      <span className="font-display font-black uppercase tracking-tight text-center leading-tight text-[13px] sm:text-[15px] break-words w-full">
+      <span className={`font-display font-black uppercase tracking-tight text-center leading-tight text-[13px] sm:text-[15px] break-words w-full ${clickable ? 'group-hover:text-brand-accent-light transition-colors' : ''}`}>
         {team?.name ?? '—'}
       </span>
-    </div>
+    </button>
   );
 }
 
@@ -346,11 +360,13 @@ function TeamCompare({
   away,
   homeAgg,
   awayAgg,
+  onSelect,
 }: {
   home?: Team;
   away?: Team;
   homeAgg: TeamAgg;
   awayAgg: TeamAgg;
+  onSelect?: (teamId: string) => void;
 }) {
   const hc = home?.logoColor || '#22DFC9';
   const ac = away?.logoColor || '#E9C46A';
@@ -374,15 +390,27 @@ function TeamCompare({
   return (
     <div className="hl-card p-4 sm:p-6 lg:p-8 mb-6">
       <div className="grid grid-cols-3 items-center mb-5 lg:mb-7 gap-2">
-        <div className="flex items-center gap-2 min-w-0">
+        <button
+          type="button"
+          onClick={onSelect && home ? () => onSelect(home.id) : undefined}
+          disabled={!(onSelect && home)}
+          className={`flex items-center gap-2 min-w-0 text-left ${onSelect && home ? 'cursor-pointer group' : 'cursor-default'}`}
+          title={onSelect && home ? `${home.name} – Vereinsseite öffnen` : undefined}
+        >
           <MiniCrest team={home} />
-          <span className="font-display font-black uppercase tracking-tight text-[13px] lg:text-[15px] truncate">{home?.name ?? '—'}</span>
-        </div>
+          <span className={`font-display font-black uppercase tracking-tight text-[13px] lg:text-[15px] truncate ${onSelect && home ? 'group-hover:text-brand-accent-light transition-colors' : ''}`}>{home?.name ?? '—'}</span>
+        </button>
         <div className="text-center text-[10px] sm:text-[11px] lg:text-xs uppercase tracking-[2px] text-hl-dim">Team-Statistiken</div>
-        <div className="flex items-center gap-2 min-w-0 justify-end">
-          <span className="font-display font-black uppercase tracking-tight text-[13px] lg:text-[15px] truncate text-right">{away?.name ?? '—'}</span>
+        <button
+          type="button"
+          onClick={onSelect && away ? () => onSelect(away.id) : undefined}
+          disabled={!(onSelect && away)}
+          className={`flex items-center gap-2 min-w-0 justify-end text-right ${onSelect && away ? 'cursor-pointer group' : 'cursor-default'}`}
+          title={onSelect && away ? `${away.name} – Vereinsseite öffnen` : undefined}
+        >
+          <span className={`font-display font-black uppercase tracking-tight text-[13px] lg:text-[15px] truncate ${onSelect && away ? 'group-hover:text-brand-accent-light transition-colors' : ''}`}>{away?.name ?? '—'}</span>
           <MiniCrest team={away} />
-        </div>
+        </button>
       </div>
 
       <div className="space-y-3.5 lg:space-y-5">

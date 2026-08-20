@@ -803,6 +803,7 @@ export default function App() {
               onSelectPlayer={(teamId, name) =>
                 navigateTo(`/verein/${encodeURIComponent(teamId)}/spieler/${encodeURIComponent(name)}`)
               }
+              onSelectTeam={openTeamDetail}
             />
           ) : (
             <div className="text-center py-24 space-y-4">

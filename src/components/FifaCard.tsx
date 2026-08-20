@@ -75,8 +75,8 @@ export default function FifaCard({ card, name, imageUrl, team, className = '' }:
       <div className="absolute inset-x-0 top-0 h-1/5 z-10" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,.5), transparent)' }} />
 
       {/* Name senkrecht am linken Rand, von unten (knapp über der Linie) nach oben
-          lesbar – darf lang sein und läuft bis knapp unter den oberen Rand. */}
-      <div className="absolute left-0 z-20 flex items-end" style={{ top: '4cqw', bottom: '30cqw', paddingLeft: '3.5cqw' }}>
+          lesbar – z-30, damit ihn der dunkle Streifen unten NICHT verdeckt. */}
+      <div className="absolute left-0 z-30 flex items-end" style={{ top: '4cqw', bottom: '26cqw', paddingLeft: '3.5cqw' }}>
         <span
           className="font-display font-black uppercase tracking-tight whitespace-nowrap"
           style={{

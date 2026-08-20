@@ -141,14 +141,6 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
       ? 'NÄCHSTER SPIELTAG'
       : 'LETZTER SPIELTAG';
 
-    const intro = !featuredDay
-      ? ''
-      : featuredDay.kind === 'live'
-      ? `Der ${featuredDay.day}. Spieltag läuft gerade${venue ? ` in ${venue}` : ''} — ${cnt} ${games} an einem Abend. Verfolge die Ergebnisse live.`
-      : featuredDay.kind === 'upcoming'
-      ? `Der ${featuredDay.day}. Spieltag der Hero League steigt am ${dateLong}${first ? ` ab ${first.time} Uhr` : ''}${venue ? ` in ${venue}` : ''} — ${cnt} ${games} an einem Abend.`
-      : `Der ${featuredDay.day}. Spieltag ist gespielt${venue ? ` in ${venue}` : ''} — alle Ergebnisse und die Tabelle findest du hier.`;
-
     return (
       <>
         <div className="absolute inset-0 overflow-hidden">
@@ -175,7 +167,6 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                     <br />
                     <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">Spieltag</span>
                   </h1>
-                  <p className="mt-5 max-w-[460px] hidden sm:block text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">{intro}</p>
                 </>
               ) : (
                 <>
@@ -184,9 +175,6 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                     <br />
                     <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">League</span>
                   </h1>
-                  <p className="mt-5 max-w-[440px] hidden sm:block text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
-                    Die Saison startet in Kürze — sobald Spiele angesetzt sind, findest du hier alles live.
-                  </p>
                 </>
               )}
               <div className="hidden lg:flex gap-3 mt-7 flex-wrap">
@@ -359,15 +347,12 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                   Spieltages{pom.matchday ? ` ${pom.matchday}` : ''}
                 </span>
               </h1>
-              <p className="mt-5 max-w-[430px] mx-auto lg:mx-0 hidden sm:block text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
-                Die herausragende Leistung des Spieltags in der Hero League.
-              </p>
               {/* Sponsor der Auszeichnung – Logo/Name mit Link, aktualisiert sich
                   automatisch mit der Partner-Auswahl im Admin. Auch auf dem Handy sichtbar. */}
               {sponsor && (sponsor.logoUrl || sponsor.name) && (
                 <div className="mt-5 flex items-center justify-center lg:justify-start gap-2.5">
                   <span className="font-sans font-bold text-[10.5px] tracking-[2px] uppercase text-hl-gold/90 whitespace-nowrap">
-                    Gesponsert von
+                    Präsentiert von
                   </span>
                   {sponsor.logoUrl ? (
                     <SponsorLink sponsorId={sponsor.id} sponsorName={sponsor.name} placement="spieler-des-spieltages" href={sponsor.linkUrl} title={sponsor.name} className="inline-flex items-center">
@@ -449,10 +434,6 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                 <br />
                 <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">Spitze</span>
               </h1>
-              <p className="mt-5 max-w-[430px] hidden sm:block text-[15px] sm:text-[16.5px] leading-relaxed text-hl-soft">
-                {leader.teamName} führt die Hero League mit {leader.points} Punkten an
-                {standings[1] ? ` — dicht gefolgt von ${standings[1].teamName}` : ''}. Das Titelrennen ist eröffnet.
-              </p>
               <div className="hidden lg:flex gap-3 mt-7 flex-wrap">
                 <button onClick={() => onNavigate('tabelle')} className={primaryBtn}>
                   ▸ TABELLE ANSEHEN
