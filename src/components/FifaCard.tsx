@@ -39,6 +39,12 @@ export default function FifaCard({ card, name, imageUrl, team, className = '' }:
   const parts = name.trim().split(/\s+/);
   const lastName = parts.length > 1 ? parts[parts.length - 1] : name;
 
+  // Der senkrechte Name füllt IMMER die volle Höhe zwischen oberem Rand und der
+  // grünen Linie: je länger der Name, desto kleiner die Schrift (in cqw, damit es
+  // mit der Kartengröße mitskaliert). Kurze Namen werden nach oben gedeckelt.
+  const nameLen = Math.max(3, name.trim().length);
+  const nameFontCqw = Math.max(5.5, Math.min(13.5, 101 / (nameLen * 0.6)));
+
   return (
     <div
       className={`relative rounded-3xl overflow-hidden select-none ${className}`}
@@ -76,13 +82,13 @@ export default function FifaCard({ card, name, imageUrl, team, className = '' }:
 
       {/* Name senkrecht am linken Rand, von unten (knapp über der Linie) nach oben
           lesbar – z-30, damit ihn der dunkle Streifen unten NICHT verdeckt. */}
-      <div className="absolute left-0 z-30 flex items-end" style={{ top: '4cqw', bottom: '26cqw', paddingLeft: '3.5cqw' }}>
+      <div className="absolute left-0 z-30 flex items-end" style={{ top: '16cqw', bottom: '26cqw', paddingLeft: '3.5cqw' }}>
         <span
           className="font-display font-black uppercase tracking-tight whitespace-nowrap"
           style={{
             writingMode: 'vertical-rl',
             transform: 'rotate(180deg)',
-            fontSize: '7.6cqw',
+            fontSize: `${nameFontCqw}cqw`,
             lineHeight: 1,
             color: t.accent,
             textShadow: '0 2px 10px rgba(0,0,0,.95)',

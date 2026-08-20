@@ -5,6 +5,7 @@ import type { ActionCounts, Match, MatchPlayerStat, ScoringConfig, Team } from '
 import { notesForMatch, type MatchNoteEntry } from '../lib/trackingView';
 import { ACTION_META, type ActionTone } from '../lib/scoring';
 import { sumCounts, gesamtschuesse, passversuche } from '../lib/rating';
+import { ImageZoom } from './ui';
 import { useBackClose, goBackLayer } from '../lib/backStack';
 
 // ===========================================================================
@@ -246,7 +247,12 @@ function PlayerMatchDetail({
 
       <div className="flex items-center gap-4 min-w-0">
         {photo ? (
-          <img src={photo} alt="" className="w-20 h-20 lg:w-24 lg:h-24 rounded-2xl object-cover shrink-0 border border-white/10" />
+          <ImageZoom
+            src={photo}
+            alt={entry.playerName}
+            className="w-20 h-20 lg:w-24 lg:h-24 rounded-2xl object-cover shrink-0 border border-white/10"
+            zoomClassName="w-72 sm:w-96 max-w-[85vw] max-h-[80vh] object-contain"
+          />
         ) : (
           <div className="w-20 h-20 lg:w-24 lg:h-24 rounded-2xl bg-white/5 grid place-items-center text-2xl font-black text-hl-faint shrink-0">
             {entry.playerName.charAt(0)}
@@ -254,7 +260,14 @@ function PlayerMatchDetail({
         )}
         <div className="min-w-0 flex-1">
           <div className="text-[10px] uppercase tracking-[2px] text-hl-dim">Bewertung{isKeeper ? ' · Torwart' : ''}</div>
-          <div className="font-display font-black text-2xl uppercase tracking-tight leading-tight truncate">{entry.playerName}</div>
+          <button
+            type="button"
+            onClick={onOpenCard}
+            className="block max-w-full text-left font-display font-black text-2xl uppercase tracking-tight leading-tight truncate hover:text-brand-accent-light transition-colors cursor-pointer"
+            title={`${entry.playerName} – zur Spielerseite`}
+          >
+            {entry.playerName}
+          </button>
           <div className="text-[11px] text-hl-dim truncate mt-0.5">
             {homeName} <span className="text-hl-faint">gegen</span> {awayName}
           </div>
