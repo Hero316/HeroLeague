@@ -14,6 +14,7 @@ interface EventPageProps {
   reportMatchIds?: Set<string>; // Event-Spiele mit veröffentlichtem Spielbericht
   onOpenReport?: (matchId: string) => void; // Klick aufs Spiel -> Event-Spielbericht
   onOpenEventTeam?: (teamName: string) => void; // Klick aufs Team -> Event-Team-Seite
+  staffPreview?: boolean; // Event nur für Super-Admins sichtbar (Test-Modus)
 }
 
 // Namen tolerant vergleichen (Groß/Klein, Leerzeichen, Punkte egal).
@@ -27,7 +28,7 @@ const normName = (s: string) =>
 // Sonder-Event-Seite (z.B. Testspieltag): Kopf + Live-Tabelle + kompletter
 // Spielplan mit Uhrzeiten und Feldern – im Look der Hauptseite, aber mit
 // eigener Magenta/Gold-Farbwelt, damit es sich besonders anfühlt.
-export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin, onPrint, reportMatchIds, onOpenReport, onOpenEventTeam }: EventPageProps) {
+export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin, onPrint, reportMatchIds, onOpenReport, onOpenEventTeam, staffPreview }: EventPageProps) {
   const standings = useMemo(
     () => calculateEventStandings(event.teams, event.matches),
     [event.teams, event.matches]
@@ -115,6 +116,14 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
 
   return (
     <div className="relative overflow-x-clip">
+      {staffPreview && (
+        <div className="bg-[rgba(230,35,142,.12)] border-b border-[rgba(230,35,142,.4)] px-4 py-2.5 text-center">
+          <span className="inline-flex items-center gap-2 text-[12px] sm:text-sm font-sans font-bold text-[#ff9ad4]">
+            <Lock className="w-4 h-4" />
+            Test-Modus: Nur für Super-Admins sichtbar – Besucher sehen dieses Event noch nicht.
+          </span>
+        </div>
+      )}
       {/* Kopf mit eigener Farbwelt */}
       <div className="relative overflow-hidden border-b border-[rgba(230,35,142,.25)] bg-[radial-gradient(120%_140%_at_50%_-10%,rgba(230,35,142,.28),transparent_60%)]">
         <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 py-10 sm:py-14">

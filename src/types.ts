@@ -259,6 +259,10 @@ export interface EventConfig {
 // (null = keins sichtbar, Seite ist komplett normal).
 export interface EventArchive {
   activeId: string | null;
+  // Test-Sichtbarkeit: dieses Event ist „live", aber NUR für Super-Admins sichtbar
+  // (Besucher sehen die normale Seite ohne Event). Zum Prüfen vor dem echten
+  // Live-Gang. Wird ignoriert, wenn activeId gesetzt ist.
+  previewId?: string | null;
   events: EventConfig[];
 }
 

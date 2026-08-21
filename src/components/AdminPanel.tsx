@@ -915,10 +915,13 @@ export default function AdminPanel({
     }
   };
 
-  // Ausgewähltes Event sichtbar schalten (oder alle verstecken) – speichert sofort.
-  const setActiveEvent = (id: string | null) => {
-    if (!eventArchive) return;
-    saveEventArchive({ ...eventArchive, activeId: id });
+  // Sichtbarkeit des ausgewählten Events setzen – speichert sofort.
+  //  • 'public' = für ALLE live · 'staff' = nur für Super-Admins (Test) · 'hidden' = versteckt.
+  const setEventVisibility = (mode: 'public' | 'staff' | 'hidden') => {
+    if (!eventArchive || !selectedEventId) return;
+    if (mode === 'public') saveEventArchive({ ...eventArchive, activeId: selectedEventId, previewId: null });
+    else if (mode === 'staff') saveEventArchive({ ...eventArchive, activeId: null, previewId: selectedEventId });
+    else saveEventArchive({ ...eventArchive, activeId: null, previewId: null });
   };
 
   // Neues Testspiel anlegen (leer) und direkt auswählen.
@@ -945,7 +948,8 @@ export default function AdminPanel({
     if (!window.confirm(`„${selectedEvent.label}" mit allen Daten wirklich löschen?`)) return;
     const events = eventArchive.events.filter((e) => e.id !== selectedEventId);
     const activeId = eventArchive.activeId === selectedEventId ? null : eventArchive.activeId;
-    const next = { activeId, events };
+    const previewId = eventArchive.previewId === selectedEventId ? null : eventArchive.previewId;
+    const next = { activeId, previewId, events };
     setSelectedEventId(events[0]?.id ?? '');
     saveEventArchive(next);
   };
@@ -2514,7 +2518,7 @@ export default function AdminPanel({
                     {eventArchive.events.map((ev) => (
                       <option key={ev.id} value={ev.id}>
                         {ev.label}
-                        {eventArchive.activeId === ev.id ? ' — aktiv' : ''}
+                        {eventArchive.activeId === ev.id ? ' — aktiv' : eventArchive.previewId === ev.id ? ' — Test (nur Super-Admins)' : ''}
                       </option>
                     ))}
                   </select>
@@ -2528,35 +2532,60 @@ export default function AdminPanel({
                 </button>
               </div>
 
-              {/* Sichtbarkeit */}
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl border border-[rgba(230,35,142,.3)] bg-[rgba(230,35,142,.06)]">
-                <div className="flex-1">
-                  <div className="font-sans font-bold text-white text-sm">Auf der Website anzeigen</div>
-                  <div className="text-xs text-gray-400 font-sans">Es kann immer nur ein Testspiel gleichzeitig sichtbar sein.</div>
-                </div>
-                {selectedEvent && eventArchive.activeId === selectedEvent.id ? (
-                  <button
-                    type="button"
-                    onClick={() => setActiveEvent(null)}
-                    className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider border bg-[rgba(230,35,142,.25)] text-[#ff9ad4] border-[rgba(230,35,142,.5)] cursor-pointer"
-                  >
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#E6238E] opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[#E6238E]" />
-                    </span>
-                    AKTIV – ausblenden
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => selectedEvent && setActiveEvent(selectedEvent.id)}
-                    disabled={!selectedEvent}
-                    className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider border bg-[#060E0F]/60 text-gray-300 border-white/10 hover:text-white hover:border-[rgba(230,35,142,.5)] transition-all cursor-pointer disabled:opacity-40"
-                  >
-                    Dieses Testspiel aktivieren
-                  </button>
-                )}
-              </div>
+              {/* Sichtbarkeit – drei Zustände */}
+              {(() => {
+                const isPublic = !!selectedEvent && eventArchive.activeId === selectedEvent.id;
+                const isStaff = !!selectedEvent && eventArchive.previewId === selectedEvent.id && !isPublic;
+                const stateLabel = isPublic
+                  ? 'Aktiv – für ALLE sichtbar'
+                  : isStaff
+                  ? 'Test – nur für Super-Admins sichtbar'
+                  : 'Versteckt – niemand sieht es';
+                const stateColor = isPublic ? 'text-emerald-300' : isStaff ? 'text-[#ff9ad4]' : 'text-gray-400';
+                return (
+                  <div className="p-4 rounded-xl border border-[rgba(230,35,142,.3)] bg-[rgba(230,35,142,.06)] space-y-3">
+                    <div>
+                      <div className="font-sans font-bold text-white text-sm">Auf der Website anzeigen</div>
+                      <div className="text-xs text-gray-400 font-sans">
+                        Es kann immer nur ein Testspiel gleichzeitig sichtbar sein. Aktueller Status:{' '}
+                        <span className={`font-bold ${stateColor}`}>{stateLabel}</span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEventVisibility('public')}
+                        disabled={!selectedEvent}
+                        className={`inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer disabled:opacity-40 ${
+                          isPublic ? 'bg-emerald-500/25 text-emerald-200 border-emerald-500/50' : 'bg-[#060E0F]/60 text-gray-300 border-white/10 hover:text-white hover:border-emerald-500/50'
+                        }`}
+                      >
+                        {isPublic && <span className="w-2 h-2 rounded-full bg-emerald-400" />}
+                        Für alle live
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEventVisibility('staff')}
+                        disabled={!selectedEvent}
+                        className={`inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all cursor-pointer disabled:opacity-40 ${
+                          isStaff ? 'bg-[rgba(230,35,142,.25)] text-[#ff9ad4] border-[rgba(230,35,142,.5)]' : 'bg-[#060E0F]/60 text-gray-300 border-white/10 hover:text-white hover:border-[rgba(230,35,142,.5)]'
+                        }`}
+                      >
+                        {isStaff && <span className="w-2 h-2 rounded-full bg-[#E6238E]" />}
+                        Nur Super-Admins (Test)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEventVisibility('hidden')}
+                        disabled={!selectedEvent || (!isPublic && !isStaff)}
+                        className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider border bg-[#060E0F]/60 text-gray-300 border-white/10 hover:text-white hover:border-white/30 transition-all cursor-pointer disabled:opacity-40"
+                      >
+                        Ausblenden
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {selectedEvent ? (
                 <>
