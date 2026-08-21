@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster, PlayerOfMonth, MatchPlayerStat, ScoringConfig } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
-import { fetchPublicStats, fetchEventStats, fetchScoring } from './lib/stats';
+import { fetchPublicStats, fetchEventStats, fetchScoring, saveEventMatch } from './lib/stats';
 import { eventTeamsAsTeams, eventMatchesAsMatches, eventPlayers } from './lib/eventView';
 import { DEFAULT_SCORING } from './lib/scoring';
 import { startPresence } from './lib/presence';
@@ -577,6 +577,29 @@ export default function App() {
   const handleRefereeUpdateMatch = (matchId: string, patch: Partial<Match>) =>
     runAdminAction(() => apiFetch(`/api/matches/${matchId}`, { method: 'PUT', body: JSON.stringify(patch) }));
 
+  // Event-Archiv neu laden (für den Schiedsrichter-Refresh, damit parallele
+  // Änderungen am zweiten Feld erscheinen).
+  const refetchEventArchive = async () => {
+    try {
+      setEventArchive(await apiFetch<EventArchive>('/api/twitch?resource=event'));
+    } catch {
+      /* egal – bleibt beim letzten Stand */
+    }
+  };
+
+  // Schiedsrichter: ein EINZELNES Event-Spiel aktualisieren (live, Tore, Abpfiff).
+  const handleRefereeUpdateEventMatch = async (matchId: string, patch: Partial<Match>): Promise<boolean> => {
+    if (!shownEvent) return false;
+    try {
+      const updated = await saveEventMatch(shownEvent.id, matchId, patch);
+      setEventArchive(updated);
+      return true;
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
+      return false;
+    }
+  };
+
   const handleAddTeam = (newTeam: Omit<Team, 'id'>) =>
     runAdminAction(() => apiFetch('/api/teams', { method: 'POST', body: JSON.stringify(newTeam) }));
 
@@ -678,9 +701,13 @@ export default function App() {
         roster={roster}
         onUpdateMatch={handleRefereeUpdateMatch}
         onSaveRoster={handleSaveRoster}
-        onRefresh={fetchData}
+        onRefresh={async () => { await fetchData(); await refetchEventArchive(); }}
         onLogout={handleLogout}
         onExit={isReferee ? undefined : () => setRefereeView(false)}
+        eventTeams={shownEvent ? eventTeamsAsTeams(shownEvent, visibleTeams) : undefined}
+        eventMatches={shownEvent ? eventMatchesAsMatches(shownEvent) : undefined}
+        eventLabel={shownEvent?.title || 'Testspiel'}
+        onUpdateEventMatch={handleRefereeUpdateEventMatch}
       />
     );
   }

@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { EventArchive, EventMatch } from '../src/types';
 import { sql, getTeams } from './_lib/db.js';
 import { requireStaff, requireMatchWrite, requireSuperadmin, getSession } from './_lib/auth.js';
 
@@ -326,6 +327,8 @@ function normalizeEvent(body: unknown, index = 0) {
         awayScore: toScore(m.awayScore),
         status: ['geplant', 'live', 'beendet'].includes(str(m.status)) ? (str(m.status) as string) : 'geplant',
         liveStartedAt: typeof m.liveStartedAt === 'string' ? m.liveStartedAt : null,
+        durationMinutes: Number.isFinite(Number(m.durationMinutes)) && str(m.durationMinutes) !== '' ? Math.max(1, Math.min(120, Math.trunc(Number(m.durationMinutes)))) : undefined,
+        pausedAt: typeof m.pausedAt === 'string' ? m.pausedAt : null,
         absentees: arr(m.absentees)
           .map((s) => {
             const o = (s ?? {}) as Record<string, unknown>;
@@ -382,6 +385,86 @@ const saveEvent = requireStaff(async (req: VercelRequest, res: VercelResponse) =
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
   `;
   return res.json(archive);
+});
+
+// Ein EINZELNES Event-Spiel aktualisieren (Schiedsrichtermodus: live schalten,
+// Tore, bester Spieler, Pause/Abpfiff). Bewusst match-granular und mit
+// requireMatchWrite, damit auch Schiedsrichter (nicht nur Staff) Testspiele
+// live pfeifen dürfen – ohne das komplette Event-Archiv überschreiben zu können.
+const saveEventMatch = requireMatchWrite(async (req: VercelRequest, res: VercelResponse) => {
+  const b = (req.body ?? {}) as { eventId?: unknown; matchId?: unknown; patch?: unknown };
+  const eventId = str(b.eventId).trim();
+  const matchId = str(b.matchId).trim();
+  if (!eventId || !matchId) return res.status(400).json({ error: 'eventId und matchId sind Pflicht.' });
+  const patch = (b.patch && typeof b.patch === 'object' ? b.patch : {}) as Record<string, unknown>;
+
+  const rows = await sql`SELECT value FROM settings WHERE key = 'event'`;
+  const archive = toArchive(rows[0]?.value) as EventArchive;
+  const ev = archive.events.find((e) => e.id === eventId);
+  if (!ev) return res.status(404).json({ error: 'Testspiel nicht gefunden.' });
+  const m = ev.matches.find((mm) => mm.id === matchId) as EventMatch | undefined;
+  if (!m) return res.status(404).json({ error: 'Spiel nicht gefunden.' });
+
+  // Match-Form (playerName/teamId) -> Event-Form (player/team).
+  const mapScorers = (v: unknown) =>
+    (Array.isArray(v) ? v : [])
+      .map((raw) => {
+        const o = (raw ?? {}) as Record<string, unknown>;
+        const out: { player: string; team: string; assist?: string } = {
+          player: str(o.playerName ?? o.player).trim(),
+          team: str(o.teamId ?? o.team).trim(),
+        };
+        const assist = str(o.assistName ?? o.assist).trim();
+        if (assist) out.assist = assist;
+        return out;
+      })
+      .filter((s) => s.team);
+  const mapAwards = (v: unknown) =>
+    (Array.isArray(v) ? v : [])
+      .map((raw) => {
+        const o = (raw ?? {}) as Record<string, unknown>;
+        return { player: str(o.playerName ?? o.player).trim(), team: str(o.teamId ?? o.team).trim() };
+      })
+      .filter((a) => a.team);
+
+  if ('homeScore' in patch) m.homeScore = toScore(patch.homeScore);
+  if ('awayScore' in patch) m.awayScore = toScore(patch.awayScore);
+  if ('scorers' in patch) m.scorers = mapScorers(patch.scorers);
+  if ('bestPlayers' in patch) m.bestPlayers = mapAwards(patch.bestPlayers);
+  if ('goalkeepers' in patch) m.goalkeepers = mapAwards(patch.goalkeepers);
+  if ('absentees' in patch) m.absentees = mapAwards(patch.absentees);
+  if ('durationMinutes' in patch) {
+    const d = Number(patch.durationMinutes);
+    if (Number.isFinite(d)) m.durationMinutes = Math.max(1, Math.min(120, Math.trunc(d)));
+  }
+
+  // Live-Logik wie bei den echten Spielen (liveStartedAt / pausedAt).
+  if ('status' in patch) {
+    const status = (['geplant', 'live', 'beendet'].includes(str(patch.status)) ? str(patch.status) : m.status) as EventMatch['status'];
+    m.status = status;
+    if (status === 'live') {
+      if (!m.liveStartedAt) m.liveStartedAt = new Date().toISOString();
+    } else {
+      m.liveStartedAt = null;
+      m.pausedAt = null;
+    }
+  }
+  if ('pausedAt' in patch) {
+    const wasPaused = m.pausedAt;
+    const now = typeof patch.pausedAt === 'string' ? patch.pausedAt : null;
+    if (now === null && wasPaused && m.liveStartedAt) {
+      const pausedMs = Date.now() - new Date(wasPaused).getTime();
+      if (pausedMs > 0) m.liveStartedAt = new Date(new Date(m.liveStartedAt).getTime() + pausedMs).toISOString();
+    }
+    m.pausedAt = now;
+  }
+
+  const next = normalizeArchive(archive);
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('event', ${JSON.stringify(next)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+  return res.json(next);
 });
 
 // Ein einzelnes Medien-Item säubern.
@@ -776,6 +859,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'partners') return savePartners(req, res);
       if (resource === 'team-sponsors') return saveTeamSponsors(req, res);
       if (resource === 'event') return saveEvent(req, res);
+      if (resource === 'event-match') return saveEventMatch(req, res);
       if (resource === 'highlights') return saveHighlights(req, res);
       if (resource === 'hero') return saveHero(req, res);
       if (resource === 'countdown') return saveCountdown(req, res);
