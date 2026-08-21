@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Shield, ArrowLeft, LogOut, Plus, X, Play, Pause, Square, Users, Star, Check, RefreshCw } from 'lucide-react';
 import { EveningRoster, Match, RosterMap, SessionUser, Team } from '../types';
 import { useCountdown, formatClock } from './ui';
+import { useBackClose } from '../lib/backStack';
 
 interface RefereeModeProps {
   user: SessionUser;
@@ -72,15 +73,34 @@ export default function RefereeMode({
     () => [...new Set(curMatches.map((m) => m.matchday))].sort((a, b) => a - b),
     [curMatches]
   );
-  const latestMatchday = matchdays[matchdays.length - 1] ?? 1;
-  const [matchday, setMatchday] = useState<number>(latestMatchday);
+  // Standard-Auswahl: der erste Spieltag/Block, der noch NICHT komplett gespielt
+  // ist (aufsteigend – Block 1 vor Block 5), sonst der erste überhaupt. So landet
+  // man logisch bei den nächsten zu pfeifenden Spielen, nicht ganz hinten.
+  const defaultMatchday = useMemo(() => {
+    const open = matchdays.find((d) => curMatches.some((m) => m.matchday === d && m.status !== 'beendet'));
+    return open ?? matchdays[0] ?? 1;
+  }, [matchdays, curMatches]);
+  const [matchday, setMatchday] = useState<number>(defaultMatchday);
   useEffect(() => {
-    if (matchdays.length && !matchdays.includes(matchday)) setMatchday(latestMatchday);
-  }, [matchdays, matchday, latestMatchday]);
+    if (matchdays.length && !matchdays.includes(matchday)) setMatchday(defaultMatchday);
+  }, [matchdays, matchday, defaultMatchday]);
 
   const [fieldFilter, setFieldFilter] = useState<number | 'all'>('all');
   const [openMatchId, setOpenMatchId] = useState<string | null>(null);
   const [showRoster, setShowRoster] = useState(false);
+
+  // Beim Wechsel von Spieltag/Block oder Liga/Testspiel den Feld-Filter auf „Alle"
+  // zurücksetzen – sonst bliebe man evtl. auf einem Feld hängen, das es in der
+  // neuen Auswahl gar nicht gibt (leere Liste).
+  useEffect(() => {
+    setFieldFilter('all');
+  }, [matchday, mode]);
+
+  // Handy-„Zurück": schließt erst die offene Ebene (Spiel-Detail bzw. Aufstellung),
+  // statt sofort den ganzen Schiedsrichtermodus zu verlassen. So kommt man immer
+  // dorthin zurück, wo man war.
+  useBackClose(!!openMatchId, () => setOpenMatchId(null));
+  useBackClose(showRoster, () => setShowRoster(false));
 
   // Regelmäßig aktualisieren, damit parallele Änderungen (z. B. zweites Feld)
   // erscheinen. Popups bleiben davon unberührt (lokaler State).
@@ -306,7 +326,8 @@ export default function RefereeMode({
 // Eine Spielkarte in der Übersicht (großflächig antippbar).
 function MatchRow({ match, teamName, onOpen }: { match: Match; teamName: (id: string) => string; onOpen: () => void }) {
   // Auch in der Übersicht läuft die Zeit ins Minus (Schiedsrichter-Werkzeug).
-  const remaining = useCountdown(match.liveStartedAt, match.durationMinutes, match.pausedAt, true);
+  // Fallback-Dauer, damit der Timer auch ohne gespeicherte Dauer läuft.
+  const remaining = useCountdown(match.liveStartedAt, match.durationMinutes || DEFAULT_MINUTES, match.pausedAt, true);
   return (
     <button
       type="button"
@@ -365,9 +386,13 @@ function MatchScreen({
   const awayScore = match.awayScore ?? 0;
   const bestPlayers = match.bestPlayers ?? [];
   const isPaused = !!match.pausedAt;
+  // Spieldauer für den Countdown: bevorzugt die am Spiel gespeicherte, sonst die
+  // eingestellte/Standard-Dauer. So bleibt der Timer NIE leer – auch wenn ein
+  // Spiel „live" ist, aber (noch) keine Dauer am Spiel hängt.
+  const dur = match.durationMinutes || minutes || DEFAULT_MINUTES;
   // allowNegative: der Countdown läuft bei 0 rot ins Minus weiter (Nachspielzeit),
   // es wird NICHT automatisch abgepfiffen – der Schiedsrichter pfeift selbst ab.
-  const remaining = useCountdown(match.liveStartedAt, match.durationMinutes, match.pausedAt, true);
+  const remaining = useCountdown(match.liveStartedAt, dur, match.pausedAt, true);
   const isNeg = remaining !== null && remaining < 0;
 
   const bestOf = (teamId: string) => bestPlayers.find((b) => b.teamId === teamId)?.playerName ?? null;
