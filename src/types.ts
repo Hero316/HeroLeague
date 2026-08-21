@@ -231,6 +231,14 @@ export interface EventMatch {
   absentees?: EventAward[]; // abwesende Kaderspieler je Team
 }
 
+// Kader eines Event-Teams – namensbasiert, komplett vom Liga-Kader getrennt.
+// Ermöglicht Fotos, Einzelnoten, Torwart-/Abwesenheits-Auswahl und die beste
+// Aufstellung auch für Teams, die keine echten Liga-Vereine sind.
+export interface EventRoster {
+  team: string; // Teamname (muss zu EventConfig.teams passen)
+  players: Player[]; // Name + optional Foto/Nummer/Torwart
+}
+
 export interface EventConfig {
   id: string; // eindeutige ID (z.B. "testspiel-1")
   label: string; // Anzeigename in der Verwaltung, z.B. "Testspiel 1"
@@ -240,6 +248,7 @@ export interface EventConfig {
   date?: string; // 'YYYY-MM-DD' – echtes Datum für den Kalender (optional)
   location: string; // z.B. "Soccer Center Königsfeld"
   teams: string[]; // Teamnamen (für die Tabelle, auch ohne Ergebnisse)
+  rosters?: EventRoster[]; // eigener Kader je Event-Team (für Fotos/Noten/Aufstellung)
   matches: EventMatch[];
 }
 
