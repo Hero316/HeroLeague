@@ -63,11 +63,12 @@ export function fetchEventStats(eventId: string): Promise<{ rows: MatchPlayerSta
 // Event-Spiele) – gibt das aktualisierte Archiv zurück.
 export function saveEventAttendance(
   eventId: string,
-  teams: EveningRoster['teams']
+  teams: EveningRoster['teams'],
+  minutes?: number
 ): Promise<EventArchive> {
   return apiFetch('/api/twitch?resource=event-attendance', {
     method: 'POST',
-    body: JSON.stringify({ eventId, teams }),
+    body: JSON.stringify({ eventId, teams, minutes }),
   });
 }
 

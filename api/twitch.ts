@@ -473,10 +473,11 @@ const saveEventMatch = requireMatchWrite(async (req: VercelRequest, res: VercelR
 // Abwesenden (Kader minus Anwesende) und den Torwart je Team auf ALLE Spiele
 // des Events. requireMatchWrite (auch Schiedsrichter), wie bei den echten Spielen.
 const saveEventAttendance = requireMatchWrite(async (req: VercelRequest, res: VercelResponse) => {
-  const b = (req.body ?? {}) as { eventId?: unknown; teams?: unknown };
+  const b = (req.body ?? {}) as { eventId?: unknown; teams?: unknown; minutes?: unknown };
   const eventId = str(b.eventId).trim();
   if (!eventId) return res.status(400).json({ error: 'eventId ist Pflicht.' });
   const teamsIn = (b.teams && typeof b.teams === 'object' ? b.teams : {}) as Record<string, { present?: unknown; goalkeeper?: unknown }>;
+  const minutes = Number.isFinite(Number(b.minutes)) && str(b.minutes) !== '' ? Math.max(1, Math.min(120, Math.trunc(Number(b.minutes)))) : null;
 
   const rows = await sql`SELECT value FROM settings WHERE key = 'event'`;
   const archive = toArchive(rows[0]?.value) as EventArchive;
@@ -502,6 +503,7 @@ const saveEventAttendance = requireMatchWrite(async (req: VercelRequest, res: Ve
   };
 
   for (const m of ev.matches as EventMatch[]) {
+    if (minutes !== null) m.durationMinutes = minutes;
     for (const teamName of [m.home, m.away]) {
       const cfg = cfgFor(teamName);
       if (!cfg) continue;

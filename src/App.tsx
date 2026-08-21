@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster, PlayerOfMonth, MatchPlayerStat, ScoringConfig } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
-import { fetchPublicStats, fetchEventStats, fetchScoring, saveEventMatch } from './lib/stats';
+import { fetchPublicStats, fetchEventStats, fetchScoring, saveEventMatch, saveEventAttendance } from './lib/stats';
 import { eventTeamsAsTeams, eventMatchesAsMatches, eventPlayers } from './lib/eventView';
 import { DEFAULT_SCORING } from './lib/scoring';
 import { startPresence } from './lib/presence';
@@ -608,6 +608,20 @@ export default function App() {
     }
   };
 
+  // Schiedsrichter: Anwesenheit + Spieldauer fürs Testspiel setzen (wirkt auch
+  // im Statistik-Center, weil beide dieselben Event-Abwesenden lesen).
+  const handleRefereeEventAttendance = async (minutes: number, teams: EveningRoster['teams']): Promise<boolean> => {
+    if (!shownEvent) return false;
+    try {
+      const updated = await saveEventAttendance(shownEvent.id, teams, minutes);
+      setEventArchive(updated);
+      return true;
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
+      return false;
+    }
+  };
+
   const handleAddTeam = (newTeam: Omit<Team, 'id'>) =>
     runAdminAction(() => apiFetch('/api/teams', { method: 'POST', body: JSON.stringify(newTeam) }));
 
@@ -716,6 +730,7 @@ export default function App() {
         eventMatches={shownEvent ? eventMatchesAsMatches(shownEvent) : undefined}
         eventLabel={shownEvent?.title || 'Testspiel'}
         onUpdateEventMatch={handleRefereeUpdateEventMatch}
+        onSaveEventAttendance={handleRefereeEventAttendance}
       />
     );
   }
