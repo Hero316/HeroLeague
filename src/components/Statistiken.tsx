@@ -1,7 +1,8 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { PlayerStat, Match, Team } from '../types';
-import { rankGoldenGlove } from '../lib/goldenGlove';
+import { PlayerStat, Match, Team, MatchPlayerStat, ScoringConfig } from '../types';
+import { scorerRanking as trackScorers, assistRanking as trackAssists, goldenGloveRanking } from '../lib/trackingAwards';
+import { DEFAULT_SCORING } from '../lib/scoring';
 import PlayerCrest from './PlayerCrest';
 import { TeamCrest } from './ui';
 import { CountUp, Reveal, useSettledList } from './anim';
@@ -10,7 +11,16 @@ interface StatistikenProps {
   players: PlayerStat[];
   matches: Match[];
   teams: Team[];
+  trackingRows?: MatchPlayerStat[]; // veröffentlichte getrackte Werte (für die Award-Rechnung)
+  scoringConfig?: ScoringConfig; // Score-Einstellungen (Torschützen/Torwart-Score)
   onSelectTeam?: (teamId: string, playerName?: string) => void;
+}
+
+// Torhüter-Zeile: PlayerStat (fürs Wappen) + der getrackte Torwart-Score.
+interface GloveRow extends PlayerStat {
+  score: number; // Goldener-Handschuh-Score aus den getrackten Aktionen
+  saves: number; // Paraden
+  penaltySaves: number; // gehaltene Elfmeter
 }
 
 type Accent = 'teal' | 'gold' | 'magenta';
@@ -28,7 +38,7 @@ const VALUE_COLOR: Record<Accent, string> = {
 };
 
 // Statistik-Seite: Liga-Kennzahlen als Kachelzeile + Leader-Cards für Spieler und Teams.
-export default function Statistiken({ players, matches, teams, onSelectTeam }: StatistikenProps) {
+export default function Statistiken({ players, matches, teams, trackingRows = [], scoringConfig, onSelectTeam }: StatistikenProps) {
   const finished = matches.filter((m) => m.status === 'beendet' && m.homeScore !== null && m.awayScore !== null);
   const totalGoals = finished.reduce((acc, m) => acc + (m.homeScore || 0) + (m.awayScore || 0), 0);
   const avgGoals = finished.length ? totalGoals / finished.length : 0;
@@ -69,33 +79,90 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
     };
   }, [teams, finished]);
 
-  // Spieler-Auswertungen
-  const topScorer = [...players].filter((p) => p.goals > 0).sort((a, b) => b.goals - a.goals)[0] ?? null;
-  const topAssist = [...players].filter((p) => p.assists > 0).sort((a, b) => b.assists - a.assists)[0] ?? null;
+  // Spieler-Auszeichnungen – jetzt komplett aus den GETRACKTEN Daten (identisch
+  // zum Testspiel), damit Liga und Event dieselbe, logische Rechnung nutzen:
+  // Torschützenkönig & Vorlagen aus getrackten Toren/Vorlagen, bester Torwart
+  // nach dem eigenen Torwart-Score (Goldener Handschuh).
+  const cfg = scoringConfig ?? DEFAULT_SCORING;
+
+  // Ein getracktes Ranking auf ein PlayerStat-Objekt abbilden (fürs Wappen/Foto),
+  // die Zähler aber aus dem Tracking übernehmen. Fehlt der Spieler in der Liste,
+  // wird ein minimales Ersatzobjekt gebaut (Name + Team, ohne Foto).
+  const resolvePlayer = React.useCallback(
+    (teamId: string, name: string): PlayerStat => {
+      const found = players.find((p) => p.teamId === teamId && p.name === name);
+      if (found) return found;
+      const t = teams.find((x) => x.id === teamId);
+      return {
+        id: `${teamId}:${name}`,
+        name,
+        teamId,
+        teamName: t?.name ?? teamId,
+        teamLogoColor: t?.logoColor ?? '#22dfc9',
+        goals: 0,
+        assists: 0,
+        matchesPlayed: 0,
+        wins: 0,
+        draws: 0,
+        losses: 0,
+        motmCount: 0,
+        cleanSheets: 0,
+        gamesInGoal: 0,
+        goalsConceded: 0,
+        points: 0,
+      };
+    },
+    [players, teams]
+  );
+
+  // Torschützen (getrackt) → PlayerStat-Zeilen mit den getrackten Zählern.
+  const scorerRows = React.useMemo(
+    () =>
+      trackScorers(trackingRows, cfg).map((e) => ({
+        ...resolvePlayer(e.teamId, e.playerName),
+        goals: e.goals,
+        assists: e.assists,
+        matchesPlayed: e.games,
+      })),
+    [trackingRows, cfg, resolvePlayer]
+  );
+  const assistRows = React.useMemo(
+    () =>
+      trackAssists(trackingRows, cfg).map((e) => ({
+        ...resolvePlayer(e.teamId, e.playerName),
+        goals: e.goals,
+        assists: e.assists,
+        matchesPlayed: e.games,
+      })),
+    [trackingRows, cfg, resolvePlayer]
+  );
+
+  // Bester Torwart – eigener Torwart-Score aus den getrackten Torwart-Aktionen
+  // (weniger kassieren als der Schnitt, Paraden, Spiele zu null, gehaltene
+  // Elfmeter, Stellungsspiel). Top 5 absteigend nach Score.
+  const gloveRows = React.useMemo<GloveRow[]>(
+    () =>
+      goldenGloveRanking(trackingRows, cfg).map((e) => ({
+        ...resolvePlayer(e.teamId, e.playerName),
+        gamesInGoal: e.games,
+        cleanSheets: e.cleanSheets,
+        goalsConceded: e.goalsConceded,
+        score: e.goldenGloveScore,
+        saves: e.saves,
+        penaltySaves: e.penaltySaves,
+      })),
+    [trackingRows, cfg, resolvePlayer]
+  );
+
+  const topScorer = scorerRows[0] ?? null;
+  const topAssist = assistRows[0] ?? null;
   const bestRatio =
-    [...players]
+    [...scorerRows]
       .filter((p) => p.goals > 0 && p.matchesPlayed > 0)
       .sort((a, b) => b.goals / b.matchesPlayed - a.goals / a.matchesPlayed)[0] ?? null;
 
-  // Torschützenkönig: Top 5 nach erzielten Toren (Tiebreak: Vorlagen, dann Name)
-  const scorerRanking = React.useMemo(
-    () =>
-      [...players]
-        .filter((p) => p.goals > 0)
-        .sort(
-          (a, b) =>
-            b.goals - a.goals ||
-            b.assists - a.assists ||
-            a.name.localeCompare(b.name)
-        )
-        .slice(0, 5),
-    [players]
-  );
-
-  // Goldener Handschuh: Top 5 Torhüter nach der „Goals Saved Above Average"-Wertung.
-  // Der Score wird dynamisch aus dem Liga-Durchschnitt berechnet; angezeigt werden
-  // nur Keeper mit mindestens MIN_GAMES Torwart-Spielen, absteigend nach Score.
-  const gloveRanking = React.useMemo(() => rankGoldenGlove(players, matches).slice(0, 5), [players, matches]);
+  const scorerRanking = scorerRows.slice(0, 5);
+  const gloveRanking = gloveRows.slice(0, 5);
 
   // Container-Refs für die weiche Umsortier-Animation (motion layout) bei Live-Updates.
   const scorer = useSettledList(scorerRanking, (p) => p.name);
@@ -380,7 +447,7 @@ export default function Statistiken({ players, matches, teams, onSelectTeam }: S
                       `${p.gamesInGoal} im Tor`,
                       `${p.cleanSheets}× zu null`,
                       `${p.goalsConceded} Gegentore`,
-                      p.motmCount > 0 ? `${p.motmCount}× ⭐` : null,
+                      p.saves > 0 ? `${p.saves} Paraden` : null,
                     ]
                       .filter(Boolean)
                       .join(' · ');
