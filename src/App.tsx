@@ -1168,6 +1168,7 @@ export default function App() {
                 reportMatchIds={eventReportMatchIds}
                 onOpenReport={(id) => navigateTo(`/testspiel/spiel/${encodeURIComponent(id)}`)}
                 onOpenEventTeam={(name) => navigateTo(`/testspiel/team/${encodeURIComponent(name)}`)}
+                onOpenEventPlayer={(team, name) => navigateTo(`/testspiel/team/${encodeURIComponent(team)}/spieler/${encodeURIComponent(name)}`)}
                 staffPreview={eventStaffPreview}
                 trackingRows={eventTrackingRows}
                 scoringConfig={scoring}
