@@ -710,10 +710,42 @@ export default function App() {
     );
   }
 
+  // Fester Einstiegs-Link für Schiedsrichter: <website>/schiedsrichter.
+  // Nicht eingeloggt ⇒ Login-Maske; eingeloggt mit Spiel-Rechten ⇒ Modus (unten).
+  const onRefereePath = currentPath.startsWith('/schiedsrichter');
+  if (onRefereePath && !sessionUser) {
+    return (
+      <div className="min-h-screen text-hl-text font-sans flex flex-col justify-between">
+        <PageBackground page="default" />
+        <header
+          className="border-b border-white/[.07] bg-[rgba(7,10,8,.72)] backdrop-blur-xl px-6 py-4"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}
+        >
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <img src="/assets/hero-league-logo.png" alt="Hero League" className="h-9 w-auto" />
+              <span className="font-sans font-semibold text-[11px] tracking-[2px] text-hl-dim uppercase">Schiedsrichter</span>
+            </div>
+            <button
+              onClick={() => navigateTo('/')}
+              className="flex items-center space-x-1 text-xs text-hl-mute hover:text-white transition-colors uppercase tracking-wider font-semibold font-sans cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Zurück zur Website</span>
+            </button>
+          </div>
+        </header>
+        <main className="flex-1 flex items-center justify-center p-6">
+          <AdminLogin onLoginSuccess={(user) => setSessionUser(user)} />
+        </main>
+      </div>
+    );
+  }
+
   // Schiedsrichtermodus: für die Rolle „Schiedsrichter" der einzige Bildschirm
-  // (alles andere gesperrt); für Admins optional über den Navbar-Schnellzugang.
-  // Admins können ihn wieder verlassen (onExit) – Schiedsrichter nicht.
-  if (sessionUser && (isReferee || refereeView)) {
+  // (alles andere gesperrt); für Admins optional über den Navbar-Schnellzugang
+  // ODER den festen Link /schiedsrichter. Admins können ihn wieder verlassen.
+  if (sessionUser && (isReferee || refereeView || (onRefereePath && canManageMatches))) {
     return (
       <RefereeMode
         user={sessionUser}
@@ -725,7 +757,7 @@ export default function App() {
         onSaveRoster={handleSaveRoster}
         onRefresh={async () => { await fetchData(); await refetchEventArchive(); }}
         onLogout={handleLogout}
-        onExit={isReferee ? undefined : () => setRefereeView(false)}
+        onExit={isReferee ? undefined : () => { setRefereeView(false); if (onRefereePath) navigateTo('/'); }}
         eventTeams={shownEvent ? eventTeamsAsTeams(shownEvent, visibleTeams) : undefined}
         eventMatches={shownEvent ? eventMatchesAsMatches(shownEvent) : undefined}
         eventLabel={shownEvent?.title || 'Testspiel'}
