@@ -2705,6 +2705,26 @@ export default function AdminPanel({
                     </div>
                   </div>
 
+                  {/* Kopf-Hintergrundbild (wie die Startseite) – dezent, verläuft nach unten
+                      ins Dunkle und bekommt oben einen leichten Magenta-Filter. */}
+                  <div className="mt-4">
+                    <ImageUploader
+                      label="Kopf-Hintergrundbild (optional) — erscheint dezent hinter dem Titel und verläuft nach unten ins Dunkle"
+                      value={selectedEvent.heroImage ?? ''}
+                      onChange={(url) => patchEvent({ heroImage: url })}
+                      maxDimension={2000}
+                    />
+                    {selectedEvent.heroImage ? (
+                      <button
+                        type="button"
+                        onClick={() => patchEvent({ heroImage: '' })}
+                        className="mt-1.5 text-[10px] font-sans font-bold uppercase tracking-wider text-gray-400 hover:text-rose-400 transition-colors cursor-pointer"
+                      >
+                        Bild entfernen
+                      </button>
+                    ) : null}
+                  </div>
+
               {/* Event-Kader je Team – für Fotos, Einzelnoten und die beste Aufstellung */}
               <div>
                 <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">

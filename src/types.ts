@@ -249,6 +249,7 @@ export interface EventConfig {
   dateLabel: string; // z.B. "Sonntag, 2. August 2026" (Anzeige-Text)
   date?: string; // 'YYYY-MM-DD' – echtes Datum für den Kalender (optional)
   location: string; // z.B. "Soccer Center Königsfeld"
+  heroImage?: string; // optionales Kopf-Hintergrundbild (Blob-URL) – dezent mit Verlauf, wie die Startseite
   teams: string[]; // Teamnamen (für die Tabelle, auch ohne Ergebnisse)
   rosters?: EventRoster[]; // eigener Kader je Event-Team (für Fotos/Noten/Aufstellung)
   matches: EventMatch[];

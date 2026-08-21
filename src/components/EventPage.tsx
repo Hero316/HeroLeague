@@ -175,9 +175,29 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
           </span>
         </div>
       )}
-      {/* Kopf mit eigener Farbwelt */}
-      <div className="relative overflow-hidden border-b border-[rgba(230,35,142,.25)] bg-[radial-gradient(120%_140%_at_50%_-10%,rgba(230,35,142,.28),transparent_60%)]">
-        <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 py-10 sm:py-14">
+      {/* Kopf mit eigener Farbwelt – optional mit dezentem Hintergrundbild */}
+      <div className="relative overflow-hidden border-b border-[rgba(230,35,142,.25)] bg-brand-dark">
+        {/* Hintergrund: entweder das Event-Bild (dezent, mit Magenta-Filter und
+            Verlauf ins Dunkle) oder – ohne Bild – die bisherige Magenta-Radial-Optik. */}
+        {event.heroImage ? (
+          <div aria-hidden className="absolute inset-0 z-0 pointer-events-none">
+            <img
+              src={event.heroImage}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover object-center opacity-[0.30]"
+            />
+            {/* leichter Magenta-Filter in der Testspiel-Farbe (oben am stärksten) */}
+            <div className="absolute inset-0 bg-[radial-gradient(120%_150%_at_50%_-15%,rgba(230,35,142,.55),rgba(230,35,142,.14)_42%,transparent_72%)]" />
+            {/* nach unten sauber ins Seiten-Dunkel (#0A1415) verschwinden lassen */}
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(10,20,21,.30)_0%,rgba(10,20,21,.12)_30%,rgba(10,20,21,.72)_78%,#0A1415_100%)]" />
+          </div>
+        ) : (
+          <div
+            aria-hidden
+            className="absolute inset-0 z-0 pointer-events-none bg-[radial-gradient(120%_140%_at_50%_-10%,rgba(230,35,142,.28),transparent_60%)]"
+          />
+        )}
+        <div className="relative z-10 max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 py-10 sm:py-14">
           <button
             onClick={onBack}
             className="flex w-fit items-center gap-1.5 text-xs font-sans font-bold uppercase tracking-wider text-hl-mute hover:text-white transition-colors cursor-pointer mb-6"
