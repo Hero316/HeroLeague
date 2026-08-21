@@ -453,6 +453,8 @@ export default function AdminPanel({
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [eventSuccess, setEventSuccess] = useState(false);
   const [openEventMatch, setOpenEventMatch] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState('');
 
   // Neue Saison starten
   const [seasonModalOpen, setSeasonModalOpen] = useState(false);
@@ -944,6 +946,59 @@ export default function AdminPanel({
     patchEvent({
       matches: selectedEvent.matches.map((m) => ({ ...m, homeScore: null, awayScore: null, scorers: [], bestPlayers: [], goalkeepers: [], status: 'geplant', liveStartedAt: null })),
     });
+  };
+
+  // Kompletten Spielplan als Text (JSON) in das ausgewählte Testspiel laden.
+  // Erwartet ein Objekt mit `matches` (und optional title/tagline/dateLabel/
+  // date/location/teams). Ersetzt Spiele & Teams des Events, Ergebnisse werden
+  // bewusst geleert (neuer Spielplan startet ungespielt). activeId bleibt, d.h.
+  // nichts geht ungewollt live – Sichtbarkeit wie gehabt per Schalter.
+  const importEventPlan = () => {
+    if (!eventArchive || !selectedEvent) return;
+    let data: unknown;
+    try {
+      data = JSON.parse(importText);
+    } catch {
+      alert('Konnte den Text nicht lesen. Bitte den kompletten Spielplan-Text unverändert einfügen.');
+      return;
+    }
+    const src = (data && typeof data === 'object' && !Array.isArray(data) ? data : {}) as Record<string, unknown>;
+    const rawMatches = Array.isArray(src.matches) ? src.matches : Array.isArray(data) ? (data as unknown[]) : [];
+    if (rawMatches.length === 0) {
+      alert('Im eingefügten Text wurden keine Spiele gefunden.');
+      return;
+    }
+    const matches: EMatch[] = rawMatches.map((raw, i) => {
+      const m = (raw ?? {}) as Record<string, unknown>;
+      return {
+        id: String(m.id ?? `m${i + 1}`),
+        block: Number(m.block) || 0,
+        field: Number(m.field) || 0,
+        start: String(m.start ?? ''),
+        end: String(m.end ?? ''),
+        home: String(m.home ?? '').trim(),
+        away: String(m.away ?? '').trim(),
+        homeScore: null,
+        awayScore: null,
+        status: 'geplant',
+      };
+    });
+    const derivedTeams = Array.from(new Set(matches.flatMap((m) => [m.home, m.away]).filter(Boolean)));
+    const teams =
+      Array.isArray(src.teams) && src.teams.length
+        ? src.teams.map((t) => String(t).trim()).filter(Boolean)
+        : derivedTeams;
+    const patch: Partial<EventConfig> = { matches, teams };
+    (['title', 'tagline', 'dateLabel', 'date', 'location'] as const).forEach((k) => {
+      if (typeof src[k] === 'string' && (src[k] as string).trim()) patch[k] = (src[k] as string).trim();
+    });
+    if (!window.confirm(`Spielplan mit ${matches.length} Spielen in „${selectedEvent.label}" laden?\n\nBestehende Spiele & Ergebnisse dieses Testspiels werden ersetzt.`)) return;
+    saveEventArchive({
+      ...eventArchive,
+      events: eventArchive.events.map((e) => (e.id === selectedEventId ? { ...e, ...patch } : e)),
+    });
+    setImportText('');
+    setImportOpen(false);
   };
 
   // --- Verwalten-Popup (wie bei den echten Spielen) ---
@@ -2439,6 +2494,50 @@ export default function AdminPanel({
                       <input type="text" value={selectedEvent.location} onChange={(e) => patchEvent({ location: e.target.value })} className={inputClass} />
                     </div>
                   </div>
+
+              {/* Spielplan importieren (Text/JSON einfügen -> Paarungen laden) */}
+              <div className="rounded-xl border border-[rgba(230,35,142,.25)] bg-[rgba(230,35,142,.05)] p-3">
+                <button
+                  type="button"
+                  onClick={() => setImportOpen((v) => !v)}
+                  className="w-full flex items-center justify-between gap-2 text-left cursor-pointer"
+                >
+                  <span className="text-xs font-mono uppercase tracking-wider text-[#ff9ad4] font-bold">Spielplan importieren</span>
+                  <span className="text-[11px] text-gray-400 font-sans">{importOpen ? 'schließen' : 'Text einfügen'}</span>
+                </button>
+                {importOpen && (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-[11px] text-gray-400 font-sans leading-relaxed">
+                      Fertigen Spielplan-Text (aus dem Chat) hier einfügen und laden. Ersetzt die Spiele dieses Testspiels; Ergebnisse
+                      werden geleert. Die Sichtbarkeit bleibt unverändert (nichts geht ungewollt live).
+                    </p>
+                    <textarea
+                      value={importText}
+                      onChange={(e) => setImportText(e.target.value)}
+                      rows={5}
+                      placeholder='{ "title": "…", "teams": […], "matches": [ … ] }'
+                      className={`${inputClass} font-mono text-[11px] resize-y`}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={importEventPlan}
+                        disabled={!importText.trim()}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border bg-[rgba(230,35,142,.2)] text-[#ff9ad4] border-[rgba(230,35,142,.5)] hover:bg-[rgba(230,35,142,.3)] transition-all cursor-pointer disabled:opacity-40"
+                      >
+                        Spielplan laden
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setImportText(''); setImportOpen(false); }}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border border-white/15 text-gray-300 hover:text-white hover:border-white/30 transition-all cursor-pointer"
+                      >
+                        Abbrechen
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Ergebnisse / Spielplan */}
               <div>
