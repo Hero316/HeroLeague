@@ -1,109 +1,41 @@
 /*
- * Service Worker der Hero League.
+ * Service Worker der Hero League – bewusst OHNE eigenes Caching.
  *
- * Zweck: Er macht die Seite auf Android/Chrome zuverlässig installierbar
- * (Chrome verlangt einen aktiven fetch-Handler) und gibt der installierten
- * App einen Offline-Notfall-Fallback.
- *
- * WICHTIG – Live-Daten dürfen NIE veralten:
- *  - Anfragen an /api/* und alle Nicht-GET-Requests werden gar nicht angefasst
- *    (gehen direkt ans Netz) → Ergebnisse, Tabelle und Statistiken sind immer frisch.
- *  - HTML/Navigationen laufen "network-first" (Cache nur als Offline-Fallback).
- *  - Nur statische, per Hash unveränderliche Assets werden dauerhaft gecacht.
+ * Hintergrund: Ein früherer Cache-Handler konnte nach einem Deploy eine
+ * veraltete oder vermischte App-Hülle ausliefern -> schwarze/leere Seite.
+ * Um das dauerhaft auszuschließen, cacht dieser SW NICHTS mehr: Navigationen
+ * und Assets laufen immer direkt ans Netz (die Seite ist ohnehin online-first).
+ * Beim Aktivieren werden ALLE alten Caches gelöscht -> ein hängengebliebenes
+ * Gerät heilt sich beim nächsten Laden von selbst. Web-Push bleibt voll erhalten.
  */
 
-// Version bei Bedarf erhöhen: beim Aktivieren löscht der SW alle Caches mit
-// abweichendem Namen → ein hängengebliebener/kaputter Asset-Cache (z. B. schwarze
-// Seite nach einem Deploy) wird beim nächsten Laden automatisch bereinigt.
-const CACHE = 'hl-static-v9';
-
-// App-Shell für den Offline-Fallback. Bewusst minimal.
-const SHELL = ['/', '/index.html', '/chat.html', '/manifest.webmanifest', '/assets/icon-192.png'];
-
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) => cache.addAll(SHELL))
-      .catch(() => undefined),
-  );
-  // Neue Version sofort übernehmen.
+self.addEventListener('install', () => {
+  // Neue Version sofort übernehmen (nicht auf alte Clients warten).
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim()),
+    (async () => {
+      // ALLE alten Caches restlos entfernen – heilt kaputt gecachte Zustände
+      // (z. B. die schwarze Seite nach einem Deploy) beim nächsten Laden.
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      } catch (e) {
+        /* ignorieren */
+      }
+      await self.clients.claim();
+    })(),
   );
 });
 
-// Ist diese GET-Anfrage ein unveränderliches, statisches Asset?
-function isStaticAsset(url) {
-  return (
-    url.origin === self.location.origin &&
-    (url.pathname.startsWith('/assets/') ||
-      url.pathname.startsWith('/fonts/') ||
-      url.pathname === '/favicon.ico' ||
-      url.pathname === '/manifest.webmanifest')
-  );
-}
-
+// Bewusst KEIN Caching. Nur Navigationen als reiner Netz-Durchgriff, damit die
+// App installierbar bleibt und IMMER die aktuelle Seite frisch lädt.
 self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
-
-  // Nur GET behandeln; Schreibzugriffe (POST/PUT/DELETE) unangetastet lassen.
-  if (request.method !== 'GET') return;
-
-  // Live-Daten: API niemals cachen oder verzögern.
-  if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) return;
-
-  // Statische Assets: cache-first (Dateinamen sind durch Hashing eindeutig).
-  // WICHTIG: NUR erfolgreiche (200, same-origin) Antworten cachen. Sonst würde
-  // eine 404/Fehlerseite – z. B. wenn während eines Deploys ein JS-Chunk kurz
-  // fehlt – dauerhaft gecacht und die Seite bliebe leer hängen.
-  if (isStaticAsset(url)) {
-    event.respondWith(
-      caches.match(request).then(
-        (cached) =>
-          cached ||
-          fetch(request).then((res) => {
-            if (res && res.ok && res.status === 200 && res.type === 'basic') {
-              const copy = res.clone();
-              caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => undefined);
-            }
-            return res;
-          }),
-      ),
-    );
-    return;
+  if (event.request.mode === 'navigate') {
+    event.respondWith(fetch(event.request));
   }
-
-  // HTML/Navigationen: network-first, damit online immer die aktuelle Seite kommt.
-  // Ebenfalls nur erfolgreiche Antworten als Offline-Fallback ablegen. WICHTIG:
-  // /chat ist eine EIGENE App-Hülle (chat.html) – sie darf NICHT unter dem
-  // gleichen Schlüssel wie die Haupt-App (/index.html) landen, sonst bekommt man
-  // nach einem Deploy die falsche/leere Hülle (schwarze Seite).
-  if (request.mode === 'navigate') {
-    const shellKey = url.pathname.startsWith('/chat') ? '/chat.html' : '/index.html';
-    event.respondWith(
-      fetch(request)
-        .then((res) => {
-          if (res && res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE).then((cache) => cache.put(shellKey, copy)).catch(() => undefined);
-          }
-          return res;
-        })
-        .catch(() => caches.match(shellKey).then((cached) => cached || caches.match('/index.html'))),
-    );
-    return;
-  }
-
-  // Alles andere: normal ans Netz.
 });
 
 // Base64url (VAPID public key) -> Uint8Array für pushManager.subscribe.
@@ -156,7 +88,7 @@ self.addEventListener('push', (event) => {
   }
   const title = data.title || 'Hero League';
   const body = data.body || '';
-  const url = data.url || '/admin';
+  const url = data.url || '/chat';
 
   // Ziel-Chat aus der URL (?c=…) herauslesen – nur bei Chat-Pushs gesetzt.
   let convId = null;
