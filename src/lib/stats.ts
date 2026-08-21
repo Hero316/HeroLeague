@@ -59,6 +59,18 @@ export function fetchEventStats(eventId: string): Promise<{ rows: MatchPlayerSta
   return apiFetch(`/api/stats?resource=public&event=${encodeURIComponent(eventId)}`);
 }
 
+// Anwesenheit/Torwart für ein Testspiel speichern (schreibt Abwesende auf alle
+// Event-Spiele) – gibt das aktualisierte Archiv zurück.
+export function saveEventAttendance(
+  eventId: string,
+  teams: EveningRoster['teams']
+): Promise<EventArchive> {
+  return apiFetch('/api/twitch?resource=event-attendance', {
+    method: 'POST',
+    body: JSON.stringify({ eventId, teams }),
+  });
+}
+
 // Ein einzelnes Event-Spiel aktualisieren (Schiedsrichtermodus). Match-Form-Patch
 // (playerName/teamId) wird serverseitig in die Event-Form übersetzt. Gibt das
 // aktualisierte Archiv zurück.

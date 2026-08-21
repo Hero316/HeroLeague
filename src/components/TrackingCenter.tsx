@@ -52,6 +52,7 @@ import {
   exportToSheet,
   exportScoringToSheet,
   saveAttendance,
+  saveEventAttendance,
 } from '../lib/stats';
 
 // ===========================================================================
@@ -128,7 +129,11 @@ export default function TrackingCenter({
     if (activeSeasonId) setSeasonId(activeSeasonId);
   }, [activeSeasonId]);
 
-  const events = useMemo(() => eventArchive?.events ?? [], [eventArchive]);
+  // Lokale Kopie des Event-Archivs, damit Anwesenheits-Änderungen sofort wirken
+  // (der Elternteil pollt erst mit Verzögerung nach).
+  const [eventArchiveLocal, setEventArchiveLocal] = useState(eventArchive);
+  useEffect(() => setEventArchiveLocal(eventArchive), [eventArchive]);
+  const events = useMemo(() => eventArchiveLocal?.events ?? [], [eventArchiveLocal]);
 
   // Auswahl: entweder ein Liga-Spieltag ODER ein Testspielabend.
   const [selectedMatchday, setSelectedMatchday] = useState<number | null>(null);
@@ -247,6 +252,10 @@ export default function TrackingCenter({
           date: ev.date ?? '',
           time: em.start ?? '',
           status: em.status ?? 'geplant',
+          // Anwesenheit/Torwart aus den Event-Daten mitgeben (namensbasiert),
+          // damit der Tracker Abwesende ausblendet und den Torwart erkennt.
+          absentees: (em.absentees ?? []).map((a) => ({ playerName: a.player, teamId: a.team })),
+          goalkeepers: (em.goalkeepers ?? []).map((g) => ({ playerName: g.player, teamId: g.team })),
         }) as Match
     );
   }, []);
@@ -270,10 +279,14 @@ export default function TrackingCenter({
       if (selectedEvent) {
         const own = selectedEvent.rosters?.find((r) => normName(r.team) === normName(key))?.players;
         const list = own && own.length ? own : resolveTeam(key)?.spielerliste ?? [];
+        // Abend-Torwart aus den Event-Daten (Anwesenheit), sonst fester Kader-Torwart.
+        const eveningKeeper = selectedEvent.matches
+          .flatMap((m) => m.goalkeepers ?? [])
+          .find((g) => normName(g.team) === normName(key))?.player;
         return list
           .filter((p) => p.name)
           .filter((p) => !absent || !absent.has(p.name))
-          .map((p) => ({ name: p.name, role: (p.goalkeeper ? 'keeper' : 'field') as StatRole }));
+          .map((p) => ({ name: p.name, role: ((eveningKeeper ? p.name === eveningKeeper : p.goalkeeper) ? 'keeper' : 'field') as StatRole }));
       }
       const team = resolveTeam(key);
       if (!team) return [];
@@ -569,6 +582,60 @@ export default function TrackingCenter({
     [selectedMatchday, seasonId, rosterState, matches, buildRows]
   );
 
+  // --- Anwesenheit für Testspiele (wie „Wer ist heute da?" bei der Liga) ------
+  // Synthetisches Team je Event-Teamname (Event-Kader), damit das bestehende
+  // Anwesenheits-Panel 1:1 wiederverwendet werden kann.
+  const eventResolveTeam = useCallback(
+    (name: string): Team | undefined => {
+      if (!selectedEvent) return undefined;
+      const league = teams.find((t) => normName(t.name) === normName(name));
+      const own = selectedEvent.rosters?.find((r) => normName(r.team) === normName(name))?.players;
+      const spielerliste = own && own.length ? own : league?.spielerliste ?? [];
+      return {
+        id: name,
+        name,
+        shortName: league?.shortName || name,
+        logoColor: league?.logoColor || '#E6238E',
+        logoIcon: league?.logoIcon || '⚽',
+        logoUrl: league?.logoUrl,
+        spielerliste,
+      };
+    },
+    [selectedEvent, teams]
+  );
+
+  const eventAttendanceRk = 'event-attendance';
+  const eventAttendanceRoster = useMemo<RosterMap>(() => {
+    if (!selectedEvent) return {};
+    const teamsMap: EveningRoster['teams'] = {};
+    for (const name of selectedEvent.teams) {
+      const roster = (eventResolveTeam(name)?.spielerliste ?? []).map((p) => p.name).filter(Boolean);
+      const absent = new Set(
+        selectedEvent.matches.flatMap((m) => m.absentees ?? []).filter((a) => normName(a.team) === normName(name)).map((a) => a.player)
+      );
+      const present = roster.filter((n) => !absent.has(n));
+      const keeper = selectedEvent.matches.flatMap((m) => m.goalkeepers ?? []).find((g) => normName(g.team) === normName(name))?.player;
+      teamsMap[name] = { present, ...(keeper ? { goalkeeper: keeper } : {}) };
+    }
+    return { [eventAttendanceRk]: { minutes: 7, teams: teamsMap } };
+  }, [selectedEvent, eventResolveTeam]);
+
+  const applyEventAttendance = useCallback(
+    async (teamsPayload: EveningRoster['teams']) => {
+      if (!selectedEvent) return;
+      setAttendanceOpen(false);
+      try {
+        const updated = await saveEventAttendance(selectedEvent.id, teamsPayload);
+        setEventArchiveLocal(updated);
+        const ev = updated.events.find((e) => e.id === selectedEvent.id);
+        if (ev) buildRows(eventDayKey(ev.id), eventGamesAsMatches(ev), null);
+      } catch {
+        /* lokal bleibt der letzte Stand */
+      }
+    },
+    [selectedEvent, buildRows, eventGamesAsMatches]
+  );
+
   const light = theme === 'light';
   const headerSub = selectedEvent
     ? selectedEvent.title || 'Testspiel'
@@ -669,7 +736,7 @@ export default function TrackingCenter({
               onOpenMatch={setSelectedMatchId}
               onExport={selectedEvent || demoActive ? undefined : runExport}
               exporting={exporting}
-              onAttendance={selectedEvent ? undefined : () => setAttendanceOpen(true)}
+              onAttendance={() => setAttendanceOpen(true)}
             />
           ) : (
             <DayList
@@ -695,6 +762,16 @@ export default function TrackingCenter({
           rk={`${seasonId}:${selectedMatchday}`}
           onClose={() => setAttendanceOpen(false)}
           onSave={applyAttendance}
+        />
+      )}
+      {attendanceOpen && selectedEvent && (
+        <AttendancePanel
+          teamIds={selectedEvent.teams}
+          resolveTeam={eventResolveTeam}
+          roster={eventAttendanceRoster}
+          rk={eventAttendanceRk}
+          onClose={() => setAttendanceOpen(false)}
+          onSave={(teams) => applyEventAttendance(teams)}
         />
       )}
     </div>
