@@ -28,7 +28,7 @@ import LegalPage from './components/LegalPage';
 import PageBackground from './components/PageBackground';
 import MobileDock from './components/MobileDock';
 import Countdown from './components/Countdown';
-import EventPage from './components/EventPage';
+import EventPage, { EventTab } from './components/EventPage';
 import EventBanner from './components/EventBanner';
 import EventErgebniszettel from './components/EventErgebniszettel';
 import HighlightsHome from './components/HighlightsHome';
@@ -1118,6 +1118,14 @@ export default function App() {
     const previewEvent =
       activeEvent ?? (canManageChannels ? eventArchive?.events?.[(eventArchive.events?.length ?? 0) - 1] ?? null : null);
     const isPreviewOnly = !activeEvent && !!previewEvent;
+    // Aktiver Reiter steckt im Pfad (/testspiel, /testspiel/spielplan, …), damit er
+    // beim Aktualisieren und „Zurück" erhalten bleibt. Unbekannt ⇒ Tabelle.
+    const rawEvTab = currentPath.slice('/testspiel'.length).replace(/^\/+|\/+$/g, '');
+    const evTab: EventTab = (['tabelle', 'spielplan', 'statistiken', 'auszeichnungen'] as EventTab[]).includes(
+      rawEvTab as EventTab
+    )
+      ? (rawEvTab as EventTab)
+      : 'tabelle';
     return (
       <div className="min-h-screen bg-brand-dark text-hl-text font-sans flex flex-col">
         {renderMobileDock(true)}
@@ -1172,6 +1180,8 @@ export default function App() {
                 staffPreview={eventStaffPreview}
                 trackingRows={eventTrackingRows}
                 scoringConfig={scoring}
+                tab={evTab}
+                onSelectTab={(t) => navigateTo(t === 'tabelle' ? '/testspiel' : `/testspiel/${t}`)}
               />
             </>
           ) : (
