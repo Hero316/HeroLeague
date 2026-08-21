@@ -16,6 +16,7 @@ interface EventPageProps {
   reportMatchIds?: Set<string>; // Event-Spiele mit veröffentlichtem Spielbericht
   onOpenReport?: (matchId: string) => void; // Klick aufs Spiel -> Event-Spielbericht
   onOpenEventTeam?: (teamName: string) => void; // Klick aufs Team -> Event-Team-Seite
+  onOpenEventPlayer?: (teamName: string, playerName: string) => void; // Klick auf Spielernamen -> Spieler direkt geöffnet
   staffPreview?: boolean; // Event nur für Super-Admins sichtbar (Test-Modus)
   trackingRows?: MatchPlayerStat[]; // veröffentlichte getrackte Werte des Events
   scoringConfig?: ScoringConfig; // Score-Einstellungen (für die Award-Rechnung)
@@ -32,7 +33,7 @@ const normName = (s: string) =>
 // Sonder-Event-Seite (z.B. Testspieltag): Kopf + Live-Tabelle + kompletter
 // Spielplan mit Uhrzeiten und Feldern – im Look der Hauptseite, aber mit
 // eigener Magenta/Gold-Farbwelt, damit es sich besonders anfühlt.
-export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin, onPrint, reportMatchIds, onOpenReport, onOpenEventTeam, staffPreview, trackingRows = [], scoringConfig }: EventPageProps) {
+export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin, onPrint, reportMatchIds, onOpenReport, onOpenEventTeam, onOpenEventPlayer, staffPreview, trackingRows = [], scoringConfig }: EventPageProps) {
   const standings = useMemo(
     () => calculateEventStandings(event.teams, event.matches),
     [event.teams, event.matches]
@@ -47,6 +48,10 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
     const t = crestFor(name);
     return t && onSelectTeam ? () => onSelectTeam(t.id) : undefined;
   };
+  // Klick auf einen SPIELERNAMEN (Auszeichnungen/Torschützenliste): öffnet direkt
+  // den Spieler auf seiner Event-Team-Seite. Fällt auf den Team-Klick zurück.
+  const playerClick = (teamName: string, playerName: string) =>
+    onOpenEventPlayer ? () => onOpenEventPlayer(teamName, playerName) : crestClick(teamName);
 
   // Abend-Statistiken (team-basiert, nur aus den Event-Ergebnissen – völlig
   // getrennt von der echten Liga).
@@ -423,7 +428,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                   value={scorerKing.playerName}
                   sub={`${scorerKing.goals} ${scorerKing.goals === 1 ? 'Tor' : 'Tore'} · ${scorerKing.teamId}`}
                   crest={crestFor(scorerKing.teamId)}
-                  onSelect={crestClick(scorerKing.teamId)}
+                  onSelect={playerClick(scorerKing.teamId, scorerKing.playerName)}
                 />
               )}
               {assistKing && (
@@ -433,7 +438,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                   value={assistKing.playerName}
                   sub={`${assistKing.assists} ${assistKing.assists === 1 ? 'Vorlage' : 'Vorlagen'} · ${assistKing.teamId}`}
                   crest={crestFor(assistKing.teamId)}
-                  onSelect={crestClick(assistKing.teamId)}
+                  onSelect={playerClick(assistKing.teamId, assistKing.playerName)}
                 />
               )}
               {bestPlayer && (
@@ -443,7 +448,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                   value={bestPlayer.playerName}
                   sub={bestPlayer.teamId}
                   crest={crestFor(bestPlayer.teamId)}
-                  onSelect={crestClick(bestPlayer.teamId)}
+                  onSelect={playerClick(bestPlayer.teamId, bestPlayer.playerName)}
                 />
               )}
               {glove && (
@@ -453,7 +458,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                   value={glove.playerName}
                   sub={glove.teamId}
                   crest={crestFor(glove.teamId)}
-                  onSelect={crestClick(glove.teamId)}
+                  onSelect={playerClick(glove.teamId, glove.playerName)}
                 />
               )}
             </div>
@@ -467,7 +472,11 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                   {scorers.slice(0, 8).map((s, i) => (
                     <div key={`${s.teamId}-${s.playerName}`} className="flex items-center gap-3 px-4 py-2.5 text-sm">
                       <span className="w-5 shrink-0 text-center font-display font-black text-hl-mute">{i + 1}</span>
-                      <span className="font-sans font-semibold text-white truncate min-w-0">{s.playerName}</span>
+                      {playerClick(s.teamId, s.playerName) ? (
+                        <button onClick={playerClick(s.teamId, s.playerName)} className="font-sans font-semibold text-white truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{s.playerName}</button>
+                      ) : (
+                        <span className="font-sans font-semibold text-white truncate min-w-0">{s.playerName}</span>
+                      )}
                       {crestClick(s.teamId) ? (
                         <button onClick={crestClick(s.teamId)} className="text-xs text-hl-mute truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{s.teamId}</button>
                       ) : (
