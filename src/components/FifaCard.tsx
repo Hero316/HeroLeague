@@ -113,10 +113,10 @@ export default function FifaCard({ card, name, imageUrl, team, className = '' }:
       {/* Unterer Streifen: Gesamtwertung mittig ÜBER den vier Werten */}
       <div
         className="absolute bottom-0 inset-x-0 z-20"
-        style={{ padding: '14cqw 5cqw 5.5cqw', background: 'linear-gradient(180deg, transparent 0%, rgba(2,7,5,.82) 40%, rgba(2,7,5,.98) 70%)' }}
+        style={{ padding: '10cqw 5cqw 4cqw', background: 'linear-gradient(180deg, transparent 0%, rgba(2,7,5,.82) 40%, rgba(2,7,5,.98) 70%)' }}
       >
         {/* Stufe oben, darunter die Gesamtwertung – mittig, als Kopf der Werte-Gruppe */}
-        <div className="flex flex-col items-center" style={{ marginBottom: '1.5cqw' }}>
+        <div className="flex flex-col items-center" style={{ marginBottom: '1cqw' }}>
           <div className="font-display font-black uppercase leading-none" style={{ fontSize: '4.6cqw', letterSpacing: '0.18em', color: t.accent }}>
             {t.label}
           </div>
@@ -124,7 +124,7 @@ export default function FifaCard({ card, name, imageUrl, team, className = '' }:
             {card.ges}
           </div>
         </div>
-        <div className="w-full" style={{ height: '1px', marginBottom: '4cqw', background: `${t.accent}55` }} />
+        <div className="w-full" style={{ height: '1px', marginBottom: '2.5cqw', background: `${t.accent}55` }} />
         <div className="grid grid-cols-4" style={{ gap: '2cqw' }}>
           {card.attrs.map((a) => (
             <div key={a.key} className="text-center">
