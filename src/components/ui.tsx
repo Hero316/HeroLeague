@@ -556,10 +556,14 @@ export function useLiveMinute(liveStartedAt?: string | null): number {
 // Restsekunden eines Countdowns aus Anpfiff-Zeitstempel + Spieldauer. Gibt null
 // zurück, wenn keine Dauer gesetzt ist (dann zählt die klassische Live-Minute).
 // Tickt sekündlich, damit die mm:ss-Anzeige flüssig läuft.
+// `allowNegative`: läuft der Countdown bei 0 weiter ins Minus (für den
+// Schiedsrichtermodus – kein Auto-Abpfiff, die Nachspielzeit läuft rot mit).
+// Standard bleibt bei 0 gekappt (öffentliche Anzeige zeigt nie Minuszeit).
 export function useCountdown(
   liveStartedAt?: string | null,
   durationMinutes?: number | null,
-  pausedAt?: string | null
+  pausedAt?: string | null,
+  allowNegative = false
 ): number | null {
   const [remaining, setRemaining] = React.useState<number | null>(null);
 
@@ -570,29 +574,33 @@ export function useCountdown(
     }
     const total = durationMinutes * 60;
     const startMs = new Date(liveStartedAt).getTime();
+    const clamp = (v: number) => (allowNegative ? v : Math.max(0, v));
     // Pausiert: eingefrorener Reststand (Pausen-Zeitpunkt minus Anpfiff).
     if (pausedAt) {
       const elapsed = Math.floor((new Date(pausedAt).getTime() - startMs) / 1000);
-      setRemaining(Math.max(0, total - elapsed));
+      setRemaining(clamp(total - elapsed));
       return;
     }
     const compute = () => {
       const elapsed = Math.floor((Date.now() - startMs) / 1000);
-      setRemaining(Math.max(0, total - elapsed));
+      setRemaining(clamp(total - elapsed));
     };
     compute();
     const id = setInterval(compute, 1000);
     return () => clearInterval(id);
-  }, [liveStartedAt, durationMinutes, pausedAt]);
+  }, [liveStartedAt, durationMinutes, pausedAt, allowNegative]);
 
   return remaining;
 }
 
-// Sekunden als m:ss darstellen (z. B. 7:00, 0:09).
+// Sekunden als m:ss darstellen (z. B. 7:00, 0:09). Negative Werte (Nachspielzeit)
+// bekommen ein führendes „−", z. B. −0:05.
 export function formatClock(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
+  const neg = seconds < 0;
+  const abs = Math.abs(seconds);
+  const m = Math.floor(abs / 60);
+  const s = abs % 60;
+  return `${neg ? '−' : ''}${m}:${String(s).padStart(2, '0')}`;
 }
 
 // Live-Badge – zeigt den Countdown (m:ss), sobald eine Spieldauer gesetzt ist,

@@ -305,7 +305,8 @@ export default function RefereeMode({
 
 // Eine Spielkarte in der Übersicht (großflächig antippbar).
 function MatchRow({ match, teamName, onOpen }: { match: Match; teamName: (id: string) => string; onOpen: () => void }) {
-  const remaining = useCountdown(match.liveStartedAt, match.durationMinutes, match.pausedAt);
+  // Auch in der Übersicht läuft die Zeit ins Minus (Schiedsrichter-Werkzeug).
+  const remaining = useCountdown(match.liveStartedAt, match.durationMinutes, match.pausedAt, true);
   return (
     <button
       type="button"
@@ -364,7 +365,10 @@ function MatchScreen({
   const awayScore = match.awayScore ?? 0;
   const bestPlayers = match.bestPlayers ?? [];
   const isPaused = !!match.pausedAt;
-  const remaining = useCountdown(match.liveStartedAt, match.durationMinutes, match.pausedAt);
+  // allowNegative: der Countdown läuft bei 0 rot ins Minus weiter (Nachspielzeit),
+  // es wird NICHT automatisch abgepfiffen – der Schiedsrichter pfeift selbst ab.
+  const remaining = useCountdown(match.liveStartedAt, match.durationMinutes, match.pausedAt, true);
+  const isNeg = remaining !== null && remaining < 0;
 
   const bestOf = (teamId: string) => bestPlayers.find((b) => b.teamId === teamId)?.playerName ?? null;
 
@@ -460,68 +464,90 @@ function MatchScreen({
         {busy ? <RefreshCw className="w-4 h-4 text-brand-accent-light animate-spin" /> : <span className="w-4" />}
       </header>
 
-      <main className="flex-1 px-4 py-4 space-y-4 max-w-2xl w-full mx-auto pb-24">
-        {/* Anzeigetafel */}
-        <div className="bg-white/[.04] border border-white/10 rounded-2xl p-4">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 mb-3">
-            <div className="text-right font-extrabold text-xl leading-tight">{teamName(home)}</div>
-            <div className="font-mono font-black text-4xl tabular-nums">
-              {homeScore}<span className="text-hl-dim mx-1">:</span>{awayScore}
+      <main className="flex-1 px-4 py-4 flex flex-col max-w-2xl w-full mx-auto pb-6">
+        {/* OBEN: Anzeigetafel + Anpfiff/Abpfiff – bleiben oben stehen */}
+        <div className="space-y-3 shrink-0">
+          {/* Anzeigetafel */}
+          <div className="bg-white/[.04] border border-white/10 rounded-2xl p-4">
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+              <div className="text-right font-extrabold text-xl leading-tight">{teamName(home)}</div>
+              <div className="font-mono font-black text-4xl tabular-nums">
+                {homeScore}<span className="text-hl-dim mx-1">:</span>{awayScore}
+              </div>
+              <div className="text-left font-extrabold text-xl leading-tight">{teamName(away)}</div>
             </div>
-            <div className="text-left font-extrabold text-xl leading-tight">{teamName(away)}</div>
+            {/* Status-Wort (der große Timer läuft in der Lücke darunter) */}
+            <div className="text-center mt-2">
+              {match.status === 'live' ? (
+                <span className={`font-bold uppercase tracking-wider text-sm ${isPaused ? 'text-amber-400' : isNeg ? 'text-hl-red-soft' : 'text-emerald-400'}`}>
+                  {isPaused ? 'Pausiert' : isNeg ? 'Nachspielzeit' : 'Läuft'}
+                </span>
+              ) : match.status === 'beendet' ? (
+                <span className="text-emerald-400 font-bold uppercase tracking-wider text-sm">Beendet</span>
+              ) : (
+                <span className="text-brand-accent-light font-bold uppercase tracking-wider text-sm">Bereit zum Anpfiff</span>
+              )}
+            </div>
           </div>
 
-          {/* Timer / Status */}
-          <div className="text-center">
-            {match.status === 'live' ? (
-              <div className={`font-mono font-black text-3xl tabular-nums ${isPaused ? 'text-amber-400' : 'text-hl-red-soft'}`}>
-                {remaining !== null ? formatClock(remaining) : 'LIVE'}
-                {isPaused && <div className="text-xs font-sans uppercase tracking-wider mt-1">Pausiert</div>}
-                {!isPaused && remaining === 0 && <div className="text-xs font-sans text-hl-dim mt-1">Zeit abgelaufen – Abpfiff wählen</div>}
-              </div>
-            ) : match.status === 'beendet' ? (
-              <div className="text-emerald-400 font-bold uppercase tracking-wider">Beendet</div>
-            ) : (
-              <div className="text-brand-accent-light font-bold uppercase tracking-wider">Bereit zum Anpfiff</div>
-            )}
-          </div>
+          {/* Anpfiff / Pause / Abpfiff */}
+          {match.status !== 'live' ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={kickoff}
+              className="w-full min-h-[60px] rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:scale-[.99] disabled:opacity-50 text-white font-extrabold text-xl flex items-center justify-center gap-2 transition-all"
+            >
+              <Play className="w-7 h-7" /> {match.status === 'beendet' ? 'Erneut anpfeifen' : 'Anpfiff'}
+            </button>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={isPaused ? resume : pause}
+                className={`min-h-[60px] rounded-2xl active:scale-[.99] disabled:opacity-50 text-white font-extrabold text-lg flex items-center justify-center gap-2 transition-all ${
+                  isPaused ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-amber-500 hover:bg-amber-400'
+                }`}
+              >
+                {isPaused ? <><Play className="w-6 h-6" /> Weiter</> : <><Pause className="w-6 h-6" /> Pause</>}
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={finalize}
+                className="min-h-[60px] rounded-2xl bg-hl-red hover:brightness-110 active:scale-[.99] disabled:opacity-50 text-white font-extrabold text-lg flex items-center justify-center gap-2 transition-all"
+              >
+                <Square className="w-6 h-6" /> Abpfiff
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Anpfiff / Pause / Abpfiff */}
-        {match.status !== 'live' ? (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={kickoff}
-            className="w-full min-h-[64px] rounded-2xl bg-emerald-500 hover:bg-emerald-400 active:scale-[.99] disabled:opacity-50 text-white font-extrabold text-xl flex items-center justify-center gap-2 transition-all"
-          >
-            <Play className="w-7 h-7" /> {match.status === 'beendet' ? 'Erneut anpfeifen' : 'Anpfiff'}
-          </button>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={isPaused ? resume : pause}
-              className={`min-h-[64px] rounded-2xl active:scale-[.99] disabled:opacity-50 text-white font-extrabold text-lg flex items-center justify-center gap-2 transition-all ${
-                isPaused ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-amber-500 hover:bg-amber-400'
-              }`}
-            >
-              {isPaused ? <><Play className="w-6 h-6" /> Weiter</> : <><Pause className="w-6 h-6" /> Pause</>}
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={finalize}
-              className="min-h-[64px] rounded-2xl bg-hl-red hover:brightness-110 active:scale-[.99] disabled:opacity-50 text-white font-extrabold text-lg flex items-center justify-center gap-2 transition-all"
-            >
-              <Square className="w-6 h-6" /> Abpfiff
-            </button>
-          </div>
-        )}
+        {/* MITTE (Lücke): der große Countdown. Läuft nach 0 rot ins Minus weiter –
+            KEIN Auto-Abpfiff. Vor dem Anpfiff steht dezent die eingestellte Zeit. */}
+        <div className="flex-1 flex items-center justify-center py-6 min-h-[110px]">
+          {match.status === 'live' && remaining !== null ? (
+            <div className="text-center">
+              <div className={`font-mono font-black tabular-nums leading-none text-7xl sm:text-8xl ${isPaused ? 'text-amber-400' : isNeg ? 'text-hl-red' : 'text-white'}`}>
+                {formatClock(remaining)}
+              </div>
+              {isNeg && !isPaused && (
+                <div className="mt-2 text-xs font-sans font-semibold uppercase tracking-wider text-hl-red-soft">Nachspielzeit – selbst abpfeifen</div>
+              )}
+            </div>
+          ) : match.status === 'geplant' ? (
+            <div className="text-center">
+              <div className="font-mono font-black tabular-nums leading-none text-6xl sm:text-7xl text-white/20">
+                {formatClock(minutes * 60)}
+              </div>
+              <div className="mt-2 text-[11px] font-sans uppercase tracking-wider text-hl-dim">Spieldauer · startet beim Anpfiff</div>
+            </div>
+          ) : null}
+        </div>
 
-        {/* Tore je Team */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* UNTEN: Tore je Team – ganz unten im Daumen-Bereich */}
+        <div className="grid grid-cols-2 gap-3 shrink-0">
           <TeamColumn teamId={home} />
           <TeamColumn teamId={away} />
         </div>
