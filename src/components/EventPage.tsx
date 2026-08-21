@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react';
 import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shield, Lock, Goal, Crown, Star, Hand, Handshake, Printer } from 'lucide-react';
-import { EventConfig, PlayerStat, Team } from '../types';
+import { EventConfig, MatchPlayerStat, ScoringConfig, Team } from '../types';
 import { TeamCrest, LiveBadge } from './ui';
 import { calculateEventStandings } from '../lib/eventStandings';
-import { eventPlayers, eventMatchesAsMatches } from '../lib/eventView';
-import { rankGoldenGlove } from '../lib/goldenGlove';
+import { scorerRanking, assistRanking, goldenGloveRanking, seasonRanking } from '../lib/trackingAwards';
+import { DEFAULT_SCORING } from '../lib/scoring';
 
 interface EventPageProps {
   event: EventConfig;
@@ -17,6 +17,8 @@ interface EventPageProps {
   onOpenReport?: (matchId: string) => void; // Klick aufs Spiel -> Event-Spielbericht
   onOpenEventTeam?: (teamName: string) => void; // Klick aufs Team -> Event-Team-Seite
   staffPreview?: boolean; // Event nur für Super-Admins sichtbar (Test-Modus)
+  trackingRows?: MatchPlayerStat[]; // veröffentlichte getrackte Werte des Events
+  scoringConfig?: ScoringConfig; // Score-Einstellungen (für die Award-Rechnung)
 }
 
 // Namen tolerant vergleichen (Groß/Klein, Leerzeichen, Punkte egal).
@@ -30,7 +32,7 @@ const normName = (s: string) =>
 // Sonder-Event-Seite (z.B. Testspieltag): Kopf + Live-Tabelle + kompletter
 // Spielplan mit Uhrzeiten und Feldern – im Look der Hauptseite, aber mit
 // eigener Magenta/Gold-Farbwelt, damit es sich besonders anfühlt.
-export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin, onPrint, reportMatchIds, onOpenReport, onOpenEventTeam, staffPreview }: EventPageProps) {
+export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin, onPrint, reportMatchIds, onOpenReport, onOpenEventTeam, staffPreview, trackingRows = [], scoringConfig }: EventPageProps) {
   const standings = useMemo(
     () => calculateEventStandings(event.teams, event.matches),
     [event.teams, event.matches]
@@ -74,26 +76,19 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
     return { totalGoals, bestOffense, bestDefense, mostCleanSheets, topMatch, playedCount: playedMatches.length };
   }, [event.matches, standings]);
 
-  // Auszeichnungen des Abends – EXAKT wie die Liga-Statistikseite: aus den
-  // abgeleiteten Spielerstatistiken (calculatePlayers) und dem Goldenen Handschuh
-  // (GSAA / „durchschnittliche Gegentore"). So rechnet das Event wie die Liga.
-  const evPlayers = useMemo<PlayerStat[]>(() => eventPlayers(event, teams), [event, teams]);
-  const evMatches = useMemo(() => eventMatchesAsMatches(event), [event]);
-  const scorerRanking = useMemo(
-    () => [...evPlayers].filter((p) => p.goals > 0).sort((a, b) => b.goals - a.goals || b.assists - a.assists || a.name.localeCompare(b.name)),
-    [evPlayers]
-  );
-  const assistKing = useMemo(
-    () => [...evPlayers].filter((p) => p.assists > 0).sort((a, b) => b.assists - a.assists || a.name.localeCompare(b.name))[0] ?? null,
-    [evPlayers]
-  );
-  const bestPlayerMotm = useMemo(
-    () => [...evPlayers].filter((p) => p.motmCount > 0).sort((a, b) => b.motmCount - a.motmCount || a.name.localeCompare(b.name))[0] ?? null,
-    [evPlayers]
-  );
-  const glove = useMemo(() => rankGoldenGlove(evPlayers, evMatches)[0] ?? null, [evPlayers, evMatches]);
-  const scorerKing = scorerRanking[0] ?? null;
-  const hasAwards = Boolean(scorerKing || assistKing || bestPlayerMotm || glove);
+  // Auszeichnungen des Abends – aus den getrackten Daten (wie die Liga):
+  // Torschützenkönig/Vorlagen aus getrackten Toren/Vorlagen, bester Spieler nach
+  // HERO-Score, bester Torwart nach dem Goldenen-Handschuh-Score (Tracking).
+  const cfg = scoringConfig ?? DEFAULT_SCORING;
+  const scorers = useMemo(() => scorerRanking(trackingRows, cfg), [trackingRows, cfg]);
+  const assists = useMemo(() => assistRanking(trackingRows, cfg), [trackingRows, cfg]);
+  const keepers = useMemo(() => goldenGloveRanking(trackingRows, cfg), [trackingRows, cfg]);
+  const hero = useMemo(() => seasonRanking(trackingRows, cfg), [trackingRows, cfg]);
+  const scorerKing = scorers[0] ?? null;
+  const assistKing = assists[0] ?? null;
+  const glove = keepers[0] ?? null;
+  const bestPlayer = hero[0] ?? null;
+  const hasAwards = Boolean(scorerKing || assistKing || bestPlayer || glove);
 
   // Spiele nach Block gruppieren (für die Blockdarstellung mit Zeitfenster).
   const blocks = useMemo(() => {
@@ -425,58 +420,58 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                 <StatTile
                   icon={<Crown className="w-4 h-4" />}
                   label="Torschützenkönig"
-                  value={scorerKing.name}
-                  sub={`${scorerKing.goals} ${scorerKing.goals === 1 ? 'Tor' : 'Tore'} · ${scorerKing.teamName}`}
-                  crest={crestFor(scorerKing.teamName)}
-                  onSelect={crestClick(scorerKing.teamName)}
+                  value={scorerKing.playerName}
+                  sub={`${scorerKing.goals} ${scorerKing.goals === 1 ? 'Tor' : 'Tore'} · ${scorerKing.teamId}`}
+                  crest={crestFor(scorerKing.teamId)}
+                  onSelect={crestClick(scorerKing.teamId)}
                 />
               )}
               {assistKing && (
                 <StatTile
                   icon={<Handshake className="w-4 h-4" />}
                   label="Meiste Vorlagen"
-                  value={assistKing.name}
-                  sub={`${assistKing.assists} ${assistKing.assists === 1 ? 'Vorlage' : 'Vorlagen'} · ${assistKing.teamName}`}
-                  crest={crestFor(assistKing.teamName)}
-                  onSelect={crestClick(assistKing.teamName)}
+                  value={assistKing.playerName}
+                  sub={`${assistKing.assists} ${assistKing.assists === 1 ? 'Vorlage' : 'Vorlagen'} · ${assistKing.teamId}`}
+                  crest={crestFor(assistKing.teamId)}
+                  onSelect={crestClick(assistKing.teamId)}
                 />
               )}
-              {bestPlayerMotm && (
+              {bestPlayer && (
                 <StatTile
                   icon={<Star className="w-4 h-4" />}
                   label="Bester Spieler"
-                  value={bestPlayerMotm.name}
-                  sub={`${bestPlayerMotm.motmCount}× Spieler des Spiels · ${bestPlayerMotm.teamName}`}
-                  crest={crestFor(bestPlayerMotm.teamName)}
-                  onSelect={crestClick(bestPlayerMotm.teamName)}
+                  value={bestPlayer.playerName}
+                  sub={bestPlayer.teamId}
+                  crest={crestFor(bestPlayer.teamId)}
+                  onSelect={crestClick(bestPlayer.teamId)}
                 />
               )}
               {glove && (
                 <StatTile
                   icon={<Hand className="w-4 h-4" />}
                   label="Bester Torwart"
-                  value={glove.name}
-                  sub={glove.teamName}
-                  crest={crestFor(glove.teamName)}
-                  onSelect={crestClick(glove.teamName)}
+                  value={glove.playerName}
+                  sub={glove.teamId}
+                  crest={crestFor(glove.teamId)}
+                  onSelect={crestClick(glove.teamId)}
                 />
               )}
             </div>
 
-            {scorerRanking.length > 1 && (
+            {scorers.length > 1 && (
               <div className="mt-4 rounded-2xl border border-white/10 bg-[rgba(255,255,255,.02)] overflow-hidden">
                 <div className="px-4 py-2 bg-white/[.03] border-b border-white/[.06] text-[10px] font-mono uppercase tracking-wider text-hl-mute">
                   Torschützenliste
                 </div>
                 <div className="divide-y divide-white/[.06]">
-                  {scorerRanking.slice(0, 8).map((s, i) => (
-                    <div key={`${s.teamName}-${s.name}`} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                  {scorers.slice(0, 8).map((s, i) => (
+                    <div key={`${s.teamId}-${s.playerName}`} className="flex items-center gap-3 px-4 py-2.5 text-sm">
                       <span className="w-5 shrink-0 text-center font-display font-black text-hl-mute">{i + 1}</span>
-                      <span className="font-sans font-semibold text-white truncate min-w-0">{s.name}</span>
-                      {crestClick(s.teamName) ? (
-                        <button onClick={crestClick(s.teamName)} className="text-xs text-hl-mute truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{s.teamName}</button>
+                      <span className="font-sans font-semibold text-white truncate min-w-0">{s.playerName}</span>
+                      {crestClick(s.teamId) ? (
+                        <button onClick={crestClick(s.teamId)} className="text-xs text-hl-mute truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{s.teamId}</button>
                       ) : (
-                        <span className="text-xs text-hl-mute truncate min-w-0">{s.teamName}</span>
+                        <span className="text-xs text-hl-mute truncate min-w-0">{s.teamId}</span>
                       )}
                       <span className="ml-auto shrink-0 font-display font-black text-white">{s.goals}</span>
                     </div>

@@ -1169,6 +1169,8 @@ export default function App() {
                 onOpenReport={(id) => navigateTo(`/testspiel/spiel/${encodeURIComponent(id)}`)}
                 onOpenEventTeam={(name) => navigateTo(`/testspiel/team/${encodeURIComponent(name)}`)}
                 staffPreview={eventStaffPreview}
+                trackingRows={eventTrackingRows}
+                scoringConfig={scoring}
               />
             </>
           ) : (
@@ -1625,7 +1627,7 @@ export default function App() {
             title="Statistiken"
           />
           {seasonSwitcher}
-          <Statistiken players={players} matches={seasonMatches} teams={visibleTeams} onSelectTeam={openTeamDetail} />
+          <Statistiken players={players} matches={seasonMatches} teams={visibleTeams} trackingRows={trackingRows} scoringConfig={scoring} onSelectTeam={openTeamDetail} />
         </>
       )}
       </div>
