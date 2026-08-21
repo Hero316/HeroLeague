@@ -713,7 +713,8 @@ export default function App() {
 
   // Fester Einstiegs-Link für Schiedsrichter: <website>/schiedsrichter.
   // Nicht eingeloggt ⇒ Login-Maske; eingeloggt mit Spiel-Rechten ⇒ Modus (unten).
-  const onRefereePath = currentPath.startsWith('/schiedsrichter');
+  // Groß-/Kleinschreibung egal: /schiedsrichter, /Schiedsrichter, /SCHIRI-URL …
+  const onRefereePath = /^\/schiedsrichter(\/|$)/i.test(currentPath) || /^\/schiri(\/|$)/i.test(currentPath);
   if (onRefereePath && !sessionUser) {
     return (
       <div className="min-h-screen text-hl-text font-sans flex flex-col justify-between">
