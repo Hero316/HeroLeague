@@ -82,7 +82,7 @@ const DEFAULT_EVENT = {
 };
 
 // Archiv aller Testspiele – standardmäßig eins (Testspiel 1), keins aktiv.
-const DEFAULT_EVENT_ARCHIVE = { activeId: null as string | null, events: [DEFAULT_EVENT] };
+const DEFAULT_EVENT_ARCHIVE = { activeId: null as string | null, previewId: null as string | null, events: [DEFAULT_EVENT] };
 
 // Kanalnamen aus einer evtl. eingefügten URL extrahieren
 function normalizeChannel(input: unknown): string {
@@ -364,7 +364,8 @@ function normalizeArchive(body: unknown) {
   const events = (Array.isArray(b.events) ? b.events : []).map((e, i) => normalizeEvent(e, i));
   const ids = new Set(events.map((e) => e.id));
   const activeId = typeof b.activeId === 'string' && ids.has(b.activeId) ? b.activeId : null;
-  return { activeId, events };
+  const previewId = typeof b.previewId === 'string' && ids.has(b.previewId) ? b.previewId : null;
+  return { activeId, previewId, events };
 }
 
 // Gespeicherten Wert in ein Archiv umwandeln – inkl. Migration vom alten
@@ -375,7 +376,7 @@ function toArchive(stored: unknown) {
   if (Array.isArray(s.events)) return normalizeArchive(s);
   // Alt-Format: ein einzelnes Event -> in ein Archiv verpacken.
   const single = normalizeEvent(s, 0);
-  return { activeId: s.active ? single.id : null, events: [single] };
+  return { activeId: s.active ? single.id : null, previewId: null, events: [single] };
 }
 
 const saveEvent = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
@@ -814,7 +815,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (resource === 'event') {
         const rows = await sql`SELECT value FROM settings WHERE key = 'event'`;
-        return res.json(toArchive(rows[0]?.value));
+        const archive = toArchive(rows[0]?.value) as EventArchive;
+        // Test-Event (previewId) NUR an Super-Admins ausliefern; für alle anderen
+        // komplett aus der Antwort entfernen, damit nichts durchsickert.
+        if (archive.previewId && archive.activeId !== archive.previewId) {
+          const session = await getSession(req);
+          if (session?.role !== 'superadmin') {
+            return res.json({
+              activeId: archive.activeId,
+              previewId: null,
+              events: archive.events.filter((e) => e.id !== archive.previewId),
+            });
+          }
+        }
+        return res.json(archive);
       }
       if (resource === 'highlights') {
         const rows = await sql`SELECT value FROM settings WHERE key = 'highlights'`;

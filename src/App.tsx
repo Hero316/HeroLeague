@@ -106,10 +106,6 @@ export default function App() {
   const [editMode, setEditMode] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Aktuell sichtbares Event (per activeId). null = keins sichtbar.
-  const activeEvent = eventArchive?.events?.find((e) => e.id === eventArchive.activeId) ?? null;
-  // Läuft gerade ein Spiel im aktiven Event?
-  const eventHasLive = !!activeEvent?.matches?.some((m) => m.status === 'live');
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   // Aus einer Benachrichtigung direkt geöffnetes Ticket/Aufgabe (Deep-Link).
   const [deepOpen, setDeepOpen] = useState<{ type: 'ticket' | 'task'; id: string } | null>(null);
@@ -132,6 +128,18 @@ export default function App() {
   const canEditHomepage = isSuperadmin; // Startseite (Hero/Countdown), News-Ticker, Partner & Sponsoren
   const canManageChannels = isSuperadmin; // Twitch/Social, Event/Testspiel
   const canManageUsers = isSuperadmin; // Benutzerverwaltung
+  // Sichtbares Event – rollenabhängig:
+  //  • activeId  = öffentlich für ALLE sichtbar (echter Live-Gang).
+  //  • previewId = „live", aber NUR für Super-Admins (Test vor dem Live-Gang);
+  //    Besucher sehen die normale Seite ohne Event.
+  const publicActiveEvent = eventArchive?.events?.find((e) => e.id === eventArchive?.activeId) ?? null;
+  const staffPreviewEvent =
+    isSuperadmin && eventArchive?.previewId ? eventArchive.events.find((e) => e.id === eventArchive.previewId) ?? null : null;
+  const activeEvent = publicActiveEvent ?? staffPreviewEvent;
+  // Event ist gerade NUR für Super-Admins sichtbar (Test-Modus) → Hinweis anzeigen.
+  const eventStaffPreview = !publicActiveEvent && !!staffPreviewEvent;
+  // Läuft gerade ein Spiel im sichtbaren Event?
+  const eventHasLive = !!activeEvent?.matches?.some((m) => m.status === 'live');
   // Zuletzt angelegtes Event – Admin darf es auf /testspiel vorab prüfen.
   const lastEvent = eventArchive?.events?.length ? eventArchive.events[eventArchive.events.length - 1] : null;
   // Auf der Testspiel-Seite tatsächlich gezeigtes Event (aktiv, oder Admin-Vorschau).
@@ -1145,6 +1153,7 @@ export default function App() {
                 reportMatchIds={eventReportMatchIds}
                 onOpenReport={(id) => navigateTo(`/testspiel/spiel/${encodeURIComponent(id)}`)}
                 onOpenEventTeam={(name) => navigateTo(`/testspiel/team/${encodeURIComponent(name)}`)}
+                staffPreview={eventStaffPreview}
               />
             </>
           ) : (
@@ -1498,7 +1507,7 @@ export default function App() {
         onOpenAlbum={openHighlightsAlbum}
       />
       {activeEvent && activeTab === 'home' && (
-        <EventBanner event={activeEvent} isLive={eventHasLive} onOpen={() => navigateTo('/testspiel')} />
+        <EventBanner event={activeEvent} isLive={eventHasLive} staffPreview={eventStaffPreview} onOpen={() => navigateTo('/testspiel')} />
       )}
       <LiveTicker news={news} />
 

@@ -1,16 +1,17 @@
 import React from 'react';
-import { Zap, ArrowRight, CalendarDays, MapPin } from 'lucide-react';
+import { Zap, ArrowRight, CalendarDays, MapPin, Lock } from 'lucide-react';
 import { EventConfig } from '../types';
 
 interface EventBannerProps {
   event: EventConfig;
   isLive?: boolean; // läuft gerade ein Spiel?
+  staffPreview?: boolean; // nur für Super-Admins sichtbar (Test-Modus)
   onOpen: () => void;
 }
 
 // Auffälliges Banner ganz oben auf der Startseite, wenn ein Sonder-Event aktiv
 // ist. Eigene Magenta/Gold-Farbwelt + Animation, damit man sofort Bock hat.
-export default function EventBanner({ event, isLive, onOpen }: EventBannerProps) {
+export default function EventBanner({ event, isLive, staffPreview, onOpen }: EventBannerProps) {
   return (
     <button
       onClick={onOpen}
@@ -30,6 +31,11 @@ export default function EventBanner({ event, isLive, onOpen }: EventBannerProps)
         </div>
 
         <div className="min-w-0 flex-1">
+          {staffPreview && (
+            <span className="inline-flex items-center gap-1.5 mb-1 px-2 py-0.5 rounded-full bg-[rgba(230,35,142,.2)] border border-[rgba(230,35,142,.5)] text-[9px] sm:text-[10px] font-sans font-extrabold uppercase tracking-wider text-[#ff9ad4]">
+              <Lock className="w-3 h-3" /> Nur für Super-Admins (Test)
+            </span>
+          )}
           <div className="flex items-center gap-2">
             {isLive ? (
               <span className="inline-flex items-center gap-1.5 font-sans font-extrabold text-[10px] sm:text-[11px] tracking-[2px] uppercase text-red-300">
