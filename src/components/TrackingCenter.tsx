@@ -265,6 +265,16 @@ export default function TrackingCenter({
   // Bei Events (kein rk) wird nicht nach Aufstellung gefiltert.
   const squadFor = useCallback(
     (key: string, rk: string | null, absent?: Set<string>, rmap?: RosterMap): { name: string; role: StatRole }[] => {
+      // Event-Modus: zuerst der EIGENE Event-Kader (namensbasiert), sonst der
+      // gleichnamige Liga-Verein. So lassen sich auch reine Gastteams tracken.
+      if (selectedEvent) {
+        const own = selectedEvent.rosters?.find((r) => normName(r.team) === normName(key))?.players;
+        const list = own && own.length ? own : resolveTeam(key)?.spielerliste ?? [];
+        return list
+          .filter((p) => p.name)
+          .filter((p) => !absent || !absent.has(p.name))
+          .map((p) => ({ name: p.name, role: (p.goalkeeper ? 'keeper' : 'field') as StatRole }));
+      }
       const team = resolveTeam(key);
       if (!team) return [];
       const rt = rk ? (rmap ?? rosterState)[rk]?.teams?.[team.id] : undefined;
@@ -278,7 +288,7 @@ export default function TrackingCenter({
           role: (keeper ? p.name === keeper : p.goalkeeper) ? ('keeper' as StatRole) : ('field' as StatRole),
         }));
     },
-    [resolveTeam, rosterState]
+    [resolveTeam, rosterState, selectedEvent]
   );
 
   // Zeilen für einen Tag bauen (Liga oder Event) und gespeicherte Zähler laden.
