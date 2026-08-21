@@ -225,6 +225,8 @@ export interface EventMatch {
   awayScore: number | null;
   status?: 'geplant' | 'live' | 'beendet'; // Spielstatus (wie bei den echten Spielen)
   liveStartedAt?: string | null; // Zeitstempel, seit dem das Spiel läuft (für Live-Minute)
+  durationMinutes?: number; // Spieldauer (für den Countdown im Schiedsrichtermodus)
+  pausedAt?: string | null; // seit wann pausiert (null = läuft)
   scorers?: EventScorer[]; // Torschützen (mit optionaler Vorlage)
   bestPlayers?: EventAward[]; // bester Spieler je Team (max. einer pro Team)
   goalkeepers?: EventAward[]; // Torwart je Team (für „zu null")

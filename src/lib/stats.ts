@@ -1,6 +1,6 @@
 import { apiFetch } from './api';
 import { mergeScoring } from './scoring';
-import type { EveningRoster, MatchPlayerStat, ScoringConfig } from '../types';
+import type { EveningRoster, EventArchive, Match, MatchPlayerStat, ScoringConfig } from '../types';
 
 // ===========================================================================
 // Frontend-Anbindung ans Statistics Center (/api/stats).
@@ -57,6 +57,16 @@ export function fetchPublicStats(
 // getrennt von den Liga-Saisons (day_key = "event:<id>").
 export function fetchEventStats(eventId: string): Promise<{ rows: MatchPlayerStat[]; days: string[] }> {
   return apiFetch(`/api/stats?resource=public&event=${encodeURIComponent(eventId)}`);
+}
+
+// Ein einzelnes Event-Spiel aktualisieren (Schiedsrichtermodus). Match-Form-Patch
+// (playerName/teamId) wird serverseitig in die Event-Form übersetzt. Gibt das
+// aktualisierte Archiv zurück.
+export function saveEventMatch(eventId: string, matchId: string, patch: Partial<Match>): Promise<EventArchive> {
+  return apiFetch('/api/twitch?resource=event-match', {
+    method: 'POST',
+    body: JSON.stringify({ eventId, matchId, patch }),
+  });
 }
 
 // Verbindungstest zum Google Sheet (schreibt nichts).

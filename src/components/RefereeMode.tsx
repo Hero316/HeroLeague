@@ -21,6 +21,12 @@ interface RefereeModeProps {
   onRefresh: () => Promise<unknown> | void;
   onLogout: () => void;
   onExit?: () => void; // nur für Admins: Schiedsrichtermodus verlassen (zurück zur Seite)
+  // Optional: aktives Testspiel/Event (synthetische Teams/Matches wie die Liga),
+  // damit Schiedsrichter auch Event-Spiele live pfeifen können.
+  eventTeams?: Team[];
+  eventMatches?: Match[];
+  eventLabel?: string;
+  onUpdateEventMatch?: (matchId: string, patch: Partial<Match>) => Promise<boolean>;
 }
 
 const DEFAULT_MINUTES = 7;
@@ -39,15 +45,28 @@ export default function RefereeMode({
   onRefresh,
   onLogout,
   onExit,
+  eventTeams,
+  eventMatches,
+  eventLabel,
+  onUpdateEventMatch,
 }: RefereeModeProps) {
-  const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
+  const hasEvent = !!(eventMatches && eventMatches.length && onUpdateEventMatch);
+  const [mode, setMode] = useState<'liga' | 'event'>('liga');
+  const isEvent = mode === 'event' && hasEvent;
+
+  // Aktive Datenquelle je nach Modus (Liga oder Testspiel).
+  const curTeams = isEvent ? (eventTeams ?? []) : teams;
+  const curMatches = isEvent ? (eventMatches ?? []) : matches;
+  const curUpdate = isEvent ? onUpdateEventMatch! : onUpdateMatch;
+
+  const teamById = useMemo(() => new Map(curTeams.map((t) => [t.id, t])), [curTeams]);
   const teamName = (id: string) => teamById.get(id)?.name ?? id;
 
-  // Vorhandene Spieltage aufsteigend (1 → n), damit die Leiste von links nach
-  // rechts ansteigt. Vorausgewählt bleibt der neueste (höchste) Spieltag.
+  // Vorhandene Spieltage/Blöcke aufsteigend (1 → n), damit die Leiste von links
+  // nach rechts ansteigt. Vorausgewählt bleibt der neueste (höchste).
   const matchdays = useMemo(
-    () => [...new Set(matches.map((m) => m.matchday))].sort((a, b) => a - b),
-    [matches]
+    () => [...new Set(curMatches.map((m) => m.matchday))].sort((a, b) => a - b),
+    [curMatches]
   );
   const latestMatchday = matchdays[matchdays.length - 1] ?? 1;
   const [matchday, setMatchday] = useState<number>(latestMatchday);
@@ -86,21 +105,21 @@ export default function RefereeMode({
 
   const dayMatches = useMemo(
     () =>
-      matches
+      curMatches
         .filter((m) => m.matchday === matchday)
         .filter((m) => (fieldFilter === 'all' ? true : (m.field ?? 0) === fieldFilter))
         // Streng chronologisch: erst Uhrzeit, dann Zeitblock, dann Feld –
         // damit die beiden Felder nicht durcheinandergewürfelt sind.
         .sort((a, b) => a.time.localeCompare(b.time) || (a.slot ?? 0) - (b.slot ?? 0) || (a.field ?? 0) - (b.field ?? 0)),
-    [matches, matchday, fieldFilter]
+    [curMatches, matchday, fieldFilter]
   );
 
   const fieldsAvailable = useMemo(
-    () => [...new Set(matches.filter((m) => m.matchday === matchday).map((m) => m.field).filter((f): f is number => !!f))].sort(),
-    [matches, matchday]
+    () => [...new Set(curMatches.filter((m) => m.matchday === matchday).map((m) => m.field).filter((f): f is number => !!f))].sort(),
+    [curMatches, matchday]
   );
 
-  const openMatch = openMatchId ? matches.find((m) => m.id === openMatchId) ?? null : null;
+  const openMatch = openMatchId ? curMatches.find((m) => m.id === openMatchId) ?? null : null;
 
   // ---- Detail-Ansicht eines Spiels ----------------------------------------
   if (openMatch) {
@@ -111,7 +130,7 @@ export default function RefereeMode({
         presentPlayers={presentPlayersFor}
         minutes={minutesFor}
         onBack={() => setOpenMatchId(null)}
-        onUpdateMatch={onUpdateMatch}
+        onUpdateMatch={curUpdate}
       />
     );
   }
@@ -162,7 +181,27 @@ export default function RefereeMode({
       </header>
 
       <main className="flex-1 px-4 py-4 space-y-4 max-w-2xl w-full mx-auto pb-24">
-        {/* Spieltag-Auswahl */}
+        {/* Liga / Testspiel umschalten (nur wenn ein Testspiel aktiv ist) */}
+        {hasEvent && (
+          <div className="flex items-center gap-2 p-1 rounded-2xl bg-white/[.04] border border-white/10">
+            <button
+              type="button"
+              onClick={() => { setMode('liga'); setOpenMatchId(null); setShowRoster(false); }}
+              className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors ${!isEvent ? 'bg-brand-accent text-white' : 'text-hl-dim hover:text-white'}`}
+            >
+              Liga
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode('event'); setOpenMatchId(null); setShowRoster(false); }}
+              className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors ${isEvent ? 'bg-[#E6238E] text-white' : 'text-hl-dim hover:text-white'}`}
+            >
+              {eventLabel || 'Testspiel'}
+            </button>
+          </div>
+        )}
+
+        {/* Spieltag-/Block-Auswahl */}
         {matchdays.length > 1 && (
           <div className="flex items-center gap-2 overflow-x-auto pb-1">
             {matchdays.map((d) => (
@@ -174,7 +213,7 @@ export default function RefereeMode({
                   d === matchday ? 'bg-brand-accent text-white' : 'bg-white/5 text-hl-dim hover:bg-white/10'
                 }`}
               >
-                {d}. Spieltag
+                {isEvent ? `Block ${d}` : `${d}. Spieltag`}
               </button>
             ))}
           </div>
@@ -207,15 +246,17 @@ export default function RefereeMode({
           </div>
         )}
 
-        {/* Aufstellung des Abends */}
-        <button
-          type="button"
-          onClick={() => setShowRoster(true)}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-sm font-semibold transition-colors"
-        >
-          <Users className="w-5 h-5 text-brand-accent-light" />
-          Aufstellung des Abends (Anwesende · Torwart · Spieldauer {minutesFor} Min)
-        </button>
+        {/* Aufstellung des Abends – nur Liga (Events nutzen den festen Event-Kader) */}
+        {!isEvent && (
+          <button
+            type="button"
+            onClick={() => setShowRoster(true)}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-sm font-semibold transition-colors"
+          >
+            <Users className="w-5 h-5 text-brand-accent-light" />
+            Aufstellung des Abends (Anwesende · Torwart · Spieldauer {minutesFor} Min)
+          </button>
+        )}
 
         {/* Spiel-Liste */}
         <div className="space-y-3">
