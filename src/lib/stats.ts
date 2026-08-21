@@ -53,6 +53,12 @@ export function fetchPublicStats(
   return apiFetch(`/api/stats?resource=public${q}`);
 }
 
+// Öffentliche (veröffentlichte) Roh-Daten EINES Testspiels/Events laden –
+// getrennt von den Liga-Saisons (day_key = "event:<id>").
+export function fetchEventStats(eventId: string): Promise<{ rows: MatchPlayerStat[]; days: string[] }> {
+  return apiFetch(`/api/stats?resource=public&event=${encodeURIComponent(eventId)}`);
+}
+
 // Verbindungstest zum Google Sheet (schreibt nichts).
 export function testSheet(): Promise<{ ok: boolean; title: string; sheets: string[] }> {
   return apiFetch('/api/stats?resource=sheet-test', { method: 'POST', body: '{}' });

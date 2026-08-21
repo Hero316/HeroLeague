@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster, PlayerOfMonth, MatchPlayerStat, ScoringConfig } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
-import { fetchPublicStats, fetchScoring } from './lib/stats';
+import { fetchPublicStats, fetchEventStats, fetchScoring } from './lib/stats';
+import { eventTeamsAsTeams, eventMatchesAsMatches } from './lib/eventView';
 import { DEFAULT_SCORING } from './lib/scoring';
 import { startPresence } from './lib/presence';
 import { syncPush } from './lib/push';
@@ -69,6 +70,7 @@ export default function App() {
   // Statistics Center: veröffentlichte getrackte Zähler + Score-Einstellungen
   // (für Spieler-FIFA-Karten und den Spielbericht). Öffentlich, ohne Login.
   const [trackingRows, setTrackingRows] = useState<MatchPlayerStat[]>([]);
+  const [eventTrackingRows, setEventTrackingRows] = useState<MatchPlayerStat[]>([]);
   const [scoring, setScoring] = useState<ScoringConfig>(DEFAULT_SCORING);
   // Spieler des Monats schon beim Laden holen, damit der Hero direkt mit finaler
   // Höhe erscheint (sonst kommt der Slide asynchron dazu und der Hero „springt").
@@ -130,6 +132,10 @@ export default function App() {
   const canEditHomepage = isSuperadmin; // Startseite (Hero/Countdown), News-Ticker, Partner & Sponsoren
   const canManageChannels = isSuperadmin; // Twitch/Social, Event/Testspiel
   const canManageUsers = isSuperadmin; // Benutzerverwaltung
+  // Zuletzt angelegtes Event – Admin darf es auf /testspiel vorab prüfen.
+  const lastEvent = eventArchive?.events?.length ? eventArchive.events[eventArchive.events.length - 1] : null;
+  // Auf der Testspiel-Seite tatsächlich gezeigtes Event (aktiv, oder Admin-Vorschau).
+  const shownEvent = activeEvent ?? (canManageChannels ? lastEvent : null);
   // Backoffice-Rubriken sichtbar, wenn mind. eine Sektion darin zugänglich ist:
   const canSeeLeagueArea = canManageMatches || canManageSeason;
   const canSeeStartseiteArea = canEditHomepage || canManagePom;
@@ -464,6 +470,21 @@ export default function App() {
 
   // Spiele, für die es getrackte Werte gibt (→ Spielbericht anklickbar).
   const reportMatchIds = useMemo(() => new Set(trackingRows.map((r) => r.matchId)), [trackingRows]);
+
+  // Veröffentlichte Roh-Daten des gezeigten Testspiels laden (Event-Spielberichte).
+  useEffect(() => {
+    const evId = shownEvent?.id;
+    if (!evId) {
+      setEventTrackingRows([]);
+      return;
+    }
+    fetchEventStats(evId)
+      .then((r) => setEventTrackingRows(r.rows))
+      .catch(() => setEventTrackingRows([]));
+  }, [shownEvent?.id, eventHasLive]);
+
+  // Event-Spiele, für die es veröffentlichte Werte gibt (→ Spielbericht anklickbar).
+  const eventReportMatchIds = useMemo(() => new Set(eventTrackingRows.map((r) => r.matchId)), [eventTrackingRows]);
 
   // Aufstellungen laden, sobald jemand angemeldet ist (für den Schiedsrichtermodus).
   useEffect(() => {
@@ -891,6 +912,71 @@ export default function App() {
     );
   }
 
+  // ROUTE: /testspiel/spiel/:id – öffentlicher Event-Spielbericht (Einzelnoten aus
+  // dem Event-Tracking; komplett isoliert von der Liga). Muss VOR /testspiel stehen.
+  if (currentPath.startsWith('/testspiel/spiel/')) {
+    const matchId = decodeURIComponent(currentPath.slice('/testspiel/spiel/'.length).replace(/\/+$/, ''));
+    const evTeams = shownEvent ? eventTeamsAsTeams(shownEvent, visibleTeams) : [];
+    const evMatch = shownEvent ? eventMatchesAsMatches(shownEvent).find((m) => m.id === matchId) ?? null : null;
+    return (
+      <div className="min-h-screen text-hl-text font-sans flex flex-col overflow-x-clip">
+        <PageBackground page="tabelle" />
+        {renderMobileDock()}
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={goToTab}
+          isAdmin={isAdmin}
+          canAccessBackoffice={canAccessBackoffice}
+          onLogout={handleLogout}
+          onOpenLogin={() => navigateTo('/admin')}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
+          onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
+          demoActive={demo.active}
+          seasonLabel={selectedSeasonName}
+          seasonNumber={currentSeasonNumber}
+          hasLiveMatch={hasLiveMatch}
+          eventActive={!!activeEvent}
+          eventTitle={activeEvent?.title}
+          onOpenEvent={() => navigateTo('/testspiel')}
+          hasHighlights={hasHighlights}
+          mobileMode={mobileMode}
+          onToggleMobileMode={toggleMobileMode}
+          teams={visibleTeams}
+          matches={currentSeasonMatches}
+          onSelectTeam={openTeamDetail}
+          onGoToMatchday={goToMatchday}
+          albums={highlights.albums}
+          onOpenAlbum={openHighlightsAlbum}
+        />
+        <main className="flex-1">
+          {evMatch ? (
+            <SpielberichtPage
+              match={evMatch}
+              teams={evTeams}
+              rows={eventTrackingRows}
+              cfg={scoring}
+              onBack={() => navigateTo('/testspiel')}
+              onSelectPlayer={() => navigateTo('/testspiel')}
+              onSelectTeam={() => navigateTo('/testspiel')}
+            />
+          ) : (
+            <div className="text-center py-24 space-y-4">
+              <p className="text-hl-mute font-sans">Dieses Testspiel-Spiel gibt es nicht (mehr) oder ist noch nicht veröffentlicht.</p>
+              <button
+                onClick={() => navigateTo('/testspiel')}
+                className="inline-flex items-center gap-1.5 text-xs font-sans font-bold uppercase tracking-wider text-brand-accent-light hover:underline cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Zurück zum Testspieltag
+              </button>
+            </div>
+          )}
+        </main>
+        <Footer onNavigate={goToTab} onNavigatePath={navigateTo} />
+      </div>
+    );
+  }
+
   // ROUTE: /testspiel-zettel – Ergebniszettel zum Ausdrucken (nur Admin)
   if (currentPath.startsWith('/testspiel-zettel')) {
     const printEvent = activeEvent ?? eventArchive?.events?.[(eventArchive.events?.length ?? 0) - 1] ?? null;
@@ -953,6 +1039,8 @@ export default function App() {
                 onSelectTeam={openTeamDetail}
                 isAdmin={canManageChannels}
                 onPrint={() => navigateTo('/testspiel-zettel')}
+                reportMatchIds={eventReportMatchIds}
+                onOpenReport={(id) => navigateTo(`/testspiel/spiel/${encodeURIComponent(id)}`)}
               />
             </>
           ) : (
