@@ -1,8 +1,10 @@
 import React, { useMemo } from 'react';
 import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shield, Lock, Goal, Crown, Star, Hand, Handshake, Printer } from 'lucide-react';
-import { EventConfig, Team } from '../types';
+import { EventConfig, PlayerStat, Team } from '../types';
 import { TeamCrest, LiveBadge } from './ui';
-import { calculateEventStandings, calculateEventAwards } from '../lib/eventStandings';
+import { calculateEventStandings } from '../lib/eventStandings';
+import { eventPlayers, eventMatchesAsMatches } from '../lib/eventView';
+import { rankGoldenGlove } from '../lib/goldenGlove';
 
 interface EventPageProps {
   event: EventConfig;
@@ -72,10 +74,26 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
     return { totalGoals, bestOffense, bestDefense, mostCleanSheets, topMatch, playedCount: playedMatches.length };
   }, [event.matches, standings]);
 
-  const awards = useMemo(() => calculateEventAwards(event.matches), [event.matches]);
-  const hasAwards = Boolean(
-    awards.topScorers.length || awards.topAssists.length || awards.bestPlayer || awards.bestKeeper
+  // Auszeichnungen des Abends – EXAKT wie die Liga-Statistikseite: aus den
+  // abgeleiteten Spielerstatistiken (calculatePlayers) und dem Goldenen Handschuh
+  // (GSAA / „durchschnittliche Gegentore"). So rechnet das Event wie die Liga.
+  const evPlayers = useMemo<PlayerStat[]>(() => eventPlayers(event, teams), [event, teams]);
+  const evMatches = useMemo(() => eventMatchesAsMatches(event), [event]);
+  const scorerRanking = useMemo(
+    () => [...evPlayers].filter((p) => p.goals > 0).sort((a, b) => b.goals - a.goals || b.assists - a.assists || a.name.localeCompare(b.name)),
+    [evPlayers]
   );
+  const assistKing = useMemo(
+    () => [...evPlayers].filter((p) => p.assists > 0).sort((a, b) => b.assists - a.assists || a.name.localeCompare(b.name))[0] ?? null,
+    [evPlayers]
+  );
+  const bestPlayerMotm = useMemo(
+    () => [...evPlayers].filter((p) => p.motmCount > 0).sort((a, b) => b.motmCount - a.motmCount || a.name.localeCompare(b.name))[0] ?? null,
+    [evPlayers]
+  );
+  const glove = useMemo(() => rankGoldenGlove(evPlayers, evMatches)[0] ?? null, [evPlayers, evMatches]);
+  const scorerKing = scorerRanking[0] ?? null;
+  const hasAwards = Boolean(scorerKing || assistKing || bestPlayerMotm || glove);
 
   // Spiele nach Block gruppieren (für die Blockdarstellung mit Zeitfenster).
   const blocks = useMemo(() => {
@@ -403,64 +421,64 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
               <h3 className="font-display font-black text-lg uppercase tracking-tight text-white">Spieler des Abends</h3>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {awards.topScorers[0] && (
+              {scorerKing && (
                 <StatTile
                   icon={<Crown className="w-4 h-4" />}
                   label="Torschützenkönig"
-                  value={awards.topScorers[0].player}
-                  sub={`${awards.topScorers[0].count} Tore · ${awards.topScorers[0].team}`}
-                  crest={crestFor(awards.topScorers[0].team)}
-                  onSelect={crestClick(awards.topScorers[0].team)}
+                  value={scorerKing.name}
+                  sub={`${scorerKing.goals} ${scorerKing.goals === 1 ? 'Tor' : 'Tore'} · ${scorerKing.teamName}`}
+                  crest={crestFor(scorerKing.teamName)}
+                  onSelect={crestClick(scorerKing.teamName)}
                 />
               )}
-              {awards.topAssists[0] && (
+              {assistKing && (
                 <StatTile
                   icon={<Handshake className="w-4 h-4" />}
                   label="Meiste Vorlagen"
-                  value={awards.topAssists[0].player}
-                  sub={`${awards.topAssists[0].count} Vorlagen · ${awards.topAssists[0].team}`}
-                  crest={crestFor(awards.topAssists[0].team)}
-                  onSelect={crestClick(awards.topAssists[0].team)}
+                  value={assistKing.name}
+                  sub={`${assistKing.assists} ${assistKing.assists === 1 ? 'Vorlage' : 'Vorlagen'} · ${assistKing.teamName}`}
+                  crest={crestFor(assistKing.teamName)}
+                  onSelect={crestClick(assistKing.teamName)}
                 />
               )}
-              {awards.bestPlayer && (
+              {bestPlayerMotm && (
                 <StatTile
                   icon={<Star className="w-4 h-4" />}
                   label="Bester Spieler"
-                  value={awards.bestPlayer.player}
-                  sub={awards.bestPlayer.team}
-                  crest={crestFor(awards.bestPlayer.team)}
-                  onSelect={crestClick(awards.bestPlayer.team)}
+                  value={bestPlayerMotm.name}
+                  sub={`${bestPlayerMotm.motmCount}× Spieler des Spiels · ${bestPlayerMotm.teamName}`}
+                  crest={crestFor(bestPlayerMotm.teamName)}
+                  onSelect={crestClick(bestPlayerMotm.teamName)}
                 />
               )}
-              {awards.bestKeeper && (
+              {glove && (
                 <StatTile
                   icon={<Hand className="w-4 h-4" />}
                   label="Bester Torwart"
-                  value={awards.bestKeeper.player}
-                  sub={`${awards.bestKeeper.count}× zu Null · ${awards.bestKeeper.team}`}
-                  crest={crestFor(awards.bestKeeper.team)}
-                  onSelect={crestClick(awards.bestKeeper.team)}
+                  value={glove.name}
+                  sub={glove.teamName}
+                  crest={crestFor(glove.teamName)}
+                  onSelect={crestClick(glove.teamName)}
                 />
               )}
             </div>
 
-            {awards.topScorers.length > 1 && (
+            {scorerRanking.length > 1 && (
               <div className="mt-4 rounded-2xl border border-white/10 bg-[rgba(255,255,255,.02)] overflow-hidden">
                 <div className="px-4 py-2 bg-white/[.03] border-b border-white/[.06] text-[10px] font-mono uppercase tracking-wider text-hl-mute">
                   Torschützenliste
                 </div>
                 <div className="divide-y divide-white/[.06]">
-                  {awards.topScorers.slice(0, 8).map((s, i) => (
-                    <div key={`${s.team}-${s.player}`} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                  {scorerRanking.slice(0, 8).map((s, i) => (
+                    <div key={`${s.teamName}-${s.name}`} className="flex items-center gap-3 px-4 py-2.5 text-sm">
                       <span className="w-5 shrink-0 text-center font-display font-black text-hl-mute">{i + 1}</span>
-                      <span className="font-sans font-semibold text-white truncate min-w-0">{s.player}</span>
-                      {crestClick(s.team) ? (
-                        <button onClick={crestClick(s.team)} className="text-xs text-hl-mute truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{s.team}</button>
+                      <span className="font-sans font-semibold text-white truncate min-w-0">{s.name}</span>
+                      {crestClick(s.teamName) ? (
+                        <button onClick={crestClick(s.teamName)} className="text-xs text-hl-mute truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{s.teamName}</button>
                       ) : (
-                        <span className="text-xs text-hl-mute truncate min-w-0">{s.team}</span>
+                        <span className="text-xs text-hl-mute truncate min-w-0">{s.teamName}</span>
                       )}
-                      <span className="ml-auto shrink-0 font-display font-black text-white">{s.count}</span>
+                      <span className="ml-auto shrink-0 font-display font-black text-white">{s.goals}</span>
                     </div>
                   ))}
                 </div>
