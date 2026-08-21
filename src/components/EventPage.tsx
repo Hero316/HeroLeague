@@ -8,9 +8,12 @@ interface EventPageProps {
   event: EventConfig;
   teams: Team[]; // echte Vereine – für Wappen/Farben, per Namensabgleich
   onBack: () => void;
-  onSelectTeam?: (teamId: string) => void; // Klick aufs Wappen -> Vereinsseite
+  onSelectTeam?: (teamId: string) => void; // Klick aufs Wappen -> Vereinsseite (Fallback)
   isAdmin?: boolean;
   onPrint?: () => void; // Ergebniszettel öffnen (nur Admin)
+  reportMatchIds?: Set<string>; // Event-Spiele mit veröffentlichtem Spielbericht
+  onOpenReport?: (matchId: string) => void; // Klick aufs Spiel -> Event-Spielbericht
+  onOpenEventTeam?: (teamName: string) => void; // Klick aufs Team -> Event-Team-Seite
 }
 
 // Namen tolerant vergleichen (Groß/Klein, Leerzeichen, Punkte egal).
@@ -24,7 +27,7 @@ const normName = (s: string) =>
 // Sonder-Event-Seite (z.B. Testspieltag): Kopf + Live-Tabelle + kompletter
 // Spielplan mit Uhrzeiten und Feldern – im Look der Hauptseite, aber mit
 // eigener Magenta/Gold-Farbwelt, damit es sich besonders anfühlt.
-export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin, onPrint }: EventPageProps) {
+export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin, onPrint, reportMatchIds, onOpenReport, onOpenEventTeam }: EventPageProps) {
   const standings = useMemo(
     () => calculateEventStandings(event.teams, event.matches),
     [event.teams, event.matches]
@@ -32,8 +35,10 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
 
   // Teamname -> echtes Vereins-Wappen (falls der Name mit einem Verein übereinstimmt).
   const crestFor = (name: string) => teams.find((t) => normName(t.name) === normName(name));
-  // Klick-Handler fürs Wappen (nur wenn der Verein bekannt ist).
+  // Klick-Handler fürs Wappen: bevorzugt die Event-Team-Seite (für ALLE Event-Teams),
+  // sonst – falls der Name einem echten Verein entspricht – dessen Liga-Seite.
   const crestClick = (name: string) => {
+    if (onOpenEventTeam) return () => onOpenEventTeam(name);
     const t = crestFor(name);
     return t && onSelectTeam ? () => onSelectTeam(t.id) : undefined;
   };
@@ -89,7 +94,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
     const click = crestClick(name);
     return (
       <div className={`flex items-center gap-2 min-w-0 ${align === 'right' ? 'flex-row-reverse text-right' : ''}`}>
-        <span className="shrink-0">
+        <span className="shrink-0 pointer-events-auto">
           <TeamCrest
             name={name}
             shortName={crest?.shortName ?? name.slice(0, 3).toUpperCase()}
@@ -100,7 +105,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
           />
         </span>
         {click ? (
-          <button onClick={click} className="font-sans font-semibold text-sm text-white truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer">{name}</button>
+          <button onClick={(e) => { e.stopPropagation(); click(); }} className="pointer-events-auto font-sans font-semibold text-sm text-white truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer">{name}</button>
         ) : (
           <span className="font-sans font-semibold text-sm text-white truncate min-w-0">{name}</span>
         )}
@@ -251,8 +256,18 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                     {ms.map((m) => {
                       const played = m.homeScore !== null && m.awayScore !== null;
                       const isLive = m.status === 'live';
+                      const canReport = !!onOpenReport && !!reportMatchIds?.has(m.id);
                       return (
-                        <div key={m.id} className={`px-4 py-3 ${isLive ? 'bg-red-500/[.07]' : ''}`}>
+                        <div key={m.id} className={`relative px-4 py-3 ${isLive ? 'bg-red-500/[.07]' : ''} ${canReport ? 'hover:bg-white/[.03] transition-colors' : ''}`}>
+                          {canReport && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenReport!(m.id)}
+                              aria-label="Spielbericht ansehen"
+                              className="absolute inset-0 z-0 cursor-pointer"
+                            />
+                          )}
+                          <div className={`relative z-10 ${canReport ? 'pointer-events-none' : ''}`}>
                           <div className="flex items-center gap-3">
                             <span className="shrink-0 min-w-[3.25rem] text-[10px] font-mono uppercase tracking-wider leading-tight">
                               {isLive ? (
@@ -305,6 +320,12 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                               </div>
                             </div>
                           )}
+                          {canReport && (
+                            <div className="mt-2 pl-[3.75rem] text-[10px] uppercase tracking-wider text-[#ff7ac4]/80 font-sans font-bold">
+                              Spielbericht ansehen ›
+                            </div>
+                          )}
+                          </div>
                         </div>
                       );
                     })}
