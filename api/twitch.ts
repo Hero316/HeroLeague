@@ -469,6 +469,60 @@ const saveEventMatch = requireMatchWrite(async (req: VercelRequest, res: VercelR
   return res.json(next);
 });
 
+// Anwesenheit (wer ist da) + Torwart für ein Testspiel setzen – schreibt die
+// Abwesenden (Kader minus Anwesende) und den Torwart je Team auf ALLE Spiele
+// des Events. requireMatchWrite (auch Schiedsrichter), wie bei den echten Spielen.
+const saveEventAttendance = requireMatchWrite(async (req: VercelRequest, res: VercelResponse) => {
+  const b = (req.body ?? {}) as { eventId?: unknown; teams?: unknown };
+  const eventId = str(b.eventId).trim();
+  if (!eventId) return res.status(400).json({ error: 'eventId ist Pflicht.' });
+  const teamsIn = (b.teams && typeof b.teams === 'object' ? b.teams : {}) as Record<string, { present?: unknown; goalkeeper?: unknown }>;
+
+  const rows = await sql`SELECT value FROM settings WHERE key = 'event'`;
+  const archive = toArchive(rows[0]?.value) as EventArchive;
+  const ev = archive.events.find((e) => e.id === eventId);
+  if (!ev) return res.status(404).json({ error: 'Testspiel nicht gefunden.' });
+
+  const nrm = (s: string) => s.toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
+  const leagueTeams = await getTeams();
+  const rosterNamesOf = (teamName: string): string[] => {
+    const own = ev.rosters?.find((r) => nrm(r.team) === nrm(teamName))?.players;
+    if (own && own.length) return own.map((p) => p.name).filter(Boolean);
+    const lg = leagueTeams.find((t) => nrm(t.name) === nrm(teamName))?.spielerliste;
+    return (lg ?? []).map((p) => p.name).filter(Boolean);
+  };
+  const cfgFor = (teamName: string) => {
+    const hit = Object.entries(teamsIn).find(([k]) => nrm(k) === nrm(teamName));
+    if (!hit) return null;
+    const v = hit[1] || {};
+    return {
+      present: new Set((Array.isArray(v.present) ? v.present : []).map((x) => str(x).trim()).filter(Boolean)),
+      goalkeeper: str(v.goalkeeper).trim(),
+    };
+  };
+
+  for (const m of ev.matches as EventMatch[]) {
+    for (const teamName of [m.home, m.away]) {
+      const cfg = cfgFor(teamName);
+      if (!cfg) continue;
+      const roster = rosterNamesOf(teamName);
+      const absent = roster.filter((n) => !cfg.present.has(n)).map((player) => ({ player, team: teamName }));
+      m.absentees = [...(m.absentees ?? []).filter((a) => nrm(a.team) !== nrm(teamName)), ...absent];
+      m.goalkeepers = [
+        ...(m.goalkeepers ?? []).filter((g) => nrm(g.team) !== nrm(teamName)),
+        ...(cfg.goalkeeper ? [{ player: cfg.goalkeeper, team: teamName }] : []),
+      ];
+    }
+  }
+
+  const next = normalizeArchive(archive);
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('event', ${JSON.stringify(next)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+  return res.json(next);
+});
+
 // Testspiel-Demo befüllen/entfernen (nur Super-Admin). Legt ein separates
 // Demo-Event an (nur für Super-Admins sichtbar), lässt das echte Testspiel in Ruhe.
 const eventDemo = requireSuperadmin(async (req: VercelRequest, res: VercelResponse) => {
@@ -887,6 +941,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'team-sponsors') return saveTeamSponsors(req, res);
       if (resource === 'event') return saveEvent(req, res);
       if (resource === 'event-match') return saveEventMatch(req, res);
+      if (resource === 'event-attendance') return saveEventAttendance(req, res);
       if (resource === 'event-demo') return eventDemo(req, res);
       if (resource === 'highlights') return saveHighlights(req, res);
       if (resource === 'hero') return saveHero(req, res);
