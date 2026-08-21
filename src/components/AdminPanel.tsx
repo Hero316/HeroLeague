@@ -456,6 +456,8 @@ export default function AdminPanel({
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState('');
   const [openRosterTeam, setOpenRosterTeam] = useState<string | null>(null);
+  const [addTeamMode, setAddTeamMode] = useState<'menu' | 'copy' | 'new' | null>(null);
+  const [newEventTeamName, setNewEventTeamName] = useState('');
 
   // Neue Saison starten
   const [seasonModalOpen, setSeasonModalOpen] = useState(false);
@@ -1027,6 +1029,71 @@ export default function AdminPanel({
     if (eventRosterOf(teamName).length && !window.confirm('Vorhandenen Event-Kader durch den Liga-Kader ersetzen?')) return;
     setEventRoster(teamName, league.map((p) => ({ ...p })));
   };
+
+  // Neues (leeres) Event-Team hinzufügen.
+  const addNewEventTeam = (name: string) => {
+    const nm = name.trim();
+    if (!nm || !selectedEvent) return;
+    if (selectedEvent.teams.some((t) => normTeamName(t) === normTeamName(nm))) {
+      alert('Dieses Team ist bereits dabei.');
+      return;
+    }
+    patchEvent({ teams: [...selectedEvent.teams, nm] });
+    setOpenRosterTeam(nm);
+  };
+
+  // Verein komplett aus der Liga-Website übernehmen (Name + Kader inkl. Fotos).
+  // Das Logo/Wappen wird auf der Website automatisch über den Namen aufgelöst.
+  const copyLeagueTeamIntoEvent = (league: Team) => {
+    if (!selectedEvent) return;
+    const exists = selectedEvent.teams.some((t) => normTeamName(t) === normTeamName(league.name));
+    const teamsNext = exists ? selectedEvent.teams : [...selectedEvent.teams, league.name];
+    const others = (selectedEvent.rosters ?? []).filter((r) => normTeamName(r.team) !== normTeamName(league.name));
+    const rostersNext = [...others, { team: league.name, players: (league.spielerliste ?? []).map((p) => ({ ...p })) }];
+    patchEvent({ teams: teamsNext, rosters: rostersNext });
+    setOpenRosterTeam(league.name);
+  };
+
+  // Ein Team komplett aus dem Event entfernen (inkl. Kader).
+  const removeEventTeam = (teamName: string) => {
+    if (!selectedEvent) return;
+    if (!window.confirm(`„${teamName}" aus diesem Testspiel entfernen? Der hinterlegte Event-Kader geht verloren.`)) return;
+    patchEvent({
+      teams: selectedEvent.teams.filter((t) => normTeamName(t) !== normTeamName(teamName)),
+      rosters: (selectedEvent.rosters ?? []).filter((r) => normTeamName(r.team) !== normTeamName(teamName)),
+    });
+  };
+
+  // Bequemlichkeit: für ALLE Event-Teams ohne eigenen Kader den gleichnamigen
+  // Liga-Kader übernehmen (ein Klick statt Team für Team).
+  const fillAllRostersFromLeague = () => {
+    if (!selectedEvent) return;
+    const existing = selectedEvent.rosters ?? [];
+    let filled = 0;
+    const rosters = [...existing];
+    selectedEvent.teams.forEach((name) => {
+      const has = existing.find((r) => normTeamName(r.team) === normTeamName(name));
+      if (has && has.players.length) return; // eigener Kader bleibt unangetastet
+      const league = leagueRosterOf(name);
+      if (!league.length) return;
+      const idx = rosters.findIndex((r) => normTeamName(r.team) === normTeamName(name));
+      const entry = { team: name, players: league.map((p) => ({ ...p })) };
+      if (idx >= 0) rosters[idx] = entry;
+      else rosters.push(entry);
+      filled++;
+    });
+    if (!filled) {
+      alert('Nichts zu übernehmen: Es gibt keine leeren Teams mit gleichnamigem Liga-Verein.');
+      return;
+    }
+    patchEvent({ rosters });
+    alert(`${filled} Kader aus der Liga übernommen. Nicht vergessen: unten „Speichern".`);
+  };
+
+  // Liga-Vereine, die noch nicht im Event sind (für die Kopier-Auswahl).
+  const leagueTeamsNotInEvent = teams.filter(
+    (t) => !(selectedEvent?.teams ?? []).some((n) => normTeamName(n) === normTeamName(t.name))
+  );
 
   // --- Verwalten-Popup (wie bei den echten Spielen) ---
   const managedMatch = selectedEvent?.matches.find((m) => m.id === openEventMatch) ?? null;
@@ -2524,10 +2591,93 @@ export default function AdminPanel({
 
               {/* Event-Kader je Team – für Fotos, Einzelnoten und die beste Aufstellung */}
               <div>
-                <label className="block text-xs font-mono text-gray-400 mb-2 uppercase tracking-wider">Event-Kader (je Team)</label>
+                <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                  <label className="text-xs font-mono text-gray-400 uppercase tracking-wider">Event-Kader (je Team)</label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={fillAllRostersFromLeague}
+                      title="Für alle leeren Teams den gleichnamigen Liga-Kader übernehmen"
+                      className="text-[10px] font-sans font-bold uppercase tracking-wider text-gray-400 hover:text-brand-accent-light transition-colors cursor-pointer"
+                    >
+                      Alle Kader aus Liga holen
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAddTeamMode(addTeamMode ? null : 'menu'); setNewEventTeamName(''); }}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-[rgba(230,35,142,.4)] text-[#ff9ad4] hover:bg-[rgba(230,35,142,.15)] transition-all cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Team
+                    </button>
+                  </div>
+                </div>
+
+                {addTeamMode && (
+                  <div className="mb-3 rounded-xl border border-[rgba(230,35,142,.3)] bg-[rgba(230,35,142,.06)] p-3 space-y-2">
+                    {addTeamMode === 'menu' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setAddTeamMode('copy')}
+                          className="rounded-lg border border-white/15 hover:border-brand-accent-light/60 px-3 py-2.5 text-left cursor-pointer transition-colors"
+                        >
+                          <div className="text-sm font-sans font-bold text-white">Aus Website kopieren</div>
+                          <div className="text-[11px] text-gray-400 font-sans">Verein inkl. Spieler, Fotos & Logo übernehmen</div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAddTeamMode('new')}
+                          className="rounded-lg border border-white/15 hover:border-brand-accent-light/60 px-3 py-2.5 text-left cursor-pointer transition-colors"
+                        >
+                          <div className="text-sm font-sans font-bold text-white">Neues Team</div>
+                          <div className="text-[11px] text-gray-400 font-sans">Leeres Team anlegen und Kader selbst pflegen</div>
+                        </button>
+                      </div>
+                    )}
+                    {addTeamMode === 'copy' && (
+                      <div className="space-y-2">
+                        <div className="text-[11px] font-sans font-bold uppercase tracking-wider text-gray-400">Verein aus der Website wählen</div>
+                        {leagueTeamsNotInEvent.length === 0 ? (
+                          <p className="text-[11px] text-gray-500 font-sans">Alle Vereine sind bereits im Testspiel.</p>
+                        ) : (
+                          <div className="max-h-56 overflow-y-auto space-y-1">
+                            {leagueTeamsNotInEvent.map((t) => (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => { copyLeagueTeamIntoEvent(t); setAddTeamMode(null); }}
+                                className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg border border-white/10 hover:border-brand-accent-light/50 hover:bg-white/[.03] text-left cursor-pointer transition-colors"
+                              >
+                                <span className="w-6 h-6 rounded grid place-items-center text-xs shrink-0 overflow-hidden" style={{ background: `${t.logoColor}22`, color: t.logoColor }}>
+                                  {t.logoUrl ? <img src={t.logoUrl} alt="" className="w-6 h-6 object-contain" /> : (t.logoIcon || '⚽')}
+                                </span>
+                                <span className="flex-1 min-w-0 truncate text-sm font-sans font-semibold text-white">{t.name}</span>
+                                <span className="shrink-0 text-[10px] font-mono text-gray-500">{t.spielerliste?.length ?? 0} Sp.</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <button type="button" onClick={() => setAddTeamMode('menu')} className="text-[11px] text-gray-400 hover:text-white font-sans cursor-pointer">‹ zurück</button>
+                      </div>
+                    )}
+                    {addTeamMode === 'new' && (
+                      <form onSubmit={(e) => { e.preventDefault(); addNewEventTeam(newEventTeamName); setNewEventTeamName(''); setAddTeamMode(null); }} className="flex items-center gap-2">
+                        <input autoFocus type="text" value={newEventTeamName} onChange={(e) => setNewEventTeamName(e.target.value)} placeholder="Teamname" className={inputClass} />
+                        <button
+                          type="submit"
+                          disabled={!newEventTeamName.trim()}
+                          className="shrink-0 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider border bg-[rgba(230,35,142,.2)] text-[#ff9ad4] border-[rgba(230,35,142,.5)] hover:bg-[rgba(230,35,142,.3)] transition-all cursor-pointer disabled:opacity-40"
+                        >
+                          Hinzufügen
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                )}
+
                 {selectedEvent.teams.length === 0 ? (
                   <p className="px-3 py-3 text-[11px] text-gray-500 font-sans rounded-xl border border-white/10">
-                    Noch keine Teams. Erst den Spielplan importieren (oder Paarungen anlegen) – dann erscheint hier jedes Team zum Kader-Pflegen.
+                    Noch keine Teams. Nutze oben „+ Team" (aus der Website kopieren oder neu anlegen) – oder importiere einen Spielplan.
                   </p>
                 ) : (
                   <div className="space-y-2">
@@ -2560,6 +2710,13 @@ export default function AdminPanel({
                                 </button>
                               )}
                               <RosterEditor roster={roster} teamColor={color} onChange={(next) => setEventRoster(teamName, next)} />
+                              <button
+                                type="button"
+                                onClick={() => removeEventTeam(teamName)}
+                                className="text-[11px] font-sans font-bold uppercase tracking-wider text-gray-500 hover:text-rose-400 transition-colors cursor-pointer"
+                              >
+                                Team aus Testspiel entfernen
+                              </button>
                             </div>
                           )}
                         </div>
