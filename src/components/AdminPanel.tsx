@@ -924,6 +924,33 @@ export default function AdminPanel({
     else saveEventArchive({ ...eventArchive, activeId: null, previewId: null });
   };
 
+  // Testspiel-Demo befüllen/entfernen (nur Super-Admin) – legt ein separates
+  // Demo-Event an (nur für Super-Admins sichtbar), lässt das echte in Ruhe.
+  const [demoBusy, setDemoBusy] = useState(false);
+  const hasEventDemo = !!eventArchive?.events?.some((e) => e.id.startsWith('event-demo-'));
+  const runEventDemo = async (action: 'create' | 'remove') => {
+    if (action === 'create' && !window.confirm('Demo für dieses Testspiel erstellen?\n\nEs entsteht ein separates Demo-Event – NUR für Super-Admins sichtbar – mit Zufalls-Kadern, -Ergebnissen und getrackten Werten. Dein echtes Testspiel bleibt unangetastet.')) return;
+    if (action === 'remove' && !window.confirm('Testspiel-Demo restlos entfernen?')) return;
+    setDemoBusy(true);
+    try {
+      const updated = await apiFetch<EventArchive>('/api/twitch?resource=event-demo', {
+        method: 'POST',
+        body: JSON.stringify({ action, sourceEventId: selectedEventId }),
+      });
+      setEventArchive(updated);
+      if (action === 'create') {
+        if (updated.previewId) setSelectedEventId(updated.previewId);
+        alert('Demo erstellt. Öffne die Website – unter „Testspiel" siehst nur du (Super-Admin) jetzt das voll gefüllte Demo-Event.');
+      } else {
+        alert('Testspiel-Demo entfernt.');
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler bei der Demo.');
+    } finally {
+      setDemoBusy(false);
+    }
+  };
+
   // Neues Testspiel anlegen (leer) und direkt auswählen.
   const addNewEvent = () => {
     if (!eventArchive) return;
@@ -2616,6 +2643,36 @@ export default function AdminPanel({
                   </div>
                 );
               })()}
+
+              {/* Testspiel-Demo (nur Super-Admins) – zum Testen aller Funktionen */}
+              <div className="p-4 rounded-xl border border-emerald-500/25 bg-emerald-500/[.05] space-y-2">
+                <div className="font-sans font-bold text-white text-sm">Testspiel-Demo (nur zum Testen)</div>
+                <div className="text-xs text-gray-400 font-sans">
+                  Füllt ein <strong>separates Demo-Event</strong> mit Zufalls-Kadern, -Ergebnissen und getrackten Werten –
+                  <strong> nur für Super-Admins sichtbar</strong>. So siehst du alle Funktionen (Spielberichte, Noten, beste
+                  Aufstellung …), ohne echte Daten anzufassen. Dein echtes Testspiel bleibt unberührt.
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => runEventDemo('create')}
+                    disabled={demoBusy || !selectedEvent}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider border bg-emerald-500/20 text-emerald-200 border-emerald-500/50 hover:bg-emerald-500/30 transition-all cursor-pointer disabled:opacity-40"
+                  >
+                    {demoBusy ? 'Arbeite…' : hasEventDemo ? 'Demo neu befüllen' : 'Demo befüllen'}
+                  </button>
+                  {hasEventDemo && (
+                    <button
+                      type="button"
+                      onClick={() => runEventDemo('remove')}
+                      disabled={demoBusy}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider border border-white/15 text-gray-300 hover:text-white hover:border-rose-400/50 transition-all cursor-pointer disabled:opacity-40"
+                    >
+                      Demo entfernen
+                    </button>
+                  )}
+                </div>
+              </div>
 
               {selectedEvent ? (
                 <>
