@@ -113,7 +113,7 @@ export default function FifaCard({ card, name, imageUrl, team, className = '' }:
       {/* Unterer Streifen: Gesamtwertung mittig ÜBER den vier Werten */}
       <div
         className="absolute bottom-0 inset-x-0 z-20"
-        style={{ padding: '10cqw 5cqw 4cqw', background: 'linear-gradient(180deg, transparent 0%, rgba(2,7,5,.82) 40%, rgba(2,7,5,.98) 70%)' }}
+        style={{ padding: '18cqw 5cqw 4cqw', background: 'linear-gradient(180deg, transparent 0%, transparent 14%, rgba(5,6,7,0.5) 28%, rgba(5,6,7,0.9) 40%, #050607 47%, #050607 100%)' }}
       >
         {/* Stufe oben, darunter die Gesamtwertung – mittig, als Kopf der Werte-Gruppe */}
         <div className="flex flex-col items-center" style={{ marginBottom: '1cqw' }}>
