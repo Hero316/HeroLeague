@@ -65,7 +65,7 @@ export default function FifaCard({ card, name, imageUrl, team, className = '' }:
             src={imageUrl}
             alt={name}
             className="w-full h-full object-cover"
-            style={{ objectPosition: 'center 18%', transform: 'scale(1.12) translateY(-7%)', transformOrigin: 'center 18%' }}
+            style={{ objectPosition: 'center 15%', transform: 'scale(1.0) translateY(-9%)', transformOrigin: 'center 15%' }}
           />
         ) : (
           <div className="w-full h-full grid place-items-center">
