@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { EventArchive, EventMatch } from '../src/types';
+import { createEventDemo, removeEventDemo } from './_lib/eventDemo.js';
 import { sql, getTeams } from './_lib/db.js';
 import { requireStaff, requireMatchWrite, requireSuperadmin, getSession } from './_lib/auth.js';
 
@@ -468,6 +469,18 @@ const saveEventMatch = requireMatchWrite(async (req: VercelRequest, res: VercelR
   return res.json(next);
 });
 
+// Testspiel-Demo befüllen/entfernen (nur Super-Admin). Legt ein separates
+// Demo-Event an (nur für Super-Admins sichtbar), lässt das echte Testspiel in Ruhe.
+const eventDemo = requireSuperadmin(async (req: VercelRequest, res: VercelResponse) => {
+  const b = (req.body ?? {}) as { action?: unknown; sourceEventId?: unknown };
+  try {
+    if (str(b.action) === 'remove') return res.json(await removeEventDemo());
+    return res.json(await createEventDemo(str(b.sourceEventId).trim()));
+  } catch (err) {
+    return res.status(400).json({ error: err instanceof Error ? err.message : 'Demo-Fehler' });
+  }
+});
+
 // Ein einzelnes Medien-Item säubern.
 function normalizeMediaItem(raw: unknown, i: number): HighlightMedia | null {
   const o = (raw ?? {}) as Record<string, unknown>;
@@ -874,6 +887,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'team-sponsors') return saveTeamSponsors(req, res);
       if (resource === 'event') return saveEvent(req, res);
       if (resource === 'event-match') return saveEventMatch(req, res);
+      if (resource === 'event-demo') return eventDemo(req, res);
       if (resource === 'highlights') return saveHighlights(req, res);
       if (resource === 'hero') return saveHero(req, res);
       if (resource === 'countdown') return saveCountdown(req, res);
