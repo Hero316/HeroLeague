@@ -1,4 +1,5 @@
-import type { EventConfig, Match, Player, Team } from '../types';
+import type { EventConfig, Match, Player, PlayerStat, Team } from '../types';
+import { calculatePlayers } from '../../api/_lib/league';
 
 // ===========================================================================
 // Adapter: macht aus einem Testspiel/Event (namensbasiert) die gleichen
@@ -60,4 +61,12 @@ export function eventMatchesAsMatches(event: EventConfig): Match[] {
     bestPlayers: (m.bestPlayers ?? []).map((b) => ({ playerName: b.player, teamId: b.team })),
     goalkeepers: (m.goalkeepers ?? []).map((g) => ({ playerName: g.player, teamId: g.team })),
   }));
+}
+
+// Spielerstatistiken (Tore, Vorlagen, Einsätze, Siege, MOTM, Zu-Null …) fürs
+// Event – dieselbe Berechnung wie in der Liga, nur auf die synthetischen
+// Event-Daten angewandt (zählt nur beendete Event-Spiele). Für Team-Seite,
+// Siegquote und die beste Aufstellung.
+export function eventPlayers(event: EventConfig, leagueTeams: Team[]): PlayerStat[] {
+  return calculatePlayers(eventTeamsAsTeams(event, leagueTeams), eventMatchesAsMatches(event));
 }
