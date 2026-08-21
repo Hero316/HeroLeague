@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shield, Lock, Goal, Crown, Star, Hand, Handshake, Printer } from 'lucide-react';
 import { EventConfig, MatchPlayerStat, ScoringConfig, Team } from '../types';
 import { TeamCrest, LiveBadge } from './ui';
@@ -21,6 +21,18 @@ interface EventPageProps {
   trackingRows?: MatchPlayerStat[]; // veröffentlichte getrackte Werte des Events
   scoringConfig?: ScoringConfig; // Score-Einstellungen (für die Award-Rechnung)
 }
+
+// Untermenüs der Testspiel-Seite (wie die Reiter der Liga). Tabelle ist Standard.
+type EventTab = 'tabelle' | 'spielplan' | 'statistiken' | 'auszeichnungen';
+
+// Spalten der Reiter-Leiste ab sm passend zur Anzahl (immer eine volle Reihe;
+// als feste Klassen-Strings, damit Tailwind sie nicht wegpurged).
+const SM_COLS: Record<number, string> = {
+  1: 'sm:grid-cols-1',
+  2: 'sm:grid-cols-2',
+  3: 'sm:grid-cols-3',
+  4: 'sm:grid-cols-4',
+};
 
 // Namen tolerant vergleichen (Groß/Klein, Leerzeichen, Punkte egal).
 const normName = (s: string) =>
@@ -94,6 +106,17 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
   const glove = keepers[0] ?? null;
   const bestPlayer = hero[0] ?? null;
   const hasAwards = Boolean(scorerKing || assistKing || bestPlayer || glove);
+
+  // Aktives Untermenü. Beim Öffnen der Seite immer „Tabelle" (Standard). Tabelle
+  // und Spielplan gibt es immer; Statistiken/Auszeichnungen nur mit Daten – so
+  // stehen unten nur so viele Tasten wie es Untermenüs mit Inhalt gibt.
+  const [tab, setTab] = useState<EventTab>('tabelle');
+  const tabs = [
+    { id: 'tabelle' as const, label: 'Tabelle', icon: Trophy },
+    { id: 'spielplan' as const, label: 'Spielplan', icon: Clock },
+    ...(stats ? [{ id: 'statistiken' as const, label: 'Statistiken', icon: BarChart3 }] : []),
+    ...(hasAwards ? [{ id: 'auszeichnungen' as const, label: 'Auszeichnungen', icon: Star }] : []),
+  ];
 
   // Spiele nach Block gruppieren (für die Blockdarstellung mit Zeitfenster).
   const blocks = useMemo(() => {
@@ -192,8 +215,37 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
         </div>
       </div>
 
-      <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 py-8 sm:py-12 grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] gap-8 lg:gap-12">
+      {/* Untermenü-Tasten (Reiter) – beim Öffnen immer „Tabelle". Am Handy 2×2,
+          ab sm nebeneinander. Nur Reiter mit Inhalt werden gezeigt. */}
+      <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pt-6 sm:pt-8">
+        <div className={`grid grid-cols-2 gap-2 sm:gap-3 ${SM_COLS[tabs.length] ?? 'sm:grid-cols-4'}`}>
+          {tabs.map((t) => {
+            const active = t.id === tab;
+            const Icon = t.icon;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                aria-pressed={active}
+                className={`flex items-center justify-center gap-2 rounded-2xl px-3 py-3.5 sm:py-4 font-display font-black uppercase tracking-tight text-[13px] sm:text-base transition-all cursor-pointer border ${
+                  active
+                    ? 'bg-[#E6238E] border-[#E6238E] text-white shadow-[0_10px_30px_rgba(230,35,142,.35)]'
+                    : 'bg-white/[.03] border-white/10 text-hl-mute hover:text-white hover:border-[rgba(230,35,142,.4)]'
+                }`}
+              >
+                <Icon className="w-4 h-4 shrink-0" />
+                <span className="truncate">{t.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Inhalt des aktiven Reiters */}
+      <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 py-6 sm:py-8">
         {/* Tabelle */}
+        {tab === 'tabelle' && (
         <section className="min-w-0">
           <div className="flex items-center gap-2 mb-4">
             <Trophy className="w-5 h-5 text-[#E9C46A]" />
@@ -258,14 +310,16 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
             Die Tabelle aktualisiert sich automatisch, sobald Ergebnisse eingetragen werden.
           </p>
         </section>
+        )}
 
-        {/* Spielplan */}
+        {/* Spielplan – Blöcke nebeneinander (weniger Scrollen, wie in der Liga) */}
+        {tab === 'spielplan' && (
         <section className="min-w-0">
           <div className="flex items-center gap-2 mb-4">
             <Clock className="w-5 h-5 text-[#E6238E]" />
             <h2 className="font-display font-black text-xl uppercase tracking-tight text-white">Spielplan</h2>
           </div>
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start">
             {blocks.map(([block, ms]) => {
               const start = ms[0]?.start;
               const end = ms[0]?.end;
@@ -359,10 +413,11 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
             })}
           </div>
         </section>
-      </div>
+        )}
 
-      {/* Statistiken vom Abend */}
-      <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-12">
+        {/* Statistiken vom Abend */}
+        {tab === 'statistiken' && (
+        <div>
         <div className="flex items-center gap-2 mb-4">
           <BarChart3 className="w-5 h-5 text-[#ff7ac4]" />
           <h2 className="font-display font-black text-xl uppercase tracking-tight text-white">Statistiken vom Abend</h2>
@@ -412,13 +467,15 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
             Sobald die ersten Ergebnisse eingetragen sind, erscheinen hier die Bestwerte des Abends.
           </div>
         )}
+        </div>
+        )}
 
-        {/* Spieler des Abends */}
-        {hasAwards && (
-          <div className="mt-8">
+        {/* Auszeichnungen des Abends – mehrere Ehrungen, nicht nur ein Spieler */}
+        {tab === 'auszeichnungen' && hasAwards && (
+          <div>
             <div className="flex items-center gap-2 mb-4">
               <Star className="w-5 h-5 text-[#E9C46A]" />
-              <h3 className="font-display font-black text-lg uppercase tracking-tight text-white">Spieler des Abends</h3>
+              <h2 className="font-display font-black text-xl uppercase tracking-tight text-white">Auszeichnungen</h2>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {scorerKing && (
