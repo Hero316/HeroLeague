@@ -115,13 +115,13 @@ export default function FifaCard({ card, name, imageUrl, team, className = '' }:
         className="absolute bottom-0 inset-x-0 z-20"
         style={{ padding: '14cqw 5cqw 5.5cqw', background: 'linear-gradient(180deg, transparent 0%, rgba(2,7,5,.82) 40%, rgba(2,7,5,.98) 70%)' }}
       >
-        {/* Gesamtwertung + Stufe – mittig, als Kopf der Werte-Gruppe */}
-        <div className="flex flex-col items-center" style={{ marginBottom: '4cqw' }}>
-          <div className="font-display font-black tabular-nums leading-none" style={{ fontSize: '26cqw', color: t.accent, textShadow: '0 3px 14px rgba(0,0,0,.9)' }}>
-            {card.ges}
-          </div>
-          <div className="font-display font-black uppercase leading-none" style={{ fontSize: '4.6cqw', letterSpacing: '0.18em', marginTop: '1.5cqw', color: t.accent }}>
+        {/* Stufe oben, darunter die Gesamtwertung – mittig, als Kopf der Werte-Gruppe */}
+        <div className="flex flex-col items-center" style={{ marginBottom: '1.5cqw' }}>
+          <div className="font-display font-black uppercase leading-none" style={{ fontSize: '4.6cqw', letterSpacing: '0.18em', color: t.accent }}>
             {t.label}
+          </div>
+          <div className="font-display font-black tabular-nums leading-none" style={{ fontSize: '26cqw', color: t.accent, textShadow: '0 3px 14px rgba(0,0,0,.9)', marginTop: '0.5cqw' }}>
+            {card.ges}
           </div>
         </div>
         <div className="w-full" style={{ height: '1px', marginBottom: '4cqw', background: `${t.accent}55` }} />
