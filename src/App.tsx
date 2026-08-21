@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster, PlayerOfMonth, MatchPlayerStat, ScoringConfig } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
 import { fetchPublicStats, fetchEventStats, fetchScoring } from './lib/stats';
-import { eventTeamsAsTeams, eventMatchesAsMatches } from './lib/eventView';
+import { eventTeamsAsTeams, eventMatchesAsMatches, eventPlayers } from './lib/eventView';
 import { DEFAULT_SCORING } from './lib/scoring';
 import { startPresence } from './lib/presence';
 import { syncPush } from './lib/push';
@@ -956,12 +956,88 @@ export default function App() {
               rows={eventTrackingRows}
               cfg={scoring}
               onBack={() => navigateTo('/testspiel')}
-              onSelectPlayer={() => navigateTo('/testspiel')}
-              onSelectTeam={() => navigateTo('/testspiel')}
+              onSelectPlayer={(teamId, name) => navigateTo(`/testspiel/team/${encodeURIComponent(teamId)}/spieler/${encodeURIComponent(name)}`)}
+              onSelectTeam={(teamId) => navigateTo(`/testspiel/team/${encodeURIComponent(teamId)}`)}
             />
           ) : (
             <div className="text-center py-24 space-y-4">
               <p className="text-hl-mute font-sans">Dieses Testspiel-Spiel gibt es nicht (mehr) oder ist noch nicht veröffentlicht.</p>
+              <button
+                onClick={() => navigateTo('/testspiel')}
+                className="inline-flex items-center gap-1.5 text-xs font-sans font-bold uppercase tracking-wider text-brand-accent-light hover:underline cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Zurück zum Testspieltag
+              </button>
+            </div>
+          )}
+        </main>
+        <Footer onNavigate={goToTab} onNavigatePath={navigateTo} />
+      </div>
+    );
+  }
+
+  // ROUTE: /testspiel/team/:name – Event-Team-Seite (Kader, Einzelnoten, beste
+  // Aufstellung – exakt wie die Liga-Vereinsseite, aber mit Event-Daten). Muss
+  // VOR /testspiel stehen. Optional /spieler/:name für den direkt geöffneten Spieler.
+  if (currentPath.startsWith('/testspiel/team/')) {
+    const rest = currentPath.slice('/testspiel/team/'.length).replace(/\/+$/, '');
+    const sepIdx = rest.indexOf('/spieler/');
+    const teamName = decodeURIComponent(sepIdx >= 0 ? rest.slice(0, sepIdx) : rest);
+    const initialPlayer = sepIdx >= 0 ? decodeURIComponent(rest.slice(sepIdx + '/spieler/'.length)) : undefined;
+    const evTeams = shownEvent ? eventTeamsAsTeams(shownEvent, visibleTeams) : [];
+    const evTeam = evTeams.find((t) => t.id === teamName) ?? null;
+    const evMatches = shownEvent ? eventMatchesAsMatches(shownEvent) : [];
+    const evPlayers = shownEvent ? eventPlayers(shownEvent, visibleTeams) : [];
+    return (
+      <div className="min-h-screen text-hl-text font-sans flex flex-col overflow-x-clip">
+        <PageBackground page="tabelle" teamColor={evTeam?.logoColor} teamLogoUrl={evTeam?.logoUrl} />
+        {renderMobileDock()}
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={goToTab}
+          isAdmin={isAdmin}
+          canAccessBackoffice={canAccessBackoffice}
+          onLogout={handleLogout}
+          onOpenLogin={() => navigateTo('/admin')}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
+          onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
+          demoActive={demo.active}
+          seasonLabel={selectedSeasonName}
+          seasonNumber={currentSeasonNumber}
+          hasLiveMatch={hasLiveMatch}
+          eventActive={!!activeEvent}
+          eventTitle={activeEvent?.title}
+          onOpenEvent={() => navigateTo('/testspiel')}
+          hasHighlights={hasHighlights}
+          mobileMode={mobileMode}
+          onToggleMobileMode={toggleMobileMode}
+          teams={visibleTeams}
+          matches={currentSeasonMatches}
+          onSelectTeam={openTeamDetail}
+          onGoToMatchday={goToMatchday}
+          albums={highlights.albums}
+          onOpenAlbum={openHighlightsAlbum}
+        />
+        <main className="flex-1">
+          {evTeam ? (
+            <TeamDetail
+              team={evTeam}
+              teams={evTeams}
+              matches={evMatches}
+              players={evPlayers}
+              seasonLabel={shownEvent?.title || 'Testspiel'}
+              initialPlayer={initialPlayer}
+              onBack={() => navigateTo('/testspiel')}
+              onSelectTeam={(id) => navigateTo(`/testspiel/team/${encodeURIComponent(id)}`)}
+              trackingRows={eventTrackingRows}
+              scoringConfig={scoring}
+              onOpenMatch={(id) => navigateTo(`/testspiel/spiel/${encodeURIComponent(id)}`)}
+              onOpenPlayer={(name) => navigateTo(`/testspiel/team/${encodeURIComponent(teamName)}/spieler/${encodeURIComponent(name)}`)}
+            />
+          ) : (
+            <div className="text-center py-24 space-y-4">
+              <p className="text-hl-mute font-sans">Dieses Testspiel-Team gibt es nicht (mehr).</p>
               <button
                 onClick={() => navigateTo('/testspiel')}
                 className="inline-flex items-center gap-1.5 text-xs font-sans font-bold uppercase tracking-wider text-brand-accent-light hover:underline cursor-pointer"
@@ -1041,6 +1117,7 @@ export default function App() {
                 onPrint={() => navigateTo('/testspiel-zettel')}
                 reportMatchIds={eventReportMatchIds}
                 onOpenReport={(id) => navigateTo(`/testspiel/spiel/${encodeURIComponent(id)}`)}
+                onOpenEventTeam={(name) => navigateTo(`/testspiel/team/${encodeURIComponent(name)}`)}
               />
             </>
           ) : (
