@@ -1034,6 +1034,36 @@ export default function AdminPanel({
     setEventRoster(teamName, league.map((p) => ({ ...p })));
   };
 
+  // Event-Team umbenennen – ändert den Namen ÜBERALL im Event: Team-Liste,
+  // Kader, alle Paarungen sowie Torschützen/Bester/Torwart/Abwesende. So passt
+  // z.B. „FOCUS AC" → „FOCUS FC" wieder zum echten Verein (Wappen + Kader).
+  const renameEventTeam = (oldName: string, rawNew: string) => {
+    if (!selectedEvent) return;
+    const newName = rawNew.trim();
+    if (!newName || normTeamName(newName) === normTeamName(oldName)) return;
+    if (selectedEvent.teams.some((t) => normTeamName(t) === normTeamName(newName))) {
+      alert('Ein Team mit diesem Namen ist bereits im Testspiel.');
+      return;
+    }
+    const same = (a: string) => normTeamName(a) === normTeamName(oldName);
+    const renameTeamField = <T extends { team: string }>(arr?: T[]): T[] =>
+      (arr ?? []).map((x) => (same(x.team) ? { ...x, team: newName } : x));
+    patchEvent({
+      teams: selectedEvent.teams.map((t) => (same(t) ? newName : t)),
+      rosters: (selectedEvent.rosters ?? []).map((r) => (same(r.team) ? { ...r, team: newName } : r)),
+      matches: selectedEvent.matches.map((m) => ({
+        ...m,
+        home: same(m.home) ? newName : m.home,
+        away: same(m.away) ? newName : m.away,
+        scorers: renameTeamField(m.scorers),
+        bestPlayers: renameTeamField(m.bestPlayers),
+        goalkeepers: renameTeamField(m.goalkeepers),
+        absentees: renameTeamField(m.absentees),
+      })),
+    });
+    setOpenRosterTeam(newName);
+  };
+
   // Neues (leeres) Event-Team hinzufügen.
   const addNewEventTeam = (name: string) => {
     const nm = name.trim();
@@ -2729,6 +2759,29 @@ export default function AdminPanel({
                           </button>
                           {open && (
                             <div className="px-3 pb-3 pt-2 space-y-2 border-t border-white/[.06]">
+                              {/* Team umbenennen (z.B. FOCUS AC -> FOCUS FC, damit Wappen/Kader passen) */}
+                              <form
+                                onSubmit={(e) => {
+                                  e.preventDefault();
+                                  const v = (e.currentTarget.elements.namedItem('rename') as HTMLInputElement)?.value ?? '';
+                                  renameEventTeam(teamName, v);
+                                }}
+                                className="flex items-center gap-2"
+                              >
+                                <input
+                                  key={teamName}
+                                  name="rename"
+                                  defaultValue={teamName}
+                                  placeholder="Teamname"
+                                  className="flex-1 min-w-0 bg-[#060E0F]/60 border border-white/10 rounded-md px-2 py-1.5 text-white text-xs focus:outline-none focus:border-[#E6238E]"
+                                />
+                                <button
+                                  type="submit"
+                                  className="shrink-0 px-3 py-1.5 rounded-md text-[11px] font-bold uppercase tracking-wider border border-white/15 text-gray-300 hover:text-white hover:border-[#E6238E]/50 transition-all cursor-pointer"
+                                >
+                                  Umbenennen
+                                </button>
+                              </form>
                               {leagueTeam && (
                                 <button
                                   type="button"
