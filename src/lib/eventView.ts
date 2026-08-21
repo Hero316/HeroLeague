@@ -56,6 +56,8 @@ export function eventMatchesAsMatches(event: EventConfig): Match[] {
     status: m.status ?? 'geplant',
     field: m.field,
     liveStartedAt: m.liveStartedAt ?? undefined,
+    durationMinutes: m.durationMinutes,
+    pausedAt: m.pausedAt ?? undefined,
     scorers: (m.scorers ?? []).map((s) => ({ playerName: s.player, teamId: s.team, assistName: s.assist })),
     absentees: (m.absentees ?? []).map((a) => ({ playerName: a.player, teamId: a.team })),
     bestPlayers: (m.bestPlayers ?? []).map((b) => ({ playerName: b.player, teamId: b.team })),

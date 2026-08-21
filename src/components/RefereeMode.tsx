@@ -27,6 +27,9 @@ interface RefereeModeProps {
   eventMatches?: Match[];
   eventLabel?: string;
   onUpdateEventMatch?: (matchId: string, patch: Partial<Match>) => Promise<boolean>;
+  // Anwesenheit + Spieldauer fürs Testspiel setzen (schreibt Abwesende/Torwart/
+  // Dauer auf die Event-Spiele – wirkt auch im Statistik-Center).
+  onSaveEventAttendance?: (minutes: number, teams: EveningRoster['teams']) => Promise<boolean>;
 }
 
 const DEFAULT_MINUTES = 7;
@@ -49,6 +52,7 @@ export default function RefereeMode({
   eventMatches,
   eventLabel,
   onUpdateEventMatch,
+  onSaveEventAttendance,
 }: RefereeModeProps) {
   const hasEvent = !!(eventMatches && eventMatches.length && onUpdateEventMatch);
   const [mode, setMode] = useState<'liga' | 'event'>('liga');
@@ -86,7 +90,27 @@ export default function RefereeMode({
   }, [onRefresh]);
 
   const rosterKey = `${seasonId}:${matchday}`;
-  const eveningRoster: EveningRoster | undefined = roster[rosterKey];
+  const leagueEveningRoster: EveningRoster | undefined = roster[rosterKey];
+
+  // Anwesenheit/Torwart/Dauer fürs Testspiel aus den Event-Daten ableiten
+  // (Abwesende sind in den Event-Spielen hinterlegt).
+  const eventEveningRoster = useMemo<EveningRoster | undefined>(() => {
+    if (!isEvent) return undefined;
+    const teamsMap: EveningRoster['teams'] = {};
+    for (const t of curTeams) {
+      const rosterNames = (t.spielerliste ?? []).map((p) => p.name).filter(Boolean);
+      const absent = new Set(
+        curMatches.flatMap((m) => m.absentees ?? []).filter((a) => a.teamId === t.id).map((a) => a.playerName)
+      );
+      const present = rosterNames.filter((n) => !absent.has(n));
+      const keeper = curMatches.flatMap((m) => m.goalkeepers ?? []).find((g) => g.teamId === t.id)?.playerName;
+      teamsMap[t.id] = { present, ...(keeper ? { goalkeeper: keeper } : {}) };
+    }
+    const minutes = curMatches.find((m) => m.durationMinutes)?.durationMinutes ?? DEFAULT_MINUTES;
+    return { minutes, teams: teamsMap };
+  }, [isEvent, curTeams, curMatches]);
+
+  const eveningRoster = isEvent ? eventEveningRoster : leagueEveningRoster;
   const minutesFor = eveningRoster?.minutes ?? DEFAULT_MINUTES;
 
   // Anwesende Spieler eines Teams: aus der Aufstellung, sonst kompletter Kader.
@@ -141,11 +165,16 @@ export default function RefereeMode({
       <RosterEditor
         matchday={matchday}
         seasonId={seasonId}
-        matches={matches.filter((m) => m.matchday === matchday)}
-        teams={teams}
+        isEvent={isEvent}
+        matches={isEvent ? curMatches : matches.filter((m) => m.matchday === matchday)}
+        teams={curTeams}
         eveningRoster={eveningRoster}
         onBack={() => setShowRoster(false)}
-        onSave={onSaveRoster}
+        onSave={
+          isEvent && onSaveEventAttendance
+            ? (_sid, _md, mins, teamsPayload) => onSaveEventAttendance(mins, teamsPayload)
+            : onSaveRoster
+        }
       />
     );
   }
@@ -246,15 +275,16 @@ export default function RefereeMode({
           </div>
         )}
 
-        {/* Aufstellung des Abends – nur Liga (Events nutzen den festen Event-Kader) */}
-        {!isEvent && (
+        {/* Anwesenheit + Spieldauer – für Liga UND Testspiel. Beim Testspiel wirkt
+            das direkt auf die Event-Spiele (und damit auch im Statistik-Center). */}
+        {(!isEvent || !!onSaveEventAttendance) && (
           <button
             type="button"
             onClick={() => setShowRoster(true)}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-sm font-semibold transition-colors"
           >
             <Users className="w-5 h-5 text-brand-accent-light" />
-            Aufstellung des Abends (Anwesende · Torwart · Spieldauer {minutesFor} Min)
+            {isEvent ? 'Kader & Zeit' : 'Aufstellung des Abends'} (Anwesende · Torwart · Spieldauer {minutesFor} Min)
           </button>
         )}
 
@@ -325,26 +355,17 @@ function MatchScreen({
   onUpdateMatch: (matchId: string, patch: Partial<Match>) => Promise<boolean>;
 }) {
   const [busy, setBusy] = useState(false);
-  // Tor-Popup: welches Team, optional welcher Tor-Index (Bearbeiten), und in
-  // welchem Schritt (erst Torschütze, dann Vorlage). `scorer` merkt sich den
-  // gewählten Torschützen zwischen den beiden Schritten.
-  const [picker, setPicker] = useState<
-    { teamId: string; editIndex: number | null; stage: 'scorer' | 'assist'; scorer?: string } | null
-  >(null);
-  // Popup für „Spieler des Spiels".
+  // Popup nur noch für „Spieler des Spiels".
   const [motmTeam, setMotmTeam] = useState<string | null>(null);
 
   const home = match.homeTeamId;
   const away = match.awayTeamId;
   const homeScore = match.homeScore ?? 0;
   const awayScore = match.awayScore ?? 0;
-  const scorers = match.scorers ?? [];
   const bestPlayers = match.bestPlayers ?? [];
   const isPaused = !!match.pausedAt;
   const remaining = useCountdown(match.liveStartedAt, match.durationMinutes, match.pausedAt);
 
-  const scorersOf = (teamId: string) =>
-    scorers.map((s, i) => ({ ...s, i })).filter((s) => s.teamId === teamId);
   const bestOf = (teamId: string) => bestPlayers.find((b) => b.teamId === teamId)?.playerName ?? null;
 
   const save = async (patch: Partial<Match>) => {
@@ -366,45 +387,22 @@ function MatchScreen({
   const resume = () => save({ pausedAt: null });
   const finalize = () => save({ status: 'beendet' });
 
-  // Tor hinzufügen (mit oder ohne Torschütze; optional mit Vorlage).
-  const addGoal = (teamId: string, playerName: string | null, assistName?: string | null) => {
-    const nextScorers = playerName
-      ? [...scorers, { playerName, teamId, ...(assistName ? { assistName } : {}) }]
-      : scorers;
+  // Tor +1 – bewusst OHNE Torschützen-/Vorlagen-Auswahl. Der Schiedsrichter setzt
+  // nur den Spielstand; die einzelnen Torschützen ergeben sich aus dem Tracking.
+  const addGoal = (teamId: string) =>
     save({
       status: match.status === 'geplant' ? 'live' : match.status,
       durationMinutes: match.durationMinutes ?? minutes,
       homeScore: teamId === home ? homeScore + 1 : homeScore,
       awayScore: teamId === away ? awayScore + 1 : awayScore,
-      scorers: nextScorers,
     });
-  };
 
-  // Ein Tor entfernen (per Torschützen-Index).
-  const removeGoalByIndex = (index: number) => {
-    const s = scorers[index];
-    if (!s) return;
-    const nextScorers = scorers.filter((_, i) => i !== index);
-    save({
-      homeScore: s.teamId === home ? Math.max(0, homeScore - 1) : homeScore,
-      awayScore: s.teamId === away ? Math.max(0, awayScore - 1) : awayScore,
-      scorers: nextScorers,
-    });
-  };
-
-  // Ein Tor ohne Torschütze entfernen (nur Spielstand −1).
-  const removeUnattributed = (teamId: string) => {
+  // Tor −1 (falls verklickt).
+  const removeGoal = (teamId: string) =>
     save({
       homeScore: teamId === home ? Math.max(0, homeScore - 1) : homeScore,
       awayScore: teamId === away ? Math.max(0, awayScore - 1) : awayScore,
     });
-  };
-
-  // Torschützen eines bestehenden Tores ändern.
-  const changeScorer = (index: number, playerName: string) => {
-    const nextScorers = scorers.map((s, i) => (i === index ? { ...s, playerName } : s));
-    save({ scorers: nextScorers });
-  };
 
   // Bester Spieler je Team (max. einer) setzen / entfernen.
   const setBestPlayer = (teamId: string, playerName: string | null) => {
@@ -412,105 +410,43 @@ function MatchScreen({
     save({ bestPlayers: playerName ? [...others, { playerName, teamId }] : others });
   };
 
-  const onPick = (playerName: string | null) => {
-    if (!picker) return;
-    // Bestehendes Tor bearbeiten: nur den Torschützen ändern (Vorlage bleibt).
-    if (picker.editIndex !== null) {
-      if (playerName) changeScorer(picker.editIndex, playerName);
-      setPicker(null);
-      return;
-    }
-    // Neues Tor, Schritt 1 – Torschütze.
-    if (picker.stage === 'scorer') {
-      if (!playerName) {
-        // Tor ohne Torschütze: direkt buchen, kein Vorlage-Schritt.
-        addGoal(picker.teamId, null);
-        setPicker(null);
-        return;
-      }
-      // Weiter zu Schritt 2 – Vorlage (Assist).
-      setPicker({ ...picker, stage: 'assist', scorer: playerName });
-      return;
-    }
-    // Neues Tor, Schritt 2 – Vorlage (playerName = Vorlagengeber oder null).
-    addGoal(picker.teamId, picker.scorer ?? null, playerName);
-    setPicker(null);
-  };
-
-  const unattributed = (teamId: string) => {
+  const TeamColumn = ({ teamId }: { teamId: string }) => {
     const score = teamId === home ? homeScore : awayScore;
-    return Math.max(0, score - scorersOf(teamId).length);
-  };
+    return (
+      <div className="space-y-2">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => addGoal(teamId)}
+          className="w-full min-h-[84px] rounded-2xl bg-brand-accent hover:bg-brand-accent-light active:scale-[.99] disabled:opacity-50 text-white font-extrabold text-xl flex flex-col items-center justify-center gap-1 transition-all"
+        >
+          <Plus className="w-8 h-8" />
+          <span className="text-sm uppercase tracking-wide text-center px-2 leading-tight">Tor {teamName(teamId)}</span>
+        </button>
 
-  const TeamColumn = ({ teamId }: { teamId: string }) => (
-    <div className="space-y-2">
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => setPicker({ teamId, editIndex: null, stage: 'scorer' })}
-        className="w-full min-h-[72px] rounded-2xl bg-brand-accent hover:bg-brand-accent-light active:scale-[.99] disabled:opacity-50 text-white font-extrabold text-xl flex flex-col items-center justify-center gap-1 transition-all"
-      >
-        <Plus className="w-7 h-7" />
-        <span className="text-sm uppercase tracking-wide">Tor {teamName(teamId)}</span>
-      </button>
+        {/* Tor zurücknehmen (falls verklickt) */}
+        <button
+          type="button"
+          disabled={busy || score <= 0}
+          onClick={() => removeGoal(teamId)}
+          className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold rounded-xl px-3 py-2.5 border border-white/10 bg-white/[.03] hover:bg-white/[.07] disabled:opacity-40"
+        >
+          <X className="w-4 h-4 text-hl-dim" /> Tor zurücknehmen
+        </button>
 
-      {/* Torschützen dieses Teams */}
-      <div className="space-y-1.5">
-        {scorersOf(teamId).map((s) => (
-          <div key={s.i} className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2">
-            <div className="flex-1 min-w-0">
-              <span className="block font-semibold truncate">{s.playerName || 'Unbekannt'}</span>
-              {s.assistName && (
-                <span className="block text-[11px] text-hl-dim truncate">Vorlage: {s.assistName}</span>
-              )}
-            </div>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => setPicker({ teamId, editIndex: s.i, stage: 'scorer' })}
-              className="text-[11px] font-semibold text-brand-accent-light px-2 py-1 rounded-lg hover:bg-white/10 disabled:opacity-50"
-            >
-              Ändern
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => removeGoalByIndex(s.i)}
-              className="p-1.5 text-hl-dim hover:text-rose-400 hover:bg-rose-500/10 rounded-lg disabled:opacity-50"
-              title="Tor entfernen"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        ))}
-        {Array.from({ length: unattributed(teamId) }).map((_, i) => (
-          <div key={`u-${i}`} className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2">
-            <span className="flex-1 text-hl-dim italic">Tor ohne Torschütze</span>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => removeUnattributed(teamId)}
-              className="p-1.5 text-hl-dim hover:text-rose-400 hover:bg-rose-500/10 rounded-lg disabled:opacity-50"
-              title="Tor entfernen"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        ))}
+        {/* Spieler des Spiels */}
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => setMotmTeam(teamId)}
+          className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold rounded-xl px-3 py-2.5 border border-white/10 bg-white/[.03] hover:bg-white/[.07] disabled:opacity-50"
+        >
+          <Star className={`w-4 h-4 shrink-0 ${bestOf(teamId) ? 'text-amber-400 fill-amber-400' : 'text-hl-dim'}`} />
+          <span className="truncate">{bestOf(teamId) ? `Spieler d. Spiels: ${bestOf(teamId)}` : 'Spieler des Spiels'}</span>
+        </button>
       </div>
-
-      {/* Spieler des Spiels */}
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => setMotmTeam(teamId)}
-        className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold rounded-xl px-3 py-2 border border-white/10 bg-white/[.03] hover:bg-white/[.07] disabled:opacity-50"
-      >
-        <Star className={`w-4 h-4 ${bestOf(teamId) ? 'text-amber-400 fill-amber-400' : 'text-hl-dim'}`} />
-        {bestOf(teamId) ? `Spieler d. Spiels: ${bestOf(teamId)}` : 'Spieler des Spiels wählen'}
-      </button>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen bg-brand-dark text-white font-sans flex flex-col">
@@ -590,37 +526,6 @@ function MatchScreen({
           <TeamColumn teamId={away} />
         </div>
       </main>
-
-      {/* Tor-Popup: Schritt 1 Torschütze, Schritt 2 Vorlage (Assist) */}
-      <AnimatePresence>
-        {picker && (
-          <PlayerPicker
-            title={
-              picker.editIndex !== null
-                ? 'Torschütze ändern'
-                : picker.stage === 'assist'
-                ? 'Vorlage (Assist)?'
-                : 'Wer hat getroffen?'
-            }
-            subtitle={picker.stage === 'assist' && picker.scorer ? `Tor: ${picker.scorer}` : undefined}
-            teamLabel={teamName(picker.teamId)}
-            players={
-              picker.stage === 'assist'
-                ? presentPlayers(picker.teamId).filter((p) => p.name !== picker.scorer)
-                : presentPlayers(picker.teamId)
-            }
-            noneLabel={
-              picker.stage === 'assist'
-                ? 'Ohne Vorlage'
-                : picker.editIndex === null
-                ? 'Tor ohne Torschütze'
-                : undefined
-            }
-            onPick={onPick}
-            onClose={() => setPicker(null)}
-          />
-        )}
-      </AnimatePresence>
 
       {/* Spieler-des-Spiels-Popup */}
       <AnimatePresence>
@@ -742,6 +647,7 @@ function PlayerPicker({
 function RosterEditor({
   matchday,
   seasonId,
+  isEvent,
   matches,
   teams,
   eveningRoster,
@@ -750,6 +656,7 @@ function RosterEditor({
 }: {
   matchday: number;
   seasonId: string;
+  isEvent?: boolean;
   matches: Match[];
   teams: Team[];
   eveningRoster: EveningRoster | undefined;
@@ -864,7 +771,7 @@ function RosterEditor({
         <button type="button" onClick={onBack} className="flex items-center gap-1.5 text-sm font-semibold text-hl-dim hover:text-white">
           <ArrowLeft className="w-5 h-5" /> Zurück
         </button>
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-hl-dim">{matchday}. Spieltag · Aufstellung</div>
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-hl-dim">{isEvent ? 'Testspiel · Kader & Zeit' : `${matchday}. Spieltag · Aufstellung`}</div>
         <span className="w-4" />
       </header>
 
