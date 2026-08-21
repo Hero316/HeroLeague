@@ -277,28 +277,25 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                             />
                           )}
                           <div className={`relative z-10 ${canReport ? 'pointer-events-none' : ''}`}>
-                          <div className="flex items-center gap-3">
-                            <span className="shrink-0 min-w-[3.25rem] text-[10px] font-mono uppercase tracking-wider leading-tight">
-                              {isLive ? (
-                                <LiveBadge liveStartedAt={m.liveStartedAt} />
-                              ) : (
-                                <span className="text-hl-mute">Feld {m.field}</span>
-                              )}
+                          {/* Feld/Live als dezente Kopfzeile ÜBER den Teams – so haben die
+                              Team- und Spielernamen die volle Breite (kein Abschneiden am Handy). */}
+                          <div className="flex items-center justify-between gap-2 mb-1.5 text-[10px] font-mono uppercase tracking-wider text-hl-mute leading-none">
+                            <span className="shrink-0">{m.field ? `Feld ${m.field}` : m.start}</span>
+                            {isLive && <LiveBadge liveStartedAt={m.liveStartedAt} />}
+                          </div>
+                          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 min-w-0">
+                            {renderTeam(m.home, 'left')}
+                            <span
+                              className={`px-2.5 py-1 rounded-md font-display font-black text-sm tabular-nums shrink-0 ${
+                                isLive ? 'bg-red-500/20 text-red-300' : played ? 'bg-white/[.06] text-white' : 'text-hl-mute'
+                              }`}
+                            >
+                              {played ? `${m.homeScore} : ${m.awayScore}` : isLive ? '– : –' : 'vs'}
                             </span>
-                            <div className="flex-1 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 min-w-0">
-                              {renderTeam(m.home, 'left')}
-                              <span
-                                className={`px-2.5 py-1 rounded-md font-display font-black text-sm tabular-nums ${
-                                  isLive ? 'bg-red-500/20 text-red-300' : played ? 'bg-white/[.06] text-white' : 'text-hl-mute'
-                                }`}
-                              >
-                                {played ? `${m.homeScore} : ${m.awayScore}` : isLive ? '– : –' : 'vs'}
-                              </span>
-                              {renderTeam(m.away, 'right')}
-                            </div>
+                            {renderTeam(m.away, 'right')}
                           </div>
                           {(m.scorers ?? []).some((s) => s.player) && (
-                            <div className="mt-2 pl-[3.75rem] flex gap-3">
+                            <div className="mt-2 flex gap-3">
                               {/* Torschützen des Heimteams – links */}
                               <div className="flex-1 min-w-0 space-y-0.5">
                                 {(m.scorers ?? [])
@@ -330,7 +327,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                             </div>
                           )}
                           {canReport && (
-                            <div className="mt-2 pl-[3.75rem] text-[10px] uppercase tracking-wider text-[#ff7ac4]/80 font-sans font-bold">
+                            <div className="mt-2 text-[10px] uppercase tracking-wider text-[#ff7ac4]/80 font-sans font-bold">
                               Spielbericht ansehen ›
                             </div>
                           )}
