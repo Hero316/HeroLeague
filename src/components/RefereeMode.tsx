@@ -216,7 +216,7 @@ export default function RefereeMode({
             onClick={onExit}
             className="flex items-center gap-1.5 text-xs font-semibold text-hl-dim hover:text-white bg-white/5 hover:bg-white/10 rounded-lg px-3 py-2 transition-colors"
           >
-            <ArrowLeft className="w-4 h-4" /> Zurück zum Backoffice
+            <ArrowLeft className="w-4 h-4" /> Zur Website
           </button>
         ) : (
           <button

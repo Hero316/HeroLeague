@@ -117,7 +117,9 @@ export default function App() {
   // Reine Team-Mitglieder (Chat/Aufgaben/Tickets) haben KEIN Liga-Backoffice –
   // sie erreichen nur die Team-App (über das Hamburger-Menü). Backoffice bleibt
   // Super-Admins, Spiel-Admins und Schiedsrichtern vorbehalten.
-  const canAccessBackoffice = isAdmin && !isTeamMember;
+  // Schiedsrichter sehen die normale Website + den Schiedsrichtermodus, aber kein
+  // Backoffice (dort hätten sie ohnehin keine Rechte).
+  const canAccessBackoffice = isAdmin && !isTeamMember && !isReferee;
   // Tickets verwalten (Status/Zuweisung/Löschen) dürfen nur Super-Admins.
   const canManageTickets = isSuperadmin;
   // Granulare Rechte – der Spiel-Admin bekommt bewusst nur einen Teil:
@@ -149,7 +151,6 @@ export default function App() {
   const canSeeStartseiteArea = canEditHomepage || canManagePom;
   const canSeeChannelsArea = canManageChannels;
   // Admin hat den Schiedsrichtermodus manuell geöffnet (per Navbar-Schnellzugang).
-  const [refereeView, setRefereeView] = useState(false);
   // Abend-Aufstellungen (Schiedsrichtermodus), Schlüssel `${seasonId}:${matchday}`.
   const [roster, setRoster] = useState<RosterMap>({});
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
@@ -373,9 +374,9 @@ export default function App() {
   // Startseite geschickt – von dort geht es über das Hamburger-Menü in die
   // Team-App. Andere Rollen (Super-Admin, Spiel-Admin, Schiri) bleiben.
   useEffect(() => {
-    if (isTeamMember && currentPath === '/admin') navigateTo('/');
+    if ((isTeamMember || isReferee) && currentPath === '/admin') navigateTo('/');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isTeamMember, currentPath]);
+  }, [isTeamMember, isReferee, currentPath]);
 
   // Deep-Link aus einer Handy-Benachrichtigung: /admin?open=ticket&id=… bzw.
   // …?open=task&id=… → das Ticket/die Aufgabe direkt als Fenster öffnen. Danach
@@ -742,10 +743,11 @@ export default function App() {
     );
   }
 
-  // Schiedsrichtermodus: für die Rolle „Schiedsrichter" der einzige Bildschirm
-  // (alles andere gesperrt); für Admins optional über den Navbar-Schnellzugang
-  // ODER den festen Link /schiedsrichter. Admins können ihn wieder verlassen.
-  if (sessionUser && (isReferee || refereeView || (onRefereePath && canManageMatches))) {
+  // Schiedsrichtermodus ist eine echte Route (/schiedsrichter): Schiedsrichter und
+  // Match-Admins gelangen über das Hamburger-Menü rein und können jederzeit zurück
+  // zur normalen Website. Weil es in der URL steckt, bleibt man beim Aktualisieren
+  // / Runterziehen im Modus (kein Sprung zur Startseite mehr).
+  if (sessionUser && onRefereePath && (isReferee || canManageMatches)) {
     return (
       <RefereeMode
         user={sessionUser}
@@ -757,7 +759,7 @@ export default function App() {
         onSaveRoster={handleSaveRoster}
         onRefresh={async () => { await fetchData(); await refetchEventArchive(); }}
         onLogout={handleLogout}
-        onExit={isReferee ? undefined : () => { setRefereeView(false); if (onRefereePath) navigateTo('/'); }}
+        onExit={() => navigateTo('/')}
         eventTeams={shownEvent ? eventTeamsAsTeams(shownEvent, visibleTeams) : undefined}
         eventMatches={shownEvent ? eventMatchesAsMatches(shownEvent) : undefined}
         eventLabel={shownEvent?.title || 'Testspiel'}
@@ -781,7 +783,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
-          onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
+          onOpenReferee={(canManageMatches || isReferee) ? () => navigateTo('/schiedsrichter') : undefined}
           demoActive={demo.active}
           seasonLabel={selectedSeasonName}
           seasonNumber={currentSeasonNumber}
@@ -821,7 +823,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
-          onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
+          onOpenReferee={(canManageMatches || isReferee) ? () => navigateTo('/schiedsrichter') : undefined}
           demoActive={demo.active}
           seasonLabel={selectedSeasonName}
           seasonNumber={currentSeasonNumber}
@@ -873,7 +875,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
-          onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
+          onOpenReferee={(canManageMatches || isReferee) ? () => navigateTo('/schiedsrichter') : undefined}
           demoActive={demo.active}
           seasonLabel={selectedSeasonName}
           seasonNumber={currentSeasonNumber}
@@ -942,7 +944,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
-          onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
+          onOpenReferee={(canManageMatches || isReferee) ? () => navigateTo('/schiedsrichter') : undefined}
           demoActive={demo.active}
           seasonLabel={selectedSeasonName}
           seasonNumber={currentSeasonNumber}
@@ -1012,7 +1014,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
-          onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
+          onOpenReferee={(canManageMatches || isReferee) ? () => navigateTo('/schiedsrichter') : undefined}
           demoActive={demo.active}
           seasonLabel={selectedSeasonName}
           seasonNumber={currentSeasonNumber}
@@ -1083,7 +1085,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
-          onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
+          onOpenReferee={(canManageMatches || isReferee) ? () => navigateTo('/schiedsrichter') : undefined}
           demoActive={demo.active}
           seasonLabel={selectedSeasonName}
           seasonNumber={currentSeasonNumber}
@@ -1169,7 +1171,7 @@ export default function App() {
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
           onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
-          onOpenReferee={canManageMatches ? () => setRefereeView(true) : undefined}
+          onOpenReferee={(canManageMatches || isReferee) ? () => navigateTo('/schiedsrichter') : undefined}
           demoActive={demo.active}
           seasonLabel={currentSeasonName}
           seasonNumber={currentSeasonNumber}
@@ -1303,7 +1305,7 @@ export default function App() {
   // ROUTE: /admin – geschütztes Backoffice. Team-Mitglieder haben hier nichts zu
   // suchen (siehe Redirect-Effekt oben) – kurz nichts zeigen, bis er greift.
   if (currentPath === '/admin') {
-    if (isAdmin && isTeamMember) return null;
+    if (isAdmin && (isTeamMember || isReferee)) return null;
     return (
       <div className="min-h-screen text-hl-text font-sans flex flex-col justify-between">
         <PageBackground page="default" />
@@ -1548,7 +1550,7 @@ export default function App() {
         onLogout={handleLogout}
         onOpenLogin={() => navigateTo('/admin')}
         onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
-        onOpenReferee={() => setRefereeView(true)}
+        onOpenReferee={(canManageMatches || isReferee) ? () => navigateTo('/schiedsrichter') : undefined}
         demoActive={demo.active}
         seasonLabel={currentSeasonName}
         seasonNumber={currentSeasonNumber}
