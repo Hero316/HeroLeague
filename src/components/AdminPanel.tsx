@@ -455,6 +455,7 @@ export default function AdminPanel({
   const [openEventMatch, setOpenEventMatch] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState('');
+  const [openRosterTeam, setOpenRosterTeam] = useState<string | null>(null);
 
   // Neue Saison starten
   const [seasonModalOpen, setSeasonModalOpen] = useState(false);
@@ -845,9 +846,16 @@ export default function AdminPanel({
   const isAbsent = (m: EMatch, team: string, player: string) =>
     (m.absentees ?? []).some((a) => a.team === team && a.player === player);
 
-  // Kader (echte Spieler) eines Event-Team-Namens holen
-  const rosterOf = (teamName: string) =>
+  // Kader eines Event-Team-Namens holen: zuerst der EIGENE Event-Kader, sonst
+  // (als Startvorlage/Fallback) der gleichnamige Liga-Verein.
+  const eventRosterOf = (teamName: string): Player[] =>
+    selectedEvent?.rosters?.find((r) => normTeamName(r.team) === normTeamName(teamName))?.players ?? [];
+  const leagueRosterOf = (teamName: string): Player[] =>
     teams.find((t) => normTeamName(t.name) === normTeamName(teamName))?.spielerliste ?? [];
+  const rosterOf = (teamName: string): Player[] => {
+    const own = eventRosterOf(teamName);
+    return own.length ? own : leagueRosterOf(teamName);
+  };
 
   // Spieler-Auswahl streng aus dem Kader EINES Teams (wie im Original). Ohne
   // hinterlegten Kader Freitext. `exclude` blendet z.B. den Torschützen bei der
@@ -999,6 +1007,25 @@ export default function AdminPanel({
     });
     setImportText('');
     setImportOpen(false);
+  };
+
+  // --- Event-Kader (eigene Spielerlisten je Event-Team) ---
+  const setEventRoster = (teamName: string, players: Player[]) => {
+    const existing = selectedEvent?.rosters ?? [];
+    const has = existing.some((r) => normTeamName(r.team) === normTeamName(teamName));
+    const next = has
+      ? existing.map((r) => (normTeamName(r.team) === normTeamName(teamName) ? { team: teamName, players } : r))
+      : [...existing, { team: teamName, players }];
+    patchEvent({ rosters: next });
+  };
+  const prefillRosterFromLeague = (teamName: string) => {
+    const league = leagueRosterOf(teamName);
+    if (league.length === 0) {
+      alert('Kein gleichnamiger Liga-Verein mit hinterlegtem Kader gefunden.');
+      return;
+    }
+    if (eventRosterOf(teamName).length && !window.confirm('Vorhandenen Event-Kader durch den Liga-Kader ersetzen?')) return;
+    setEventRoster(teamName, league.map((p) => ({ ...p })));
   };
 
   // --- Verwalten-Popup (wie bei den echten Spielen) ---
@@ -2494,6 +2521,54 @@ export default function AdminPanel({
                       <input type="text" value={selectedEvent.location} onChange={(e) => patchEvent({ location: e.target.value })} className={inputClass} />
                     </div>
                   </div>
+
+              {/* Event-Kader je Team – für Fotos, Einzelnoten und die beste Aufstellung */}
+              <div>
+                <label className="block text-xs font-mono text-gray-400 mb-2 uppercase tracking-wider">Event-Kader (je Team)</label>
+                {selectedEvent.teams.length === 0 ? (
+                  <p className="px-3 py-3 text-[11px] text-gray-500 font-sans rounded-xl border border-white/10">
+                    Noch keine Teams. Erst den Spielplan importieren (oder Paarungen anlegen) – dann erscheint hier jedes Team zum Kader-Pflegen.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedEvent.teams.map((teamName) => {
+                      const roster = eventRosterOf(teamName);
+                      const leagueTeam = teams.find((t) => normTeamName(t.name) === normTeamName(teamName));
+                      const color = leagueTeam?.logoColor || '#E6238E';
+                      const open = openRosterTeam === teamName;
+                      return (
+                        <div key={teamName} className="rounded-xl border border-white/10 overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setOpenRosterTeam(open ? null : teamName)}
+                            className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-white/[.03]"
+                          >
+                            <span className="font-sans font-bold text-white text-sm truncate min-w-0">{teamName}</span>
+                            <span className="shrink-0 text-[11px] font-mono text-gray-400">
+                              {roster.length} Spieler {open ? '▲' : '▼'}
+                            </span>
+                          </button>
+                          {open && (
+                            <div className="px-3 pb-3 pt-2 space-y-2 border-t border-white/[.06]">
+                              {leagueTeam && (
+                                <button
+                                  type="button"
+                                  onClick={() => prefillRosterFromLeague(teamName)}
+                                  className="text-[11px] font-sans font-bold uppercase tracking-wider text-gray-400 hover:text-brand-accent-light transition-colors cursor-pointer"
+                                >
+                                  Aus Liga-Verein „{leagueTeam.name}" übernehmen
+                                </button>
+                              )}
+                              <RosterEditor roster={roster} teamColor={color} onChange={(next) => setEventRoster(teamName, next)} />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <p className="text-[10px] text-gray-500 font-sans">Änderungen mit „Speichern" unten sichern.</p>
+                  </div>
+                )}
+              </div>
 
               {/* Spielplan importieren (Text/JSON einfügen -> Paarungen laden) */}
               <div className="rounded-xl border border-[rgba(230,35,142,.25)] bg-[rgba(230,35,142,.05)] p-3">

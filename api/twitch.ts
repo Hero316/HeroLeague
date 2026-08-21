@@ -291,6 +291,26 @@ function normalizeEvent(body: unknown, index = 0) {
     date: /^\d{4}-\d{2}-\d{2}$/.test(str(b.date).trim()) ? str(b.date).trim() : '',
     location: str(b.location).trim(),
     teams: Array.isArray(b.teams) ? b.teams.map((t) => str(t).trim()).filter(Boolean) : [],
+    // Eigener Kader je Event-Team (namensbasiert, getrennt von der Liga).
+    rosters: (Array.isArray(b.rosters) ? b.rosters : [])
+      .map((raw) => {
+        const r = (raw ?? {}) as Record<string, unknown>;
+        const players = (Array.isArray(r.players) ? r.players : [])
+          .map((praw) => {
+            const p = (praw ?? {}) as Record<string, unknown>;
+            const num = Number(p.number);
+            const player: Record<string, unknown> = { name: str(p.name).trim() };
+            const img = str(p.imageUrl).trim();
+            if (img) player.imageUrl = img;
+            if (str(p.number) !== '' && Number.isFinite(num)) player.number = Math.trunc(num);
+            if (p.goalkeeper) player.goalkeeper = true;
+            if (p.captain) player.captain = true;
+            return player;
+          })
+          .filter((p) => p.name);
+        return { team: str(r.team).trim(), players };
+      })
+      .filter((r) => r.team),
     matches: matches.map((raw, i) => {
       const m = (raw ?? {}) as Record<string, unknown>;
       const arr = (v: unknown) => (Array.isArray(v) ? v : []);
