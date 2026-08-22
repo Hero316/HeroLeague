@@ -54,6 +54,7 @@ export async function ensureSchema(): Promise<void> {
     await sql`SELECT attach_type, edited_at, deleted_at FROM task_comments LIMIT 1`;
     await sql`SELECT 1 FROM task_comment_reactions LIMIT 1`;
     await sql`SELECT 1 FROM task_reads LIMIT 1`;
+    await sql`SELECT 1 FROM task_read_baseline LIMIT 1`;
     // Benannte Links („Link-Tasten") mitprüfen.
     await sql`SELECT links FROM tasks LIMIT 1`;
     ensured = true;
@@ -119,6 +120,11 @@ export async function ensureSchema(): Promise<void> {
   await run(sql`CREATE TABLE IF NOT EXISTS task_reads (
     user_id TEXT NOT NULL, task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
     last_read_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (user_id, task_id))`);
+  // Einmaliger Start-Zeitpunkt je Nutzer: Beiträge, die VOR dem ersten Öffnen der
+  // Aufgaben existierten, zählen nie als „ungelesen" (sonst wäre die Zahl beim
+  // Feature-Start voll mit alten Kommentaren). Wird beim ersten Laden gesetzt.
+  await run(sql`CREATE TABLE IF NOT EXISTS task_read_baseline (
+    user_id TEXT PRIMARY KEY, since TIMESTAMPTZ NOT NULL DEFAULT now())`);
   await run(sql`CREATE TABLE IF NOT EXISTS notifications (
     id TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL,
     ref_type TEXT NOT NULL, ref_id TEXT NOT NULL, body TEXT NOT NULL DEFAULT '',

@@ -310,6 +310,20 @@ function AssigneeChips({
   );
 }
 
+// Kleine pinke Zahl = ungelesene Verlauf-Beiträge dieser Aufgabe/dieses Termins
+// (verschwindet, sobald man sie öffnet – wie die Zähler unten in der Leiste).
+function UnreadBadge({ n, className = '' }: { n?: number; className?: string }) {
+  if (!n || n <= 0) return null;
+  return (
+    <span
+      title={`${n} neue Beiträge`}
+      className={`min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full bg-[#E6238E] text-white text-[10px] font-bold tabular-nums shadow-[0_2px_6px_rgba(230,35,142,.45)] ${className}`}
+    >
+      {n > 99 ? '99+' : n}
+    </span>
+  );
+}
+
 // Termin-Eingaben (Google-Stil): Ganztägig-Schalter, Tag von/bis, Uhrzeit von/bis.
 // Bei „Aufgabe" heißt der Starttag „Frist" und das Bis-Datum entfällt.
 function ScheduleFields({
@@ -1713,9 +1727,12 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                             </div>
                             <div className="flex items-center justify-between mt-1.5">
                               <AssigneeChips assignees={t.assignees} urlFor={(id) => members.get(id)?.avatarUrl} px={20} />
-                              {!!t.commentCount && (
-                                <span className="flex items-center gap-1 text-[10px] text-hl-mute font-mono"><MessageSquare className="w-3 h-3" /> {t.commentCount}</span>
-                              )}
+                              <span className="flex items-center gap-1.5">
+                                {!!t.commentCount && (
+                                  <span className="flex items-center gap-1 text-[10px] text-hl-mute font-mono"><MessageSquare className="w-3 h-3" /> {t.commentCount}</span>
+                                )}
+                                <UnreadBadge n={t.unread} />
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -1762,6 +1779,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                         {t.type === 'beides' && <span className="px-1.5 py-0.5 rounded bg-brand-accent/15 text-brand-accent-light">auch Aufgabe</span>}
                       </div>
                     </div>
+                    <UnreadBadge n={t.unread} />
                     <AssigneeChips assignees={t.assignees} urlFor={(id) => members.get(id)?.avatarUrl} px={22} />
                   </button>
                 </React.Fragment>
@@ -1835,14 +1853,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                                   <MessageSquare className="w-3 h-3" /> {t.commentCount}
                                 </span>
                               )}
-                              {(t.unread ?? 0) > 0 && (
-                                <span
-                                  title={`${t.unread} neue Beiträge`}
-                                  className="min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full bg-[#E6238E] text-white text-[10px] font-bold tabular-nums shadow-[0_2px_6px_rgba(230,35,142,.45)]"
-                                >
-                                  {t.unread! > 99 ? '99+' : t.unread}
-                                </span>
-                              )}
+                              <UnreadBadge n={t.unread} />
                             </div>
                           </div>
                           <AssigneeChips assignees={t.assignees} urlFor={(id) => members.get(id)?.avatarUrl} px={22} />
@@ -1975,11 +1986,14 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                       </div>
                       <div className="flex items-center justify-between mt-1.5">
                         <AssigneeChips assignees={t.assignees} urlFor={(id) => members.get(id)?.avatarUrl} px={22} />
-                        {!!t.commentCount && (
-                          <span className="flex items-center gap-1 text-[10px] text-hl-mute font-mono">
-                            <MessageSquare className="w-3 h-3" /> {t.commentCount}
-                          </span>
-                        )}
+                        <span className="flex items-center gap-1.5">
+                          {!!t.commentCount && (
+                            <span className="flex items-center gap-1 text-[10px] text-hl-mute font-mono">
+                              <MessageSquare className="w-3 h-3" /> {t.commentCount}
+                            </span>
+                          )}
+                          <UnreadBadge n={t.unread} />
+                        </span>
                       </div>
                     </div>
                   ))}

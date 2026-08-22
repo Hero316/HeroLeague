@@ -236,6 +236,11 @@ CREATE TABLE IF NOT EXISTS task_reads (
   last_read_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, task_id)
 );
+-- Start-Zeitpunkt je Nutzer: alles davor gilt als gelesen (kein Alt-Kommentar-Stau).
+CREATE TABLE IF NOT EXISTS task_read_baseline (
+  user_id TEXT PRIMARY KEY,
+  since   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 -- In-App-Benachrichtigungen (Erwähnungen, Zuweisungen, neue Kommentare).
 -- user_id = Empfänger. ref_type/ref_id verweisen auf das Ticket bzw. die Aufgabe.
