@@ -139,6 +139,27 @@ export const addIdeaComment = (
     body: JSON.stringify({ ideaId, body, ...(attach ?? {}) }),
   });
 
+// Beitrag bearbeiten (nur eigener) – gibt den aktualisierten Beitrag zurück.
+export const editIdeaComment = (commentId: string, body: string) =>
+  apiFetch<IdeaComment>('/api/team?resource=idea-comment', {
+    method: 'PATCH',
+    body: JSON.stringify({ commentId, body }),
+  });
+
+// Beitrag für alle löschen (nur eigener).
+export const deleteIdeaComment = (commentId: string) =>
+  apiFetch<{ ok: boolean; id: string }>(`/api/team?resource=idea-comment&commentId=${encodeURIComponent(commentId)}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ commentId }),
+  });
+
+// Emoji-Reaktion auf einen Beitrag umschalten – gibt die neue Reaktionsliste zurück.
+export const reactIdeaComment = (commentId: string, emoji: string) =>
+  apiFetch<{ commentId: string; reactions: { userId: string; emoji: string }[] }>('/api/team?resource=idea-comment-react', {
+    method: 'POST',
+    body: JSON.stringify({ commentId, emoji }),
+  });
+
 // --- Benachrichtigungen -----------------------------------------------------
 export const fetchNotifications = () =>
   apiFetch<{ items: AppNotification[]; unreadCount: number }>('/api/notifications');

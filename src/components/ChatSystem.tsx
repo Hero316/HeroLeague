@@ -1106,8 +1106,8 @@ function Composer({
 }
 
 // --- Emoji-Reaktionen & -Auswahl -------------------------------------------
-const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '😍'];
-const EMOJIS = [
+export const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏', '😍'];
+export const EMOJIS = [
   '😀','😃','😄','😁','😆','😅','😂','🤣','🥲','😊','😇','🙂','🙃','😉','😌','😍',
   '🥰','😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🥳','🤩',
   '😏','😒','😞','😔','😟','😕','🙁','☹️','😣','😖','😫','😩','🥺','😢','😭','😤',
@@ -1118,7 +1118,7 @@ const EMOJIS = [
 ];
 
 // Voll-Emoji-Auswahl (für „+" bei Reaktionen und die Emoji-Taste im Eingabefeld).
-function EmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose: () => void }) {
+export function EmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose: () => void }) {
   const backdrop = useBackdropDismiss(onClose);
   useBackClose(true, onClose);
   return (
@@ -1153,7 +1153,7 @@ function EmojiPicker({ onPick, onClose }: { onPick: (e: string) => void; onClose
 
 // Lange-Drücken (Touch) bzw. Rechtsklick (Desktop) erkennen – öffnet das
 // Nachrichten-Menü (Reagieren/Bearbeiten/Löschen), wie bei WhatsApp.
-function useLongPress(onLongPress: () => void, ms = 420) {
+export function useLongPress(onLongPress: () => void, ms = 420) {
   const timer = useRef<number | null>(null);
   const clear = () => {
     if (timer.current) {
@@ -1171,7 +1171,7 @@ function useLongPress(onLongPress: () => void, ms = 420) {
 }
 
 // --- Eine Nachricht ---------------------------------------------------------
-function ActionBtn({ icon: Icon, label, onClick, tone }: { icon: typeof Trash2; label: string; onClick: () => void; tone?: 'rose' }) {
+export function ActionBtn({ icon: Icon, label, onClick, tone }: { icon: typeof Trash2; label: string; onClick: () => void; tone?: 'rose' }) {
   return (
     <button onClick={onClick} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[.06] active:bg-white/10 cursor-pointer text-left ${tone === 'rose' ? 'text-rose-300' : 'text-hl-soft'}`}>
       <Icon className="w-5 h-5 shrink-0" /> <span className="text-sm font-sans font-semibold">{label}</span>

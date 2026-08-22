@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X, Send, Trash2, Loader2, Lightbulb, Check, ListChecks, CalendarDays, Users, Image as ImageIcon, Mic, File as FileIcon } from 'lucide-react';
+import { Plus, X, Send, Trash2, Loader2, Lightbulb, Check, ListChecks, CalendarDays, Users, Image as ImageIcon, Mic, File as FileIcon, Copy, Pencil, Smile } from 'lucide-react';
 import type { Idea, IdeaComment, IdeaStatus, LinkItem, TeamMember } from '../types';
-import { fetchIdeas, fetchIdea, createIdea, updateIdea, deleteIdea, convertIdea, addIdeaComment, fetchTeam } from '../lib/collab';
+import { fetchIdeas, fetchIdea, createIdea, updateIdea, deleteIdea, convertIdea, addIdeaComment, editIdeaComment, deleteIdeaComment, reactIdeaComment, fetchTeam } from '../lib/collab';
 import { useBackClose } from '../lib/backStack';
 import { uploadFile } from '../lib/api';
 import Avatar from './Avatar';
@@ -10,7 +10,7 @@ import MentionTextarea from './MentionTextarea';
 import LinkChips from './LinkChips';
 import { VoiceMessage } from './AudioPlayer';
 import { useBackdropDismiss, ModalPortal, EmptyState } from './ui';
-import { BUBBLE_MINE, pickNameColor } from './ChatSystem';
+import { BUBBLE_MINE, pickNameColor, EmojiPicker, useLongPress, QUICK_REACTIONS, ActionBtn } from './ChatSystem';
 
 // Ideen-Bereich (Brainstorm): Jede Idee ist ein kleiner eigener Verlauf, in dem
 // die eingeladenen Leute Vorschläge sammeln. Am Ende ein Fazit schreiben, Status
@@ -66,6 +66,195 @@ function useIdeaRecorder(onDone: (file: File) => void) {
     setRecording(false);
   };
   return { recording, toggle: () => (recording ? stop() : start()) };
+}
+
+// Ein Brainstorm-Beitrag – volle Chat-Funktionen: lange drücken (bzw. Rechtsklick)
+// öffnet das Menü zum Reagieren/Kopieren/Bearbeiten/Für-alle-löschen; Emoji-
+// Reaktionen unter der Blase; „bearbeitet"/gelöscht wie im Chat.
+function IdeaCommentRow({
+  c,
+  mine,
+  currentUserId,
+  avatarUrl,
+  colorSeed,
+  onChanged,
+}: {
+  c: IdeaComment;
+  mine: boolean;
+  currentUserId: string;
+  avatarUrl?: string;
+  colorSeed: string;
+  onChanged: (c: IdeaComment) => void;
+}) {
+  const deleted = !!c.deletedAt;
+  const [menu, setMenu] = useState(false);
+  const [pick, setPick] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(c.body);
+  const [busy, setBusy] = useState(false);
+  const longPress = useLongPress(() => {
+    if (!deleted) setMenu(true);
+  });
+  const menuBackdrop = useBackdropDismiss(() => setMenu(false));
+  useBackClose(menu, () => setMenu(false));
+  useBackClose(editing, () => setEditing(false));
+
+  const myEmoji = (c.reactions ?? []).find((r) => r.userId === currentUserId)?.emoji;
+  const react = async (emoji: string) => {
+    setMenu(false);
+    setPick(false);
+    try {
+      const res = await reactIdeaComment(c.id, emoji);
+      onChanged({ ...c, reactions: res.reactions });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Reaktion fehlgeschlagen.');
+    }
+  };
+  const doDelete = async () => {
+    setMenu(false);
+    if (!window.confirm('Diesen Beitrag für alle löschen?')) return;
+    try {
+      await deleteIdeaComment(c.id);
+      onChanged({ ...c, deletedAt: new Date().toISOString(), body: '', attachType: null, attachUrl: null, attachMime: null, attachTitle: null, reactions: [] });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Löschen fehlgeschlagen.');
+    }
+  };
+  const saveEdit = async () => {
+    const t = editText.trim();
+    if (!t) return;
+    setBusy(true);
+    try {
+      const updated = await editIdeaComment(c.id, t);
+      onChanged(updated);
+      setEditing(false);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Bearbeiten fehlgeschlagen.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Reaktionen bündeln: Emoji → Anzahl (+ ob ich selbst reagiert habe).
+  const grouped: { emoji: string; count: number; mine: boolean }[] = [];
+  for (const r of c.reactions ?? []) {
+    const g = grouped.find((x) => x.emoji === r.emoji);
+    if (g) {
+      g.count++;
+      if (r.userId === currentUserId) g.mine = true;
+    } else grouped.push({ emoji: r.emoji, count: 1, mine: r.userId === currentUserId });
+  }
+  const canEdit = mine && !deleted && !!c.body;
+
+  return (
+    <div className={`flex gap-2 ${mine ? 'justify-end' : 'justify-start'}`}>
+      {!mine && (
+        <div className="shrink-0 self-end">
+          <Avatar name={c.authorName} url={avatarUrl} size={28} />
+        </div>
+      )}
+      <div className={`max-w-[82%] min-w-0 flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
+        <div
+          {...(deleted ? {} : longPress)}
+          className={`hl-bubble px-3 py-2 rounded-2xl ${mine ? 'text-white rounded-br-md' : 'hl-bubble-other text-hl-text rounded-bl-md'} ${deleted ? 'opacity-70' : 'select-none'}`}
+          style={mine ? { background: BUBBLE_MINE, color: '#fff' } : undefined}
+        >
+          {!mine && !deleted && (
+            <div className="text-[12px] font-sans font-bold mb-0.5" style={{ color: pickNameColor(c.authorName, colorSeed) }}>
+              {c.authorName}
+            </div>
+          )}
+          {deleted ? (
+            <p className="text-[15px] font-sans italic text-hl-faint flex items-center gap-1.5">
+              <Trash2 className="w-3.5 h-3.5" /> Beitrag gelöscht
+            </p>
+          ) : (
+            <>
+              {c.body && <p className="text-[15px] font-sans whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-snug">{c.body}</p>}
+              <IdeaAttachment c={c} />
+            </>
+          )}
+          <div className={`text-[10px] font-mono leading-none text-right mt-1 flex items-center justify-end gap-1.5 ${mine ? 'text-white/60' : 'text-hl-faint'}`}>
+            {c.editedAt && !deleted && <span className="italic">bearbeitet</span>}
+            {fmtTime(c.createdAt)}
+          </div>
+        </div>
+
+        {grouped.length > 0 && (
+          <div className={`flex flex-wrap gap-1 mt-1 ${mine ? 'justify-end' : 'justify-start'}`}>
+            {grouped.map((g) => (
+              <button
+                key={g.emoji}
+                onClick={() => react(g.emoji)}
+                className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border cursor-pointer ${g.mine ? 'bg-brand-accent-light/20 border-brand-accent-light/50' : 'bg-white/5 border-white/10'}`}
+              >
+                <span className="text-sm leading-none">{g.emoji}</span>
+                {g.count > 1 && <span className="text-[11px] font-mono text-hl-soft">{g.count}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Aktions-Menü (lange drücken / Rechtsklick) */}
+      {menu && (
+        <ModalPortal>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[80] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" {...menuBackdrop}>
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 20, opacity: 0 }}
+              className="w-full sm:max-w-sm hl-surf border-t sm:border border-white/10 rounded-t-2xl sm:rounded-2xl p-3"
+              style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.75rem)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-1 hl-surf rounded-full px-2 py-1.5 mb-3">
+                {QUICK_REACTIONS.map((e) => (
+                  <button key={e} onClick={() => react(e)} className={`text-2xl leading-none p-1 rounded-full cursor-pointer ${myEmoji === e ? 'bg-brand-accent-light/25' : 'hover:bg-white/10'}`}>
+                    {e}
+                  </button>
+                ))}
+                <button onClick={() => { setMenu(false); setPick(true); }} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-hl-soft hover:text-white cursor-pointer shrink-0">
+                  <Plus className="w-5 h-5" />
+                </button>
+              </div>
+              {!!c.body && <ActionBtn icon={Copy} label="Kopieren" onClick={() => { setMenu(false); navigator.clipboard?.writeText(c.body).catch(() => {}); }} />}
+              {canEdit && <ActionBtn icon={Pencil} label="Bearbeiten" onClick={() => { setMenu(false); setEditText(c.body); setEditing(true); }} />}
+              {mine && !deleted && <ActionBtn icon={Trash2} label="Für alle löschen" tone="rose" onClick={doDelete} />}
+            </motion.div>
+          </motion.div>
+        </ModalPortal>
+      )}
+
+      {pick && <EmojiPicker onPick={react} onClose={() => setPick(false)} />}
+
+      {editing && (
+        <ModalPortal>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[82] bg-black/70 flex items-center justify-center p-4" onClick={() => setEditing(false)}>
+            <div className="hl-card hl-modal-card w-full max-w-md p-4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-display font-bold text-white uppercase tracking-tight">Beitrag bearbeiten</h4>
+                <button onClick={() => setEditing(false)} className="p-1 text-hl-mute hover:text-white cursor-pointer"><X className="w-5 h-5" /></button>
+              </div>
+              <textarea
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                rows={3}
+                autoFocus
+                className="w-full hl-surf-0 border border-white/10 rounded-xl px-3 py-2 text-[15px] text-white focus:outline-none focus:border-brand-accent-light resize-y"
+              />
+              <div className="flex justify-end gap-2 mt-3">
+                <button onClick={() => setEditing(false)} className="px-3 py-2 rounded-lg text-sm text-hl-mute hover:text-white cursor-pointer">Abbrechen</button>
+                <button onClick={saveEdit} disabled={busy || !editText.trim()} className="px-4 py-2 rounded-lg text-sm font-semibold bg-brand-accent-light hover:bg-brand-accent text-white cursor-pointer disabled:opacity-50 flex items-center gap-1.5">
+                  {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Speichern
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </ModalPortal>
+      )}
+    </div>
+  );
 }
 
 // Medien-Anhang eines Brainstorm-Beitrags anzeigen (Bild/Video/Datei/Audio).
@@ -355,6 +544,7 @@ function IdeaDetail({
   // Chat-artiger Anhang (Bild/Video/Datei/Audio) für den nächsten Beitrag.
   const [attach, setAttach] = useState<{ type: 'file' | 'audio'; url: string; mime: string; title: string } | null>(null);
   const [attachMenu, setAttachMenu] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false); // Emoji-Auswahl fürs Eingabefeld
   const [uploading, setUploading] = useState(false);
   const [uploadPct, setUploadPct] = useState<number | null>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
@@ -493,6 +683,12 @@ function IdeaDetail({
     }
   };
 
+  // Einen einzelnen Beitrag im Verlauf ersetzen (nach Reaktion/Bearbeiten/Löschen).
+  const patchComment = (updated: IdeaComment) => {
+    setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    onChanged();
+  };
+
   const doConvert = async (type: 'termin' | 'aufgabe' | 'beides') => {
     if (!confirm('Aus dieser Idee eine ' + (type === 'termin' ? 'Termin' : type === 'aufgabe' ? 'Aufgabe' : 'Aufgabe + Termin') + ' erstellen?')) return;
     setBusy(true);
@@ -581,38 +777,17 @@ function IdeaDetail({
                 {comments.length === 0 ? (
                   <p className="text-sm text-hl-faint py-2">Noch keine Beiträge – schreib den ersten Vorschlag oder häng etwas an.</p>
                 ) : (
-                  comments.map((c) => {
-                    const tm = team.find((t) => t.id === c.authorId);
-                    // Wie im normalen Chat: eigene Beiträge rechts (dunkle Türkis-
-                    // Blase, weiße Schrift), andere links mit Wappen + Namensfarbe.
-                    const mine = c.authorId === currentUserId;
-                    return (
-                      <div key={c.id} className={`flex gap-2 ${mine ? 'justify-end' : 'justify-start'}`}>
-                        {!mine && (
-                          <div className="shrink-0 self-end">
-                            <Avatar name={c.authorName} url={tm?.avatarUrl} size={28} />
-                          </div>
-                        )}
-                        <div
-                          className={`hl-bubble max-w-[82%] min-w-0 px-3 py-2 rounded-2xl ${
-                            mine ? 'text-white rounded-br-md' : 'hl-bubble-other text-hl-text rounded-bl-md'
-                          }`}
-                          style={mine ? { background: BUBBLE_MINE, color: '#fff' } : undefined}
-                        >
-                          {!mine && (
-                            <div className="text-[12px] font-sans font-bold mb-0.5" style={{ color: pickNameColor(c.authorName, ideaId) }}>
-                              {c.authorName}
-                            </div>
-                          )}
-                          {c.body && <p className="text-[15px] font-sans whitespace-pre-wrap break-words leading-snug">{c.body}</p>}
-                          <IdeaAttachment c={c} />
-                          <div className={`text-[10px] font-mono leading-none text-right mt-1 ${mine ? 'text-white/60' : 'text-hl-faint'}`}>
-                            {fmtTime(c.createdAt)}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
+                  comments.map((c) => (
+                    <IdeaCommentRow
+                      key={c.id}
+                      c={c}
+                      mine={c.authorId === currentUserId}
+                      currentUserId={currentUserId}
+                      avatarUrl={team.find((t) => t.id === c.authorId)?.avatarUrl}
+                      colorSeed={ideaId}
+                      onChanged={patchComment}
+                    />
+                  ))
                 )}
               </div>
 
@@ -711,10 +886,18 @@ function IdeaDetail({
                     className={inputClass}
                   />
                 </div>
+                <button
+                  onClick={() => setEmojiOpen(true)}
+                  title="Emoji"
+                  className="p-2.5 rounded-full border border-white/10 bg-white/5 text-hl-soft hover:text-white cursor-pointer shrink-0"
+                >
+                  <Smile className="w-5 h-5" />
+                </button>
                 <button onClick={submitComment} disabled={busy || uploading || (!commentBody.trim() && !attach)} className="p-2.5 rounded-full bg-brand-accent-light hover:bg-brand-accent text-white cursor-pointer disabled:opacity-50 shrink-0">
                   {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                 </button>
               </div>
+              {emojiOpen && <EmojiPicker onPick={(e) => setCommentBody((b) => b + e)} onClose={() => setEmojiOpen(false)} />}
 
               {/* Fazit / Zusammenfassung */}
               <div className="mt-5">

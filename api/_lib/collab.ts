@@ -721,10 +721,12 @@ export async function idea(req: VercelRequest, res: VercelResponse) {
     const base = await fetchIdeaById(id);
     if (!base) return res.status(404).json({ error: 'Idee nicht gefunden.' });
     const comments = await sql`
-      SELECT id, idea_id AS "ideaId", author_id AS "authorId", author_name AS "authorName", body,
-             attach_type AS "attachType", attach_url AS "attachUrl", attach_mime AS "attachMime", attach_title AS "attachTitle",
-             created_at AS "createdAt"
-      FROM idea_comments WHERE idea_id = ${id} ORDER BY created_at`;
+      SELECT c.id, c.idea_id AS "ideaId", c.author_id AS "authorId", c.author_name AS "authorName", c.body,
+             c.attach_type AS "attachType", c.attach_url AS "attachUrl", c.attach_mime AS "attachMime", c.attach_title AS "attachTitle",
+             c.edited_at AS "editedAt", c.deleted_at AS "deletedAt", c.created_at AS "createdAt",
+             COALESCE((SELECT json_agg(json_build_object('userId', r.user_id, 'emoji', r.emoji) ORDER BY r.created_at)
+                       FROM idea_comment_reactions r WHERE r.comment_id = c.id), '[]') AS reactions
+      FROM idea_comments c WHERE c.idea_id = ${id} ORDER BY c.created_at`;
     await sql`UPDATE idea_members SET last_read_at = now() WHERE idea_id = ${id} AND user_id = ${uid}`;
     return res.json({ ...base, comments });
   }
@@ -809,8 +811,46 @@ export async function idea(req: VercelRequest, res: VercelResponse) {
 export async function ideaComment(req: VercelRequest, res: VercelResponse) {
   const session = await getSession(req);
   if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
   const uid = session.userId;
+
+  // --- Bearbeiten (nur eigener, nicht gelöschter Beitrag) ------------------
+  if (req.method === 'PATCH') {
+    const pb = req.body ?? {};
+    const commentId = typeof pb.commentId === 'string' ? pb.commentId : typeof pb.id === 'string' ? pb.id : '';
+    if (!commentId) return badRequest(res, 'Beitrags-ID fehlt.');
+    if (!isNonEmptyString(pb.body)) return badRequest(res, 'Bitte einen Text eingeben.');
+    const own = (await sql`SELECT author_id AS "authorId", deleted_at AS "deletedAt" FROM idea_comments WHERE id = ${commentId} LIMIT 1`) as {
+      authorId: string;
+      deletedAt: string | null;
+    }[];
+    if (own.length === 0) return res.status(404).json({ error: 'Beitrag nicht gefunden.' });
+    if (own[0].authorId !== uid) return res.status(403).json({ error: 'Nur eigene Beiträge bearbeiten.' });
+    if (own[0].deletedAt) return badRequest(res, 'Gelöschte Beiträge können nicht bearbeitet werden.');
+    await sql`UPDATE idea_comments SET body = ${pb.body.slice(0, 8000)}, edited_at = now() WHERE id = ${commentId}`;
+    const updated = await sql`
+      SELECT c.id, c.idea_id AS "ideaId", c.author_id AS "authorId", c.author_name AS "authorName", c.body,
+             c.attach_type AS "attachType", c.attach_url AS "attachUrl", c.attach_mime AS "attachMime", c.attach_title AS "attachTitle",
+             c.edited_at AS "editedAt", c.deleted_at AS "deletedAt", c.created_at AS "createdAt",
+             COALESCE((SELECT json_agg(json_build_object('userId', r.user_id, 'emoji', r.emoji) ORDER BY r.created_at)
+                       FROM idea_comment_reactions r WHERE r.comment_id = c.id), '[]') AS reactions
+      FROM idea_comments c WHERE c.id = ${commentId}`;
+    return res.json(updated[0] ?? { ok: true });
+  }
+
+  // --- Für alle löschen (nur eigener Beitrag) ------------------------------
+  if (req.method === 'DELETE') {
+    const commentId =
+      typeof req.body?.commentId === 'string' ? req.body.commentId : String(req.query.commentId ?? req.query.id ?? '');
+    if (!commentId) return badRequest(res, 'Beitrags-ID fehlt.');
+    const own = (await sql`SELECT author_id AS "authorId" FROM idea_comments WHERE id = ${commentId} LIMIT 1`) as { authorId: string }[];
+    if (own.length === 0) return res.status(404).json({ error: 'Beitrag nicht gefunden.' });
+    if (own[0].authorId !== uid) return res.status(403).json({ error: 'Nur eigene Beiträge löschen.' });
+    await sql`UPDATE idea_comments SET deleted_at = now(), body = '', attach_type = NULL, attach_url = NULL, attach_mime = NULL, attach_title = NULL WHERE id = ${commentId}`;
+    await sql`DELETE FROM idea_comment_reactions WHERE comment_id = ${commentId}`;
+    return res.json({ ok: true, id: commentId });
+  }
+
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
 
   const b = req.body ?? {};
   const ideaId = typeof b.ideaId === 'string' ? b.ideaId : '';
@@ -839,7 +879,7 @@ export async function ideaComment(req: VercelRequest, res: VercelResponse) {
     VALUES (${id}, ${ideaId}, ${uid}, ${name}, ${body}, ${attachType}, ${attachUrl}, ${attachMime}, ${attachTitle})
     RETURNING id, idea_id AS "ideaId", author_id AS "authorId", author_name AS "authorName", body,
               attach_type AS "attachType", attach_url AS "attachUrl", attach_mime AS "attachMime", attach_title AS "attachTitle",
-              created_at AS "createdAt"`;
+              edited_at AS "editedAt", deleted_at AS "deletedAt", created_at AS "createdAt", '[]'::json AS reactions`;
   await sql`UPDATE ideas SET updated_at = now() WHERE id = ${ideaId}`;
 
   const members = await loadMembers();
@@ -867,4 +907,34 @@ export async function ideaComment(req: VercelRequest, res: VercelResponse) {
     await sendPushToUser(m.userId, { title: `💡 ${title}`, body: `${name}: ${preview}`, url: `/chat?tab=ideen&openIdea=${encodeURIComponent(ideaId)}` });
   }
   return res.json(inserted[0]);
+}
+
+// Emoji-Reaktion auf einen Ideen-Beitrag umschalten (eine pro Nutzer & Beitrag,
+// wie im Chat). Gibt die vollständige Reaktionsliste des Beitrags zurück.
+export async function reactIdeaComment(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
+  const uid = session.userId;
+  const b = req.body ?? {};
+  const commentId = typeof b.commentId === 'string' ? b.commentId : '';
+  const emoji = typeof b.emoji === 'string' ? b.emoji.slice(0, 16) : '';
+  if (!commentId || !emoji) return badRequest(res, 'Beitrag oder Emoji fehlt.');
+  const rows = (await sql`SELECT idea_id AS "ideaId" FROM idea_comments WHERE id = ${commentId} AND deleted_at IS NULL LIMIT 1`) as {
+    ideaId: string;
+  }[];
+  if (rows.length === 0) return res.status(404).json({ error: 'Beitrag nicht gefunden.' });
+  if (!(await isIdeaMember(rows[0].ideaId, uid))) return res.status(403).json({ error: 'Kein Zugriff auf diese Idee.' });
+  const existing = (await sql`SELECT emoji FROM idea_comment_reactions WHERE comment_id = ${commentId} AND user_id = ${uid} LIMIT 1`) as {
+    emoji: string;
+  }[];
+  const current = existing.length ? existing[0].emoji : null;
+  if (current === emoji) {
+    await sql`DELETE FROM idea_comment_reactions WHERE comment_id = ${commentId} AND user_id = ${uid}`;
+  } else {
+    await sql`INSERT INTO idea_comment_reactions (comment_id, user_id, emoji) VALUES (${commentId}, ${uid}, ${emoji})
+              ON CONFLICT (comment_id, user_id) DO UPDATE SET emoji = EXCLUDED.emoji, created_at = now()`;
+  }
+  const reactions = await sql`SELECT user_id AS "userId", emoji FROM idea_comment_reactions WHERE comment_id = ${commentId} ORDER BY created_at`;
+  return res.json({ commentId, reactions });
 }

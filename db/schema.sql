@@ -344,6 +344,23 @@ CREATE TABLE idea_comments (
 );
 CREATE INDEX idx_idea_comments_idea ON idea_comments(idea_id, created_at);
 
+-- Volle Chat-Funktionen im Brainstorm: Anhänge, Bearbeiten (edited_at),
+-- Für-alle-löschen (deleted_at) und Emoji-Reaktionen (eine pro Nutzer & Beitrag).
+ALTER TABLE idea_comments ADD COLUMN IF NOT EXISTS attach_type TEXT;
+ALTER TABLE idea_comments ADD COLUMN IF NOT EXISTS attach_url TEXT;
+ALTER TABLE idea_comments ADD COLUMN IF NOT EXISTS attach_mime TEXT;
+ALTER TABLE idea_comments ADD COLUMN IF NOT EXISTS attach_title TEXT;
+ALTER TABLE idea_comments ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;
+ALTER TABLE idea_comments ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS idea_comment_reactions (
+  comment_id TEXT NOT NULL REFERENCES idea_comments(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL,
+  emoji      TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (comment_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_idea_comment_reactions_c ON idea_comment_reactions(comment_id);
+
 -- Benannte Links („Link-Tasten") auf Aufgaben/Terminen, Tickets und Ideen.
 -- Format: JSONB-Array [{ "url": "...", "label": "Anzeigetext" }].
 ALTER TABLE tasks   ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]';

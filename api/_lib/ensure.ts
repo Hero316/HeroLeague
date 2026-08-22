@@ -44,6 +44,11 @@ export async function ensureSchema(): Promise<void> {
     await sql`SELECT 1 FROM ideas LIMIT 1`;
     // Medien-Anhänge im Ideen-Brainstorm (Bild/Video/Datei/Audio) mitprüfen.
     await sql`SELECT attach_type FROM idea_comments LIMIT 1`;
+    // Volle Chat-Funktionen im Brainstorm: Bearbeitet/Gelöscht + Reaktionen
+    // mitprüfen, sonst überspringt der Schnell-Check das Anlegen auf bereits
+    // bestehenden Datenbanken.
+    await sql`SELECT edited_at, deleted_at FROM idea_comments LIMIT 1`;
+    await sql`SELECT 1 FROM idea_comment_reactions LIMIT 1`;
     // Benannte Links („Link-Tasten") mitprüfen.
     await sql`SELECT links FROM tasks LIMIT 1`;
     ensured = true;
@@ -184,6 +189,15 @@ export async function ensureSchema(): Promise<void> {
   await run(sql`ALTER TABLE idea_comments ADD COLUMN IF NOT EXISTS attach_url TEXT`);
   await run(sql`ALTER TABLE idea_comments ADD COLUMN IF NOT EXISTS attach_mime TEXT`);
   await run(sql`ALTER TABLE idea_comments ADD COLUMN IF NOT EXISTS attach_title TEXT`);
+  // Volle Chat-Funktionen im Brainstorm: Bearbeiten (edited_at) + Für-alle-löschen
+  // (deleted_at) + Emoji-Reaktionen (eine pro Nutzer & Beitrag, Tippen togglet).
+  await run(sql`ALTER TABLE idea_comments ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ`);
+  await run(sql`ALTER TABLE idea_comments ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`);
+  await run(sql`CREATE TABLE IF NOT EXISTS idea_comment_reactions (
+    comment_id TEXT NOT NULL REFERENCES idea_comments(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL, emoji TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (comment_id, user_id))`);
+  await run(sql`CREATE INDEX IF NOT EXISTS idx_idea_comment_reactions_c ON idea_comment_reactions(comment_id)`);
 
   // --- Benannte Links („Link-Tasten") auf Aufgaben/Terminen, Tickets, Ideen --
   await run(sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]'`);
