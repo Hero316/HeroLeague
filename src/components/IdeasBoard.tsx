@@ -10,6 +10,7 @@ import MentionTextarea from './MentionTextarea';
 import LinkChips from './LinkChips';
 import { VoiceMessage } from './AudioPlayer';
 import { useBackdropDismiss, ModalPortal, EmptyState } from './ui';
+import { BUBBLE_MINE, pickNameColor } from './ChatSystem';
 
 // Ideen-Bereich (Brainstorm): Jede Idee ist ein kleiner eigener Verlauf, in dem
 // die eingeladenen Leute Vorschläge sammeln. Am Ende ein Fazit schreiben, Status
@@ -183,9 +184,19 @@ export default function IdeasBoard({
                 >
                   <div className="flex items-start justify-between gap-3">
                     <h3 className="font-display font-black text-white text-base leading-tight break-words">{idea.title}</h3>
-                    <span className={`shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${sm.cell}`}>
-                      {sm.label}
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {(idea.unread ?? 0) > 0 && (
+                        <span
+                          title={`${idea.unread} neue Beiträge`}
+                          className="min-w-[20px] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-[#E6238E] text-white text-[11px] font-bold tabular-nums shadow-[0_2px_8px_rgba(230,35,142,.45)]"
+                        >
+                          {idea.unread! > 99 ? '99+' : idea.unread}
+                        </span>
+                      )}
+                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${sm.cell}`}>
+                        {sm.label}
+                      </span>
+                    </div>
                   </div>
                   {idea.summary && <p className="text-sm text-hl-mute mt-1.5 line-clamp-2 break-words">{idea.summary}</p>}
                   <div className="flex items-center gap-3 mt-2.5 text-[11px] text-hl-faint font-sans">
@@ -218,11 +229,12 @@ export default function IdeasBoard({
       )}
       {openId && (
         <IdeaDetail
+          key={openId}
           ideaId={openId}
           team={team}
           currentUserId={currentUserId}
           isSuperadmin={isSuperadmin}
-          onClose={() => setOpenId(null)}
+          onClose={() => { setOpenId(null); load(); }}
           onChanged={load}
         />
       )}
@@ -571,18 +583,32 @@ function IdeaDetail({
                 ) : (
                   comments.map((c) => {
                     const tm = team.find((t) => t.id === c.authorId);
+                    // Wie im normalen Chat: eigene Beiträge rechts (dunkle Türkis-
+                    // Blase, weiße Schrift), andere links mit Wappen + Namensfarbe.
+                    const mine = c.authorId === currentUserId;
                     return (
-                      <div key={c.id} className="flex gap-2">
-                        <div className="shrink-0 pt-0.5">
-                          <Avatar name={c.authorName} url={tm?.avatarUrl} size={28} />
-                        </div>
-                        <div className="flex-1 min-w-0 hl-surf-soft border border-white/5 rounded-lg p-2.5">
-                          <div className="flex items-center justify-between mb-0.5 gap-2">
-                            <span className="text-xs font-sans font-semibold text-white truncate">{c.authorName}</span>
-                            <span className="text-[10px] font-mono text-hl-faint shrink-0">{fmtTime(c.createdAt)}</span>
+                      <div key={c.id} className={`flex gap-2 ${mine ? 'justify-end' : 'justify-start'}`}>
+                        {!mine && (
+                          <div className="shrink-0 self-end">
+                            <Avatar name={c.authorName} url={tm?.avatarUrl} size={28} />
                           </div>
-                          {c.body && <p className="text-sm text-hl-soft font-sans whitespace-pre-wrap break-words">{c.body}</p>}
+                        )}
+                        <div
+                          className={`hl-bubble max-w-[82%] min-w-0 px-3 py-2 rounded-2xl ${
+                            mine ? 'text-white rounded-br-md' : 'hl-bubble-other text-hl-text rounded-bl-md'
+                          }`}
+                          style={mine ? { background: BUBBLE_MINE, color: '#fff' } : undefined}
+                        >
+                          {!mine && (
+                            <div className="text-[12px] font-sans font-bold mb-0.5" style={{ color: pickNameColor(c.authorName, ideaId) }}>
+                              {c.authorName}
+                            </div>
+                          )}
+                          {c.body && <p className="text-[15px] font-sans whitespace-pre-wrap break-words leading-snug">{c.body}</p>}
                           <IdeaAttachment c={c} />
+                          <div className={`text-[10px] font-mono leading-none text-right mt-1 ${mine ? 'text-white/60' : 'text-hl-faint'}`}>
+                            {fmtTime(c.createdAt)}
+                          </div>
                         </div>
                       </div>
                     );
