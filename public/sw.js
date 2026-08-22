@@ -123,9 +123,15 @@ self.addEventListener('push', (event) => {
 
       await self.registration.showNotification(title, {
         body,
-        icon: '/assets/icon-192.png',
-        badge: '/assets/icon-192.png',
-        tag: 'hl-chat',
+        // Großes Symbol in der Benachrichtigung: Team-App-Logo.
+        icon: '/assets/chat-icon-192.png',
+        // Kleines Statusleisten-Symbol: MUSS einfarbig/transparent sein, sonst
+        // zeigt Android ein weißes Viereck. Eigene Sprechblasen-Silhouette.
+        badge: '/assets/badge-96.png',
+        // Pro Ziel (Chat/Idee/Aufgabe) eine eigene Benachrichtigung; eine neue
+        // Nachricht im selben Ziel aktualisiert die bestehende, statt alles zu
+        // überschreiben.
+        tag: url,
         renotify: true,
         data: { url },
       });
