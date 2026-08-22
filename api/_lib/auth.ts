@@ -197,3 +197,29 @@ export const requireTicketManage = requireRoles(['superadmin']);
 
 // Rückwärtskompatibler Alias für reine Lese-Endpunkte hinter Login (jede Rolle).
 export const requireAdmin = requireAuth;
+
+// --- Team-App-Zugang --------------------------------------------------------
+// Wer darf in die interne Team-App (Chat, Aufgaben, Kalender, Tickets, Ideen,
+// Benachrichtigungen, Push)? Bewusst NICHT der Schiedsrichter (referee): der
+// pfeift nur Spiele und darf die internen Team-Daten nicht sehen. Alle anderen
+// eingeloggten Rollen (Super-Admin, Spiel-Admin, Team-Mitglied) dürfen.
+export const TEAM_APP_ROLES: UserRole[] = ['superadmin', 'match_admin', 'team_member'];
+export function mayUseTeamApp(role: UserRole): boolean {
+  return TEAM_APP_ROLES.includes(role);
+}
+
+// Gate für ALLE Team-App-Endpunkte. Gibt true zurück, wenn die Anfrage bereits
+// abgelehnt wurde (401 ohne Login, 403 ohne Team-App-Zugang) – der Aufrufer
+// bricht dann ab. So kommen z.B. Schiedsrichter GAR NICHT an die Team-Daten.
+export async function denyWithoutTeamApp(req: VercelRequest, res: VercelResponse): Promise<boolean> {
+  const session = await getSession(req);
+  if (!session) {
+    res.status(401).json({ error: 'Nicht angemeldet' });
+    return true;
+  }
+  if (!mayUseTeamApp(session.role)) {
+    res.status(403).json({ error: 'Kein Zugriff auf die Team-App.' });
+    return true;
+  }
+  return false;
+}

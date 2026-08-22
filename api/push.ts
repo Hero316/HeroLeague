@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getSession } from './_lib/auth.js';
+import { getSession, mayUseTeamApp } from './_lib/auth.js';
 import { sql } from './_lib/db.js';
 import { saveSubscription, removeSubscription, pushPublicKey, pushSendConfigured, sendTestToUser } from './_lib/push.js';
 import { badRequest } from './_lib/validate.js';
@@ -16,6 +16,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await ensureSchema();
     const session = await getSession(req);
     if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+    // Push gehört zur Team-App – Schiedsrichter (referee) haben keinen Zugang.
+    if (!mayUseTeamApp(session.role)) return res.status(403).json({ error: 'Kein Zugriff auf die Team-App.' });
     const resource = req.query.resource;
 
     if (req.method === 'GET' && resource === 'key') {

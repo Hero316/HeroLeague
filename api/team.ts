@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { teamMembers, updateProfile, ideas, idea, ideaComment, reactIdeaComment } from './_lib/collab.js';
+import { denyWithoutTeamApp } from './_lib/auth.js';
 import { ensureSchema } from './_lib/ensure.js';
 
 // Team-Mitglieder + eigenes Profil + Ideen (Brainstorm). Für eingeloggte Nutzer.
@@ -13,6 +14,7 @@ import { ensureSchema } from './_lib/ensure.js';
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     await ensureSchema();
+    if (await denyWithoutTeamApp(req, res)) return;
     const resource = req.query.resource;
     if (req.method === 'POST' && resource === 'profile') return updateProfile(req, res);
     if (resource === 'ideas') return ideas(req, res);

@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { tasks, task, taskGet, taskComment, reactTaskComment } from './_lib/collab.js';
+import { denyWithoutTeamApp } from './_lib/auth.js';
 import { ensureSchema } from './_lib/ensure.js';
 
 // Aufgaben-Board (Monday-Style): eigener Endpunkt.
@@ -12,6 +13,7 @@ import { ensureSchema } from './_lib/ensure.js';
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     await ensureSchema();
+    if (await denyWithoutTeamApp(req, res)) return;
     if (req.query.sub === 'comment') return taskComment(req, res);
     if (req.query.sub === 'comment-react') return reactTaskComment(req, res);
     if (req.method === 'GET' && req.query.id) return taskGet(req, res);

@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { notifications } from './_lib/collab.js';
+import { denyWithoutTeamApp } from './_lib/auth.js';
 import { ensureSchema } from './_lib/ensure.js';
 
 // In-App-Benachrichtigungen (Glocke im Backoffice).
@@ -9,6 +10,7 @@ import { ensureSchema } from './_lib/ensure.js';
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     await ensureSchema();
+    if (await denyWithoutTeamApp(req, res)) return;
     return notifications(req, res);
   } catch (err) {
     console.error('Fehler in /api/notifications:', err);

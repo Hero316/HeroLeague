@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { conversations, messages, markRead, searchMessages, updateConversation, manageMember, presence, reactMessage, threads, createPoll, votePoll } from './_lib/chat.js';
+import { denyWithoutTeamApp } from './_lib/auth.js';
 import { ensureSchema } from './_lib/ensure.js';
 
 // Interner Chat (Phase 3). Eigener Endpunkt (Vercel Pro).
@@ -11,6 +12,7 @@ import { ensureSchema } from './_lib/ensure.js';
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     await ensureSchema();
+    if (await denyWithoutTeamApp(req, res)) return;
     const resource = req.query.resource;
     if (resource === 'messages') return messages(req, res);
     if (resource === 'poll') return createPoll(req, res);
