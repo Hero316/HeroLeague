@@ -620,6 +620,34 @@ export async function manageMember(req: VercelRequest, res: VercelResponse) {
   return res.json({ ok: true });
 }
 
+// --- Unterhaltung löschen bzw. verlassen ------------------------------------
+// DM: jeder der beiden Teilnehmer darf sie ganz löschen (betrifft nur die zwei).
+// Gruppe: Ersteller/Super-Admin löschen sie ganz; ein normales Mitglied verlässt
+// sie nur (entfernt sich selbst). Das Voll-Löschen kaskadiert über die
+// Fremdschlüssel (Nachrichten, Reaktionen, Umfragen, Mitglieder, Thread-Lesestand).
+export async function deleteConversation(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
+  const b = req.body ?? {};
+  const id = typeof b.conversationId === 'string' ? b.conversationId : '';
+  if (!id) return badRequest(res, 'Unterhaltungs-ID fehlt.');
+  const rows = await sql`SELECT kind, created_by AS "createdBy" FROM conversations WHERE id = ${id}`;
+  if (rows.length === 0) return res.status(404).json({ error: 'Unterhaltung nicht gefunden.' });
+  const conv = rows[0] as { kind: string; createdBy: string };
+  const member = await isMember(id, session.userId);
+  if (!member && session.role !== 'superadmin') return res.status(403).json({ error: 'Kein Zugriff auf diese Unterhaltung.' });
+
+  const canDeleteAll = conv.kind === 'dm' || session.role === 'superadmin' || conv.createdBy === session.userId;
+  // Gruppe nur verlassen (kein Voll-Löschrecht) – sich selbst entfernen.
+  if (conv.kind === 'group' && !canDeleteAll) {
+    await sql`DELETE FROM conversation_members WHERE conversation_id = ${id} AND user_id = ${session.userId}`;
+    return res.json({ ok: true, left: true });
+  }
+  await sql`DELETE FROM conversations WHERE id = ${id}`; // kaskadiert
+  return res.json({ ok: true, deleted: id });
+}
+
 // --- Präsenz: echter Online-Status + „tippt gerade" -------------------------
 // Bewusst leichtgewichtig und ephemer (kein Verlauf, keine Lesebestätigung –
 // das würde nur Antwortdruck erzeugen). Ein Eintrag pro Nutzer.

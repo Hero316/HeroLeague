@@ -91,6 +91,13 @@ export const addGroupMember = (conversationId: string, userId: string) =>
 export const removeGroupMember = (conversationId: string, userId: string) =>
   apiFetch('/api/chat?resource=member', { method: 'POST', body: JSON.stringify({ conversationId, userId, op: 'remove' }) });
 
+// Unterhaltung löschen (DM/eigene Gruppe) bzw. Gruppe verlassen (normales Mitglied).
+export const deleteConversation = (conversationId: string) =>
+  apiFetch<{ ok: boolean; deleted?: string; left?: boolean }>('/api/chat?resource=delete', {
+    method: 'POST',
+    body: JSON.stringify({ conversationId }),
+  });
+
 export interface ChatSearchHit {
   id: string;
   conversationId: string;

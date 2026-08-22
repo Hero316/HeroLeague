@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { conversations, messages, markRead, searchMessages, updateConversation, manageMember, presence, reactMessage, threads, createPoll, votePoll } from './_lib/chat.js';
+import { conversations, messages, markRead, searchMessages, updateConversation, manageMember, presence, reactMessage, threads, createPoll, votePoll, deleteConversation } from './_lib/chat.js';
 import { denyWithoutTeamApp } from './_lib/auth.js';
 import { ensureSchema } from './_lib/ensure.js';
 
@@ -23,6 +23,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (resource === 'search') return searchMessages(req, res);
     if (resource === 'group') return updateConversation(req, res);
     if (resource === 'member') return manageMember(req, res);
+    if (resource === 'delete') return deleteConversation(req, res);
     if (resource === 'presence') return presence(req, res);
     return conversations(req, res);
   } catch (err) {

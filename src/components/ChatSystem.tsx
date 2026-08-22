@@ -45,6 +45,7 @@ import {
   updateGroup,
   addGroupMember,
   removeGroupMember,
+  deleteConversation,
   sendPresence,
   fetchPresence,
   reactMessage,
@@ -1721,6 +1722,7 @@ function ConversationInfo({
   online,
   onClose,
   onChanged,
+  onDeleted,
 }: {
   conversation: Conversation;
   members: Map<string, TeamMember>;
@@ -1730,9 +1732,30 @@ function ConversationInfo({
   online: Set<string>;
   onClose: () => void;
   onChanged: () => void;
+  onDeleted: () => void;
 }) {
   const isGroup = conversation.kind === 'group';
   const canEdit = isGroup && isSuperadmin;
+  // Löschen/Verlassen: DM darf jeder Teilnehmer ganz löschen; eine Gruppe löscht
+  // nur Ersteller/Super-Admin ganz – ein normales Mitglied verlässt sie nur.
+  const canDeleteAll = !isGroup || isSuperadmin || conversation.createdBy === currentUserId;
+  const deleteLabel = !isGroup ? 'Chat löschen' : canDeleteAll ? 'Gruppe löschen' : 'Gruppe verlassen';
+  const doDelete = async () => {
+    const q = !isGroup
+      ? 'Diesen Chat wirklich löschen? Der ganze Verlauf wird für beide entfernt.'
+      : canDeleteAll
+        ? 'Diese Gruppe wirklich löschen? Der ganze Verlauf wird für alle entfernt.'
+        : 'Diese Gruppe wirklich verlassen?';
+    if (!window.confirm(q)) return;
+    setBusy(true);
+    try {
+      await deleteConversation(conversation.id);
+      onDeleted();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Löschen fehlgeschlagen.');
+      setBusy(false);
+    }
+  };
   const [title, setTitle] = useState(conversation.title);
   const [busy, setBusy] = useState(false);
   const [zoom, setZoom] = useState<string | null>(null); // Profilbild groß
@@ -1869,6 +1892,17 @@ function ConversationInfo({
             )}
           </div>
         )}
+
+        {/* Chat löschen / Gruppe verlassen */}
+        <div className="mt-5 pt-4 border-t border-white/5">
+          <button
+            onClick={doDelete}
+            disabled={busy}
+            className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:bg-rose-500/20 cursor-pointer disabled:opacity-50"
+          >
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} {deleteLabel}
+          </button>
+        </div>
       </motion.div>
     </motion.div>
     {zoom && (
@@ -2675,6 +2709,7 @@ export default function ChatSystem({
             online={online}
             onClose={() => setShowInfo(false)}
             onChanged={loadConvs}
+            onDeleted={() => { setShowInfo(false); setActiveId(null); loadConvs(); }}
           />
         )}
         {attachView?.type === 'ticket' && (
