@@ -429,7 +429,15 @@ export interface TaskComment {
   authorId: string;
   authorName: string;
   body: string;
+  // Chat-artige Medien-Anhänge im Aufgaben-Verlauf (Bild/Video/Datei = 'file', 'audio').
+  attachType?: 'file' | 'audio' | null;
+  attachUrl?: string | null;
+  attachMime?: string | null;
+  attachTitle?: string | null;
   createdAt: string;
+  editedAt?: string | null; // gesetzt = nachträglich bearbeitet
+  deletedAt?: string | null; // gesetzt = für alle zurückgenommen
+  reactions?: MessageReaction[]; // Emoji-Reaktionen (wie im Chat)
 }
 
 // Termin (Kalender-Eintrag) · Aufgabe (To-do mit Frist) · beides.
@@ -454,6 +462,7 @@ export interface Task {
   updatedAt: string;
   assignees: { userId: string; userName: string }[];
   commentCount?: number;
+  unread?: number; // neue Verlauf-Beiträge seit dem letzten Öffnen (nur Listenansicht)
   comments?: TaskComment[];
 }
 

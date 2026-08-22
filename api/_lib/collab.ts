@@ -59,7 +59,10 @@ export async function notify(
   kind: string,
   refType: 'ticket' | 'task' | 'conversation' | 'idea',
   refId: string,
-  body: string
+  body: string,
+  // Optional den Push-Titel bzw. das Ziel (Deep-Link) überschreiben – z.B. für
+  // Termine („landet am Tag") oder schönere Titel („Neue Idee").
+  opts?: { pushTitle?: string; url?: string }
 ): Promise<void> {
   if (!recipientId || recipientId === actorId) return;
   await sql`
@@ -67,7 +70,22 @@ export async function notify(
     VALUES (${genId('n')}, ${recipientId}, ${kind}, ${refType}, ${refId}, ${body.slice(0, 200)}, false)
   `;
   // Zusätzlich als Handy-Push (best-effort; respektiert „nicht stören").
-  await sendPushToUser(recipientId, { title: 'Hero League', body: body.slice(0, 200), url: notifyUrl(refType, refId) });
+  await sendPushToUser(recipientId, {
+    title: opts?.pushTitle || 'Hero League',
+    body: body.slice(0, 200),
+    url: opts?.url || notifyUrl(refType, refId),
+  });
+}
+
+// Deep-Link für eine Aufgabe/einen Termin je nach Art: ein Termin (mit Datum)
+// landet im Kalender auf dem passenden Tag; eine reine Aufgabe im Aufgaben-Tab.
+// In beiden Fällen öffnet sich zusätzlich das Detail-Fenster (openTask).
+function taskDeepLink(type: string, dueDate: string | null, id: string): string {
+  const open = `openTask=${encodeURIComponent(id)}`;
+  if ((type === 'termin' || type === 'beides') && dueDate) {
+    return `/chat?tab=kalender&av=day&ad=${encodeURIComponent(dueDate)}&${open}`;
+  }
+  return `/chat?tab=aufgaben&${open}`;
 }
 
 // Einfache @Name-Erwähnungen gegen die Mitgliederliste auflösen.
@@ -364,7 +382,10 @@ export async function ticketComment(req: VercelRequest, res: VercelResponse) {
 }
 
 // --- Aufgaben-Board ---------------------------------------------------------
-async function fetchTasks(where: string, params: unknown[]) {
+// `viewerId` ($1) ist der aktuelle Nutzer – für den „ungelesen"-Zähler des
+// Verlaufs (nur bei Aufgaben, an denen er beteiligt ist: Ersteller/zugewiesen).
+// Deshalb beginnen die WHERE-Platzhalter der Aufrufer bei $2.
+async function fetchTasks(viewerId: string, where: string, params: unknown[]) {
   const query = `
     SELECT t.id, t.title, t.notes, COALESCE(t.type, 'termin') AS "type", to_char(t.due_date, 'YYYY-MM-DD') AS "dueDate",
            to_char(t.end_date, 'YYYY-MM-DD') AS "endDate",
@@ -377,18 +398,23 @@ async function fetchTasks(where: string, params: unknown[]) {
              json_agg(json_build_object('userId', a.user_id, 'userName', a.user_name))
              FILTER (WHERE a.user_id IS NOT NULL), '[]'
            ) AS assignees,
-           (SELECT count(*)::int FROM task_comments c WHERE c.task_id = t.id) AS "commentCount"
+           (SELECT count(*)::int FROM task_comments c WHERE c.task_id = t.id AND c.deleted_at IS NULL) AS "commentCount",
+           CASE WHEN t.created_by = $1 OR EXISTS (SELECT 1 FROM task_assignees ai WHERE ai.task_id = t.id AND ai.user_id = $1)
+             THEN (SELECT count(*)::int FROM task_comments c
+                     WHERE c.task_id = t.id AND c.author_id <> $1 AND c.deleted_at IS NULL
+                       AND c.created_at > COALESCE((SELECT r.last_read_at FROM task_reads r WHERE r.task_id = t.id AND r.user_id = $1), t.created_at))
+             ELSE 0 END AS "unread"
     FROM tasks t
     LEFT JOIN task_assignees a ON a.task_id = t.id
     ${where}
     GROUP BY t.id
     ORDER BY t.due_date NULLS LAST, t.created_at
   `;
-  return sql.query(query, params);
+  return sql.query(query, [viewerId, ...params]);
 }
 
-async function fetchTaskById(id: string) {
-  const rows = await fetchTasks('WHERE t.id = $1', [id]);
+async function fetchTaskById(id: string, viewerId: string) {
+  const rows = await fetchTasks(viewerId, 'WHERE t.id = $2', [id]);
   return rows[0] ?? null;
 }
 
@@ -435,12 +461,12 @@ export async function tasks(req: VercelRequest, res: VercelResponse) {
     const from = normalizeDueDate(req.query.from);
     const to = normalizeDueDate(req.query.to);
     let rows;
-    if (week) rows = await fetchTasks('WHERE t.iso_week = $1', [week]);
+    if (week) rows = await fetchTasks(session.userId, 'WHERE t.iso_week = $2', [week]);
     // Überlappung mit dem Sichtbereich: Aufgabe startet vor/an "to" UND endet
     // (end_date, sonst due_date) nach/an "from" – so werden Mehrtages-Balken,
     // die in den Bereich hineinragen, ebenfalls geladen.
-    else if (from && to) rows = await fetchTasks('WHERE t.due_date <= $2 AND COALESCE(t.end_date, t.due_date) >= $1', [from, to]);
-    else rows = await fetchTasks('', []);
+    else if (from && to) rows = await fetchTasks(session.userId, 'WHERE t.due_date <= $3 AND COALESCE(t.end_date, t.due_date) >= $2', [from, to]);
+    else rows = await fetchTasks(session.userId, '', []);
     return res.json(rows);
   }
 
@@ -471,12 +497,30 @@ export async function tasks(req: VercelRequest, res: VercelResponse) {
     const members = await loadMembers();
     const added = await replaceAssignees(id, assigneeIds, members);
     for (const uid of added) {
-      await notify(uid, session.userId, 'task_assigned', 'task', id, `Dir wurde eine Aufgabe zugewiesen: „${b.title.trim()}“`);
+      notifyTaskAssigned(uid, session.userId, id, b.title.trim(), type, dueDate);
     }
-    return res.json(await fetchTaskById(id));
+    return res.json(await fetchTaskById(id, session.userId));
   }
 
   return res.status(405).json({ error: 'Nicht unterstützt' });
+}
+
+// Zuweisung einer Aufgabe/eines Termins melden – mit passendem Titel & Deep-Link:
+// Termin ⇒ „landet am Tag" im Kalender; reine Aufgabe ⇒ Aufgaben-Tab.
+async function notifyTaskAssigned(
+  recipientId: string,
+  actorId: string,
+  taskId: string,
+  title: string,
+  type: string,
+  dueDate: string | null
+): Promise<void> {
+  const isEvent = type === 'termin' || type === 'beides';
+  const body = isEvent ? `Termin in dem du erwähnt wurdest: „${title}“` : `Dir wurde eine Aufgabe zugewiesen: „${title}“`;
+  await notify(recipientId, actorId, 'task_assigned', 'task', taskId, body, {
+    pushTitle: isEvent ? '📅 Neuer Termin' : '✅ Neue Aufgabe',
+    url: taskDeepLink(type, dueDate, taskId),
+  });
 }
 
 // Einzelaufgabe inkl. Kommentar-Verlauf lesen.
@@ -487,12 +531,19 @@ export async function taskGet(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store');
   const id = String(req.query.id ?? '');
   if (!id) return badRequest(res, 'Aufgaben-ID fehlt.');
-  const t = await fetchTaskById(id);
+  const t = await fetchTaskById(id, session.userId);
   if (!t) return res.status(404).json({ error: 'Aufgabe nicht gefunden.' });
   const comments = await sql`
-    SELECT id, task_id AS "taskId", author_id AS "authorId", author_name AS "authorName", body, created_at AS "createdAt"
-    FROM task_comments WHERE task_id = ${id} ORDER BY created_at
+    SELECT c.id, c.task_id AS "taskId", c.author_id AS "authorId", c.author_name AS "authorName", c.body,
+           c.attach_type AS "attachType", c.attach_url AS "attachUrl", c.attach_mime AS "attachMime", c.attach_title AS "attachTitle",
+           c.edited_at AS "editedAt", c.deleted_at AS "deletedAt", c.created_at AS "createdAt",
+           COALESCE((SELECT json_agg(json_build_object('userId', r.user_id, 'emoji', r.emoji) ORDER BY r.created_at)
+                     FROM task_comment_reactions r WHERE r.comment_id = c.id), '[]') AS reactions
+    FROM task_comments c WHERE c.task_id = ${id} ORDER BY c.created_at
   `;
+  // Öffnen = gelesen: Lesestand für den „ungelesen"-Zähler im Aufgaben-Tab setzen.
+  await sql`INSERT INTO task_reads (user_id, task_id, last_read_at) VALUES (${session.userId}, ${id}, now())
+            ON CONFLICT (user_id, task_id) DO UPDATE SET last_read_at = now()`;
   return res.json({ ...t, comments });
 }
 
@@ -506,9 +557,9 @@ export async function task(req: VercelRequest, res: VercelResponse) {
   const id = typeof b.id === 'string' ? b.id : '';
   if (!id) return badRequest(res, 'Aufgaben-ID fehlt.');
 
-  const rows = await sql`SELECT id, created_by AS "createdBy", title FROM tasks WHERE id = ${id}`;
+  const rows = await sql`SELECT id, created_by AS "createdBy", title, COALESCE(type,'termin') AS "type", to_char(due_date, 'YYYY-MM-DD') AS "dueDate" FROM tasks WHERE id = ${id}`;
   if (rows.length === 0) return res.status(404).json({ error: 'Aufgabe nicht gefunden.' });
-  const cur = rows[0] as { createdBy: string; title: string };
+  const cur = rows[0] as { createdBy: string; title: string; type: string; dueDate: string | null };
 
   if (b.op === 'delete') {
     if (session.role !== 'superadmin' && session.userId !== cur.createdBy) {
@@ -557,23 +608,81 @@ export async function task(req: VercelRequest, res: VercelResponse) {
     const members = await loadMembers();
     const ids = b.assignees.filter((x: unknown): x is string => typeof x === 'string');
     const added = await replaceAssignees(id, ids, members);
+    // Art/Datum können in DIESEM Update mitgeändert worden sein – neuere Werte
+    // für den Deep-Link bevorzugen, sonst den Bestand.
+    const newType = type ?? cur.type;
+    const newDue = b.dueDate !== undefined ? dueDate ?? null : cur.dueDate;
     for (const uid of added) {
-      await notify(uid, session.userId, 'task_assigned', 'task', id, `Dir wurde eine Aufgabe zugewiesen: „${cur.title}“`);
+      await notifyTaskAssigned(uid, session.userId, id, cur.title, newType, newDue);
     }
   }
-  return res.json(await fetchTaskById(id));
+  return res.json(await fetchTaskById(id, session.userId));
 }
 
-// Kommentar/Thread zu einer Aufgabe.
+// Vollständige SELECT-Spalten eines Aufgaben-Beitrags (mit Anhang/Status/Reaktionen).
+const TASK_COMMENT_SELECT = `
+  c.id, c.task_id AS "taskId", c.author_id AS "authorId", c.author_name AS "authorName", c.body,
+  c.attach_type AS "attachType", c.attach_url AS "attachUrl", c.attach_mime AS "attachMime", c.attach_title AS "attachTitle",
+  c.edited_at AS "editedAt", c.deleted_at AS "deletedAt", c.created_at AS "createdAt",
+  COALESCE((SELECT json_agg(json_build_object('userId', r.user_id, 'emoji', r.emoji) ORDER BY r.created_at)
+            FROM task_comment_reactions r WHERE r.comment_id = c.id), '[]') AS reactions
+`;
+
+// Kommentar/Verlauf zu einer Aufgabe – volle Chat-Funktionen (wie im Chat/bei den
+// Ideen): schreiben mit Text und/oder Anhang (POST), eigenen Beitrag bearbeiten
+// (PATCH) und für alle zurücknehmen (DELETE). Darf jeder eingeloggte Nutzer.
 export async function taskComment(req: VercelRequest, res: VercelResponse) {
   const session = await getSession(req);
   if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  const uid = session.userId;
+
+  // --- Bearbeiten (nur eigener, nicht gelöschter Beitrag) ------------------
+  if (req.method === 'PATCH') {
+    const pb = req.body ?? {};
+    const commentId = typeof pb.commentId === 'string' ? pb.commentId : typeof pb.id === 'string' ? pb.id : '';
+    if (!commentId) return badRequest(res, 'Beitrags-ID fehlt.');
+    if (!isNonEmptyString(pb.body)) return badRequest(res, 'Bitte einen Text eingeben.');
+    const own = (await sql`SELECT author_id AS "authorId", deleted_at AS "deletedAt" FROM task_comments WHERE id = ${commentId} LIMIT 1`) as {
+      authorId: string;
+      deletedAt: string | null;
+    }[];
+    if (own.length === 0) return res.status(404).json({ error: 'Beitrag nicht gefunden.' });
+    if (own[0].authorId !== uid) return res.status(403).json({ error: 'Nur eigene Beiträge bearbeiten.' });
+    if (own[0].deletedAt) return badRequest(res, 'Gelöschte Beiträge können nicht bearbeitet werden.');
+    await sql`UPDATE task_comments SET body = ${pb.body.slice(0, 4000)}, edited_at = now() WHERE id = ${commentId}`;
+    const updated = await sql.query(`SELECT ${TASK_COMMENT_SELECT} FROM task_comments c WHERE c.id = $1`, [commentId]);
+    return res.json(updated[0] ?? { ok: true });
+  }
+
+  // --- Für alle löschen (nur eigener Beitrag) ------------------------------
+  if (req.method === 'DELETE') {
+    const commentId =
+      typeof req.body?.commentId === 'string' ? req.body.commentId : String(req.query.commentId ?? req.query.id ?? '');
+    if (!commentId) return badRequest(res, 'Beitrags-ID fehlt.');
+    const own = (await sql`SELECT author_id AS "authorId" FROM task_comments WHERE id = ${commentId} LIMIT 1`) as { authorId: string }[];
+    if (own.length === 0) return res.status(404).json({ error: 'Beitrag nicht gefunden.' });
+    if (own[0].authorId !== uid) return res.status(403).json({ error: 'Nur eigene Beiträge löschen.' });
+    await sql`UPDATE task_comments SET deleted_at = now(), body = '', attach_type = NULL, attach_url = NULL, attach_mime = NULL, attach_title = NULL WHERE id = ${commentId}`;
+    await sql`DELETE FROM task_comment_reactions WHERE comment_id = ${commentId}`;
+    return res.json({ ok: true, id: commentId });
+  }
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
 
   const b = req.body ?? {};
   const taskId = typeof b.taskId === 'string' ? b.taskId : '';
   if (!taskId) return badRequest(res, 'Aufgaben-ID fehlt.');
-  if (!isNonEmptyString(b.body)) return badRequest(res, 'Bitte einen Kommentar schreiben.');
+
+  // Chat-artig: Beitrag kann Text UND/ODER einen Medien-Anhang tragen.
+  const hasBody = isNonEmptyString(b.body);
+  const attachType = b.attachType === 'file' || b.attachType === 'audio' ? b.attachType : null;
+  const attachUrl =
+    attachType && typeof b.attachUrl === 'string' && /^https?:\/\//i.test(b.attachUrl.trim()) ? b.attachUrl.trim() : null;
+  if (attachType && !attachUrl) return badRequest(res, 'Anhang-URL fehlt oder ist ungültig.');
+  if (!hasBody && !attachType) return badRequest(res, 'Bitte einen Beitrag schreiben oder etwas anhängen.');
+  const attachMime = attachType ? String(b.attachMime ?? '').slice(0, 120) || null : null;
+  const attachTitle = attachType ? String(b.attachTitle ?? '').slice(0, 200) || null : null;
+  const body = hasBody ? b.body.slice(0, 4000) : '';
 
   const rows = await sql`SELECT created_by AS "createdBy", title FROM tasks WHERE id = ${taskId}`;
   if (rows.length === 0) return res.status(404).json({ error: 'Aufgabe nicht gefunden.' });
@@ -581,22 +690,71 @@ export async function taskComment(req: VercelRequest, res: VercelResponse) {
 
   const id = genId('kc');
   const name = sessionName(session);
-  const inserted = await sql`
-    INSERT INTO task_comments (id, task_id, author_id, author_name, body)
-    VALUES (${id}, ${taskId}, ${session.userId}, ${name}, ${b.body.slice(0, 4000)})
-    RETURNING id, task_id AS "taskId", author_id AS "authorId", author_name AS "authorName", body, created_at AS "createdAt"
+  await sql`
+    INSERT INTO task_comments (id, task_id, author_id, author_name, body, attach_type, attach_url, attach_mime, attach_title)
+    VALUES (${id}, ${taskId}, ${uid}, ${name}, ${body}, ${attachType}, ${attachUrl}, ${attachMime}, ${attachTitle})
   `;
+  await sql`UPDATE tasks SET updated_at = now() WHERE id = ${taskId}`;
+  const inserted = await sql.query(`SELECT ${TASK_COMMENT_SELECT} FROM task_comments c WHERE c.id = $1`, [id]);
 
+  // Empfänger: Ersteller + Zugewiesene + Erwähnte. Deep-Link öffnet die Aufgabe
+  // (Detail-Fenster mit Chat). Preview wie im Chat.
   const members = await loadMembers();
   const assignees = (await sql`SELECT user_id AS "userId" FROM task_assignees WHERE task_id = ${taskId}`) as { userId: string }[];
-  await notify(t.createdBy, session.userId, 'task_comment', 'task', taskId, `${name} hat die Aufgabe „${t.title}“ kommentiert.`);
-  for (const a of assignees) {
-    await notify(a.userId, session.userId, 'task_comment', 'task', taskId, `Neuer Kommentar zur Aufgabe „${t.title}“.`);
+  const url = `/chat?openTask=${encodeURIComponent(taskId)}`;
+  const preview = hasBody
+    ? String(b.body).slice(0, 120)
+    : attachType === 'audio'
+      ? '🎤 Sprachnachricht'
+      : (attachMime ?? '').startsWith('image/')
+        ? '🖼️ Bild'
+        : (attachMime ?? '').startsWith('video/')
+          ? '🎬 Video'
+          : '📎 Datei';
+  const mentioned = new Set<string>();
+  if (hasBody) {
+    for (const mid of findMentions(b.body, members)) {
+      if (mid === uid) continue;
+      mentioned.add(mid);
+      await notify(mid, uid, 'mention', 'task', taskId, `${name} hat dich in der Aufgabe „${t.title}“ erwähnt.`, {
+        pushTitle: `📋 ${t.title}`,
+        url,
+      });
+    }
   }
-  for (const uid of findMentions(b.body, members)) {
-    await notify(uid, session.userId, 'mention', 'task', taskId, `${name} hat dich in der Aufgabe „${t.title}“ erwähnt.`);
+  const recipients = new Set<string>([t.createdBy, ...assignees.map((a) => a.userId)]);
+  for (const rid of recipients) {
+    if (rid === uid || mentioned.has(rid)) continue;
+    await notify(rid, uid, 'task_comment', 'task', taskId, `${name}: ${preview}`, { pushTitle: `📋 ${t.title}`, url });
   }
   return res.json(inserted[0]);
+}
+
+// Emoji-Reaktion auf einen Aufgaben-Beitrag umschalten (eine pro Nutzer & Beitrag,
+// wie im Chat). Gibt die vollständige Reaktionsliste des Beitrags zurück.
+export async function reactTaskComment(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
+  const uid = session.userId;
+  const b = req.body ?? {};
+  const commentId = typeof b.commentId === 'string' ? b.commentId : '';
+  const emoji = typeof b.emoji === 'string' ? b.emoji.slice(0, 16) : '';
+  if (!commentId || !emoji) return badRequest(res, 'Beitrag oder Emoji fehlt.');
+  const rows = (await sql`SELECT 1 FROM task_comments WHERE id = ${commentId} AND deleted_at IS NULL LIMIT 1`) as unknown[];
+  if (rows.length === 0) return res.status(404).json({ error: 'Beitrag nicht gefunden.' });
+  const existing = (await sql`SELECT emoji FROM task_comment_reactions WHERE comment_id = ${commentId} AND user_id = ${uid} LIMIT 1`) as {
+    emoji: string;
+  }[];
+  const current = existing.length ? existing[0].emoji : null;
+  if (current === emoji) {
+    await sql`DELETE FROM task_comment_reactions WHERE comment_id = ${commentId} AND user_id = ${uid}`;
+  } else {
+    await sql`INSERT INTO task_comment_reactions (comment_id, user_id, emoji) VALUES (${commentId}, ${uid}, ${emoji})
+              ON CONFLICT (comment_id, user_id) DO UPDATE SET emoji = EXCLUDED.emoji, created_at = now()`;
+  }
+  const reactions = await sql`SELECT user_id AS "userId", emoji FROM task_comment_reactions WHERE comment_id = ${commentId} ORDER BY created_at`;
+  return res.json({ commentId, reactions });
 }
 
 // --- Benachrichtigungen -----------------------------------------------------
@@ -709,7 +867,7 @@ export async function ideas(req: VercelRequest, res: VercelResponse) {
     const added = await setIdeaMembers(id, uid, wanted, members);
     for (const mid of added) {
       if (mid === uid) continue;
-      await notify(mid, uid, 'idea', 'idea', id, `${meName} hat dich zur Idee „${title}“ hinzugefügt.`);
+      await notify(mid, uid, 'idea', 'idea', id, `${meName} hat dich zur Idee „${title}“ hinzugefügt.`, { pushTitle: '💡 Neue Idee' });
     }
     return res.json(await fetchIdeaById(id));
   }
@@ -806,7 +964,7 @@ export async function idea(req: VercelRequest, res: VercelResponse) {
       const meName = sessionName(session);
       for (const mid of added) {
         if (mid === uid) continue;
-        await notify(mid, uid, 'idea', 'idea', id, `${meName} hat dich zur Idee „${cur.title}“ hinzugefügt.`);
+        await notify(mid, uid, 'idea', 'idea', id, `${meName} hat dich zur Idee „${cur.title}“ hinzugefügt.`, { pushTitle: '💡 Neue Idee' });
       }
     }
     return res.json(await fetchIdeaById(id));
