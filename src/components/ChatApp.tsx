@@ -10,12 +10,13 @@ import TeamSettings from './TeamSettings';
 import DeepLinkModal from './DeepLinkModal';
 import { useInstall } from './InstallProvider';
 import { pushDebug, enablePush } from '../lib/push';
-import { fetchNotifications } from '../lib/collab';
+import { fetchNotifications, fetchIdeas, fetchAllTasks } from '../lib/collab';
+import { fetchConversations } from '../lib/chat';
 import { setNotifUnread } from '../lib/badge';
 import { getUrlParam, setUrlParam } from '../lib/urlState';
 import { useBackClose } from '../lib/backStack';
 import { AudioPlayerProvider, MiniPlayer } from './AudioPlayer';
-import type { SessionUser, UserStatus } from '../types';
+import type { SessionUser, UserStatus, Conversation, Idea, Task } from '../types';
 
 // Eigenständige „Team-App" unter /chat: Vollbild auf iPhone & Android, mit
 // unterer Tab-Leiste (Chats · Aufgaben · Tickets). Bewusst getrennt vom
@@ -170,6 +171,88 @@ export default function ChatApp({
       document.removeEventListener('visibilitychange', tick);
     };
   }, []);
+
+  // „Verpasst"-Zähler pro Tab (kleine Zahl unten in der Leiste). Ohne Push –
+  // rein in der App. Chat/Ideen = server-seitig gezählt (ungelesen); Kalender/
+  // Aufgaben = neue Einträge seit dem letzten Öffnen (pro Gerät gemerkt).
+  const [badges, setBadges] = useState({ chats: 0, ideen: 0, kalender: 0, aufgaben: 0 });
+  const SEEN_KEY = (t: 'kalender' | 'aufgaben') => `hl-app-seen-${t}`;
+  const getSeen = (t: 'kalender' | 'aufgaben'): number => {
+    try {
+      return Number(localStorage.getItem(SEEN_KEY(t))) || 0;
+    } catch {
+      return 0;
+    }
+  };
+  const setSeen = (t: 'kalender' | 'aufgaben', v: number) => {
+    try {
+      localStorage.setItem(SEEN_KEY(t), String(v));
+    } catch {
+      /* egal */
+    }
+  };
+  // Beim allerersten Start die „gesehen"-Marke auf jetzt setzen, damit nicht alle
+  // bestehenden Termine/Aufgaben sofort als „neu" gezählt werden.
+  useEffect(() => {
+    (['kalender', 'aufgaben'] as const).forEach((t) => {
+      if (!getSeen(t)) setSeen(t, Date.now());
+    });
+  }, []);
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const [convs, ideas, tasks] = await Promise.all([
+          fetchConversations().catch(() => [] as Conversation[]),
+          fetchIdeas().catch(() => [] as Idea[]),
+          fetchAllTasks().catch(() => [] as Task[]),
+        ]);
+        if (!alive) return;
+        const chats = convs.reduce((s, c) => s + (c.unread || 0), 0);
+        const ideen = ideas.reduce((s, i) => s + (i.unread || 0), 0);
+        const seenK = getSeen('kalender');
+        const seenA = getSeen('aufgaben');
+        const ts = (iso: string) => new Date(iso).getTime();
+        const kalender = tasks.filter(
+          (t) =>
+            (t.type === 'termin' || t.type === 'beides') &&
+            t.createdBy !== currentUserId &&
+            ts(t.createdAt) > seenK
+        ).length;
+        const aufgaben = tasks.filter(
+          (t) =>
+            (t.type === 'aufgabe' || t.type === 'beides') &&
+            t.createdBy !== currentUserId &&
+            (t.assignees ?? []).some((a) => a.userId === currentUserId) &&
+            ts(t.createdAt) > seenA
+        ).length;
+        setBadges({ chats, ideen, kalender, aufgaben });
+      } catch {
+        /* egal – Zähler bleiben beim letzten Stand */
+      }
+    };
+    tick();
+    const iv = setInterval(tick, 20000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      alive = false;
+      clearInterval(iv);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [currentUserId]);
+  // Öffnet man Kalender/Aufgaben, gilt alles als gesehen ⇒ Zähler sofort auf 0.
+  useEffect(() => {
+    if (tab === 'kalender') {
+      setSeen('kalender', Date.now());
+      setBadges((b) => ({ ...b, kalender: 0 }));
+    } else if (tab === 'aufgaben') {
+      setSeen('aufgaben', Date.now());
+      setBadges((b) => ({ ...b, aufgaben: 0 }));
+    }
+  }, [tab]);
+  const badgeFor = (id: Tab): number =>
+    id === 'chats' ? badges.chats : id === 'ideen' ? badges.ideen : id === 'kalender' ? badges.kalender : id === 'aufgaben' ? badges.aufgaben : 0;
 
   // Deep-Link aus einer Benachrichtigung: /chat?openTicket=… bzw. …?openTask=…
   // öffnet das Ticket/die Aufgabe direkt als Detail-Fenster – unabhängig vom
@@ -390,6 +473,7 @@ export default function ChatApp({
         {TABS.map((t) => {
           const active = t.id === tab;
           const Icon = t.icon;
+          const count = badgeFor(t.id);
           return (
             <button
               key={t.id}
@@ -413,7 +497,14 @@ export default function ChatApp({
                 transition={{ type: 'spring', stiffness: 500, damping: 26 }}
                 className={`relative z-10 transition-colors ${active ? 'text-brand-accent-light' : 'text-hl-mute'}`}
               >
-                <Icon className="w-[22px] h-[22px]" />
+                <span className="relative inline-block">
+                  <Icon className="w-[22px] h-[22px]" />
+                  {count > 0 && (
+                    <span className="absolute -top-2 -right-2.5 min-w-[16px] h-4 px-1 inline-flex items-center justify-center rounded-full bg-[#E6238E] text-white text-[9px] font-bold leading-none tabular-nums shadow-[0_2px_6px_rgba(230,35,142,.5)] ring-2 ring-brand-dark">
+                      {count > 99 ? '99+' : count}
+                    </span>
+                  )}
+                </span>
               </motion.span>
               <span className={`relative z-10 text-[10px] font-sans font-bold uppercase tracking-wide transition-colors ${active ? 'text-brand-accent-light' : 'text-hl-mute'}`}>
                 {t.label}
