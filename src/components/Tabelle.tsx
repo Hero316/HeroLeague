@@ -21,8 +21,7 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
   // Einsortier-Animation: startet alphabetisch und rutscht in die echte Tabelle.
   const { ref: listRef, items: displayStandings } = useSettledList(standings, (s) => s.teamName);
 
-  // Zonen: Meisterschaftsrunde = Top 3, Abstiegszone = letzte 2 (nur bei genug Teams)
-  const championsEnd = 3;
+  // Abstiegszone = letzte 2 (nur bei genug Teams).
   const relegationStart = standings.length >= 6 ? standings.length - 2 : Number.POSITIVE_INFINITY;
 
   const rankColors: Record<number, string> = { 1: '#E9C46A', 2: '#C9D1CC', 3: '#C98A5A' };
@@ -168,10 +167,6 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
         </div>
       ) : (
         <div className="flex flex-wrap gap-3 sm:gap-5 items-center pt-[18px] px-1.5 sm:px-2.5 pb-1 font-sans font-semibold text-[10.5px] sm:text-[11px] tracking-[.5px] text-hl-dim">
-          <span className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-[3px] bg-[#E9C46A]" />
-            Meisterschaftsrunde (1–{Math.min(championsEnd, standings.length)})
-          </span>
           {Number.isFinite(relegationStart) && (
             <span className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-[3px] bg-hl-red" />
