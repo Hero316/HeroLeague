@@ -130,7 +130,13 @@ export default function ChatApp({
     const check = () => {
       if (document.visibilityState !== 'visible') return;
       pushDebug()
-        .then((d) => setNeedsPush(d.supported && d.intended && d.permission !== 'granted'))
+        .then((d) =>
+          // Ein-Tipp-Knopf zeigen, wenn Push hier (Team-App) noch nicht scharf ist:
+          // - Erlaubnis noch nie gefragt (frische Installation) ODER
+          // - Push war gewünscht, aber die Erlaubnis ist weg.
+          // Bei erteilter Erlaubnis heilt syncPush das Abo ohnehin automatisch.
+          setNeedsPush(d.supported && d.permission !== 'granted' && (d.intended || d.permission === 'default'))
+        )
         .catch(() => {});
     };
     check();
@@ -394,7 +400,7 @@ export default function ChatApp({
         >
           <Bell className="w-4 h-4 text-amber-500 shrink-0" />
           <span className="flex-1 text-[12px] text-hl-soft leading-snug">
-            <span className="font-semibold text-white">Benachrichtigungen sind aus.</span> Zum Wieder-Einschalten hier tippen.
+            <span className="font-semibold text-white">Benachrichtigungen sind aus.</span> Hier tippen, um sie für dieses Gerät einzuschalten.
           </span>
           <span className="text-[11px] font-bold uppercase tracking-wider text-amber-500 shrink-0">
             {reactivating ? '…' : 'Einschalten'}
