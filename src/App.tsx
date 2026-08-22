@@ -120,6 +120,10 @@ export default function App() {
   // Schiedsrichter sehen die normale Website + den Schiedsrichtermodus, aber kein
   // Backoffice (dort hätten sie ohnehin keine Rechte).
   const canAccessBackoffice = isAdmin && !isTeamMember && !isReferee;
+  // Interne Team-App (Chat/Aufgaben/Kalender/Tickets/Ideen): für alle
+  // eingeloggten Rollen AUSSER Schiedsrichter. Ein Schiri pfeift nur Spiele und
+  // darf die internen Team-Daten GAR NICHT sehen (weder Oberfläche noch Daten).
+  const canUseTeamApp = isAdmin && !isReferee;
   // Tickets verwalten (Status/Zuweisung/Löschen) dürfen nur Super-Admins.
   const canManageTickets = isSuperadmin;
   // Granulare Rechte – der Spiel-Admin bekommt bewusst nur einen Teil:
@@ -786,7 +790,7 @@ export default function App() {
           canAccessBackoffice={canAccessBackoffice}
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
-          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={canUseTeamApp ? () => navigateTo('/chat') : undefined}
           onOpenReferee={(canManageMatches || isReferee) ? () => navigateTo('/schiedsrichter') : undefined}
           demoActive={demo.active}
           seasonLabel={selectedSeasonName}
@@ -826,7 +830,7 @@ export default function App() {
           canAccessBackoffice={canAccessBackoffice}
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
-          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={canUseTeamApp ? () => navigateTo('/chat') : undefined}
           onOpenReferee={(canManageMatches || isReferee) ? () => navigateTo('/schiedsrichter') : undefined}
           demoActive={demo.active}
           seasonLabel={selectedSeasonName}
@@ -878,7 +882,7 @@ export default function App() {
           canAccessBackoffice={canAccessBackoffice}
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
-          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={canUseTeamApp ? () => navigateTo('/chat') : undefined}
           onOpenReferee={(canManageMatches || isReferee) ? () => navigateTo('/schiedsrichter') : undefined}
           demoActive={demo.active}
           seasonLabel={selectedSeasonName}
@@ -947,7 +951,7 @@ export default function App() {
           canAccessBackoffice={canAccessBackoffice}
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
-          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={canUseTeamApp ? () => navigateTo('/chat') : undefined}
           onOpenReferee={(canManageMatches || isReferee) ? () => navigateTo('/schiedsrichter') : undefined}
           demoActive={demo.active}
           seasonLabel={selectedSeasonName}
@@ -1017,7 +1021,7 @@ export default function App() {
           canAccessBackoffice={canAccessBackoffice}
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
-          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={canUseTeamApp ? () => navigateTo('/chat') : undefined}
           onOpenReferee={(canManageMatches || isReferee) ? () => navigateTo('/schiedsrichter') : undefined}
           demoActive={demo.active}
           seasonLabel={selectedSeasonName}
@@ -1088,7 +1092,7 @@ export default function App() {
           canAccessBackoffice={canAccessBackoffice}
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
-          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={canUseTeamApp ? () => navigateTo('/chat') : undefined}
           onOpenReferee={(canManageMatches || isReferee) ? () => navigateTo('/schiedsrichter') : undefined}
           demoActive={demo.active}
           seasonLabel={selectedSeasonName}
@@ -1174,7 +1178,7 @@ export default function App() {
           canAccessBackoffice={canAccessBackoffice}
           onLogout={handleLogout}
           onOpenLogin={() => navigateTo('/admin')}
-          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={canUseTeamApp ? () => navigateTo('/chat') : undefined}
           onOpenReferee={(canManageMatches || isReferee) ? () => navigateTo('/schiedsrichter') : undefined}
           demoActive={demo.active}
           seasonLabel={currentSeasonName}
@@ -1249,6 +1253,24 @@ export default function App() {
           <div className="flex-1 flex items-center justify-center p-6">
             <AdminLogin onLoginSuccess={(user) => setSessionUser(user)} />
           </div>
+        </div>
+      );
+    }
+    // Schiedsrichter haben KEINEN Zugang zur Team-App (nur Website + Schiri-Modus).
+    if (!canUseTeamApp) {
+      return (
+        <div className="h-screen flex flex-col items-center justify-center gap-4 bg-[#060E0F] text-hl-text p-6 text-center">
+          <Shield className="w-10 h-10 text-brand-accent-light" />
+          <h1 className="font-display font-black text-xl text-white uppercase tracking-tight">Kein Zugriff</h1>
+          <p className="text-sm text-hl-mute max-w-xs">
+            Die Team-App ist dem internen Team vorbehalten. Als Schiedsrichter nutzt du die Website und den Schiedsrichtermodus.
+          </p>
+          <button
+            onClick={() => navigateTo('/')}
+            className="mt-2 px-5 py-2.5 rounded-xl bg-brand-accent-light hover:bg-brand-accent text-white text-xs font-bold uppercase tracking-wider cursor-pointer"
+          >
+            Zur Website
+          </button>
         </div>
       );
     }
@@ -1553,7 +1575,7 @@ export default function App() {
         canAccessBackoffice={canAccessBackoffice}
         onLogout={handleLogout}
         onOpenLogin={() => navigateTo('/admin')}
-        onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={() => navigateTo('/chat')}
+        onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={canUseTeamApp ? () => navigateTo('/chat') : undefined}
         onOpenReferee={(canManageMatches || isReferee) ? () => navigateTo('/schiedsrichter') : undefined}
         demoActive={demo.active}
         seasonLabel={currentSeasonName}
