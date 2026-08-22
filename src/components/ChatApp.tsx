@@ -426,6 +426,7 @@ export default function ChatApp({
               initialConversationId={initialConversationId ?? getUrlParam('c')}
               initialThreadId={getUrlParam('thread')}
               homeSignal={chatHomeSignal}
+              onChatUnread={(n) => setBadges((b) => (b.chats === n ? b : { ...b, chats: n }))}
             />
           ) : tab === 'aufgaben' ? (
             <div className="h-full overflow-y-auto p-3">

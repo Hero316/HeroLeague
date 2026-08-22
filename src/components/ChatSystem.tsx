@@ -2012,6 +2012,7 @@ export default function ChatSystem({
   initialConversationId = null,
   initialThreadId = null,
   homeSignal = 0,
+  onChatUnread,
 }: {
   currentUserId: string;
   canManageTickets?: boolean;
@@ -2020,6 +2021,7 @@ export default function ChatSystem({
   initialConversationId?: string | null;
   initialThreadId?: string | null;
   homeSignal?: number; // erhöht sich, wenn unten „Chats" getippt wird → zur Liste
+  onChatUnread?: (total: number) => void; // Live-Stand der ungelesenen Chats (für das Dock-Badge)
 }) {
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
@@ -2091,11 +2093,16 @@ export default function ChatSystem({
     }
   };
 
+  // Immer die aktuelle Callback-Referenz nutzen, ohne loadConvs neu zu erzeugen.
+  const onChatUnreadRef = useRef(onChatUnread);
+  onChatUnreadRef.current = onChatUnread;
   const loadConvs = useCallback(async () => {
     try {
       const cs = await fetchConversations();
       setConvs(cs);
-      setChatUnread(cs.reduce((s, c) => s + (c.unread || 0), 0)); // App-Icon-Zahl
+      const totalUnread = cs.reduce((s, c) => s + (c.unread || 0), 0);
+      setChatUnread(totalUnread); // App-Icon-Zahl
+      onChatUnreadRef.current?.(totalUnread); // Dock-Badge sofort mitziehen (leert sich beim Öffnen)
     } catch {
       /* still */
     } finally {
