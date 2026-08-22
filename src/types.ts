@@ -475,6 +475,9 @@ export interface IdeaComment {
   attachMime?: string | null;
   attachTitle?: string | null;
   createdAt: string;
+  editedAt?: string | null; // gesetzt = nachträglich bearbeitet
+  deletedAt?: string | null; // gesetzt = für alle zurückgenommen
+  reactions?: MessageReaction[]; // Emoji-Reaktionen (wie im Chat)
 }
 
 export interface Idea {
