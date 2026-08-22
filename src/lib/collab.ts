@@ -43,6 +43,7 @@ export const createTicket = (input: {
   category: string;
   images: string[];
   links?: LinkItem[];
+  assignedTo?: string | null;
 }) => apiFetch<Ticket>('/api/tickets', { method: 'POST', body: JSON.stringify(input) });
 
 export const updateTicket = (
