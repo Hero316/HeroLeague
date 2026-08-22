@@ -46,6 +46,70 @@ export function pushSupported(): boolean {
   return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 }
 
+// Registrierung, auf der Push läuft. In der Team-App (/chat) bewusst eine EIGENE
+// Registrierung im Scope '/chat', damit Android die Benachrichtigungen + die Zahl
+// am App-Icon der TEAM-APP zuordnet – nicht der Website-App (gemeinsamer Scope '/').
+// Fällt bei Problemen auf die Standard-Registrierung zurück (Push bleibt so IMMER
+// funktionsfähig, im schlimmsten Fall nur wieder mit alter Zuordnung).
+async function pushRegistration(): Promise<ServiceWorkerRegistration> {
+  const inChat = typeof location !== 'undefined' && location.pathname.startsWith('/chat');
+  if (inChat) {
+    try {
+      const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/chat' });
+      if (!reg.active) {
+        // Frische Registrierung ist erst am Installieren – kurz auf „aktiv" warten.
+        await new Promise<void>((resolve) => {
+          const sw = reg.installing || reg.waiting;
+          const to = setTimeout(resolve, 3000); // Sicherheitsnetz
+          if (!sw) {
+            clearTimeout(to);
+            resolve();
+            return;
+          }
+          sw.addEventListener('statechange', function h(this: ServiceWorker) {
+            if (this.state === 'activated') {
+              this.removeEventListener('statechange', h);
+              clearTimeout(to);
+              resolve();
+            }
+          });
+        });
+      }
+      return reg;
+    } catch {
+      /* unten auf die Standard-Registrierung zurückfallen */
+    }
+  }
+  return navigator.serviceWorker.ready;
+}
+
+// Alt-Abo auf der Wurzel-Registrierung (Scope '/') entfernen. Vor der Trennung lag
+// das Team-App-Abo dort – und wurde deshalb der Website-App zugeordnet. Nach der
+// Umstellung auf ein '/chat'-Abo räumen wir das alte weg, damit die Website-App
+// keine (falsch zugeordneten) Benachrichtigungen mehr bekommt.
+async function dropRootSubscription(keepEndpoint: string): Promise<void> {
+  try {
+    if (typeof location === 'undefined' || !location.pathname.startsWith('/chat')) return;
+    const root = await navigator.serviceWorker.getRegistration('/');
+    if (!root || !root.scope.endsWith('/')) return; // nur die echte Wurzel behandeln
+    const sub = await root.pushManager.getSubscription();
+    if (sub && sub.endpoint !== keepEndpoint) {
+      try {
+        await removePushSubscription(sub.endpoint);
+      } catch {
+        /* egal */
+      }
+      try {
+        await sub.unsubscribe();
+      } catch {
+        /* egal */
+      }
+    }
+  } catch {
+    /* egal – best effort */
+  }
+}
+
 // Wunsch des Nutzers pro Gerät merken ("ich will hier Push"). Browser verwerfen
 // ein Push-Abo gelegentlich von selbst (z.B. nach längerer Zeit / Update) – dann
 // wäre der Schalter nach dem Neustart wieder aus. Mit diesem Merker stellen wir
@@ -95,7 +159,7 @@ export async function pushDebug(): Promise<{
   let hasSubscription = false;
   if (supported) {
     try {
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await pushRegistration();
       hasSubscription = !!(await reg.pushManager.getSubscription());
     } catch {
       /* egal */
@@ -107,7 +171,7 @@ export async function pushDebug(): Promise<{
 export async function isPushEnabled(): Promise<boolean> {
   if (!pushSupported()) return false;
   try {
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await pushRegistration();
     return !!(await reg.pushManager.getSubscription());
   } catch {
     return false;
@@ -132,7 +196,7 @@ export async function enablePush(): Promise<void> {
         : 'Benachrichtigungen sind für diese Seite blockiert. Im Browser links neben der Adresse auf das Schloss/⋮ tippen → Website-Einstellungen → Benachrichtigungen auf „Erlauben" stellen, dann erneut versuchen.'
     );
   }
-  const reg = await navigator.serviceWorker.ready;
+  const reg = await pushRegistration();
   const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
   if (perm !== 'granted') throw new Error('Benachrichtigungen wurden nicht erlaubt. Bitte beim Nachfragen auf „Erlauben" tippen.');
   // Wunsch SOFORT merken (bevor die Netz-Schritte kommen): Selbst wenn das
@@ -154,12 +218,13 @@ export async function enablePush(): Promise<void> {
   const sub =
     existing ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8Array(key) }));
   await savePushSubscription(sub.toJSON());
+  await dropRootSubscription(sub.endpoint); // altes, falsch zugeordnetes Abo wegräumen
 }
 
 export async function disablePush(): Promise<void> {
   setPushIntent(false); // Wunsch zurücknehmen – zuerst, damit syncPush nicht gegenhält
   if (!pushSupported()) return;
-  const reg = await navigator.serviceWorker.ready;
+  const reg = await pushRegistration();
   const sub = await reg.pushManager.getSubscription();
   if (sub) {
     await removePushSubscription(sub.endpoint);
@@ -175,7 +240,7 @@ export async function disablePush(): Promise<void> {
 export async function syncPush(): Promise<boolean> {
   if (!pushSupported()) return false;
   try {
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await pushRegistration();
     let sub = await reg.pushManager.getSubscription();
     if (sub) {
       // Passt das Abo noch zum aktuellen Server-Schlüssel? Falls NICHT (VAPID
@@ -214,6 +279,7 @@ export async function syncPush(): Promise<boolean> {
     } catch {
       /* Abo bleibt lokal bestehen; nächster Start heilt nach */
     }
+    await dropRootSubscription(sub.endpoint); // altes, falsch zugeordnetes Abo wegräumen
     return true;
   } catch {
     return false;
