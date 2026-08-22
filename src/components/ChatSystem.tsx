@@ -79,7 +79,9 @@ const IS_TOUCH =
 
 // Bubble-Farben (heller Look): eigene Nachricht türkiser Verlauf (weiße Schrift),
 // fremde Nachricht weiße Karte (dunkle Schrift via Token).
-const BUBBLE_MINE = 'linear-gradient(135deg, #22DFC9 0%, #12AEC6 100%)';
+// Eigene Nachrichten: dunklerer Türkis-Verlauf, damit die weiße Schrift klar
+// lesbar bleibt (heller Verlauf hatte zu wenig Kontrast).
+const BUBBLE_MINE = 'linear-gradient(135deg, #0C7A70 0%, #084F66 100%)';
 
 // Zufällige-aber-konstante Namensfarben (wie WhatsApp). Pro Gruppe anders, weil
 // der Konversations-Schlüssel in den Hash einfließt. Gut lesbar auf dunkel.
@@ -154,9 +156,12 @@ type Attachment =
   | { kind: 'ref'; type: 'ticket' | 'task'; id: string; title: string }
   | { kind: 'media'; type: 'file' | 'audio'; url: string; mime: string; title: string };
 
+// Anhang-Chip (Ticket/Aufgabe/Termin): kräftiges Pink mit heller Schrift –
+// gut lesbar sowohl auf der türkisen eigenen Blase als auch auf dunklen Blasen
+// (das frühere Türkis war auf der türkisen Blase praktisch unsichtbar).
 function AttachChip({ type, title }: { type: 'ticket' | 'task'; title: string | null }) {
   return (
-    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-brand-accent/15 border border-brand-accent-light/30 text-brand-accent-light text-[11px] font-sans font-semibold max-w-full">
+    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[rgba(230,35,142,0.30)] border border-[rgba(255,138,196,0.6)] text-[#FFD1EA] text-[11px] font-sans font-semibold max-w-full">
       {type === 'ticket' ? <TicketIcon className="w-3.5 h-3.5 shrink-0" /> : <CalendarDays className="w-3.5 h-3.5 shrink-0" />}
       <span className="truncate">{type === 'ticket' ? 'Ticket' : 'Aufgabe'}: {title || '—'}</span>
     </span>
