@@ -24,9 +24,13 @@ try {
 }
 
 // Service Worker registrieren: macht die Seite auf Android zuverlässig installierbar.
-// Läuft nur im Browser (nicht bei SSR) und stört bei Fehler die App nicht.
+// WICHTIG: In der Team-App (/chat) mit Scope '/chat' registrieren, damit Push-
+// Benachrichtigungen UND die Zahl am App-Icon der TEAM-APP („Hero Team") zugeordnet
+// werden – nicht der Website-App („Hero League"). Beide Apps teilten sich sonst den
+// einen Scope-'/'-Worker, wodurch Android alles der Website-App zurechnete.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+    const scope = location.pathname.startsWith('/chat') ? '/chat' : '/';
+    navigator.serviceWorker.register('/sw.js', { scope }).catch(() => undefined);
   });
 }
