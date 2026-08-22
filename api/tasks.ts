@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { tasks, task, taskGet, taskComment } from './_lib/collab.js';
+import { tasks, task, taskGet, taskComment, reactTaskComment } from './_lib/collab.js';
 import { ensureSchema } from './_lib/ensure.js';
 
 // Aufgaben-Board (Monday-Style): eigener Endpunkt.
@@ -13,6 +13,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     await ensureSchema();
     if (req.query.sub === 'comment') return taskComment(req, res);
+    if (req.query.sub === 'comment-react') return reactTaskComment(req, res);
     if (req.method === 'GET' && req.query.id) return taskGet(req, res);
     if (req.method === 'POST' && req.body?.id) return task(req, res);
     return tasks(req, res);

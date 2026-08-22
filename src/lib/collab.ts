@@ -108,8 +108,36 @@ export const updateTask = (
 export const deleteTask = (id: string) =>
   apiFetch<{ ok: boolean }>('/api/tasks', { method: 'POST', body: JSON.stringify({ id, op: 'delete' }) });
 
-export const addTaskComment = (taskId: string, body: string) =>
-  apiFetch<TaskComment>('/api/tasks?sub=comment', { method: 'POST', body: JSON.stringify({ taskId, body }) });
+export const addTaskComment = (
+  taskId: string,
+  body: string,
+  attach?: { attachType: 'file' | 'audio'; attachUrl: string; attachMime: string; attachTitle: string } | null,
+) =>
+  apiFetch<TaskComment>('/api/tasks?sub=comment', {
+    method: 'POST',
+    body: JSON.stringify({ taskId, body, ...(attach ?? {}) }),
+  });
+
+// Beitrag im Aufgaben-Verlauf bearbeiten (nur eigener) – gibt den aktualisierten zurück.
+export const editTaskComment = (commentId: string, body: string) =>
+  apiFetch<TaskComment>('/api/tasks?sub=comment', {
+    method: 'PATCH',
+    body: JSON.stringify({ commentId, body }),
+  });
+
+// Beitrag für alle löschen (nur eigener).
+export const deleteTaskComment = (commentId: string) =>
+  apiFetch<{ ok: boolean; id: string }>(`/api/tasks?sub=comment&commentId=${encodeURIComponent(commentId)}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ commentId }),
+  });
+
+// Emoji-Reaktion auf einen Aufgaben-Beitrag umschalten – gibt die neue Liste zurück.
+export const reactTaskComment = (commentId: string, emoji: string) =>
+  apiFetch<{ commentId: string; reactions: { userId: string; emoji: string }[] }>('/api/tasks?sub=comment-react', {
+    method: 'POST',
+    body: JSON.stringify({ commentId, emoji }),
+  });
 
 // --- Ideen (Brainstorm) -----------------------------------------------------
 export const fetchIdeas = () => apiFetch<Idea[]>('/api/team?resource=ideas');

@@ -69,6 +69,9 @@ export default function ChatApp({
   const readTab = (): Tab => {
     if (getUrlParam('openIdea')) return 'ideen'; // Deep-Link Idee (Benachrichtigung)
     const urlTab = getUrlParam('tab');
+    // Frischer Deep-Link aus einer Push mit explizitem Ziel-Tab (z.B. Termin →
+    // Kalender, Aufgabe → Aufgaben): dorthin springen, damit man „am Tag" landet.
+    if ((getUrlParam('openTask') || getUrlParam('openTicket')) && isTab(urlTab)) return urlTab;
     // Frischer Konversations-Deep-Link (c ohne gültigen tab-Parameter) → Chats,
     // damit der verlinkte Chat sicher sichtbar ist.
     if (getUrlParam('c') && !isTab(urlTab)) return 'chats';
@@ -226,14 +229,18 @@ export default function ChatApp({
             t.createdBy !== currentUserId &&
             ts(t.createdAt) > seenK
         ).length;
-        const aufgaben = tasks.filter(
+        // Neu zugewiesene Aufgaben seit dem letzten Öffnen (gerätebasiert) …
+        const aufgabenNeu = tasks.filter(
           (t) =>
             (t.type === 'aufgabe' || t.type === 'beides') &&
             t.createdBy !== currentUserId &&
             (t.assignees ?? []).some((a) => a.userId === currentUserId) &&
             ts(t.createdAt) > seenA
         ).length;
-        setBadges({ chats, ideen, kalender, aufgaben });
+        // … PLUS ungelesene Verlauf-Beiträge (server-seitig, verschwindet beim
+        // Öffnen der jeweiligen Aufgabe – wie beim Chat/bei den Ideen).
+        const aufgabenUngelesen = tasks.reduce((s, t) => s + (t.unread || 0), 0);
+        setBadges({ chats, ideen, kalender, aufgaben: aufgabenNeu + aufgabenUngelesen });
       } catch {
         /* egal – Zähler bleiben beim letzten Stand */
       }

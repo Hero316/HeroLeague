@@ -49,6 +49,11 @@ export async function ensureSchema(): Promise<void> {
     // bestehenden Datenbanken.
     await sql`SELECT edited_at, deleted_at FROM idea_comments LIMIT 1`;
     await sql`SELECT 1 FROM idea_comment_reactions LIMIT 1`;
+    // Volle Chat-Funktionen im Aufgaben-Verlauf (wie im Chat/bei den Ideen):
+    // Anhänge + Bearbeitet/Gelöscht + Reaktionen + Lesestand mitprüfen.
+    await sql`SELECT attach_type, edited_at, deleted_at FROM task_comments LIMIT 1`;
+    await sql`SELECT 1 FROM task_comment_reactions LIMIT 1`;
+    await sql`SELECT 1 FROM task_reads LIMIT 1`;
     // Benannte Links („Link-Tasten") mitprüfen.
     await sql`SELECT links FROM tasks LIMIT 1`;
     ensured = true;
@@ -95,6 +100,25 @@ export async function ensureSchema(): Promise<void> {
     id TEXT PRIMARY KEY, task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
     author_id TEXT NOT NULL, author_name TEXT NOT NULL DEFAULT '', body TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+  // Voller Chat im Aufgaben-Verlauf (wie im Chat/bei den Ideen): Medien-Anhänge
+  // (Bild/Video/Datei = 'file', 'audio'), Bearbeiten (edited_at), Für-alle-löschen
+  // (deleted_at) und Emoji-Reaktionen (eine pro Nutzer & Beitrag, Tippen togglet).
+  await run(sql`ALTER TABLE task_comments ADD COLUMN IF NOT EXISTS attach_type TEXT`);
+  await run(sql`ALTER TABLE task_comments ADD COLUMN IF NOT EXISTS attach_url TEXT`);
+  await run(sql`ALTER TABLE task_comments ADD COLUMN IF NOT EXISTS attach_mime TEXT`);
+  await run(sql`ALTER TABLE task_comments ADD COLUMN IF NOT EXISTS attach_title TEXT`);
+  await run(sql`ALTER TABLE task_comments ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ`);
+  await run(sql`ALTER TABLE task_comments ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`);
+  await run(sql`CREATE TABLE IF NOT EXISTS task_comment_reactions (
+    comment_id TEXT NOT NULL REFERENCES task_comments(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL, emoji TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (comment_id, user_id))`);
+  await run(sql`CREATE INDEX IF NOT EXISTS idx_task_comment_reactions_c ON task_comment_reactions(comment_id)`);
+  // Lesestand je Aufgabe & Nutzer (für den „ungelesen"-Zähler im Aufgaben-Tab,
+  // wie bei Chat/Ideen). Fehlt eine Zeile, gilt der Erstellzeitpunkt als Basis.
+  await run(sql`CREATE TABLE IF NOT EXISTS task_reads (
+    user_id TEXT NOT NULL, task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    last_read_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (user_id, task_id))`);
   await run(sql`CREATE TABLE IF NOT EXISTS notifications (
     id TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL,
     ref_type TEXT NOT NULL, ref_id TEXT NOT NULL, body TEXT NOT NULL DEFAULT '',

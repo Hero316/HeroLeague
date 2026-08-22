@@ -212,6 +212,31 @@ CREATE TABLE task_comments (
 );
 CREATE INDEX idx_task_comments_task ON task_comments(task_id);
 
+-- Voller Chat im Aufgaben-Verlauf (wie im Chat/bei den Ideen): Anhänge,
+-- Bearbeiten (edited_at), Für-alle-löschen (deleted_at) und Emoji-Reaktionen.
+ALTER TABLE task_comments ADD COLUMN IF NOT EXISTS attach_type TEXT;
+ALTER TABLE task_comments ADD COLUMN IF NOT EXISTS attach_url TEXT;
+ALTER TABLE task_comments ADD COLUMN IF NOT EXISTS attach_mime TEXT;
+ALTER TABLE task_comments ADD COLUMN IF NOT EXISTS attach_title TEXT;
+ALTER TABLE task_comments ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;
+ALTER TABLE task_comments ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS task_comment_reactions (
+  comment_id TEXT NOT NULL REFERENCES task_comments(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL,
+  emoji      TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (comment_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_task_comment_reactions_c ON task_comment_reactions(comment_id);
+
+-- Lesestand je Aufgabe & Nutzer (für den „ungelesen"-Zähler im Aufgaben-Tab).
+CREATE TABLE IF NOT EXISTS task_reads (
+  user_id      TEXT NOT NULL,
+  task_id      TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  last_read_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, task_id)
+);
+
 -- In-App-Benachrichtigungen (Erwähnungen, Zuweisungen, neue Kommentare).
 -- user_id = Empfänger. ref_type/ref_id verweisen auf das Ticket bzw. die Aufgabe.
 CREATE TABLE notifications (
