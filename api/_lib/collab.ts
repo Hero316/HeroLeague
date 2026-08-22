@@ -677,7 +677,9 @@ export async function ideas(req: VercelRequest, res: VercelResponse) {
              i.created_at AS "createdAt", i.updated_at AS "updatedAt",
              COALESCE((SELECT json_agg(json_build_object('userId', m.user_id, 'userName', m.user_name))
                        FROM idea_members m WHERE m.idea_id = i.id), '[]') AS members,
-             (SELECT count(*)::int FROM idea_comments c WHERE c.idea_id = i.id) AS "commentCount"
+             (SELECT count(*)::int FROM idea_comments c WHERE c.idea_id = i.id) AS "commentCount",
+             (SELECT count(*)::int FROM idea_comments c
+                WHERE c.idea_id = i.id AND c.author_id <> ${uid} AND c.created_at > me.last_read_at) AS "unread"
       FROM ideas i
       JOIN idea_members me ON me.idea_id = i.id AND me.user_id = ${uid}
       ORDER BY CASE i.status WHEN 'offen' THEN 0 WHEN 'in_bearbeitung' THEN 1 WHEN 'erledigt' THEN 2 ELSE 3 END,

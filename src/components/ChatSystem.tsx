@@ -81,7 +81,7 @@ const IS_TOUCH =
 // fremde Nachricht weiße Karte (dunkle Schrift via Token).
 // Eigene Nachrichten: dunklerer Türkis-Verlauf, damit die weiße Schrift klar
 // lesbar bleibt (heller Verlauf hatte zu wenig Kontrast).
-const BUBBLE_MINE = 'linear-gradient(135deg, #0C7A70 0%, #084F66 100%)';
+export const BUBBLE_MINE = 'linear-gradient(135deg, #0C7A70 0%, #084F66 100%)';
 
 // Zufällige-aber-konstante Namensfarben (wie WhatsApp). Pro Gruppe anders, weil
 // der Konversations-Schlüssel in den Hash einfließt. Gut lesbar auf dunkel.
@@ -94,7 +94,7 @@ function hashStr(s: string): number {
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
   return h;
 }
-function pickNameColor(name: string, seed: string): string {
+export function pickNameColor(name: string, seed: string): string {
   return NAME_COLORS[hashStr(`${name}::${seed}`) % NAME_COLORS.length];
 }
 function firstName(name: string): string {

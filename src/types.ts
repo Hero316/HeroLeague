@@ -490,6 +490,7 @@ export interface Idea {
   updatedAt: string;
   members: { userId: string; userName: string }[];
   commentCount?: number;
+  unread?: number; // neue Beiträge seit dem letzten Öffnen (nur in der Listenansicht)
   comments?: IdeaComment[];
 }
 
