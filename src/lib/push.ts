@@ -199,11 +199,16 @@ export async function syncPush(): Promise<boolean> {
         return true;
       }
     }
-    // Kein (gültiges) Abo vorhanden: nur wiederherstellen, wenn gewünscht UND erlaubt.
-    if (Notification.permission !== 'granted' || !pushIntended()) return false;
+    // Kein (gültiges) Abo vorhanden: neu anlegen, SOBALD die Browser-Erlaubnis
+    // erteilt ist – auch ohne zuvor gemerkten Wunsch. Grund: Eine erteilte
+    // Erlaubnis heißt, der Nutzer hat Push zugestimmt; nach einer Neuinstallation
+    // (localStorage weg) würde das Abo sonst nie automatisch wiederkommen, obwohl
+    // die Erlaubnis am Handy noch aktiv ist – genau das „ich krieg gar nichts mehr".
+    if (Notification.permission !== 'granted') return false;
     const { key } = await getPushKey();
     if (!key) return false;
     sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8Array(key) });
+    setPushIntent(true);
     try {
       await savePushSubscription(sub.toJSON());
     } catch {
