@@ -395,11 +395,14 @@ export default function App() {
   // Merkt sich, ob innerhalb der App navigiert wurde (für „Zurück").
   const navigatedInApp = useRef(false);
 
-  const navigateTo = (path: string) => {
+  const navigateTo = (path: string, opts?: { keepScroll?: boolean }) => {
     window.history.pushState({}, '', path);
     navigatedInApp.current = true;
     setCurrentPath(path);
-    window.scrollTo({ top: 0 }); // neue Seite (z.B. Vereinsseite) immer oben starten
+    // Neue Seite (z.B. Vereinsseite) immer oben starten – außer bei reinen
+    // Reiter-Wechseln auf derselben Seite (z.B. Testspiel Tabelle↔Spielplan),
+    // da soll die Scroll-Position erhalten bleiben.
+    if (!opts?.keepScroll) window.scrollTo({ top: 0 });
   };
 
   // Ziel einer Benachrichtigung öffnen (Glocke): Chat → eigene Seite, Idee →
@@ -1216,7 +1219,7 @@ export default function App() {
                 trackingRows={eventTrackingRows}
                 scoringConfig={scoring}
                 tab={evTab}
-                onSelectTab={(t) => navigateTo(t === 'tabelle' ? '/testspiel' : `/testspiel/${t}`)}
+                onSelectTab={(t) => navigateTo(t === 'tabelle' ? '/testspiel' : `/testspiel/${t}`, { keepScroll: true })}
               />
             </>
           ) : (
