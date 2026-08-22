@@ -416,11 +416,12 @@ export function TicketDetail({
 }
 
 // --- Neues-Ticket-Formular --------------------------------------------------
-function NewTicketForm({ onCreated, onCancel }: { onCreated: () => void; onCancel: () => void }) {
+function NewTicketForm({ team, canManage, onCreated, onCancel }: { team: TeamMember[]; canManage: boolean; onCreated: () => void; onCancel: () => void }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<TicketPriority>('mittel');
   const [category, setCategory] = useState('');
+  const [assignedTo, setAssignedTo] = useState('');
   const [busy, setBusy] = useState(false);
   const up = useImageUploads();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -433,7 +434,7 @@ function NewTicketForm({ onCreated, onCancel }: { onCreated: () => void; onCance
     }
     setBusy(true);
     try {
-      await createTicket({ title: title.trim(), description, priority, category: category.trim(), images: up.images });
+      await createTicket({ title: title.trim(), description, priority, category: category.trim(), images: up.images, assignedTo: assignedTo || null });
       onCreated();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Ticket konnte nicht erstellt werden.');
@@ -469,6 +470,20 @@ function NewTicketForm({ onCreated, onCancel }: { onCreated: () => void; onCance
           <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="z.B. Startseite, Tabelle…" className={inputClass} />
         </div>
       </div>
+      {canManage && (
+        <div>
+          <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-1.5">Zuständig (optional)</label>
+          <select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} className={inputClass}>
+            <option value="">— niemand —</option>
+            {team.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-[10px] text-hl-faint mt-1">Die zuständige Person bekommt eine Benachrichtigung.</p>
+        </div>
+      )}
       <div>
         <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-1.5">Beschreibung / Umsetzungsidee</label>
         <textarea
@@ -597,6 +612,8 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
         {showNew && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-4">
             <NewTicketForm
+              team={team}
+              canManage={canManage}
               onCreated={() => {
                 setShowNew(false);
                 load();

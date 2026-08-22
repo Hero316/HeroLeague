@@ -170,12 +170,18 @@ export async function tickets(req: VercelRequest, res: VercelResponse) {
     const links = sanitizeLinks(b.links);
     const id = genId('t');
     const name = sessionName(session);
-
     const title = b.title.trim().slice(0, 200);
+
+    // Optionale Zuständigkeit direkt beim Erstellen (nur gültige, aktive Person).
+    const members = await loadMembers();
+    const assignee = typeof b.assignedTo === 'string' && b.assignedTo && members.has(b.assignedTo) ? members.get(b.assignedTo)! : null;
+    const assignedTo = assignee ? assignee.id : null;
+    const assignedToName = assignee ? assignee.name : null;
+
     const rows = await sql`
-      INSERT INTO tickets (id, title, description, priority, status, category, images, links, created_by, created_by_name)
+      INSERT INTO tickets (id, title, description, priority, status, category, images, links, created_by, created_by_name, assigned_to, assigned_to_name)
       VALUES (${id}, ${title}, ${description}, ${priority}, 'offen',
-              ${category}, ${JSON.stringify(images)}::jsonb, ${JSON.stringify(links)}::jsonb, ${session.userId}, ${name})
+              ${category}, ${JSON.stringify(images)}::jsonb, ${JSON.stringify(links)}::jsonb, ${session.userId}, ${name}, ${assignedTo}, ${assignedToName})
       RETURNING
         id, title, description, priority, status, category, images,
         COALESCE(links, '[]'::jsonb) AS links,
@@ -184,13 +190,16 @@ export async function tickets(req: VercelRequest, res: VercelResponse) {
         created_at AS "createdAt", updated_at AS "updatedAt"
     `;
 
-    // Alle Ticket-Bearbeiter (nur Super-Admins) informieren.
-    const members = await loadMembers();
+    // Alle Ticket-Bearbeiter (nur Super-Admins) über das neue Ticket informieren –
+    // außer der zugewiesenen Person (die bekommt die gezieltere Meldung unten).
     for (const u of members.values()) {
-      const canHandle = u.role === 'superadmin';
-      if (canHandle) {
+      if (u.role === 'superadmin' && u.id !== assignedTo) {
         await notify(u.id, session.userId, 'ticket_new', 'ticket', id, `Neues Ticket von ${name}: „${title}“`);
       }
+    }
+    // Direkt zugewiesene Person gezielt benachrichtigen (Glocke + Push).
+    if (assignedTo) {
+      await notify(assignedTo, session.userId, 'ticket_assigned', 'ticket', id, `Dir wurde ein Ticket zugewiesen: „${title}“`);
     }
     return res.json({ ...rows[0], commentCount: 0, comments: [] });
   }
