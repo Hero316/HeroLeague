@@ -402,7 +402,10 @@ async function fetchTasks(viewerId: string, where: string, params: unknown[]) {
            CASE WHEN t.created_by = $1 OR EXISTS (SELECT 1 FROM task_assignees ai WHERE ai.task_id = t.id AND ai.user_id = $1)
              THEN (SELECT count(*)::int FROM task_comments c
                      WHERE c.task_id = t.id AND c.author_id <> $1 AND c.deleted_at IS NULL
-                       AND c.created_at > COALESCE((SELECT r.last_read_at FROM task_reads r WHERE r.task_id = t.id AND r.user_id = $1), t.created_at))
+                       AND c.created_at > COALESCE(
+                             (SELECT r.last_read_at FROM task_reads r WHERE r.task_id = t.id AND r.user_id = $1),
+                             (SELECT b.since FROM task_read_baseline b WHERE b.user_id = $1),
+                             t.created_at))
              ELSE 0 END AS "unread"
     FROM tasks t
     LEFT JOIN task_assignees a ON a.task_id = t.id
@@ -457,6 +460,9 @@ export async function tasks(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'GET') {
     res.setHeader('Cache-Control', 'no-store');
+    // Beim allerersten Laden den „Start-Zeitpunkt" merken: alle bereits
+    // vorhandenen Beiträge gelten dann als gelesen (kein Alt-Kommentar-Stau).
+    await sql`INSERT INTO task_read_baseline (user_id) VALUES (${session.userId}) ON CONFLICT (user_id) DO NOTHING`;
     const week = normalizeWeek(req.query.week);
     const from = normalizeDueDate(req.query.from);
     const to = normalizeDueDate(req.query.to);

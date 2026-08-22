@@ -238,9 +238,12 @@ export default function ChatApp({
             ts(t.createdAt) > seenA
         ).length;
         // … PLUS ungelesene Verlauf-Beiträge (server-seitig, verschwindet beim
-        // Öffnen der jeweiligen Aufgabe – wie beim Chat/bei den Ideen).
-        const aufgabenUngelesen = tasks.reduce((s, t) => s + (t.unread || 0), 0);
-        setBadges({ chats, ideen, kalender, aufgaben: aufgabenNeu + aufgabenUngelesen });
+        // Öffnen der jeweiligen Aufgabe – wie beim Chat/bei den Ideen). Aufgaben-
+        // Chat zählt zum Aufgaben-Tab, Termin-Chat zum Kalender-Tab (so passt die
+        // Zahl unten immer zu den Beiträgen, die man in der Liste auch sieht).
+        const aufgabenUngelesen = tasks.filter((t) => t.type !== 'termin').reduce((s, t) => s + (t.unread || 0), 0);
+        const terminUngelesen = tasks.filter((t) => t.type !== 'aufgabe').reduce((s, t) => s + (t.unread || 0), 0);
+        setBadges({ chats, ideen, kalender: kalender + terminUngelesen, aufgaben: aufgabenNeu + aufgabenUngelesen });
       } catch {
         /* egal – Zähler bleiben beim letzten Stand */
       }
