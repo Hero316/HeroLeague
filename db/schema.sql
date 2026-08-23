@@ -242,6 +242,41 @@ CREATE TABLE IF NOT EXISTS task_read_baseline (
   since   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Huddle (WLAN-Anrufe im Slack-Style): Audio-Raum zu einer Unterhaltung.
+-- ended_at IS NULL = läuft noch. Teilnehmer heartbeaten (last_seen); wer geht,
+-- bekommt left_at. WebRTC-Signale laufen kurzlebig über huddle_signals (Polling)
+-- und werden nach dem Abholen gelöscht.
+CREATE TABLE IF NOT EXISTS huddles (
+  id              TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  created_by      TEXT NOT NULL,
+  message_id      TEXT,                       -- die anklickbare Chat-Karte
+  notes           TEXT NOT NULL DEFAULT '',   -- Notizen aus dem Call
+  started_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  ended_at        TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_huddles_conv ON huddles(conversation_id, ended_at);
+CREATE TABLE IF NOT EXISTS huddle_participants (
+  huddle_id  TEXT NOT NULL REFERENCES huddles(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL,
+  user_name  TEXT NOT NULL DEFAULT '',
+  joined_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_seen  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  left_at    TIMESTAMPTZ,
+  PRIMARY KEY (huddle_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS huddle_signals (
+  id         TEXT PRIMARY KEY,
+  huddle_id  TEXT NOT NULL REFERENCES huddles(id) ON DELETE CASCADE,
+  sender_id  TEXT NOT NULL,
+  target_id  TEXT NOT NULL,
+  kind       TEXT NOT NULL,          -- offer | answer | ice
+  payload    JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_huddle_signals_target ON huddle_signals(huddle_id, target_id, created_at);
+-- messages.attach_type erlaubt zusätzlich 'huddle' (die Anruf-Karte im Chat).
+
 -- In-App-Benachrichtigungen (Erwähnungen, Zuweisungen, neue Kommentare).
 -- user_id = Empfänger. ref_type/ref_id verweisen auf das Ticket bzw. die Aufgabe.
 CREATE TABLE notifications (

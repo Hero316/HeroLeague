@@ -527,7 +527,7 @@ export interface ChatLastMessage {
   body: string;
   authorName: string;
   createdAt: string;
-  attachType: 'ticket' | 'task' | 'file' | 'audio' | 'poll' | null;
+  attachType: 'ticket' | 'task' | 'file' | 'audio' | 'poll' | 'huddle' | null;
   deleted?: boolean; // Nachricht wurde zurückgenommen
 }
 
@@ -555,7 +555,22 @@ export interface ChatPresence {
   typing: { userId: string; userName: string }[]; // tippt in der aktiven Unterhaltung
 }
 
-export type ChatAttachType = 'ticket' | 'task' | 'file' | 'audio' | 'poll';
+export type ChatAttachType = 'ticket' | 'task' | 'file' | 'audio' | 'poll' | 'huddle';
+
+// Huddle (WLAN-Anruf im Slack-Style) – Audio-Raum zu einer Unterhaltung.
+export interface HuddleParticipant {
+  userId: string;
+  userName: string;
+}
+export interface HuddleState {
+  id: string;
+  conversationId: string;
+  createdBy: string;
+  notes: string;
+  messageId: string | null;
+  startedAt: string;
+  endedAt: string | null;
+}
 
 // Abstimmung (Umfrage) im Chat – wie bei WhatsApp.
 export interface PollOption {

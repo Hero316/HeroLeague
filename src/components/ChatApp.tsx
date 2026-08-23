@@ -8,15 +8,16 @@ import TicketSystem from './TicketSystem';
 import IdeasBoard from './IdeasBoard';
 import TeamSettings from './TeamSettings';
 import DeepLinkModal from './DeepLinkModal';
+import { useHuddleController, HuddleBar } from './Huddle';
 import { useInstall } from './InstallProvider';
 import { pushDebug, enablePush } from '../lib/push';
-import { fetchNotifications, fetchIdeas, fetchAllTasks } from '../lib/collab';
+import { fetchNotifications, fetchIdeas, fetchAllTasks, fetchTeam } from '../lib/collab';
 import { fetchConversations } from '../lib/chat';
 import { setNotifUnread } from '../lib/badge';
 import { getUrlParam, setUrlParam } from '../lib/urlState';
 import { useBackClose } from '../lib/backStack';
 import { AudioPlayerProvider, MiniPlayer } from './AudioPlayer';
-import type { SessionUser, UserStatus, Conversation, Idea, Task } from '../types';
+import type { SessionUser, UserStatus, Conversation, Idea, Task, TeamMember } from '../types';
 
 // Eigenständige „Team-App" unter /chat: Vollbild auf iPhone & Android, mit
 // unterer Tab-Leiste (Chats · Aufgaben · Tickets). Bewusst getrennt vom
@@ -102,6 +103,11 @@ export default function ChatApp({
   useBackClose(showGame, () => setShowGame(false));
   const { isStandalone, isIos, canInstall, promptInstall } = useInstall();
   const current = TABS.find((t) => t.id === tab) ?? SETTINGS_TAB;
+  // Huddle (WLAN-Anruf): eine aktive Sitzung, überlebt den Tab-Wechsel; die
+  // Leiste sitzt unten über der Tab-Leiste. Team-Liste für Namen/Avatare.
+  const huddle = useHuddleController(currentUserId);
+  const [huddleTeam, setHuddleTeam] = useState<TeamMember[]>([]);
+  useEffect(() => { fetchTeam().then(setHuddleTeam).catch(() => {}); }, []);
   // Deep-Link: aus einer Benachrichtigung direkt eine bestimmte Idee öffnen.
   // Einmalig lesen und danach den Parameter aus der URL entfernen.
   const [initialOpenIdeaId] = useState(() => getUrlParam('openIdea'));
@@ -437,6 +443,7 @@ export default function ChatApp({
               initialThreadId={getUrlParam('thread')}
               homeSignal={chatHomeSignal}
               onChatUnread={(n) => setBadges((b) => (b.chats === n ? b : { ...b, chats: n }))}
+              huddle={huddle}
             />
           ) : tab === 'aufgaben' ? (
             <div className="h-full overflow-y-auto p-3">
@@ -481,6 +488,17 @@ export default function ChatApp({
 
       {/* Läuft weiter beim Tab-Wechsel: Sprachnachrichten-Mini-Leiste */}
       <MiniPlayer />
+
+      {/* Huddle-Leiste (WLAN-Anruf) – über der Tab-Leiste, bleibt beim Tab-Wechsel */}
+      {huddle.active && (
+        <HuddleBar
+          active={huddle.active}
+          team={huddleTeam}
+          currentUserId={currentUserId}
+          onLeave={huddle.leave}
+          onToggleMute={huddle.toggleMute}
+        />
+      )}
 
       {/* Untere Tab-Leiste: schwebende Pille, die zum getippten Tab „fliegt". */}
       <nav

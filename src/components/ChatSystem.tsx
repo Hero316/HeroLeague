@@ -31,6 +31,7 @@ import {
   Square,
   Eye,
   EyeOff,
+  Headphones,
 } from 'lucide-react';
 import type { Conversation, ChatMessage, TeamMember, Ticket, Task, UserStatus, Poll } from '../types';
 import { USER_STATUS } from '../types';
@@ -57,6 +58,7 @@ import {
   type ChatSearchHit,
   type ThreadSummary,
 } from '../lib/chat';
+import { HuddleBanner, HuddleCard, type HuddleController } from './Huddle';
 import { fetchTeam, fetchTickets, fetchAllTasks, fetchTask, memberMap } from '../lib/collab';
 import { setChatUnread } from '../lib/badge';
 import { setUrlParam } from '../lib/urlState';
@@ -119,11 +121,12 @@ function fmtClock(iso: string): string {
 }
 // Kurzvorschau für einen Anhang in Listen (Threads, Suche).
 function attachPreview(attachType: string | null | undefined): string {
-  return attachType === 'poll' ? '📊 Umfrage' : '📎 Anhang';
+  return attachType === 'poll' ? '📊 Umfrage' : attachType === 'huddle' ? '🎧 Huddle' : '📎 Anhang';
 }
-// Vorschautext der letzten Nachricht in der Chatliste (Poll/Anhang/Text).
+// Vorschautext der letzten Nachricht in der Chatliste (Poll/Huddle/Anhang/Text).
 function lastMsgPreview(lm: { body: string; attachType: string | null }): string {
   if (lm.attachType === 'poll') return '📊 Umfrage';
+  if (lm.attachType === 'huddle') return '🎧 Huddle';
   if (lm.attachType) return `📎 ${lm.body || 'Anhang'}`;
   return lm.body || '';
 }
@@ -2047,6 +2050,7 @@ export default function ChatSystem({
   initialThreadId = null,
   homeSignal = 0,
   onChatUnread,
+  huddle,
 }: {
   currentUserId: string;
   canManageTickets?: boolean;
@@ -2056,7 +2060,10 @@ export default function ChatSystem({
   initialThreadId?: string | null;
   homeSignal?: number; // erhöht sich, wenn unten „Chats" getippt wird → zur Liste
   onChatUnread?: (total: number) => void; // Live-Stand der ungelesenen Chats (für das Dock-Badge)
+  huddle?: HuddleController; // WLAN-Anruf-Steuerung (aus ChatApp)
 }) {
+  // Laufender Huddle DIESER offenen Unterhaltung (für Kopf-Knopf + Karten).
+  const [liveHuddleId, setLiveHuddleId] = useState<string | null>(null);
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -2577,6 +2584,29 @@ export default function ChatSystem({
                   </div>
                 </div>
               </button>
+              {huddle && (() => {
+                const inThis = huddle.active?.state.conversationId === active.id;
+                return (
+                  <button
+                    onClick={() => {
+                      if (inThis) return; // schon drin
+                      if (liveHuddleId) huddle.joinHuddle(liveHuddleId);
+                      else huddle.startInConversation(active.id);
+                    }}
+                    disabled={huddle.busy}
+                    title={inThis ? 'Du bist im Huddle' : liveHuddleId ? 'Huddle beitreten' : 'Huddle starten'}
+                    className={`p-2 rounded-lg border cursor-pointer shrink-0 disabled:opacity-50 ${
+                      inThis
+                        ? 'bg-[#0C7A70] border-[#0C7A70] text-white'
+                        : liveHuddleId
+                          ? 'bg-[#0C7A70]/20 border-[#0C7A70]/50 text-[#22DFC9] animate-pulse'
+                          : 'bg-white/5 border-white/10 text-hl-soft hover:text-white'
+                    }`}
+                  >
+                    <Headphones className="w-4 h-4" />
+                  </button>
+                );
+              })()}
               <button
                 onClick={() => setShowConvSearch((v) => { if (v) setConvSearch(''); return !v; })}
                 title="In diesem Chat suchen (auch Threads)"
@@ -2585,6 +2615,14 @@ export default function ChatSystem({
                 <Search className="w-4 h-4" />
               </button>
             </div>
+            {huddle && (
+              <HuddleBanner
+                conversationId={active.id}
+                inThisConversation={huddle.active?.state.conversationId === active.id}
+                onJoin={(id) => huddle.joinHuddle(id)}
+                onLive={setLiveHuddleId}
+              />
+            )}
             {showConvSearch && (
               <div className="px-3 py-2 border-b border-white/5 hl-surf">
                 <div className="flex items-center gap-2 hl-surf-0 border border-white/10 rounded-lg px-2.5 py-1.5">
@@ -2632,21 +2670,29 @@ export default function ChatSystem({
                           </span>
                         </div>
                       )}
-                      <MessageRow
-                        m={m}
-                        mine={m.authorId === currentUserId}
-                        firstOfRun={firstOfRun}
-                        showAuthor={showAuthor}
-                        colorSeed={active.id}
-                        displayName={mem?.name}
-                        avatarUrl={mem?.avatarUrl}
-                        members={members}
-                        highlight={highlightId === m.id}
-                        currentUserId={currentUserId}
-                        onOpenThread={setThread}
-                        onOpenAttachment={openAttachment}
-                        onChanged={(um) => setMessages((prev) => prev.map((x) => (x.id === um.id ? { ...x, ...um } : x)))}
-                      />
+                      {m.attachType === 'huddle' ? (
+                        <HuddleCard
+                          message={m}
+                          isLiveHuddleId={liveHuddleId}
+                          onJoin={(id) => huddle?.joinHuddle(id)}
+                        />
+                      ) : (
+                        <MessageRow
+                          m={m}
+                          mine={m.authorId === currentUserId}
+                          firstOfRun={firstOfRun}
+                          showAuthor={showAuthor}
+                          colorSeed={active.id}
+                          displayName={mem?.name}
+                          avatarUrl={mem?.avatarUrl}
+                          members={members}
+                          highlight={highlightId === m.id}
+                          currentUserId={currentUserId}
+                          onOpenThread={setThread}
+                          onOpenAttachment={openAttachment}
+                          onChanged={(um) => setMessages((prev) => prev.map((x) => (x.id === um.id ? { ...x, ...um } : x)))}
+                        />
+                      )}
                     </React.Fragment>
                   );
                 })

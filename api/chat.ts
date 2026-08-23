@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { conversations, messages, markRead, searchMessages, updateConversation, manageMember, presence, reactMessage, threads, createPoll, votePoll, deleteConversation } from './_lib/chat.js';
+import { huddle } from './_lib/huddle.js';
 import { denyWithoutTeamApp } from './_lib/auth.js';
 import { ensureSchema } from './_lib/ensure.js';
 
@@ -24,6 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (resource === 'group') return updateConversation(req, res);
     if (resource === 'member') return manageMember(req, res);
     if (resource === 'delete') return deleteConversation(req, res);
+    if (resource === 'huddle') return huddle(req, res);
     if (resource === 'presence') return presence(req, res);
     return conversations(req, res);
   } catch (err) {
