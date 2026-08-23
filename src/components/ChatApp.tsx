@@ -37,6 +37,19 @@ const TABS: { id: Tab; label: string; icon: typeof MessageSquare; color: string 
 ];
 const SETTINGS_TAB = { id: 'mehr' as Tab, label: 'Einstellungen', icon: Settings };
 
+// Sektor-Farbe pro Tab: färbt Hintergrund, Sektor-Tasten und Pop-ups. Wird auf
+// <html> gesetzt (damit die per Portal an den <body> gehängten Pop-ups sie erben)
+// und morpht dank CSS-Transition weich beim Tab-Wechsel.
+const SECTION_COLOR: Record<Tab, string> = {
+  start: '#16BDA9',
+  chats: '#3B9EFF',
+  aufgaben: '#8B7CFF',
+  kalender: '#E83E8C',
+  ideen: '#F2A93B',
+  tickets: '#2BB0BD',
+  mehr: '#16BDA9',
+};
+
 export default function ChatApp({
   user,
   currentUserId,
@@ -302,6 +315,22 @@ export default function ChatApp({
       return 'light';
     }
   });
+
+  // Sektor-Farbe (--section) je nach aktivem Tab auf <html> setzen. Cascadet auf
+  // Hintergrund, Sektor-Tasten und die per Portal gehängten Pop-ups; der weiche
+  // Farb-Übergang kommt aus der CSS-Transition auf <html>. Beim Verlassen der
+  // Team-App wieder entfernen (Website/Backoffice bleiben beim Teal-Standard).
+  useEffect(() => {
+    document.documentElement.style.setProperty('--section', SECTION_COLOR[tab]);
+  }, [tab]);
+  useEffect(() => {
+    const el = document.documentElement;
+    el.classList.add('hl-app-active');
+    return () => {
+      el.classList.remove('hl-app-active');
+      el.style.removeProperty('--section');
+    };
+  }, []);
 
   // Theme auf <html> markieren, damit AUCH die per Portal an den <body> gehängten
   // Fenster (Modals) es erben. Beim Verlassen wieder weg, damit Website &
