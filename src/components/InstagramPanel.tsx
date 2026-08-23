@@ -1,43 +1,97 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Instagram, Play, Heart, MessageCircle, Eye, Users, TrendingUp, Film } from 'lucide-react';
+import { ArrowLeft, Instagram, Play, Heart, MessageCircle, Eye, Users, TrendingUp, Film, Loader2 } from 'lucide-react';
 import { ModalPortal } from './ui';
 import { useBackClose } from '../lib/backStack';
-import type { IgReelsResult } from '../lib/collab';
+import { fetchInstagramReels, type IgReelsResult } from '../lib/collab';
 
-// Große Zahlen kompakt.
 function compact(n: number | null | undefined): string {
   if (n == null) return '–';
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.', ',') + ' Mio.';
   if (n >= 1_000) return (n / 1_000).toFixed(1).replace('.', ',') + 'k';
   return String(n);
 }
+const fmt = (n: number) => n.toLocaleString('de-DE');
+function dayLabel(iso: string): string {
+  const p = iso.split('-');
+  return p.length === 3 ? `${Number(p[2])}.${Number(p[1])}.` : iso;
+}
 
 const IG_GRAD = 'linear-gradient(135deg, #F2A93B 0%, #E83E8C 50%, #8B7CFF 100%)';
+const RANGES = [7, 14, 30, 60, 90];
 
-// Verlaufs-Diagramm (Fläche + Linie) aus den Tageswerten.
-function AreaChart({ data }: { data: { day: string; value: number }[] }) {
+// Verlaufs-Diagramm mit Achsen-Zahlen UND antippbarem Tooltip (wie bei Instagram).
+function AreaChart({ data, label }: { data: { day: string; value: number }[]; label: string }) {
+  const [active, setActive] = useState<number | null>(null);
   if (data.length < 2) return null;
-  const W = 320, H = 110, P = 6;
+  const W = 320, H = 120, PL = 4, PR = 4, PT = 8, PB = 4;
   const max = Math.max(1, ...data.map((d) => d.value));
-  const pts = data.map((d, i) => {
-    const x = P + (i / (data.length - 1)) * (W - 2 * P);
-    const y = H - P - (d.value / max) * (H - 2 * P);
-    return [x, y] as const;
-  });
+  const xOf = (i: number) => PL + (i / (data.length - 1)) * (W - PL - PR);
+  const yOf = (v: number) => PT + (1 - v / max) * (H - PT - PB);
+  const pts = data.map((d, i) => [xOf(i), yOf(d.value)] as const);
   const line = pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-  const area = `${P},${H - P} ${line} ${W - P},${H - P}`;
+  const area = `${PL},${H - PB} ${line} ${W - PR},${H - PB}`;
+  const mid = data[Math.floor(data.length / 2)];
+
+  const onMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    setActive(Math.round(frac * (data.length - 1)));
+  };
+
+  const ap = active != null ? data[active] : null;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-28">
-      <defs>
-        <linearGradient id="igArea" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#E83E8C" stopOpacity="0.45" />
-          <stop offset="100%" stopColor="#E83E8C" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <polygon points={area} fill="url(#igArea)" />
-      <polyline points={line} fill="none" stroke="#E83E8C" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-    </svg>
+    <div>
+      <div className="flex">
+        <div className="flex flex-col justify-between text-[9px] font-mono text-hl-faint tabular-nums pr-1.5 py-1" style={{ height: '7rem' }}>
+          <span>{compact(max)}</span>
+          <span>{compact(Math.round(max / 2))}</span>
+          <span>0</span>
+        </div>
+        <div
+          className="relative flex-1 touch-none cursor-crosshair"
+          onPointerDown={onMove}
+          onPointerMove={onMove}
+          onPointerLeave={() => setActive(null)}
+        >
+          <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-28">
+            <defs>
+              <linearGradient id="igArea" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#E83E8C" stopOpacity="0.45" />
+                <stop offset="100%" stopColor="#E83E8C" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <line x1={PL} y1={PT} x2={W - PR} y2={PT} stroke="currentColor" strokeOpacity="0.08" className="text-hl-text" />
+            <line x1={PL} y1={(H + PT - PB) / 2} x2={W - PR} y2={(H + PT - PB) / 2} stroke="currentColor" strokeOpacity="0.08" className="text-hl-text" />
+            <polygon points={area} fill="url(#igArea)" />
+            <polyline points={line} fill="none" stroke="#E83E8C" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+            {active != null && (
+              <line x1={xOf(active)} y1={PT} x2={xOf(active)} y2={H - PB} stroke="#E83E8C" strokeOpacity="0.5" strokeDasharray="3 3" />
+            )}
+          </svg>
+          {/* Punkt + Tooltip als HTML (über dem SVG positioniert) */}
+          {ap && (
+            <>
+              <div className="absolute w-2.5 h-2.5 rounded-full bg-[#E83E8C] ring-2 ring-white -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                style={{ left: `${(xOf(active!) / W) * 100}%`, top: `${(yOf(ap.value) / H) * 100}%` }} />
+              <div className="absolute -translate-x-1/2 -top-1 pointer-events-none z-10"
+                style={{ left: `${Math.min(85, Math.max(15, (xOf(active!) / W) * 100))}%` }}>
+                <div className="px-2.5 py-1 rounded-lg text-center whitespace-nowrap" style={{ background: '#1a1420', boxShadow: '0 6px 18px rgba(0,0,0,.4)' }}>
+                  <div className="text-white text-[13px] font-bold tabular-nums leading-tight">{fmt(ap.value)}</div>
+                  <div className="text-hl-faint text-[10px] font-mono">{dayLabel(ap.day)}</div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="flex justify-between text-[9px] font-mono text-hl-faint pl-7 mt-1">
+        <span>{dayLabel(data[0].day)}</span>
+        {mid && <span>{dayLabel(mid.day)}</span>}
+        <span>{dayLabel(data[data.length - 1].day)}</span>
+      </div>
+      <div className="text-center text-[9px] font-mono uppercase tracking-wider text-hl-faint mt-1">{label} · antippen für Details</div>
+    </div>
   );
 }
 
@@ -54,12 +108,24 @@ function StatTile({ icon: Icon, label, value, sub }: { icon: typeof Eye; label: 
   );
 }
 
-export default function InstagramPanel({ data, onClose }: { data: IgReelsResult; onClose: () => void }) {
+export default function InstagramPanel({ data: initial, onClose }: { data: IgReelsResult; onClose: () => void }) {
   const [tab, setTab] = useState<'overview' | 'content'>('overview');
+  const [data, setData] = useState<IgReelsResult>(initial);
+  const [days, setDays] = useState<number>(initial.days ?? 30);
+  const [loading, setLoading] = useState(false);
   useBackClose(true, onClose);
 
+  const changeRange = (d: number) => {
+    if (d === days) return;
+    setDays(d);
+    setLoading(true);
+    fetchInstagramReels(d).then(setData).catch(() => {}).finally(() => setLoading(false));
+  };
+
+  const rl = `${days} T.`;
   const daily = data.daily ?? [];
   const items = data.items ?? [];
+  const totalArt = Math.max(1, (data.viewsReels30 || 0) + (data.viewsStories30 || 0) + (data.viewsPosts30 || 0));
 
   return (
     <ModalPortal>
@@ -70,7 +136,6 @@ export default function InstagramPanel({ data, onClose }: { data: IgReelsResult;
         transition={{ type: 'spring', stiffness: 320, damping: 32 }}
         className="fixed inset-0 z-[80] flex flex-col hl-app-bg text-hl-text"
       >
-        {/* Kopf */}
         <header
           className="flex items-center gap-2 px-2 py-2 border-b border-white/10 hl-app-bar backdrop-blur-xl shrink-0"
           style={{ paddingTop: 'calc(env(safe-area-inset-top) + 0.5rem)' }}
@@ -85,9 +150,9 @@ export default function InstagramPanel({ data, onClose }: { data: IgReelsResult;
             <div className="font-display font-black text-white uppercase tracking-tight text-sm leading-none">Instagram</div>
             {data.username && <div className="text-[11px] text-hl-mute font-sans truncate">@{data.username}</div>}
           </div>
+          {loading && <Loader2 className="w-4 h-4 animate-spin text-hl-mute ml-auto mr-2" />}
         </header>
 
-        {/* Tabs */}
         <div className="flex gap-1 px-3 pt-3 shrink-0">
           {([
             { id: 'overview', label: 'Übersicht' },
@@ -107,60 +172,64 @@ export default function InstagramPanel({ data, onClose }: { data: IgReelsResult;
           ))}
         </div>
 
-        {/* Inhalt */}
         <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3">
           {tab === 'overview' ? (
             <div className="space-y-3">
-              {/* Kernzahlen */}
-              <div className="grid grid-cols-2 gap-2.5">
-                <StatTile icon={Eye} label="Aufrufe · 30 T." value={compact(data.totalViews30)} />
-                <StatTile icon={TrendingUp} label="Reichweite · 30 T." value={compact(data.reach30)} />
-                <StatTile icon={Users} label="Follower" value={compact(data.followers)} sub={data.newFollowers30 != null ? `+${compact(data.newFollowers30)} in 30 T.` : undefined} />
-                <StatTile icon={Film} label="Beiträge · 30 T." value={compact(data.count30)} />
+              {/* Zeitraum-Filter */}
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                {RANGES.map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => changeRange(d)}
+                    className="px-3 py-1.5 rounded-full text-[12px] font-sans font-bold shrink-0 cursor-pointer transition-colors"
+                    style={days === d ? { background: IG_GRAD, color: '#fff' } : { color: 'var(--color-hl-mute)' }}
+                  >
+                    {d} Tage
+                  </button>
+                ))}
               </div>
 
-              {/* Verlauf */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <StatTile icon={Eye} label={`Aufrufe · ${rl}`} value={compact(data.totalViews30)} />
+                <StatTile icon={TrendingUp} label={`Reichweite · ${rl}`} value={compact(data.reach30)} />
+                <StatTile icon={Users} label="Follower" value={compact(data.followers)} sub={data.newFollowers30 != null ? `+${compact(data.newFollowers30)} in ${rl}` : undefined} />
+                <StatTile icon={Film} label={`Beiträge · ${rl}`} value={compact(data.count30)} />
+              </div>
+
               {daily.length > 1 && (
                 <div className="hl-card rounded-2xl p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-mono uppercase tracking-wider text-hl-dim">{data.dailyLabel || 'Aufrufe'} · letzte 30 Tage</span>
-                  </div>
-                  <AreaChart data={daily} />
+                  <div className="text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-2">{data.dailyLabel || 'Aufrufe'} · letzte {rl}</div>
+                  <AreaChart data={daily} label={data.dailyLabel || 'Aufrufe'} />
                 </div>
               )}
 
-              {/* Aufrufe nach Content-Art */}
-              {(data.viewsReels30 || data.viewsPosts30) ? (
+              {(data.viewsReels30 || data.viewsStories30 || data.viewsPosts30) ? (
                 <div className="hl-card rounded-2xl p-4">
-                  <div className="text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-3">Aufrufe nach Art · 30 T.</div>
+                  <div className="text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-3">Aufrufe nach Art · {rl}</div>
                   {([
                     { label: 'Reels', value: data.viewsReels30 || 0, color: '#E83E8C' },
-                    { label: 'Beiträge', value: data.viewsPosts30 || 0, color: '#8B7CFF' },
-                  ] as const).map((row) => {
-                    const total = Math.max(1, (data.viewsReels30 || 0) + (data.viewsPosts30 || 0));
-                    return (
-                      <div key={row.label} className="mb-3 last:mb-0">
-                        <div className="flex items-center justify-between text-[13px] font-sans mb-1">
-                          <span className="font-semibold text-hl-text">{row.label}</span>
-                          <span className="tabular-nums font-bold text-hl-text">{compact(row.value)}</span>
-                        </div>
-                        <div className="h-2.5 rounded-full overflow-hidden bg-white/10">
-                          <div className="h-full rounded-full" style={{ width: `${(row.value / total) * 100}%`, background: row.color }} />
-                        </div>
+                    { label: 'Stories', value: data.viewsStories30 || 0, color: '#8B7CFF' },
+                    { label: 'Beiträge', value: data.viewsPosts30 || 0, color: '#F2A93B' },
+                  ] as const).map((row) => (
+                    <div key={row.label} className="mb-3 last:mb-0">
+                      <div className="flex items-center justify-between text-[13px] font-sans mb-1">
+                        <span className="font-semibold text-hl-text">{row.label}</span>
+                        <span className="tabular-nums font-bold text-hl-text">{compact(row.value)}</span>
                       </div>
-                    );
-                  })}
+                      <div className="h-2.5 rounded-full overflow-hidden bg-white/10">
+                        <div className="h-full rounded-full" style={{ width: `${(row.value / totalArt) * 100}%`, background: row.color }} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : null}
 
-              {/* Interaktionen */}
               <div className="grid grid-cols-2 gap-2.5">
-                <StatTile icon={Heart} label="Likes · 30 T." value={compact(data.totalLikes30)} />
-                <StatTile icon={MessageCircle} label="Kommentare · 30 T." value={compact(data.totalComments30)} />
+                <StatTile icon={Heart} label={`Likes · ${rl}`} value={compact(data.totalLikes30)} />
+                <StatTile icon={MessageCircle} label={`Kommentare · ${rl}`} value={compact(data.totalComments30)} />
               </div>
             </div>
           ) : (
-            /* Inhalte: alle Beiträge mit Zahlen */
             <div className="space-y-2">
               {items.map((m) => (
                 <a

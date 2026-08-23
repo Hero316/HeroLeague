@@ -189,7 +189,7 @@ export async function heroBackfillMonth(req: VercelRequest, res: VercelResponse)
 // variable IG_ACCESS_TOKEN. Account-ID aus IG_BUSINESS_ID. Ohne beides →
 // configured:false. Ergebnis wird pro Instanz 10 Min gecached (API-Limit).
 const IG_BASE = 'https://graph.instagram.com/v21.0';
-let igCache: { at: number; payload: unknown } = { at: 0, payload: null };
+const igCache = new Map<number, { at: number; payload: unknown }>();
 
 async function saveIgToken(token: string, at: number) {
   try {
@@ -224,18 +224,64 @@ async function getIgToken(): Promise<string | null> {
   return token;
 }
 
-// Ein Account-Insight (best-effort; gibt bei Fehler null/[] zurück).
-async function igAccountMetricSum(igId: string, token: string, metric: string, sinceSec: number, untilSec: number): Promise<{ total: number | null; daily: { day: string; value: number }[] }> {
+// Konto-Insight als Gesamtwert (metric_type=total_value), optional nach
+// Content-Art aufgeschlüsselt. Best-effort (bei Fehler null/leer).
+async function igTotalValue(
+  igId: string, token: string, metric: string, sinceSec: number, untilSec: number, breakdown?: string
+): Promise<{ total: number | null; byDim: Record<string, number> }> {
   try {
-    const r = await fetch(`${IG_BASE}/${igId}/insights?metric=${metric}&period=day&since=${sinceSec}&until=${untilSec}&access_token=${encodeURIComponent(token)}`);
+    const bd = breakdown ? `&breakdown=${breakdown}` : '';
+    const r = await fetch(`${IG_BASE}/${igId}/insights?metric=${metric}&metric_type=total_value&period=day&since=${sinceSec}&until=${untilSec}${bd}&access_token=${encodeURIComponent(token)}`);
+    const d = (await r.json()) as { data?: { name: string; total_value?: { value?: number; breakdowns?: { results?: { dimension_values?: string[]; value?: number }[] }[] } }[] };
+    const item = d?.data?.find((x) => x.name === metric);
+    const total = typeof item?.total_value?.value === 'number' ? item!.total_value!.value! : null;
+    const byDim: Record<string, number> = {};
+    for (const b of item?.total_value?.breakdowns?.[0]?.results ?? []) {
+      const k = b.dimension_values?.[0];
+      if (k) byDim[k] = Number(b.value) || 0;
+    }
+    return { total, byDim };
+  } catch {
+    return { total: null, byDim: {} };
+  }
+}
+
+// Konto-Insight als Tageszeitreihe (metric_type=time_series) – fürs Diagramm.
+async function igTimeSeries(igId: string, token: string, metric: string, sinceSec: number, untilSec: number): Promise<{ day: string; value: number }[]> {
+  try {
+    const r = await fetch(`${IG_BASE}/${igId}/insights?metric=${metric}&metric_type=time_series&period=day&since=${sinceSec}&until=${untilSec}&access_token=${encodeURIComponent(token)}`);
     const d = (await r.json()) as { data?: { name: string; values?: { end_time?: string; value: number }[] }[] };
     const vals = d?.data?.find((x) => x.name === metric)?.values;
-    if (!Array.isArray(vals)) return { total: null, daily: [] };
-    const daily = vals.map((v) => ({ day: (v.end_time || '').slice(0, 10), value: Number(v.value) || 0 }));
-    return { total: daily.reduce((s, x) => s + x.value, 0), daily };
+    if (!Array.isArray(vals)) return [];
+    return vals.map((v) => ({ day: (v.end_time || '').slice(0, 10), value: Number(v.value) || 0 }));
   } catch {
-    return { total: null, daily: [] };
+    return [];
   }
+}
+
+// Insights-Zeitraum in ≤30-Tage-Fenster zerlegen (Instagram erlaubt pro Tag-
+// Abfrage max. ~30 Tage) und zusammenrechnen – so gehen auch 60/90 Tage.
+function igWindows(sinceSec: number, untilSec: number): [number, number][] {
+  const out: [number, number][] = [];
+  const step = 30 * 86400;
+  let s = sinceSec;
+  while (s < untilSec) { const e = Math.min(s + step, untilSec); out.push([s, e]); s = e; }
+  return out.length ? out : [[sinceSec, untilSec]];
+}
+async function igTotalValueRange(igId: string, token: string, metric: string, sinceSec: number, untilSec: number, breakdown?: string) {
+  let total: number | null = null;
+  const byDim: Record<string, number> = {};
+  for (const [s, e] of igWindows(sinceSec, untilSec)) {
+    const r = await igTotalValue(igId, token, metric, s, e, breakdown);
+    if (r.total != null) total = (total || 0) + r.total;
+    for (const k of Object.keys(r.byDim)) byDim[k] = (byDim[k] || 0) + r.byDim[k];
+  }
+  return { total, byDim };
+}
+async function igTimeSeriesRange(igId: string, token: string, metric: string, sinceSec: number, untilSec: number) {
+  const out: { day: string; value: number }[] = [];
+  for (const [s, e] of igWindows(sinceSec, untilSec)) out.push(...(await igTimeSeries(igId, token, metric, s, e)));
+  return out;
 }
 
 export async function instagramReels(req: VercelRequest, res: VercelResponse) {
@@ -245,13 +291,15 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
 
   const igId = process.env.IG_BUSINESS_ID;
   const token = await getIgToken();
-  if (!token || !igId) return res.json({ configured: false, items: [], totalViews30: 0, count30: 0, count: 0 });
+  const days = [7, 14, 30, 60, 90].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
+  if (!token || !igId) return res.json({ configured: false, days, items: [], totalViews30: 0, count30: 0, count: 0 });
 
-  if (igCache.payload && Date.now() - igCache.at < 10 * 60 * 1000) return res.json(igCache.payload);
+  const cached = igCache.get(days);
+  if (cached && Date.now() - cached.at < 10 * 60 * 1000) return res.json(cached.payload);
 
   try {
     const fields = 'id,caption,media_type,media_product_type,thumbnail_url,media_url,permalink,timestamp,like_count,comments_count';
-    const r = await fetch(`${IG_BASE}/${encodeURIComponent(igId)}/media?fields=${fields}&limit=30&access_token=${encodeURIComponent(token)}`);
+    const r = await fetch(`${IG_BASE}/${encodeURIComponent(igId)}/media?fields=${fields}&limit=60&access_token=${encodeURIComponent(token)}`);
     const data = (await r.json()) as { data?: unknown[]; error?: { message?: string } };
     if (!r.ok || !Array.isArray(data.data)) {
       return res.json({ configured: true, error: data.error?.message || 'Instagram-Abruf fehlgeschlagen', items: [], totalViews30: 0, count30: 0, count: 0 });
@@ -294,10 +342,10 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
     );
 
     const now = Date.now();
-    const in30 = items.filter((m) => m.timestamp && now - new Date(m.timestamp).getTime() <= 30 * 864e5);
+    const in30 = items.filter((m) => m.timestamp && now - new Date(m.timestamp).getTime() <= days * 864e5);
 
     // Account-Ebene (best-effort): Follower, Reichweite/Aufrufe pro Tag, neue Follower.
-    const sinceSec = Math.floor((now - 30 * 864e5) / 1000);
+    const sinceSec = Math.floor((now - days * 864e5) / 1000);
     const untilSec = Math.floor(now / 1000);
     let followers: number | null = null;
     let mediaCount: number | null = null;
@@ -310,35 +358,43 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
       mediaCount = typeof pd.media_count === 'number' ? pd.media_count : null;
     } catch { /* egal */ }
 
-    let daily = (await igAccountMetricSum(igId, token, 'views', sinceSec, untilSec)).daily;
+    // Aufrufe gesamt + nach Content-Art (offizielle Konto-Zahl, inkl. Stories).
+    const viewsTV = await igTotalValueRange(igId, token, 'views', sinceSec, untilSec, 'media_product_type');
+    const reachTV = await igTotalValueRange(igId, token, 'reach', sinceSec, untilSec);
+    const bd = viewsTV.byDim;
+    const mediaViewsSum = in30.reduce((s, m) => s + (m.views || 0), 0);
+
+    // Diagramm: Aufrufe pro Tag; falls Views-Zeitreihe leer, auf Reichweite ausweichen.
+    let daily = await igTimeSeriesRange(igId, token, 'views', sinceSec, untilSec);
     let dailyLabel = 'Aufrufe';
-    if (daily.length === 0) { daily = (await igAccountMetricSum(igId, token, 'reach', sinceSec, untilSec)).daily; dailyLabel = 'Reichweite'; }
-    const reach30 = (await igAccountMetricSum(igId, token, 'reach', sinceSec, untilSec)).total;
-    const newFollowers30 = (await igAccountMetricSum(igId, token, 'follower_count', sinceSec, untilSec)).total;
+    if (daily.length === 0) { daily = await igTimeSeriesRange(igId, token, 'reach', sinceSec, untilSec); dailyLabel = 'Reichweite'; }
+    const followerTs = await igTimeSeriesRange(igId, token, 'follower_count', sinceSec, untilSec);
 
     const payload = {
       configured: true,
+      days,
       username,
       followers,
       mediaCount,
-      newFollowers30,
-      reach30,
-      totalViews30: in30.reduce((s, m) => s + (m.views || 0), 0),
+      newFollowers30: followerTs.length ? followerTs.reduce((s, x) => s + x.value, 0) : null,
+      reach30: reachTV.total,
+      totalViews30: viewsTV.total ?? mediaViewsSum,
       totalLikes30: in30.reduce((s, m) => s + (m.likes || 0), 0),
       totalComments30: in30.reduce((s, m) => s + (m.comments || 0), 0),
-      viewsReels30: in30.filter((m) => m.type === 'reel').reduce((s, m) => s + (m.views || 0), 0),
-      viewsPosts30: in30.filter((m) => m.type === 'post').reduce((s, m) => s + (m.views || 0), 0),
+      viewsReels30: bd.REELS ?? in30.filter((m) => m.type === 'reel').reduce((s, m) => s + (m.views || 0), 0),
+      viewsStories30: bd.STORY ?? 0,
+      viewsPosts30: (bd.POST ?? 0) + (bd.CAROUSEL_CONTAINER ?? 0) + (bd.IMAGE ?? 0) + (bd.CAROUSEL ?? 0),
       count30: in30.length,
       count: items.length,
       daily,
       dailyLabel,
       items,
     };
-    igCache = { at: Date.now(), payload };
+    igCache.set(days, { at: Date.now(), payload });
     return res.json(payload);
   } catch (err) {
     console.error('instagramReels:', err);
-    return res.json({ configured: true, error: 'Abruf fehlgeschlagen', items: [], totalViews30: 0, count30: 0, count: 0 });
+    return res.json({ configured: true, days, error: 'Abruf fehlgeschlagen', items: [], totalViews30: 0, count30: 0, count: 0 });
   }
 }
 

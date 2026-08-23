@@ -246,6 +246,7 @@ export interface IgReel {
 }
 export interface IgReelsResult {
   configured: boolean;
+  days?: number;
   username?: string;
   followers?: number | null;
   mediaCount?: number | null;
@@ -256,6 +257,7 @@ export interface IgReelsResult {
   totalLikes30?: number;
   totalComments30?: number;
   viewsReels30?: number;
+  viewsStories30?: number;
   viewsPosts30?: number;
   count30: number;
   count: number;
@@ -263,7 +265,7 @@ export interface IgReelsResult {
   dailyLabel?: string;
   error?: string;
 }
-export const fetchInstagramReels = () => apiFetch<IgReelsResult>('/api/team?resource=instagram');
+export const fetchInstagramReels = (days = 30) => apiFetch<IgReelsResult>(`/api/team?resource=instagram&days=${days}`);
 
 // --- Kalenderwochen-Helfer (ISO 8601, Woche beginnt Montag) -----------------
 export function isoWeekOf(d: Date): string {
