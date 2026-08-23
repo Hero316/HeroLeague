@@ -227,6 +227,10 @@ export const markHeroEventsSeen = (ids?: string[]) =>
     method: 'POST',
     body: JSON.stringify(ids && ids.length ? { ids } : { all: true }),
   });
+// Einmaliges Nachtragen (Super-Admin): Heroes für alle diesen Monat bereits
+// abgeschlossenen Aufgaben/Termine/Tickets/Ideen rückwirkend vergeben.
+export const backfillHeroesMonth = () =>
+  apiFetch<{ ok: boolean; inserted: number }>('/api/team?resource=hero-backfill', { method: 'POST' });
 
 // --- Kalenderwochen-Helfer (ISO 8601, Woche beginnt Montag) -----------------
 export function isoWeekOf(d: Date): string {

@@ -2,10 +2,49 @@ import { useEffect, useState } from 'react';
 import { Globe, LogOut, Sun, Moon, UserCircle, Bell, Palette, Users, UserMinus, Trash2, Loader2 } from 'lucide-react';
 import type { SessionUser, UserStatus, AppUser, UserRole } from '../types';
 import { USER_STATUS } from '../types';
-import { fetchAllUsers, purgeUserFromTeamApp } from '../lib/collab';
+import { fetchAllUsers, purgeUserFromTeamApp, backfillHeroesMonth, fetchHeroEvents } from '../lib/collab';
+import { setHeroStats } from '../lib/heroes';
 import Avatar from './Avatar';
 import ProfileEditor from './ProfileEditor';
 import NotificationSettings from './NotificationSettings';
+
+// Super-Admin: Heroes für alle diesen Monat schon abgeschlossenen Aufgaben/
+// Termine/Tickets/Ideen rückwirkend verteilen (weil das System erst mitten im
+// Monat kam). Idempotent – mehrfaches Tippen schadet nicht.
+function HeroBackfill() {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const run = async () => {
+    setBusy(true);
+    setMsg('');
+    try {
+      const r = await backfillHeroesMonth();
+      setMsg(r.inserted > 0 ? `${r.inserted} Heroes nachgetragen ⚡` : 'Alles schon aktuell – nichts nachzutragen.');
+      fetchHeroEvents().then((h) => setHeroStats({ total: h.total, month: h.month })).catch(() => {});
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Konnte nicht nachtragen.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="hl-card rounded-2xl p-4">
+      <h3 className="font-display font-black text-white uppercase tracking-tight text-base flex items-center gap-2 mb-1">
+        <span className="text-lg">⚡</span> Heroes nachtragen
+      </h3>
+      <p className="text-[12px] text-hl-mute mb-3">Nur Super-Admin. Vergibt für alle in diesem Monat bereits abgeschlossenen Aufgaben/Termine/Tickets/Ideen rückwirkend Heroes (ohne Feier). Mehrfach tippen ist unbedenklich.</p>
+      <button
+        onClick={run}
+        disabled={busy}
+        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand-accent-light text-[#04120f] font-sans font-bold text-sm cursor-pointer disabled:opacity-60"
+      >
+        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>⚡</span>}
+        {busy ? 'Wird nachgetragen…' : 'Heroes für diesen Monat nachtragen'}
+      </button>
+      {msg && <p className="text-[12px] text-hl-soft mt-2">{msg}</p>}
+    </section>
+  );
+}
 
 const ROLE_LABEL: Record<UserRole, string> = {
   superadmin: 'Super-Admin',
@@ -163,7 +202,8 @@ export default function TeamSettings({
           </button>
         </section>
 
-        {/* Personen verwalten (nur Super-Admin) */}
+        {/* Heroes nachtragen + Personen verwalten (nur Super-Admin) */}
+        {isSuperadmin && <HeroBackfill />}
         {isSuperadmin && <TeamMemberAdmin currentUserId={currentUserId} />}
 
         {/* App-Wechsel & Abmelden */}
