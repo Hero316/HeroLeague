@@ -244,6 +244,25 @@ export interface IgReel {
   comments: number | null;
   views: number | null;
 }
+export interface IgDemo { key: string; value: number }
+export interface IgMediaDetail {
+  configured: boolean;
+  id?: string;
+  caption?: string;
+  type?: string;
+  thumbnail?: string;
+  permalink?: string;
+  timestamp?: string;
+  likes?: number | null;
+  comments?: number | null;
+  views?: number | null;
+  reach?: number | null;
+  saved?: number | null;
+  shares?: number | null;
+  interactions?: number | null;
+  commentList?: { username: string; text: string; timestamp: string; likes: number | null }[];
+  error?: string;
+}
 export interface IgReelsResult {
   configured: boolean;
   days?: number;
@@ -253,6 +272,9 @@ export interface IgReelsResult {
   newFollowers30?: number | null;
   reach30?: number | null;
   interactions30?: number | null;
+  followerReach30?: number | null;
+  nonFollowerReach30?: number | null;
+  demographics?: { country: IgDemo[]; city: IgDemo[]; age: IgDemo[]; gender: IgDemo[] };
   items: IgReel[];
   totalViews30: number;
   totalLikes30?: number;
@@ -263,10 +285,12 @@ export interface IgReelsResult {
   count30: number;
   count: number;
   daily?: { day: string; value: number }[];
+  followerDaily?: { day: string; value: number }[];
   dailyLabel?: string;
   error?: string;
 }
 export const fetchInstagramReels = (days = 30) => apiFetch<IgReelsResult>(`/api/team?resource=instagram&days=${days}`);
+export const fetchInstagramMedia = (id: string) => apiFetch<IgMediaDetail>(`/api/team?resource=instagram-media&id=${encodeURIComponent(id)}`);
 
 // --- Kalenderwochen-Helfer (ISO 8601, Woche beginnt Montag) -----------------
 export function isoWeekOf(d: Date): string {
