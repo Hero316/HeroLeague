@@ -253,9 +253,10 @@ export function TicketDetail({
       {...backdrop}
     >
       <motion.div
-        initial={{ scale: 0.97, y: 10 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.97, y: 10 }}
+        initial={{ scale: 0.8, y: 24, opacity: 0 }}
+        animate={{ scale: 1, y: 0, opacity: 1 }}
+        exit={{ scale: 0.85, y: 12, opacity: 0 }}
+        transition={{ type: 'spring', stiffness: 420, damping: 20, mass: 0.8 }}
         className="hl-card hl-modal-card w-full max-w-2xl my-0 sm:my-8 p-5 sm:p-6 rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -639,7 +640,7 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
       ) : visible.length === 0 ? (
         <EmptyState icon={TicketIcon} title="Noch keine Tickets" hint="Leg oben ein neues Ticket an." />
       ) : (
-        <div className="space-y-2.5">
+        <div className="space-y-2.5 hl-cascade-soft">
           {visible.map((t) => (
             <motion.button
               key={t.id}
