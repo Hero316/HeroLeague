@@ -345,7 +345,6 @@ export default function HomeOverview({
         {ig?.configured && ig.items.length > 0 && (() => {
           const latest = ig.items[0];
           const dd = ig.daily ?? [];
-          const dmax = Math.max(1, ...dd.map((d) => d.value));
           return (
             <motion.div variants={item} className="hl-card rounded-3xl p-4 overflow-hidden">
               <div className="flex items-center justify-between mb-3">
@@ -371,15 +370,24 @@ export default function HomeOverview({
                 ))}
               </div>
 
-              {/* Mini-Verlauf */}
-              {dd.length > 1 && (
-                <div className="flex items-end gap-0.5 h-9 mt-3">
-                  {dd.map((d) => (
-                    <div key={d.day} className="flex-1 rounded-t-sm min-h-[2px]" title={`${d.day}: ${d.value}`}
-                      style={{ height: `${Math.max(6, (d.value / dmax) * 100)}%`, background: 'linear-gradient(180deg, #E83E8C, rgba(232,62,140,.35))' }} />
-                  ))}
-                </div>
-              )}
+              {/* Mini-Verlauf (letzte 14 Tage) mit kleiner Zahl je Balken */}
+              {dd.length > 1 && (() => {
+                const last = dd.slice(-14);
+                const lmax = Math.max(1, ...last.map((d) => d.value));
+                return (
+                  <div className="flex items-end gap-1 mt-3">
+                    {last.map((d) => (
+                      <div key={d.day} className="flex-1 flex flex-col items-center gap-1 min-w-0" title={`${d.day}: ${d.value}`}>
+                        <div className="w-full flex items-end h-9">
+                          <div className="w-full rounded-t-sm min-h-[2px]"
+                            style={{ height: `${Math.max(6, (d.value / lmax) * 100)}%`, background: 'linear-gradient(180deg, #E83E8C, rgba(232,62,140,.35))' }} />
+                        </div>
+                        <span className="text-[7px] font-mono text-hl-faint tabular-nums leading-none">{compact(d.value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
 
               {/* Aktuellstes Reel */}
               <a
