@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Lightbulb, Clock, ChevronRight, CheckSquare, Square, Sparkles, Plus, Globe } from 'lucide-react';
-import type { Task, Idea, TeamMember } from '../types';
-import { fetchAllTasks, fetchIdeas, fetchTeam, memberMap, updateTask, fetchVisitStats, type VisitStats } from '../lib/collab';
+import { Lightbulb, Clock, ChevronRight, CheckSquare, Square, Sparkles, Plus, Globe, Ticket as TicketIcon } from 'lucide-react';
+import type { Task, Idea, TeamMember, Ticket, TicketPriority } from '../types';
+import { fetchAllTasks, fetchIdeas, fetchTeam, fetchTickets, memberMap, updateTask, fetchVisitStats, type VisitStats } from '../lib/collab';
 import { useHeroStats } from '../lib/heroes';
 import Avatar from './Avatar';
 
@@ -43,6 +43,7 @@ export default function HomeOverview({
   currentUserId,
   userName,
   onOpenTask,
+  onOpenTicket,
   onOpenDay,
   onGoTab,
   onNewTask,
@@ -50,6 +51,7 @@ export default function HomeOverview({
   currentUserId: string;
   userName: string;
   onOpenTask: (taskId: string) => void;
+  onOpenTicket: (ticketId: string) => void;
   onOpenDay: (dateStr: string) => void;
   onGoTab: (tab: 'chats' | 'aufgaben' | 'kalender' | 'ideen' | 'tickets') => void;
   onNewTask: () => void;
@@ -57,6 +59,7 @@ export default function HomeOverview({
   const [tasks, setTasks] = useState<Task[]>([]);
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
   const [visits, setVisits] = useState<VisitStats | null>(null);
   const { total: heroes, month: heroMonth } = useHeroStats();
   const MONTH_GOAL = 20; // Monatsziel: so viele Heroes im Monat sammeln
@@ -66,7 +69,16 @@ export default function HomeOverview({
   const load = () => {
     fetchAllTasks().then(setTasks).catch(() => {});
     fetchIdeas().then(setIdeas).catch(() => {});
+    fetchTickets().then(setTickets).catch(() => {});
   };
+
+  // Mir zugewiesene, noch offene Tickets – nach Dringlichkeit, dann Aktualität.
+  const myTickets = useMemo(() => {
+    const RANK: Record<TicketPriority, number> = { dringend: 0, hoch: 1, mittel: 2, niedrig: 3 };
+    return tickets
+      .filter((t) => t.assignedTo === currentUserId && t.status !== 'erledigt' && t.status !== 'abgelehnt')
+      .sort((a, b) => (RANK[a.priority] - RANK[b.priority]) || b.updatedAt.localeCompare(a.updatedAt));
+  }, [tickets, currentUserId]);
   useEffect(() => {
     load();
     fetchTeam().then(setTeam).catch(() => {});
@@ -167,48 +179,40 @@ export default function HomeOverview({
           </div>
         </motion.div>
 
-        {/* Website-Besucher (anonyme Zählung, rollierende Fenster) */}
-        {visits && (
-          <motion.div variants={item} className="hl-card rounded-3xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-mono uppercase tracking-wider text-hl-dim flex items-center gap-1.5">
-                <Globe className="w-3.5 h-3.5 text-brand-accent-light" /> Website
-              </span>
-              <span className="flex items-center gap-1.5 text-[12px] font-sans font-bold text-hl-green">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-hl-green opacity-60" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-hl-green" />
-                </span>
-                {visits.online} live
-              </span>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {([
-                { label: '7 Tage', value: visits.perWeek },
-                { label: '14 Tage', value: visits.perFortnight },
-                { label: '30 Tage', value: visits.perMonth },
-              ] as const).map((s) => (
-                <div key={s.label} className="rounded-2xl px-2 py-2.5 text-center hl-surf-0">
-                  <div className="font-display font-black text-xl tabular-nums text-hl-text leading-none">{s.value.toLocaleString('de-DE')}</div>
-                  <div className="text-[10px] font-sans font-bold uppercase tracking-wide text-hl-dim mt-1">{s.label}</div>
+        {/* Meine Tickets: das dringendste/aktuellste zuerst, Rest per Knopf */}
+        {myTickets.length > 0 && (() => {
+          const PRIO_COLOR: Record<TicketPriority, string> = { dringend: '#FF5442', hoch: '#E9C46A', mittel: '#38BDF8', niedrig: '#7E877F' };
+          const PRIO_LABEL: Record<TicketPriority, string> = { dringend: 'Dringend', hoch: 'Hoch', mittel: 'Mittel', niedrig: 'Niedrig' };
+          const top = myTickets[0];
+          return (
+            <motion.div variants={item}>
+              <div className="flex items-center justify-between px-1 mb-2">
+                <span className="text-xs font-mono uppercase tracking-wider text-hl-dim flex items-center gap-1.5"><TicketIcon className="w-3.5 h-3.5 text-brand-accent-light" /> Deine Tickets</span>
+                <span className="text-[11px] font-mono text-hl-dim tabular-nums">{myTickets.length}</span>
+              </div>
+              <button
+                onClick={() => onOpenTicket(top.id)}
+                className="w-full text-left hl-card hl-tint rounded-[22px] p-3.5 flex items-center gap-3 cursor-pointer"
+                style={{ ['--tint' as string]: PRIO_COLOR[top.priority] }}
+              >
+                <span className="hl-tint-chip w-11 h-11 rounded-2xl shrink-0 flex items-center justify-center"><TicketIcon className="w-5 h-5" strokeWidth={2.4} /></span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[15px] font-sans font-semibold text-white leading-snug truncate">{top.title}</div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="hl-tint-pill px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">{PRIO_LABEL[top.priority]}</span>
+                    <span className="text-[11px] text-hl-dim font-sans">Dir zugewiesen</span>
+                  </div>
                 </div>
-              ))}
-            </div>
-            {/* 14-Tage-Verlauf (Balken) */}
-            {visits.daily.length > 1 && (() => {
-              const max = Math.max(1, ...visits.daily.map((d) => d.count));
-              return (
-                <div className="flex items-end gap-1 h-10 mt-3">
-                  {visits.daily.map((d) => (
-                    <div key={d.day} className="flex-1 rounded-t-sm min-h-[2px]" title={`${d.day}: ${d.count}`}
-                      style={{ height: `${Math.max(6, (d.count / max) * 100)}%`, background: 'linear-gradient(180deg, var(--section), color-mix(in srgb, var(--section) 55%, transparent))' }} />
-                  ))}
-                </div>
-              );
-            })()}
-            <div className="text-[10px] font-sans text-hl-faint mt-2">Eindeutige Besucher · rollierend</div>
-          </motion.div>
-        )}
+                <ChevronRight className="w-4 h-4 text-hl-mute shrink-0" />
+              </button>
+              {myTickets.length > 1 && (
+                <button onClick={() => onGoTab('tickets')} className="mt-2 w-full hl-card rounded-2xl py-2.5 flex items-center justify-center gap-1.5 text-[12px] font-sans font-bold text-brand-accent-light cursor-pointer active:scale-[.99] transition-transform">
+                  +{myTickets.length - 1} weitere{myTickets.length - 1 === 1 ? 's' : ''} Ticket{myTickets.length - 1 === 1 ? '' : 's'} <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </motion.div>
+          );
+        })()}
 
         {/* Wochenstreifen */}
         <motion.div variants={item} className="hl-card p-3 rounded-3xl">
@@ -323,6 +327,54 @@ export default function HomeOverview({
                 </motion.button>
               ))}
             </div>
+          </motion.div>
+        )}
+
+        {/* Website-Besucher (anonyme Zählung, rollierende Fenster) – ganz unten */}
+        {visits && (
+          <motion.div variants={item} className="hl-card rounded-3xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-mono uppercase tracking-wider text-hl-dim flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-brand-accent-light" /> Website
+              </span>
+              <span className="flex items-center gap-1.5 text-[12px] font-sans font-bold text-hl-green">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-hl-green opacity-60" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-hl-green" />
+                </span>
+                {visits.online} live
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { label: '7 Tage', value: visits.perWeek },
+                { label: '14 Tage', value: visits.perFortnight },
+                { label: '30 Tage', value: visits.perMonth },
+              ] as const).map((s) => (
+                <div key={s.label} className="rounded-2xl px-2 py-2.5 text-center hl-surf-0">
+                  <div className="font-display font-black text-xl tabular-nums text-hl-text leading-none">{s.value.toLocaleString('de-DE')}</div>
+                  <div className="text-[10px] font-sans font-bold uppercase tracking-wide text-hl-dim mt-1">{s.label}</div>
+                </div>
+              ))}
+            </div>
+            {/* 14-Tage-Verlauf: Balken + kleine Zahl je Tag darunter */}
+            {visits.daily.length > 1 && (() => {
+              const max = Math.max(1, ...visits.daily.map((d) => d.count));
+              return (
+                <div className="flex items-end gap-1 mt-3">
+                  {visits.daily.map((d) => (
+                    <div key={d.day} className="flex-1 flex flex-col items-center gap-1" title={`${d.day}: ${d.count}`}>
+                      <div className="w-full flex items-end h-10">
+                        <div className="w-full rounded-t-sm min-h-[2px]"
+                          style={{ height: `${Math.max(6, (d.count / max) * 100)}%`, background: 'linear-gradient(180deg, var(--section), color-mix(in srgb, var(--section) 55%, transparent))' }} />
+                      </div>
+                      <span className="text-[8px] font-mono text-hl-faint tabular-nums leading-none">{d.count}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+            <div className="text-[10px] font-sans text-hl-faint mt-2">Eindeutige Besucher · rollierend</div>
           </motion.div>
         )}
 
