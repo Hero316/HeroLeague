@@ -43,6 +43,7 @@ export interface VisitStats {
   today: number; // eindeutige Besucher heute
   perDay: number; // Ø eindeutige Besucher pro Tag (letzte 30 abgeschlossene Tage mit Daten)
   perWeek: number; // eindeutige Besucher der letzten 7 Tage (rollierend)
+  perFortnight: number; // eindeutige Besucher der letzten 14 Tage (rollierend)
   perMonth: number; // eindeutige Besucher der letzten 30 Tage (rollierend)
   daily: { day: string; count: number }[]; // letzte 14 Tage (Mini-Verlauf)
 }
@@ -57,7 +58,7 @@ export async function readVisitStats(): Promise<VisitStats> {
   // Alte Zeilen (>400 Tage) gelegentlich aufräumen – hält die Tabelle klein.
   await sql`DELETE FROM visits WHERE day < (now() AT TIME ZONE 'Europe/Berlin')::date - 400`;
 
-  const [online, daily, perDay, perWeek, perMonth] = await Promise.all([
+  const [online, daily, perDay, perWeek, perFortnight, perMonth] = await Promise.all([
     // Gerade online
     sql`SELECT count(DISTINCT visitor_id)::int AS n
         FROM visits WHERE last_seen > now() - interval '90 seconds'`,
@@ -79,6 +80,9 @@ export async function readVisitStats(): Promise<VisitStats> {
     // Kalenderwoche – so kippt der Wert am Wochenanfang nicht weg).
     sql`SELECT count(DISTINCT visitor_id)::int AS n FROM visits
         WHERE day > (now() AT TIME ZONE 'Europe/Berlin')::date - 7`,
+    // Eindeutige Besucher der letzten 14 Tage (rollierendes Fenster).
+    sql`SELECT count(DISTINCT visitor_id)::int AS n FROM visits
+        WHERE day > (now() AT TIME ZONE 'Europe/Berlin')::date - 14`,
     // Eindeutige Besucher der letzten 30 Tage (rollierendes Fenster statt
     // Kalendermonat).
     sql`SELECT count(DISTINCT visitor_id)::int AS n FROM visits
@@ -93,6 +97,7 @@ export async function readVisitStats(): Promise<VisitStats> {
     today: toInt(days.find((d) => d.day === todayStr)?.count),
     perDay: toInt(perDay[0]?.avg),
     perWeek: toInt(perWeek[0]?.n),
+    perFortnight: toInt(perFortnight[0]?.n),
     perMonth: toInt(perMonth[0]?.n),
     daily: days,
   };

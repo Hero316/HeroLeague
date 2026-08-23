@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Lightbulb, Clock, ChevronRight, CheckSquare, Square, Sparkles, Plus } from 'lucide-react';
+import { Lightbulb, Clock, ChevronRight, CheckSquare, Square, Sparkles, Plus, Globe } from 'lucide-react';
 import type { Task, Idea, TeamMember } from '../types';
-import { fetchAllTasks, fetchIdeas, fetchTeam, memberMap, updateTask } from '../lib/collab';
+import { fetchAllTasks, fetchIdeas, fetchTeam, memberMap, updateTask, fetchVisitStats, type VisitStats } from '../lib/collab';
 import { useHeroStats } from '../lib/heroes';
 import Avatar from './Avatar';
 
@@ -57,6 +57,7 @@ export default function HomeOverview({
   const [tasks, setTasks] = useState<Task[]>([]);
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
+  const [visits, setVisits] = useState<VisitStats | null>(null);
   const { total: heroes, month: heroMonth } = useHeroStats();
   const MONTH_GOAL = 20; // Monatsziel: so viele Heroes im Monat sammeln
   const goalPct = Math.min(100, Math.round((heroMonth / MONTH_GOAL) * 100));
@@ -69,6 +70,9 @@ export default function HomeOverview({
   useEffect(() => {
     load();
     fetchTeam().then(setTeam).catch(() => {});
+    fetchVisitStats().then(setVisits).catch(() => {});
+    const iv = setInterval(() => fetchVisitStats().then(setVisits).catch(() => {}), 60000);
+    return () => clearInterval(iv);
   }, []);
 
   const involvesMe = (t: Task) => t.createdBy === currentUserId || t.assignees.some((a) => a.userId === currentUserId);
@@ -162,6 +166,49 @@ export default function HomeOverview({
             )}
           </div>
         </motion.div>
+
+        {/* Website-Besucher (anonyme Zählung, rollierende Fenster) */}
+        {visits && (
+          <motion.div variants={item} className="hl-card rounded-3xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-mono uppercase tracking-wider text-hl-dim flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-brand-accent-light" /> Website
+              </span>
+              <span className="flex items-center gap-1.5 text-[12px] font-sans font-bold text-hl-green">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-hl-green opacity-60" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-hl-green" />
+                </span>
+                {visits.online} live
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { label: '7 Tage', value: visits.perWeek },
+                { label: '14 Tage', value: visits.perFortnight },
+                { label: '30 Tage', value: visits.perMonth },
+              ] as const).map((s) => (
+                <div key={s.label} className="rounded-2xl px-2 py-2.5 text-center hl-surf-0">
+                  <div className="font-display font-black text-xl tabular-nums text-hl-text leading-none">{s.value.toLocaleString('de-DE')}</div>
+                  <div className="text-[10px] font-sans font-bold uppercase tracking-wide text-hl-dim mt-1">{s.label}</div>
+                </div>
+              ))}
+            </div>
+            {/* 14-Tage-Verlauf (Balken) */}
+            {visits.daily.length > 1 && (() => {
+              const max = Math.max(1, ...visits.daily.map((d) => d.count));
+              return (
+                <div className="flex items-end gap-1 h-10 mt-3">
+                  {visits.daily.map((d) => (
+                    <div key={d.day} className="flex-1 rounded-t-sm min-h-[2px]" title={`${d.day}: ${d.count}`}
+                      style={{ height: `${Math.max(6, (d.count / max) * 100)}%`, background: 'linear-gradient(180deg, var(--section), color-mix(in srgb, var(--section) 55%, transparent))' }} />
+                  ))}
+                </div>
+              );
+            })()}
+            <div className="text-[10px] font-sans text-hl-faint mt-2">Eindeutige Besucher · rollierend</div>
+          </motion.div>
+        )}
 
         {/* Wochenstreifen */}
         <motion.div variants={item} className="hl-card p-3 rounded-3xl">

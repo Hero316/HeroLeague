@@ -207,6 +207,18 @@ export const markNotificationRead = (id: string) =>
 export const markAllNotificationsRead = () =>
   apiFetch('/api/notifications', { method: 'POST', body: JSON.stringify({ all: true }) });
 
+// --- Website-Besucher (bereits vorhandene, anonyme Zählung) ------------------
+export interface VisitStats {
+  online: number;
+  today: number;
+  perDay: number;
+  perWeek: number; // letzte 7 Tage (rollierend)
+  perFortnight: number; // letzte 14 Tage (rollierend)
+  perMonth: number; // letzte 30 Tage (rollierend)
+  daily: { day: string; count: number }[]; // letzte 14 Tage
+}
+export const fetchVisitStats = () => apiFetch<VisitStats>('/api/seasons?stats');
+
 // --- Hero-Punkte (Belohnung fürs Abschließen) -------------------------------
 export const fetchHeroEvents = () =>
   apiFetch<{ items: HeroEvent[]; total: number; month: number }>('/api/team?resource=hero-events');
