@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { CalendarDays, ListChecks, Lightbulb, Clock, ChevronRight, CheckSquare, Square, Sparkles, Plus } from 'lucide-react';
+import { CalendarDays, ListChecks, Lightbulb, Clock, ChevronRight, CheckSquare, Square, Sparkles, Plus, MessageSquare } from 'lucide-react';
 import type { Task, Idea, TeamMember } from '../types';
 import { fetchAllTasks, fetchIdeas, fetchTeam, memberMap, updateTask } from '../lib/collab';
 import { getHeroes } from '../lib/heroes';
@@ -205,9 +205,9 @@ export default function HomeOverview({
                     key={t.id + u.kind}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => onOpenTask(t.id)}
-                    className="w-full text-left hl-card rounded-2xl p-3 flex items-center gap-3 cursor-pointer"
+                    className="w-full text-left hl-card hl-tint rounded-[20px] p-3.5 flex items-center gap-3 cursor-pointer"
+                    style={{ ['--tint' as string]: termin ? '#3B9EFF' : '#8B7CFF' }}
                   >
-                    <span className="w-1.5 self-stretch rounded-full shrink-0" style={{ background: termin ? '#22DFC9' : '#E9C46A' }} />
                     {!termin && (
                       <button onClick={(e) => { e.stopPropagation(); quickDone(t); }} className="shrink-0 cursor-pointer" title="Erledigt">
                         <Square className="w-5 h-5 text-hl-mute" />
@@ -245,9 +245,9 @@ export default function HomeOverview({
             </div>
             <div className="space-y-2">
               {ideenUnread.slice(0, 3).map((i) => (
-                <motion.button key={i.id} whileTap={{ scale: 0.98 }} onClick={() => onGoTab('ideen')} className="w-full text-left hl-card rounded-2xl p-3 flex items-center gap-3 cursor-pointer">
-                  <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(34,223,201,.15)' }}><Lightbulb className="w-5 h-5 text-brand-accent-light" /></span>
-                  <span className="flex-1 min-w-0 text-sm text-white truncate">{i.title}</span>
+                <motion.button key={i.id} whileTap={{ scale: 0.98 }} onClick={() => onGoTab('ideen')} className="w-full text-left hl-card hl-tint rounded-[20px] p-3.5 flex items-center gap-3 cursor-pointer" style={{ ['--tint' as string]: '#F2A93B' }}>
+                  <span className="hl-tint-chip w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"><Lightbulb className="w-5 h-5" strokeWidth={2.4} /></span>
+                  <span className="flex-1 min-w-0 text-sm font-semibold text-white truncate">{i.title}</span>
                   <span className="min-w-[20px] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-[#E6238E] text-white text-[11px] font-bold tabular-nums shrink-0">{i.unread! > 99 ? '99+' : i.unread}</span>
                 </motion.button>
               ))}
@@ -258,15 +258,15 @@ export default function HomeOverview({
         {/* Schnellzugriff */}
         <motion.div variants={item} className="grid grid-cols-4 gap-2 pt-1">
           {([
-            { t: 'chats', label: 'Chats', icon: () => <span className="text-lg">💬</span> },
-            { t: 'aufgaben', label: 'Aufgaben', icon: ListChecks },
-            { t: 'kalender', label: 'Kalender', icon: CalendarDays },
-            { t: 'ideen', label: 'Ideen', icon: Lightbulb },
+            { t: 'chats', label: 'Chats', icon: MessageSquare, color: '#3B9EFF' },
+            { t: 'aufgaben', label: 'Aufgaben', icon: ListChecks, color: '#8B7CFF' },
+            { t: 'kalender', label: 'Kalender', icon: CalendarDays, color: '#E83E8C' },
+            { t: 'ideen', label: 'Ideen', icon: Lightbulb, color: '#F2A93B' },
           ] as const).map((q) => {
             const Icon = q.icon;
             return (
-              <button key={q.t} onClick={() => onGoTab(q.t)} className="hl-card rounded-2xl py-3 flex flex-col items-center gap-1.5 cursor-pointer active:scale-95 transition-transform">
-                <Icon className="w-5 h-5 text-brand-accent-light" />
+              <button key={q.t} onClick={() => onGoTab(q.t)} className="hl-card hl-tint rounded-[20px] py-3.5 flex flex-col items-center gap-1.5 cursor-pointer active:scale-95 transition-transform" style={{ ['--tint' as string]: q.color }}>
+                <span className="hl-tint-chip w-10 h-10 rounded-2xl flex items-center justify-center"><Icon className="w-5 h-5" strokeWidth={2.4} /></span>
                 <span className="text-[10px] font-sans font-bold uppercase tracking-wide text-hl-soft">{q.label}</span>
               </button>
             );
