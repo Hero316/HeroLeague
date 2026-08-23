@@ -452,7 +452,7 @@ body {
 .hl-card {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.058), rgba(255, 255, 255, 0.014));
   border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 22px;
+  border-radius: 24px;
   backdrop-filter: blur(24px) saturate(1.4);
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
   box-shadow:
@@ -488,6 +488,19 @@ body {
 /* Größere Aktionsflächen (Buttons/Pillen) runder & mit sanftem Press-Gefühl.
    Sehr breit gültig, aber rein kosmetisch – bricht keine Logik. */
 button { -webkit-tap-highlight-color: transparent; }
+
+/* Sekundäre/Ghost-Tasten & Chips (Klasse bg-white/5) bekommen einen feinen
+   Verlauf-Schliff + klarere Kante – wirkt sofort auf ALLE solchen Tasten/Chips
+   (z.B. „+ Link", Personen-Chips, Abbrechen, Icon-Buttons). Deckkraft-Varianten
+   (bg-white/10 …) und Hover-Klassen bleiben unberührt. */
+[class~="bg-white/5"] {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.022));
+}
+.hl-team [class~="bg-white/5"] {
+  background-image: linear-gradient(180deg, rgba(16, 42, 38, 0.05), rgba(16, 42, 38, 0.015));
+}
+[class~="border-white/10"] { border-color: rgba(255, 255, 255, 0.13); }
+.hl-team [class~="border-white/10"] { border-color: rgba(16, 42, 38, 0.12); }
 
 /* iOS zoomt beim Antippen in ein Eingabefeld mit Schrift < 16px hinein – das
    ist das „plötzlich so groß". 16px auf echten Text-Eingaben (input/textarea)
@@ -870,8 +883,25 @@ button { -webkit-tap-highlight-color: transparent; }
    .hl-team (Team-App). So bleibt das Backoffice unberührt dunkel. */
 .hl-surf { background: #0a1110; }
 .hl-team .hl-surf { background: #FFFFFF; }
-.hl-surf-0 { background: #060E0F; }
-.hl-team .hl-surf-0 { background: #EEF3F4; }
+/* Eingabefeld-Fläche (Inputs/Selects/Textareas laufen alle über hl-surf-0):
+   moderner „Field"-Look mit weichem Innenschatten – wirkt in JEDEM Modal/Screen. */
+.hl-surf-0 {
+  background: linear-gradient(180deg, #0b1514 0%, #07100f 100%);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.hl-team .hl-surf-0 {
+  background: linear-gradient(180deg, #F4F9F8 0%, #E9F1F0 100%);
+  box-shadow: inset 0 1px 2px rgba(16, 42, 40, 0.06);
+}
+/* Fokus: sanfter Marken-Glow rund ums Feld – einheitlich überall. */
+.hl-surf-0:focus {
+  outline: none;
+  border-color: rgba(34, 223, 201, 0.7) !important;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3), 0 0 0 3px rgba(34, 223, 201, 0.18);
+}
+.hl-team .hl-surf-0:focus {
+  box-shadow: inset 0 1px 2px rgba(16, 42, 40, 0.05), 0 0 0 3px rgba(34, 223, 201, 0.22);
+}
 .hl-surf-soft { background: rgba(6, 14, 15, 0.4); }
 .hl-team .hl-surf-soft { background: rgba(255, 255, 255, 0.6); }
 
