@@ -136,6 +136,52 @@ export async function heroEvents(req: VercelRequest, res: VercelResponse) {
   return res.status(405).json({ error: 'Nicht unterstützt' });
 }
 
+// Einmaliges Nachtragen: Da das Hero-System mitten im Monat kam, für ALLE schon
+// in DIESEM Monat abgeschlossenen Aufgaben/Termine/Tickets/Ideen rückwirkend
+// Punkte vergeben. Idempotent (dedupe über user_id+ref_type+ref_id) und ohne
+// Feier (seen=true) – nur Super-Admin. Zählt den Monatsstand also fair hoch.
+export async function heroBackfillMonth(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (session.role !== 'superadmin') return res.status(403).json({ error: 'Nur Super-Admin.' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
+
+  let inserted = 0;
+  const ins = async (uid: string | null | undefined, reason: string, refType: string, refId: string) => {
+    if (!uid || uid === 'bootstrap') return;
+    const rows = await sql`
+      INSERT INTO hero_events (id, user_id, reason, ref_type, ref_id, seen)
+      SELECT ${genId('hero')}, ${uid}, ${reason}, ${refType}, ${refId}, true
+      WHERE NOT EXISTS (SELECT 1 FROM hero_events WHERE user_id = ${uid} AND ref_type = ${refType} AND ref_id = ${refId})
+      RETURNING id`;
+    inserted += rows.length;
+  };
+
+  const tasks = (await sql`
+    SELECT t.id, COALESCE(t.type,'termin') AS type, ta.user_id AS "userId"
+    FROM tasks t JOIN task_assignees ta ON ta.task_id = t.id
+    WHERE t.status = 'erledigt' AND t.updated_at >= date_trunc('month', now())
+  `) as { id: string; type: string; userId: string }[];
+  for (const r of tasks) {
+    const reason = r.type === 'termin' ? 'Termin abgeschlossen' : r.type === 'beides' ? 'Erledigt ✓' : 'Aufgabe erledigt';
+    await ins(r.userId, reason, 'task', r.id);
+  }
+
+  const tks = (await sql`
+    SELECT id, COALESCE(assigned_to, created_by) AS "uid" FROM tickets
+    WHERE status = 'erledigt' AND updated_at >= date_trunc('month', now())
+  `) as { id: string; uid: string | null }[];
+  for (const r of tks) await ins(r.uid, 'Ticket gelöst', 'ticket', r.id);
+
+  const ide = (await sql`
+    SELECT i.id, im.user_id AS "userId" FROM ideas i JOIN idea_members im ON im.idea_id = i.id
+    WHERE i.status = 'erledigt' AND i.updated_at >= date_trunc('month', now())
+  `) as { id: string; userId: string }[];
+  for (const r of ide) await ins(r.userId, 'Idee umgesetzt', 'idea', r.id);
+
+  return res.json({ ok: true, inserted });
+}
+
 // Deep-Link für eine Aufgabe/einen Termin je nach Art: ein Termin (mit Datum)
 // landet im Kalender auf dem passenden Tag; eine reine Aufgabe im Aufgaben-Tab.
 // In beiden Fällen öffnet sich zusätzlich das Detail-Fenster (openTask).
