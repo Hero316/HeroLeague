@@ -11,7 +11,9 @@ import DeepLinkModal from './DeepLinkModal';
 import { useHuddleController, HuddleBar } from './Huddle';
 import { useInstall } from './InstallProvider';
 import { pushDebug, enablePush } from '../lib/push';
-import { fetchNotifications, fetchIdeas, fetchAllTasks, fetchTeam } from '../lib/collab';
+import { fetchNotifications, fetchIdeas, fetchAllTasks, fetchTeam, fetchHeroEvents, markHeroEventsSeen } from '../lib/collab';
+import { setHeroStats } from '../lib/heroes';
+import { useHeroBurst } from './HeroCelebration';
 import { fetchConversations } from '../lib/chat';
 import { setNotifUnread } from '../lib/badge';
 import { getUrlParam, setUrlParam } from '../lib/urlState';
@@ -323,6 +325,37 @@ export default function ChatApp({
   useEffect(() => {
     document.documentElement.style.setProperty('--section', SECTION_COLOR[tab]);
   }, [tab]);
+
+  // Hero-Punkte: beim Öffnen (und bei jedem Zurückkehren in die App) den Stand
+  // holen. Gibt es noch nicht gesehene Belohnungen (man wurde einer erledigten
+  // Aufgabe/… zugewiesen, war aber nicht dabei), die Feier-Animation mit Grund
+  // abspielen und die Ereignisse als gesehen quittieren.
+  const heroBurst = useHeroBurst();
+  useEffect(() => {
+    let alive = true;
+    const sync = async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const r = await fetchHeroEvents();
+        if (!alive) return;
+        setHeroStats({ total: r.total, month: r.month });
+        if (r.items.length > 0) {
+          const reason = r.items.length === 1 ? r.items[0].reason : `${r.items.length}× stark abgeliefert`;
+          heroBurst.burst({ reason, count: r.items.length });
+          markHeroEventsSeen(r.items.map((i) => i.id)).catch(() => {});
+        }
+      } catch {
+        /* egal – Stand bleibt beim letzten Wert */
+      }
+    };
+    sync();
+    document.addEventListener('visibilitychange', sync);
+    return () => {
+      alive = false;
+      document.removeEventListener('visibilitychange', sync);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     const el = document.documentElement;
     el.classList.add('hl-app-active');
@@ -524,6 +557,9 @@ export default function ChatApp({
       )}
 
       {/* Mini-Spiel „Hero Kicker" (⚽ oben rechts) */}
+
+      {/* Hero-Feier beim Öffnen, wenn man in Abwesenheit Punkte bekommen hat */}
+      {heroBurst.node}
 
       {/* Läuft weiter beim Tab-Wechsel: Sprachnachrichten-Mini-Leiste */}
       <MiniPlayer />

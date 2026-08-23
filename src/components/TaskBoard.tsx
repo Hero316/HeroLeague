@@ -13,7 +13,7 @@ import { VoiceMessage } from './AudioPlayer';
 import { useBackdropDismiss, ModalPortal, SegmentedControl, EmptyState } from './ui';
 import { BUBBLE_MINE, pickNameColor, EmojiPicker, useLongPress, QUICK_REACTIONS, ActionBtn } from './ChatSystem';
 import { useHeroBurst } from './HeroCelebration';
-import { getHeroes, bumpHeroes } from '../lib/heroes';
+import { useHeroStats, bumpHeroStats } from '../lib/heroes';
 
 const inputClass =
   'w-full hl-surf-0 border border-white/10 rounded-xl px-3.5 py-2.5 text-[15px] text-white focus:outline-none focus:border-brand-accent-light transition-colors';
@@ -1499,7 +1499,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
   useBackClose(newTask !== null, () => setNewTask(null));
   // Hero-Belohnung: Punktestand + Feier-Animation beim Abhaken.
   const heroBurst = useHeroBurst();
-  const [heroes, setHeroes] = useState(() => getHeroes(currentUserId));
+  const heroes = useHeroStats().total;
   // Leuchtende Marker: Liga-Spieltage & Testspieltage (einmal laden).
   const [hl, setHl] = useState<Record<string, Highlight>>({});
   useEffect(() => {
@@ -1595,10 +1595,16 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
   }, [myTodos]);
 
   const quickSetStatus = async (t: Task, next: TaskStatus) => {
-    // Frisch abgehakt? → Hero-Belohnung feiern.
+    // Frisch abgehakt? → Hero-Belohnung feiern (nur wenn ich selbst zugewiesen
+    // bin – dann habe ich den Punkt auch verdient). Die anderen Zugewiesenen
+    // bekommen ihn serverseitig und sehen die Feier beim nächsten Öffnen.
     if (next === 'erledigt' && t.status !== 'erledigt') {
-      heroBurst.burst();
-      setHeroes(bumpHeroes(currentUserId));
+      const mine = (t.assignees ?? []).some((a) => a.userId === currentUserId);
+      if (mine) {
+        const reason = t.type === 'termin' ? 'Termin abgeschlossen' : t.type === 'beides' ? 'Erledigt ✓' : 'Aufgabe erledigt';
+        heroBurst.burst({ reason });
+        bumpHeroStats();
+      }
     }
     setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: next } : x)));
     try {

@@ -77,6 +77,65 @@ export async function notify(
   });
 }
 
+// Hero-Punkte vergeben: für jeden Empfänger (zugewiesene/ausgewählte Personen)
+// eine Zeile anlegen. Der Auslöser selbst (actorId) bekommt `seen=true`, weil er
+// die Feier-Animation direkt in der App sieht; alle anderen `seen=false`, damit
+// sie sie beim nächsten Öffnen bekommen. Best-effort: Fehler brechen NIE den
+// eigentlichen Status-Wechsel ab. `bootstrap` (Master-Login) wird übersprungen.
+export async function awardHeroes(
+  recipientIds: (string | null | undefined)[],
+  reason: string,
+  refType: string,
+  refId: string,
+  actorId: string
+): Promise<void> {
+  const done = new Set<string>();
+  for (const rid of recipientIds) {
+    if (!rid || rid === 'bootstrap' || done.has(rid)) continue;
+    done.add(rid);
+    try {
+      await sql`
+        INSERT INTO hero_events (id, user_id, reason, ref_type, ref_id, seen)
+        VALUES (${genId('hero')}, ${rid}, ${reason.slice(0, 80)}, ${refType}, ${refId}, ${rid === actorId})
+      `;
+    } catch (err) {
+      console.error('awardHeroes:', err);
+    }
+  }
+}
+
+// Hero-Punkte lesen/quittieren (Team-App). GET liefert die noch nicht gesehenen
+// Ereignisse (für die Animation) plus Gesamt- und Monatsstand. POST markiert sie
+// als gesehen ({ids} einzelne oder {all:true}).
+export async function heroEvents(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  const uid = session.userId;
+
+  if (req.method === 'GET') {
+    res.setHeader('Cache-Control', 'no-store');
+    const items = await sql`
+      SELECT id, reason, ref_type AS "refType", ref_id AS "refId", created_at AS "createdAt"
+      FROM hero_events WHERE user_id = ${uid} AND seen = false ORDER BY created_at`;
+    const totalRows = await sql`SELECT count(*)::int AS n FROM hero_events WHERE user_id = ${uid}`;
+    const monthRows = await sql`SELECT count(*)::int AS n FROM hero_events WHERE user_id = ${uid} AND created_at >= date_trunc('month', now())`;
+    return res.json({ items, total: totalRows[0]?.n ?? 0, month: monthRows[0]?.n ?? 0 });
+  }
+
+  if (req.method === 'POST') {
+    const b = req.body ?? {};
+    if (Array.isArray(b.ids) && b.ids.length) {
+      const ids = b.ids.filter((x: unknown): x is string => typeof x === 'string');
+      await sql`UPDATE hero_events SET seen = true WHERE user_id = ${uid} AND id = ANY(${ids}::text[])`;
+    } else {
+      await sql`UPDATE hero_events SET seen = true WHERE user_id = ${uid} AND seen = false`;
+    }
+    return res.json({ ok: true });
+  }
+
+  return res.status(405).json({ error: 'Nicht unterstützt' });
+}
+
 // Deep-Link für eine Aufgabe/einen Termin je nach Art: ein Termin (mit Datum)
 // landet im Kalender auf dem passenden Tag; eine reine Aufgabe im Aufgaben-Tab.
 // In beiden Fällen öffnet sich zusätzlich das Detail-Fenster (openTask).
@@ -330,7 +389,8 @@ export async function ticket(req: VercelRequest, res: VercelResponse) {
       FROM tickets WHERE id = ${id}
     `;
     if (existing.length === 0) return res.status(404).json({ error: 'Ticket nicht gefunden.' });
-    const cur = existing[0] as { assignedTo: string | null; title: string };
+    const cur = existing[0] as { assignedTo: string | null; title: string; status: string };
+    const prevTicketStatus = cur.status;
 
     if (b.op === 'delete') {
       await sql`DELETE FROM tickets WHERE id = ${id}`;
@@ -382,6 +442,12 @@ export async function ticket(req: VercelRequest, res: VercelResponse) {
     `;
     if (assignmentChanged && assignedTo) {
       await notify(assignedTo, session.userId, 'ticket_assigned', 'ticket', id, `Dir wurde ein Ticket zugewiesen: „${cur.title}“`);
+    }
+    // Hero-Punkte: frisch gelöstes Ticket belohnt die zuständige Person (sonst
+    // den Ersteller). Nur beim Wechsel nach „erledigt".
+    if (b.status === 'erledigt' && prevTicketStatus !== 'erledigt') {
+      const rewardee = assignedTo || (rows[0] as { createdBy?: string }).createdBy;
+      await awardHeroes([rewardee], 'Ticket gelöst', 'ticket', id, session.userId);
     }
     return res.json(rows[0]);
   }
@@ -607,9 +673,9 @@ export async function task(req: VercelRequest, res: VercelResponse) {
   const id = typeof b.id === 'string' ? b.id : '';
   if (!id) return badRequest(res, 'Aufgaben-ID fehlt.');
 
-  const rows = await sql`SELECT id, created_by AS "createdBy", title, COALESCE(type,'termin') AS "type", to_char(due_date, 'YYYY-MM-DD') AS "dueDate" FROM tasks WHERE id = ${id}`;
+  const rows = await sql`SELECT id, created_by AS "createdBy", title, COALESCE(type,'termin') AS "type", COALESCE(status,'') AS "prevStatus", to_char(due_date, 'YYYY-MM-DD') AS "dueDate" FROM tasks WHERE id = ${id}`;
   if (rows.length === 0) return res.status(404).json({ error: 'Aufgabe nicht gefunden.' });
-  const cur = rows[0] as { createdBy: string; title: string; type: string; dueDate: string | null };
+  const cur = rows[0] as { createdBy: string; title: string; type: string; prevStatus: string; dueDate: string | null };
 
   if (b.op === 'delete') {
     if (session.role !== 'superadmin' && session.userId !== cur.createdBy) {
@@ -653,6 +719,14 @@ export async function task(req: VercelRequest, res: VercelResponse) {
       updated_at = now()
     WHERE id = ${id}
   `;
+
+  // Hero-Punkte: wird die Aufgabe/der Termin gerade auf „erledigt" gesetzt, jede
+  // zugewiesene Person belohnen (einmalig – nur beim Wechsel nach erledigt).
+  if (b.status === 'erledigt' && cur.prevStatus !== 'erledigt') {
+    const done = (await sql`SELECT user_id AS "userId" FROM task_assignees WHERE task_id = ${id}`) as { userId: string }[];
+    const reason = cur.type === 'termin' ? 'Termin abgeschlossen' : cur.type === 'beides' ? 'Erledigt ✓' : 'Aufgabe erledigt';
+    await awardHeroes(done.map((d) => d.userId), reason, 'task', id, session.userId);
+  }
 
   if (Array.isArray(b.assignees)) {
     const members = await loadMembers();
@@ -988,6 +1062,9 @@ export async function idea(req: VercelRequest, res: VercelResponse) {
       for (const m of mem) {
         if (m.userId !== uid) await notify(m.userId, uid, 'task_assigned', 'task', taskId, `Aus der Idee „${cur.title}“ wurde eine Aufgabe.`);
       }
+      // Hero-Punkte: umgesetzte Idee belohnt alle Mitglieder (nur wenn sie nicht
+      // ohnehin schon „erledigt" war).
+      if (cur.status !== 'erledigt') await awardHeroes(mem.map((m) => m.userId), 'Idee umgesetzt', 'idea', id, uid);
       return res.json(await fetchIdeaById(id));
     }
 
@@ -1006,6 +1083,13 @@ export async function idea(req: VercelRequest, res: VercelResponse) {
         links = CASE WHEN ${links !== undefined} THEN ${JSON.stringify(links ?? [])}::jsonb ELSE links END,
         updated_at = now()
       WHERE id = ${id}`;
+
+    // Hero-Punkte: frisch umgesetzte Idee belohnt alle Mitglieder (nur beim
+    // Wechsel nach „erledigt").
+    if (b.status === 'erledigt' && cur.status !== 'erledigt') {
+      const mem = (await sql`SELECT user_id AS "userId" FROM idea_members WHERE idea_id = ${id}`) as { userId: string }[];
+      await awardHeroes(mem.map((m) => m.userId), 'Idee umgesetzt', 'idea', id, uid);
+    }
 
     // Mitglieder ändern darf nur der Ersteller.
     if (Array.isArray(b.memberIds) && isOwner) {

@@ -17,6 +17,7 @@ import type {
   IdeaStatus,
   LinkItem,
   AppUser,
+  HeroEvent,
 } from '../types';
 
 // --- Team-Mitglieder & eigenes Profil ---------------------------------------
@@ -205,6 +206,15 @@ export const markNotificationRead = (id: string) =>
   apiFetch('/api/notifications', { method: 'POST', body: JSON.stringify({ id }) });
 export const markAllNotificationsRead = () =>
   apiFetch('/api/notifications', { method: 'POST', body: JSON.stringify({ all: true }) });
+
+// --- Hero-Punkte (Belohnung fürs Abschließen) -------------------------------
+export const fetchHeroEvents = () =>
+  apiFetch<{ items: HeroEvent[]; total: number; month: number }>('/api/team?resource=hero-events');
+export const markHeroEventsSeen = (ids?: string[]) =>
+  apiFetch('/api/team?resource=hero-events', {
+    method: 'POST',
+    body: JSON.stringify(ids && ids.length ? { ids } : { all: true }),
+  });
 
 // --- Kalenderwochen-Helfer (ISO 8601, Woche beginnt Montag) -----------------
 export function isoWeekOf(d: Date): string {
