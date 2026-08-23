@@ -549,6 +549,7 @@ function IdeaDetail({
   const [uploadPct, setUploadPct] = useState<number | null>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const docRef = useRef<HTMLInputElement>(null);
+  const verlaufRef = useRef<HTMLDivElement>(null);
   const recorder = useIdeaRecorder(async (file) => {
     setUploading(true);
     try {
@@ -607,6 +608,12 @@ function IdeaDetail({
   useEffect(() => {
     load();
   }, [load]);
+
+  // Brainstorm-Verlauf immer unten (neueste zuerst sichtbar) – kein Endlos-Scrollen.
+  useEffect(() => {
+    const el = verlaufRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [comments.length]);
 
   // Beim Schließen einen noch offenen Beitrag/Anhang NICHT verlieren – vorher senden.
   const closeSafely = async () => {
@@ -773,7 +780,7 @@ function IdeaDetail({
               <h4 className="text-xs font-mono uppercase tracking-wider text-hl-dim mb-2 flex items-center gap-1.5">
                 <Send className="w-4 h-4" /> Brainstorm ({comments.length})
               </h4>
-              <div className="space-y-2.5 max-h-72 overflow-y-auto">
+              <div ref={verlaufRef} className="space-y-2.5 max-h-72 overflow-y-auto">
                 {comments.length === 0 ? (
                   <p className="text-sm text-hl-faint py-2">Noch keine Beiträge – schreib den ersten Vorschlag oder häng etwas an.</p>
                 ) : (

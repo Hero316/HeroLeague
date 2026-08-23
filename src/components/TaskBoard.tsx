@@ -691,7 +691,13 @@ export function TaskDetail({
   const [uploadPct, setUploadPct] = useState<number | null>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const docRef = useRef<HTMLInputElement>(null);
+  const verlaufRef = useRef<HTMLDivElement>(null);
   const canDelete = isSuperadmin || task.createdBy === currentUserId;
+  // Verlauf immer unten (neueste Beiträge) – kein ewiges Scrollen bei langen Chats.
+  useEffect(() => {
+    const el = verlaufRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [comments.length]);
   const recorder = useTaskRecorder(async (file) => {
     setUploading(true);
     try {
@@ -909,7 +915,7 @@ export function TaskDetail({
           <h4 className="text-xs font-mono uppercase tracking-wider text-hl-dim mb-2 flex items-center gap-1.5">
             <MessageSquare className="w-4 h-4" /> Verlauf ({comments.length})
           </h4>
-          <div className="space-y-2.5 max-h-72 overflow-y-auto">
+          <div ref={verlaufRef} className="space-y-2.5 max-h-72 overflow-y-auto">
             {comments.length === 0 ? (
               <p className="text-sm text-hl-faint py-2">Noch keine Beiträge – schreib den ersten oder häng etwas an.</p>
             ) : (

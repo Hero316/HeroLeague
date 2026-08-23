@@ -109,7 +109,9 @@ export async function teamMembers(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store');
   const users = await getUsers();
   const members = users
-    .filter((u) => u.isActive)
+    // Schiedsrichter gehören NICHT in die Team-App (kein Zugang) – daher auch
+    // nicht in die Personen-Auswahl (Zuweisungen/Ideen/Chat).
+    .filter((u) => u.isActive && u.role !== 'referee')
     .map((u) => ({
       id: u.id,
       name: u.name && u.name.trim() ? u.name : u.email,
@@ -118,6 +120,48 @@ export async function teamMembers(req: VercelRequest, res: VercelResponse) {
       status: u.status ?? 'online',
     }));
   return res.json(members);
+}
+
+// Super-Admin: eine Person KOMPLETT aus der Team-App entfernen – aus allen Chats,
+// Ideen, Aufgaben und Huddles. Optional das Konto ganz löschen (Test-Accounts).
+// Der Zugang/​die Rolle bleibt sonst unangetastet (z.B. Schiedsrichter bleibt Schiri).
+export async function purgeUser(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (session.role !== 'superadmin') return res.status(403).json({ error: 'Nur Super-Admins.' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
+  const b = req.body ?? {};
+  const userId = typeof b.userId === 'string' ? b.userId : '';
+  if (!userId) return badRequest(res, 'Nutzer-ID fehlt.');
+  if (userId === session.userId) return badRequest(res, 'Dich selbst kannst du hier nicht entfernen.');
+  const del = b.deleteAccount === true;
+
+  // Konto löschen? Vorher die Schutzregel prüfen (letzter Super-Admin bleibt).
+  if (del) {
+    const u = (await sql`SELECT role, is_active AS "isActive" FROM users WHERE id = ${userId}`) as { role: string; isActive: boolean }[];
+    if (u.length && u[0].role === 'superadmin' && u[0].isActive) {
+      const cnt = (await sql`SELECT count(*)::int AS n FROM users WHERE role = 'superadmin' AND is_active = true`) as { n: number }[];
+      if ((cnt[0]?.n ?? 0) <= 1) return badRequest(res, 'Der letzte aktive Super-Admin kann nicht gelöscht werden.');
+    }
+  }
+
+  // Überall aus der Team-App entfernen.
+  await sql`DELETE FROM task_assignees WHERE user_id = ${userId}`;
+  await sql`DELETE FROM idea_members WHERE user_id = ${userId}`;
+  await sql`DELETE FROM huddle_participants WHERE user_id = ${userId}`;
+  // Direktnachrichten mit dieser Person ganz löschen; aus Gruppen nur entfernen.
+  const dms = (await sql`
+    SELECT c.id FROM conversations c
+    JOIN conversation_members m ON m.conversation_id = c.id
+    WHERE c.kind = 'dm' AND m.user_id = ${userId}
+  `) as { id: string }[];
+  for (const d of dms) await sql`DELETE FROM conversations WHERE id = ${d.id}`;
+  await sql`DELETE FROM conversation_members WHERE user_id = ${userId}`;
+  await sql`DELETE FROM notifications WHERE user_id = ${userId}`;
+  await sql`DELETE FROM push_subscriptions WHERE user_id = ${userId}`;
+
+  if (del) await sql`DELETE FROM users WHERE id = ${userId}`;
+  return res.json({ ok: true, deleted: del });
 }
 
 // Eigenes Profil bearbeiten (Name, Avatar, Status). Jeder eingeloggte Nutzer –
