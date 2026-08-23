@@ -6,6 +6,7 @@ import { fetchTasksRange, fetchAllTasks, fetchTask, createTask, updateTask, dele
 import { apiFetch, uploadFile } from '../lib/api';
 import { getUrlParam, setUrlParam } from '../lib/urlState';
 import { useBackClose } from '../lib/backStack';
+import { zoomOriginFromEvent, zoomModalProps, ZERO_ORIGIN, type ZoomOrigin } from '../lib/zoom';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
 import LinkChips from './LinkChips';
@@ -678,6 +679,7 @@ function TaskCommentRow({
 // ===========================================================================
 export function TaskDetail({
   task,
+  origin,
   team,
   currentUserId,
   isSuperadmin,
@@ -685,6 +687,7 @@ export function TaskDetail({
   onChanged,
 }: {
   task: Task;
+  origin?: ZoomOrigin;
   team: TeamMember[];
   currentUserId: string;
   isSuperadmin: boolean;
@@ -837,7 +840,7 @@ export function TaskDetail({
   return (
     <ModalPortal>
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[70] bg-black/80 flex items-start sm:items-center justify-center p-0 pt-[env(safe-area-inset-top)] sm:p-6 overflow-y-auto" {...backdrop}>
-      <motion.div initial={{ scale: 0.8, y: 24, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.85, y: 12, opacity: 0 }} transition={{ type: 'spring', stiffness: 420, damping: 20, mass: 0.8 }} className="hl-card hl-modal-card w-full max-w-xl my-0 sm:my-8 p-5 sm:p-6 rounded-3xl" onClick={(e) => e.stopPropagation()}>
+      <motion.div {...zoomModalProps(origin ?? ZERO_ORIGIN)} className="hl-card hl-modal-card w-full max-w-xl my-0 sm:my-8 p-5 sm:p-6 rounded-3xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <h3 className="font-display font-black text-xl text-white uppercase tracking-tight">
             {type === 'aufgabe' ? 'Aufgabe' : type === 'beides' ? 'Eintrag' : 'Termin'}
@@ -1492,6 +1495,8 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [openTask, setOpenTask] = useState<Task | null>(null);
+  const [zoom, setZoom] = useState<ZoomOrigin>(ZERO_ORIGIN);
+  const openTaskAt = (e: React.MouseEvent, t: Task) => { setZoom(zoomOriginFromEvent(e)); setOpenTask(t); };
   const [newTask, setNewTask] = useState<{ date: string; startTime?: string; type?: TaskKind } | null>(null);
   // Handy-Zurück-Geste schließt das offene Detail-/Neu-Fenster, statt die App
   // zu verlassen.
@@ -1765,7 +1770,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                     dayTodos.map((t) => {
                       const done = t.status === 'erledigt';
                       return (
-                        <div key={t.id} onClick={() => setOpenTask(t)} className={`hl-card rounded-xl p-2.5 cursor-pointer transition-all flex items-start gap-2 ${done ? 'opacity-55' : ''}`}>
+                        <div key={t.id} onClick={(e) => openTaskAt(e, t)} className={`hl-card rounded-xl p-2.5 cursor-pointer transition-all flex items-start gap-2 ${done ? 'opacity-55' : ''}`}>
                           <div className="mt-0.5"><TaskCheckbox done={done} title={done ? 'Als offen markieren' : 'Als erledigt markieren'} onToggle={(e) => { e.stopPropagation(); quickSetStatus(t, done ? 'offen' : 'erledigt'); }} /></div>
                           <div className="min-w-0 flex-1">
                             <span className={`block text-sm font-sans leading-snug break-words ${done ? 'line-through text-hl-mute' : 'text-white'}`}>{t.title}</span>
@@ -1816,7 +1821,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                     </div>
                   )}
                   <button
-                    onClick={() => setOpenTask(t)}
+                    onClick={(e) => openTaskAt(e, t)}
                     className={`w-full text-left hl-card hl-tint rounded-[22px] p-3.5 cursor-pointer transition-all flex items-center gap-3 ${past ? 'opacity-60' : ''}`}
                     style={{ ['--tint' as string]: t.type === 'beides' ? '#E9C46A' : '#3B9EFF' }}
                   >
@@ -1883,7 +1888,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                         <motion.div
                           key={t.id}
                           whileTap={{ scale: 0.985 }}
-                          onClick={() => setOpenTask(t)}
+                          onClick={(e) => openTaskAt(e, t)}
                           className={`hl-card hl-tint rounded-[22px] p-3.5 cursor-pointer transition-all flex items-center gap-3 ${done ? 'opacity-60' : ''}`}
                           style={{ ['--tint' as string]: done ? '#43E5A0' : PRIORITY_BAR[t.priority] }}
                         >
@@ -2004,7 +2009,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
           tasks={eventTasks}
           highlight={hl[ymd(anchor)]}
           fullHeight={persist}
-          onOpenTask={setOpenTask}
+          onOpenTask={(t) => { setZoom(ZERO_ORIGIN); setOpenTask(t); }}
           onAddAt={(startTime) => setNewTask({ date: ymd(anchor), startTime })}
           onMoveTask={moveTask}
         />
@@ -2026,7 +2031,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                 {hl[key] && <div className="mb-2"><HighlightPill h={hl[key]} className="!text-[11px] !leading-[18px] py-0.5 text-center" /></div>}
                 <div className={`space-y-2 min-h-[2rem] ${persist ? 'flex-1 overflow-y-auto' : 'flex-1'}`}>
                   {dayTasks.map((t) => (
-                    <div key={t.id} onClick={() => setOpenTask(t)} className="hl-card rounded-xl p-2.5 cursor-pointer transition-all">
+                    <div key={t.id} onClick={(e) => openTaskAt(e, t)} className="hl-card rounded-xl p-2.5 cursor-pointer transition-all">
                       <span className="block text-sm font-sans text-white leading-snug break-words">{t.title}</span>
                       <div className="flex items-center gap-1.5 mt-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
                         <select
@@ -2072,7 +2077,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
           <NewTaskModal prefill={newTask} team={team} onClose={() => setNewTask(null)} onCreated={() => { setNewTask(null); load(); }} />
         )}
         {openTask && (
-          <TaskDetail task={openTask} team={team} currentUserId={currentUserId} isSuperadmin={isSuperadmin} onClose={() => setOpenTask(null)} onChanged={load} />
+          <TaskDetail task={openTask} origin={zoom} team={team} currentUserId={currentUserId} isSuperadmin={isSuperadmin} onClose={() => setOpenTask(null)} onChanged={load} />
         )}
       </AnimatePresence>
       {heroBurst.node}

@@ -994,10 +994,10 @@ function Composer({
             <>
               <div className="fixed inset-0 z-[59]" onClick={() => setSheet(false)} />
               <motion.div
-                initial={{ opacity: 0, y: 22, scale: 0.9 }}
+                initial={{ opacity: 0, y: 70, scale: 0.9 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 16, scale: 0.9 }}
-                transition={{ type: 'spring', stiffness: 460, damping: 26, mass: 0.7 }}
+                exit={{ opacity: 0, y: 70, scale: 0.9 }}
+                transition={{ type: 'spring', stiffness: 380, damping: 21, mass: 0.9 }}
                 style={{ transformOrigin: 'bottom center' }}
                 className="absolute bottom-full left-0 right-0 mb-2 z-[60] rounded-2xl hl-surf border border-white/10 shadow-2xl shadow-black/60 p-4"
               >
