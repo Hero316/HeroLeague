@@ -12,6 +12,8 @@ import LinkChips from './LinkChips';
 import { VoiceMessage } from './AudioPlayer';
 import { useBackdropDismiss, ModalPortal, SegmentedControl, EmptyState } from './ui';
 import { BUBBLE_MINE, pickNameColor, EmojiPicker, useLongPress, QUICK_REACTIONS, ActionBtn } from './ChatSystem';
+import { useHeroBurst } from './HeroCelebration';
+import { getHeroes, bumpHeroes } from '../lib/heroes';
 
 const inputClass =
   'w-full hl-surf-0 border border-white/10 rounded-xl px-3.5 py-2.5 text-[15px] text-white focus:outline-none focus:border-brand-accent-light transition-colors';
@@ -1474,6 +1476,9 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
   // zu verlassen.
   useBackClose(openTask !== null, () => setOpenTask(null));
   useBackClose(newTask !== null, () => setNewTask(null));
+  // Hero-Belohnung: Punktestand + Feier-Animation beim Abhaken.
+  const heroBurst = useHeroBurst();
+  const [heroes, setHeroes] = useState(() => getHeroes(currentUserId));
   // Leuchtende Marker: Liga-Spieltage & Testspieltage (einmal laden).
   const [hl, setHl] = useState<Record<string, Highlight>>({});
   useEffect(() => {
@@ -1569,6 +1574,11 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
   }, [myTodos]);
 
   const quickSetStatus = async (t: Task, next: TaskStatus) => {
+    // Frisch abgehakt? → Hero-Belohnung feiern.
+    if (next === 'erledigt' && t.status !== 'erledigt') {
+      heroBurst.burst();
+      setHeroes(bumpHeroes(currentUserId));
+    }
     setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: next } : x)));
     try {
       await updateTask(t.id, { status: next });
@@ -1657,6 +1667,16 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
         {/* Zeile 2: Datums-Navigation (blendet SMOOTH ein/aus) + „Neu" rechts –
             „Neu" ist immer erreichbar, egal welche Ansicht. */}
         <div className="flex items-center gap-2 mt-2">
+          {mode === 'tasks' && (
+            <div
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl shrink-0 font-display font-black text-sm"
+              style={{ background: 'linear-gradient(135deg, rgba(34,223,201,.16), rgba(139,124,255,.16))', border: '1px solid rgba(34,223,201,.3)' }}
+              title="Deine gesammelten Heroes (fürs Abhaken von Aufgaben)"
+            >
+              <span style={{ fontSize: 15 }}>⚡</span>
+              <span className="text-brand-accent-light tabular-nums">{heroes}</span>
+            </div>
+          )}
           <div className="flex-1 min-w-0 flex items-center justify-center gap-2">
             <AnimatePresence initial={false}>
               {((mode !== 'tasks' && (view === 'month' || view === 'week' || view === 'day')) || (mode === 'tasks' && taskView === 'week')) && (
@@ -2024,6 +2044,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
           <TaskDetail task={openTask} team={team} currentUserId={currentUserId} isSuperadmin={isSuperadmin} onClose={() => setOpenTask(null)} onChanged={load} />
         )}
       </AnimatePresence>
+      {heroBurst.node}
     </div>
   );
 }
