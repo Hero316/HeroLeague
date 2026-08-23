@@ -4,6 +4,7 @@ import { Plus, X, Send, Trash2, Loader2, Lightbulb, Check, ListChecks, CalendarD
 import type { Idea, IdeaComment, IdeaStatus, LinkItem, TeamMember } from '../types';
 import { fetchIdeas, fetchIdea, createIdea, updateIdea, deleteIdea, convertIdea, addIdeaComment, editIdeaComment, deleteIdeaComment, reactIdeaComment, fetchTeam } from '../lib/collab';
 import { useBackClose } from '../lib/backStack';
+import { zoomOriginFromEvent, zoomModalProps, ZERO_ORIGIN, type ZoomOrigin } from '../lib/zoom';
 import { uploadFile } from '../lib/api';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
@@ -309,6 +310,7 @@ export default function IdeasBoard({
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [openId, setOpenId] = useState<string | null>(initialOpenIdeaId ?? null);
+  const [zoom, setZoom] = useState<ZoomOrigin>(ZERO_ORIGIN);
 
   const load = useCallback(async () => {
     try {
@@ -371,7 +373,7 @@ export default function IdeasBoard({
                 <motion.button
                   key={idea.id}
                   whileTap={{ scale: 0.99 }}
-                  onClick={() => setOpenId(idea.id)}
+                  onClick={(e) => { setZoom(zoomOriginFromEvent(e)); setOpenId(idea.id); }}
                   className="w-full text-left hl-card hl-tint rounded-[22px] p-3.5 cursor-pointer flex gap-3 items-start"
                   style={{ ['--tint' as string]: STATUS_BAR[idea.status] }}
                 >
@@ -426,6 +428,7 @@ export default function IdeasBoard({
           <IdeaDetail
             key={openId}
             ideaId={openId}
+            origin={zoom}
             team={team}
             currentUserId={currentUserId}
             isSuperadmin={isSuperadmin}
@@ -528,6 +531,7 @@ function NewIdeaModal({
 // --- Idee öffnen: Brainstorm, Status, Fazit, Umwandeln ----------------------
 function IdeaDetail({
   ideaId,
+  origin,
   team,
   currentUserId,
   isSuperadmin,
@@ -535,6 +539,7 @@ function IdeaDetail({
   onChanged,
 }: {
   ideaId: string;
+  origin?: ZoomOrigin;
   team: TeamMember[];
   currentUserId: string;
   isSuperadmin: boolean;
@@ -734,7 +739,7 @@ function IdeaDetail({
   return (
     <ModalPortal>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/80 flex items-start sm:items-center justify-center p-0 pt-[env(safe-area-inset-top)] sm:p-6 overflow-y-auto" {...backdrop}>
-        <motion.div initial={{ scale: 0.8, y: 24, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.85, y: 12, opacity: 0 }} transition={{ type: 'spring', stiffness: 420, damping: 20, mass: 0.8 }} className="hl-card hl-modal-card w-full max-w-xl my-0 sm:my-8 p-5 sm:p-6 rounded-3xl" onClick={(e) => e.stopPropagation()}>
+        <motion.div {...zoomModalProps(origin ?? ZERO_ORIGIN)} className="hl-card hl-modal-card w-full max-w-xl my-0 sm:my-8 p-5 sm:p-6 rounded-3xl" onClick={(e) => e.stopPropagation()}>
           {!idea ? (
             <div className="flex justify-center py-10 text-hl-mute">
               <Loader2 className="w-6 h-6 animate-spin" />

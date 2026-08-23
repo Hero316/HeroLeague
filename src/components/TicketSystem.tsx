@@ -15,6 +15,7 @@ import type { Ticket, TicketComment, TicketPriority, TicketStatus, TeamMember, L
 import { uploadImage } from '../lib/api';
 import { getUrlParam, setUrlParam } from '../lib/urlState';
 import { useBackClose, goBackLayer } from '../lib/backStack';
+import { zoomOriginFromEvent, zoomModalProps, ZERO_ORIGIN, type ZoomOrigin } from '../lib/zoom';
 import {
   fetchTickets,
   fetchTicket,
@@ -151,12 +152,14 @@ function ImageStrip({ images, onRemove }: { images: string[]; onRemove?: (i: num
 // --- Detailansicht eines Tickets -------------------------------------------
 export function TicketDetail({
   ticketId,
+  origin,
   team,
   canManage,
   onClose,
   onChanged,
 }: {
   ticketId: string;
+  origin?: ZoomOrigin;
   team: TeamMember[];
   canManage: boolean;
   onClose: () => void;
@@ -253,10 +256,7 @@ export function TicketDetail({
       {...backdrop}
     >
       <motion.div
-        initial={{ scale: 0.8, y: 24, opacity: 0 }}
-        animate={{ scale: 1, y: 0, opacity: 1 }}
-        exit={{ scale: 0.85, y: 12, opacity: 0 }}
-        transition={{ type: 'spring', stiffness: 420, damping: 20, mass: 0.8 }}
+        {...zoomModalProps(origin ?? ZERO_ORIGIN)}
         className="hl-card hl-modal-card w-full max-w-2xl my-0 sm:my-8 p-5 sm:p-6 rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -555,6 +555,7 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
   // Offenes Ticket in der URL halten (nur in der Team-App), damit ein Reload
   // das Ticket wieder öffnet statt zur Liste zurückzuspringen.
   const [openId, setOpenId] = useState<string | null>(() => (persist ? getUrlParam('ticket') : null));
+  const [zoom, setZoom] = useState<ZoomOrigin>(ZERO_ORIGIN);
   useEffect(() => {
     if (persist) setUrlParam('ticket', openId);
   }, [openId, persist]);
@@ -645,7 +646,7 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
             <motion.button
               key={t.id}
               whileTap={{ scale: 0.99 }}
-              onClick={() => setOpenId(t.id)}
+              onClick={(e) => { setZoom(zoomOriginFromEvent(e)); setOpenId(t.id); }}
               className="w-full text-left hl-card hl-tint rounded-[22px] p-3.5 flex gap-3 cursor-pointer items-start"
               style={{ ['--tint' as string]: PRIORITY_BAR[t.priority] }}
             >
@@ -684,6 +685,7 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
         {openId && (
           <TicketDetail
             ticketId={openId}
+            origin={zoom}
             team={team}
             canManage={canManage}
             onClose={goBackLayer}
