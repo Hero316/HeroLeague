@@ -493,6 +493,7 @@ export default function ChatApp({
       {huddle.active && (
         <HuddleBar
           active={huddle.active}
+          speaking={huddle.speaking}
           team={huddleTeam}
           currentUserId={currentUserId}
           onLeave={huddle.leave}

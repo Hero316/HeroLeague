@@ -30,11 +30,22 @@ async function activeParticipants(huddleId: string) {
 async function endIfEmpty(huddleId: string): Promise<boolean> {
   const act = await activeParticipants(huddleId);
   if (act.length > 0) return false;
-  const rows = (await sql`UPDATE huddles SET ended_at = now() WHERE id = ${huddleId} AND ended_at IS NULL RETURNING message_id`) as {
-    message_id: string | null;
+  const rows = (await sql`
+    UPDATE huddles SET ended_at = now() WHERE id = ${huddleId} AND ended_at IS NULL
+    RETURNING message_id, COALESCE(notes,'') AS notes,
+      to_char(started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM.YYYY') AS "dateLabel",
+      to_char(started_at AT TIME ZONE 'Europe/Berlin', 'HH24:MI') AS "startLabel",
+      GREATEST(1, round(extract(epoch from (now() - started_at)) / 60))::int AS "durMin"
+  `) as {
+    message_id: string | null; notes: string; dateLabel: string; startLabel: string; durMin: number;
   }[];
   if (rows.length && rows[0].message_id) {
-    await sql`UPDATE messages SET body = '🎧 Huddle beendet' WHERE id = ${rows[0].message_id}`;
+    const r = rows[0];
+    // Karte bekommt Datum, Startzeit und Dauer in den Body; attach_title = 'notes'
+    // markiert, dass es Notizen gibt (sonst leer ⇒ kein Notizen-Knopf).
+    const hasNotes = r.notes.trim().length > 0;
+    const body = `Beendet · ${r.dateLabel}, ${r.startLabel} Uhr · ${r.durMin} Min`;
+    await sql`UPDATE messages SET body = ${body}, attach_title = ${hasNotes ? 'notes' : ''} WHERE id = ${r.message_id}`;
   }
   return true;
 }
