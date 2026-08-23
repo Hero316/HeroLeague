@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, MessageSquare, CalendarDays, ListChecks, Ticket as TicketIcon, Smartphone, X, Sun, Moon, Settings, Bell, Lightbulb } from 'lucide-react';
+import { ArrowLeft, MessageSquare, CalendarDays, ListChecks, Ticket as TicketIcon, Smartphone, X, Sun, Moon, Settings, Bell, Lightbulb, Home } from 'lucide-react';
 import ChatSystem from './ChatSystem';
+import HomeOverview from './HomeOverview';
 import SoccerGame from './SoccerGame';
 import TaskBoard from './TaskBoard';
 import TicketSystem from './TicketSystem';
@@ -24,11 +25,12 @@ import type { SessionUser, UserStatus, Conversation, Idea, Task, TeamMember } fr
 // aufklappbaren Backoffice, damit sich der Chat wie eine echte App anfühlt und
 // zum Home-Bildschirm hinzugefügt werden kann (eigenes Manifest chat.webmanifest).
 
-type Tab = 'chats' | 'aufgaben' | 'kalender' | 'tickets' | 'ideen' | 'mehr';
+type Tab = 'start' | 'chats' | 'aufgaben' | 'kalender' | 'tickets' | 'ideen' | 'mehr';
 
-// Untere Leiste (5 Tabs). „Mehr"/Einstellungen ist bewusst NICHT hier, sondern
+// Untere Leiste (6 Tabs). „Mehr"/Einstellungen ist bewusst NICHT hier, sondern
 // oben als Zahnrad neben Tag/Nacht.
 const TABS: { id: Tab; label: string; icon: typeof MessageSquare }[] = [
+  { id: 'start', label: 'Start', icon: Home },
   { id: 'chats', label: 'Chats', icon: MessageSquare },
   { id: 'aufgaben', label: 'Aufgaben', icon: ListChecks },
   { id: 'kalender', label: 'Kalender', icon: CalendarDays },
@@ -66,7 +68,7 @@ export default function ChatApp({
   // als Rückfall und für frische Deep-Links (Benachrichtigungen).
   const TAB_KEY = 'hl-chat-tab';
   const isTab = (v: unknown): v is Tab =>
-    v === 'chats' || v === 'aufgaben' || v === 'kalender' || v === 'tickets' || v === 'ideen' || v === 'mehr';
+    v === 'start' || v === 'chats' || v === 'aufgaben' || v === 'kalender' || v === 'tickets' || v === 'ideen' || v === 'mehr';
   const readTab = (): Tab => {
     if (getUrlParam('openIdea')) return 'ideen'; // Deep-Link Idee (Benachrichtigung)
     const urlTab = getUrlParam('tab');
@@ -83,8 +85,8 @@ export default function ChatApp({
     } catch {
       /* localStorage evtl. blockiert */
     }
-    // Rückfall: URL-Parameter, sonst Chats.
-    return isTab(urlTab) ? urlTab : 'chats';
+    // Rückfall: URL-Parameter, sonst Start-Übersicht.
+    return isTab(urlTab) ? urlTab : 'start';
   };
   const [tab, setTabState] = useState<Tab>(readTab);
   const setTab = (t: Tab) => {
@@ -118,7 +120,7 @@ export default function ChatApp({
   // Zurück-Geste/-Taste (iPhone-Kantenwisch, Android-Zurück): Ist man NICHT auf
   // dem Chats-Tab, geht „zurück" zuerst auf den Chats-Tab, statt die App zu
   // verlassen. So landet man von Einstellungen/Aufgaben/… wieder im Chat.
-  useBackClose(tab !== 'chats', () => setTab('chats'));
+  useBackClose(tab !== 'start', () => setTab('start'));
 
   // „Chats-Home"-Signal: Tippt man unten auf das Chats-Symbol, soll ein offener
   // Chat/Thread zugehen (zurück zur Liste) – ein Zähler, den ChatSystem beobachtet.
@@ -433,7 +435,16 @@ export default function ChatApp({
           transition={{ duration: 0.2, ease: 'easeOut' }}
           className="h-full"
         >
-          {tab === 'chats' ? (
+          {tab === 'start' ? (
+            <HomeOverview
+              currentUserId={currentUserId}
+              userName={(user.name || user.email || '').split(' ')[0]}
+              onOpenTask={(id) => setDeepOpen({ type: 'task', id })}
+              onOpenDay={(date) => { setUrlParam('av', 'day'); setUrlParam('ad', date); setTab('kalender'); }}
+              onGoTab={(t) => { if (t === 'chats') goChatsHome(); setTab(t); }}
+              onNewTask={() => setTab('aufgaben')}
+            />
+          ) : tab === 'chats' ? (
             <ChatSystem
               currentUserId={currentUserId}
               canManageTickets={canManageTickets}
@@ -506,7 +517,7 @@ export default function ChatApp({
 
       {/* Untere Tab-Leiste: schwebende Pille, die zum getippten Tab „fliegt". */}
       <nav
-        className="shrink-0 grid grid-cols-5 gap-1 border-t border-white/10 hl-app-dock backdrop-blur-xl px-2 pt-2"
+        className="shrink-0 grid grid-cols-6 gap-0.5 border-t border-white/10 hl-app-dock backdrop-blur-xl px-1 pt-2"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
       >
         {TABS.map((t) => {
