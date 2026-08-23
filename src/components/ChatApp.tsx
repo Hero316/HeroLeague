@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { ArrowLeft, MessageSquare, CalendarDays, ListChecks, Ticket as TicketIcon, Smartphone, X, Sun, Moon, Settings, Bell, Lightbulb, Home } from 'lucide-react';
 import ChatSystem from './ChatSystem';
@@ -102,7 +102,11 @@ export default function ChatApp({
     return isTab(urlTab) ? urlTab : 'start';
   };
   const [tab, setTabState] = useState<Tab>(readTab);
-  const setTab = (t: Tab) => {
+  // Verlauf der zuletzt besuchten Tabs, damit „Zurück" (Wisch/Taste) dorthin
+  // führt, wo man vorher war – und nicht immer auf Start.
+  const tabStackRef = useRef<Tab[]>([]);
+  const setTab = (t: Tab, pushHistory = true) => {
+    if (pushHistory && t !== tab) tabStackRef.current.push(tab);
     setTabState(t);
     // Nur den 'tab'-Parameter ändern – c/thread/av/ad usw. bleiben erhalten.
     setUrlParam('tab', t === 'chats' ? null : t);
@@ -113,6 +117,8 @@ export default function ChatApp({
       /* localStorage evtl. blockiert – dann bleibt nur der URL-Parameter */
     }
   };
+  // „Zurück": einen Schritt im Tab-Verlauf zurück (ohne neuen Verlaufseintrag).
+  const goBackTab = () => setTab(tabStackRef.current.pop() ?? 'start', false);
   const [showInstall, setShowInstall] = useState(true);
   const { isStandalone, isIos, canInstall, promptInstall } = useInstall();
   const current = TABS.find((t) => t.id === tab) ?? SETTINGS_TAB;
@@ -131,7 +137,7 @@ export default function ChatApp({
   // Zurück-Geste/-Taste (iPhone-Kantenwisch, Android-Zurück): Ist man NICHT auf
   // dem Chats-Tab, geht „zurück" zuerst auf den Chats-Tab, statt die App zu
   // verlassen. So landet man von Einstellungen/Aufgaben/… wieder im Chat.
-  useBackClose(tab !== 'start', () => setTab('start'));
+  useBackClose(tab !== 'start', goBackTab);
 
   // „Chats-Home"-Signal: Tippt man unten auf das Chats-Symbol, soll ein offener
   // Chat/Thread zugehen (zurück zur Liste) – ein Zähler, den ChatSystem beobachtet.
