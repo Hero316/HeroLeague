@@ -46,6 +46,8 @@ const PRIORITY_STYLE: Record<TicketPriority, string> = {
   hoch: 'bg-amber-100 text-amber-800 border-amber-200',
   dringend: 'bg-rose-100 text-rose-700 border-rose-200',
 };
+// Akzentfarbe (Balken) je Priorität – wie im Aufgaben-Redesign.
+const PRIORITY_BAR: Record<TicketPriority, string> = { niedrig: '#7E877F', mittel: '#38BDF8', hoch: '#E9C46A', dringend: '#FF5442' };
 const STATUS_LABEL: Record<TicketStatus, string> = {
   offen: 'Offen',
   in_bearbeitung: 'In Bearbeitung',
@@ -639,12 +641,14 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
       ) : (
         <div className="space-y-2.5">
           {visible.map((t) => (
-            <button
+            <motion.button
               key={t.id}
+              whileTap={{ scale: 0.99 }}
               onClick={() => setOpenId(t.id)}
-              className="w-full text-left hl-surf border border-white/5 hover:border-white/15 rounded-2xl px-4 py-3.5 shadow-sm hover:shadow transition-all cursor-pointer"
+              className="w-full text-left hl-card rounded-2xl p-3 pl-2.5 flex gap-3 cursor-pointer"
             >
-              <div className="flex items-start justify-between gap-3">
+              <span className="w-1.5 self-stretch rounded-full shrink-0" style={{ background: PRIORITY_BAR[t.priority] }} />
+              <div className="flex items-start justify-between gap-3 flex-1 min-w-0">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Badge className={PRIORITY_STYLE[t.priority]}>{PRIORITY_LABEL[t.priority]}</Badge>
@@ -666,7 +670,7 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
                   </span>
                 )}
               </div>
-            </button>
+            </motion.button>
           ))}
         </div>
       )}

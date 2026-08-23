@@ -84,7 +84,7 @@ const IS_TOUCH =
 // fremde Nachricht weiße Karte (dunkle Schrift via Token).
 // Eigene Nachrichten: dunklerer Türkis-Verlauf, damit die weiße Schrift klar
 // lesbar bleibt (heller Verlauf hatte zu wenig Kontrast).
-export const BUBBLE_MINE = 'linear-gradient(135deg, #0C7A70 0%, #084F66 100%)';
+export const BUBBLE_MINE = 'linear-gradient(135deg, #17B3A3 0%, #0C6F86 100%)';
 
 // Zufällige-aber-konstante Namensfarben (wie WhatsApp). Pro Gruppe anders, weil
 // der Konversations-Schlüssel in den Hash einfließt. Gut lesbar auf dunkel.
@@ -2464,8 +2464,8 @@ export default function ChatSystem({
                 <button
                   key={c.id}
                   onClick={() => openConversation(c.id)}
-                  className={`w-full text-left px-3 py-2.5 rounded-2xl hl-surf border shadow-sm shadow-black/[.04] cursor-pointer transition-all active:scale-[.985] hover:shadow-md ${
-                    c.id === activeId ? 'border-brand-accent-light/50 ring-1 ring-brand-accent-light/30' : 'border-white/5'
+                  className={`w-full text-left px-3 py-2.5 rounded-2xl hl-card cursor-pointer transition-all active:scale-[.985] ${
+                    c.id === activeId ? 'ring-2 ring-brand-accent-light/60' : ''
                   }`}
                 >
                   <div className="flex items-center gap-3">
