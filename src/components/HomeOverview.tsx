@@ -12,6 +12,7 @@ function compact(n: number): string {
 }
 import { useHeroStats } from '../lib/heroes';
 import Avatar from './Avatar';
+import InstagramPanel from './InstagramPanel';
 
 // „Start" – die Übersicht der Team-App: Begrüßung, Wochenstreifen und ALLES was
 // ansteht (Termine + eigene Aufgaben + Ideen) an EINEM Ort, damit man nicht
@@ -69,6 +70,7 @@ export default function HomeOverview({
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [visits, setVisits] = useState<VisitStats | null>(null);
   const [ig, setIg] = useState<IgReelsResult | null>(null);
+  const [showIg, setShowIg] = useState(false);
   const { total: heroes, month: heroMonth } = useHeroStats();
   const MONTH_GOAL = 20; // Monatsziel: so viele Heroes im Monat sammeln
   const goalPct = Math.min(100, Math.round((heroMonth / MONTH_GOAL) * 100));
@@ -339,51 +341,70 @@ export default function HomeOverview({
           </motion.div>
         )}
 
-        {/* Instagram: eigene Reels/Posts mit Views/Likes/Kommentaren */}
-        {ig?.configured && ig.items.length > 0 && (
-          <motion.div variants={item} className="hl-card rounded-3xl p-4 overflow-hidden">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-mono uppercase tracking-wider text-hl-dim flex items-center gap-1.5">
-                <Instagram className="w-3.5 h-3.5 text-brand-accent-light" /> Instagram
-              </span>
-              <div className="flex items-center gap-3 text-right">
-                <div>
-                  <div className="font-display font-black text-lg tabular-nums text-hl-text leading-none">{compact(ig.totalViews30)}</div>
-                  <div className="text-[9px] font-sans font-bold uppercase tracking-wide text-hl-dim">Views · 30 T.</div>
-                </div>
-                <div>
-                  <div className="font-display font-black text-lg tabular-nums text-hl-text leading-none">{ig.count30}</div>
-                  <div className="text-[9px] font-sans font-bold uppercase tracking-wide text-hl-dim">Posts · 30 T.</div>
-                </div>
+        {/* Instagram: Kernzahlen + Mini-Verlauf + aktuellstes Reel + „Mehr" */}
+        {ig?.configured && ig.items.length > 0 && (() => {
+          const latest = ig.items[0];
+          const dd = ig.daily ?? [];
+          const dmax = Math.max(1, ...dd.map((d) => d.value));
+          return (
+            <motion.div variants={item} className="hl-card rounded-3xl p-4 overflow-hidden">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-mono uppercase tracking-wider text-hl-dim flex items-center gap-1.5">
+                  <Instagram className="w-3.5 h-3.5 text-brand-accent-light" /> Instagram
+                </span>
+                <button onClick={() => setShowIg(true)} className="text-[11px] font-bold uppercase tracking-wider text-brand-accent-light hover:opacity-80 cursor-pointer flex items-center gap-0.5">
+                  Mehr <ChevronRight className="w-3 h-3" />
+                </button>
               </div>
-            </div>
-            <div className="flex gap-2.5 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
-              {ig.items.map((m) => (
-                <a
-                  key={m.id}
-                  href={m.permalink || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="relative shrink-0 w-28 rounded-2xl overflow-hidden bg-black/20 active:scale-[.97] transition-transform"
-                  style={{ aspectRatio: '9 / 16' }}
-                >
-                  {m.thumbnail ? (
-                    <img src={m.thumbnail} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center text-hl-faint"><Instagram className="w-6 h-6" /></div>
-                  )}
-                  <div className="absolute inset-x-0 bottom-0 p-1.5 pt-6" style={{ background: 'linear-gradient(0deg, rgba(0,0,0,.72), transparent)' }}>
-                    <div className="flex items-center gap-2 text-white text-[10px] font-bold tabular-nums">
-                      {m.views != null && <span className="flex items-center gap-0.5"><Play className="w-2.5 h-2.5 fill-current" /> {compact(m.views)}</span>}
-                      {m.likes != null && <span className="flex items-center gap-0.5"><Heart className="w-2.5 h-2.5 fill-current" /> {compact(m.likes)}</span>}
-                      {m.comments != null && <span className="flex items-center gap-0.5"><MessageCircle className="w-2.5 h-2.5 fill-current" /> {compact(m.comments)}</span>}
-                    </div>
+
+              {/* Kernzahlen */}
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { label: 'Aufrufe · 30 T.', value: compact(ig.totalViews30) },
+                  { label: 'Follower', value: compact(ig.followers ?? null) },
+                  { label: 'Neu · 30 T.', value: ig.newFollowers30 != null ? '+' + compact(ig.newFollowers30) : '–' },
+                ]).map((s) => (
+                  <div key={s.label} className="rounded-2xl px-2 py-2.5 text-center hl-surf-0">
+                    <div className="font-display font-black text-xl tabular-nums text-hl-text leading-none">{s.value}</div>
+                    <div className="text-[10px] font-sans font-bold uppercase tracking-wide text-hl-dim mt-1">{s.label}</div>
                   </div>
-                </a>
-              ))}
-            </div>
-          </motion.div>
-        )}
+                ))}
+              </div>
+
+              {/* Mini-Verlauf */}
+              {dd.length > 1 && (
+                <div className="flex items-end gap-0.5 h-9 mt-3">
+                  {dd.map((d) => (
+                    <div key={d.day} className="flex-1 rounded-t-sm min-h-[2px]" title={`${d.day}: ${d.value}`}
+                      style={{ height: `${Math.max(6, (d.value / dmax) * 100)}%`, background: 'linear-gradient(180deg, #E83E8C, rgba(232,62,140,.35))' }} />
+                  ))}
+                </div>
+              )}
+
+              {/* Aktuellstes Reel */}
+              <a
+                href={latest.permalink || '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 flex items-center gap-3 rounded-2xl p-2 hl-surf-0 active:scale-[.99] transition-transform"
+              >
+                <span className="relative shrink-0 rounded-xl overflow-hidden bg-black/20" style={{ width: 46, height: 60 }}>
+                  {latest.thumbnail ? <img src={latest.thumbnail} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" /> : <span className="absolute inset-0 flex items-center justify-center text-hl-faint"><Instagram className="w-5 h-5" /></span>}
+                  {latest.type === 'reel' && <span className="absolute top-1 right-1 text-white"><Play className="w-3 h-3 fill-current" /></span>}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-brand-accent-light mb-0.5">Neuester Post</div>
+                  <div className="text-[13px] font-sans text-hl-text leading-snug line-clamp-2 break-words">{latest.caption || (latest.type === 'reel' ? 'Reel' : 'Beitrag')}</div>
+                  <div className="flex items-center gap-3 mt-1 text-[11px] text-hl-mute font-sans tabular-nums">
+                    {latest.views != null && <span className="flex items-center gap-1"><Play className="w-3 h-3 fill-current" /> {compact(latest.views)}</span>}
+                    {latest.likes != null && <span className="flex items-center gap-1"><Heart className="w-3 h-3" /> {compact(latest.likes)}</span>}
+                    {latest.comments != null && <span className="flex items-center gap-1"><MessageCircle className="w-3 h-3" /> {compact(latest.comments)}</span>}
+                  </div>
+                </div>
+              </a>
+            </motion.div>
+          );
+        })()}
 
         {/* Website-Besucher (anonyme Zählung, rollierende Fenster) – ganz unten */}
         {visits && (
@@ -434,6 +455,9 @@ export default function HomeOverview({
         )}
 
       </motion.div>
+
+      {/* Volles Instagram-Dashboard (In-App-Vollbild) */}
+      {showIg && ig && <InstagramPanel data={ig} onClose={() => setShowIg(false)} />}
     </div>
   );
 }

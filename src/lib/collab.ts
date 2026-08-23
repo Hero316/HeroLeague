@@ -246,11 +246,21 @@ export interface IgReel {
 }
 export interface IgReelsResult {
   configured: boolean;
+  username?: string;
+  followers?: number | null;
+  mediaCount?: number | null;
+  newFollowers30?: number | null;
+  reach30?: number | null;
   items: IgReel[];
   totalViews30: number;
   totalLikes30?: number;
+  totalComments30?: number;
+  viewsReels30?: number;
+  viewsPosts30?: number;
   count30: number;
   count: number;
+  daily?: { day: string; value: number }[];
+  dailyLabel?: string;
   error?: string;
 }
 export const fetchInstagramReels = () => apiFetch<IgReelsResult>('/api/team?resource=instagram');
