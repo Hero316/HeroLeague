@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquare, Users, CalendarDays, ListChecks, Clock, Move, Check, Calendar, CheckSquare, Square, Image as ImageIcon, Mic, File as FileIcon, Copy, Pencil, Smile } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquare, Users, CalendarDays, ListChecks, Clock, Move, Check, Calendar, CheckSquare, Image as ImageIcon, Mic, File as FileIcon, Copy, Pencil, Smile } from 'lucide-react';
 import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember, Match, EventArchive, TaskKind, LinkItem } from '../types';
 import { fetchTasksRange, fetchAllTasks, fetchTask, createTask, updateTask, deleteTask, addTaskComment, editTaskComment, deleteTaskComment, reactTaskComment, fetchTeam, memberMap } from '../lib/collab';
 import { apiFetch, uploadFile } from '../lib/api';
@@ -323,6 +323,27 @@ function UnreadBadge({ n, className = '' }: { n?: number; className?: string }) 
     >
       {n > 99 ? '99+' : n}
     </span>
+  );
+}
+
+// Farbe des Prioritäts-Akzentbalkens an der Karte.
+const PRIORITY_BAR: Record<TicketPriority, string> = { niedrig: '#7E877F', mittel: '#22DFC9', hoch: '#E9C46A', dringend: '#FF5442' };
+
+// Moderne, runde Checkbox mit weichem „Pop", wenn abgehakt wird.
+function TaskCheckbox({ done, onToggle, title }: { done: boolean; onToggle: (e: React.MouseEvent) => void; title?: string }) {
+  return (
+    <button
+      onClick={onToggle}
+      title={title}
+      className="shrink-0 cursor-pointer relative w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors active:scale-90"
+      style={done ? { borderColor: 'transparent', background: 'linear-gradient(135deg,#22DFC9,#12A594)', boxShadow: '0 4px 12px -4px rgba(34,223,201,.6)' } : { borderColor: 'rgba(148,163,161,.55)' }}
+    >
+      {done && (
+        <motion.span initial={{ scale: 0, rotate: -20 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 520, damping: 18 }}>
+          <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+        </motion.span>
+      )}
+    </button>
   );
 }
 
@@ -1738,10 +1759,8 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                     dayTodos.map((t) => {
                       const done = t.status === 'erledigt';
                       return (
-                        <div key={t.id} onClick={() => setOpenTask(t)} className={`hl-surf border border-white/5 rounded-lg p-2.5 cursor-pointer hover:border-white/15 transition-colors flex items-start gap-2 ${done ? 'opacity-60' : ''}`}>
-                          <button onClick={(e) => { e.stopPropagation(); quickSetStatus(t, done ? 'offen' : 'erledigt'); }} className="shrink-0 cursor-pointer mt-0.5" title={done ? 'Als offen markieren' : 'Als erledigt markieren'}>
-                            {done ? <CheckSquare className="w-5 h-5 text-brand-accent-light" /> : <Square className="w-5 h-5 text-hl-mute" />}
-                          </button>
+                        <div key={t.id} onClick={() => setOpenTask(t)} className={`hl-card rounded-xl p-2.5 cursor-pointer transition-all flex items-start gap-2 ${done ? 'opacity-55' : ''}`}>
+                          <div className="mt-0.5"><TaskCheckbox done={done} title={done ? 'Als offen markieren' : 'Als erledigt markieren'} onToggle={(e) => { e.stopPropagation(); quickSetStatus(t, done ? 'offen' : 'erledigt'); }} /></div>
                           <div className="min-w-0 flex-1">
                             <span className={`block text-sm font-sans leading-snug break-words ${done ? 'line-through text-hl-mute' : 'text-white'}`}>{t.title}</span>
                             <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
@@ -1840,29 +1859,32 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
           return (
             <div className="space-y-4">
               {BUCKETS.filter((b) => grouped[b.key]?.length).map((b) => (
-                <div key={b.key}>
-                  <div className="text-[11px] font-mono uppercase tracking-wider mb-1.5 px-1" style={{ color: b.tone ?? '#7e877f' }}>
-                    {b.label} · {grouped[b.key].length}
+                <motion.div key={b.key} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
+                  <div className="flex items-center gap-2 mb-2 px-0.5">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-display font-black uppercase tracking-wider" style={{ color: b.tone ?? '#9aa39b', background: `${b.tone ?? '#7e877f'}1f`, border: `1px solid ${b.tone ?? '#7e877f'}44` }}>
+                      {b.label}
+                    </span>
+                    <span className="text-[11px] font-mono text-hl-dim tabular-nums">{grouped[b.key].length}</span>
                   </div>
                   <div className="space-y-2">
                     {grouped[b.key].map((t) => {
                       const done = t.status === 'erledigt';
                       const overdue = !done && !!t.dueDate && t.dueDate < TODAY;
                       return (
-                        <div
+                        <motion.div
                           key={t.id}
+                          whileTap={{ scale: 0.985 }}
                           onClick={() => setOpenTask(t)}
-                          className={`hl-surf border border-white/5 rounded-2xl p-3.5 cursor-pointer hover:border-white/15 shadow-sm hover:shadow transition-all flex items-center gap-3 ${done ? 'opacity-60' : ''}`}
+                          className={`hl-card rounded-2xl p-3 pl-2.5 cursor-pointer transition-all flex items-center gap-3 ${done ? 'opacity-55' : ''}`}
                         >
-                          <button
-                            onClick={(e) => { e.stopPropagation(); quickSetStatus(t, done ? 'offen' : 'erledigt'); }}
-                            className="shrink-0 cursor-pointer"
+                          <span className="w-1.5 self-stretch rounded-full shrink-0" style={{ background: PRIORITY_BAR[t.priority], opacity: done ? 0.4 : 1 }} />
+                          <TaskCheckbox
+                            done={done}
                             title={done ? 'Als offen markieren' : 'Als erledigt markieren'}
-                          >
-                            {done ? <CheckSquare className="w-5 h-5 text-brand-accent-light" /> : <Square className="w-5 h-5 text-hl-mute" />}
-                          </button>
+                            onToggle={(e) => { e.stopPropagation(); quickSetStatus(t, done ? 'offen' : 'erledigt'); }}
+                          />
                           <div className="min-w-0 flex-1">
-                            <span className={`block text-sm font-sans leading-snug break-words ${done ? 'line-through text-hl-mute' : 'text-white'}`}>{t.title}</span>
+                            <span className={`block text-[15px] font-sans font-semibold leading-snug break-words ${done ? 'line-through text-hl-mute' : 'text-white'}`}>{t.title}</span>
                             <div className="flex items-center gap-2 mt-1 flex-wrap text-[10px] font-mono">
                               {t.dueDate ? (
                                 <span className={`flex items-center gap-1 ${overdue ? 'text-hl-red-soft' : 'text-hl-dim'}`}>
@@ -1885,11 +1907,11 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                             </div>
                           </div>
                           <AssigneeChips assignees={t.assignees} urlFor={(id) => members.get(id)?.avatarUrl} px={22} />
-                        </div>
+                        </motion.div>
                       );
                     })}
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           );
