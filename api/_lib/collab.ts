@@ -182,6 +182,86 @@ export async function heroBackfillMonth(req: VercelRequest, res: VercelResponse)
   return res.json({ ok: true, inserted });
 }
 
+// Instagram-Reels/Posts des eigenen Business-Accounts holen (Thumbnails, Views,
+// Likes, Kommentare) über die offizielle Instagram-API (graph.instagram.com).
+// Token & Account-ID kommen aus Umgebungsvariablen (Vercel) – NIE im Code. Ohne
+// gesetzte Variablen wird sauber `configured:false` zurückgegeben. Ergebnis wird
+// pro Serverless-Instanz 10 Min zwischengespeichert (schont das API-Limit).
+let igCache: { at: number; payload: unknown } = { at: 0, payload: null };
+export async function instagramReels(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  res.setHeader('Cache-Control', 'no-store');
+
+  const token = process.env.IG_ACCESS_TOKEN;
+  const igId = process.env.IG_BUSINESS_ID;
+  if (!token || !igId) return res.json({ configured: false, items: [], totalViews30: 0, count30: 0, count: 0 });
+
+  if (igCache.payload && Date.now() - igCache.at < 10 * 60 * 1000) return res.json(igCache.payload);
+
+  try {
+    const base = 'https://graph.instagram.com/v21.0';
+    const fields = 'id,caption,media_type,media_product_type,thumbnail_url,media_url,permalink,timestamp,like_count,comments_count';
+    const r = await fetch(`${base}/${encodeURIComponent(igId)}/media?fields=${fields}&limit=24&access_token=${encodeURIComponent(token)}`);
+    const data = (await r.json()) as { data?: unknown[]; error?: { message?: string } };
+    if (!r.ok || !Array.isArray(data.data)) {
+      return res.json({ configured: true, error: data.error?.message || 'Instagram-Abruf fehlgeschlagen', items: [], totalViews30: 0, count30: 0, count: 0 });
+    }
+
+    type IgMedia = {
+      id: string; caption?: string; media_type?: string; media_product_type?: string;
+      thumbnail_url?: string; media_url?: string; permalink?: string; timestamp?: string;
+      like_count?: number; comments_count?: number;
+    };
+    const media = data.data as IgMedia[];
+
+    const items = await Promise.all(
+      media.map(async (m) => {
+        let views: number | null = null;
+        const isVideo = m.media_type === 'VIDEO' || m.media_product_type === 'REELS';
+        if (isVideo) {
+          // Metriknamen haben sich bei Instagram geändert – der Reihe nach probieren.
+          for (const metric of ['views', 'plays', 'reach']) {
+            try {
+              const ir = await fetch(`${base}/${m.id}/insights?metric=${metric}&access_token=${encodeURIComponent(token)}`);
+              const idata = (await ir.json()) as { data?: { name: string; values?: { value: number }[] }[] };
+              const val = idata?.data?.find((d) => d.name === metric)?.values?.[0]?.value;
+              if (typeof val === 'number') { views = val; break; }
+            } catch { /* nächste Metrik */ }
+          }
+        }
+        return {
+          id: m.id,
+          caption: (m.caption || '').replace(/\s+/g, ' ').trim().slice(0, 120),
+          type: m.media_product_type || m.media_type || '',
+          thumbnail: m.thumbnail_url || m.media_url || '',
+          permalink: m.permalink || '',
+          timestamp: m.timestamp || '',
+          likes: typeof m.like_count === 'number' ? m.like_count : null,
+          comments: typeof m.comments_count === 'number' ? m.comments_count : null,
+          views,
+        };
+      })
+    );
+
+    const now = Date.now();
+    const in30 = items.filter((m) => m.timestamp && now - new Date(m.timestamp).getTime() <= 30 * 864e5);
+    const payload = {
+      configured: true,
+      items,
+      totalViews30: in30.reduce((s, m) => s + (m.views || 0), 0),
+      totalLikes30: in30.reduce((s, m) => s + (m.likes || 0), 0),
+      count30: in30.length,
+      count: items.length,
+    };
+    igCache = { at: Date.now(), payload };
+    return res.json(payload);
+  } catch (err) {
+    console.error('instagramReels:', err);
+    return res.json({ configured: true, error: 'Abruf fehlgeschlagen', items: [], totalViews30: 0, count30: 0, count: 0 });
+  }
+}
+
 // Deep-Link für eine Aufgabe/einen Termin je nach Art: ein Termin (mit Datum)
 // landet im Kalender auf dem passenden Tag; eine reine Aufgabe im Aufgaben-Tab.
 // In beiden Fällen öffnet sich zusätzlich das Detail-Fenster (openTask).

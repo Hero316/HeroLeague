@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Lightbulb, Clock, ChevronRight, CheckSquare, Square, Sparkles, Plus, Globe, Ticket as TicketIcon } from 'lucide-react';
+import { Lightbulb, Clock, ChevronRight, CheckSquare, Square, Sparkles, Plus, Globe, Ticket as TicketIcon, Instagram, Play, Heart, MessageCircle } from 'lucide-react';
 import type { Task, Idea, TeamMember, Ticket, TicketPriority } from '../types';
-import { fetchAllTasks, fetchIdeas, fetchTeam, fetchTickets, memberMap, updateTask, fetchVisitStats, type VisitStats } from '../lib/collab';
+import { fetchAllTasks, fetchIdeas, fetchTeam, fetchTickets, memberMap, updateTask, fetchVisitStats, fetchInstagramReels, type VisitStats, type IgReelsResult } from '../lib/collab';
+
+// Große Zahlen kompakt: 1234 → 1,2k · 1200000 → 1,2 Mio.
+function compact(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.', ',') + ' Mio.';
+  if (n >= 1_000) return (n / 1_000).toFixed(1).replace('.', ',') + 'k';
+  return String(n);
+}
 import { useHeroStats } from '../lib/heroes';
 import Avatar from './Avatar';
 
@@ -61,6 +68,7 @@ export default function HomeOverview({
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [visits, setVisits] = useState<VisitStats | null>(null);
+  const [ig, setIg] = useState<IgReelsResult | null>(null);
   const { total: heroes, month: heroMonth } = useHeroStats();
   const MONTH_GOAL = 20; // Monatsziel: so viele Heroes im Monat sammeln
   const goalPct = Math.min(100, Math.round((heroMonth / MONTH_GOAL) * 100));
@@ -83,6 +91,7 @@ export default function HomeOverview({
     load();
     fetchTeam().then(setTeam).catch(() => {});
     fetchVisitStats().then(setVisits).catch(() => {});
+    fetchInstagramReels().then(setIg).catch(() => {});
     const iv = setInterval(() => fetchVisitStats().then(setVisits).catch(() => {}), 60000);
     return () => clearInterval(iv);
   }, []);
@@ -325,6 +334,52 @@ export default function HomeOverview({
                   <span className="flex-1 min-w-0 text-sm font-semibold text-white truncate">{i.title}</span>
                   <span className="min-w-[20px] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-[#E6238E] text-white text-[11px] font-bold tabular-nums shrink-0">{i.unread! > 99 ? '99+' : i.unread}</span>
                 </motion.button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Instagram: eigene Reels/Posts mit Views/Likes/Kommentaren */}
+        {ig?.configured && ig.items.length > 0 && (
+          <motion.div variants={item} className="hl-card rounded-3xl p-4 overflow-hidden">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-mono uppercase tracking-wider text-hl-dim flex items-center gap-1.5">
+                <Instagram className="w-3.5 h-3.5 text-brand-accent-light" /> Instagram
+              </span>
+              <div className="flex items-center gap-3 text-right">
+                <div>
+                  <div className="font-display font-black text-lg tabular-nums text-hl-text leading-none">{compact(ig.totalViews30)}</div>
+                  <div className="text-[9px] font-sans font-bold uppercase tracking-wide text-hl-dim">Views · 30 T.</div>
+                </div>
+                <div>
+                  <div className="font-display font-black text-lg tabular-nums text-hl-text leading-none">{ig.count30}</div>
+                  <div className="text-[9px] font-sans font-bold uppercase tracking-wide text-hl-dim">Posts · 30 T.</div>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2.5 overflow-x-auto no-scrollbar -mx-1 px-1 pb-1">
+              {ig.items.map((m) => (
+                <a
+                  key={m.id}
+                  href={m.permalink || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="relative shrink-0 w-28 rounded-2xl overflow-hidden bg-black/20 active:scale-[.97] transition-transform"
+                  style={{ aspectRatio: '9 / 16' }}
+                >
+                  {m.thumbnail ? (
+                    <img src={m.thumbnail} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center text-hl-faint"><Instagram className="w-6 h-6" /></div>
+                  )}
+                  <div className="absolute inset-x-0 bottom-0 p-1.5 pt-6" style={{ background: 'linear-gradient(0deg, rgba(0,0,0,.72), transparent)' }}>
+                    <div className="flex items-center gap-2 text-white text-[10px] font-bold tabular-nums">
+                      {m.views != null && <span className="flex items-center gap-0.5"><Play className="w-2.5 h-2.5 fill-current" /> {compact(m.views)}</span>}
+                      {m.likes != null && <span className="flex items-center gap-0.5"><Heart className="w-2.5 h-2.5 fill-current" /> {compact(m.likes)}</span>}
+                      {m.comments != null && <span className="flex items-center gap-0.5"><MessageCircle className="w-2.5 h-2.5 fill-current" /> {compact(m.comments)}</span>}
+                    </div>
+                  </div>
+                </a>
               ))}
             </div>
           </motion.div>

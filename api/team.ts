@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { teamMembers, updateProfile, ideas, idea, ideaComment, reactIdeaComment, purgeUser, heroEvents, heroBackfillMonth } from './_lib/collab.js';
+import { teamMembers, updateProfile, ideas, idea, ideaComment, reactIdeaComment, purgeUser, heroEvents, heroBackfillMonth, instagramReels } from './_lib/collab.js';
 import { denyWithoutTeamApp } from './_lib/auth.js';
 import { ensureSchema } from './_lib/ensure.js';
 
@@ -24,6 +24,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (resource === 'purge-user') return purgeUser(req, res);
     if (resource === 'hero-events') return heroEvents(req, res);
     if (resource === 'hero-backfill') return heroBackfillMonth(req, res);
+    if (resource === 'instagram') return instagramReels(req, res);
     return teamMembers(req, res);
   } catch (err) {
     console.error('Fehler in /api/team:', err);

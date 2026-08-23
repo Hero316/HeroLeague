@@ -232,6 +232,29 @@ export const markHeroEventsSeen = (ids?: string[]) =>
 export const backfillHeroesMonth = () =>
   apiFetch<{ ok: boolean; inserted: number }>('/api/team?resource=hero-backfill', { method: 'POST' });
 
+// --- Instagram (eigene Reels/Posts: Views/Likes/Kommentare) ------------------
+export interface IgReel {
+  id: string;
+  caption: string;
+  type: string;
+  thumbnail: string;
+  permalink: string;
+  timestamp: string;
+  likes: number | null;
+  comments: number | null;
+  views: number | null;
+}
+export interface IgReelsResult {
+  configured: boolean;
+  items: IgReel[];
+  totalViews30: number;
+  totalLikes30?: number;
+  count30: number;
+  count: number;
+  error?: string;
+}
+export const fetchInstagramReels = () => apiFetch<IgReelsResult>('/api/team?resource=instagram');
+
 // --- Kalenderwochen-Helfer (ISO 8601, Woche beginnt Montag) -----------------
 export function isoWeekOf(d: Date): string {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
