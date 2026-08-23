@@ -837,7 +837,7 @@ export function TaskDetail({
   return (
     <ModalPortal>
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[70] bg-black/80 flex items-start sm:items-center justify-center p-0 pt-[env(safe-area-inset-top)] sm:p-6 overflow-y-auto" {...backdrop}>
-      <motion.div initial={{ scale: 0.97, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 10 }} className="hl-card hl-modal-card w-full max-w-xl my-0 sm:my-8 p-5 sm:p-6 rounded-3xl" onClick={(e) => e.stopPropagation()}>
+      <motion.div initial={{ scale: 0.8, y: 24, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.85, y: 12, opacity: 0 }} transition={{ type: 'spring', stiffness: 420, damping: 20, mass: 0.8 }} className="hl-card hl-modal-card w-full max-w-xl my-0 sm:my-8 p-5 sm:p-6 rounded-3xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <h3 className="font-display font-black text-xl text-white uppercase tracking-tight">
             {type === 'aufgabe' ? 'Aufgabe' : type === 'beides' ? 'Eintrag' : 'Termin'}
@@ -1138,7 +1138,7 @@ function NewTaskModal({
   return (
     <ModalPortal>
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4 overflow-y-auto" {...backdrop}>
-      <motion.div initial={{ scale: 0.97, y: 8 }} animate={{ scale: 1, y: 0 }} className="hl-card hl-modal-card w-full max-w-md p-5 sm:p-6 rounded-3xl my-6" onClick={(e) => e.stopPropagation()}>
+      <motion.div initial={{ scale: 0.8, y: 24, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.85, y: 12, opacity: 0 }} transition={{ type: 'spring', stiffness: 420, damping: 20, mass: 0.8 }} className="hl-card hl-modal-card w-full max-w-md p-5 sm:p-6 rounded-3xl my-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <h3 className="font-display font-black text-xl text-white uppercase tracking-tight">
             {type === 'aufgabe' ? 'Neue Aufgabe' : type === 'beides' ? 'Neuer Eintrag' : 'Neuer Termin'}
@@ -1800,7 +1800,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
         </div>
       ) : view === 'termine' ? (
         /* -------- MEINE TERMINE (Agenda, nach Datum) -------- */
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 hl-cascade-soft">
           {myEvents.length === 0 ? (
             <EmptyState icon={Calendar} title="Keine Termine" hint="Termine, die dich betreffen, erscheinen hier." />
           ) : (

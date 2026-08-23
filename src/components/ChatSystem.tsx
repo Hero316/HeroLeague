@@ -1642,7 +1642,7 @@ function NewConversationModal({
       className="fixed inset-0 z-[65] bg-black/80 flex items-center justify-center p-4"
       {...backdrop}
     >
-      <motion.div initial={{ scale: 0.97 }} animate={{ scale: 1 }} className="hl-card hl-modal-card w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+      <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.85, opacity: 0 }} transition={{ type: 'spring', stiffness: 420, damping: 20, mass: 0.8 }} className="hl-card hl-modal-card w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h4 className="font-display font-bold text-white uppercase tracking-tight">Neue Unterhaltung</h4>
           <button onClick={onClose} className="p-1 text-hl-mute hover:text-white cursor-pointer">
@@ -1795,7 +1795,7 @@ function ConversationInfo({
   return (
     <ModalPortal>
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[65] bg-black/80 flex items-center justify-center p-4" {...backdrop}>
-      <motion.div initial={{ scale: 0.97 }} animate={{ scale: 1 }} className="hl-card hl-modal-card w-full max-w-sm p-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.85, opacity: 0 }} transition={{ type: 'spring', stiffness: 420, damping: 20, mass: 0.8 }} className="hl-card hl-modal-card w-full max-w-sm p-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h4 className="font-display font-bold text-white uppercase tracking-tight">Infos</h4>
           <button onClick={onClose} className="p-1 text-hl-mute hover:text-white cursor-pointer">
@@ -2449,7 +2449,7 @@ export default function ChatSystem({
           </button>
           </div>
         )}
-        <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1.5">
+        <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1.5 hl-cascade-soft">
           {loadingConvs ? (
             <div className="flex justify-center py-8 text-hl-mute">
               <Loader2 className="w-5 h-5 animate-spin" />

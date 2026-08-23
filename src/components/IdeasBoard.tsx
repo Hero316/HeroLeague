@@ -364,7 +364,7 @@ export default function IdeasBoard({
             hint="Leg eine Idee an – z.B. eine Videoidee – und brainstormt gemeinsam."
           />
         ) : (
-          <div className="space-y-2.5">
+          <div className="space-y-2.5 hl-cascade-soft">
             {ideas.map((idea) => {
               const sm = statusMeta(idea.status);
               return (
@@ -409,29 +409,31 @@ export default function IdeasBoard({
         )}
       </div>
 
-      {showNew && (
-        <NewIdeaModal
-          team={team}
-          currentUserId={currentUserId}
-          onClose={() => setShowNew(false)}
-          onCreated={(id) => {
-            setShowNew(false);
-            load();
-            setOpenId(id);
-          }}
-        />
-      )}
-      {openId && (
-        <IdeaDetail
-          key={openId}
-          ideaId={openId}
-          team={team}
-          currentUserId={currentUserId}
-          isSuperadmin={isSuperadmin}
-          onClose={() => { setOpenId(null); load(); }}
-          onChanged={load}
-        />
-      )}
+      <AnimatePresence>
+        {showNew && (
+          <NewIdeaModal
+            team={team}
+            currentUserId={currentUserId}
+            onClose={() => setShowNew(false)}
+            onCreated={(id) => {
+              setShowNew(false);
+              load();
+              setOpenId(id);
+            }}
+          />
+        )}
+        {openId && (
+          <IdeaDetail
+            key={openId}
+            ideaId={openId}
+            team={team}
+            currentUserId={currentUserId}
+            isSuperadmin={isSuperadmin}
+            onClose={() => { setOpenId(null); load(); }}
+            onChanged={load}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -471,7 +473,7 @@ function NewIdeaModal({
   return (
     <ModalPortal>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/80 flex items-start sm:items-center justify-center p-0 pt-[env(safe-area-inset-top)] sm:p-6 overflow-y-auto" {...backdrop}>
-        <motion.div initial={{ scale: 0.97, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 10 }} className="hl-card hl-modal-card w-full max-w-lg my-0 sm:my-8 p-5 sm:p-6 rounded-3xl" onClick={(e) => e.stopPropagation()}>
+        <motion.div initial={{ scale: 0.8, y: 24, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.85, y: 12, opacity: 0 }} transition={{ type: 'spring', stiffness: 420, damping: 20, mass: 0.8 }} className="hl-card hl-modal-card w-full max-w-lg my-0 sm:my-8 p-5 sm:p-6 rounded-3xl" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between mb-5">
             <h3 className="font-display font-black text-xl text-white uppercase tracking-tight flex items-center gap-2">
               <Lightbulb className="w-5 h-5 text-brand-accent-light" /> Neue Idee
@@ -732,7 +734,7 @@ function IdeaDetail({
   return (
     <ModalPortal>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/80 flex items-start sm:items-center justify-center p-0 pt-[env(safe-area-inset-top)] sm:p-6 overflow-y-auto" {...backdrop}>
-        <motion.div initial={{ scale: 0.97, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 10 }} className="hl-card hl-modal-card w-full max-w-xl my-0 sm:my-8 p-5 sm:p-6 rounded-3xl" onClick={(e) => e.stopPropagation()}>
+        <motion.div initial={{ scale: 0.8, y: 24, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.85, y: 12, opacity: 0 }} transition={{ type: 'spring', stiffness: 420, damping: 20, mass: 0.8 }} className="hl-card hl-modal-card w-full max-w-xl my-0 sm:my-8 p-5 sm:p-6 rounded-3xl" onClick={(e) => e.stopPropagation()}>
           {!idea ? (
             <div className="flex justify-center py-10 text-hl-mute">
               <Loader2 className="w-6 h-6 animate-spin" />
