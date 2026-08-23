@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { teamMembers, updateProfile, ideas, idea, ideaComment, reactIdeaComment } from './_lib/collab.js';
+import { teamMembers, updateProfile, ideas, idea, ideaComment, reactIdeaComment, purgeUser } from './_lib/collab.js';
 import { denyWithoutTeamApp } from './_lib/auth.js';
 import { ensureSchema } from './_lib/ensure.js';
 
@@ -21,6 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (resource === 'idea') return idea(req, res);
     if (resource === 'idea-comment') return ideaComment(req, res); // POST neu · PATCH bearbeiten · DELETE für alle löschen
     if (resource === 'idea-comment-react') return reactIdeaComment(req, res);
+    if (resource === 'purge-user') return purgeUser(req, res);
     return teamMembers(req, res);
   } catch (err) {
     console.error('Fehler in /api/team:', err);

@@ -16,10 +16,19 @@ import type {
   IdeaComment,
   IdeaStatus,
   LinkItem,
+  AppUser,
 } from '../types';
 
 // --- Team-Mitglieder & eigenes Profil ---------------------------------------
 export const fetchTeam = () => apiFetch<TeamMember[]>('/api/team');
+
+// Super-Admin: alle Nutzer (für „Personen verwalten") und Entfernen aus der Team-App.
+export const fetchAllUsers = () => apiFetch<AppUser[]>('/api/users');
+export const purgeUserFromTeamApp = (userId: string, deleteAccount = false) =>
+  apiFetch<{ ok: boolean; deleted: boolean }>('/api/team?resource=purge-user', {
+    method: 'POST',
+    body: JSON.stringify({ userId, deleteAccount }),
+  });
 
 export const updateOwnProfile = (input: { name?: string; avatarUrl?: string; status?: UserStatus }) =>
   apiFetch<{ id: string; name: string; avatarUrl: string; status: UserStatus; role: UserRole }>(

@@ -462,6 +462,8 @@ export default function ChatApp({
           ) : (
             <TeamSettings
               user={user}
+              currentUserId={currentUserId}
+              isSuperadmin={isSuperadmin}
               onUpdateUser={onUpdateUser}
               theme={theme}
               onToggleTheme={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}

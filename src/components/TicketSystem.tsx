@@ -165,6 +165,12 @@ export function TicketDetail({
   const [commentBody, setCommentBody] = useState('');
   const [busy, setBusy] = useState(false);
   const up = useImageUploads();
+  const verlaufRef = useRef<HTMLDivElement>(null);
+  // Verlauf immer unten (neueste Kommentare) statt ewig scrollen.
+  useEffect(() => {
+    const el = verlaufRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [ticket?.comments?.length]);
 
   const load = useCallback(async () => {
     try {
@@ -349,7 +355,7 @@ export function TicketDetail({
               <h4 className="text-xs font-mono uppercase tracking-wider text-hl-dim mb-3 flex items-center gap-1.5">
                 <MessageSquare className="w-4 h-4" /> Verlauf ({ticket.comments?.length ?? 0})
               </h4>
-              <div className="space-y-3">
+              <div ref={verlaufRef} className="space-y-3 max-h-72 overflow-y-auto">
                 {(ticket.comments ?? []).map((c: TicketComment) => (
                   <div key={c.id} className="hl-surf-soft border border-white/5 rounded-lg p-3">
                     <div className="flex items-center justify-between mb-1">
