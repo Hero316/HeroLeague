@@ -1811,11 +1811,14 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                   )}
                   <button
                     onClick={() => setOpenTask(t)}
-                    className={`w-full text-left hl-card rounded-2xl p-3 pl-2.5 cursor-pointer transition-all flex items-center gap-3 ${past ? 'opacity-55' : ''}`}
+                    className={`w-full text-left hl-card hl-tint rounded-[22px] p-3.5 cursor-pointer transition-all flex items-center gap-3 ${past ? 'opacity-60' : ''}`}
+                    style={{ ['--tint' as string]: t.type === 'beides' ? '#E9C46A' : '#3B9EFF' }}
                   >
-                    <span className="w-1.5 self-stretch rounded-full shrink-0" style={{ background: t.type === 'beides' ? '#E9C46A' : '#22DFC9' }} />
+                    <span className="hl-tint-chip w-11 h-11 rounded-2xl shrink-0 flex items-center justify-center self-start">
+                      <CalendarDays className="w-5 h-5" strokeWidth={2.4} />
+                    </span>
                     <div className="min-w-0 flex-1">
-                      <span className="block text-sm font-sans text-white leading-snug break-words">{t.title}</span>
+                      <span className="block text-[15px] font-sans font-semibold text-white leading-snug break-words">{t.title}</span>
                       <div className="flex items-center gap-2 mt-1 flex-wrap text-[10px] font-mono text-hl-dim">
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3" /> {t.startTime ? timeLabel(t) : 'ganztägig'}
@@ -1875,9 +1878,9 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                           key={t.id}
                           whileTap={{ scale: 0.985 }}
                           onClick={() => setOpenTask(t)}
-                          className={`hl-card rounded-2xl p-3 pl-2.5 cursor-pointer transition-all flex items-center gap-3 ${done ? 'opacity-55' : ''}`}
+                          className={`hl-card hl-tint rounded-[22px] p-3.5 cursor-pointer transition-all flex items-center gap-3 ${done ? 'opacity-60' : ''}`}
+                          style={{ ['--tint' as string]: done ? '#43E5A0' : PRIORITY_BAR[t.priority] }}
                         >
-                          <span className="w-1.5 self-stretch rounded-full shrink-0" style={{ background: PRIORITY_BAR[t.priority], opacity: done ? 0.4 : 1 }} />
                           <TaskCheckbox
                             done={done}
                             title={done ? 'Als offen markieren' : 'Als erledigt markieren'}

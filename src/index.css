@@ -469,9 +469,26 @@ body {
    mit eigenem Hintergrund bleiben sichtbar). Deshalb bekommen Modal-Karten
    einen soliden Hintergrund und keinen eigenen Filter. */
 .hl-modal-card {
-  background: #12211f !important;
+  position: relative;
+  background: linear-gradient(180deg, #16302b 0%, #0f1f1c 100%) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+}
+/* Kräftiger Regenbogen-Streifen ganz oben – gibt jedem Pop-up sofort einen
+   modernen, „designten" Auftritt (Marken-Farbwelt: Teal→Blau→Violett→Pink→Gold).
+   Erbt den oberen Radius der Karte, ragt also nie über die runden Ecken hinaus. */
+.hl-modal-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 5px;
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+  background: linear-gradient(90deg, #22DFC9 0%, #3B9EFF 28%, #8B7CFF 52%, #E83E8C 78%, #F2A93B 100%);
+  pointer-events: none;
+  z-index: 2;
 }
 
 /* =====================================================================
@@ -501,6 +518,82 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 [class~="border-white/10"] { border-color: rgba(255, 255, 255, 0.13); }
 .hl-team [class~="border-white/10"] { border-color: rgba(16, 42, 38, 0.12); }
+
+/* =====================================================================
+   Bunte, getönte Karten (Redesign): Jede Listen-Karte kann über die
+   CSS-Variable --tint eine eigene Farbwelt bekommen (Status/Priorität/
+   Typ). Der farbige Verlauf liegt ÜBER der Basiskarte – so wird nicht mehr
+   ein dünner Balken, sondern die GANZE Karte eingefärbt (wie bei den
+   modernen Referenz-Designs). Funktioniert in Hell UND Dunkel; ohne --tint
+   passiert nichts (Fallback = transparent).
+   ===================================================================== */
+.hl-tint { --tint: transparent; }
+.hl-card.hl-tint {
+  background-image:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--tint) 26%, transparent) 0%,
+      color-mix(in srgb, var(--tint) 8%, transparent) 55%,
+      transparent 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015));
+  border-color: color-mix(in srgb, var(--tint) 42%, rgba(255, 255, 255, 0.09));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 10px 30px -14px color-mix(in srgb, var(--tint) 55%, transparent),
+    0 20px 48px -30px rgba(0, 0, 0, 0.5);
+}
+.hl-team .hl-card.hl-tint {
+  background-image:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--tint) 22%, transparent) 0%,
+      color-mix(in srgb, var(--tint) 7%, transparent) 52%,
+      transparent 100%),
+    linear-gradient(180deg, #FFFFFF, #FBFEFD);
+  border-color: color-mix(in srgb, var(--tint) 34%, rgba(16, 42, 38, 0.07));
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 10px 26px -14px color-mix(in srgb, var(--tint) 42%, transparent),
+    0 24px 50px -28px rgba(16, 42, 40, 0.28);
+}
+/* Runder „Chip" für das führende Icon einer Karte – nimmt die Tint-Farbe auf. */
+.hl-tint-chip {
+  background: color-mix(in srgb, var(--tint) 24%, transparent);
+  color: var(--tint);
+  border: 1px solid color-mix(in srgb, var(--tint) 40%, transparent);
+}
+.hl-team .hl-tint-chip {
+  background: color-mix(in srgb, var(--tint) 16%, #ffffff);
+  color: color-mix(in srgb, var(--tint) 78%, #0a1512);
+  border: 1px solid color-mix(in srgb, var(--tint) 30%, transparent);
+}
+/* Farbige Status-/Prioritäts-Pille (rund, kräftig). */
+.hl-tint-pill {
+  background: color-mix(in srgb, var(--tint) 22%, transparent);
+  color: var(--tint);
+  border: 1px solid color-mix(in srgb, var(--tint) 40%, transparent);
+}
+.hl-team .hl-tint-pill {
+  background: color-mix(in srgb, var(--tint) 15%, #ffffff);
+  color: color-mix(in srgb, var(--tint) 82%, #0a1512);
+  border: 1px solid color-mix(in srgb, var(--tint) 26%, transparent);
+}
+
+/* Schwebendes Tab-Dock (Insel): abgerundeter, freischwebender Balken mit
+   Abstand zum Rand – deutlich moderner als eine randlose Leiste. */
+.hl-dock-float {
+  border-radius: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 18px 44px -20px rgba(0, 0, 0, 0.75),
+    0 2px 10px -4px rgba(0, 0, 0, 0.5);
+}
+.hl-team .hl-dock-float {
+  border: 1px solid rgba(16, 42, 38, 0.08);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 18px 40px -20px rgba(16, 42, 40, 0.34),
+    0 2px 10px -4px rgba(16, 42, 40, 0.16);
+}
 
 /* iOS zoomt beim Antippen in ein Eingabefeld mit Schrift < 16px hinein – das
    ist das „plötzlich so groß". 16px auf echten Text-Eingaben (input/textarea)
@@ -850,7 +943,7 @@ button { -webkit-tap-highlight-color: transparent; }
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
-.hl-team .hl-modal-card { background: #FFFFFF !important; }
+.hl-team .hl-modal-card { background: linear-gradient(180deg, #FFFFFF 0%, #F7FCFB 100%) !important; }
 /* Primärtasten im Hellmodus: heller, frischer Verlauf (Text bleibt gut lesbar). */
 .hl-team .bg-brand-accent-light {
   background-image: linear-gradient(135deg, #26E4CF 0%, #13B7A3 100%);
@@ -916,17 +1009,19 @@ button { -webkit-tap-highlight-color: transparent; }
    gibt der App Tiefe & „Wow", bleibt aber ruhig genug für Text im Vordergrund. */
 .hl-app-bg {
   background:
-    radial-gradient(1200px 680px at 4% -12%, rgba(34, 223, 201, 0.16) 0%, transparent 56%),
-    radial-gradient(1050px 640px at 116% 2%, rgba(139, 124, 255, 0.15) 0%, transparent 54%),
-    radial-gradient(1000px 760px at 50% 122%, rgba(232, 62, 140, 0.10) 0%, transparent 56%),
+    radial-gradient(880px 620px at -8% -10%, rgba(34, 223, 201, 0.24) 0%, transparent 55%),
+    radial-gradient(860px 600px at 112% 3%, rgba(139, 124, 255, 0.22) 0%, transparent 52%),
+    radial-gradient(820px 700px at 110% 112%, rgba(232, 62, 140, 0.17) 0%, transparent 55%),
+    radial-gradient(760px 640px at -6% 116%, rgba(59, 158, 255, 0.15) 0%, transparent 55%),
     linear-gradient(180deg, #0b1615 0%, #081210 58%, #060f0e 100%);
 }
 .hl-team .hl-app-bg {
   background:
-    radial-gradient(1200px 680px at 4% -12%, #D3F5EE 0%, transparent 56%),
-    radial-gradient(1050px 640px at 116% 2%, #E9E5FF 0%, transparent 54%),
-    radial-gradient(1000px 760px at 50% 122%, #FFE3F0 0%, transparent 56%),
-    linear-gradient(180deg, #EFF5F4 0%, #E8F1F0 100%);
+    radial-gradient(820px 600px at -8% -10%, #B4F0E4 0%, transparent 54%),
+    radial-gradient(820px 600px at 112% 4%, #D8D0FF 0%, transparent 52%),
+    radial-gradient(820px 680px at 110% 112%, #FFCFE4 0%, transparent 55%),
+    radial-gradient(720px 620px at -6% 116%, #FFEDC0 0%, transparent 55%),
+    linear-gradient(155deg, #EDF3FF 0%, #F3EDFB 50%, #FFEFF6 100%);
 }
 /* Schwebende Glas-Kopf-/Fußleiste: dezenter Verlauf + Tiefe. Der Blur kommt aus
    der Komponente (backdrop-blur), hier Farbe + Schatten/Lichtkante. */

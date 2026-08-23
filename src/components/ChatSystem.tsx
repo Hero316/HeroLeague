@@ -2464,9 +2464,10 @@ export default function ChatSystem({
                 <button
                   key={c.id}
                   onClick={() => openConversation(c.id)}
-                  className={`w-full text-left px-3 py-2.5 rounded-2xl hl-card cursor-pointer transition-all active:scale-[.985] ${
-                    c.id === activeId ? 'ring-2 ring-brand-accent-light/60' : ''
-                  }`}
+                  className={`w-full text-left px-3.5 py-3 rounded-[22px] hl-card cursor-pointer transition-all active:scale-[.985] ${
+                    c.id === activeId || c.unread > 0 ? 'hl-tint' : ''
+                  } ${c.id === activeId ? 'ring-2 ring-[#3B9EFF]/60' : ''}`}
+                  style={c.id === activeId || c.unread > 0 ? { ['--tint' as string]: '#3B9EFF' } : undefined}
                 >
                   <div className="flex items-center gap-3">
                     {c.kind === 'group' ? (

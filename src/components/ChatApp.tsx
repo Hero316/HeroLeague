@@ -28,12 +28,12 @@ type Tab = 'start' | 'chats' | 'aufgaben' | 'kalender' | 'tickets' | 'ideen' | '
 
 // Untere Leiste (6 Tabs). „Mehr"/Einstellungen ist bewusst NICHT hier, sondern
 // oben als Zahnrad neben Tag/Nacht.
-const TABS: { id: Tab; label: string; icon: typeof MessageSquare }[] = [
-  { id: 'start', label: 'Start', icon: Home },
-  { id: 'chats', label: 'Chats', icon: MessageSquare },
-  { id: 'aufgaben', label: 'Aufgaben', icon: ListChecks },
-  { id: 'kalender', label: 'Kalender', icon: CalendarDays },
-  { id: 'ideen', label: 'Ideen', icon: Lightbulb },
+const TABS: { id: Tab; label: string; icon: typeof MessageSquare; color: string }[] = [
+  { id: 'start', label: 'Start', icon: Home, color: '#16BDA9' },
+  { id: 'chats', label: 'Chats', icon: MessageSquare, color: '#3B9EFF' },
+  { id: 'aufgaben', label: 'Aufgaben', icon: ListChecks, color: '#8B7CFF' },
+  { id: 'kalender', label: 'Kalender', icon: CalendarDays, color: '#E83E8C' },
+  { id: 'ideen', label: 'Ideen', icon: Lightbulb, color: '#F2A93B' },
 ];
 const SETTINGS_TAB = { id: 'mehr' as Tab, label: 'Einstellungen', icon: Settings };
 
@@ -512,53 +512,65 @@ export default function ChatApp({
         />
       )}
 
-      {/* Untere Tab-Leiste: schwebende Pille, die zum getippten Tab „fliegt". */}
+      {/* Untere Tab-Leiste: schwebende bunte Insel. Der aktive Tab wird zur
+          kräftig gefüllten Pille in seiner EIGENEN Farbe – die „fliegt" beim
+          Wechsel weich zum getippten Tab (layoutId). */}
       <nav
-        className="shrink-0 grid grid-cols-5 gap-1 border-t border-white/10 hl-app-dock backdrop-blur-xl px-2 pt-2"
-        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
+        className="shrink-0 px-3 pt-2"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.6rem)' }}
       >
-        {TABS.map((t) => {
-          const active = t.id === tab;
-          const Icon = t.icon;
-          const count = badgeFor(t.id);
-          return (
-            <button
-              key={t.id}
-              onClick={() => {
-                // Tippt man auf „Chats", immer zurück zur Chat-Liste (offenen
-                // Chat/Thread schließen) – egal ob man schon auf dem Tab ist.
-                if (t.id === 'chats') goChatsHome();
-                setTab(t.id);
-              }}
-              className="relative flex flex-col items-center justify-center gap-1 py-2 rounded-2xl cursor-pointer active:scale-90 transition-transform"
-            >
-              {active && (
-                <motion.span
-                  layoutId="tab-pill"
-                  className="absolute inset-0 rounded-2xl bg-brand-accent-light/15 ring-1 ring-brand-accent-light/25"
-                  transition={{ type: 'spring', stiffness: 480, damping: 38 }}
-                />
-              )}
-              <motion.span
-                animate={{ scale: active ? 1.14 : 1, y: active ? -1 : 0 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 26 }}
-                className={`relative z-10 transition-colors ${active ? 'text-brand-accent-light' : 'text-hl-mute'}`}
+        <div className="hl-app-dock hl-dock-float backdrop-blur-2xl grid grid-cols-5 gap-0.5 p-1.5">
+          {TABS.map((t) => {
+            const active = t.id === tab;
+            const Icon = t.icon;
+            const count = badgeFor(t.id);
+            return (
+              <button
+                key={t.id}
+                onClick={() => {
+                  // Tippt man auf „Chats", immer zurück zur Chat-Liste (offenen
+                  // Chat/Thread schließen) – egal ob man schon auf dem Tab ist.
+                  if (t.id === 'chats') goChatsHome();
+                  setTab(t.id);
+                }}
+                className="relative flex flex-col items-center justify-center gap-1 py-2.5 rounded-[20px] cursor-pointer active:scale-90 transition-transform"
               >
-                <span className="relative inline-block">
-                  <Icon className="w-[22px] h-[22px]" />
-                  {count > 0 && (
-                    <span className="absolute -top-2 -right-2.5 min-w-[16px] h-4 px-1 inline-flex items-center justify-center rounded-full bg-[#E6238E] text-white text-[9px] font-bold leading-none tabular-nums shadow-[0_2px_6px_rgba(230,35,142,.5)] ring-2 ring-brand-dark">
-                      {count > 99 ? '99+' : count}
-                    </span>
-                  )}
+                {active && (
+                  <motion.span
+                    layoutId="tab-pill"
+                    className="absolute inset-0 rounded-[20px]"
+                    style={{
+                      backgroundImage: `linear-gradient(150deg, ${t.color}, ${t.color}CC)`,
+                      boxShadow: `0 8px 20px -8px ${t.color}99, inset 0 1px 0 rgba(255,255,255,.35)`,
+                    }}
+                    transition={{ type: 'spring', stiffness: 480, damping: 38 }}
+                  />
+                )}
+                <motion.span
+                  animate={{ scale: active ? 1.12 : 1, y: active ? -1 : 0 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 26 }}
+                  className="relative z-10"
+                  style={{ color: active ? '#fff' : 'var(--color-hl-mute)' }}
+                >
+                  <span className="relative inline-block">
+                    <Icon className="w-[22px] h-[22px]" strokeWidth={active ? 2.5 : 2} />
+                    {count > 0 && (
+                      <span className="absolute -top-2 -right-2.5 min-w-[16px] h-4 px-1 inline-flex items-center justify-center rounded-full bg-[#E6238E] text-white text-[9px] font-bold leading-none tabular-nums shadow-[0_2px_6px_rgba(230,35,142,.5)] ring-2 ring-brand-dark">
+                        {count > 99 ? '99+' : count}
+                      </span>
+                    )}
+                  </span>
+                </motion.span>
+                <span
+                  className="relative z-10 text-[10px] font-sans font-bold uppercase tracking-wide"
+                  style={{ color: active ? '#fff' : 'var(--color-hl-mute)' }}
+                >
+                  {t.label}
                 </span>
-              </motion.span>
-              <span className={`relative z-10 text-[10px] font-sans font-bold uppercase tracking-wide transition-colors ${active ? 'text-brand-accent-light' : 'text-hl-mute'}`}>
-                {t.label}
-              </span>
-            </button>
-          );
-        })}
+              </button>
+            );
+          })}
+        </div>
       </nav>
     </div>
     </AudioPlayerProvider>

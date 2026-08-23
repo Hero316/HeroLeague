@@ -645,9 +645,12 @@ export default function TicketSystem({ canManage, persist = false }: { currentUs
               key={t.id}
               whileTap={{ scale: 0.99 }}
               onClick={() => setOpenId(t.id)}
-              className="w-full text-left hl-card rounded-2xl p-3 pl-2.5 flex gap-3 cursor-pointer"
+              className="w-full text-left hl-card hl-tint rounded-[22px] p-3.5 flex gap-3 cursor-pointer items-start"
+              style={{ ['--tint' as string]: PRIORITY_BAR[t.priority] }}
             >
-              <span className="w-1.5 self-stretch rounded-full shrink-0" style={{ background: PRIORITY_BAR[t.priority] }} />
+              <span className="hl-tint-chip w-11 h-11 rounded-2xl shrink-0 flex items-center justify-center self-start">
+                <TicketIcon className="w-5 h-5" strokeWidth={2.4} />
+              </span>
               <div className="flex items-start justify-between gap-3 flex-1 min-w-0">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">

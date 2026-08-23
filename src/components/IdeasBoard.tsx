@@ -372,15 +372,15 @@ export default function IdeasBoard({
                   key={idea.id}
                   whileTap={{ scale: 0.99 }}
                   onClick={() => setOpenId(idea.id)}
-                  className="w-full text-left hl-card rounded-2xl p-3 pl-2.5 cursor-pointer flex gap-3"
+                  className="w-full text-left hl-card hl-tint rounded-[22px] p-3.5 cursor-pointer flex gap-3 items-start"
+                  style={{ ['--tint' as string]: STATUS_BAR[idea.status] }}
                 >
-                  <span className="w-1.5 self-stretch rounded-full shrink-0" style={{ background: STATUS_BAR[idea.status] }} />
-                  <span className="w-10 h-10 rounded-2xl shrink-0 flex items-center justify-center self-start mt-0.5" style={{ background: `${STATUS_BAR[idea.status]}22`, border: `1px solid ${STATUS_BAR[idea.status]}55` }}>
-                    <Lightbulb className="w-5 h-5" style={{ color: STATUS_BAR[idea.status] }} />
+                  <span className="hl-tint-chip w-12 h-12 rounded-2xl shrink-0 flex items-center justify-center self-start">
+                    <Lightbulb className="w-6 h-6" strokeWidth={2.4} />
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-display font-black text-white text-[15px] leading-tight break-words">{idea.title}</h3>
+                      <h3 className="font-display font-black text-white text-[16px] leading-tight break-words">{idea.title}</h3>
                       <div className="flex items-center gap-1.5 shrink-0">
                         {(idea.unread ?? 0) > 0 && (
                           <span
@@ -390,7 +390,7 @@ export default function IdeasBoard({
                             {idea.unread! > 99 ? '99+' : idea.unread}
                           </span>
                         )}
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${sm.cell}`}>
+                        <span className="hl-tint-pill px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
                           {sm.label}
                         </span>
                       </div>
