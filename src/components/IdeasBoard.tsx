@@ -26,6 +26,8 @@ const STATUS: { id: IdeaStatus; label: string; dot: string; cell: string }[] = [
   { id: 'verworfen', label: 'Verworfen', dot: 'bg-rose-500', cell: 'bg-rose-500/15 text-rose-300 border-rose-500/40' },
 ];
 const statusMeta = (s: IdeaStatus) => STATUS.find((x) => x.id === s) ?? STATUS[0];
+// Akzentfarbe (Balken/Icon) je Status.
+const STATUS_BAR: Record<IdeaStatus, string> = { offen: '#38BDF8', in_bearbeitung: '#F59E0B', erledigt: '#22DFC9', verworfen: '#FB7185' };
 
 function fmtTime(iso: string): string {
   try {
@@ -366,38 +368,41 @@ export default function IdeasBoard({
             {ideas.map((idea) => {
               const sm = statusMeta(idea.status);
               return (
-                <button
+                <motion.button
                   key={idea.id}
+                  whileTap={{ scale: 0.99 }}
                   onClick={() => setOpenId(idea.id)}
-                  className="w-full text-left hl-card p-4 rounded-2xl cursor-pointer active:scale-[.99] transition-transform"
+                  className="w-full text-left hl-card rounded-2xl p-3 pl-2.5 cursor-pointer flex gap-3"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <h3 className="font-display font-black text-white text-base leading-tight break-words">{idea.title}</h3>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {(idea.unread ?? 0) > 0 && (
-                        <span
-                          title={`${idea.unread} neue Beiträge`}
-                          className="min-w-[20px] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-[#E6238E] text-white text-[11px] font-bold tabular-nums shadow-[0_2px_8px_rgba(230,35,142,.45)]"
-                        >
-                          {idea.unread! > 99 ? '99+' : idea.unread}
+                  <span className="w-1.5 self-stretch rounded-full shrink-0" style={{ background: STATUS_BAR[idea.status] }} />
+                  <span className="w-10 h-10 rounded-2xl shrink-0 flex items-center justify-center self-start mt-0.5" style={{ background: `${STATUS_BAR[idea.status]}22`, border: `1px solid ${STATUS_BAR[idea.status]}55` }}>
+                    <Lightbulb className="w-5 h-5" style={{ color: STATUS_BAR[idea.status] }} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-display font-black text-white text-[15px] leading-tight break-words">{idea.title}</h3>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {(idea.unread ?? 0) > 0 && (
+                          <span
+                            title={`${idea.unread} neue Beiträge`}
+                            className="min-w-[20px] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-[#E6238E] text-white text-[11px] font-bold tabular-nums shadow-[0_2px_8px_rgba(230,35,142,.45)]"
+                          >
+                            {idea.unread! > 99 ? '99+' : idea.unread}
+                          </span>
+                        )}
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${sm.cell}`}>
+                          {sm.label}
                         </span>
-                      )}
-                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${sm.cell}`}>
-                        {sm.label}
-                      </span>
+                      </div>
+                    </div>
+                    {idea.summary && <p className="text-sm text-hl-mute mt-1 line-clamp-2 break-words">{idea.summary}</p>}
+                    <div className="flex items-center gap-3 mt-2 text-[11px] text-hl-faint font-sans">
+                      <span className="flex items-center gap-1"><Send className="w-3 h-3" /> {idea.commentCount ?? 0}</span>
+                      <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {idea.members?.length ?? 0}</span>
+                      {idea.linkedTaskId && <span className="text-emerald-400/80 flex items-center gap-1"><Check className="w-3 h-3" /> umgewandelt</span>}
                     </div>
                   </div>
-                  {idea.summary && <p className="text-sm text-hl-mute mt-1.5 line-clamp-2 break-words">{idea.summary}</p>}
-                  <div className="flex items-center gap-3 mt-2.5 text-[11px] text-hl-faint font-sans">
-                    <span className="flex items-center gap-1">
-                      <Send className="w-3 h-3" /> {idea.commentCount ?? 0} Beiträge
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Users className="w-3 h-3" /> {idea.members?.length ?? 0}
-                    </span>
-                    {idea.linkedTaskId && <span className="text-emerald-400/80 flex items-center gap-1"><Check className="w-3 h-3" /> umgewandelt</span>}
-                  </div>
-                </button>
+                </motion.button>
               );
             })}
           </div>

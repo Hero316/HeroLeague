@@ -1811,7 +1811,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                   )}
                   <button
                     onClick={() => setOpenTask(t)}
-                    className={`w-full text-left hl-surf border border-white/5 rounded-2xl p-3.5 cursor-pointer hover:border-white/15 shadow-sm hover:shadow transition-all flex items-center gap-3 ${past ? 'opacity-60' : ''}`}
+                    className={`w-full text-left hl-card rounded-2xl p-3 pl-2.5 cursor-pointer transition-all flex items-center gap-3 ${past ? 'opacity-55' : ''}`}
                   >
                     <span className="w-1.5 self-stretch rounded-full shrink-0" style={{ background: t.type === 'beides' ? '#E9C46A' : '#22DFC9' }} />
                     <div className="min-w-0 flex-1">
@@ -2017,7 +2017,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                 {hl[key] && <div className="mb-2"><HighlightPill h={hl[key]} className="!text-[11px] !leading-[18px] py-0.5 text-center" /></div>}
                 <div className={`space-y-2 min-h-[2rem] ${persist ? 'flex-1 overflow-y-auto' : 'flex-1'}`}>
                   {dayTasks.map((t) => (
-                    <div key={t.id} onClick={() => setOpenTask(t)} className="hl-surf border border-white/5 rounded-lg p-2.5 cursor-pointer hover:border-white/15 transition-colors">
+                    <div key={t.id} onClick={() => setOpenTask(t)} className="hl-card rounded-xl p-2.5 cursor-pointer transition-all">
                       <span className="block text-sm font-sans text-white leading-snug break-words">{t.title}</span>
                       <div className="flex items-center gap-1.5 mt-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
                         <select
