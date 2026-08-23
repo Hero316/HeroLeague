@@ -58,7 +58,7 @@ import {
   type ChatSearchHit,
   type ThreadSummary,
 } from '../lib/chat';
-import { HuddleBanner, HuddleCard, type HuddleController } from './Huddle';
+import { HuddleBanner, HuddleCard, HuddlePrejoin, type HuddleController } from './Huddle';
 import { fetchTeam, fetchTickets, fetchAllTasks, fetchTask, memberMap } from '../lib/collab';
 import { setChatUnread } from '../lib/badge';
 import { setUrlParam } from '../lib/urlState';
@@ -2064,6 +2064,7 @@ export default function ChatSystem({
 }) {
   // Laufender Huddle DIESER offenen Unterhaltung (für Kopf-Knopf + Karten).
   const [liveHuddleId, setLiveHuddleId] = useState<string | null>(null);
+  const [showPrejoin, setShowPrejoin] = useState(false); // Slack-Style: erst Fenster, dann beitreten
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -2588,11 +2589,7 @@ export default function ChatSystem({
                 const inThis = huddle.active?.state.conversationId === active.id;
                 return (
                   <button
-                    onClick={() => {
-                      if (inThis) return; // schon drin
-                      if (liveHuddleId) huddle.joinHuddle(liveHuddleId);
-                      else huddle.startInConversation(active.id);
-                    }}
+                    onClick={() => { if (!inThis) setShowPrejoin(true); }}
                     disabled={huddle.busy}
                     title={inThis ? 'Du bist im Huddle' : liveHuddleId ? 'Huddle beitreten' : 'Huddle starten'}
                     className={`p-2 rounded-lg border cursor-pointer shrink-0 disabled:opacity-50 ${
@@ -2756,6 +2753,19 @@ export default function ChatSystem({
             onClose={() => setShowInfo(false)}
             onChanged={loadConvs}
             onDeleted={() => { setShowInfo(false); setActiveId(null); loadConvs(); }}
+          />
+        )}
+        {showPrejoin && active && huddle && (
+          <HuddlePrejoin
+            title={conversationTitle(active, currentUserId)}
+            live={!!liveHuddleId}
+            busy={huddle.busy}
+            onConfirm={() => {
+              if (liveHuddleId) huddle.joinHuddle(liveHuddleId);
+              else huddle.startInConversation(active.id);
+              setShowPrejoin(false);
+            }}
+            onClose={() => setShowPrejoin(false)}
           />
         )}
         {attachView?.type === 'ticket' && (

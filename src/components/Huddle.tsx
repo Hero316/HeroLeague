@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { Headphones, Mic, MicOff, PhoneOff, StickyNote, X, Radio } from 'lucide-react';
+import { Headphones, Mic, MicOff, PhoneOff, StickyNote, X, Radio, MonitorUp, Maximize2, Loader2 } from 'lucide-react';
 import type { HuddleState, HuddleParticipant, TeamMember, ChatMessage } from '../types';
-import { HuddleSession, huddleStart, huddleJoin, huddleLeave, huddlePoll, huddleSaveNotes } from '../lib/huddle';
+import { HuddleSession, huddleStart, huddleJoin, huddleLeave, huddlePoll, huddleSaveNotes, canShareScreen } from '../lib/huddle';
 import Avatar from './Avatar';
 import { ModalPortal } from './ui';
 import { useBackClose } from '../lib/backStack';
@@ -15,6 +15,8 @@ export interface ActiveHuddle {
   state: HuddleState;
   participants: HuddleParticipant[];
   muted: boolean;
+  sharing: boolean; // teile ICH gerade meinen Bildschirm?
+  screen: { from: string; stream: MediaStream } | null; // aktuell gezeigter Bildschirm (me/Peer)
 }
 
 export function useHuddleController(currentUserId: string) {
@@ -27,7 +29,12 @@ export function useHuddleController(currentUserId: string) {
     ref.current = session;
     session.onParticipants = (p) => setActive((cur) => (cur && cur.session === session ? { ...cur, participants: p } : cur));
     session.onEnded = () => { ref.current = null; setActive(null); };
-    setActive({ session, state, participants, muted: false });
+    session.onScreen = (from, stream) => setActive((cur) => {
+      if (!cur || cur.session !== session) return cur;
+      if (!stream) return cur.screen && cur.screen.from === from ? { ...cur, screen: null } : cur;
+      return { ...cur, screen: { from, stream } };
+    });
+    setActive({ session, state, participants, muted: false, sharing: false, screen: null });
     session.start().catch((err) => {
       alert(err instanceof Error && err.name === 'NotAllowedError' ? 'Kein Mikrofon-Zugriff – bitte in den Einstellungen erlauben.' : 'Mikrofon nicht verfügbar.');
       session.stop();
@@ -77,15 +84,86 @@ export function useHuddleController(currentUserId: string) {
     setActive((cur) => (cur ? { ...cur, muted: cur.session.toggleMute() } : cur));
   }, []);
 
+  const toggleScreen = useCallback(async () => {
+    const s = ref.current;
+    if (!s) return;
+    if (s.sharing) {
+      s.stopScreen();
+      setActive((cur) => (cur ? { ...cur, sharing: false, screen: cur.screen?.from === 'me' ? null : cur.screen } : cur));
+      return;
+    }
+    try {
+      await s.startScreen();
+      setActive((cur) => (cur ? { ...cur, sharing: true } : cur));
+    } catch (err) {
+      if (!(err instanceof Error && err.name === 'NotAllowedError')) {
+        alert('Bildschirm teilen wird auf diesem Gerät/Browser nicht unterstützt (z.B. iPhone). Am PC klappt es.');
+      }
+    }
+  }, []);
+
   // Beim Verlassen der Seite höflich abmelden.
   useEffect(() => {
     return () => { if (ref.current) { ref.current.stop(); huddleLeave(ref.current.huddleId).catch(() => {}); } };
   }, []);
 
-  return { active, busy, startInConversation, joinHuddle, leave, toggleMute };
+  return { active, busy, startInConversation, joinHuddle, leave, toggleMute, toggleScreen };
 }
 
 export type HuddleController = ReturnType<typeof useHuddleController>;
+
+// ===========================================================================
+// Vor-dem-Beitreten-Fenster (Slack-Style): erst antippen → Fenster → Huddeln
+// ===========================================================================
+export function HuddlePrejoin({
+  title,
+  live,
+  busy,
+  onConfirm,
+  onClose,
+}: {
+  title: string;
+  live: boolean;
+  busy: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  useBackClose(true, onClose);
+  return (
+    <ModalPortal>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[80] bg-black/70 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+        <motion.div
+          initial={{ y: 30, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 30, opacity: 0 }}
+          className="w-full sm:max-w-sm hl-card hl-modal-card rounded-t-3xl sm:rounded-3xl p-6 text-center"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.5rem)' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="mx-auto w-16 h-16 rounded-2xl bg-[#0C7A70]/20 border border-[#0C7A70]/40 flex items-center justify-center mb-4">
+            <Headphones className="w-8 h-8" style={{ color: '#22DFC9' }} />
+          </div>
+          <h3 className="font-display font-black text-xl text-white uppercase tracking-tight">{live ? 'Huddle beitreten' : 'Huddle starten'}</h3>
+          <p className="text-sm text-hl-mute mt-1.5 mb-1">{title}</p>
+          <p className="text-[12px] text-hl-faint mb-5">
+            {live ? 'Es läuft schon ein Huddle – tritt bei.' : 'Ein Sprach-Raum, in dem ihr locker reden könnt – wie bei Slack.'}
+          </p>
+          <button
+            onClick={onConfirm}
+            disabled={busy}
+            className="w-full py-3.5 rounded-2xl text-sm font-bold uppercase tracking-wider bg-[#0C7A70] hover:bg-[#0e8a7e] text-white cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Headphones className="w-5 h-5" />}
+            {live ? 'Beitreten' : 'Huddle starten'}
+          </button>
+          <button onClick={onClose} className="w-full mt-2 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wider text-hl-mute hover:text-white cursor-pointer">
+            Abbrechen
+          </button>
+        </motion.div>
+      </motion.div>
+    </ModalPortal>
+  );
+}
 
 // ===========================================================================
 // „Du bist allein"-Musik: sanfte, leise WebAudio-Melodie (kein Datei-Download).
@@ -138,18 +216,29 @@ export function HuddleBar({
   currentUserId,
   onLeave,
   onToggleMute,
+  onToggleScreen,
 }: {
   active: ActiveHuddle;
   team: TeamMember[];
   currentUserId: string;
   onLeave: () => void;
   onToggleMute: () => void;
+  onToggleScreen: () => void;
 }) {
   const [notesOpen, setNotesOpen] = useState(false);
   const [notes, setNotes] = useState(active.state.notes ?? '');
   const alone = active.participants.length <= 1;
   useAloneMusic(alone);
   useBackClose(notesOpen, () => setNotesOpen(false));
+  const screenRef = useRef<HTMLVideoElement>(null);
+  const screen = active.screen;
+  useEffect(() => {
+    if (screenRef.current && screen) {
+      screenRef.current.srcObject = screen.stream;
+      screenRef.current.play().catch(() => {});
+    }
+  }, [screen]);
+  const canShare = canShareScreen();
 
   // Notizen entprellt speichern.
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -170,6 +259,22 @@ export function HuddleBar({
         className="shrink-0 border-t border-brand-accent-light/30 bg-[#0C7A70]/95 backdrop-blur-xl px-3 py-2.5"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
       >
+        {/* Geteilter Bildschirm (eigener oder von jemandem) */}
+        {screen && (
+          <div className="mb-2 relative rounded-xl overflow-hidden border border-white/20 bg-black">
+            <video ref={screenRef} autoPlay playsInline muted={screen.from === 'me'} className="w-full max-h-[38vh] object-contain bg-black" />
+            <div className="absolute top-1.5 left-2 text-[11px] font-sans font-semibold text-white/90 bg-black/50 px-2 py-0.5 rounded-full">
+              {screen.from === 'me' ? 'Dein Bildschirm' : `Bildschirm von ${nameOf(screen.from, 'Teilnehmer')}`}
+            </div>
+            <button
+              onClick={() => { const v = screenRef.current; if (v?.requestFullscreen) v.requestFullscreen().catch(() => {}); }}
+              title="Vollbild"
+              className="absolute top-1.5 right-1.5 p-1.5 rounded-full bg-black/50 text-white hover:bg-black/70 cursor-pointer"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 shrink-0">
             <Radio className="w-4 h-4 text-white animate-pulse" />
@@ -185,6 +290,15 @@ export function HuddleBar({
             {alone && <span className="ml-3 self-center text-[12px] text-white/80 font-sans truncate">Wartet auf andere…</span>}
           </div>
           {/* Aktionen */}
+          {canShare && (
+            <button
+              onClick={onToggleScreen}
+              title={active.sharing ? 'Bildschirm-Freigabe beenden' : 'Bildschirm teilen'}
+              className={`p-2.5 rounded-full cursor-pointer shrink-0 ${active.sharing ? 'bg-white text-[#0C7A70]' : 'bg-white/15 text-white hover:bg-white/25'}`}
+            >
+              <MonitorUp className="w-5 h-5" />
+            </button>
+          )}
           <button onClick={() => setNotesOpen(true)} title="Notizen" className="p-2.5 rounded-full bg-white/15 text-white hover:bg-white/25 cursor-pointer shrink-0">
             <StickyNote className="w-5 h-5" />
           </button>

@@ -497,6 +497,7 @@ export default function ChatApp({
           currentUserId={currentUserId}
           onLeave={huddle.leave}
           onToggleMute={huddle.toggleMute}
+          onToggleScreen={huddle.toggleScreen}
         />
       )}
 
