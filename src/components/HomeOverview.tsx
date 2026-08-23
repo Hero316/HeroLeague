@@ -123,7 +123,7 @@ export default function HomeOverview({
   return (
     <div className="h-full overflow-y-auto px-3 py-4">
       <motion.div variants={container} initial="hidden" animate="show" className="max-w-2xl mx-auto space-y-3.5">
-        {/* Begrüßung */}
+        {/* Begrüßung inkl. Hero-Punktestand & Monatsziel (alles oben, wo der Name steht) */}
         <motion.div variants={item} className="relative overflow-hidden rounded-3xl p-5 text-white" style={{ background: 'linear-gradient(135deg, #0C7A70 0%, #12A594 45%, #6D5DE6 120%)' }}>
           <div className="absolute -right-8 -top-10 w-40 h-40 rounded-full" style={{ background: 'radial-gradient(circle, rgba(255,255,255,.25), transparent 70%)' }} />
           <div className="relative flex items-start justify-between gap-3">
@@ -134,10 +134,32 @@ export default function HomeOverview({
                 {now.getDate()}. {MONTHS[now.getMonth()]} · {upcoming.filter((u) => u.date === TODAY).length} heute
               </div>
             </div>
-            <div className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-2xl font-display font-black text-lg" style={{ background: 'rgba(255,255,255,.18)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.3)' }}>
-              <span style={{ fontSize: 18 }}>⚡</span>
-              <span className="tabular-nums">{heroes}</span>
+            <div className="shrink-0 flex flex-col items-end gap-1">
+              <div className="flex items-center gap-1.5 px-3 py-2 rounded-2xl font-display font-black text-lg" style={{ background: 'rgba(255,255,255,.18)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.3)' }}>
+                <span style={{ fontSize: 18 }}>⚡</span>
+                <span className="tabular-nums">{heroes}</span>
+              </div>
+              <span className="text-[10px] font-sans font-bold uppercase tracking-wider opacity-80">Heroes</span>
             </div>
+          </div>
+          {/* Monatsziel-Fortschritt direkt hier oben */}
+          <div className="relative mt-4">
+            <div className="flex items-center justify-between text-[11px] font-sans font-bold mb-1.5">
+              <span className="uppercase tracking-wider opacity-85">Monatsziel</span>
+              <span className="tabular-nums opacity-95">{heroMonth} / {MONTH_GOAL}</span>
+            </div>
+            <div className="h-2.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,.22)' }}>
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${goalPct}%` }}
+                transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+                className="h-full rounded-full"
+                style={{ background: 'linear-gradient(90deg, #FFFFFF, #FFF2C2)', boxShadow: '0 0 12px rgba(255,255,255,.55)' }}
+              />
+            </div>
+            {heroMonth >= MONTH_GOAL && (
+              <div className="mt-1.5 text-[11px] font-sans font-semibold opacity-90">🏆 Monatsziel geknackt – stark!</div>
+            )}
           </div>
         </motion.div>
 
@@ -257,42 +279,6 @@ export default function HomeOverview({
           </motion.div>
         )}
 
-        {/* Hero-Fortschritt & Monatsziel */}
-        <motion.div variants={item} className="relative overflow-hidden rounded-3xl p-5 text-white" style={{ background: 'linear-gradient(135deg, #6D5DE6 0%, #12A594 70%, #E9C46A 150%)' }}>
-          <div className="absolute -left-10 -bottom-12 w-44 h-44 rounded-full" style={{ background: 'radial-gradient(circle, rgba(255,255,255,.22), transparent 70%)' }} />
-          <div className="relative">
-            <div className="flex items-end justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-[12px] font-sans font-bold uppercase tracking-wider opacity-90">Deine Heroes</div>
-                <div className="flex items-baseline gap-2 mt-0.5">
-                  <span className="font-display font-black text-4xl leading-none tabular-nums">{heroes}</span>
-                  <span style={{ fontSize: 26 }}>⚡</span>
-                </div>
-              </div>
-              <div className="text-right shrink-0">
-                <div className="text-[11px] font-sans font-semibold opacity-85">Diesen Monat</div>
-                <div className="font-display font-black text-xl tabular-nums leading-tight">
-                  {heroMonth}<span className="opacity-70 text-sm"> / {MONTH_GOAL}</span>
-                </div>
-              </div>
-            </div>
-            {/* Fortschrittsbalken zum Monatsziel */}
-            <div className="mt-3.5 h-3 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,.22)' }}>
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${goalPct}%` }}
-                transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
-                className="h-full rounded-full"
-                style={{ background: 'linear-gradient(90deg, #FFFFFF, #FFF2C2)', boxShadow: '0 0 14px rgba(255,255,255,.6)' }}
-              />
-            </div>
-            <div className="mt-2 text-[12px] font-sans font-semibold opacity-90">
-              {heroMonth >= MONTH_GOAL
-                ? '🏆 Monatsziel geknackt – stark, Team!'
-                : `Noch ${MONTH_GOAL - heroMonth} Hero${MONTH_GOAL - heroMonth === 1 ? '' : 'es'} bis zum Monatsziel 🚀`}
-            </div>
-          </div>
-        </motion.div>
       </motion.div>
     </div>
   );
