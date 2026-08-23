@@ -19,8 +19,15 @@ export interface ActiveHuddle {
   screen: { from: string; stream: MediaStream } | null; // aktuell gezeigter Bildschirm (me/Peer)
 }
 
+function sameSet(a: Set<string>, b: Set<string>): boolean {
+  if (a.size !== b.size) return false;
+  for (const x of a) if (!b.has(x)) return false;
+  return true;
+}
+
 export function useHuddleController(currentUserId: string) {
   const [active, setActive] = useState<ActiveHuddle | null>(null);
+  const [speaking, setSpeaking] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const ref = useRef<HuddleSession | null>(null);
 
@@ -28,7 +35,8 @@ export function useHuddleController(currentUserId: string) {
     const session = new HuddleSession(state.id, currentUserId);
     ref.current = session;
     session.onParticipants = (p) => setActive((cur) => (cur && cur.session === session ? { ...cur, participants: p } : cur));
-    session.onEnded = () => { ref.current = null; setActive(null); };
+    session.onEnded = () => { ref.current = null; setActive(null); setSpeaking(new Set()); };
+    session.onSpeaking = (ids) => setSpeaking((prev) => (sameSet(prev, ids) ? prev : ids));
     session.onScreen = (from, stream) => setActive((cur) => {
       if (!cur || cur.session !== session) return cur;
       if (!stream) return cur.screen && cur.screen.from === from ? { ...cur, screen: null } : cur;
@@ -78,6 +86,7 @@ export function useHuddleController(currentUserId: string) {
     huddleLeave(s.huddleId).catch(() => {});
     ref.current = null;
     setActive(null);
+    setSpeaking(new Set());
   }, []);
 
   const toggleMute = useCallback(() => {
@@ -107,7 +116,7 @@ export function useHuddleController(currentUserId: string) {
     return () => { if (ref.current) { ref.current.stop(); huddleLeave(ref.current.huddleId).catch(() => {}); } };
   }, []);
 
-  return { active, busy, startInConversation, joinHuddle, leave, toggleMute, toggleScreen };
+  return { active, speaking, busy, startInConversation, joinHuddle, leave, toggleMute, toggleScreen };
 }
 
 export type HuddleController = ReturnType<typeof useHuddleController>;
@@ -188,16 +197,16 @@ function useAloneMusic(play: boolean) {
         osc.type = 'sine';
         osc.frequency.value = notes[i % notes.length];
         gain.gain.setValueAtTime(0, t);
-        gain.gain.linearRampToValueAtTime(0.05, t + 0.15); // sehr leise
-        gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
+        gain.gain.linearRampToValueAtTime(0.022, t + 0.2); // sehr, sehr leise
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.8);
         osc.connect(gain).connect(ctx.destination);
         osc.start(t);
-        osc.stop(t + 1.7);
+        osc.stop(t + 1.9);
         i++;
       };
       ping();
-      timerRef.current = setInterval(ping, 1900);
-    }, 6000);
+      timerRef.current = setInterval(ping, 2600);
+    }, 8000);
     return () => {
       clearTimeout(startDelay);
       if (timerRef.current) clearInterval(timerRef.current);
@@ -212,6 +221,7 @@ function useAloneMusic(play: boolean) {
 // ===========================================================================
 export function HuddleBar({
   active,
+  speaking,
   team,
   currentUserId,
   onLeave,
@@ -219,16 +229,23 @@ export function HuddleBar({
   onToggleScreen,
 }: {
   active: ActiveHuddle;
+  speaking: Set<string>;
   team: TeamMember[];
   currentUserId: string;
   onLeave: () => void;
   onToggleMute: () => void;
   onToggleScreen: () => void;
 }) {
+  const [stageOpen, setStageOpen] = useState(false);
+  useBackClose(stageOpen, () => setStageOpen(false));
   const [notesOpen, setNotesOpen] = useState(false);
   const [notes, setNotes] = useState(active.state.notes ?? '');
+  // „Du bist allein"-Musik NUR, wenn vorher jemand da war (klassisches „vergessen
+  // rauszugehen") – nicht beim Solo-Starten/Warten. Und nie, wenn man stumm ist.
+  const [everOthers, setEverOthers] = useState(false);
+  useEffect(() => { if (active.participants.length > 1) setEverOthers(true); }, [active.participants.length]);
   const alone = active.participants.length <= 1;
-  useAloneMusic(alone);
+  useAloneMusic(alone && everOthers && !active.muted);
   useBackClose(notesOpen, () => setNotesOpen(false));
   const screenRef = useRef<HTMLVideoElement>(null);
   const screen = active.screen;
@@ -280,16 +297,26 @@ export function HuddleBar({
             <Radio className="w-4 h-4 text-white animate-pulse" />
             <span className="text-[11px] font-bold uppercase tracking-wider text-white">Huddle</span>
           </div>
-          {/* Teilnehmer */}
-          <div className="flex -space-x-1.5 flex-1 min-w-0 overflow-hidden">
-            {active.participants.map((p) => (
-              <span key={p.userId} title={nameOf(p.userId, p.userName)} className="inline-flex ring-2 ring-[#0C7A70] rounded-full">
-                <Avatar name={nameOf(p.userId, p.userName)} url={team.find((t) => t.id === p.userId)?.avatarUrl} size={30} />
-              </span>
-            ))}
+          {/* Teilnehmer (tippen = Vollbild); wer redet, leuchtet türkis */}
+          <button onClick={() => setStageOpen(true)} title="Vollbild" className="flex -space-x-1.5 flex-1 min-w-0 overflow-hidden items-center cursor-pointer">
+            {active.participants.map((p) => {
+              const talking = speaking.has(p.userId);
+              return (
+                <span
+                  key={p.userId}
+                  className={`inline-flex rounded-full ring-2 ${talking ? 'ring-[#22DFC9]' : 'ring-[#0C7A70]'}`}
+                  style={talking ? { boxShadow: '0 0 10px #22DFC9' } : undefined}
+                >
+                  <Avatar name={nameOf(p.userId, p.userName)} url={team.find((t) => t.id === p.userId)?.avatarUrl} size={30} />
+                </span>
+              );
+            })}
             {alone && <span className="ml-3 self-center text-[12px] text-white/80 font-sans truncate">Wartet auf andere…</span>}
-          </div>
+          </button>
           {/* Aktionen */}
+          <button onClick={() => setStageOpen(true)} title="Vollbild" className="p-2.5 rounded-full bg-white/15 text-white hover:bg-white/25 cursor-pointer shrink-0">
+            <Maximize2 className="w-5 h-5" />
+          </button>
           {canShare && (
             <button
               onClick={onToggleScreen}
@@ -336,7 +363,124 @@ export function HuddleBar({
           </motion.div>
         </ModalPortal>
       )}
+
+      {stageOpen && (
+        <HuddleStage
+          active={active}
+          speaking={speaking}
+          team={team}
+          currentUserId={currentUserId}
+          onLeave={() => { setStageOpen(false); onLeave(); }}
+          onToggleMute={onToggleMute}
+          onToggleScreen={onToggleScreen}
+          onClose={() => setStageOpen(false)}
+        />
+      )}
     </>
+  );
+}
+
+// ===========================================================================
+// Vollbild-Bühne: alle als Kacheln (Slack-Style), Redner leuchtet
+// ===========================================================================
+function HuddleStage({
+  active,
+  speaking,
+  team,
+  currentUserId,
+  onLeave,
+  onToggleMute,
+  onToggleScreen,
+  onClose,
+}: {
+  active: ActiveHuddle;
+  speaking: Set<string>;
+  team: TeamMember[];
+  currentUserId: string;
+  onLeave: () => void;
+  onToggleMute: () => void;
+  onToggleScreen: () => void;
+  onClose: () => void;
+}) {
+  const screenRef = useRef<HTMLVideoElement>(null);
+  const screen = active.screen;
+  useEffect(() => {
+    if (screenRef.current && screen) { screenRef.current.srcObject = screen.stream; screenRef.current.play().catch(() => {}); }
+  }, [screen]);
+  const canShare = canShareScreen();
+  const nameOf = (id: string, fb: string) => team.find((t) => t.id === id)?.name ?? fb;
+  const n = active.participants.length;
+  const cols = n <= 1 ? 'grid-cols-1' : n <= 4 ? 'grid-cols-2' : 'grid-cols-3';
+
+  return (
+    <ModalPortal>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[85] bg-[#04120f] flex flex-col" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        {/* Kopf */}
+        <div className="flex items-center justify-between px-4 py-3 shrink-0">
+          <div className="flex items-center gap-2 text-white">
+            <Radio className="w-4 h-4 animate-pulse" style={{ color: '#22DFC9' }} />
+            <span className="font-display font-black uppercase tracking-tight">Huddle</span>
+            <span className="text-hl-mute text-sm">· {n}</span>
+          </div>
+          <button onClick={onClose} title="Verkleinern" className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20 cursor-pointer">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Inhalt: geteilter Bildschirm groß + Kacheln */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+          {screen && (
+            <div className="mb-4 rounded-2xl overflow-hidden border border-white/15 bg-black relative">
+              <video ref={screenRef} autoPlay playsInline muted={screen.from === 'me'} className="w-full max-h-[45vh] object-contain bg-black" />
+              <div className="absolute top-2 left-2 text-[12px] font-sans font-semibold text-white/90 bg-black/50 px-2 py-0.5 rounded-full">
+                {screen.from === 'me' ? 'Dein Bildschirm' : `Bildschirm von ${nameOf(screen.from, 'Teilnehmer')}`}
+              </div>
+            </div>
+          )}
+          <div className={`grid ${cols} gap-3`}>
+            {active.participants.map((p) => {
+              const talking = speaking.has(p.userId);
+              const nm = nameOf(p.userId, p.userName);
+              return (
+                <div
+                  key={p.userId}
+                  className={`aspect-square rounded-3xl flex flex-col items-center justify-center gap-2 bg-white/[.04] border-2 transition-all ${talking ? 'border-[#22DFC9]' : 'border-white/10'}`}
+                  style={talking ? { boxShadow: '0 0 26px rgba(34,223,201,.55)' } : undefined}
+                >
+                  <Avatar name={nm} url={team.find((t) => t.id === p.userId)?.avatarUrl} size={72} />
+                  <span className="text-[13px] font-sans font-semibold text-white truncate max-w-[90%]">
+                    {p.userId === currentUserId ? 'Du' : nm}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Steuerung unten */}
+        <div className="shrink-0 flex items-center justify-center gap-4 px-4 pt-2" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)' }}>
+          <button
+            onClick={onToggleMute}
+            title={active.muted ? 'Ton an' : 'Stumm'}
+            className={`p-4 rounded-full cursor-pointer ${active.muted ? 'bg-white text-[#0C7A70]' : 'bg-white/15 text-white hover:bg-white/25'}`}
+          >
+            {active.muted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+          </button>
+          {canShare && (
+            <button
+              onClick={onToggleScreen}
+              title={active.sharing ? 'Freigabe beenden' : 'Bildschirm teilen'}
+              className={`p-4 rounded-full cursor-pointer ${active.sharing ? 'bg-white text-[#0C7A70]' : 'bg-white/15 text-white hover:bg-white/25'}`}
+            >
+              <MonitorUp className="w-6 h-6" />
+            </button>
+          )}
+          <button onClick={onLeave} title="Verlassen" className="p-4 rounded-full bg-rose-500 text-white hover:bg-rose-600 cursor-pointer">
+            <PhoneOff className="w-6 h-6" />
+          </button>
+        </div>
+      </motion.div>
+    </ModalPortal>
   );
 }
 
@@ -404,6 +548,8 @@ export function HuddleCard({
 }) {
   const huddleId = message.attachId ?? '';
   const live = !!huddleId && huddleId === isLiveHuddleId;
+  const hasNotes = message.attachTitle === 'notes';
+  const meta = (message.body || '').replace(/^Beendet · /, ''); // Datum, Startzeit, Dauer
   const [notes, setNotes] = useState<string | null>(null);
   const [showNotes, setShowNotes] = useState(false);
   useBackClose(showNotes, () => setShowNotes(false));
@@ -421,19 +567,28 @@ export function HuddleCard({
 
   return (
     <div className="flex justify-center my-2">
-      <div className="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-full bg-[#0C7A70]/15 border border-[#0C7A70]/40">
-        <Headphones className={`w-4 h-4 text-[#0C7A70] ${live ? 'animate-pulse' : ''}`} style={{ color: '#22DFC9' }} />
-        <span className="text-[12px] font-sans font-semibold text-hl-soft">{live ? 'Huddle läuft' : 'Huddle beendet'}</span>
-        {live ? (
+      {live ? (
+        <div className="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-full bg-[#0C7A70]/15 border border-[#0C7A70]/40">
+          <Headphones className="w-4 h-4 animate-pulse" style={{ color: '#22DFC9' }} />
+          <span className="text-[12px] font-sans font-semibold text-hl-soft">Huddle läuft</span>
           <button onClick={() => onJoin(huddleId)} className="text-[11px] font-bold uppercase tracking-wider bg-[#0C7A70] text-white px-2.5 py-1 rounded-full cursor-pointer hover:bg-[#0e8a7e]">
             Beitreten
           </button>
-        ) : (
-          <button onClick={openNotes} className="text-[11px] font-bold uppercase tracking-wider bg-white/10 text-hl-soft px-2.5 py-1 rounded-full cursor-pointer hover:text-white">
-            Notizen
-          </button>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="inline-flex items-center gap-3 px-3.5 py-2.5 rounded-2xl bg-[#0C7A70]/10 border border-[#0C7A70]/25 max-w-[88%]">
+          <Headphones className="w-4 h-4 shrink-0" style={{ color: '#22DFC9' }} />
+          <div className="min-w-0">
+            <div className="text-[12px] font-sans font-semibold text-hl-soft leading-tight">Huddle beendet</div>
+            {meta && <div className="text-[10px] font-mono text-hl-faint truncate mt-0.5">{meta}</div>}
+          </div>
+          {hasNotes && (
+            <button onClick={openNotes} className="text-[11px] font-bold uppercase tracking-wider bg-white/10 text-hl-soft px-2.5 py-1 rounded-full cursor-pointer hover:text-white shrink-0">
+              Notizen
+            </button>
+          )}
+        </div>
+      )}
 
       {showNotes && (
         <ModalPortal>

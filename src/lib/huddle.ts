@@ -64,6 +64,10 @@ export class HuddleSession {
   private pendingIce = new Map<string, RTCIceCandidateInit[]>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private stopped = false;
+  // Sprech-Erkennung (leuchtender Rahmen wie bei Slack).
+  private audioCtx: AudioContext | null = null;
+  private analysers = new Map<string, AnalyserNode>();
+  private levelTimer: ReturnType<typeof setInterval> | null = null;
   muted = false;
   sharing = false;
   participants: HuddleParticipant[] = [];
@@ -71,6 +75,8 @@ export class HuddleSession {
   onEnded: () => void = () => {};
   // from = 'me' (eigener Bildschirm) oder Peer-ID; stream = null ⇒ Freigabe beendet.
   onScreen: (from: string, stream: MediaStream | null) => void = () => {};
+  // Menge der IDs (myId + Peer-IDs), die GERADE reden.
+  onSpeaking: (ids: Set<string>) => void = () => {};
 
   constructor(huddleId: string, myId: string) {
     this.huddleId = huddleId;
@@ -79,7 +85,41 @@ export class HuddleSession {
 
   async start(): Promise<void> {
     this.local = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    this.setupLevels();
     this.loop();
+  }
+
+  // Lautstärke je Teilnehmer messen → wer redet, leuchtet.
+  private setupLevels() {
+    try {
+      const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AC) return;
+      this.audioCtx = new AC();
+      if (this.local) this.addAnalyser(this.myId, this.local);
+      this.levelTimer = setInterval(() => {
+        const speaking = new Set<string>();
+        for (const [key, an] of this.analysers) {
+          if (key === this.myId && this.muted) continue;
+          const data = new Uint8Array(an.fftSize);
+          an.getByteTimeDomainData(data);
+          let sum = 0;
+          for (let j = 0; j < data.length; j++) { const v = (data[j] - 128) / 128; sum += v * v; }
+          if (Math.sqrt(sum / data.length) > 0.06) speaking.add(key);
+        }
+        this.onSpeaking(speaking);
+      }, 200);
+    } catch { /* Sprech-Erkennung optional */ }
+  }
+
+  private addAnalyser(key: string, stream: MediaStream) {
+    try {
+      if (!this.audioCtx || stream.getAudioTracks().length === 0) return;
+      const src = this.audioCtx.createMediaStreamSource(stream);
+      const an = this.audioCtx.createAnalyser();
+      an.fftSize = 512;
+      src.connect(an); // NICHT an destination – nur messen, kein Echo
+      this.analysers.set(key, an);
+    } catch { /* egal */ }
   }
 
   private loop = async () => {
@@ -133,6 +173,7 @@ export class HuddleSession {
         }
         a.srcObject = stream;
         a.play().catch(() => {});
+        this.addAnalyser(peerId, stream);
       } else if (e.track.kind === 'video') {
         this.onScreen(peerId, stream);
         const clear = () => this.onScreen(peerId, null);
@@ -193,6 +234,8 @@ export class HuddleSession {
     }
     const a = this.audios.get(peerId);
     if (a) { a.srcObject = null; a.remove(); this.audios.delete(peerId); }
+    const an = this.analysers.get(peerId);
+    if (an) { try { an.disconnect(); } catch { /* egal */ } this.analysers.delete(peerId); }
     this.pendingIce.delete(peerId);
     this.onScreen(peerId, null);
   }
@@ -241,8 +284,11 @@ export class HuddleSession {
     if (this.stopped) return;
     this.stopped = true;
     if (this.timer) clearTimeout(this.timer);
+    if (this.levelTimer) { clearInterval(this.levelTimer); this.levelTimer = null; }
     if (this.screen) { for (const t of this.screen.getTracks()) t.stop(); this.screen = null; }
     for (const id of [...this.peers.keys()]) this.closePeer(id);
+    this.analysers.clear();
+    if (this.audioCtx) { this.audioCtx.close().catch(() => {}); this.audioCtx = null; }
     if (this.local) for (const t of this.local.getTracks()) t.stop();
     this.local = null;
   }
