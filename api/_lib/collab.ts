@@ -182,27 +182,76 @@ export async function heroBackfillMonth(req: VercelRequest, res: VercelResponse)
   return res.json({ ok: true, inserted });
 }
 
-// Instagram-Reels/Posts des eigenen Business-Accounts holen (Thumbnails, Views,
-// Likes, Kommentare) über die offizielle Instagram-API (graph.instagram.com).
-// Token & Account-ID kommen aus Umgebungsvariablen (Vercel) – NIE im Code. Ohne
-// gesetzte Variablen wird sauber `configured:false` zurückgegeben. Ergebnis wird
-// pro Serverless-Instanz 10 Min zwischengespeichert (schont das API-Limit).
+// --- Instagram-Statistiken (eigener Business-Account) -----------------------
+// Über die offizielle Instagram-API (graph.instagram.com). Der Token wird in der
+// DB (settings key 'ig_auth') gehalten und AUTOMATISCH verlängert (Instagram-
+// Token gilt 60 Tage → ab 50 Tagen erneuern). Erstbefüllung aus der Umgebungs-
+// variable IG_ACCESS_TOKEN. Account-ID aus IG_BUSINESS_ID. Ohne beides →
+// configured:false. Ergebnis wird pro Instanz 10 Min gecached (API-Limit).
+const IG_BASE = 'https://graph.instagram.com/v21.0';
 let igCache: { at: number; payload: unknown } = { at: 0, payload: null };
+
+async function saveIgToken(token: string, at: number) {
+  try {
+    await sql`INSERT INTO settings (key, value) VALUES ('ig_auth', ${JSON.stringify({ token, refreshedAt: at })}::jsonb)
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`;
+  } catch (err) {
+    console.error('saveIgToken:', err);
+  }
+}
+
+async function getIgToken(): Promise<string | null> {
+  let token: string | null = null;
+  let refreshedAt = 0;
+  try {
+    const rows = await sql`SELECT value FROM settings WHERE key = 'ig_auth'`;
+    const v = rows[0]?.value as { token?: string; refreshedAt?: number } | undefined;
+    if (v?.token) { token = v.token; refreshedAt = Number(v.refreshedAt) || 0; }
+  } catch { /* settings evtl. noch nicht da */ }
+  if (!token) {
+    token = process.env.IG_ACCESS_TOKEN || null;
+    if (token) { refreshedAt = Date.now(); await saveIgToken(token, refreshedAt); }
+  }
+  if (!token) return null;
+  // Automatische Verlängerung ab 50 Tagen (Token gilt 60).
+  if (refreshedAt && (Date.now() - refreshedAt) / 864e5 > 50) {
+    try {
+      const rr = await fetch(`${IG_BASE.replace('/v21.0', '')}/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(token)}`);
+      const rd = (await rr.json()) as { access_token?: string };
+      if (rr.ok && rd.access_token) { token = rd.access_token; await saveIgToken(token, Date.now()); }
+    } catch { /* mit altem Token weiter */ }
+  }
+  return token;
+}
+
+// Ein Account-Insight (best-effort; gibt bei Fehler null/[] zurück).
+async function igAccountMetricSum(igId: string, token: string, metric: string, sinceSec: number, untilSec: number): Promise<{ total: number | null; daily: { day: string; value: number }[] }> {
+  try {
+    const r = await fetch(`${IG_BASE}/${igId}/insights?metric=${metric}&period=day&since=${sinceSec}&until=${untilSec}&access_token=${encodeURIComponent(token)}`);
+    const d = (await r.json()) as { data?: { name: string; values?: { end_time?: string; value: number }[] }[] };
+    const vals = d?.data?.find((x) => x.name === metric)?.values;
+    if (!Array.isArray(vals)) return { total: null, daily: [] };
+    const daily = vals.map((v) => ({ day: (v.end_time || '').slice(0, 10), value: Number(v.value) || 0 }));
+    return { total: daily.reduce((s, x) => s + x.value, 0), daily };
+  } catch {
+    return { total: null, daily: [] };
+  }
+}
+
 export async function instagramReels(req: VercelRequest, res: VercelResponse) {
   const session = await getSession(req);
   if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
   res.setHeader('Cache-Control', 'no-store');
 
-  const token = process.env.IG_ACCESS_TOKEN;
   const igId = process.env.IG_BUSINESS_ID;
+  const token = await getIgToken();
   if (!token || !igId) return res.json({ configured: false, items: [], totalViews30: 0, count30: 0, count: 0 });
 
   if (igCache.payload && Date.now() - igCache.at < 10 * 60 * 1000) return res.json(igCache.payload);
 
   try {
-    const base = 'https://graph.instagram.com/v21.0';
     const fields = 'id,caption,media_type,media_product_type,thumbnail_url,media_url,permalink,timestamp,like_count,comments_count';
-    const r = await fetch(`${base}/${encodeURIComponent(igId)}/media?fields=${fields}&limit=24&access_token=${encodeURIComponent(token)}`);
+    const r = await fetch(`${IG_BASE}/${encodeURIComponent(igId)}/media?fields=${fields}&limit=30&access_token=${encodeURIComponent(token)}`);
     const data = (await r.json()) as { data?: unknown[]; error?: { message?: string } };
     if (!r.ok || !Array.isArray(data.data)) {
       return res.json({ configured: true, error: data.error?.message || 'Instagram-Abruf fehlgeschlagen', items: [], totalViews30: 0, count30: 0, count: 0 });
@@ -220,20 +269,20 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
         let views: number | null = null;
         const isVideo = m.media_type === 'VIDEO' || m.media_product_type === 'REELS';
         if (isVideo) {
-          // Metriknamen haben sich bei Instagram geändert – der Reihe nach probieren.
           for (const metric of ['views', 'plays', 'reach']) {
             try {
-              const ir = await fetch(`${base}/${m.id}/insights?metric=${metric}&access_token=${encodeURIComponent(token)}`);
+              const ir = await fetch(`${IG_BASE}/${m.id}/insights?metric=${metric}&access_token=${encodeURIComponent(token)}`);
               const idata = (await ir.json()) as { data?: { name: string; values?: { value: number }[] }[] };
               const val = idata?.data?.find((d) => d.name === metric)?.values?.[0]?.value;
               if (typeof val === 'number') { views = val; break; }
             } catch { /* nächste Metrik */ }
           }
         }
+        const reel = m.media_product_type === 'REELS' || m.media_type === 'VIDEO';
         return {
           id: m.id,
           caption: (m.caption || '').replace(/\s+/g, ' ').trim().slice(0, 120),
-          type: m.media_product_type || m.media_type || '',
+          type: reel ? 'reel' : 'post',
           thumbnail: m.thumbnail_url || m.media_url || '',
           permalink: m.permalink || '',
           timestamp: m.timestamp || '',
@@ -246,13 +295,44 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
 
     const now = Date.now();
     const in30 = items.filter((m) => m.timestamp && now - new Date(m.timestamp).getTime() <= 30 * 864e5);
+
+    // Account-Ebene (best-effort): Follower, Reichweite/Aufrufe pro Tag, neue Follower.
+    const sinceSec = Math.floor((now - 30 * 864e5) / 1000);
+    const untilSec = Math.floor(now / 1000);
+    let followers: number | null = null;
+    let mediaCount: number | null = null;
+    let username = '';
+    try {
+      const pr = await fetch(`${IG_BASE}/${igId}?fields=username,followers_count,media_count&access_token=${encodeURIComponent(token)}`);
+      const pd = (await pr.json()) as { username?: string; followers_count?: number; media_count?: number };
+      username = pd.username || '';
+      followers = typeof pd.followers_count === 'number' ? pd.followers_count : null;
+      mediaCount = typeof pd.media_count === 'number' ? pd.media_count : null;
+    } catch { /* egal */ }
+
+    let daily = (await igAccountMetricSum(igId, token, 'views', sinceSec, untilSec)).daily;
+    let dailyLabel = 'Aufrufe';
+    if (daily.length === 0) { daily = (await igAccountMetricSum(igId, token, 'reach', sinceSec, untilSec)).daily; dailyLabel = 'Reichweite'; }
+    const reach30 = (await igAccountMetricSum(igId, token, 'reach', sinceSec, untilSec)).total;
+    const newFollowers30 = (await igAccountMetricSum(igId, token, 'follower_count', sinceSec, untilSec)).total;
+
     const payload = {
       configured: true,
-      items,
+      username,
+      followers,
+      mediaCount,
+      newFollowers30,
+      reach30,
       totalViews30: in30.reduce((s, m) => s + (m.views || 0), 0),
       totalLikes30: in30.reduce((s, m) => s + (m.likes || 0), 0),
+      totalComments30: in30.reduce((s, m) => s + (m.comments || 0), 0),
+      viewsReels30: in30.filter((m) => m.type === 'reel').reduce((s, m) => s + (m.views || 0), 0),
+      viewsPosts30: in30.filter((m) => m.type === 'post').reduce((s, m) => s + (m.views || 0), 0),
       count30: in30.length,
       count: items.length,
+      daily,
+      dailyLabel,
+      items,
     };
     igCache = { at: Date.now(), payload };
     return res.json(payload);
