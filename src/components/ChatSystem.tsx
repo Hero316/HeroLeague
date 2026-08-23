@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   MessageSquare,
@@ -2290,13 +2290,22 @@ export default function ChatSystem({
     };
   }, [activeId, currentUserId]);
 
-  // Nach unten scrollen NUR, wenn man ohnehin unten ist – und nur INNERHALB des
-  // Chat-Containers (nicht die ganze Seite).
-  useEffect(() => {
-    if (atBottomRef.current && listRef.current) {
-      listRef.current.scrollTop = listRef.current.scrollHeight;
+  // Beim Öffnen einer Unterhaltung sofort (VOR dem ersten Paint) ans Ende
+  // scrollen, damit die Nachrichten nicht kurz oben aufblitzen und dann nach
+  // unten springen. useLayoutEffect = noch vor dem Zeichnen. Danach nur noch
+  // mitscrollen, wenn man ohnehin unten ist. Zurücksetzen bei Chat-Wechsel.
+  const initialScrollRef = useRef(false);
+  useEffect(() => { initialScrollRef.current = false; }, [activeId]);
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    if (!initialScrollRef.current) {
+      el.scrollTop = el.scrollHeight;
+      if (!loadingMsgs && messages.length > 0) initialScrollRef.current = true;
+    } else if (atBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
     }
-  }, [messages, typers.length]);
+  }, [messages, typers.length, loadingMsgs, activeId]);
 
   // Globale Suche (entprellt).
   useEffect(() => {
