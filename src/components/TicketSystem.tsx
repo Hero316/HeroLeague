@@ -261,7 +261,7 @@ export function TicketDetail({
         onClick={(e) => e.stopPropagation()}
       >
         {loading || !ticket ? (
-          <div className="flex items-center justify-center py-16 text-hl-mute">
+          <div className="flex items-center justify-center text-hl-mute" style={{ minHeight: '55vh' }}>
             <Loader2 className="w-6 h-6 animate-spin" />
           </div>
         ) : (

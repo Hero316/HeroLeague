@@ -363,38 +363,37 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
     // Account-Ebene (best-effort): Follower, Reichweite/Aufrufe pro Tag, neue Follower.
     const sinceSec = Math.floor((now - days * 864e5) / 1000);
     const untilSec = Math.floor(now / 1000);
-    let followers: number | null = null;
-    let mediaCount: number | null = null;
-    let username = '';
-    try {
-      const pr = await fetch(`${IG_BASE}/${igId}?fields=username,followers_count,media_count&access_token=${encodeURIComponent(token)}`);
-      const pd = (await pr.json()) as { username?: string; followers_count?: number; media_count?: number };
-      username = pd.username || '';
-      followers = typeof pd.followers_count === 'number' ? pd.followers_count : null;
-      mediaCount = typeof pd.media_count === 'number' ? pd.media_count : null;
-    } catch { /* egal */ }
 
-    // Aufrufe gesamt + nach Content-Art (offizielle Konto-Zahl, inkl. Stories).
-    const viewsTV = await igTotalValueRange(igId, token, 'views', sinceSec, untilSec, 'media_product_type');
-    const reachTV = await igTotalValueRange(igId, token, 'reach', sinceSec, untilSec, 'follow_type');
-    const interTV = await igTotalValueRange(igId, token, 'total_interactions', sinceSec, untilSec);
-    const bd = viewsTV.byDim;
-    const rbd = reachTV.byDim;
-
-    // Zielgruppe (best-effort, parallel): Demografie nach Land/Stadt/Alter/Geschlecht.
-    const [demoCountry, demoCity, demoAge, demoGender] = await Promise.all([
+    // Alle Konto-Abfragen PARALLEL (statt nacheinander) – deutlich schneller.
+    const profileP = (async () => {
+      try {
+        const pr = await fetch(`${IG_BASE}/${igId}?fields=username,followers_count,media_count&access_token=${encodeURIComponent(token)}`);
+        const pd = (await pr.json()) as { username?: string; followers_count?: number; media_count?: number };
+        return { username: pd.username || '', followers: typeof pd.followers_count === 'number' ? pd.followers_count : null, mediaCount: typeof pd.media_count === 'number' ? pd.media_count : null };
+      } catch { return { username: '', followers: null as number | null, mediaCount: null as number | null }; }
+    })();
+    const [profile, viewsTV, reachTV, interTV, demoCountry, demoCity, demoAge, demoGender, viewsDaily, reachDaily, followerTs] = await Promise.all([
+      profileP,
+      igTotalValueRange(igId, token, 'views', sinceSec, untilSec, 'media_product_type'),
+      igTotalValueRange(igId, token, 'reach', sinceSec, untilSec, 'follow_type'),
+      igTotalValueRange(igId, token, 'total_interactions', sinceSec, untilSec),
       igDemographics(igId, token, 'country'),
       igDemographics(igId, token, 'city'),
       igDemographics(igId, token, 'age'),
       igDemographics(igId, token, 'gender'),
+      igTimeSeriesRange(igId, token, 'views', sinceSec, untilSec),
+      igTimeSeriesRange(igId, token, 'reach', sinceSec, untilSec),
+      igTimeSeriesRange(igId, token, 'follower_count', sinceSec, untilSec),
     ]);
+    const { username, followers, mediaCount } = profile;
+    const bd = viewsTV.byDim;
+    const rbd = reachTV.byDim;
     const mediaViewsSum = in30.reduce((s, m) => s + (m.views || 0), 0);
 
     // Diagramm: Aufrufe pro Tag; falls Views-Zeitreihe leer, auf Reichweite ausweichen.
-    let daily = await igTimeSeriesRange(igId, token, 'views', sinceSec, untilSec);
+    let daily = viewsDaily;
     let dailyLabel = 'Aufrufe';
-    if (daily.length === 0) { daily = await igTimeSeriesRange(igId, token, 'reach', sinceSec, untilSec); dailyLabel = 'Reichweite'; }
-    const followerTs = await igTimeSeriesRange(igId, token, 'follower_count', sinceSec, untilSec);
+    if (daily.length === 0) { daily = reachDaily; dailyLabel = 'Reichweite'; }
 
     const payload = {
       configured: true,
