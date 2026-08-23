@@ -1815,6 +1815,8 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
           ];
           const grouped: Record<string, Task[]> = {};
           for (const t of myTodos) (grouped[bucketOf(t)] ??= []).push(t);
+          // Erledigte: zuletzt abgeschlossene zuerst (nach Änderungsdatum), nicht nach Frist.
+          if (grouped.done) grouped.done.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''));
           return (
             <div className="space-y-4">
               {BUCKETS.filter((b) => grouped[b.key]?.length).map((b) => (
