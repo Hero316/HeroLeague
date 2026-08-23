@@ -3,7 +3,6 @@ import { motion } from 'motion/react';
 import { ArrowLeft, MessageSquare, CalendarDays, ListChecks, Ticket as TicketIcon, Smartphone, X, Sun, Moon, Settings, Bell, Lightbulb, Home } from 'lucide-react';
 import ChatSystem from './ChatSystem';
 import HomeOverview from './HomeOverview';
-import SoccerGame from './SoccerGame';
 import TaskBoard from './TaskBoard';
 import TicketSystem from './TicketSystem';
 import IdeasBoard from './IdeasBoard';
@@ -35,7 +34,6 @@ const TABS: { id: Tab; label: string; icon: typeof MessageSquare }[] = [
   { id: 'aufgaben', label: 'Aufgaben', icon: ListChecks },
   { id: 'kalender', label: 'Kalender', icon: CalendarDays },
   { id: 'ideen', label: 'Ideen', icon: Lightbulb },
-  { id: 'tickets', label: 'Tickets', icon: TicketIcon },
 ];
 const SETTINGS_TAB = { id: 'mehr' as Tab, label: 'Einstellungen', icon: Settings };
 
@@ -101,8 +99,6 @@ export default function ChatApp({
     }
   };
   const [showInstall, setShowInstall] = useState(true);
-  const [showGame, setShowGame] = useState(false);
-  useBackClose(showGame, () => setShowGame(false));
   const { isStandalone, isIos, canInstall, promptInstall } = useInstall();
   const current = TABS.find((t) => t.id === tab) ?? SETTINGS_TAB;
   // Huddle (WLAN-Anruf): eine aktive Sitzung, überlebt den Tab-Wechsel; die
@@ -346,12 +342,14 @@ export default function ChatApp({
             nicht hier – das steckt in den Einstellungen. */}
         <div className="flex items-center gap-0.5 shrink-0">
           <button
-            onClick={() => setShowGame(true)}
-            title="Hero Kicker – Mini-Spiel"
-            aria-label="Hero Kicker – Mini-Spiel"
-            className="p-2.5 rounded-full text-hl-mute hover:text-brand-accent-light active:bg-white/10 cursor-pointer transition-colors text-[19px] leading-none"
+            onClick={() => setTab('tickets')}
+            title="Tickets"
+            aria-label="Tickets"
+            className={`p-2.5 rounded-full active:bg-white/10 cursor-pointer transition-colors ${
+              tab === 'tickets' ? 'text-brand-accent-light' : 'text-hl-mute hover:text-brand-accent-light'
+            }`}
           >
-            ⚽
+            <TicketIcon className="w-5 h-5" />
           </button>
           <button
             onClick={() => setTab('mehr')}
@@ -497,7 +495,6 @@ export default function ChatApp({
       )}
 
       {/* Mini-Spiel „Hero Kicker" (⚽ oben rechts) */}
-      {showGame && <SoccerGame currentUserId={currentUserId} onClose={() => setShowGame(false)} />}
 
       {/* Läuft weiter beim Tab-Wechsel: Sprachnachrichten-Mini-Leiste */}
       <MiniPlayer />
@@ -517,7 +514,7 @@ export default function ChatApp({
 
       {/* Untere Tab-Leiste: schwebende Pille, die zum getippten Tab „fliegt". */}
       <nav
-        className="shrink-0 grid grid-cols-6 gap-0.5 border-t border-white/10 hl-app-dock backdrop-blur-xl px-1 pt-2"
+        className="shrink-0 grid grid-cols-5 gap-1 border-t border-white/10 hl-app-dock backdrop-blur-xl px-2 pt-2"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
       >
         {TABS.map((t) => {
