@@ -2408,7 +2408,7 @@ export default function ChatSystem({
 
   return (
     <div
-      className={`flex overflow-hidden hl-chat-bg ${
+      className={`relative flex overflow-hidden hl-chat-bg ${
         fullHeight ? 'h-full' : 'h-[70vh] min-h-[480px] rounded-2xl border border-white/10'
       }`}
     >
@@ -2551,8 +2551,9 @@ export default function ChatSystem({
         </div>
       </div>
 
-      {/* Nachrichten */}
-      <div className={`flex-1 min-w-0 flex-col ${activeId ? 'flex' : 'hidden md:flex'}`}>
+      {/* Nachrichten – auf dem Handy als volle Deckschicht über der Liste, damit
+          beim Öffnen nichts durchblitzt; am Desktop normal daneben. */}
+      <div className={`flex-1 min-w-0 flex-col hl-chat-bg ${activeId ? 'flex absolute inset-0 z-10 md:static md:z-auto' : 'hidden md:flex'}`}>
         {!active ? (
           <div className="flex-1 flex flex-col items-center justify-center text-hl-mute gap-2 hl-chat-bg">
             <MessageSquare className="w-8 h-8 text-hl-faint" />
