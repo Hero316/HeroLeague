@@ -60,6 +60,9 @@ export async function ensureSchema(): Promise<void> {
     await sql`SELECT 1 FROM huddle_signals LIMIT 1`;
     // Benannte Links („Link-Tasten") mitprüfen.
     await sql`SELECT links FROM tasks LIMIT 1`;
+    // Hero-Punkte (Belohnung fürs Abschließen) mitprüfen, sonst überspringt der
+    // Schnell-Check das Anlegen auf bereits bestehenden Datenbanken.
+    await sql`SELECT 1 FROM hero_events LIMIT 1`;
     ensured = true;
     return;
   } catch {
@@ -264,6 +267,15 @@ export async function ensureSchema(): Promise<void> {
     kind TEXT NOT NULL, payload JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
   await run(sql`CREATE INDEX IF NOT EXISTS idx_huddle_signals_target ON huddle_signals(huddle_id, target_id, created_at)`);
+
+  // --- Hero-Punkte (Belohnung fürs Abschließen von Aufgaben/Terminen/Tickets/
+  // Ideen). Eine Zeile je belohntem Nutzer & Ereignis. `seen=false` ⇒ die Person
+  // war nicht dabei und bekommt die Feier-Animation beim nächsten Öffnen. -----
+  await run(sql`CREATE TABLE IF NOT EXISTS hero_events (
+    id TEXT PRIMARY KEY, user_id TEXT NOT NULL, reason TEXT NOT NULL DEFAULT '',
+    ref_type TEXT NOT NULL DEFAULT '', ref_id TEXT NOT NULL DEFAULT '',
+    seen BOOLEAN NOT NULL DEFAULT false, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+  await run(sql`CREATE INDEX IF NOT EXISTS idx_hero_events_user ON hero_events(user_id, seen)`);
 
   // --- Constraints ganz zuletzt (unkritisch; nur für Rollen-/Anhang-Checks) -
   await run(sql`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);

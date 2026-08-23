@@ -517,6 +517,16 @@ export interface AppNotification {
   createdAt: string;
 }
 
+// Ein verdienter Hero-Punkt (Belohnung fürs Abschließen). Ungesehene Ereignisse
+// lösen beim nächsten Öffnen die Feier-Animation mit Grund aus.
+export interface HeroEvent {
+  id: string;
+  reason: string; // z. B. „Aufgabe erledigt", „Ticket gelöst", „Idee umgesetzt"
+  refType: string;
+  refId: string;
+  createdAt: string;
+}
+
 // --- Phase 3: Chat ----------------------------------------------------------
 export interface ConversationMember {
   userId: string;

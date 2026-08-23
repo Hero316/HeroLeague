@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { CalendarDays, ListChecks, Lightbulb, Clock, ChevronRight, CheckSquare, Square, Sparkles, Plus, MessageSquare } from 'lucide-react';
+import { Lightbulb, Clock, ChevronRight, CheckSquare, Square, Sparkles, Plus } from 'lucide-react';
 import type { Task, Idea, TeamMember } from '../types';
 import { fetchAllTasks, fetchIdeas, fetchTeam, memberMap, updateTask } from '../lib/collab';
-import { getHeroes } from '../lib/heroes';
+import { useHeroStats } from '../lib/heroes';
 import Avatar from './Avatar';
 
 // „Start" – die Übersicht der Team-App: Begrüßung, Wochenstreifen und ALLES was
@@ -57,7 +57,9 @@ export default function HomeOverview({
   const [tasks, setTasks] = useState<Task[]>([]);
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
-  const [heroes] = useState(() => getHeroes(currentUserId));
+  const { total: heroes, month: heroMonth } = useHeroStats();
+  const MONTH_GOAL = 20; // Monatsziel: so viele Heroes im Monat sammeln
+  const goalPct = Math.min(100, Math.round((heroMonth / MONTH_GOAL) * 100));
   const members = useMemo(() => memberMap(team), [team]);
 
   const load = () => {
@@ -255,22 +257,41 @@ export default function HomeOverview({
           </motion.div>
         )}
 
-        {/* Schnellzugriff */}
-        <motion.div variants={item} className="grid grid-cols-4 gap-2 pt-1">
-          {([
-            { t: 'chats', label: 'Chats', icon: MessageSquare, color: '#3B9EFF' },
-            { t: 'aufgaben', label: 'Aufgaben', icon: ListChecks, color: '#8B7CFF' },
-            { t: 'kalender', label: 'Kalender', icon: CalendarDays, color: '#E83E8C' },
-            { t: 'ideen', label: 'Ideen', icon: Lightbulb, color: '#F2A93B' },
-          ] as const).map((q) => {
-            const Icon = q.icon;
-            return (
-              <button key={q.t} onClick={() => onGoTab(q.t)} className="hl-card hl-tint rounded-[20px] py-3.5 flex flex-col items-center gap-1.5 cursor-pointer active:scale-95 transition-transform" style={{ ['--tint' as string]: q.color }}>
-                <span className="hl-tint-chip w-10 h-10 rounded-2xl flex items-center justify-center"><Icon className="w-5 h-5" strokeWidth={2.4} /></span>
-                <span className="text-[10px] font-sans font-bold uppercase tracking-wide text-hl-soft">{q.label}</span>
-              </button>
-            );
-          })}
+        {/* Hero-Fortschritt & Monatsziel */}
+        <motion.div variants={item} className="relative overflow-hidden rounded-3xl p-5 text-white" style={{ background: 'linear-gradient(135deg, #6D5DE6 0%, #12A594 70%, #E9C46A 150%)' }}>
+          <div className="absolute -left-10 -bottom-12 w-44 h-44 rounded-full" style={{ background: 'radial-gradient(circle, rgba(255,255,255,.22), transparent 70%)' }} />
+          <div className="relative">
+            <div className="flex items-end justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[12px] font-sans font-bold uppercase tracking-wider opacity-90">Deine Heroes</div>
+                <div className="flex items-baseline gap-2 mt-0.5">
+                  <span className="font-display font-black text-4xl leading-none tabular-nums">{heroes}</span>
+                  <span style={{ fontSize: 26 }}>⚡</span>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-[11px] font-sans font-semibold opacity-85">Diesen Monat</div>
+                <div className="font-display font-black text-xl tabular-nums leading-tight">
+                  {heroMonth}<span className="opacity-70 text-sm"> / {MONTH_GOAL}</span>
+                </div>
+              </div>
+            </div>
+            {/* Fortschrittsbalken zum Monatsziel */}
+            <div className="mt-3.5 h-3 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,.22)' }}>
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${goalPct}%` }}
+                transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+                className="h-full rounded-full"
+                style={{ background: 'linear-gradient(90deg, #FFFFFF, #FFF2C2)', boxShadow: '0 0 14px rgba(255,255,255,.6)' }}
+              />
+            </div>
+            <div className="mt-2 text-[12px] font-sans font-semibold opacity-90">
+              {heroMonth >= MONTH_GOAL
+                ? '🏆 Monatsziel geknackt – stark, Team!'
+                : `Noch ${MONTH_GOAL - heroMonth} Hero${MONTH_GOAL - heroMonth === 1 ? '' : 'es'} bis zum Monatsziel 🚀`}
+            </div>
+          </div>
         </motion.div>
       </motion.div>
     </div>
