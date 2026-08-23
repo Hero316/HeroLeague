@@ -853,10 +853,12 @@ button { -webkit-tap-highlight-color: transparent; }
 .hl-chat-bg {
   background-color: #0a1210;
   background-image:
-    radial-gradient(rgba(34, 223, 201, 0.05) 0.5px, transparent 0.5px),
+    radial-gradient(130% 62% at 50% -6%, color-mix(in srgb, var(--section) 24%, transparent) 0%, transparent 62%),
+    radial-gradient(rgba(255, 255, 255, 0.05) 0.5px, transparent 0.5px),
     radial-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px);
-  background-size: 26px 26px, 26px 26px;
-  background-position: 0 0, 13px 13px;
+  background-size: 100% 100%, 26px 26px, 26px 26px;
+  background-position: 0 0, 0 0, 13px 13px;
+  background-repeat: no-repeat, repeat, repeat;
 }
 
 /* „Tippt gerade" – drei sanft wippende Punkte (wie WhatsApp). */
@@ -945,10 +947,12 @@ button { -webkit-tap-highlight-color: transparent; }
 .hl-team .hl-chat-bg {
   background-color: #F1F6F5;
   background-image:
-    radial-gradient(rgba(18, 174, 198, 0.10) 0.5px, transparent 0.5px),
+    radial-gradient(130% 62% at 50% -6%, color-mix(in srgb, var(--section) 20%, transparent) 0%, transparent 60%),
+    radial-gradient(rgba(16, 42, 38, 0.05) 0.5px, transparent 0.5px),
     radial-gradient(rgba(16, 42, 38, 0.03) 1px, transparent 1px);
-  background-size: 26px 26px, 26px 26px;
-  background-position: 0 0, 13px 13px;
+  background-size: 100% 100%, 26px 26px, 26px 26px;
+  background-position: 0 0, 0 0, 13px 13px;
+  background-repeat: no-repeat, repeat, repeat;
 }
 /* Karten & Modals hell. */
 .hl-team .hl-card {
