@@ -246,6 +246,22 @@ async function igTotalValue(
   }
 }
 
+// Follower-Demografie (Länder/Städte/Alter/Geschlecht). Lifetime-Metrik mit
+// Zeitfenster; best-effort (bei Fehler leer). Absteigend sortiert zurück.
+async function igDemographics(igId: string, token: string, breakdown: string): Promise<{ key: string; value: number }[]> {
+  try {
+    const r = await fetch(`${IG_BASE}/${igId}/insights?metric=follower_demographics&period=lifetime&timeframe=this_month&metric_type=total_value&breakdown=${breakdown}&access_token=${encodeURIComponent(token)}`);
+    const d = (await r.json()) as { data?: { total_value?: { breakdowns?: { results?: { dimension_values?: string[]; value?: number }[] }[] } }[] };
+    const results = d?.data?.[0]?.total_value?.breakdowns?.[0]?.results ?? [];
+    return results
+      .map((x) => ({ key: x.dimension_values?.[0] || '', value: Number(x.value) || 0 }))
+      .filter((x) => x.key)
+      .sort((a, b) => b.value - a.value);
+  } catch {
+    return [];
+  }
+}
+
 // Konto-Insight als Tageszeitreihe (metric_type=time_series) – fürs Diagramm.
 async function igTimeSeries(igId: string, token: string, metric: string, sinceSec: number, untilSec: number): Promise<{ day: string; value: number }[]> {
   try {
@@ -360,9 +376,18 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
 
     // Aufrufe gesamt + nach Content-Art (offizielle Konto-Zahl, inkl. Stories).
     const viewsTV = await igTotalValueRange(igId, token, 'views', sinceSec, untilSec, 'media_product_type');
-    const reachTV = await igTotalValueRange(igId, token, 'reach', sinceSec, untilSec);
+    const reachTV = await igTotalValueRange(igId, token, 'reach', sinceSec, untilSec, 'follow_type');
     const interTV = await igTotalValueRange(igId, token, 'total_interactions', sinceSec, untilSec);
     const bd = viewsTV.byDim;
+    const rbd = reachTV.byDim;
+
+    // Zielgruppe (best-effort, parallel): Demografie nach Land/Stadt/Alter/Geschlecht.
+    const [demoCountry, demoCity, demoAge, demoGender] = await Promise.all([
+      igDemographics(igId, token, 'country'),
+      igDemographics(igId, token, 'city'),
+      igDemographics(igId, token, 'age'),
+      igDemographics(igId, token, 'gender'),
+    ]);
     const mediaViewsSum = in30.reduce((s, m) => s + (m.views || 0), 0);
 
     // Diagramm: Aufrufe pro Tag; falls Views-Zeitreihe leer, auf Reichweite ausweichen.
@@ -378,8 +403,12 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
       followers,
       mediaCount,
       newFollowers30: followerTs.length ? followerTs.reduce((s, x) => s + x.value, 0) : null,
+      followerDaily: followerTs,
       reach30: reachTV.total,
       interactions30: interTV.total,
+      followerReach30: rbd.FOLLOWER ?? null,
+      nonFollowerReach30: rbd.NON_FOLLOWER ?? null,
+      demographics: { country: demoCountry, city: demoCity, age: demoAge, gender: demoGender },
       totalViews30: viewsTV.total ?? mediaViewsSum,
       totalLikes30: in30.reduce((s, m) => s + (m.likes || 0), 0),
       totalComments30: in30.reduce((s, m) => s + (m.comments || 0), 0),
@@ -397,6 +426,82 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
   } catch (err) {
     console.error('instagramReels:', err);
     return res.json({ configured: true, days, error: 'Abruf fehlgeschlagen', items: [], totalViews30: 0, count30: 0, count: 0 });
+  }
+}
+
+// Einzelnen Beitrag/Reel im Detail: Zahlen (inkl. Shares/Saves/Reichweite) +
+// Kommentar-Texte. Wird auf Anfrage geladen (beim Antippen eines Posts).
+const igMediaCache = new Map<string, { at: number; payload: unknown }>();
+export async function instagramMedia(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  res.setHeader('Cache-Control', 'no-store');
+  const token = await getIgToken();
+  if (!token) return res.json({ configured: false });
+  const id = String(req.query.id ?? '');
+  if (!id) return badRequest(res, 'Media-ID fehlt.');
+
+  const cached = igMediaCache.get(id);
+  if (cached && Date.now() - cached.at < 10 * 60 * 1000) return res.json(cached.payload);
+
+  try {
+    const fields = 'id,caption,media_type,media_product_type,thumbnail_url,media_url,permalink,timestamp,like_count,comments_count';
+    const mr = await fetch(`${IG_BASE}/${id}?fields=${fields}&access_token=${encodeURIComponent(token)}`);
+    const m = (await mr.json()) as Record<string, unknown>;
+
+    // Insights: für alle gültig reach/saved/total_interactions; shares extra (Reels).
+    const metricVal = async (metrics: string) => {
+      try {
+        const ir = await fetch(`${IG_BASE}/${id}/insights?metric=${metrics}&access_token=${encodeURIComponent(token)}`);
+        const d = (await ir.json()) as { data?: { name: string; values?: { value: number }[] }[] };
+        const out: Record<string, number> = {};
+        for (const it of d?.data ?? []) { const v = it.values?.[0]?.value; if (typeof v === 'number') out[it.name] = v; }
+        return out;
+      } catch { return {}; }
+    };
+    const base = await metricVal('reach,saved,total_interactions');
+    const shares = await metricVal('shares');
+    let views: number | null = null;
+    for (const metric of ['views', 'plays']) {
+      const v = await metricVal(metric);
+      if (typeof v[metric] === 'number') { views = v[metric]; break; }
+    }
+
+    let comments: { username: string; text: string; timestamp: string; likes: number | null }[] = [];
+    try {
+      const cr = await fetch(`${IG_BASE}/${id}/comments?fields=text,username,timestamp,like_count&limit=50&access_token=${encodeURIComponent(token)}`);
+      const cd = (await cr.json()) as { data?: { text?: string; username?: string; timestamp?: string; like_count?: number }[] };
+      comments = (cd.data ?? []).map((c) => ({
+        username: c.username || '',
+        text: (c.text || '').slice(0, 500),
+        timestamp: c.timestamp || '',
+        likes: typeof c.like_count === 'number' ? c.like_count : null,
+      }));
+    } catch { /* Kommentare optional */ }
+
+    const reel = m.media_product_type === 'REELS' || m.media_type === 'VIDEO';
+    const payload = {
+      configured: true,
+      id,
+      caption: String(m.caption || '').replace(/\s+/g, ' ').trim(),
+      type: reel ? 'reel' : 'post',
+      thumbnail: (m.thumbnail_url as string) || (m.media_url as string) || '',
+      permalink: (m.permalink as string) || '',
+      timestamp: (m.timestamp as string) || '',
+      likes: typeof m.like_count === 'number' ? m.like_count : null,
+      comments: typeof m.comments_count === 'number' ? m.comments_count : null,
+      views,
+      reach: base.reach ?? null,
+      saved: base.saved ?? null,
+      shares: shares.shares ?? null,
+      interactions: base.total_interactions ?? null,
+      commentList: comments,
+    };
+    igMediaCache.set(id, { at: Date.now(), payload });
+    return res.json(payload);
+  } catch (err) {
+    console.error('instagramMedia:', err);
+    return res.json({ configured: true, error: 'Abruf fehlgeschlagen', commentList: [] });
   }
 }
 
