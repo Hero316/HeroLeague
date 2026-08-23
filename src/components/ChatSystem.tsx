@@ -994,17 +994,28 @@ function Composer({
             <>
               <div className="fixed inset-0 z-[59]" onClick={() => setSheet(false)} />
               <motion.div
-                initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                initial={{ opacity: 0, y: 22, scale: 0.9 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 14, scale: 0.98 }}
-                transition={{ duration: 0.16 }}
+                exit={{ opacity: 0, y: 16, scale: 0.9 }}
+                transition={{ type: 'spring', stiffness: 460, damping: 26, mass: 0.7 }}
+                style={{ transformOrigin: 'bottom center' }}
                 className="absolute bottom-full left-0 right-0 mb-2 z-[60] rounded-2xl hl-surf border border-white/10 shadow-2xl shadow-black/60 p-4"
               >
-                <div className="grid grid-cols-3 gap-y-4 gap-x-2">
+                <motion.div
+                  className="grid grid-cols-3 gap-y-4 gap-x-2"
+                  variants={{ show: { transition: { staggerChildren: 0.035 } } }}
+                  initial="hidden"
+                  animate="show"
+                >
                   {tiles.map((t) => (
-                    <SheetTile key={t.key} label={t.label} color={t.color} icon={t.icon} onClick={t.onClick} />
+                    <motion.div
+                      key={t.key}
+                      variants={{ hidden: { opacity: 0, scale: 0.4, y: 8 }, show: { opacity: 1, scale: 1, y: 0, transition: { type: 'spring', stiffness: 520, damping: 20 } } }}
+                    >
+                      <SheetTile label={t.label} color={t.color} icon={t.icon} onClick={t.onClick} />
+                    </motion.div>
                   ))}
-                </div>
+                </motion.div>
               </motion.div>
             </>
           )}
