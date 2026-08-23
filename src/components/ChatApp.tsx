@@ -180,13 +180,17 @@ export default function ChatApp({
   // Benachrichtigungs-Zähler (Aufgaben/Tickets/Ideen) in die App-Icon-Zahl einrechnen.
   // Der Chat-Anteil kommt aus ChatSystem; seit die Glocke im Backoffice weg ist, muss
   // die Team-App den Benachrichtigungs-Anteil selbst pflegen.
+  // Ungelesene Ticket-Benachrichtigungen (Zahl oben auf dem Ticket-Symbol).
+  const [ticketBadge, setTicketBadge] = useState(0);
   useEffect(() => {
     let alive = true;
     const tick = () => {
       if (document.visibilityState !== 'visible') return;
       fetchNotifications()
         .then((r) => {
-          if (alive) setNotifUnread(r.unreadCount);
+          if (!alive) return;
+          setNotifUnread(r.unreadCount);
+          setTicketBadge(r.items.filter((n) => n.refType === 'ticket' && !n.isRead).length);
         })
         .catch(() => {});
     };
@@ -407,11 +411,16 @@ export default function ChatApp({
             onClick={() => setTab('tickets')}
             title="Tickets"
             aria-label="Tickets"
-            className={`p-2.5 rounded-full active:bg-white/10 cursor-pointer transition-colors ${
+            className={`relative p-2.5 rounded-full active:bg-white/10 cursor-pointer transition-colors ${
               tab === 'tickets' ? 'text-brand-accent-light' : 'text-hl-mute hover:text-brand-accent-light'
             }`}
           >
             <TicketIcon className="w-5 h-5" />
+            {ticketBadge > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 inline-flex items-center justify-center rounded-full bg-[#E6238E] text-white text-[9px] font-bold leading-none tabular-nums shadow-[0_2px_6px_rgba(230,35,142,.5)]">
+                {ticketBadge > 99 ? '99+' : ticketBadge}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setTab('mehr')}
@@ -500,6 +509,7 @@ export default function ChatApp({
               currentUserId={currentUserId}
               userName={(user.name || user.email || '').split(' ')[0]}
               onOpenTask={(id) => setDeepOpen({ type: 'task', id })}
+              onOpenTicket={(id) => setDeepOpen({ type: 'ticket', id })}
               onOpenDay={(date) => { setUrlParam('av', 'day'); setUrlParam('ad', date); setTab('kalender'); }}
               onGoTab={(t) => { if (t === 'chats') goChatsHome(); setTab(t); }}
               onNewTask={() => setTab('aufgaben')}
