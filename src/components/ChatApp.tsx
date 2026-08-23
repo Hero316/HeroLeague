@@ -142,9 +142,18 @@ export default function ChatApp({
   // „Chats-Home"-Signal: Tippt man unten auf das Chats-Symbol, soll ein offener
   // Chat/Thread zugehen (zurück zur Liste) – ein Zähler, den ChatSystem beobachtet.
   const [chatHomeSignal, setChatHomeSignal] = useState(0);
+  // Welche Unterhaltung beim (Neu-)Öffnen des Chat-Tabs automatisch geöffnet wird
+  // (Deep-Link/Reload). Wird beim Tippen auf „Chats" unten geleert, damit man in
+  // der LISTE landet – nicht wieder im zuletzt geöffneten Chat.
+  const [chatConv, setChatConv] = useState<string | null>(() => initialConversationId ?? getUrlParam('c'));
+  // Neuer Deep-Link (z. B. aus einer Benachrichtigung) → Chat wieder öffnen.
+  useEffect(() => {
+    if (initialConversationId) setChatConv(initialConversationId);
+  }, [initialConversationId]);
   const goChatsHome = () => {
     setUrlParam('c', null);
     setUrlParam('thread', null);
+    setChatConv(null);
     setChatHomeSignal((n) => n + 1);
   };
 
@@ -517,7 +526,7 @@ export default function ChatApp({
               canManageTickets={canManageTickets}
               isSuperadmin={isSuperadmin}
               fullHeight
-              initialConversationId={initialConversationId ?? getUrlParam('c')}
+              initialConversationId={chatConv}
               initialThreadId={getUrlParam('thread')}
               homeSignal={chatHomeSignal}
               onChatUnread={(n) => setBadges((b) => (b.chats === n ? b : { ...b, chats: n }))}
