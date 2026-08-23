@@ -55,6 +55,9 @@ export async function ensureSchema(): Promise<void> {
     await sql`SELECT 1 FROM task_comment_reactions LIMIT 1`;
     await sql`SELECT 1 FROM task_reads LIMIT 1`;
     await sql`SELECT 1 FROM task_read_baseline LIMIT 1`;
+    // Huddle (WLAN-Anrufe/Slack-Style): Räume, Teilnehmer, Signalisierung.
+    await sql`SELECT 1 FROM huddles LIMIT 1`;
+    await sql`SELECT 1 FROM huddle_signals LIMIT 1`;
     // Benannte Links („Link-Tasten") mitprüfen.
     await sql`SELECT links FROM tasks LIMIT 1`;
     ensured = true;
@@ -234,9 +237,37 @@ export async function ensureSchema(): Promise<void> {
   await run(sql`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]'`);
   await run(sql`ALTER TABLE ideas ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]'`);
 
+  // --- Huddle (WLAN-Anrufe im Slack-Style) --------------------------------
+  // Ein Huddle ist ein Audio-Raum zu einer Unterhaltung. `ended_at IS NULL` =
+  // läuft noch. Teilnehmer heartbeaten (last_seen); wer sich abmeldet, bekommt
+  // left_at. Signale (WebRTC-Angebote/Antworten/ICE) laufen kurzlebig über
+  // huddle_signals und werden nach dem Abholen gelöscht (Polling-Signalisierung).
+  await run(sql`CREATE TABLE IF NOT EXISTS huddles (
+    id TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    created_by TEXT NOT NULL,
+    message_id TEXT,
+    notes TEXT NOT NULL DEFAULT '',
+    started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ended_at TIMESTAMPTZ)`);
+  await run(sql`CREATE INDEX IF NOT EXISTS idx_huddles_conv ON huddles(conversation_id, ended_at)`);
+  await run(sql`CREATE TABLE IF NOT EXISTS huddle_participants (
+    huddle_id TEXT NOT NULL REFERENCES huddles(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL, user_name TEXT NOT NULL DEFAULT '',
+    joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_seen TIMESTAMPTZ NOT NULL DEFAULT now(),
+    left_at TIMESTAMPTZ, PRIMARY KEY (huddle_id, user_id))`);
+  await run(sql`CREATE TABLE IF NOT EXISTS huddle_signals (
+    id TEXT PRIMARY KEY,
+    huddle_id TEXT NOT NULL REFERENCES huddles(id) ON DELETE CASCADE,
+    sender_id TEXT NOT NULL, target_id TEXT NOT NULL,
+    kind TEXT NOT NULL, payload JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+  await run(sql`CREATE INDEX IF NOT EXISTS idx_huddle_signals_target ON huddle_signals(huddle_id, target_id, created_at)`);
+
   // --- Constraints ganz zuletzt (unkritisch; nur für Rollen-/Anhang-Checks) -
   await run(sql`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
   await run(sql`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('superadmin','match_admin','referee','ticket_manager','team_member'))`);
   await run(sql`ALTER TABLE messages DROP CONSTRAINT IF EXISTS messages_attach_type_check`);
-  await run(sql`ALTER TABLE messages ADD CONSTRAINT messages_attach_type_check CHECK (attach_type IN ('ticket','task','file','audio','poll'))`);
+  await run(sql`ALTER TABLE messages ADD CONSTRAINT messages_attach_type_check CHECK (attach_type IN ('ticket','task','file','audio','poll','huddle'))`);
 }
