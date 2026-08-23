@@ -84,7 +84,9 @@ const IS_TOUCH =
 // fremde Nachricht weiße Karte (dunkle Schrift via Token).
 // Eigene Nachrichten: dunklerer Türkis-Verlauf, damit die weiße Schrift klar
 // lesbar bleibt (heller Verlauf hatte zu wenig Kontrast).
-export const BUBBLE_MINE = 'linear-gradient(135deg, #17B3A3 0%, #0C6F86 100%)';
+// Eigene Nachrichten-Blase in der SEKTOR-Farbe (Chats=Blau, Ideen=Gold,
+// Aufgaben=Violett …) – zieht das durchgängige Farbkonzept bis in die Blasen.
+export const BUBBLE_MINE = 'linear-gradient(135deg, var(--section) 0%, color-mix(in srgb, var(--section) 62%, #04121a) 100%)';
 
 // Zufällige-aber-konstante Namensfarben (wie WhatsApp). Pro Gruppe anders, weil
 // der Konversations-Schlüssel in den Hash einfließt. Gut lesbar auf dunkel.
