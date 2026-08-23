@@ -474,6 +474,21 @@ body {
   -webkit-backdrop-filter: none !important;
 }
 
+/* =====================================================================
+   Globales Button-/Karten-Vokabular (Redesign) – wirkt überall auf einmal,
+   ohne die Komponenten anzufassen. Primäre Aktions-Tasten UND die aktive
+   Segment-Pille nutzen alle die Klasse .bg-brand-accent-light: aus flachem
+   Türkis wird ein lebendiger Verlauf mit Tiefe/Glow. Die Deckkraft-Varianten
+   (.bg-brand-accent-light/15 etc.) sind eigene Klassen und bleiben unberührt.
+   ===================================================================== */
+.bg-brand-accent-light {
+  background-image: linear-gradient(135deg, #2AE3CE 0%, #14A897 55%, #16BDA9 100%);
+  box-shadow: 0 10px 24px -12px rgba(20, 168, 151, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+/* Größere Aktionsflächen (Buttons/Pillen) runder & mit sanftem Press-Gefühl.
+   Sehr breit gültig, aber rein kosmetisch – bricht keine Logik. */
+button { -webkit-tap-highlight-color: transparent; }
+
 /* iOS zoomt beim Antippen in ein Eingabefeld mit Schrift < 16px hinein – das
    ist das „plötzlich so groß". 16px auf echten Text-Eingaben (input/textarea)
    verhindert das zuverlässig. Kleine Status-Auswahlen (select) bleiben
@@ -823,6 +838,11 @@ body {
   -webkit-backdrop-filter: none;
 }
 .hl-team .hl-modal-card { background: #FFFFFF !important; }
+/* Primärtasten im Hellmodus: heller, frischer Verlauf (Text bleibt gut lesbar). */
+.hl-team .bg-brand-accent-light {
+  background-image: linear-gradient(135deg, #26E4CF 0%, #13B7A3 100%);
+  box-shadow: 0 10px 22px -12px rgba(16, 165, 148, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
 /* Einstellungen/Profil in der Team-App (heller Modus): die wiederverwendeten
    Editoren (Profil, Benachrichtigungen) haben fest dunkle Eingabefelder – hier
    auf hell drehen, sonst wäre der Text dunkel-auf-dunkel und unlesbar. */
