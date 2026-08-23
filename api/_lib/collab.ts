@@ -361,6 +361,7 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
     // Aufrufe gesamt + nach Content-Art (offizielle Konto-Zahl, inkl. Stories).
     const viewsTV = await igTotalValueRange(igId, token, 'views', sinceSec, untilSec, 'media_product_type');
     const reachTV = await igTotalValueRange(igId, token, 'reach', sinceSec, untilSec);
+    const interTV = await igTotalValueRange(igId, token, 'total_interactions', sinceSec, untilSec);
     const bd = viewsTV.byDim;
     const mediaViewsSum = in30.reduce((s, m) => s + (m.views || 0), 0);
 
@@ -378,6 +379,7 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
       mediaCount,
       newFollowers30: followerTs.length ? followerTs.reduce((s, x) => s + x.value, 0) : null,
       reach30: reachTV.total,
+      interactions30: interTV.total,
       totalViews30: viewsTV.total ?? mediaViewsSum,
       totalLikes30: in30.reduce((s, m) => s + (m.likes || 0), 0),
       totalComments30: in30.reduce((s, m) => s + (m.comments || 0), 0),

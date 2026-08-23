@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Instagram, Play, Heart, MessageCircle, Eye, Users, TrendingUp, Film, Loader2 } from 'lucide-react';
+import { ArrowLeft, Instagram, Play, Heart, MessageCircle, Eye, Users, TrendingUp, Activity, Loader2, Flame } from 'lucide-react';
 import { ModalPortal } from './ui';
 import { useBackClose } from '../lib/backStack';
 import { fetchInstagramReels, type IgReelsResult } from '../lib/collab';
@@ -110,6 +110,7 @@ function StatTile({ icon: Icon, label, value, sub }: { icon: typeof Eye; label: 
 
 export default function InstagramPanel({ data: initial, onClose }: { data: IgReelsResult; onClose: () => void }) {
   const [tab, setTab] = useState<'overview' | 'content'>('overview');
+  const [sort, setSort] = useState<'newest' | 'views' | 'likes'>('newest');
   const [data, setData] = useState<IgReelsResult>(initial);
   const [days, setDays] = useState<number>(initial.days ?? 30);
   const [loading, setLoading] = useState(false);
@@ -192,8 +193,8 @@ export default function InstagramPanel({ data: initial, onClose }: { data: IgRee
               <div className="grid grid-cols-2 gap-2.5">
                 <StatTile icon={Eye} label={`Aufrufe · ${rl}`} value={compact(data.totalViews30)} />
                 <StatTile icon={TrendingUp} label={`Reichweite · ${rl}`} value={compact(data.reach30)} />
+                <StatTile icon={Activity} label={`Interaktionen · ${rl}`} value={compact(data.interactions30)} />
                 <StatTile icon={Users} label="Follower" value={compact(data.followers)} sub={data.newFollowers30 != null ? `+${compact(data.newFollowers30)} in ${rl}` : undefined} />
-                <StatTile icon={Film} label={`Beiträge · ${rl}`} value={compact(data.count30)} />
               </div>
 
               {daily.length > 1 && (
@@ -228,10 +229,48 @@ export default function InstagramPanel({ data: initial, onClose }: { data: IgRee
                 <StatTile icon={Heart} label={`Likes · ${rl}`} value={compact(data.totalLikes30)} />
                 <StatTile icon={MessageCircle} label={`Kommentare · ${rl}`} value={compact(data.totalComments30)} />
               </div>
+
+              {/* Top-Content nach Aufrufen */}
+              {items.some((m) => m.views != null) && (
+                <div className="hl-card rounded-2xl p-4">
+                  <div className="text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-3 flex items-center gap-1.5"><Flame className="w-3.5 h-3.5" /> Top-Content nach Aufrufen</div>
+                  <div className="flex gap-2.5 overflow-x-auto no-scrollbar -mx-1 px-1">
+                    {[...items].filter((m) => m.views != null).sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 10).map((m) => (
+                      <a key={m.id} href={m.permalink || '#'} target="_blank" rel="noopener noreferrer" className="relative shrink-0 w-24 rounded-2xl overflow-hidden bg-black/20 active:scale-[.97] transition-transform" style={{ aspectRatio: '9 / 16' }}>
+                        {m.thumbnail ? <img src={m.thumbnail} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" /> : <span className="absolute inset-0 flex items-center justify-center text-hl-faint"><Instagram className="w-6 h-6" /></span>}
+                        <div className="absolute inset-x-0 bottom-0 p-1.5 pt-6" style={{ background: 'linear-gradient(0deg, rgba(0,0,0,.75), transparent)' }}>
+                          <div className="flex items-center gap-1 text-white text-[11px] font-bold tabular-nums"><Play className="w-2.5 h-2.5 fill-current" /> {compact(m.views)}</div>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-2">
-              {items.map((m) => (
+              {/* Sortierung */}
+              <div className="flex items-center gap-1.5 mb-1">
+                {([
+                  { id: 'newest', label: 'Neueste' },
+                  { id: 'views', label: 'Aufrufe' },
+                  { id: 'likes', label: 'Likes' },
+                ] as const).map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setSort(s.id)}
+                    className="px-3 py-1.5 rounded-full text-[12px] font-sans font-bold cursor-pointer transition-colors"
+                    style={sort === s.id ? { background: IG_GRAD, color: '#fff' } : { color: 'var(--color-hl-mute)' }}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              {[...items].sort((a, b) =>
+                sort === 'views' ? (b.views || 0) - (a.views || 0)
+                : sort === 'likes' ? (b.likes || 0) - (a.likes || 0)
+                : (b.timestamp || '').localeCompare(a.timestamp || '')
+              ).map((m) => (
                 <a
                   key={m.id}
                   href={m.permalink || '#'}

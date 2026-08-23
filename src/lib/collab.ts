@@ -252,6 +252,7 @@ export interface IgReelsResult {
   mediaCount?: number | null;
   newFollowers30?: number | null;
   reach30?: number | null;
+  interactions30?: number | null;
   items: IgReel[];
   totalViews30: number;
   totalLikes30?: number;
