@@ -2,17 +2,21 @@ import { useEffect, useState } from 'react';
 import { Trophy, ArrowRight, CalendarClock } from 'lucide-react';
 import { fetchSignupConfig, type SignupConfig } from '../lib/register';
 
-// Dezent-auffälliges Banner auf der Startseite, das zur (offenen) Season-2-
-// Team-Anmeldung führt. Blendet sich selbst aus, wenn die Anmeldung zu ist.
+// Auffälliges Banner auf der Startseite, das zur Season-2-Anmeldung führt.
+// WICHTIG: Es ist SOFORT beim Laden sichtbar (mit statischen Standardtexten) und
+// springt nie nach – der Server-Abruf aktualisiert nur die Texte und blendet es
+// aus, falls die Anmeldung geschlossen ist (seltener Admin-Fall).
+const DEFAULT_CFG: SignupConfig = { open: true, seasonLabel: 'Season 2', startInfo: 'Start im März 2027', minSquad: 8, maxSquad: 12, note: '', turnstileSiteKey: '' };
 export default function SeasonSignupBanner({ onOpen }: { onOpen: () => void }) {
-  const [cfg, setCfg] = useState<SignupConfig | null>(null);
-  useEffect(() => { fetchSignupConfig().then(setCfg).catch(() => setCfg(null)); }, []);
-  if (!cfg || !cfg.open) return null;
+  const [cfg, setCfg] = useState<SignupConfig>(DEFAULT_CFG);
+  const [closed, setClosed] = useState(false);
+  useEffect(() => { fetchSignupConfig().then((c) => { setCfg(c); setClosed(!c.open); }).catch(() => {}); }, []);
+  if (closed) return null;
 
   return (
     <button
       onClick={onOpen}
-      className="group relative block w-full text-left overflow-hidden cursor-pointer border-b border-[rgba(18,165,148,.28)]"
+      className="group relative block w-full text-left overflow-hidden cursor-pointer border-y border-[rgba(18,165,148,.28)]"
       aria-label={`${cfg.seasonLabel} – Team anmelden`}
     >
       <div className="absolute inset-0 bg-[linear-gradient(100deg,#04120f_0%,#08251f_48%,#061a16_100%)]" />

@@ -1640,7 +1640,6 @@ export default function App() {
       {activeEvent && activeTab === 'home' && (
         <EventBanner event={activeEvent} isLive={eventHasLive} staffPreview={eventStaffPreview} onOpen={() => navigateTo('/testspiel')} onOpenTickets={() => navigateTo('/testspiel/tickets')} />
       )}
-      {activeTab === 'home' && <SeasonSignupBanner onOpen={() => navigateTo('/anmeldung')} />}
       <LiveTicker news={news} />
 
       <div key={activeTab} className={`hl-fade ${mobileMode ? 'pb-36 lg:pb-0' : ''}`}>
@@ -1746,6 +1745,8 @@ export default function App() {
         </>
       )}
       </div>
+
+      {activeTab === 'home' && <SeasonSignupBanner onOpen={() => navigateTo('/anmeldung')} />}
 
       <InstallPrompt />
 

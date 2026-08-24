@@ -173,8 +173,13 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
     try {
       if (kind === 'returning') {
         const r = await lookupCaptain(email.trim());
-        if (r.found) { setCaptainTeam(r.teamName); patch({ teamName: r.teamName, s1TeamName: r.teamName }); }
-        else { setCaptainTeam(''); patch({ s1TeamName: '' }); }
+        if (!r.found) {
+          // Bestehendes Team wählt man nur mit der hinterlegten Captain-E-Mail.
+          // Unbekannte Adresse ⇒ hart blockieren (kein Weitermachen).
+          setErr('Diese E-Mail-Adresse gehört zu keinem Team aus Season 1. Bitte nutze die E-Mail, die du uns als Captain gegeben hast – oder gehe zurück und melde dich als „Neues Team" an.');
+          return;
+        }
+        setCaptainTeam(r.teamName); patch({ teamName: r.teamName, s1TeamName: r.teamName });
       }
       go('details');
     } catch (e) { setErr(e instanceof Error ? e.message : 'Etwas ist schiefgelaufen.'); }

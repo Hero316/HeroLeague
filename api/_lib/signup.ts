@@ -207,6 +207,13 @@ async function submit(req: VercelRequest, res: VercelResponse) {
   if (!teamName) return badRequest(res, 'Bitte einen Teamnamen angeben.');
   if (!contactName) return badRequest(res, 'Bitte einen Ansprechpartner angeben.');
   const kind = b.kind === 'returning' ? 'returning' : 'new';
+  // „Bestehendes Team" nur mit hinterlegter Captain-E-Mail (serverseitig hart).
+  if (kind === 'returning') {
+    const captains = await getCaptains();
+    if (!captains.find((c) => normEmail(c.email) === normEmail(b.email))) {
+      return badRequest(res, 'Diese E-Mail-Adresse gehört zu keinem Season-1-Team.');
+    }
+  }
   const data = {
     teamName, contactName, phone: clamp(b.phone, 40), kind,
     s1TeamName: clamp(b.s1TeamName, 80),
