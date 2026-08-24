@@ -276,7 +276,7 @@ export interface IgReelsResult {
   nonFollowerReach30?: number | null;
   demographics?: { country: IgDemo[]; city: IgDemo[]; age: IgDemo[]; gender: IgDemo[] };
   items: IgReel[];
-  totalViews30: number;
+  totalViews30: number | null;
   totalLikes30?: number;
   totalComments30?: number;
   viewsReels30?: number;
@@ -289,7 +289,8 @@ export interface IgReelsResult {
   dailyLabel?: string;
   error?: string;
 }
-export const fetchInstagramReels = (days = 30) => apiFetch<IgReelsResult>(`/api/team?resource=instagram&days=${days}`);
+export const fetchInstagramReels = (days = 30, light = false) =>
+  apiFetch<IgReelsResult>(`/api/team?resource=instagram&days=${days}${light ? '&light=1' : ''}`);
 export const fetchInstagramMedia = (id: string) => apiFetch<IgMediaDetail>(`/api/team?resource=instagram-media&id=${encodeURIComponent(id)}`);
 
 // --- Kalenderwochen-Helfer (ISO 8601, Woche beginnt Montag) -----------------
