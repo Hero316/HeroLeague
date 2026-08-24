@@ -34,7 +34,7 @@ const DEFAULT_CONFIG: TicketConfig = {
   open: true,
   eventKey: 'testspiel-2025-09-13',
   title: 'Hero League Testspieltag',
-  dateLabel: 'Samstag, 13. September',
+  dateLabel: 'Sonntag, 13. September',
   locationLabel: '',
   capacity: 40,
   maxPerEmail: 4,

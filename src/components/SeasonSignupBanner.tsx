@@ -25,16 +25,16 @@ export default function SeasonSignupBanner({ onOpen }: { onOpen: () => void }) {
           <Trophy className="w-5 h-5 sm:w-7 sm:h-7 text-[#5fe6d3]" />
         </div>
         <div className="min-w-0 flex-1">
-          <span className="font-sans font-extrabold text-[10px] sm:text-[11px] tracking-[2.5px] uppercase text-[#5fe6d3]">
-            {cfg.seasonLabel} · Anmeldung offen
+          <span className="font-sans font-extrabold text-[10px] sm:text-[11px] tracking-[2px] uppercase text-[#5fe6d3]">
+            Melde jetzt dich oder dein Team
           </span>
-          <div className="font-display font-black text-xl sm:text-3xl uppercase tracking-tight text-white leading-none mt-0.5">
-            Team oder Spieler anmelden
+          <div className="font-display font-black text-2xl sm:text-4xl uppercase tracking-tight text-white leading-none mt-0.5">
+            Für {cfg.seasonLabel} an
           </div>
           {cfg.startInfo && (
             <div className="mt-1.5 hidden sm:flex items-center gap-2 text-xs font-sans text-hl-soft">
               <CalendarClock className="w-3.5 h-3.5 text-[#12A594]" />
-              {cfg.startInfo} · unverbindliche Vorregistrierung
+              {cfg.startInfo} · unverbindlich
             </div>
           )}
         </div>

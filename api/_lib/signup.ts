@@ -28,7 +28,7 @@ interface SignupConfig {
 const DEFAULT_CONFIG: SignupConfig = {
   open: true,
   seasonLabel: 'Season 2',
-  startInfo: 'Start voraussichtlich März 2027',
+  startInfo: 'Start im März 2027',
   minSquad: 8,
   maxSquad: 12,
   note: 'Diese Anmeldung ist eine unverbindliche Vorregistrierung und noch KEIN garantierter Startplatz in Season 2. ABER: Wer sich jetzt meldet, hat eine deutlich höhere Chance, dabei zu sein (eine 100%-Garantie ist es trotzdem nicht). Sie hilft uns bei der Planung – wir melden uns danach persönlich bei euch.',
