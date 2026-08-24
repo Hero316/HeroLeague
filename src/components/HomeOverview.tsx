@@ -10,7 +10,8 @@ function compact(n: number): string {
   if (n >= 1_000) return (n / 1_000).toFixed(1).replace('.', ',') + 'k';
   return String(n);
 }
-import { useHeroStats } from '../lib/heroes';
+import { useHeroStats, bumpHeroStats } from '../lib/heroes';
+import { useHeroBurst } from './HeroCelebration';
 import Avatar from './Avatar';
 import InstagramPanel from './InstagramPanel';
 
@@ -73,6 +74,7 @@ export default function HomeOverview({
   const [igStatus, setIgStatus] = useState<'loading' | 'ok' | 'error'>('loading');
   const [showIg, setShowIg] = useState(false);
   const { total: heroes, month: heroMonth } = useHeroStats();
+  const heroBurst = useHeroBurst();
   const MONTH_GOAL = 20; // Monatsziel: so viele Heroes im Monat sammeln
   const goalPct = Math.min(100, Math.round((heroMonth / MONTH_GOAL) * 100));
   const members = useMemo(() => memberMap(team), [team]);
@@ -164,6 +166,14 @@ export default function HomeOverview({
   };
 
   const quickDone = async (t: Task) => {
+    // Frisch abgehakt & ich bin zugewiesen? → Hero-Belohnung sofort feiern
+    // (identisch zur Aufgaben-Seite). Server vergibt die Heroes ohnehin; hier
+    // die sofortige Animation + Zähler-Bump als direktes Feedback.
+    if (t.status !== 'erledigt' && (t.assignees ?? []).some((a) => a.userId === currentUserId)) {
+      const reason = t.type === 'termin' ? 'Termin abgeschlossen' : t.type === 'beides' ? 'Erledigt ✓' : 'Aufgabe erledigt';
+      heroBurst.burst({ reason });
+      bumpHeroStats();
+    }
     setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: 'erledigt' } : x)));
     try { await updateTask(t.id, { status: 'erledigt' }); } catch { load(); }
   };
@@ -519,6 +529,9 @@ export default function HomeOverview({
         )}
 
       </motion.div>
+
+      {/* Hero-Feier beim Abhaken direkt auf der Startseite */}
+      {heroBurst.node}
 
       {/* Volles Instagram-Dashboard (In-App-Vollbild) */}
       {showIg && ig && <InstagramPanel data={ig} onClose={() => setShowIg(false)} />}
