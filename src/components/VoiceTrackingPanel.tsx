@@ -24,6 +24,7 @@ export interface VoicePlayer {
   teamName: string;
   name: string;
   role: 'field' | 'keeper';
+  number?: number;
 }
 
 interface ApplyItem {
@@ -173,7 +174,14 @@ export default function VoiceTrackingPanel({ homeName, awayName, players, onAppl
 
   // Kontext für Gemini aus dem Kader bauen.
   const voicePlayers = useMemo<VoiceRosterPlayer[]>(
-    () => players.map((p) => ({ team: p.side, teamName: p.teamName, name: p.name, role: p.role })),
+    () =>
+      players.map((p) => ({
+        team: p.side,
+        teamName: p.teamName,
+        name: p.name,
+        role: p.role,
+        ...(typeof p.number === 'number' ? { number: p.number } : {}),
+      })),
     [players]
   );
 
@@ -517,6 +525,7 @@ export default function VoiceTrackingPanel({ homeName, awayName, players, onAppl
                             <optgroup label={homeName}>
                               {selectOptions.home.map((p) => (
                                 <option key={`${p.teamId}::${p.name}`} value={`${p.teamId}::${p.name}`}>
+                                  {typeof p.number === 'number' ? `#${p.number} ` : ''}
                                   {p.name}
                                   {p.role === 'keeper' ? ' (TW)' : ''}
                                 </option>
@@ -525,6 +534,7 @@ export default function VoiceTrackingPanel({ homeName, awayName, players, onAppl
                             <optgroup label={awayName}>
                               {selectOptions.away.map((p) => (
                                 <option key={`${p.teamId}::${p.name}`} value={`${p.teamId}::${p.name}`}>
+                                  {typeof p.number === 'number' ? `#${p.number} ` : ''}
                                   {p.name}
                                   {p.role === 'keeper' ? ' (TW)' : ''}
                                 </option>
@@ -605,13 +615,18 @@ function resolveSelection(ev: VoiceEvent, players: VoicePlayer[]): string {
   }
   const pool = side ? players.filter((p) => p.side === side) : players;
   const target = normName(ev.player);
-  // exakter Name, sonst Teilstring (Vor-/Nachname), sonst über beide Teams.
+  // Reine Nummer? (z.B. "5" oder "nummer 5") → über Trikotnummer zuordnen.
+  const numMatch = target.match(/^(?:nummer\s*|nr\.?\s*|#)?(\d{1,2})$/);
+  const byNumber = (arr: VoicePlayer[]) => (numMatch ? arr.find((p) => p.number === Number(numMatch[1])) : undefined);
+  // exakter Name, sonst Nummer, sonst Teilstring (Vor-/Nachname), sonst über beide Teams.
   let hit =
     pool.find((p) => normName(p.name) === target) ||
+    byNumber(pool) ||
     pool.find((p) => normName(p.name).includes(target) || target.includes(normName(p.name)));
   if (!hit && side) {
     hit =
       players.find((p) => normName(p.name) === target) ||
+      byNumber(players) ||
       players.find((p) => normName(p.name).includes(target) || target.includes(normName(p.name)));
   }
   return hit ? `${hit.teamId}::${hit.name}` : '';

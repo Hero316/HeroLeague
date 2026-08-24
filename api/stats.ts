@@ -213,6 +213,7 @@ function sanitizeContext(raw: unknown): VoiceContext {
             teamName: typeof o.teamName === 'string' ? o.teamName.slice(0, 80) : '',
             name: typeof o.name === 'string' ? o.name.slice(0, 80) : '',
             role: o.role === 'keeper' ? 'keeper' : 'field',
+            ...(typeof o.number === 'number' && Number.isFinite(o.number) ? { number: Math.trunc(o.number) } : {}),
           } as RosterPlayer;
         })
         .filter((p) => p.name)

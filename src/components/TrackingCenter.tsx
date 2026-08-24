@@ -1031,9 +1031,13 @@ function MatchEditor({
     const out: VoicePlayer[] = [];
     ([match.homeTeamId, match.awayTeamId] as const).forEach((teamId, idx) => {
       const side: 'home' | 'away' = idx === 0 ? 'home' : 'away';
-      const teamName = resolveTeam(teamId)?.name ?? teamId;
+      const team = resolveTeam(teamId);
+      const teamName = team?.name ?? teamId;
       teamRows(teamId).forEach(({ r }) => {
-        out.push({ side, teamId, teamName, name: r.playerName, role: r.role });
+        // Echte Trikotnummer aus der Spielerliste (falls hinterlegt) mitgeben,
+        // damit die KI „die Nummer 5" korrekt zuordnen kann.
+        const num = team?.spielerliste?.find((p) => normName(p.name) === normName(r.playerName))?.number;
+        out.push({ side, teamId, teamName, name: r.playerName, role: r.role, ...(typeof num === 'number' ? { number: num } : {}) });
       });
     });
     return out;

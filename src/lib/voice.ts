@@ -28,6 +28,7 @@ export interface VoiceRosterPlayer {
   teamName: string;
   name: string;
   role: 'field' | 'keeper';
+  number?: number;
 }
 
 export interface VoiceContext {

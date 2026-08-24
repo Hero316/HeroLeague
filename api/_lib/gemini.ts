@@ -78,6 +78,7 @@ export interface RosterPlayer {
   teamName: string;
   name: string;
   role: 'field' | 'keeper';
+  number?: number; // feste Trikotnummer (optional)
 }
 
 export interface VoiceContext {
@@ -148,12 +149,17 @@ function buildInstruction(ctx: VoiceContext): string {
   const home = ctx.players.filter((p) => p.team === 'home');
   const away = ctx.players.filter((p) => p.team === 'away');
   const list = (arr: RosterPlayer[]) =>
-    arr.length ? arr.map((p) => `- ${p.name}${p.role === 'keeper' ? ' (Torwart)' : ''}`).join('\n') : '- (kein Kader hinterlegt)';
+    arr.length
+      ? arr
+          .map((p) => `- ${typeof p.number === 'number' ? `#${p.number} ` : ''}${p.name}${p.role === 'keeper' ? ' (Torwart)' : ''}`)
+          .join('\n')
+      : '- (kein Kader hinterlegt)';
 
   const actions = ACTION_CATALOG.map((a) => `- ${a.key} — ${a.label}: ${a.hint}`).join('\n');
 
-  return `Du bist ein präziser Fußball-Datenanalyst für die "Hero League".
-Du bekommst eine Sprachaufnahme (oder ein Transkript), in der ein Spiel live kommentiert wird – locker und in Alltagssprache, oft langsam/abschnittsweise. Wandle das in strukturierte Tracking-Ereignisse um.
+  return `Du bist ein professioneller Fußball-Datenanalyst ("Tracker/Scout") für die "Hero League" – eine Kleinfeld-/Soccer-Liga (kleines Feld, kleine Teams, viele Zweikämpfe, schnelles Umschaltspiel, kein Abseits). Deine Aufgabe: ein KOMPLETTES Spiel auswerten und dabei JEDEN Spieler EINZELN über alle unten stehenden Tasten erfassen – so, wie es ein Profi-Analyst tut, der den Spielverlauf und die Fußballlogik versteht.
+
+Du bekommst eine Sprachaufnahme (oder ein Transkript), in der jemand das Spiel live kommentiert – locker und in Alltagssprache, oft langsam/abschnittsweise. Wandle das in strukturierte Tracking-Ereignisse um.
 
 ## Spiel
 Heim ("home"): ${ctx.homeTeam}
@@ -168,22 +174,28 @@ ${list(away)}
 ## Erlaubte Aktionen (feld "action" MUSS exakt einer dieser Schlüssel sein)
 ${actions}
 
-## Regeln
-1. Ordne jede erkennbare Aktion GENAU einem Spieler aus den obigen Kadern zu. Nutze im Feld "player" den EXAKTEN Namen aus dem Kader (auch wenn im Audio nur Vor- oder Spitzname oder Rückennummer fällt – ordne bestmöglich zu). Im Feld "team" den passenden Team-Namen ("${ctx.homeTeam}" oder "${ctx.awayTeam}").
-2. Erkenne Synonyme und Umgangssprache (siehe Hinweise oben). Der Sprecher benutzt NICHT die exakten Button-Namen.
-3. Gepaarte Ereignisse:
-   - Ein Zweikampf hat oft zwei Beteiligte: "X gewinnt den Zweikampf gegen Y" → duel_won für X UND duel_lost für Y (nur wenn Y klar benannt und im Kader ist).
-   - "X holt sich den Ball von Y" → duel_won für X (und duel_lost für Y, falls benannt).
+## SO WIRD GEZÄHLT (sehr wichtig)
+Jede Taste ist ein EIGENER Zähler, der nur nach OBEN geht. Jedes Vorkommen einer Aktion ist EIN eigenes Ereignis mit delta 1.
+- Beispiel: Spieler dribbelt erfolgreich → dribble_won +1. Kurz danach nochmal erfolgreich → nochmal dribble_won +1 (er steht dann bei 2).
+- Ein MISSLUNGENES Dribbling zieht NICHTS von den gewonnenen ab! Es ist ein eigener Zähler: dribble_lost +1. Niemals dribble_won verringern, weil ein Dribbling schiefging.
+- Dasselbe für ALLE Gegensatz-Paare: pass_ok ↔ pass_fail, duel_won ↔ duel_lost, shot_on ↔ shot_miss. Positive und negative Aktionen werden GETRENNT hochgezählt, nie gegeneinander verrechnet.
+- "delta" ist daher fast immer 1 und IMMER positiv. Gib pro einzelner Aktion ein eigenes Ereignis aus (kein Zusammenfassen mit negativem delta).
+
+## Zuordnung
+1. Ordne jede erkennbare Aktion GENAU einem Spieler aus den obigen Kadern zu. Nutze im Feld "player" den EXAKTEN Namen aus dem Kader. Der Sprecher nennt oft nur Vorname, Spitzname ODER die Rückennummer ("die Nummer 5", "die 7") – ordne über die #Nummer bzw. den Namen dem richtigen Kaderspieler zu und gib trotzdem den EXAKTEN Namen aus. Im Feld "team" den passenden Team-Namen ("${ctx.homeTeam}" oder "${ctx.awayTeam}").
+2. Erkenne Synonyme und Umgangssprache (siehe Hinweise oben). Der Sprecher benutzt NICHT die exakten Button-Namen; erschließe die richtige Taste aus der Fußball-Situation.
+3. Gepaarte Ereignisse (zwei getrennte Einträge):
+   - Ein Zweikampf hat zwei Beteiligte: "X gewinnt den Zweikampf gegen Y" → duel_won für X UND duel_lost für Y (nur wenn Y klar benannt/erkennbar und im Kader ist).
+   - "X holt sich den Ball von Y" / "erobert gegen Y" → duel_won für X (und duel_lost für Y, falls benannt).
    - Ein Schlüsselpass, der ankommt → key_pass UND pass_ok für den Passgeber.
    - Ein Tor mit Vorlage → goal für den Torschützen UND assist für den Vorlagengeber (falls benannt).
    - Ein Tor zählt automatisch als Schuss: gib bei goal NICHT zusätzlich shot_on aus.
-4. Korrekturen: Wenn der Sprecher etwas zurücknimmt ("nein", "doch nicht", "verspreche", "streich das", "Entschuldigung, das war falsch", "Quatsch"), dann gib das zurückgenommene Ereignis NICHT aus. Liefere immer das bereinigte Endergebnis.
-5. "delta" ist die Anzahl (fast immer 1; nur mehr, wenn ausdrücklich mehrere gemeint sind).
-6. Erfinde nichts. Nur Aktionen ausgeben, die klar genannt werden und zu einem Kaderspieler passen. Unklares mit niedriger "confidence" und kurzer "note" markieren.
-7. "quote" = kurzer wörtlicher Ausschnitt aus dem Transkript, der zu diesem Ereignis führt.
+4. Korrekturen: Wenn der Sprecher etwas zurücknimmt ("nein", "doch nicht", "verspreche", "streich das", "Entschuldigung, das war falsch", "Quatsch"), dann gib das zurückgenommene Ereignis GAR NICHT aus (nicht etwa mit negativem delta ausgleichen). Liefere immer das bereinigte Endergebnis.
+5. Erfinde nichts. Nur Aktionen ausgeben, die klar genannt werden und zu einem Kaderspieler passen. Unklares mit niedriger "confidence" und kurzer "note" markieren.
+6. "quote" = kurzer wörtlicher Ausschnitt aus dem Transkript, der zu diesem Ereignis führt.
 ${ctx.rules ? `\n## Zusätzliche, dauerhafte Liga-Regeln (immer beachten)\n${ctx.rules}\n` : ''}
 ## Ausgabe
-Gib zuerst das vollständige "transcript" (wörtliche Transkription der Aufnahme; bei reinem Text-Input den Text unverändert) und dann "events" in zeitlicher Reihenfolge.`;
+Gib zuerst das vollständige "transcript" (wörtliche Transkription der Aufnahme; bei reinem Text-Input den Text unverändert) und dann "events" in zeitlicher Reihenfolge – ein Eintrag pro Einzelaktion.`;
 }
 
 const RESPONSE_SCHEMA = {
