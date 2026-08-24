@@ -390,6 +390,17 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
     const rbd = reachTV.byDim;
     const mediaViewsSum = in30.reduce((s, m) => s + (m.views || 0), 0);
 
+    // Aufrufe nach Art robust aufteilen. Die Dimensionswerte von
+    // media_product_type variieren (REELS, STORY, FEED, POST, CAROUSEL_CONTAINER,
+    // IGTV, AD …). Reels & Stories explizit, ALLES andere = „Beiträge" – so gehen
+    // keine Feed-Aufrufe verloren, egal unter welchem Schlüssel sie kommen.
+    const reelsViews = bd.REELS ?? 0;
+    const storyViews = bd.STORY ?? 0;
+    const postsViews = Object.entries(bd).reduce(
+      (s, [k, v]) => (k === 'REELS' || k === 'STORY' ? s : s + (v || 0)),
+      0,
+    );
+
     // Diagramm: Aufrufe pro Tag; falls Views-Zeitreihe leer, auf Reichweite ausweichen.
     let daily = viewsDaily;
     let dailyLabel = 'Aufrufe';
@@ -411,9 +422,9 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
       totalViews30: viewsTV.total ?? mediaViewsSum,
       totalLikes30: in30.reduce((s, m) => s + (m.likes || 0), 0),
       totalComments30: in30.reduce((s, m) => s + (m.comments || 0), 0),
-      viewsReels30: bd.REELS ?? in30.filter((m) => m.type === 'reel').reduce((s, m) => s + (m.views || 0), 0),
-      viewsStories30: bd.STORY ?? 0,
-      viewsPosts30: (bd.POST ?? 0) + (bd.CAROUSEL_CONTAINER ?? 0) + (bd.IMAGE ?? 0) + (bd.CAROUSEL ?? 0),
+      viewsReels30: reelsViews || in30.filter((m) => m.type === 'reel').reduce((s, m) => s + (m.views || 0), 0),
+      viewsStories30: storyViews,
+      viewsPosts30: postsViews,
       count30: in30.length,
       count: items.length,
       daily,
