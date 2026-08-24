@@ -87,9 +87,9 @@ export default function HighlightsHome({
       {/* Weiche Kanten: der farbige Bereich geht oben und unten sanft in den
           Seiten-Hintergrund (#0A1415) über – kein dunkler Saum, kein harter Schnitt. */}
       <div aria-hidden className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-[#0A1415] to-transparent pointer-events-none" />
-      <div aria-hidden className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-[#0A1415] via-[rgba(10,20,21,0.85)] to-transparent pointer-events-none" />
+      <div aria-hidden className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#0A1415] via-[rgba(10,20,21,0.85)] to-transparent pointer-events-none" />
 
-      <div className="relative z-[1] max-w-[1320px] mx-auto px-4 sm:px-10 py-14 sm:py-20">
+      <div className="relative z-[1] max-w-[1320px] mx-auto px-4 sm:px-10 pt-14 sm:pt-20 pb-6 sm:pb-9">
         <Reveal className="flex items-end justify-between gap-4 mb-8">
           <div>
             <div className="inline-flex items-center gap-2 font-sans font-extrabold text-xs tracking-[3px] text-brand-accent-light uppercase">

@@ -16,8 +16,8 @@ import {
 type Step = 'entry' | 'who' | 'email' | 'details' | 'ptype' | 'pdetails' | 'verify' | 'done';
 type Entry = 'team' | 'player';
 type PType = 'verein' | 'hobby';
-const ACCENT = '#12A594';
-const GRAD = `linear-gradient(135deg,#0C7A70,${ACCENT})`;
+const ACCENT = '#2F5BFF'; // Königsblau – eigene Farbwelt der Season-2-Anmeldung
+const GRAD = `linear-gradient(135deg,#16277A,${ACCENT})`;
 const PURPLE = 'linear-gradient(135deg,#3B2E86,#6D5DE6)';
 
 const AGE_BUCKETS = ['16–20', '21–25', '26–30', '31–35', '36+', 'Gemischt'];
@@ -69,7 +69,7 @@ function Field({ label, children, hint }: { label: string; children: React.React
 }
 
 const inputCls =
-  'w-full bg-white/[.05] border border-white/10 rounded-xl px-4 py-3 text-[15px] text-white placeholder-hl-faint focus:border-brand-accent-light focus:outline-none focus:ring-2 focus:ring-brand-accent-light/20 transition-colors';
+  'w-full bg-white/[.05] border border-white/10 rounded-xl px-4 py-3 text-[15px] text-white placeholder-hl-faint focus:border-[#5B7FFF] focus:outline-none focus:ring-2 focus:ring-[#5B7FFF]/20 transition-colors';
 
 // Pillen-Auswahl (Einfachauswahl).
 function Pills<T extends string>({ options, value, onChange }: { options: { id: T; label: string }[]; value: T | undefined; onChange: (v: T) => void }) {
@@ -90,7 +90,7 @@ function RatingScale({ label, value, onChange }: { label: string; value: number 
     <div>
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-[13px] font-semibold text-hl-soft">{label}</span>
-        <span className="text-[13px] font-black tabular-nums" style={{ color: value ? '#5fe6d3' : 'var(--color-hl-faint)' }}>{value ?? '–'}<span className="text-hl-faint font-normal">/10</span></span>
+        <span className="text-[13px] font-black tabular-nums" style={{ color: value ? '#83A0FF' : 'var(--color-hl-faint)' }}>{value ?? '–'}<span className="text-hl-faint font-normal">/10</span></span>
       </div>
       <div className="grid grid-cols-10 gap-1">
         {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
@@ -119,7 +119,7 @@ function StepNumbers({ onNumber, value, min, max }: { onNumber: (n: number) => v
 const PrimaryBtn = ({ children, disabled, onClick }: { children: React.ReactNode; disabled?: boolean; onClick?: () => void }) => (
   <button type="button" disabled={disabled} onClick={onClick}
     className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-[15px] font-display font-black uppercase tracking-wide text-white transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[.99]"
-    style={{ background: GRAD, boxShadow: '0 12px 30px -14px rgba(18,165,148,.7)' }}>
+    style={{ background: GRAD, boxShadow: '0 12px 30px -14px rgba(47,91,255,.7)' }}>
     {children}
   </button>
 );
@@ -258,7 +258,7 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
 
   return (
     <div className="min-h-screen bg-brand-dark text-hl-text font-sans flex flex-col relative overflow-hidden">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[420px]" style={{ background: 'radial-gradient(120% 100% at 50% -10%, rgba(18,165,148,.22), transparent 60%)' }} />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[420px]" style={{ background: 'radial-gradient(120% 100% at 50% -10%, rgba(47,91,255,.22), transparent 60%)' }} />
 
       <header className="relative border-b border-white/[.07] backdrop-blur-xl" style={{ paddingTop: 'calc(env(safe-area-inset-top) + .75rem)' }}>
         <div className="max-w-3xl mx-auto px-4 pb-3 flex items-center justify-between">
@@ -293,7 +293,7 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
             {step === 'entry' && (
               <div className="space-y-5">
                 <div>
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider mb-3" style={{ background: 'rgba(18,165,148,.14)', color: '#5fe6d3', border: '1px solid rgba(18,165,148,.3)' }}>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider mb-3" style={{ background: 'rgba(47,91,255,.14)', color: '#83A0FF', border: '1px solid rgba(47,91,255,.3)' }}>
                     <Sparkles className="w-3.5 h-3.5" /> {seasonLabel} · Anmeldung
                   </div>
                   <h1 className="font-display font-black text-3xl sm:text-4xl uppercase tracking-tight text-white leading-[1.05]">Sei bei Season 2 dabei</h1>
@@ -307,7 +307,7 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
                   <div className="hl-card rounded-2xl p-5 text-center text-hl-mute text-[14px]">Die Anmeldung ist derzeit geschlossen. Schau bald wieder vorbei!</div>
                 ) : (
                   <div className="grid gap-3 pt-1">
-                    <button onClick={() => { setEntry('team'); go('who'); }} className="hl-card rounded-2xl p-4 flex items-center gap-3.5 text-left hover:border-brand-accent-light/40 transition-colors cursor-pointer active:scale-[.99]">
+                    <button onClick={() => { setEntry('team'); go('who'); }} className="hl-card rounded-2xl p-4 flex items-center gap-3.5 text-left hover:border-[#5B7FFF]/40 transition-colors cursor-pointer active:scale-[.99]">
                       <span className="w-12 h-12 rounded-2xl grid place-items-center shrink-0 text-white" style={{ background: GRAD }}><Users className="w-6 h-6" /></span>
                       <div className="min-w-0 flex-1">
                         <div className="font-display font-black text-white uppercase tracking-tight">Team anmelden</div>
@@ -315,7 +315,7 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
                       </div>
                       <ArrowRight className="w-5 h-5 text-hl-faint shrink-0" />
                     </button>
-                    <button onClick={() => { setEntry('player'); go('ptype'); }} className="hl-card rounded-2xl p-4 flex items-center gap-3.5 text-left hover:border-brand-accent-light/40 transition-colors cursor-pointer active:scale-[.99]">
+                    <button onClick={() => { setEntry('player'); go('ptype'); }} className="hl-card rounded-2xl p-4 flex items-center gap-3.5 text-left hover:border-[#5B7FFF]/40 transition-colors cursor-pointer active:scale-[.99]">
                       <span className="w-12 h-12 rounded-2xl grid place-items-center shrink-0 text-white" style={{ background: PURPLE }}><User className="w-6 h-6" /></span>
                       <div className="min-w-0 flex-1">
                         <div className="font-display font-black text-white uppercase tracking-tight">Als Spieler anmelden</div>
@@ -333,12 +333,12 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
               <div className="space-y-5">
                 <div><h2 className="font-display font-black text-2xl uppercase tracking-tight text-white">Euer Team</h2><p className="text-hl-soft text-[14px] mt-1.5">Wart ihr schon in Season 1 dabei?</p></div>
                 <div className="grid gap-3">
-                  <button onClick={() => { setKind('returning'); go('email'); }} className="hl-card rounded-2xl p-4 flex items-center gap-3.5 text-left hover:border-brand-accent-light/40 transition-colors cursor-pointer active:scale-[.99]">
+                  <button onClick={() => { setKind('returning'); go('email'); }} className="hl-card rounded-2xl p-4 flex items-center gap-3.5 text-left hover:border-[#5B7FFF]/40 transition-colors cursor-pointer active:scale-[.99]">
                     <span className="w-11 h-11 rounded-2xl grid place-items-center shrink-0 text-white" style={{ background: GRAD }}><Trophy className="w-5 h-5" /></span>
                     <div className="min-w-0 flex-1"><div className="font-display font-black text-white uppercase tracking-tight">Wir waren dabei</div><div className="text-[13px] text-hl-mute mt-0.5">E-Mail eingeben – wir erkennen euer Team.</div></div>
                     <ArrowRight className="w-5 h-5 text-hl-faint shrink-0" />
                   </button>
-                  <button onClick={() => { setKind('new'); go('email'); }} className="hl-card rounded-2xl p-4 flex items-center gap-3.5 text-left hover:border-brand-accent-light/40 transition-colors cursor-pointer active:scale-[.99]">
+                  <button onClick={() => { setKind('new'); go('email'); }} className="hl-card rounded-2xl p-4 flex items-center gap-3.5 text-left hover:border-[#5B7FFF]/40 transition-colors cursor-pointer active:scale-[.99]">
                     <span className="w-11 h-11 rounded-2xl grid place-items-center shrink-0 text-white" style={{ background: PURPLE }}><Users className="w-5 h-5" /></span>
                     <div className="min-w-0 flex-1"><div className="font-display font-black text-white uppercase tracking-tight">Neues Team</div><div className="text-[13px] text-hl-mute mt-0.5">Ihr wollt neu dabei sein.</div></div>
                     <ArrowRight className="w-5 h-5 text-hl-faint shrink-0" />
@@ -362,7 +362,7 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
               <div className="space-y-4">
                 <div>
                   <h2 className="font-display font-black text-2xl uppercase tracking-tight text-white">Team-Infos</h2>
-                  {kind === 'returning' && captainTeam && <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-semibold" style={{ background: 'rgba(18,165,148,.14)', color: '#5fe6d3' }}><PartyPopper className="w-4 h-4" /> Willkommen zurück, {captainTeam}!</div>}
+                  {kind === 'returning' && captainTeam && <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-semibold" style={{ background: 'rgba(47,91,255,.14)', color: '#83A0FF' }}><PartyPopper className="w-4 h-4" /> Willkommen zurück, {captainTeam}!</div>}
                   {kind === 'returning' && !captainTeam && <p className="text-[13px] text-yellow-200/80 mt-2">Kein Team zu dieser E-Mail gefunden – füll die Felder einfach aus.</p>}
                 </div>
                 {err && <ErrorMsg>{err}</ErrorMsg>}
@@ -405,12 +405,12 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
               <div className="space-y-5">
                 <div><h2 className="font-display font-black text-2xl uppercase tracking-tight text-white">Spielst du im Verein?</h2><p className="text-hl-soft text-[14px] mt-1.5">Danach kommen passende Fragen zu dir.</p></div>
                 <div className="grid gap-3">
-                  <button onClick={() => { setPlayerType('verein'); go('pdetails'); }} className="hl-card rounded-2xl p-4 flex items-center gap-3.5 text-left hover:border-brand-accent-light/40 transition-colors cursor-pointer active:scale-[.99]">
+                  <button onClick={() => { setPlayerType('verein'); go('pdetails'); }} className="hl-card rounded-2xl p-4 flex items-center gap-3.5 text-left hover:border-[#5B7FFF]/40 transition-colors cursor-pointer active:scale-[.99]">
                     <span className="w-12 h-12 rounded-2xl grid place-items-center shrink-0 text-white" style={{ background: GRAD }}><Building2 className="w-6 h-6" /></span>
                     <div className="min-w-0 flex-1"><div className="font-display font-black text-white uppercase tracking-tight">Ja, im Verein</div><div className="text-[13px] text-hl-mute mt-0.5">Ich spiele aktiv in einem Verein.</div></div>
                     <ArrowRight className="w-5 h-5 text-hl-faint shrink-0" />
                   </button>
-                  <button onClick={() => { setPlayerType('hobby'); go('pdetails'); }} className="hl-card rounded-2xl p-4 flex items-center gap-3.5 text-left hover:border-brand-accent-light/40 transition-colors cursor-pointer active:scale-[.99]">
+                  <button onClick={() => { setPlayerType('hobby'); go('pdetails'); }} className="hl-card rounded-2xl p-4 flex items-center gap-3.5 text-left hover:border-[#5B7FFF]/40 transition-colors cursor-pointer active:scale-[.99]">
                     <span className="w-12 h-12 rounded-2xl grid place-items-center shrink-0 text-white" style={{ background: PURPLE }}><Dribbble className="w-6 h-6" /></span>
                     <div className="min-w-0 flex-1"><div className="font-display font-black text-white uppercase tracking-tight">Nein, Hobby</div><div className="text-[13px] text-hl-mute mt-0.5">Ich kicke hobbymäßig / in keinem Verein.</div></div>
                     <ArrowRight className="w-5 h-5 text-hl-faint shrink-0" />
@@ -424,7 +424,7 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
               <div className="space-y-4">
                 <div>
                   <h2 className="font-display font-black text-2xl uppercase tracking-tight text-white">Über dich</h2>
-                  <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-semibold" style={{ background: 'rgba(18,165,148,.14)', color: '#5fe6d3' }}>{playerType === 'verein' ? <Building2 className="w-4 h-4" /> : <Dribbble className="w-4 h-4" />} {playerType === 'verein' ? 'Vereinsspieler' : 'Hobby-Kicker'}</div>
+                  <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-semibold" style={{ background: 'rgba(47,91,255,.14)', color: '#83A0FF' }}>{playerType === 'verein' ? <Building2 className="w-4 h-4" /> : <Dribbble className="w-4 h-4" />} {playerType === 'verein' ? 'Vereinsspieler' : 'Hobby-Kicker'}</div>
                 </div>
                 {err && <ErrorMsg>{err}</ErrorMsg>}
                 <Field label="Dein Name"><input value={form.name || ''} onChange={(e) => patch({ name: e.target.value })} placeholder="Vor- und Nachname" className={inputCls} /></Field>
@@ -465,7 +465,7 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
             {step === 'verify' && (
               <div className="space-y-5">
                 <div className="text-center">
-                  <div className="w-14 h-14 rounded-2xl grid place-items-center mx-auto mb-3" style={{ background: 'rgba(18,165,148,.14)', border: '1px solid rgba(18,165,148,.3)' }}><KeyRound className="w-7 h-7 text-brand-accent-light" /></div>
+                  <div className="w-14 h-14 rounded-2xl grid place-items-center mx-auto mb-3" style={{ background: 'rgba(47,91,255,.14)', border: '1px solid rgba(47,91,255,.3)' }}><KeyRound className="w-7 h-7 text-[#83A0FF]" /></div>
                   <h2 className="font-display font-black text-2xl uppercase tracking-tight text-white">E-Mail bestätigen</h2>
                   <p className="text-hl-soft text-[14px] mt-1.5">Code an<br /><span className="font-semibold text-white">{email}</span> geschickt.</p>
                 </div>
@@ -473,7 +473,7 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
                 {err && <ErrorMsg>{err}</ErrorMsg>}
                 <input value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" placeholder="••••••" className={`${inputCls} text-center text-[26px] tracking-[.5em] font-mono font-bold`} autoFocus />
                 <label className="flex items-start gap-2.5 cursor-pointer select-none">
-                  <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 w-5 h-5 rounded accent-[#12A594] shrink-0" />
+                  <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 w-5 h-5 rounded accent-[#2F5BFF] shrink-0" />
                   <span className="text-[13px] text-hl-soft leading-relaxed">Mir ist klar, dass das eine <strong className="text-white">unverbindliche Vorregistrierung</strong> ist und kein garantierter Platz in {seasonLabel}.</span>
                 </label>
                 <PrimaryBtn onClick={finish} disabled={busy || code.length !== 6 || !consent}>{busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <><CheckCircle2 className="w-4 h-4" /> Anmeldung abschließen</>}</PrimaryBtn>
@@ -483,7 +483,7 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
 
             {step === 'done' && (
               <motion.div initial={{ scale: .9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 20 }} className="text-center py-8 space-y-4">
-                <div className="w-20 h-20 rounded-full grid place-items-center mx-auto" style={{ background: GRAD, boxShadow: '0 20px 50px -18px rgba(18,165,148,.8)' }}><CheckCircle2 className="w-11 h-11 text-white" /></div>
+                <div className="w-20 h-20 rounded-full grid place-items-center mx-auto" style={{ background: GRAD, boxShadow: '0 20px 50px -18px rgba(47,91,255,.8)' }}><CheckCircle2 className="w-11 h-11 text-white" /></div>
                 <h2 className="font-display font-black text-3xl uppercase tracking-tight text-white">Anmeldung eingegangen!</h2>
                 <p className="text-hl-soft text-[15px] max-w-sm mx-auto leading-relaxed">Danke, {(entry === 'player' ? form.name : form.contactName)?.split(' ')[0] || 'Leute'}! Wir haben deine {entry === 'player' ? 'Spieler-' : ''}Vorregistrierung für {seasonLabel} erhalten und eine Bestätigung an <span className="text-white font-semibold">{email}</span> geschickt.</p>
                 <div className="rounded-2xl border border-yellow-500/25 bg-yellow-500/[.07] px-4 py-3 text-[13px] text-yellow-100/90 max-w-sm mx-auto text-left flex items-start gap-2.5"><ShieldCheck className="w-4 h-4 text-yellow-300 shrink-0 mt-0.5" /><span>Denk dran: noch kein fester Platz – wir melden uns persönlich.</span></div>
