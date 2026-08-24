@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Ticket as TicketIcon, Trash2, Settings2, Save, Loader2, RefreshCw, Download,
-  CheckCircle2, Circle, Users, Heart, ShieldCheck,
+  CheckCircle2, Circle, Users, Heart, ShieldCheck, ChevronRight, X, Mail,
 } from 'lucide-react';
+import { ModalPortal } from './ui';
+import { useBackClose } from '../lib/backStack';
 import {
   ticketAdminList, ticketAdminCheckin, ticketAdminDelete, ticketAdminSave,
   type TicketAdminData, type TicketAdminConfig, type TicketRow,
@@ -11,6 +13,67 @@ import {
 
 const fmtDate = (iso: string | null) => { if (!iso) return '–'; try { return new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return iso; } };
 const inp = 'w-full bg-white/[.05] border border-white/10 rounded-xl px-3 py-2 text-[14px] text-white placeholder-hl-faint focus:border-[#E6238E] focus:outline-none';
+
+// Detail-Overlay eines Tickets: alle Daten + Einlass + Löschen MIT Bestätigung.
+function TicketDetail({ row, busy, onClose, onCheckin, onDelete }: {
+  row: TicketRow; busy: boolean; onClose: () => void;
+  onCheckin: () => void; onDelete: () => void;
+}) {
+  const [confirmDel, setConfirmDel] = useState(false);
+  useBackClose(true, onClose);
+  const rows: [string, string][] = [
+    ['Name', row.name || '–'],
+    ['E-Mail', row.email],
+    ['Personen', String(row.quantity)],
+    ['Ticket-Code', row.code || '–'],
+    ['Eingecheckt', row.checkedIn ? 'Ja' : 'Nein'],
+    ['Angemeldet am', fmtDate(row.createdAt)],
+    ['Bestätigt am', fmtDate(row.verifiedAt)],
+  ];
+  return (
+    <ModalPortal>
+      <motion.div className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+        <motion.div onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-lg bg-[#150a11] border border-white/10 rounded-t-3xl sm:rounded-3xl max-h-[90vh] overflow-y-auto"
+          initial={{ y: 40, opacity: 0, scale: .98 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: 40, opacity: 0, scale: .98 }} transition={{ type: 'spring', stiffness: 380, damping: 32 }}>
+          <div className="sticky top-0 bg-[#150a11]/95 backdrop-blur px-5 py-4 border-b border-white/10 flex items-center justify-between">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="w-9 h-9 rounded-xl grid place-items-center shrink-0 text-white" style={{ background: 'linear-gradient(135deg,#7a0f49,#E6238E)' }}><TicketIcon className="w-4 h-4" /></span>
+              <div className="min-w-0">
+                <div className="font-display font-black text-white uppercase tracking-tight truncate">{row.name || 'Ticket'}</div>
+                <div className="text-[12px] text-hl-mute truncate">{row.email}</div>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2 rounded-lg text-hl-mute hover:text-white hover:bg-white/10 cursor-pointer shrink-0"><X className="w-5 h-5" /></button>
+          </div>
+          <div className="p-5 space-y-4">
+            <div className="rounded-2xl border border-white/10 divide-y divide-white/[.06]">
+              {rows.map(([k, v]) => (
+                <div key={k} className="flex items-start justify-between gap-3 px-4 py-2.5">
+                  <span className="text-[12px] text-hl-dim shrink-0">{k}</span>
+                  <span className="text-[14px] text-white text-right font-medium break-words">{v}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={onCheckin} disabled={busy} className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold cursor-pointer border ${row.checkedIn ? 'text-brand-accent-light bg-brand-accent-light/10 border-brand-accent-light/25' : 'text-white bg-white/[.06] border-white/10'}`}>
+                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : row.checkedIn ? <><CheckCircle2 className="w-4 h-4" /> Eingecheckt</> : <><Circle className="w-4 h-4" /> Einchecken</>}
+              </button>
+              <a href={`mailto:${row.email}`} className="flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold text-[#ff9ad4] bg-[#E6238E]/10 border border-[#E6238E]/25 cursor-pointer"><Mail className="w-4 h-4" /> E-Mail</a>
+            </div>
+            {confirmDel ? (
+              <div className="flex gap-2">
+                <button onClick={onDelete} disabled={busy} className="flex-1 rounded-xl py-2.5 text-[13px] font-bold text-white bg-rose-600 cursor-pointer">Wirklich löschen</button>
+                <button onClick={() => setConfirmDel(false)} className="flex-1 rounded-xl py-2.5 text-[13px] font-bold text-hl-mute bg-white/[.06] cursor-pointer">Abbrechen</button>
+              </div>
+            ) : (
+              <button onClick={() => setConfirmDel(true)} className="w-full flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold text-rose-300 bg-rose-500/10 border border-rose-500/20 cursor-pointer"><Trash2 className="w-4 h-4" /> Ticket löschen</button>
+            )}
+          </div>
+        </motion.div>
+      </motion.div>
+    </ModalPortal>
+  );
+}
 
 export default function TicketAdmin() {
   const [data, setData] = useState<TicketAdminData | null>(null);
@@ -20,6 +83,7 @@ export default function TicketAdmin() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const load = () => { setLoading(true); ticketAdminList().then((d) => { setData(d); if (!cfg) setCfg(d.config); }).catch(() => setData(null)).finally(() => setLoading(false)); };
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -48,6 +112,7 @@ export default function TicketAdmin() {
   };
 
   const confirmedRows = data?.rows.filter((r) => r.status === 'confirmed') ?? [];
+  const openRow = confirmedRows.find((r) => r.id === openId) || null;
 
   return (
     <div className="space-y-4">
@@ -119,10 +184,11 @@ export default function TicketAdmin() {
       ) : (
         <div className="space-y-2">
           {confirmedRows.map((r) => (
-            <div key={r.id} className="hl-card rounded-2xl p-3.5 flex items-center gap-3">
-              <button onClick={() => toggleCheckin(r)} disabled={busyId === r.id} className="shrink-0 cursor-pointer" title="Einlass">
+            <button key={r.id} onClick={() => setOpenId(r.id)} className="w-full text-left hl-card rounded-2xl p-3.5 flex items-center gap-3 hover:border-[#E6238E]/30 transition-colors cursor-pointer active:scale-[.99]">
+              {/* Schneller Einlass-Haken (öffnet NICHT das Detail) */}
+              <span onClick={(e) => { e.stopPropagation(); if (busyId !== r.id) toggleCheckin(r); }} className="shrink-0 cursor-pointer" title="Einlass">
                 {busyId === r.id ? <Loader2 className="w-6 h-6 animate-spin text-hl-mute" /> : r.checkedIn ? <CheckCircle2 className="w-6 h-6 text-brand-accent-light" /> : <Circle className="w-6 h-6 text-hl-faint" />}
-              </button>
+              </span>
               <div className="min-w-0 flex-1">
                 <div className="text-[15px] font-semibold text-white leading-snug truncate flex items-center gap-2">{r.name}
                   <span className="inline-flex items-center gap-0.5 text-[11px] text-hl-mute font-normal"><Users className="w-3 h-3" />{r.quantity}</span>
@@ -133,11 +199,23 @@ export default function TicketAdmin() {
                 <div className="font-mono font-bold text-[13px] text-white tracking-wider">{r.code}</div>
                 <div className="text-[10px] text-hl-faint mt-0.5">{r.checkedIn ? 'eingecheckt' : fmtDate(r.verifiedAt)}</div>
               </div>
-              <button onClick={() => del(r.id)} disabled={busyId === r.id} className="p-1.5 rounded-lg text-rose-300/70 hover:text-rose-300 hover:bg-rose-500/10 cursor-pointer shrink-0"><Trash2 className="w-4 h-4" /></button>
-            </div>
+              <ChevronRight className="w-4 h-4 text-hl-faint shrink-0" />
+            </button>
           ))}
         </div>
       )}
+
+      <AnimatePresence>
+        {openRow && (
+          <TicketDetail
+            row={openRow}
+            busy={busyId === openRow.id}
+            onClose={() => setOpenId(null)}
+            onCheckin={() => toggleCheckin(openRow)}
+            onDelete={async () => { const id = openRow.id; await del(id); setOpenId(null); }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
