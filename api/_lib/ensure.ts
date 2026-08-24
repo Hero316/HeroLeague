@@ -63,6 +63,11 @@ export async function ensureSchema(): Promise<void> {
     // Hero-Punkte (Belohnung fürs Abschließen) mitprüfen, sonst überspringt der
     // Schnell-Check das Anlegen auf bereits bestehenden Datenbanken.
     await sql`SELECT 1 FROM hero_events LIMIT 1`;
+    // Öffentliche Formulare: Season-2-Anmeldung & Zuschauer-Tickets mitprüfen.
+    // WICHTIG: die neue Spalte `entry` (Team vs. Spieler) mitprüfen, sonst
+    // überspringt der Schnell-Check das ALTER auf bereits bestehenden Tabellen.
+    await sql`SELECT entry FROM season_signups LIMIT 1`;
+    await sql`SELECT 1 FROM event_tickets LIMIT 1`;
     ensured = true;
     return;
   } catch {
@@ -276,6 +281,32 @@ export async function ensureSchema(): Promise<void> {
     ref_type TEXT NOT NULL DEFAULT '', ref_id TEXT NOT NULL DEFAULT '',
     seen BOOLEAN NOT NULL DEFAULT false, created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
   await run(sql`CREATE INDEX IF NOT EXISTS idx_hero_events_user ON hero_events(user_id, seen)`);
+
+  // --- Season-2-Team-Anmeldung (öffentlich, unverbindliche Vorregistrierung).
+  // Eine Zeile je E-Mail; alle Antworten in `data` (jsonb). ------------------
+  await run(sql`CREATE TABLE IF NOT EXISTS season_signups (
+    id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE,
+    email_verified BOOLEAN NOT NULL DEFAULT false, status TEXT NOT NULL DEFAULT 'confirmed',
+    kind TEXT NOT NULL DEFAULT 'new', team_name TEXT NOT NULL DEFAULT '',
+    contact_name TEXT NOT NULL DEFAULT '', data JSONB NOT NULL DEFAULT '{}',
+    ip TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+  // Team- ODER Spieler-Anmeldung.
+  await run(sql`ALTER TABLE season_signups ADD COLUMN IF NOT EXISTS entry TEXT NOT NULL DEFAULT 'team'`);
+  await run(sql`CREATE INDEX IF NOT EXISTS idx_season_signups_created ON season_signups(created_at DESC)`);
+
+  // --- Zuschauer-Tickets (Testspieltag). Eine Zeile je (event_key, email);
+  // Reservierung bis reserved_until, danach frei. Kapazität wird beim
+  // Anfordern/Bestätigen serverseitig geprüft. ------------------------------
+  await run(sql`CREATE TABLE IF NOT EXISTS event_tickets (
+    id TEXT PRIMARY KEY, event_key TEXT NOT NULL, email TEXT NOT NULL,
+    email_verified BOOLEAN NOT NULL DEFAULT false, status TEXT NOT NULL DEFAULT 'reserved',
+    name TEXT NOT NULL DEFAULT '', quantity INTEGER NOT NULL DEFAULT 1,
+    code TEXT, checked_in BOOLEAN NOT NULL DEFAULT false, ip TEXT NOT NULL DEFAULT '',
+    reserved_until TIMESTAMPTZ, verified_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (event_key, email))`);
+  await run(sql`CREATE INDEX IF NOT EXISTS idx_event_tickets_key ON event_tickets(event_key, status)`);
 
   // --- Constraints ganz zuletzt (unkritisch; nur für Rollen-/Anhang-Checks) -
   await run(sql`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);

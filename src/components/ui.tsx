@@ -504,6 +504,14 @@ export function Footer({ onNavigate, onNavigatePath }: FooterProps) {
               {l.label}
             </button>
           ))}
+          {onNavigatePath && (
+            <button
+              onClick={() => onNavigatePath('/anmeldung')}
+              className="font-sans font-semibold text-xs tracking-wider text-brand-accent-light hover:text-white transition-[color,transform] duration-150 ease-out active:scale-[.97] cursor-pointer"
+            >
+              SEASON 2 ANMELDUNG
+            </button>
+          )}
           {onNavigatePath &&
             legalLinks.map((l) => (
               <button
