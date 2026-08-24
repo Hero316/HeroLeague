@@ -5,7 +5,8 @@ import type { Task, Idea, TeamMember, Ticket, TicketPriority } from '../types';
 import { fetchAllTasks, fetchIdeas, fetchTeam, fetchTickets, memberMap, updateTask, fetchVisitStats, fetchInstagramReels, type VisitStats, type IgReelsResult } from '../lib/collab';
 
 // Große Zahlen kompakt: 1234 → 1,2k · 1200000 → 1,2 Mio.
-function compact(n: number): string {
+function compact(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return '–';
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.', ',') + ' Mio.';
   if (n >= 1_000) return (n / 1_000).toFixed(1).replace('.', ',') + 'k';
   return String(n);
