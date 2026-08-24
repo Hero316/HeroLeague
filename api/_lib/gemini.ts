@@ -226,6 +226,7 @@ const RESPONSE_SCHEMA = {
 
 export async function parseTracking(opts: {
   audio?: { uri: string; mimeType: string };
+  audioInline?: { base64: string; mimeType: string };
   transcript?: string;
   context: VoiceContext;
 }): Promise<VoiceResult> {
@@ -233,7 +234,10 @@ export async function parseTracking(opts: {
   if (!apiKey) throw new Error('Gemini ist nicht konfiguriert (GEMINI_API_KEY fehlt).');
 
   const parts: Record<string, unknown>[] = [];
-  if (opts.audio) {
+  if (opts.audioInline) {
+    parts.push({ inlineData: { mimeType: opts.audioInline.mimeType, data: opts.audioInline.base64 } });
+    parts.push({ text: 'Transkribiere die Aufnahme und werte sie wie beschrieben aus.' });
+  } else if (opts.audio) {
     parts.push({ fileData: { fileUri: opts.audio.uri, mimeType: opts.audio.mimeType } });
     parts.push({ text: 'Transkribiere die Aufnahme und werte sie wie beschrieben aus.' });
   } else if (opts.transcript) {

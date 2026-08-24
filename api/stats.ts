@@ -250,8 +250,14 @@ const voiceTracking = requireStaff(async (req: VercelRequest, res: VercelRespons
       if (buf.length === 0) return badRequest(res, 'Audio ist leer.');
       if (buf.length > MAX_AUDIO_BYTES) return badRequest(res, 'Audio ist zu groß.');
       const mimeType = typeof b.mimeType === 'string' && b.mimeType ? b.mimeType : 'audio/wav';
-      const uploaded = await uploadAudio(buf, mimeType);
-      const result = await parseTracking({ audio: uploaded, context });
+      // Kurze Aufnahmen direkt inline an Gemini (schneller, umgeht die Files-API).
+      // Nur große Dateien gehen über den Files-API-Upload. Grenze so gewählt, dass
+      // die base64-aufgeblähte Anfrage unter Geminis 20-MB-Request-Limit bleibt.
+      const INLINE_LIMIT = 14 * 1024 * 1024;
+      const result =
+        buf.length <= INLINE_LIMIT
+          ? await parseTracking({ audioInline: { base64: buf.toString('base64'), mimeType }, context })
+          : await parseTracking({ audio: await uploadAudio(buf, mimeType), context });
       return res.json(result);
     }
     if (transcript) {
