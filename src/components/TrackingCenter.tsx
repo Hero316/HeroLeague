@@ -1092,6 +1092,7 @@ function MatchEditor({
 
       {voiceOpen && (
         <VoiceTrackingPanel
+          matchId={match.id}
           homeName={home?.name ?? match.homeTeamId}
           awayName={away?.name ?? match.awayTeamId}
           players={voicePlayers}
