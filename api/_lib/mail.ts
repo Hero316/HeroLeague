@@ -9,12 +9,49 @@ export function isMailConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY);
 }
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+// Allgemeiner Versand über Resend. Ohne RESEND_API_KEY wird nichts verschickt
+// (der Aufrufer behandelt das je nach Kontext, z.B. Dev-Code direkt anzeigen).
+// `from` überschreibt den Standard-Absender (z.B. tickets@hero-league.de).
+export async function sendMail(opts: {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  from?: string;
+  replyTo?: string;
+}): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.log(`[Mail nicht konfiguriert] an ${opts.to}: ${opts.subject}`);
+    return;
+  }
+  const body: Record<string, unknown> = {
+    from: opts.from || process.env.MAIL_FROM || 'Hero League <login@hero-league.de>',
+    to: [opts.to],
+    subject: opts.subject,
+    html: opts.html,
+    text: opts.text,
+  };
+  if (opts.replyTo) body.reply_to = opts.replyTo;
+
+  const res = await fetch(RESEND_ENDPOINT, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    console.error('Resend-Mailversand fehlgeschlagen:', res.status, detail);
+    throw new Error('E-Mail konnte nicht gesendet werden.');
+  }
 }
 
 export async function sendLoginCode(email: string, code: string): Promise<void> {

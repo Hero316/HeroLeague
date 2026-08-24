@@ -30,6 +30,11 @@ import MobileDock from './components/MobileDock';
 import Countdown from './components/Countdown';
 import EventPage, { EventTab } from './components/EventPage';
 import EventBanner from './components/EventBanner';
+import SeasonSignup from './components/SeasonSignup';
+import SeasonSignupBanner from './components/SeasonSignupBanner';
+import EventTickets from './components/EventTickets';
+import SignupAdmin from './components/SignupAdmin';
+import TicketAdmin from './components/TicketAdmin';
 import EventErgebniszettel from './components/EventErgebniszettel';
 import HighlightsHome from './components/HighlightsHome';
 import HighlightsPage from './components/HighlightsPage';
@@ -1004,6 +1009,17 @@ export default function App() {
     );
   }
 
+  // ROUTE: /anmeldung – öffentliche, unverbindliche Season-2-Team-Anmeldung.
+  if (currentPath.startsWith('/anmeldung')) {
+    return <SeasonSignup onNavigate={navigateTo} />;
+  }
+
+  // ROUTE: /testspiel/tickets – öffentliche Zuschauer-Ticket-Anmeldung. Muss VOR
+  // dem generischen /testspiel stehen.
+  if (currentPath.startsWith('/testspiel/tickets')) {
+    return <EventTickets onNavigate={navigateTo} />;
+  }
+
   // ROUTE: /testspiel/spiel/:id – öffentlicher Event-Spielbericht (Einzelnoten aus
   // dem Event-Tracking; komplett isoliert von der Liga). Muss VOR /testspiel stehen.
   if (currentPath.startsWith('/testspiel/spiel/')) {
@@ -1224,6 +1240,7 @@ export default function App() {
                 scoringConfig={scoring}
                 tab={evTab}
                 onSelectTab={(t) => navigateTo(t === 'tabelle' ? '/testspiel' : `/testspiel/${t}`, { keepScroll: true })}
+                onOpenTickets={() => navigateTo('/testspiel/tickets')}
               />
             </>
           ) : (
@@ -1440,6 +1457,7 @@ export default function App() {
                   ...(canSeeLeagueArea ? [{ id: 'spiele', label: 'Spiele & Liga' }] : []),
                   ...(canSeeStartseiteArea ? [{ id: 'startseite', label: 'Startseite' }] : []),
                   ...(canSeeChannelsArea ? [{ id: 'kanaele', label: 'Kanäle & Event' }] : []),
+                  ...(isSuperadmin ? [{ id: 'anmeldungen', label: 'Anmeldungen' }] : []),
                   ...(canManageUsers ? [{ id: 'zugaenge', label: 'Zugänge' }] : []),
                 ]}
               >
@@ -1498,6 +1516,31 @@ export default function App() {
                       demoActive={demo.active}
                       onToggleDemo={handleToggleDemo}
                     />
+                  )}
+
+                  {isSuperadmin && (
+                    <>
+                      <AccordionSection
+                        id="season-signups"
+                        category="anmeldungen"
+                        title="Season 2 – Team-Anmeldungen"
+                        subtitle="Vorregistrierungen ansehen, Captains hinterlegen, Fenster steuern"
+                        icon={<Trophy className="w-5 h-5" />}
+                        accent="#12A594"
+                      >
+                        <SignupAdmin />
+                      </AccordionSection>
+                      <AccordionSection
+                        id="event-tickets"
+                        category="anmeldungen"
+                        title="Testspieltag – Zuschauer-Tickets"
+                        subtitle="Anmeldungen, Einlass/Check-in, Plätze & Spenden-Link"
+                        icon={<Ticket className="w-5 h-5" />}
+                        accent="#E6238E"
+                      >
+                        <TicketAdmin />
+                      </AccordionSection>
+                    </>
                   )}
 
                   {isSuperadmin && (
@@ -1597,6 +1640,7 @@ export default function App() {
       {activeEvent && activeTab === 'home' && (
         <EventBanner event={activeEvent} isLive={eventHasLive} staffPreview={eventStaffPreview} onOpen={() => navigateTo('/testspiel')} />
       )}
+      {activeTab === 'home' && <SeasonSignupBanner onOpen={() => navigateTo('/anmeldung')} />}
       <LiveTicker news={news} />
 
       <div key={activeTab} className={`hl-fade ${mobileMode ? 'pb-36 lg:pb-0' : ''}`}>

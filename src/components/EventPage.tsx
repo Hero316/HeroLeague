@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shield, Lock, Goal, Crown, Star, Hand, Handshake, Printer } from 'lucide-react';
+import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shield, Lock, Goal, Crown, Star, Hand, Handshake, Printer, Ticket, ArrowRight } from 'lucide-react';
 import { EventConfig, MatchPlayerStat, ScoringConfig, Team } from '../types';
 import { TeamCrest, LiveBadge } from './ui';
 import { calculateEventStandings } from '../lib/eventStandings';
@@ -23,6 +23,7 @@ interface EventPageProps {
   scoringConfig?: ScoringConfig; // Score-Einstellungen (für die Award-Rechnung)
   tab?: EventTab; // aktiver Reiter (aus der URL – für Refresh/Zurück)
   onSelectTab?: (tab: EventTab) => void; // Reiter wechseln (schreibt in die URL)
+  onOpenTickets?: () => void; // Zuschauer-Ticket-Anmeldung öffnen
 }
 
 // Untermenüs der Testspiel-Seite (wie die Reiter der Liga). Tabelle ist Standard.
@@ -48,7 +49,7 @@ const normName = (s: string) =>
 // Sonder-Event-Seite (z.B. Testspieltag): Kopf + Live-Tabelle + kompletter
 // Spielplan mit Uhrzeiten und Feldern – im Look der Hauptseite, aber mit
 // eigener Magenta/Gold-Farbwelt, damit es sich besonders anfühlt.
-export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin, onPrint, reportMatchIds, onOpenReport, onOpenEventTeam, onOpenEventPlayer, staffPreview, trackingRows = [], scoringConfig, tab: tabProp, onSelectTab }: EventPageProps) {
+export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin, onPrint, reportMatchIds, onOpenReport, onOpenEventTeam, onOpenEventPlayer, staffPreview, trackingRows = [], scoringConfig, tab: tabProp, onSelectTab, onOpenTickets }: EventPageProps) {
   const standings = useMemo(
     () => calculateEventStandings(event.teams, event.matches),
     [event.teams, event.matches]
@@ -233,15 +234,28 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
             )}
           </div>
 
-          {isAdmin && onPrint && (
-            <button
-              onClick={onPrint}
-              className="mt-6 inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-[rgba(230,35,142,.4)] bg-[rgba(230,35,142,.1)] text-[#ff9ad4] hover:bg-[rgba(230,35,142,.2)] text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
-            >
-              <Printer className="w-4 h-4" />
-              Ergebniszettel drucken
-            </button>
-          )}
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            {onOpenTickets && (
+              <button
+                onClick={onOpenTickets}
+                className="group inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-white text-sm font-display font-black uppercase tracking-wide transition-all cursor-pointer active:scale-[.98]"
+                style={{ background: 'linear-gradient(135deg,#7a0f49,#E6238E)', boxShadow: '0 14px 34px -14px rgba(230,35,142,.8)' }}
+              >
+                <Ticket className="w-4 h-4" />
+                Zuschauer-Tickets sichern
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+            )}
+            {isAdmin && onPrint && (
+              <button
+                onClick={onPrint}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-[rgba(230,35,142,.4)] bg-[rgba(230,35,142,.1)] text-[#ff9ad4] hover:bg-[rgba(230,35,142,.2)] text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                Ergebniszettel drucken
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
