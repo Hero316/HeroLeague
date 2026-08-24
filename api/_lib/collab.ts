@@ -380,9 +380,10 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
     const profileP = (async () => {
       try {
         const pr = await fetch(`${IG_BASE}/${igId}?fields=username,followers_count,media_count&access_token=${encodeURIComponent(token)}`);
-        const pd = (await pr.json()) as { username?: string; followers_count?: number; media_count?: number };
-        return { username: pd.username || '', followers: typeof pd.followers_count === 'number' ? pd.followers_count : null, mediaCount: typeof pd.media_count === 'number' ? pd.media_count : null };
-      } catch { return { username: '', followers: null as number | null, mediaCount: null as number | null }; }
+        const pd = (await pr.json()) as { username?: string; followers_count?: number; media_count?: number; error?: { message?: string; code?: number } };
+        const err = pd.error?.message ? `${pd.error.message}${pd.error.code ? ` (Code ${pd.error.code})` : ''}` : (pr.ok ? '' : `HTTP ${pr.status}`);
+        return { username: pd.username || '', followers: typeof pd.followers_count === 'number' ? pd.followers_count : null, mediaCount: typeof pd.media_count === 'number' ? pd.media_count : null, err };
+      } catch (e) { return { username: '', followers: null as number | null, mediaCount: null as number | null, err: e instanceof Error ? e.message : 'Netzwerkfehler' }; }
     })();
     const [profile, viewsTV, reachTV, interTV, demoCountry, demoCity, demoAge, demoGender, viewsDaily, reachDaily, followerTs] = await Promise.all([
       profileP,
@@ -417,8 +418,13 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
     let dailyLabel = 'Aufrufe';
     if (daily.length === 0) { daily = reachDaily; dailyLabel = 'Reichweite'; }
 
+    // Fehlergrund sichtbar machen, wenn KEINE Konto-Kennzahl kam (z.B. Token
+    // abgelaufen / Rate-Limit) – hilft bei der Diagnose.
+    const accountErr = (followers == null && viewsTV.total == null && reachTV.total == null)
+      ? (profile.err || 'Instagram-Konto-Daten aktuell nicht verfügbar') : undefined;
     const payload = {
       configured: true,
+      error: accountErr,
       days,
       username,
       followers,

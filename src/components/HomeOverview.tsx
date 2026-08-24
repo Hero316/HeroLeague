@@ -421,6 +421,12 @@ export default function HomeOverview({
                 </button>
               </div>
 
+              {ig.error && (
+                <div className="mb-3 text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-2 break-words">
+                  Instagram: {ig.error}
+                </div>
+              )}
+
               {/* Kernzahlen */}
               <div className="grid grid-cols-3 gap-2">
                 {([
