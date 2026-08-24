@@ -35,6 +35,7 @@ interface ApplyItem {
 }
 
 interface Props {
+  matchId: string;
   homeName: string;
   awayName: string;
   players: VoicePlayer[];
@@ -63,8 +64,13 @@ function fmtTime(sec: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export default function VoiceTrackingPanel({ homeName, awayName, players, onApply, onClose }: Props) {
+export default function VoiceTrackingPanel({ matchId, homeName, awayName, players, onApply, onClose }: Props) {
   useBackClose(true, onClose);
+
+  // Erkanntes Ergebnis pro Spiel zwischenspeichern, damit versehentliches
+  // Schließen (oder ein Neuladen) die Liste NICHT vernichtet.
+  const storeKey = `hl-voice-review-${matchId}`;
+  const restoredRef = useRef(false);
 
   const [tab, setTab] = useState<'record' | 'text'>('record');
   const [phase, setPhase] = useState<'input' | 'processing' | 'review'>('input');
@@ -260,6 +266,46 @@ export default function VoiceTrackingPanel({ homeName, awayName, players, onAppl
   const [transcript, setTranscript] = useState('');
   const [showTranscript, setShowTranscript] = useState(false);
 
+  // Beim Öffnen: zuletzt erkanntes (noch nicht übernommenes) Ergebnis wiederherstellen.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(storeKey);
+      if (raw) {
+        const saved = JSON.parse(raw) as { review?: ReviewRow[]; transcript?: string };
+        if (saved?.review?.length) {
+          setReview(saved.review);
+          setTranscript(saved.transcript || '');
+          setPhase('review');
+        }
+      }
+    } catch {
+      /* egal */
+    }
+    restoredRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeKey]);
+
+  // Solange ein Ergebnis in der Kontroll-Liste steht, laufend sichern (überlebt
+  // versehentliches Schließen). Nur schreiben, nie beim ersten Lauf löschen.
+  useEffect(() => {
+    if (!restoredRef.current) return;
+    try {
+      if (phase === 'review' && review.length) {
+        sessionStorage.setItem(storeKey, JSON.stringify({ review, transcript }));
+      }
+    } catch {
+      /* egal */
+    }
+  }, [review, transcript, phase, storeKey]);
+
+  const clearSaved = useCallback(() => {
+    try {
+      sessionStorage.removeItem(storeKey);
+    } catch {
+      /* egal */
+    }
+  }, [storeKey]);
+
   const selectOptions = useMemo(() => {
     const home = players.filter((p) => p.side === 'home');
     const away = players.filter((p) => p.side === 'away');
@@ -276,16 +322,18 @@ export default function VoiceTrackingPanel({ homeName, awayName, players, onAppl
       const player = rest.join('::');
       items.push({ teamId, player, action: r.ev.action, delta: r.delta });
     }
+    clearSaved();
     onApply(items);
     onClose();
-  }, [review, onApply, onClose]);
+  }, [review, onApply, onClose, clearSaved]);
 
   const patchRow = (id: number, patch: Partial<ReviewRow>) =>
     setReview((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      {/* Kein Schließen bei Klick daneben – sonst geht die erkannte Liste versehentlich verloren. */}
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div className="relative w-full sm:max-w-3xl max-h-[92vh] sm:max-h-[88vh] flex flex-col bg-hl-card border border-white/12 rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl">
         {/* Kopf */}
         <div className="flex items-center gap-3 px-4 sm:px-5 py-3.5 border-b border-white/10 shrink-0">
@@ -564,6 +612,7 @@ export default function VoiceTrackingPanel({ homeName, awayName, players, onAppl
           <div className="border-t border-white/10 px-4 sm:px-5 py-3 flex items-center gap-3 shrink-0">
             <button
               onClick={() => {
+                clearSaved();
                 setPhase('input');
                 setReview([]);
                 setTranscript('');
