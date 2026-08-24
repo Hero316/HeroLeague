@@ -190,6 +190,10 @@ export async function heroBackfillMonth(req: VercelRequest, res: VercelResponse)
 // configured:false. Ergebnis wird pro Instanz 10 Min gecached (API-Limit).
 const IG_BASE = 'https://graph.instagram.com/v21.0';
 const igCache = new Map<number, { at: number; payload: unknown }>();
+// Letzte GESUNDE Antwort je Zeitraum. Falls Instagram mal leer/fehlerhaft
+// antwortet (Rate-Limit/Timeout), zeigen wir lieber die letzten guten Zahlen
+// statt 0/null – und cachen die kaputten Zahlen NICHT.
+const igLastGood = new Map<number, unknown>();
 
 async function saveIgToken(token: string, at: number) {
   try {
@@ -431,10 +435,22 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
       dailyLabel,
       items,
     };
-    igCache.set(days, { at: Date.now(), payload });
+    // „Gesund" = mindestens eine echte Konto-Kennzahl ist da. Nur dann cachen
+    // und als „letzten guten Stand" merken. Sonst: letzten guten Stand ausliefern
+    // (statt 0/null) und den kaputten Abruf NICHT cachen (nächster Aufruf holt neu).
+    const healthy = followers != null || (payload.totalViews30 ?? 0) > 0 || reachTV.total != null;
+    if (healthy) {
+      igCache.set(days, { at: Date.now(), payload });
+      igLastGood.set(days, payload);
+      return res.json(payload);
+    }
+    const lastGood = igLastGood.get(days);
+    if (lastGood) return res.json(lastGood);
     return res.json(payload);
   } catch (err) {
     console.error('instagramReels:', err);
+    const lastGood = igLastGood.get(days);
+    if (lastGood) return res.json(lastGood);
     return res.json({ configured: true, days, error: 'Abruf fehlgeschlagen', items: [], totalViews30: 0, count30: 0, count: 0 });
   }
 }
