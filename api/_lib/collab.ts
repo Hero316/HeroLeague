@@ -189,11 +189,11 @@ export async function heroBackfillMonth(req: VercelRequest, res: VercelResponse)
 // variable IG_ACCESS_TOKEN. Account-ID aus IG_BUSINESS_ID. Ohne beides →
 // configured:false. Ergebnis wird pro Instanz 10 Min gecached (API-Limit).
 const IG_BASE = 'https://graph.instagram.com/v21.0';
-const igCache = new Map<number, { at: number; payload: unknown }>();
-// Letzte GESUNDE Antwort je Zeitraum. Falls Instagram mal leer/fehlerhaft
+const igCache = new Map<string, { at: number; payload: unknown }>();
+// Letzte GESUNDE Antwort je Abruf-Variante. Falls Instagram mal leer/fehlerhaft
 // antwortet (Rate-Limit/Timeout), zeigen wir lieber die letzten guten Zahlen
 // statt 0/null – und cachen die kaputten Zahlen NICHT.
-const igLastGood = new Map<number, unknown>();
+const igLastGood = new Map<string, unknown>();
 
 async function saveIgToken(token: string, at: number) {
   try {
@@ -312,9 +312,15 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
   const igId = process.env.IG_BUSINESS_ID;
   const token = await getIgToken();
   const days = [7, 14, 30, 60, 90].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
+  // LEICHT-Modus (Startseite): nur Konto-Kennzahlen + Verlauf, KEIN Einzel-Post-
+  // Insights-Massenabruf und KEINE Demografie → wenige Calls, schnell & stabil.
+  // Voll-Modus (Panel „Mehr"): alles inkl. Post-Insights (aber gedeckelt) + Demografie.
+  const light = req.query.light === '1';
+  const INSIGHTS_LIMIT = light ? 0 : 18; // wie viele (neueste) Posts Einzel-Insights bekommen
+  const cacheKey = `${days}:${light ? 'l' : 'f'}`;
   if (!token || !igId) return res.json({ configured: false, days, items: [], totalViews30: 0, count30: 0, count: 0 });
 
-  const cached = igCache.get(days);
+  const cached = igCache.get(cacheKey);
   if (cached && Date.now() - cached.at < 10 * 60 * 1000) return res.json(cached.payload);
 
   try {
@@ -333,10 +339,12 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
     const media = data.data as IgMedia[];
 
     const items = await Promise.all(
-      media.map(async (m) => {
+      media.map(async (m, idx) => {
         let views: number | null = null;
         const isVideo = m.media_type === 'VIDEO' || m.media_product_type === 'REELS';
-        if (isVideo) {
+        // Einzel-Post-Insights nur für die NEUESTEN Posts (Deckel) und nie im
+        // Leicht-Modus – das ist der Haupttreiber der Instagram-Rate-Limits.
+        if (isVideo && idx < INSIGHTS_LIMIT) {
           for (const metric of ['views', 'plays', 'reach']) {
             try {
               const ir = await fetch(`${IG_BASE}/${m.id}/insights?metric=${metric}&access_token=${encodeURIComponent(token)}`);
@@ -381,10 +389,10 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
       igTotalValueRange(igId, token, 'views', sinceSec, untilSec, 'media_product_type'),
       igTotalValueRange(igId, token, 'reach', sinceSec, untilSec, 'follow_type'),
       igTotalValueRange(igId, token, 'total_interactions', sinceSec, untilSec),
-      igDemographics(igId, token, 'country'),
-      igDemographics(igId, token, 'city'),
-      igDemographics(igId, token, 'age'),
-      igDemographics(igId, token, 'gender'),
+      light ? Promise.resolve([]) : igDemographics(igId, token, 'country'),
+      light ? Promise.resolve([]) : igDemographics(igId, token, 'city'),
+      light ? Promise.resolve([]) : igDemographics(igId, token, 'age'),
+      light ? Promise.resolve([]) : igDemographics(igId, token, 'gender'),
       igTimeSeriesRange(igId, token, 'views', sinceSec, untilSec),
       igTimeSeriesRange(igId, token, 'reach', sinceSec, untilSec),
       igTimeSeriesRange(igId, token, 'follower_count', sinceSec, untilSec),
@@ -392,7 +400,6 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
     const { username, followers, mediaCount } = profile;
     const bd = viewsTV.byDim;
     const rbd = reachTV.byDim;
-    const mediaViewsSum = in30.reduce((s, m) => s + (m.views || 0), 0);
 
     // Aufrufe nach Art robust aufteilen. Die Dimensionswerte von
     // media_product_type variieren (REELS, STORY, FEED, POST, CAROUSEL_CONTAINER,
@@ -423,7 +430,7 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
       followerReach30: rbd.FOLLOWER ?? null,
       nonFollowerReach30: rbd.NON_FOLLOWER ?? null,
       demographics: { country: demoCountry, city: demoCity, age: demoAge, gender: demoGender },
-      totalViews30: viewsTV.total ?? mediaViewsSum,
+      totalViews30: viewsTV.total,
       totalLikes30: in30.reduce((s, m) => s + (m.likes || 0), 0),
       totalComments30: in30.reduce((s, m) => s + (m.comments || 0), 0),
       viewsReels30: reelsViews || in30.filter((m) => m.type === 'reel').reduce((s, m) => s + (m.views || 0), 0),
@@ -440,16 +447,16 @@ export async function instagramReels(req: VercelRequest, res: VercelResponse) {
     // (statt 0/null) und den kaputten Abruf NICHT cachen (nächster Aufruf holt neu).
     const healthy = followers != null || (payload.totalViews30 ?? 0) > 0 || reachTV.total != null;
     if (healthy) {
-      igCache.set(days, { at: Date.now(), payload });
-      igLastGood.set(days, payload);
+      igCache.set(cacheKey, { at: Date.now(), payload });
+      igLastGood.set(cacheKey, payload);
       return res.json(payload);
     }
-    const lastGood = igLastGood.get(days);
+    const lastGood = igLastGood.get(cacheKey);
     if (lastGood) return res.json(lastGood);
     return res.json(payload);
   } catch (err) {
     console.error('instagramReels:', err);
-    const lastGood = igLastGood.get(days);
+    const lastGood = igLastGood.get(cacheKey);
     if (lastGood) return res.json(lastGood);
     return res.json({ configured: true, days, error: 'Abruf fehlgeschlagen', items: [], totalViews30: 0, count30: 0, count: 0 });
   }

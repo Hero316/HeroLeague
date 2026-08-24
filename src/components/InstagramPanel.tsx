@@ -211,10 +211,17 @@ export default function InstagramPanel({ data: initial, onClose }: { data: IgRee
   const [openMedia, setOpenMedia] = useState<IgReel | null>(null);
   useBackClose(true, onClose);
 
+  // Beim Öffnen die VOLLEN Daten laden – die Startseite liefert nur den
+  // schnellen Leicht-Modus (ohne Post-Insights & Demografie).
+  useEffect(() => {
+    setLoading(true);
+    fetchInstagramReels(days, false).then(setData).catch(() => {}).finally(() => setLoading(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const changeRange = (dd: number) => {
     if (dd === days) return;
     setDays(dd); setLoading(true);
-    fetchInstagramReels(dd).then(setData).catch(() => {}).finally(() => setLoading(false));
+    fetchInstagramReels(dd, false).then(setData).catch(() => {}).finally(() => setLoading(false));
   };
 
   const rl = `${days} T.`;

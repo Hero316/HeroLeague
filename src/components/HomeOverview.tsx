@@ -95,7 +95,7 @@ export default function HomeOverview({
     setIgStatus('loading');
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const data = await fetchInstagramReels();
+        const data = await fetchInstagramReels(30, true); // Leicht-Modus: schnell & stabil
         setIg(data);
         setIgStatus('ok');
         return;
