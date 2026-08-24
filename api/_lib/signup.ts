@@ -7,7 +7,7 @@ import { sql } from './db.js';
 import { getSession } from './auth.js';
 import { badRequest } from './validate.js';
 import {
-  checkCode, clientIp, codeBlock, isDisposableEmail, isEmail, issueCode, mailLayout,
+  checkCode, clientIp, codeBlock, isDisposableEmail, isEmail, issueCode, mailButton,
   normEmail, sendBrandedMail, tooManyAttempts, verifyTurnstile,
 } from './publicforms.js';
 
@@ -53,6 +53,18 @@ async function getCaptains(): Promise<Captain[]> {
     return [];
   }
 }
+// „Hero League unterstützen"-Link: gemeinsam mit den Tickets (ein Pool). Wird aus
+// den Ticket-Einstellungen (settings key 'event_tickets') gelesen – so muss der
+// Link nur EINMAL gepflegt werden.
+async function getDonationUrl(): Promise<string> {
+  try {
+    const rows = await sql`SELECT value FROM settings WHERE key = 'event_tickets'`;
+    const v = rows[0]?.value as { donationUrl?: string } | undefined;
+    return typeof v?.donationUrl === 'string' && /^https?:\/\//i.test(v.donationUrl) ? v.donationUrl : '';
+  } catch {
+    return '';
+  }
+}
 
 // --- Eingaben säubern -------------------------------------------------------
 const clamp = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -67,7 +79,7 @@ const clampInt = (v: unknown, lo: number, hi: number): number | null => {
 // Öffentliche Konfiguration + (öffentlicher) Turnstile-Site-Key fürs Frontend.
 async function publicConfig(_req: VercelRequest, res: VercelResponse) {
   const cfg = await getConfig();
-  return res.json({ ...cfg, turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || '' });
+  return res.json({ ...cfg, turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || '', donationUrl: await getDonationUrl() });
 }
 
 // Captain-Erkennung: Ist diese E-Mail als Season-1-Captain hinterlegt?
@@ -142,6 +154,14 @@ async function saveSignup(req: VercelRequest, res: VercelResponse, opts: {
       status = 'confirmed', email_verified = true, entry = EXCLUDED.entry, kind = EXCLUDED.kind,
       team_name = EXCLUDED.team_name, contact_name = EXCLUDED.contact_name,
       data = EXCLUDED.data, updated_at = now()`;
+  const donation = await getDonationUrl();
+  const donationBlock = donation
+    ? `<div style="margin-top:20px;padding-top:18px;border-top:1px solid #eef2f1;">
+        <p style="font-family:Arial,Helvetica,sans-serif;color:#3a4441;font-size:14px;line-height:1.6;margin:0 0 12px;">
+          Bock, die Hero League zu unterstützen? Über einen freiwilligen Beitrag freuen wir uns riesig – jeder Euro fließt in die Liga. 💙</p>
+        ${mailButton('Hero League unterstützen', donation, ACCENT)}
+      </div>`
+    : '';
   try {
     await sendBrandedMail({
       to: email, from: FROM,
@@ -151,10 +171,10 @@ async function saveSignup(req: VercelRequest, res: VercelResponse, opts: {
         heading: opts.mailHeading, accent: ACCENT, accentDark: ACCENT_DARK,
         intro: opts.mailIntro,
         bodyHtml: `<p style="font-family:Arial,Helvetica,sans-serif;color:#3a4441;font-size:14px;line-height:1.6;margin:0;">
-          <strong>Wichtig:</strong> ${opts.note}</p>`,
+          <strong>Wichtig:</strong> ${opts.note}</p>${donationBlock}`,
         footnote: 'Fragen? Antworte einfach auf diese E-Mail.',
       },
-      text: `${opts.mailText}\n\nWichtig: ${opts.note}`,
+      text: `${opts.mailText}\n\nWichtig: ${opts.note}${donation ? `\n\nHero League unterstützen: ${donation}` : ''}`,
     });
   } catch { /* Mail optional */ }
   return res.json({ ok: true });

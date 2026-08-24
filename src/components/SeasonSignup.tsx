@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft, ArrowRight, Users, Sparkles, KeyRound, ShieldCheck, CheckCircle2,
-  AlertCircle, Loader2, Trophy, RefreshCw, PartyPopper, User, Building2, Dribbble,
+  AlertCircle, Loader2, Trophy, RefreshCw, PartyPopper, User, Building2, Dribbble, Heart,
 } from 'lucide-react';
 import {
   fetchSignupConfig, lookupCaptain, requestSignupCode, submitSignup, useTurnstile,
@@ -487,6 +487,15 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
                 <h2 className="font-display font-black text-3xl uppercase tracking-tight text-white">Anmeldung eingegangen!</h2>
                 <p className="text-hl-soft text-[15px] max-w-sm mx-auto leading-relaxed">Danke, {(entry === 'player' ? form.name : form.contactName)?.split(' ')[0] || 'Leute'}! Wir haben deine {entry === 'player' ? 'Spieler-' : ''}Vorregistrierung für {seasonLabel} erhalten und eine Bestätigung an <span className="text-white font-semibold">{email}</span> geschickt.</p>
                 <div className="rounded-2xl border border-yellow-500/25 bg-yellow-500/[.07] px-4 py-3 text-[13px] text-yellow-100/90 max-w-sm mx-auto text-left flex items-start gap-2.5"><ShieldCheck className="w-4 h-4 text-yellow-300 shrink-0 mt-0.5" /><span>Denk dran: noch kein fester Platz – wir melden uns persönlich.</span></div>
+
+                {cfg?.donationUrl && (
+                  <div className="hl-card rounded-2xl p-5 text-left max-w-sm mx-auto">
+                    <div className="flex items-center gap-2 text-white font-display font-black uppercase tracking-tight"><Heart className="w-4 h-4 text-[#83A0FF]" /> Bock, uns zu unterstützen?</div>
+                    <p className="text-[13px] text-hl-mute mt-1 mb-3">Über einen freiwilligen Beitrag freuen wir uns riesig – jeder Euro fließt in die Hero League. 💙</p>
+                    <a href={cfg.donationUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-[14px] font-bold text-white cursor-pointer" style={{ background: GRAD }}><Heart className="w-4 h-4" /> Hero League unterstützen</a>
+                  </div>
+                )}
+
                 <button onClick={() => onNavigate('/')} className="inline-flex items-center gap-2 rounded-2xl px-6 py-3 mt-2 text-[14px] font-display font-black uppercase tracking-wide text-white cursor-pointer" style={{ background: GRAD }}>Zur Startseite <ArrowRight className="w-4 h-4" /></button>
               </motion.div>
             )}

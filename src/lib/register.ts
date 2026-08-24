@@ -13,6 +13,7 @@ export interface SignupConfig {
   maxSquad: number;
   note: string;
   turnstileSiteKey: string;
+  donationUrl?: string; // optionaler „Hero League unterstützen"-Link (aus den Ticket-Einstellungen)
 }
 export type PlayerRatings = { technik: number | null; ausdauer: number | null; tempo: number | null; uebersicht: number | null; abschluss: number | null };
 export interface SignupPayload {
