@@ -18,7 +18,7 @@ export function isGeminiConfigured(): boolean {
 }
 
 function model(): string {
-  return process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  return process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 }
 
 // --- Aktions-Katalog (bewusst hier gespiegelt, mit Synonymen für die KI) -----
