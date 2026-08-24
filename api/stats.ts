@@ -5,6 +5,7 @@ import { badRequest, isNonEmptyString } from './_lib/validate.js';
 import { sheetInfo } from './_lib/gsheets.js';
 import { exportLeagueDay, exportScoringConfig } from './_lib/sheetExport.js';
 import { readDemo } from './_lib/demo.js';
+import { isGeminiConfigured, uploadAudio, parseTracking, type VoiceContext, type RosterPlayer } from './_lib/gemini.js';
 
 // ===========================================================================
 // Statistics Center — Roh-Zähler je Spieler & Spiel + Score-Einstellungen.
@@ -20,6 +21,9 @@ import { readDemo } from './_lib/demo.js';
 //  GET  /api/stats?resource=match&matchId=ID   -> { rows } für ein Spiel (eingeloggt)
 //  POST /api/stats?resource=tally              -> eine Spieler-Zeile speichern (Staff)
 // ===========================================================================
+
+// Voice-Tracking (Audio-Upload zu Gemini + Auswertung) kann länger dauern.
+export const config = { maxDuration: 120 };
 
 let statsEnsured = false;
 async function ensureStats(): Promise<void> {
@@ -181,6 +185,86 @@ const savePublish = requireStaff(async (req: VercelRequest, res: VercelResponse)
   return res.json({ days });
 });
 
+// --- Tracking-Regeln (saisonweit) & Voice-Tracking -------------------------
+
+const saveTrackingRules = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+  const b = (req.body ?? {}) as { text?: unknown };
+  const text = typeof b.text === 'string' ? b.text.slice(0, 4000) : '';
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('tracking_rules', ${JSON.stringify({ text })}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+  return res.json({ ok: true, text });
+});
+
+// Kontext (Kader/Teams) aus dem Frontend säubern – knallhart begrenzt gegen Müll.
+function sanitizeContext(raw: unknown): VoiceContext {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const homeTeam = typeof r.homeTeam === 'string' ? r.homeTeam.slice(0, 80) : '';
+  const awayTeam = typeof r.awayTeam === 'string' ? r.awayTeam.slice(0, 80) : '';
+  const rules = typeof r.rules === 'string' ? r.rules.slice(0, 4000) : '';
+  const players: RosterPlayer[] = Array.isArray(r.players)
+    ? (r.players as unknown[])
+        .slice(0, 60)
+        .map((p) => {
+          const o = (p ?? {}) as Record<string, unknown>;
+          return {
+            team: o.team === 'away' ? 'away' : 'home',
+            teamName: typeof o.teamName === 'string' ? o.teamName.slice(0, 80) : '',
+            name: typeof o.name === 'string' ? o.name.slice(0, 80) : '',
+            role: o.role === 'keeper' ? 'keeper' : 'field',
+            ...(typeof o.number === 'number' && Number.isFinite(o.number) ? { number: Math.trunc(o.number) } : {}),
+          } as RosterPlayer;
+        })
+        .filter((p) => p.name)
+    : [];
+  return { homeTeam, awayTeam, players, rules };
+}
+
+const MAX_AUDIO_BYTES = 40 * 1024 * 1024; // Sicherheitsgrenze für das Server-seitige Nachladen
+
+const voiceTracking = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+  if (!isGeminiConfigured()) {
+    return res.status(400).json({ error: 'Gemini ist nicht eingerichtet. Bitte GEMINI_API_KEY in Vercel hinterlegen.' });
+  }
+  const b = (req.body ?? {}) as { audioUrl?: unknown; mimeType?: unknown; transcript?: unknown; context?: unknown };
+  const context = sanitizeContext(b.context);
+  const transcript = typeof b.transcript === 'string' ? b.transcript.slice(0, 20000).trim() : '';
+  const audioUrl = typeof b.audioUrl === 'string' ? b.audioUrl : '';
+
+  try {
+    if (audioUrl) {
+      // Nur unsere eigenen Blob-URLs nachladen (kein offener Proxy).
+      let host = '';
+      try {
+        host = new URL(audioUrl).host;
+      } catch {
+        return badRequest(res, 'Ungültige Audio-URL.');
+      }
+      if (!/\.blob\.vercel-storage\.com$/.test(host) && !/(^|\.)hero-league\.de$/.test(host)) {
+        return badRequest(res, 'Audio-URL nicht erlaubt.');
+      }
+      const audioRes = await fetch(audioUrl);
+      if (!audioRes.ok) return res.status(400).json({ error: 'Audio konnte nicht geladen werden.' });
+      const buf = Buffer.from(await audioRes.arrayBuffer());
+      if (buf.length === 0) return badRequest(res, 'Audio ist leer.');
+      if (buf.length > MAX_AUDIO_BYTES) return badRequest(res, 'Audio ist zu groß.');
+      const mimeType = typeof b.mimeType === 'string' && b.mimeType ? b.mimeType : 'audio/wav';
+      const uploaded = await uploadAudio(buf, mimeType);
+      const result = await parseTracking({ audio: uploaded, context });
+      return res.json(result);
+    }
+    if (transcript) {
+      const result = await parseTracking({ transcript, context });
+      return res.json(result);
+    }
+    return badRequest(res, 'Kein Audio und kein Transkript übergeben.');
+  } catch (err) {
+    console.error('voiceTracking:', err);
+    return res.status(400).json({ error: err instanceof Error ? err.message : 'Auswertung fehlgeschlagen.' });
+  }
+});
+
 // --- Dispatcher -------------------------------------------------------------
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -260,6 +344,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           FROM match_player_stats WHERE match_id = ${matchId}`) as StatRow[];
         return res.json({ rows });
       }
+      if (resource === 'tracking-rules') {
+        const rows = await sql`SELECT value FROM settings WHERE key = 'tracking_rules'`;
+        const text = (rows[0]?.value as { text?: unknown })?.text;
+        return res.json({ text: typeof text === 'string' ? text : '' });
+      }
       return badRequest(res, 'Unbekannte Ressource.');
     }
 
@@ -270,6 +359,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'sheet-test') return testSheet(req, res);
       if (resource === 'export') return exportDay(req, res);
       if (resource === 'export-scoring') return exportScoring(req, res);
+      if (resource === 'tracking-rules') return saveTrackingRules(req, res);
+      if (resource === 'voice') return voiceTracking(req, res);
       return badRequest(res, 'Unbekannte Ressource.');
     }
 

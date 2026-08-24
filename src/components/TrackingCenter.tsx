@@ -14,6 +14,7 @@ import {
   FlaskConical,
   FileSpreadsheet,
   Users,
+  Mic,
 } from 'lucide-react';
 import type {
   ActionCounts,
@@ -40,6 +41,7 @@ import {
 import { emptyCounts, matchNote, normalizeCounts, rohscore } from '../lib/rating';
 import { shortDate } from './ui';
 import { useBackClose, goBackLayer } from '../lib/backStack';
+import VoiceTrackingPanel, { type VoicePlayer } from './VoiceTrackingPanel';
 import {
   fetchScoring,
   saveScoring as apiSaveScoring,
@@ -80,6 +82,7 @@ interface EditRow {
   playerName: string;
   role: StatRole;
   counts: ActionCounts;
+  number?: number; // feste Trikotnummer (aus dem Kader), optional
 }
 
 type RowMap = Record<string, EditRow>; // Schlüssel: `${matchId}::${teamId}::${name}`
@@ -273,7 +276,7 @@ export default function TrackingCenter({
   //    ausgeblendet (aus der Spiel-Verwaltung, `absent`).
   // Bei Events (kein rk) wird nicht nach Aufstellung gefiltert.
   const squadFor = useCallback(
-    (key: string, rk: string | null, absent?: Set<string>, rmap?: RosterMap): { name: string; role: StatRole }[] => {
+    (key: string, rk: string | null, absent?: Set<string>, rmap?: RosterMap): { name: string; role: StatRole; number?: number }[] => {
       // Event-Modus: zuerst der EIGENE Event-Kader (namensbasiert), sonst der
       // gleichnamige Liga-Verein. So lassen sich auch reine Gastteams tracken.
       if (selectedEvent) {
@@ -286,7 +289,11 @@ export default function TrackingCenter({
         return list
           .filter((p) => p.name)
           .filter((p) => !absent || !absent.has(p.name))
-          .map((p) => ({ name: p.name, role: ((eveningKeeper ? p.name === eveningKeeper : p.goalkeeper) ? 'keeper' : 'field') as StatRole }));
+          .map((p) => ({
+            name: p.name,
+            role: ((eveningKeeper ? p.name === eveningKeeper : p.goalkeeper) ? 'keeper' : 'field') as StatRole,
+            number: (p as { number?: number }).number,
+          }));
       }
       const team = resolveTeam(key);
       if (!team) return [];
@@ -299,6 +306,7 @@ export default function TrackingCenter({
         .map((p) => ({
           name: p.name,
           role: (keeper ? p.name === keeper : p.goalkeeper) ? ('keeper' as StatRole) : ('field' as StatRole),
+          number: p.number,
         }));
     },
     [resolveTeam, rosterState, selectedEvent]
@@ -336,6 +344,7 @@ export default function TrackingCenter({
                 playerName: pl.name,
                 role: (sv?.role as StatRole) || pl.role,
                 counts: sv?.counts ?? emptyCounts(),
+                number: pl.number,
               };
             });
           });
@@ -1022,6 +1031,36 @@ function MatchEditor({
       .filter(([k]) => k.startsWith(`${match.id}::${teamId}::`))
       .map(([k, r]) => ({ k, r }));
 
+  const [voiceOpen, setVoiceOpen] = useState(false);
+
+  // Kader beider Teams für das Voice-Panel (aus dem aktuellen Raster).
+  const voicePlayers = useMemo<VoicePlayer[]>(() => {
+    const out: VoicePlayer[] = [];
+    ([match.homeTeamId, match.awayTeamId] as const).forEach((teamId, idx) => {
+      const side: 'home' | 'away' = idx === 0 ? 'home' : 'away';
+      const team = resolveTeam(teamId);
+      const teamName = team?.name ?? teamId;
+      teamRows(teamId).forEach(({ r }) => {
+        // Echte Trikotnummer aus der Spielerliste (falls hinterlegt) mitgeben,
+        // damit die KI „die Nummer 5" korrekt zuordnen kann.
+        const num = team?.spielerliste?.find((p) => normName(p.name) === normName(r.playerName))?.number;
+        out.push({ side, teamId, teamName, name: r.playerName, role: r.role, ...(typeof num === 'number' ? { number: num } : {}) });
+      });
+    });
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [match.id, rows]);
+
+  // Erkannte Ereignisse ins Raster übernehmen (delta pro Aktion).
+  const applyVoice = useCallback(
+    (items: { teamId: string; player: string; action: keyof ActionCounts; delta: number }[]) => {
+      items.forEach((it) => {
+        onDelta(rowKey(match.id, it.teamId, it.player), match.id, it.action, it.delta);
+      });
+    },
+    [onDelta, match.id]
+  );
+
   return (
     <div className="hl-fade">
       <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -1035,13 +1074,31 @@ function MatchEditor({
           {home?.name ?? match.homeTeamId} <span className="text-hl-faint">–</span> {away?.name ?? match.awayTeamId}
         </h1>
         <button
+          onClick={() => setVoiceOpen(true)}
+          title="Spiel einreden – KI trägt die Aktionen ein"
+          className="ml-auto px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-white cursor-pointer active:scale-95 transition"
+          style={{ background: 'linear-gradient(135deg,#E6238E,#b81570)' }}
+        >
+          <Mic className="w-3.5 h-3.5" /> Audio-Tracking
+        </button>
+        <button
           onClick={() => onUndo(match.id)}
           disabled={undoCount === 0}
-          className="ml-auto px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border border-white/10 bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border border-white/10 bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
         >
           <Undo2 className="w-3.5 h-3.5" /> Rückgängig
         </button>
       </div>
+
+      {voiceOpen && (
+        <VoiceTrackingPanel
+          homeName={home?.name ?? match.homeTeamId}
+          awayName={away?.name ?? match.awayTeamId}
+          players={voicePlayers}
+          onApply={applyVoice}
+          onClose={() => setVoiceOpen(false)}
+        />
+      )}
 
       {/* Am PC beide Mannschaften nebeneinander (2 Spalten) – kompakter, kein Scrollen. */}
       <div className="grid xl:grid-cols-2 gap-x-5 items-start">
@@ -1108,11 +1165,17 @@ function PlayerCard({
     <div className="hl-card p-2 flex flex-col lg:flex-row gap-2 min-w-0">
       {/* Identität */}
       <div className="lg:w-40 shrink-0 flex items-center gap-2.5 px-1">
-        <div className="w-8 h-8 rounded-full bg-brand-accent/12 border border-brand-accent/25 grid place-items-center text-brand-accent-light font-black text-sm shrink-0">
-          {slot}
+        <div
+          className="w-8 h-8 rounded-full bg-brand-accent/12 border border-brand-accent/25 grid place-items-center text-brand-accent-light font-black text-base shrink-0 tabular-nums"
+          title={typeof row.number === 'number' ? `Trikotnummer ${row.number}` : 'noch keine Nummer eingetragen'}
+        >
+          {typeof row.number === 'number' ? row.number : '–'}
         </div>
         <div className="min-w-0 flex-1">
           <div className="font-display font-black text-[15px] truncate leading-tight">{row.playerName}</div>
+          {typeof row.number !== 'number' && (
+            <div className="text-[9px] text-hl-faint leading-tight mt-0.5">noch keine Nummer eingetragen</div>
+          )}
           <div className="flex items-center gap-2 mt-0.5">
             <span
               className="font-display font-black tabular-nums text-[17px] leading-none"
