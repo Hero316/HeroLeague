@@ -1638,7 +1638,7 @@ export default function App() {
         onOpenAlbum={openHighlightsAlbum}
       />
       {activeEvent && activeTab === 'home' && (
-        <EventBanner event={activeEvent} isLive={eventHasLive} staffPreview={eventStaffPreview} onOpen={() => navigateTo('/testspiel')} />
+        <EventBanner event={activeEvent} isLive={eventHasLive} staffPreview={eventStaffPreview} onOpen={() => navigateTo('/testspiel')} onOpenTickets={() => navigateTo('/testspiel/tickets')} />
       )}
       {activeTab === 'home' && <SeasonSignupBanner onOpen={() => navigateTo('/anmeldung')} />}
       <LiveTicker news={news} />
