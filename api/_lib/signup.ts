@@ -112,6 +112,54 @@ async function requestCode(req: VercelRequest, res: VercelResponse) {
   return res.json(result.devCode ? { ok: true, devCode: result.devCode } : { ok: true });
 }
 
+const clampRating = (v: unknown): number | null => {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.min(10, Math.max(1, n)) : null;
+};
+const RATING_KEYS = ['technik', 'ausdauer', 'tempo', 'uebersicht', 'abschluss'] as const;
+function buildRatings(src: unknown): Record<string, number | null> {
+  const r = (src && typeof src === 'object' ? src : {}) as Record<string, unknown>;
+  const out: Record<string, number | null> = {};
+  for (const k of RATING_KEYS) out[k] = clampRating(r[k]);
+  return out;
+}
+
+// Gemeinsames Speichern + Bestätigungs-Mail (Team ODER Spieler).
+async function saveSignup(req: VercelRequest, res: VercelResponse, opts: {
+  entry: 'team' | 'player'; kind: string; teamName: string; contactName: string;
+  data: Record<string, unknown>; seasonLabel: string; note: string;
+  mailHeading: string; mailIntro: string; mailText: string;
+}) {
+  const id = randomUUID();
+  const email = normEmail(String((req.body ?? {}).email));
+  const ip = clientIp(req);
+  // Eine Anmeldung pro E-Mail: bestehende (bestätigte) aktualisieren.
+  await sql`INSERT INTO season_signups
+      (id, email, email_verified, status, entry, kind, team_name, contact_name, data, ip, created_at, updated_at)
+    VALUES (${id}, ${email}, true, 'confirmed', ${opts.entry}, ${opts.kind}, ${opts.teamName}, ${opts.contactName}, ${JSON.stringify(opts.data)}::jsonb, ${ip}, now(), now())
+    ON CONFLICT (email) DO UPDATE SET
+      status = 'confirmed', email_verified = true, entry = EXCLUDED.entry, kind = EXCLUDED.kind,
+      team_name = EXCLUDED.team_name, contact_name = EXCLUDED.contact_name,
+      data = EXCLUDED.data, updated_at = now()`;
+  try {
+    await sendBrandedMail({
+      to: email, from: FROM,
+      subject: `Anmeldung eingegangen – ${opts.contactName || opts.teamName}`,
+      layout: {
+        preheader: 'Wir haben deine Vorregistrierung für Season 2 erhalten.',
+        heading: opts.mailHeading, accent: ACCENT, accentDark: ACCENT_DARK,
+        intro: opts.mailIntro,
+        bodyHtml: `<p style="font-family:Arial,Helvetica,sans-serif;color:#3a4441;font-size:14px;line-height:1.6;margin:0;">
+          <strong>Wichtig:</strong> ${opts.note}</p>`,
+        footnote: 'Fragen? Antworte einfach auf diese E-Mail.',
+      },
+      text: `${opts.mailText}\n\nWichtig: ${opts.note}`,
+    });
+  } catch { /* Mail optional */ }
+  return res.json({ ok: true });
+}
+
 // Anmeldung abschließen (Code prüfen + speichern + Bestätigungs-Mail).
 async function submit(req: VercelRequest, res: VercelResponse) {
   const cfg = await getConfig();
@@ -119,20 +167,47 @@ async function submit(req: VercelRequest, res: VercelResponse) {
   const b = req.body ?? {};
   if (typeof b.website === 'string' && b.website.trim() !== '') return res.json({ ok: true }); // Honeypot
   if (!isEmail(b.email)) return badRequest(res, 'Bitte eine gültige E-Mail-Adresse eingeben.');
-
   const check = await checkCode(PURPOSE, b.email, b.code);
-  if (!check.ok) return badRequest(res, check.error || "Code ungültig.");
+  if (!check.ok) return badRequest(res, check.error || 'Code ungültig.');
+  if (b.consent !== true) return badRequest(res, 'Bitte bestätige den Hinweis zur unverbindlichen Anmeldung.');
 
+  // --- Spieler-Anmeldung ----------------------------------------------------
+  if (b.entry === 'player') {
+    const name = clamp(b.name, 80);
+    if (!name) return badRequest(res, 'Bitte deinen Namen angeben.');
+    const ptype = b.playerType === 'verein' ? 'verein' : b.playerType === 'hobby' ? 'hobby' : '';
+    if (!ptype) return badRequest(res, 'Bitte auswählen: Verein oder Hobby.');
+    const data = {
+      name, phone: clamp(b.phone, 40), age: clampInt(b.age, 12, 80),
+      playerType: ptype,
+      position: ['tor', 'abwehr', 'mittelfeld', 'sturm', 'flexibel'].includes(b.position) ? b.position : '',
+      foot: ['links', 'rechts', 'beid'].includes(b.foot) ? b.foot : '',
+      ratings: buildRatings(b.ratings),
+      motivation: clamp(b.motivation, 800),
+      // Verein-spezifisch
+      club: clamp(b.club, 80),
+      league: clamp(b.league, 60),
+      // Hobby-spezifisch
+      years: clampInt(b.years, 0, 60),
+      frequency: ['selten', 'monatlich', 'woechentlich', 'mehrmals'].includes(b.frequency) ? b.frequency : '',
+    };
+    return saveSignup(req, res, {
+      entry: 'player', kind: ptype, teamName: '', contactName: name, data,
+      seasonLabel: cfg.seasonLabel, note: cfg.note,
+      mailHeading: 'Anmeldung eingegangen ✅',
+      mailIntro: `Danke, ${name}! Wir haben deine Spieler-Vorregistrierung für ${cfg.seasonLabel} erhalten.`,
+      mailText: `Danke, ${name}! Deine Spieler-Vorregistrierung für ${cfg.seasonLabel} ist eingegangen.`,
+    });
+  }
+
+  // --- Team-Anmeldung -------------------------------------------------------
   const teamName = clamp(b.teamName, 80);
   const contactName = clamp(b.contactName, 80);
   if (!teamName) return badRequest(res, 'Bitte einen Teamnamen angeben.');
   if (!contactName) return badRequest(res, 'Bitte einen Ansprechpartner angeben.');
-  if (b.consent !== true) return badRequest(res, 'Bitte bestätige den Hinweis zur unverbindlichen Anmeldung.');
-
   const kind = b.kind === 'returning' ? 'returning' : 'new';
   const data = {
-    teamName, contactName, phone: clamp(b.phone, 40),
-    kind,
+    teamName, contactName, phone: clamp(b.phone, 40), kind,
     s1TeamName: clamp(b.s1TeamName, 80),
     keepName: b.keepName === true,
     rosterChange: ['same', 'minor', 'major'].includes(b.rosterChange) ? b.rosterChange : '',
@@ -143,36 +218,13 @@ async function submit(req: VercelRequest, res: VercelResponse) {
     hobbyPlayers: clampInt(b.hobbyPlayers, 0, 30),
     motivation: clamp(b.motivation, 800),
   };
-
-  const id = randomUUID();
-  const email = normEmail(b.email);
-  const ip = clientIp(req);
-  // Eine Anmeldung pro E-Mail: bestehende (bestätigte) aktualisieren.
-  await sql`INSERT INTO season_signups
-      (id, email, email_verified, status, kind, team_name, contact_name, data, ip, created_at, updated_at)
-    VALUES (${id}, ${email}, true, 'confirmed', ${kind}, ${teamName}, ${contactName}, ${JSON.stringify(data)}::jsonb, ${ip}, now(), now())
-    ON CONFLICT (email) DO UPDATE SET
-      status = 'confirmed', email_verified = true, kind = EXCLUDED.kind,
-      team_name = EXCLUDED.team_name, contact_name = EXCLUDED.contact_name,
-      data = EXCLUDED.data, updated_at = now()`;
-
-  try {
-    await sendBrandedMail({
-      to: email, from: FROM,
-      subject: `Anmeldung eingegangen – ${teamName}`,
-      layout: {
-        preheader: 'Wir haben eure Vorregistrierung für Season 2 erhalten.',
-        heading: 'Anmeldung eingegangen ✅', accent: ACCENT, accentDark: ACCENT_DARK,
-        intro: `Danke, ${contactName}! Wir haben die Vorregistrierung von „${teamName}" für ${cfg.seasonLabel} erhalten.`,
-        bodyHtml: `<p style="font-family:Arial,Helvetica,sans-serif;color:#3a4441;font-size:14px;line-height:1.6;margin:0;">
-          <strong>Wichtig:</strong> ${cfg.note}</p>`,
-        footnote: 'Fragen? Antworte einfach auf diese E-Mail.',
-      },
-      text: `Danke, ${contactName}! Eure Vorregistrierung für ${cfg.seasonLabel} (Team „${teamName}") ist eingegangen.\n\nWichtig: ${cfg.note}`,
-    });
-  } catch { /* Mail optional */ }
-
-  return res.json({ ok: true });
+  return saveSignup(req, res, {
+    entry: 'team', kind, teamName, contactName, data,
+    seasonLabel: cfg.seasonLabel, note: cfg.note,
+    mailHeading: 'Anmeldung eingegangen ✅',
+    mailIntro: `Danke, ${contactName}! Wir haben die Vorregistrierung von „${teamName}" für ${cfg.seasonLabel} erhalten.`,
+    mailText: `Danke, ${contactName}! Eure Vorregistrierung für ${cfg.seasonLabel} (Team „${teamName}") ist eingegangen.`,
+  });
 }
 
 // --- Admin-Aktionen (nur Super-Admin) ---------------------------------------
@@ -184,7 +236,7 @@ async function requireSuper(req: VercelRequest, res: VercelResponse): Promise<bo
 }
 
 async function adminList(_req: VercelRequest, res: VercelResponse) {
-  const rows = await sql`SELECT id, email, status, kind,
+  const rows = await sql`SELECT id, email, status, entry, kind,
       team_name AS "teamName", contact_name AS "contactName",
       email_verified AS "emailVerified",
       created_at AS "createdAt", updated_at AS "updatedAt"
@@ -193,7 +245,7 @@ async function adminList(_req: VercelRequest, res: VercelResponse) {
 }
 async function adminDetail(req: VercelRequest, res: VercelResponse) {
   const id = String(req.query.id ?? '');
-  const rows = await sql`SELECT id, email, status, kind, team_name AS "teamName", contact_name AS "contactName",
+  const rows = await sql`SELECT id, email, status, entry, kind, team_name AS "teamName", contact_name AS "contactName",
       email_verified AS "emailVerified", data, ip, created_at AS "createdAt", updated_at AS "updatedAt"
     FROM season_signups WHERE id = ${id} LIMIT 1`;
   if (rows.length === 0) return res.status(404).json({ error: 'Nicht gefunden' });

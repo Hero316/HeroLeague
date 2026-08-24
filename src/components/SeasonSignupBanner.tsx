@@ -26,10 +26,10 @@ export default function SeasonSignupBanner({ onOpen }: { onOpen: () => void }) {
         </div>
         <div className="min-w-0 flex-1">
           <span className="font-sans font-extrabold text-[10px] sm:text-[11px] tracking-[2.5px] uppercase text-[#5fe6d3]">
-            {cfg.seasonLabel} · Team-Anmeldung offen
+            {cfg.seasonLabel} · Anmeldung offen
           </span>
           <div className="font-display font-black text-xl sm:text-3xl uppercase tracking-tight text-white leading-none mt-0.5">
-            Meldet euer Team an
+            Team oder Spieler anmelden
           </div>
           {cfg.startInfo && (
             <div className="mt-1.5 hidden sm:flex items-center gap-2 text-xs font-sans text-hl-soft">

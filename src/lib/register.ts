@@ -14,13 +14,20 @@ export interface SignupConfig {
   note: string;
   turnstileSiteKey: string;
 }
+export type PlayerRatings = { technik: number | null; ausdauer: number | null; tempo: number | null; uebersicht: number | null; abschluss: number | null };
 export interface SignupPayload {
   email: string;
   code?: string;
-  kind: 'returning' | 'new';
-  teamName: string;
-  contactName: string;
-  phone: string;
+  entry: 'team' | 'player';
+  consent?: boolean;
+  website?: string; // Honeypot
+  turnstileToken?: string;
+  phone?: string;
+  motivation?: string;
+  // Team
+  kind?: 'returning' | 'new';
+  teamName?: string;
+  contactName?: string;
   s1TeamName?: string;
   keepName?: boolean;
   rosterChange?: 'same' | 'minor' | 'major' | '';
@@ -29,23 +36,35 @@ export interface SignupPayload {
   level?: 'hobby' | 'mixed' | 'ambitioniert' | '';
   clubPlayers?: number | null;
   hobbyPlayers?: number | null;
-  motivation?: string;
-  consent?: boolean;
-  website?: string; // Honeypot
-  turnstileToken?: string;
+  // Spieler
+  name?: string;
+  age?: number | null;
+  playerType?: 'verein' | 'hobby';
+  position?: 'tor' | 'abwehr' | 'mittelfeld' | 'sturm' | 'flexibel' | '';
+  foot?: 'links' | 'rechts' | 'beid' | '';
+  ratings?: Partial<PlayerRatings>;
+  club?: string;
+  league?: string;
+  years?: number | null;
+  frequency?: 'selten' | 'monatlich' | 'woechentlich' | 'mehrmals' | '';
 }
 export interface SignupListItem {
-  id: string; email: string; status: string; kind: 'returning' | 'new';
+  id: string; email: string; status: string; entry: 'team' | 'player'; kind: string;
   teamName: string; contactName: string; emailVerified: boolean;
   createdAt: string; updatedAt: string;
 }
 export interface SignupDetail extends SignupListItem {
   ip: string;
   data: {
-    teamName: string; contactName: string; phone: string; kind: string;
-    s1TeamName: string; keepName: boolean; rosterChange: string;
-    squadSize: number | null; avgAge: string; level: string;
-    clubPlayers: number | null; hobbyPlayers: number | null; motivation: string;
+    // Team
+    teamName?: string; contactName?: string; phone?: string; kind?: string;
+    s1TeamName?: string; keepName?: boolean; rosterChange?: string;
+    squadSize?: number | null; avgAge?: string; level?: string;
+    clubPlayers?: number | null; hobbyPlayers?: number | null; motivation?: string;
+    // Spieler
+    name?: string; age?: number | null; playerType?: string;
+    position?: string; foot?: string; ratings?: PlayerRatings;
+    club?: string; league?: string; years?: number | null; frequency?: string;
   };
 }
 export interface Captain { email: string; teamName: string; }
