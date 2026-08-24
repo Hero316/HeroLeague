@@ -36,6 +36,11 @@ const FREQ = [
   { id: 'selten', label: 'Selten' }, { id: 'monatlich', label: 'Monatlich' },
   { id: 'woechentlich', label: 'Wöchentlich' }, { id: 'mehrmals', label: 'Mehrmals/Woche' },
 ] as const;
+const HEARD = [
+  { id: 'internet', label: 'Internet / Google' }, { id: 'social', label: 'Social Media' },
+  { id: 'freunde', label: 'Freunde / Bekannte' }, { id: 'kontakte', label: 'Kontakte / Verein' },
+  { id: 'sonstiges', label: 'Sonstiges' },
+] as const;
 const RATINGS: { key: keyof NonNullable<SignupPayload['ratings']>; label: string }[] = [
   { key: 'technik', label: 'Technik' },
   { key: 'ausdauer', label: 'Ausdauer / Fitness' },
@@ -216,7 +221,7 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
     if (!consent) { setErr('Bitte den Hinweis zur unverbindlichen Anmeldung bestätigen.'); return; }
     setBusy(true); setErr('');
     try {
-      const base: SignupPayload = { email: email.trim(), code: code.trim(), entry, consent, website: honeypot.current, phone: form.phone || '', motivation: form.motivation };
+      const base: SignupPayload = { email: email.trim(), code: code.trim(), entry, consent, website: honeypot.current, phone: form.phone || '', motivation: form.motivation, heardFrom: form.heardFrom };
       if (entry === 'player') {
         await submitSignup({
           ...base, name: form.name!.trim(), playerType, age: form.age ?? null,
@@ -384,6 +389,7 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
                   <Field label="Nur Hobby"><input type="number" min={0} max={30} inputMode="numeric" value={form.hobbyPlayers ?? ''} onChange={(e) => patch({ hobbyPlayers: e.target.value === '' ? null : Number(e.target.value) })} placeholder="0" className={inputCls} /></Field>
                 </div>
                 <Field label="Warum wollt ihr dabei sein? (optional)"><textarea value={form.motivation || ''} onChange={(e) => patch({ motivation: e.target.value })} rows={3} maxLength={800} placeholder="Erzählt uns kurz was über euch …" className={`${inputCls} resize-none`} /></Field>
+                <Field label="Wie habt ihr von uns erfahren?"><Pills options={HEARD.map((h) => ({ id: h.id as string, label: h.label }))} value={form.heardFrom || undefined} onChange={(v) => patch({ heardFrom: v })} /></Field>
                 {cfg?.turnstileSiteKey && <div ref={turnstile.ref} className="flex justify-center" />}
                 <PrimaryBtn onClick={teamToVerify} disabled={busy}>{busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Weiter zur Bestätigung <ArrowRight className="w-4 h-4" /></>}</PrimaryBtn>
               </div>
@@ -443,6 +449,7 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
                 </div>
 
                 <Field label="Warum sollte dich ein Team nehmen?"><textarea value={form.motivation || ''} onChange={(e) => patch({ motivation: e.target.value })} rows={3} maxLength={800} placeholder="Deine Stärken, Erfahrung, was dich ausmacht …" className={`${inputCls} resize-none`} /></Field>
+                <Field label="Wie hast du von uns erfahren?"><Pills options={HEARD.map((h) => ({ id: h.id as string, label: h.label }))} value={form.heardFrom || undefined} onChange={(v) => patch({ heardFrom: v })} /></Field>
 
                 {cfg?.turnstileSiteKey && <div ref={turnstile.ref} className="flex justify-center" />}
                 <PrimaryBtn onClick={playerToVerify} disabled={busy}>{busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Weiter zur Bestätigung <ArrowRight className="w-4 h-4" /></>}</PrimaryBtn>

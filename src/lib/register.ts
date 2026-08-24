@@ -24,6 +24,7 @@ export interface SignupPayload {
   turnstileToken?: string;
   phone?: string;
   motivation?: string;
+  heardFrom?: string;
   // Team
   kind?: 'returning' | 'new';
   teamName?: string;
@@ -56,6 +57,7 @@ export interface SignupListItem {
 export interface SignupDetail extends SignupListItem {
   ip: string;
   data: {
+    heardFrom?: string;
     // Team
     teamName?: string; contactName?: string; phone?: string; kind?: string;
     s1TeamName?: string; keepName?: boolean; rosterChange?: string;

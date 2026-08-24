@@ -31,7 +31,7 @@ const DEFAULT_CONFIG: SignupConfig = {
   startInfo: 'Start voraussichtlich März 2027',
   minSquad: 8,
   maxSquad: 12,
-  note: 'Diese Anmeldung ist eine unverbindliche Vorregistrierung und noch KEIN garantierter Startplatz in Season 2. Sie hilft uns nur bei der Planung – wir melden uns danach persönlich bei euch.',
+  note: 'Diese Anmeldung ist eine unverbindliche Vorregistrierung und noch KEIN garantierter Startplatz in Season 2. ABER: Wer sich jetzt meldet, hat eine deutlich höhere Chance, dabei zu sein (eine 100%-Garantie ist es trotzdem nicht). Sie hilft uns bei der Planung – wir melden uns danach persönlich bei euch.',
 };
 interface Captain { email: string; teamName: string; }
 
@@ -184,6 +184,7 @@ async function submit(req: VercelRequest, res: VercelResponse) {
       foot: ['links', 'rechts', 'beid'].includes(b.foot) ? b.foot : '',
       ratings: buildRatings(b.ratings),
       motivation: clamp(b.motivation, 800),
+      heardFrom: ['internet', 'social', 'freunde', 'kontakte', 'sonstiges'].includes(b.heardFrom) ? b.heardFrom : '',
       // Verein-spezifisch
       club: clamp(b.club, 80),
       league: clamp(b.league, 60),
@@ -217,6 +218,7 @@ async function submit(req: VercelRequest, res: VercelResponse) {
     clubPlayers: clampInt(b.clubPlayers, 0, 30),
     hobbyPlayers: clampInt(b.hobbyPlayers, 0, 30),
     motivation: clamp(b.motivation, 800),
+    heardFrom: ['internet', 'social', 'freunde', 'kontakte', 'sonstiges'].includes(b.heardFrom) ? b.heardFrom : '',
   };
   return saveSignup(req, res, {
     entry: 'team', kind, teamName, contactName, data,

@@ -17,6 +17,7 @@ const POS_LABEL: Record<string, string> = { tor: 'Tor', abwehr: 'Abwehr', mittel
 const FOOT_LABEL: Record<string, string> = { links: 'Links', rechts: 'Rechts', beid: 'Beidfüßig' };
 const FREQ_LABEL: Record<string, string> = { selten: 'Selten', monatlich: 'Monatlich', woechentlich: 'Wöchentlich', mehrmals: 'Mehrmals/Woche' };
 const RATING_LABEL: Record<string, string> = { technik: 'Technik', ausdauer: 'Ausdauer', tempo: 'Schnelligkeit', uebersicht: 'Übersicht', abschluss: 'Abschluss' };
+const HEARD_LABEL: Record<string, string> = { internet: 'Internet / Google', social: 'Social Media', freunde: 'Freunde / Bekannte', kontakte: 'Kontakte / Verein', sonstiges: 'Sonstiges' };
 const fmtDate = (iso: string) => { try { return new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return iso; } };
 const inp = 'w-full bg-white/[.05] border border-white/10 rounded-xl px-3 py-2 text-[14px] text-white placeholder-hl-faint focus:border-brand-accent-light focus:outline-none';
 
@@ -43,6 +44,7 @@ function DetailModal({ id, onClose, onDeleted }: { id: string; onClose: () => vo
       ['Jahre Erfahrung', d.data.years != null ? String(d.data.years) : '–'] as [string, string],
       ['Spielt', FREQ_LABEL[d.data.frequency || ''] || '–'] as [string, string],
     ]),
+    ['Gefunden über', HEARD_LABEL[d.data.heardFrom || ''] || '–'],
     ['Angemeldet am', fmtDate(d.createdAt)],
   ] : [
     ['Team', d.data.teamName || d.teamName],
@@ -60,6 +62,7 @@ function DetailModal({ id, onClose, onDeleted }: { id: string; onClose: () => vo
     ['Ausrichtung', LEVEL_LABEL[d.data.level || ''] || '–'],
     ['Spieler im Verein', d.data.clubPlayers != null ? String(d.data.clubPlayers) : '–'],
     ['Nur Hobby', d.data.hobbyPlayers != null ? String(d.data.hobbyPlayers) : '–'],
+    ['Gefunden über', HEARD_LABEL[d.data.heardFrom || ''] || '–'],
     ['Angemeldet am', fmtDate(d.createdAt)],
   ];
   const ratings = isPlayer && d?.data.ratings ? Object.entries(d.data.ratings).filter(([, v]) => v != null) : [];
