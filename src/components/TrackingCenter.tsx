@@ -14,6 +14,7 @@ import {
   FlaskConical,
   FileSpreadsheet,
   Users,
+  Mic,
 } from 'lucide-react';
 import type {
   ActionCounts,
@@ -40,6 +41,7 @@ import {
 import { emptyCounts, matchNote, normalizeCounts, rohscore } from '../lib/rating';
 import { shortDate } from './ui';
 import { useBackClose, goBackLayer } from '../lib/backStack';
+import VoiceTrackingPanel, { type VoicePlayer } from './VoiceTrackingPanel';
 import {
   fetchScoring,
   saveScoring as apiSaveScoring,
@@ -1022,6 +1024,32 @@ function MatchEditor({
       .filter(([k]) => k.startsWith(`${match.id}::${teamId}::`))
       .map(([k, r]) => ({ k, r }));
 
+  const [voiceOpen, setVoiceOpen] = useState(false);
+
+  // Kader beider Teams für das Voice-Panel (aus dem aktuellen Raster).
+  const voicePlayers = useMemo<VoicePlayer[]>(() => {
+    const out: VoicePlayer[] = [];
+    ([match.homeTeamId, match.awayTeamId] as const).forEach((teamId, idx) => {
+      const side: 'home' | 'away' = idx === 0 ? 'home' : 'away';
+      const teamName = resolveTeam(teamId)?.name ?? teamId;
+      teamRows(teamId).forEach(({ r }) => {
+        out.push({ side, teamId, teamName, name: r.playerName, role: r.role });
+      });
+    });
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [match.id, rows]);
+
+  // Erkannte Ereignisse ins Raster übernehmen (delta pro Aktion).
+  const applyVoice = useCallback(
+    (items: { teamId: string; player: string; action: keyof ActionCounts; delta: number }[]) => {
+      items.forEach((it) => {
+        onDelta(rowKey(match.id, it.teamId, it.player), match.id, it.action, it.delta);
+      });
+    },
+    [onDelta, match.id]
+  );
+
   return (
     <div className="hl-fade">
       <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -1035,13 +1063,31 @@ function MatchEditor({
           {home?.name ?? match.homeTeamId} <span className="text-hl-faint">–</span> {away?.name ?? match.awayTeamId}
         </h1>
         <button
+          onClick={() => setVoiceOpen(true)}
+          title="Spiel einreden – KI trägt die Aktionen ein"
+          className="ml-auto px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-white cursor-pointer active:scale-95 transition"
+          style={{ background: 'linear-gradient(135deg,#E6238E,#b81570)' }}
+        >
+          <Mic className="w-3.5 h-3.5" /> Audio-Tracking
+        </button>
+        <button
           onClick={() => onUndo(match.id)}
           disabled={undoCount === 0}
-          className="ml-auto px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border border-white/10 bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border border-white/10 bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
         >
           <Undo2 className="w-3.5 h-3.5" /> Rückgängig
         </button>
       </div>
+
+      {voiceOpen && (
+        <VoiceTrackingPanel
+          homeName={home?.name ?? match.homeTeamId}
+          awayName={away?.name ?? match.awayTeamId}
+          players={voicePlayers}
+          onApply={applyVoice}
+          onClose={() => setVoiceOpen(false)}
+        />
+      )}
 
       {/* Am PC beide Mannschaften nebeneinander (2 Spalten) – kompakter, kein Scrollen. */}
       <div className="grid xl:grid-cols-2 gap-x-5 items-start">
