@@ -25,10 +25,10 @@ export default function SeasonSignupBanner({ onOpen }: { onOpen: () => void }) {
           <Trophy className="w-5 h-5 sm:w-7 sm:h-7 text-[#5fe6d3]" />
         </div>
         <div className="min-w-0 flex-1">
-          <span className="font-sans font-extrabold text-[10px] sm:text-[11px] tracking-[2px] uppercase text-[#5fe6d3]">
+          <span className="block font-sans font-extrabold text-[9.5px] sm:text-[11px] tracking-[1px] sm:tracking-[2px] uppercase text-[#5fe6d3] whitespace-nowrap overflow-hidden text-ellipsis">
             Melde jetzt dich oder dein Team
           </span>
-          <div className="font-display font-black text-2xl sm:text-4xl uppercase tracking-tight text-white leading-none mt-0.5">
+          <div className="font-display font-black text-[22px] sm:text-4xl uppercase tracking-tight leading-none mt-0.5 whitespace-nowrap" style={{ color: '#22DFC9', textShadow: '0 0 22px rgba(34,223,201,.55), 0 0 8px rgba(34,223,201,.4)' }}>
             Für {cfg.seasonLabel} an
           </div>
           {cfg.startInfo && (
@@ -38,9 +38,9 @@ export default function SeasonSignupBanner({ onOpen }: { onOpen: () => void }) {
             </div>
           )}
         </div>
-        <span className="shrink-0 inline-flex items-center gap-1.5 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-full text-white text-[11px] sm:text-sm font-display font-black uppercase tracking-wide" style={{ background: 'linear-gradient(135deg,#0C7A70,#12A594)' }}>
+        {/* Handy: runder Pfeil (spart Platz für die einzeiligen Texte); ab sm volle Taste */}
+        <span className="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-full text-white font-display font-black uppercase tracking-wide w-10 h-10 sm:w-auto sm:h-auto sm:px-5 sm:py-2.5 text-sm" style={{ background: 'linear-gradient(135deg,#0C7A70,#12A594)' }}>
           <span className="hidden sm:inline">Jetzt anmelden</span>
-          <span className="sm:hidden">Anmelden</span>
           <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
         </span>
       </div>
