@@ -82,6 +82,7 @@ interface EditRow {
   playerName: string;
   role: StatRole;
   counts: ActionCounts;
+  number?: number; // feste Trikotnummer (aus dem Kader), optional
 }
 
 type RowMap = Record<string, EditRow>; // Schlüssel: `${matchId}::${teamId}::${name}`
@@ -275,7 +276,7 @@ export default function TrackingCenter({
   //    ausgeblendet (aus der Spiel-Verwaltung, `absent`).
   // Bei Events (kein rk) wird nicht nach Aufstellung gefiltert.
   const squadFor = useCallback(
-    (key: string, rk: string | null, absent?: Set<string>, rmap?: RosterMap): { name: string; role: StatRole }[] => {
+    (key: string, rk: string | null, absent?: Set<string>, rmap?: RosterMap): { name: string; role: StatRole; number?: number }[] => {
       // Event-Modus: zuerst der EIGENE Event-Kader (namensbasiert), sonst der
       // gleichnamige Liga-Verein. So lassen sich auch reine Gastteams tracken.
       if (selectedEvent) {
@@ -288,7 +289,11 @@ export default function TrackingCenter({
         return list
           .filter((p) => p.name)
           .filter((p) => !absent || !absent.has(p.name))
-          .map((p) => ({ name: p.name, role: ((eveningKeeper ? p.name === eveningKeeper : p.goalkeeper) ? 'keeper' : 'field') as StatRole }));
+          .map((p) => ({
+            name: p.name,
+            role: ((eveningKeeper ? p.name === eveningKeeper : p.goalkeeper) ? 'keeper' : 'field') as StatRole,
+            number: (p as { number?: number }).number,
+          }));
       }
       const team = resolveTeam(key);
       if (!team) return [];
@@ -301,6 +306,7 @@ export default function TrackingCenter({
         .map((p) => ({
           name: p.name,
           role: (keeper ? p.name === keeper : p.goalkeeper) ? ('keeper' as StatRole) : ('field' as StatRole),
+          number: p.number,
         }));
     },
     [resolveTeam, rosterState, selectedEvent]
@@ -338,6 +344,7 @@ export default function TrackingCenter({
                 playerName: pl.name,
                 role: (sv?.role as StatRole) || pl.role,
                 counts: sv?.counts ?? emptyCounts(),
+                number: pl.number,
               };
             });
           });
@@ -1158,11 +1165,17 @@ function PlayerCard({
     <div className="hl-card p-2 flex flex-col lg:flex-row gap-2 min-w-0">
       {/* Identität */}
       <div className="lg:w-40 shrink-0 flex items-center gap-2.5 px-1">
-        <div className="w-8 h-8 rounded-full bg-brand-accent/12 border border-brand-accent/25 grid place-items-center text-brand-accent-light font-black text-sm shrink-0">
-          {slot}
+        <div
+          className="w-8 h-8 rounded-full bg-brand-accent/12 border border-brand-accent/25 grid place-items-center text-brand-accent-light font-black text-base shrink-0 tabular-nums"
+          title={typeof row.number === 'number' ? `Trikotnummer ${row.number}` : 'noch keine Nummer eingetragen'}
+        >
+          {typeof row.number === 'number' ? row.number : '–'}
         </div>
         <div className="min-w-0 flex-1">
           <div className="font-display font-black text-[15px] truncate leading-tight">{row.playerName}</div>
+          {typeof row.number !== 'number' && (
+            <div className="text-[9px] text-hl-faint leading-tight mt-0.5">noch keine Nummer eingetragen</div>
+          )}
           <div className="flex items-center gap-2 mt-0.5">
             <span
               className="font-display font-black tabular-nums text-[17px] leading-none"
