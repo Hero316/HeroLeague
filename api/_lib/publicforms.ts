@@ -6,7 +6,7 @@
 import { createHash, timingSafeEqual, randomInt } from 'node:crypto';
 import type { VercelRequest } from '@vercel/node';
 import { sql } from './db.js';
-import { escapeHtml, isMailConfigured, sendMail } from './mail.js';
+import { escapeHtml, sendMail } from './mail.js';
 
 export const CODE_TTL_MIN = 15; // Gültigkeit des Bestätigungs-Codes
 export const MAX_CODE_ATTEMPTS = 6; // erlaubte Fehlversuche pro Code
@@ -139,9 +139,10 @@ export async function issueCode(
   } catch (err) {
     console.error('Bestätigungs-Mail fehlgeschlagen:', err);
   }
-  // Ohne Mail-Setup (nur außerhalb Produktion) den Code direkt zurückgeben,
-  // damit der Flow auf dev/preview auch ohne Postfach testbar ist.
-  const exposeDev = !isMailConfigured() && process.env.VERCEL_ENV !== 'production';
+  // Auf dev/preview (NIE in Produktion/live) den Code zusätzlich direkt
+  // zurückgeben, damit man ohne Postfach schnell durchtesten kann. Die Mail wird
+  // trotzdem verschickt. Auf der Live-Seite bleibt der Code geheim.
+  const exposeDev = process.env.VERCEL_ENV !== 'production';
   return exposeDev ? { ok: true, devCode: code } : { ok: true };
 }
 
