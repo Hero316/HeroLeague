@@ -91,7 +91,7 @@ export default function TicketAdmin() {
               <label className="block">
                 <span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1 flex items-center gap-1.5"><Heart className="w-3.5 h-3.5 text-[#ff7ac4]" /> Spenden-Link (optional)</span>
                 <input value={cfg.donationUrl} onChange={(e) => setCfg({ ...cfg, donationUrl: e.target.value })} placeholder="https://… (Stripe Payment Link oder PayPal.Me)" className={inp} />
-                <span className="block text-[11px] text-hl-faint mt-1">Erscheint als „Freiwillig unterstützen" in der Bestätigungs-Mail & Erfolgsseite.</span>
+                <span className="block text-[11px] text-hl-faint mt-1">Erscheint bei Tickets UND bei der Season-2-Anmeldung (Mail + Erfolgsseite) als „Hero League unterstützen".</span>
               </label>
               <label className="block"><span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Event-Schlüssel (intern)</span><input value={cfg.eventKey} onChange={(e) => setCfg({ ...cfg, eventKey: e.target.value })} className={inp} />
                 <span className="block text-[11px] text-hl-faint mt-1">Nur ändern für ein NEUES Event – die alten Anmeldungen bleiben unter dem alten Schlüssel.</span></label>
