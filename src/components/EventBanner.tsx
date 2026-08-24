@@ -16,7 +16,7 @@ interface EventBannerProps {
 // kein Button im Button steckt.)
 export default function EventBanner({ event, isLive, staffPreview, onOpen, onOpenTickets }: EventBannerProps) {
   return (
-    <div className="group relative block w-full text-left overflow-hidden border-b border-[rgba(230,35,142,.3)]">
+    <div className="group relative block w-full text-left overflow-hidden border-y border-[rgba(230,35,142,.3)]">
       {/* Hintergrund-Glanz */}
       <div className="absolute inset-0 bg-[linear-gradient(100deg,#12030c_0%,#2a0a1e_45%,#1a0616_100%)]" />
       <div className="absolute inset-0 bg-[radial-gradient(80%_140%_at_15%_0%,rgba(230,35,142,.4),transparent_55%)]" />

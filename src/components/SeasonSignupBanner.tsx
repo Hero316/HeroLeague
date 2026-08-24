@@ -16,7 +16,7 @@ export default function SeasonSignupBanner({ onOpen }: { onOpen: () => void }) {
   return (
     <button
       onClick={onOpen}
-      className="group relative block w-full text-left overflow-hidden cursor-pointer border-y border-[rgba(18,165,148,.28)]"
+      className="group relative block w-full text-left overflow-hidden cursor-pointer border-b border-[rgba(18,165,148,.28)]"
       aria-label={`${cfg.seasonLabel} – Team anmelden`}
     >
       <div className="absolute inset-0 bg-[linear-gradient(100deg,#04120f_0%,#08251f_48%,#061a16_100%)]" />
@@ -29,11 +29,14 @@ export default function SeasonSignupBanner({ onOpen }: { onOpen: () => void }) {
           <Trophy className="w-5 h-5 sm:w-7 sm:h-7 text-[#5fe6d3]" />
         </div>
         <div className="min-w-0 flex-1">
-          <span className="block font-sans font-extrabold text-[9.5px] sm:text-[11px] tracking-[1px] sm:tracking-[2px] uppercase text-[#5fe6d3] whitespace-nowrap overflow-hidden text-ellipsis">
-            Melde jetzt dich oder dein Team
+          <span className="block font-sans font-extrabold text-[9px] sm:text-[11px] tracking-[.5px] sm:tracking-[1.5px] uppercase text-white/80 whitespace-nowrap">
+            Melde jetzt dich oder dein Team für
           </span>
-          <div className="font-display font-black text-[22px] sm:text-4xl uppercase tracking-tight leading-none mt-0.5 whitespace-nowrap" style={{ color: '#22DFC9', textShadow: '0 0 22px rgba(34,223,201,.55), 0 0 8px rgba(34,223,201,.4)' }}>
-            Für {cfg.seasonLabel} an
+          <div className="flex items-baseline gap-1.5 mt-0.5 whitespace-nowrap">
+            <span className="font-display font-black text-[26px] sm:text-4xl uppercase tracking-tight text-white leading-none" style={{ textShadow: '0 0 22px rgba(34,223,201,.4)' }}>
+              {cfg.seasonLabel}
+            </span>
+            <span className="font-display font-black text-[16px] sm:text-xl uppercase tracking-tight text-white/55 leading-none">an</span>
           </div>
           {cfg.startInfo && (
             <div className="mt-1.5 hidden sm:flex items-center gap-2 text-xs font-sans text-hl-soft">
