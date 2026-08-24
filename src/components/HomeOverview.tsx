@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Lightbulb, Clock, ChevronRight, CheckSquare, Square, Sparkles, Plus, Globe, Ticket as TicketIcon, Instagram, Play, Heart, MessageCircle } from 'lucide-react';
+import { Lightbulb, Clock, ChevronRight, CheckSquare, Square, Sparkles, Plus, Globe, Ticket as TicketIcon, Instagram, Play, Heart, MessageCircle, Loader2, RefreshCw } from 'lucide-react';
 import type { Task, Idea, TeamMember, Ticket, TicketPriority } from '../types';
 import { fetchAllTasks, fetchIdeas, fetchTeam, fetchTickets, memberMap, updateTask, fetchVisitStats, fetchInstagramReels, type VisitStats, type IgReelsResult } from '../lib/collab';
 
@@ -70,6 +70,7 @@ export default function HomeOverview({
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [visits, setVisits] = useState<VisitStats | null>(null);
   const [ig, setIg] = useState<IgReelsResult | null>(null);
+  const [igStatus, setIgStatus] = useState<'loading' | 'ok' | 'error'>('loading');
   const [showIg, setShowIg] = useState(false);
   const { total: heroes, month: heroMonth } = useHeroStats();
   const MONTH_GOAL = 20; // Monatsziel: so viele Heroes im Monat sammeln
@@ -80,6 +81,26 @@ export default function HomeOverview({
     fetchAllTasks().then(setTasks).catch(() => {});
     fetchIdeas().then(setIdeas).catch(() => {});
     fetchTickets().then(setTickets).catch(() => {});
+  };
+
+  // Instagram-Kennzahlen laden. Der Endpunkt ruft viele Instagram-Graph-Calls
+  // auf und ist entsprechend langsam – auf langsameren Handy-Verbindungen (v.a.
+  // iPhone/Safari) kann ein einzelner Abruf mal scheitern. Deshalb: einmal
+  // automatisch nachfassen und den Status merken, damit die Kachel NIE stumm
+  // verschwindet (sonst wirkt es, als sähen manche die Zahlen gar nicht).
+  const loadIg = async () => {
+    setIgStatus('loading');
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const data = await fetchInstagramReels();
+        setIg(data);
+        setIgStatus('ok');
+        return;
+      } catch {
+        if (attempt === 0) await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+    setIgStatus('error');
   };
 
   // Mir zugewiesene, noch offene Tickets – nach Dringlichkeit, dann Aktualität.
@@ -93,7 +114,7 @@ export default function HomeOverview({
     load();
     fetchTeam().then(setTeam).catch(() => {});
     fetchVisitStats().then(setVisits).catch(() => {});
-    fetchInstagramReels().then(setIg).catch(() => {});
+    loadIg();
     const iv = setInterval(() => fetchVisitStats().then(setVisits).catch(() => {}), 60000);
     return () => clearInterval(iv);
   }, []);
@@ -341,8 +362,41 @@ export default function HomeOverview({
           </motion.div>
         )}
 
+        {/* Instagram – lädt noch (v.a. auf langsamen Handy-Verbindungen dauert der
+            Abruf ein paar Sekunden). Statt einer stumm fehlenden Kachel eine
+            klare „lädt"-Kachel, damit auch iPhone-Nutzer sehen, dass da was kommt. */}
+        {igStatus === 'loading' && !ig?.configured && (
+          <motion.div variants={item} className="hl-card rounded-3xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-mono uppercase tracking-wider text-hl-dim flex items-center gap-1.5">
+                <Instagram className="w-3.5 h-3.5 text-brand-accent-light" /> Instagram
+              </span>
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-hl-mute" />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {[0, 1, 2].map((i) => <div key={i} className="rounded-2xl h-[52px] hl-surf-0 animate-pulse" />)}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Instagram – Abruf gescheitert: nicht verschwinden lassen, sondern
+            „erneut versuchen" anbieten (Netz-Aussetzer auf dem Handy). */}
+        {igStatus === 'error' && !ig?.configured && (
+          <motion.div variants={item} className="hl-card rounded-3xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-mono uppercase tracking-wider text-hl-dim flex items-center gap-1.5">
+                <Instagram className="w-3.5 h-3.5 text-brand-accent-light" /> Instagram
+              </span>
+            </div>
+            <p className="text-[13px] text-hl-mute mb-3">Instagram-Zahlen konnten gerade nicht geladen werden.</p>
+            <button onClick={loadIg} className="w-full hl-card rounded-2xl py-2.5 flex items-center justify-center gap-1.5 text-[12px] font-sans font-bold text-brand-accent-light cursor-pointer active:scale-[.99] transition-transform">
+              <RefreshCw className="w-3.5 h-3.5" /> Erneut versuchen
+            </button>
+          </motion.div>
+        )}
+
         {/* Instagram: Kernzahlen + Mini-Verlauf + aktuellstes Reel + „Mehr" */}
-        {ig?.configured && ig.items.length > 0 && (() => {
+        {ig?.configured && (() => {
           const latest = ig.items[0];
           const dd = ig.daily ?? [];
           return (
@@ -390,26 +444,28 @@ export default function HomeOverview({
               })()}
 
               {/* Aktuellstes Reel */}
-              <a
-                href={latest.permalink || '#'}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 flex items-center gap-3 rounded-2xl p-2 hl-surf-0 active:scale-[.99] transition-transform"
-              >
-                <span className="relative shrink-0 rounded-xl overflow-hidden bg-black/20" style={{ width: 46, height: 60 }}>
-                  {latest.thumbnail ? <img src={latest.thumbnail} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" /> : <span className="absolute inset-0 flex items-center justify-center text-hl-faint"><Instagram className="w-5 h-5" /></span>}
-                  {latest.type === 'reel' && <span className="absolute top-1 right-1 text-white"><Play className="w-3 h-3 fill-current" /></span>}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[10px] font-mono uppercase tracking-wider text-brand-accent-light mb-0.5">Neuester Post</div>
-                  <div className="text-[13px] font-sans text-hl-text leading-snug line-clamp-2 break-words">{latest.caption || (latest.type === 'reel' ? 'Reel' : 'Beitrag')}</div>
-                  <div className="flex items-center gap-3 mt-1 text-[11px] text-hl-mute font-sans tabular-nums">
-                    {latest.views != null && <span className="flex items-center gap-1"><Play className="w-3 h-3 fill-current" /> {compact(latest.views)}</span>}
-                    {latest.likes != null && <span className="flex items-center gap-1"><Heart className="w-3 h-3" /> {compact(latest.likes)}</span>}
-                    {latest.comments != null && <span className="flex items-center gap-1"><MessageCircle className="w-3 h-3" /> {compact(latest.comments)}</span>}
+              {latest && (
+                <a
+                  href={latest.permalink || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 flex items-center gap-3 rounded-2xl p-2 hl-surf-0 active:scale-[.99] transition-transform"
+                >
+                  <span className="relative shrink-0 rounded-xl overflow-hidden bg-black/20" style={{ width: 46, height: 60 }}>
+                    {latest.thumbnail ? <img src={latest.thumbnail} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" /> : <span className="absolute inset-0 flex items-center justify-center text-hl-faint"><Instagram className="w-5 h-5" /></span>}
+                    {latest.type === 'reel' && <span className="absolute top-1 right-1 text-white"><Play className="w-3 h-3 fill-current" /></span>}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-brand-accent-light mb-0.5">Neuester Post</div>
+                    <div className="text-[13px] font-sans text-hl-text leading-snug line-clamp-2 break-words">{latest.caption || (latest.type === 'reel' ? 'Reel' : 'Beitrag')}</div>
+                    <div className="flex items-center gap-3 mt-1 text-[11px] text-hl-mute font-sans tabular-nums">
+                      {latest.views != null && <span className="flex items-center gap-1"><Play className="w-3 h-3 fill-current" /> {compact(latest.views)}</span>}
+                      {latest.likes != null && <span className="flex items-center gap-1"><Heart className="w-3 h-3" /> {compact(latest.likes)}</span>}
+                      {latest.comments != null && <span className="flex items-center gap-1"><MessageCircle className="w-3 h-3" /> {compact(latest.comments)}</span>}
+                    </div>
                   </div>
-                </div>
-              </a>
+                </a>
+              )}
             </motion.div>
           );
         })()}
