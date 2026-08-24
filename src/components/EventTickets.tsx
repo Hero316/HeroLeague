@@ -167,7 +167,7 @@ export default function EventTickets({ onNavigate }: { onNavigate: (path: string
                       <input type="email" inputMode="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="du@example.de" className={inputCls} />
                     </label>
                     <div>
-                      <span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1.5">Wie viele kommt ihr? (max. {maxPer})</span>
+                      <span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1.5">Mit wie vielen kommst du? (max. {maxPer})</span>
                       <div className="flex items-center gap-4">
                         <button type="button" onClick={() => setQty((q) => Math.max(1, q - 1))} className="w-11 h-11 rounded-xl grid place-items-center bg-white/[.06] text-white hover:bg-white/10 cursor-pointer active:scale-95 disabled:opacity-30" disabled={qty <= 1}><Minus className="w-5 h-5" /></button>
                         <span className="font-display font-black text-3xl text-white tabular-nums w-10 text-center">{qty}</span>
