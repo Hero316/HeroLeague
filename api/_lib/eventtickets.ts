@@ -54,6 +54,13 @@ async function getConfig(): Promise<TicketConfig> {
 const purposeFor = (cfg: TicketConfig) => PURPOSE_PREFIX + cfg.eventKey;
 
 const clamp = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+// URL tolerant normalisieren: leer bleibt leer; fehlt das Schema, wird https://
+// ergänzt (damit „paypal.me/…" oder „www…." nicht stillschweigend verworfen wird).
+const normUrl = (s: string): string => {
+  const t = s.trim();
+  if (!t) return '';
+  return /^https?:\/\//i.test(t) ? t : 'https://' + t.replace(/^\/+/, '');
+};
 const clampInt = (v: unknown, lo: number, hi: number): number | null => {
   if (v === null || v === undefined || v === '') return null;
   const n = Math.round(Number(v));
@@ -252,7 +259,7 @@ async function adminSaveConfig(req: VercelRequest, res: VercelResponse) {
     capacity: clampInt(c.capacity, 1, 100000) ?? DEFAULT_CONFIG.capacity,
     maxPerEmail: clampInt(c.maxPerEmail, 1, 20) ?? DEFAULT_CONFIG.maxPerEmail,
     note: clamp(c.note, 400),
-    donationUrl: /^https?:\/\//i.test(clamp(c.donationUrl, 400)) ? clamp(c.donationUrl, 400) : '',
+    donationUrl: normUrl(clamp(c.donationUrl, 400)),
   };
   await sql`INSERT INTO settings (key, value) VALUES ('event_tickets', ${JSON.stringify(cfg)}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`;
