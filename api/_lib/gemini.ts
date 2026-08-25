@@ -183,6 +183,7 @@ Jede Taste ist ein EIGENER Zähler, der nur nach OBEN geht. Jedes Vorkommen eine
 
 ## Zuordnung
 1. Ordne jede erkennbare Aktion GENAU einem Spieler aus den obigen Kadern zu. Nutze im Feld "player" den EXAKTEN Namen aus dem Kader. Der Sprecher nennt oft nur Vorname, Spitzname ODER die Rückennummer ("die Nummer 5", "die 7") – ordne über die #Nummer bzw. den Namen dem richtigen Kaderspieler zu und gib trotzdem den EXAKTEN Namen aus. Im Feld "team" den passenden Team-Namen ("${ctx.homeTeam}" oder "${ctx.awayTeam}").
+   KONTEXT MITFÜHREN: Der aktuell handelnde Spieler und seine Mannschaft gelten WEITER für alle folgenden Teilsätze, bis ein neuer Spieler oder ein neues Team genannt wird. Beispiel: „Süß FC, die Nummer 2 läuft, macht einen Haken, dribbelt die 17 aus, rennt weiter, schießt und Tor" → ALLES gehört der Nummer 2 von Süß FC (dribble_won + goal); nur die ausgedribbelte „17" gehört zur GEGNERISCHEN Mannschaft (duel_lost). Reine Laufwege/Ballbesitz-Ansagen ohne konkrete Aktion („läuft", „hat den Ball", „rennt weiter", „kommt nach vorne") erzeugen KEIN Ereignis.
 2. Erkenne Synonyme und Umgangssprache (siehe Hinweise oben). Der Sprecher benutzt NICHT die exakten Button-Namen; erschließe die richtige Taste aus der Fußball-Situation.
 3. AUTOMATISCHE FUSSBALL-LOGIK – leite diese Folge-Ereignisse SELBST ab, auch wenn der Sprecher sie nicht ausspricht. Der Sprecher sagt z.B. nur „die Nummer 10 macht das Tor" – du erzeugst dann automatisch auch das Gegentor beim gegnerischen Torwart usw.
 
@@ -198,7 +199,7 @@ Jede Taste ist ein EIGENER Zähler, der nur nach OBEN geht. Jedes Vorkommen eine
    - Schlüsselpass, der ankommt → key_pass UND pass_ok für den Passgeber.
    - Assist (Vorlage) → assist UND pass_ok (die Vorlage ist ein angekommener Pass).
 
-   (c) Zwei Beteiligte – NUR wenn der zweite Spieler klar benannt/erkennbar und im Kader ist (sonst nur den einen):
+   (c) Zwei Beteiligte – NUR wenn der zweite Spieler klar benannt/erkennbar und im Kader ist (sonst nur den einen). Der zweite/unterlegene Spieler (Y) gehört IMMER zur GEGNERISCHEN Mannschaft des Handelnden (X) – nutze das, um bei einer Rückennummer, die es in BEIDEN Teams gibt, das richtige Team zu wählen:
    - Zweikampf: „X gewinnt gegen Y" / „X holt sich/erobert den Ball von Y" → duel_won für X UND duel_lost für Y.
    - Dribbling: „X tunnelt/umkurvt Y" / „geht an Y vorbei" → dribble_won für X UND duel_lost für Y.
    - Abgefangener Pass: „X fängt den Pass von Y ab" → interception für X UND pass_fail für Y.
