@@ -70,7 +70,11 @@ export default function VoiceTrackingPanel({ matchId, homeName, awayName, player
   // Erkanntes Ergebnis pro Spiel zwischenspeichern, damit versehentliches
   // Schließen (oder ein Neuladen) die Liste NICHT vernichtet.
   const storeKey = `hl-voice-review-${matchId}`;
+  const audioKey = `hl-voice-audio-${matchId}`;
   const restoredRef = useRef(false);
+  // Die zuletzt hochgeladene Aufnahme – damit man nach einem Fehler ERNEUT
+  // auswerten kann, ohne alles noch mal einzusprechen.
+  const [retryAudio, setRetryAudio] = useState<{ url: string; mimeType: string } | null>(null);
 
   const [tab, setTab] = useState<'record' | 'text'>('record');
   const [phase, setPhase] = useState<'input' | 'processing' | 'review'>('input');
@@ -207,12 +211,19 @@ export default function VoiceTrackingPanel({ matchId, homeName, awayName, player
         setReview(rows);
         setTranscript(result.transcript || '');
         setPhase('review');
+        // Erfolgreich ausgewertet → Roh-Audio wird nicht mehr für einen Retry gebraucht.
+        setRetryAudio(null);
+        try {
+          sessionStorage.removeItem(audioKey);
+        } catch {
+          /* egal */
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Auswertung fehlgeschlagen.');
         setPhase('input');
       }
     },
-    [homeName, awayName, voicePlayers, rules, players]
+    [homeName, awayName, voicePlayers, rules, players, audioKey]
   );
 
   const stopAndEvaluate = useCallback(async () => {
@@ -242,15 +253,24 @@ export default function VoiceTrackingPanel({ matchId, homeName, awayName, player
       const file = new File([wav], 'tracking.wav', { type: 'audio/wav' });
       setProgress('Audio wird hochgeladen …');
       const up = await uploadFile(file);
+      // Aufnahme merken, damit man sie nach einem Fehler ERNEUT auswerten kann,
+      // ohne alles noch mal einzusprechen (überlebt auch versehentliches Schließen).
+      const audio = { url: up.url, mimeType: 'audio/wav' };
+      setRetryAudio(audio);
+      try {
+        sessionStorage.setItem(audioKey, JSON.stringify(audio));
+      } catch {
+        /* egal */
+      }
       setProgress('Gemini wertet aus … (kann bei langen Aufnahmen etwas dauern)');
-      await runEvaluate({ audioUrl: up.url, mimeType: 'audio/wav' });
+      await runEvaluate({ audioUrl: audio.url, mimeType: audio.mimeType });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Verarbeitung fehlgeschlagen.');
       setPhase('input');
     } finally {
       setProgress('');
     }
-  }, [cleanupStream, runEvaluate]);
+  }, [cleanupStream, runEvaluate, audioKey]);
 
   const evaluateText = useCallback(() => {
     const t = textValue.trim();
@@ -278,6 +298,11 @@ export default function VoiceTrackingPanel({ matchId, homeName, awayName, player
           setPhase('review');
         }
       }
+      const rawAudio = sessionStorage.getItem(audioKey);
+      if (rawAudio) {
+        const a = JSON.parse(rawAudio) as { url?: string; mimeType?: string };
+        if (a?.url) setRetryAudio({ url: a.url, mimeType: a.mimeType || 'audio/wav' });
+      }
     } catch {
       /* egal */
     }
@@ -301,10 +326,12 @@ export default function VoiceTrackingPanel({ matchId, homeName, awayName, player
   const clearSaved = useCallback(() => {
     try {
       sessionStorage.removeItem(storeKey);
+      sessionStorage.removeItem(audioKey);
     } catch {
       /* egal */
     }
-  }, [storeKey]);
+    setRetryAudio(null);
+  }, [storeKey, audioKey]);
 
   const selectOptions = useMemo(() => {
     const home = players.filter((p) => p.side === 'home');
@@ -364,6 +391,15 @@ export default function VoiceTrackingPanel({ matchId, homeName, awayName, player
 
           {phase === 'input' && (
             <>
+              {retryAudio && (
+                <button
+                  onClick={() => runEvaluate({ audioUrl: retryAudio.url, mimeType: retryAudio.mimeType })}
+                  className="w-full mb-4 py-3 rounded-xl font-bold text-white flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition"
+                  style={{ background: 'linear-gradient(135deg,#2F5BFF,#16277A)' }}
+                >
+                  <Sparkles className="w-4 h-4" /> Letzte Aufnahme erneut auswerten
+                </button>
+              )}
               {/* Umschalter Aufnehmen / Text */}
               <div className="flex gap-1 p-1 rounded-xl bg-white/5 border border-white/10 mb-4">
                 <TabBtn active={tab === 'record'} onClick={() => setTab('record')} icon={<Mic className="w-3.5 h-3.5" />} label="Einreden" />
