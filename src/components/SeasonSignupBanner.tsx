@@ -29,10 +29,7 @@ export default function SeasonSignupBanner({ onOpen }: { onOpen: () => void }) {
           <Trophy className="w-5 h-5 sm:w-7 sm:h-7 text-[#8FA8FF]" />
         </div>
         <div className="min-w-0 flex-1">
-          <span className="block font-sans font-extrabold text-[9px] sm:text-[11px] tracking-[.5px] sm:tracking-[1.5px] uppercase text-white/80 whitespace-nowrap">
-            Melde dich oder dein Team für
-          </span>
-          <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0 mt-0.5">
+          <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0">
             <span className="font-display font-black text-[26px] sm:text-4xl uppercase tracking-tight text-white leading-none" style={{ textShadow: '0 0 22px rgba(47,91,255,.55)' }}>
               {cfg.seasonLabel}
             </span>
