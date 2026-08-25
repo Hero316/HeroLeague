@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePolling } from './lib/usePolling';
 import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster, PlayerOfMonth, MatchPlayerStat, ScoringConfig } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
 import { fetchPublicStats, fetchEventStats, fetchScoring, saveEventMatch, saveEventAttendance } from './lib/stats';
@@ -316,11 +317,9 @@ export default function App() {
 
   // Solange ein Spiel live ist: regelmäßig nachladen, damit Besucher den Spielstand
   // und die Torschützen ohne Neuladen mitverfolgen. Endet das Spiel, stoppt das Polling.
-  useEffect(() => {
-    if (!hasLiveMatch) return;
-    const interval = setInterval(fetchData, 15000);
-    return () => clearInterval(interval);
-  }, [hasLiveMatch, fetchData]);
+  // Nur im sichtbaren Tab (usePolling): Im Hintergrund pausiert das Nachladen, damit die
+  // nutzungsbasiert abgerechnete Datenbank in ruhigen Phasen schlafen kann.
+  usePolling(fetchData, 15_000, { enabled: hasLiveMatch, immediate: false });
 
   // Beim Zurückkehren zum Tab sofort den aktuellen Stand holen
   useEffect(() => {
@@ -366,14 +365,16 @@ export default function App() {
 
   // Event-Daten regelmäßig nachladen, damit Live-Ergebnisse/Status ohne
   // Neuladen erscheinen (Tabelle, Torschützen, Live-Anzeige).
-  useEffect(() => {
-    const iv = setInterval(() => {
+  // Nur im sichtbaren Tab (usePolling); ohne laufendes Spiel reicht ein längerer Takt.
+  usePolling(
+    () => {
       apiFetch<EventArchive>('/api/twitch?resource=event')
         .then((data) => setEventArchive(data))
         .catch(() => {});
-    }, 20000);
-    return () => clearInterval(iv);
-  }, []);
+    },
+    eventHasLive || hasLiveMatch ? 20_000 : 60_000,
+    { immediate: false },
+  );
 
   // App-Identität je nach Bereich umschalten: unter /chat ist es die eigene
   // „Hero Team"-App (eigenes Manifest, eigenes Symbol, startet direkt im Chat),

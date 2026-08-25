@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { usePolling } from '../lib/usePolling';
 import { AnimatePresence, motion } from 'motion/react';
 import { Shield, ArrowLeft, LogOut, Plus, X, Play, Pause, Square, Users, Star, Check, RefreshCw } from 'lucide-react';
 import { EveningRoster, Match, RosterMap, SessionUser, Team } from '../types';
@@ -104,10 +105,8 @@ export default function RefereeMode({
 
   // Regelmäßig aktualisieren, damit parallele Änderungen (z. B. zweites Feld)
   // erscheinen. Popups bleiben davon unberührt (lokaler State).
-  useEffect(() => {
-    const iv = setInterval(() => onRefresh(), 15000);
-    return () => clearInterval(iv);
-  }, [onRefresh]);
+  // Nur im sichtbaren Tab (usePolling pausiert im Hintergrund).
+  usePolling(() => onRefresh(), 15_000, { immediate: false });
 
   const rosterKey = `${seasonId}:${matchday}`;
   const leagueEveningRoster: EveningRoster | undefined = roster[rosterKey];

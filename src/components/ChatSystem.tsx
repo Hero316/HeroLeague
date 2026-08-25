@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { usePolling } from '../lib/usePolling';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   MessageSquare,
@@ -2255,58 +2256,56 @@ export default function ChatSystem({
     }
   }, []);
 
-  // Erstladen + Team + Polling der Liste (inkl. ungelesene Threads).
+  // Erstladen + Team; Nachladen der Liste alle 15 s übernimmt usePolling
+  // (nur im sichtbaren Tab – im Hintergrund pausiert das Polling komplett).
   useEffect(() => {
     loadConvs();
     loadThreads();
-    fetchTeam().then(setTeam).catch(() => {});
-    const iv = setInterval(() => { loadConvs(); loadThreads(); }, 8000);
-    return () => clearInterval(iv);
   }, [loadConvs, loadThreads]);
+  useEffect(() => {
+    fetchTeam().then(setTeam).catch(() => {});
+  }, []);
+  usePolling(() => { loadConvs(); loadThreads(); }, 15_000, { immediate: false });
 
-  // Aktive Unterhaltung laden + alle 5 s aktualisieren.
+  // Aktive Unterhaltung laden; alle 5 s aktualisieren (nur im sichtbaren Tab).
   useEffect(() => {
     if (!activeId) return;
     atBottomRef.current = true; // beim Öffnen unten starten
     setTypers([]); // Tipp-Anzeige der vorigen Unterhaltung sofort leeren
     loadMessages(activeId);
-    const iv = setInterval(() => loadMessages(activeId, true), 5000);
-    return () => clearInterval(iv);
   }, [activeId, loadMessages]);
+  usePolling(
+    () => {
+      if (activeId) loadMessages(activeId, true);
+    },
+    5_000,
+    { enabled: !!activeId, immediate: false },
+  );
 
   // Online-Heartbeat: alle ~18 s (und beim Sichtbarwerden) senden. Trägt den
   // Tipp-Status mit, damit ein Heartbeat das Tippen nicht fälschlich löscht.
-  useEffect(() => {
-    const beat = () => sendPresence(isTypingRef.current ? activeId : null).catch(() => {});
-    beat();
-    const iv = setInterval(beat, 18000);
-    const onVis = () => document.visibilityState === 'visible' && beat();
-    document.addEventListener('visibilitychange', onVis);
-    return () => {
-      clearInterval(iv);
-      document.removeEventListener('visibilitychange', onVis);
-    };
-  }, [activeId]);
+  // Im Hintergrund-Tab wird nicht gesendet – dann ist man auch nicht „online".
+  usePolling(() => sendPresence(isTypingRef.current ? activeId : null).catch(() => {}), 18_000);
 
   // Präsenz lesen: online-Menge global, Tipp-Anzeige für die aktive Unterhaltung.
+  // Sofort bei Wechsel der Unterhaltung, danach alle 8 s (nur im sichtbaren Tab).
+  // Veraltete Antworten einer vorigen Unterhaltung werden verworfen.
+  const presenceSeq = useRef(0);
+  const loadPresence = () => {
+    const seq = ++presenceSeq.current;
+    fetchPresence(activeId ?? undefined)
+      .then((p) => {
+        if (seq !== presenceSeq.current) return;
+        setOnline(new Set(p?.online ?? []));
+        setTypers((p?.typing ?? []).filter((t) => t.userId !== currentUserId));
+      })
+      .catch(() => {});
+  };
   useEffect(() => {
-    let stop = false;
-    const load = () => {
-      fetchPresence(activeId ?? undefined)
-        .then((p) => {
-          if (stop) return;
-          setOnline(new Set(p?.online ?? []));
-          setTypers((p?.typing ?? []).filter((t) => t.userId !== currentUserId));
-        })
-        .catch(() => {});
-    };
-    load();
-    const iv = setInterval(load, 4000);
-    return () => {
-      stop = true;
-      clearInterval(iv);
-    };
+    loadPresence();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId, currentUserId]);
+  usePolling(loadPresence, 8_000, { immediate: false });
 
   // Beim Öffnen einer Unterhaltung sofort (VOR dem ersten Paint) ans Ende
   // scrollen, damit die Nachrichten nicht kurz oben aufblitzen und dann nach

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { usePolling } from '../lib/usePolling';
 import { MessageSquare } from 'lucide-react';
 import { fetchConversations } from '../lib/chat';
 import { setChatUnread } from '../lib/badge';
@@ -8,19 +9,18 @@ import { setChatUnread } from '../lib/badge';
 export default function ChatUnreadBadge({ onClick }: { onClick?: () => void }) {
   const [unread, setUnread] = useState(0);
 
-  useEffect(() => {
-    const load = () =>
+  // Alle 60 s nachladen – nur im sichtbaren Tab (usePolling pausiert im Hintergrund).
+  usePolling(
+    () =>
       fetchConversations()
         .then((cs) => {
           const total = cs.reduce((s, c) => s + (c.unread || 0), 0);
           setUnread(total);
           setChatUnread(total); // App-Icon-Zahl (kombiniert mit Benachrichtigungen)
         })
-        .catch(() => {});
-    load();
-    const iv = setInterval(load, 25000);
-    return () => clearInterval(iv);
-  }, []);
+        .catch(() => {}),
+    60_000,
+  );
 
   return (
     <button

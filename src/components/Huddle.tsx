@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePolling } from '../lib/usePolling';
 import { motion } from 'motion/react';
 import { Headphones, Mic, MicOff, PhoneOff, StickyNote, X, Radio, MonitorUp, Maximize2, Loader2 } from 'lucide-react';
 import type { HuddleState, HuddleParticipant, TeamMember, ChatMessage } from '../types';
@@ -501,23 +502,25 @@ export function HuddleBanner({
   reloadKey?: number;
 }) {
   const [live, setLive] = useState<{ id: string; participants: HuddleParticipant[] } | null>(null);
+  // Sofort bei Wechsel der Unterhaltung/reloadKey, danach alle 5 s – nur im
+  // sichtbaren Tab (usePolling). Veraltete Antworten werden verworfen.
+  const pollSeq = useRef(0);
+  const tick = async () => {
+    const seq = ++pollSeq.current;
+    try {
+      const r = await huddlePoll({ conversationId });
+      if (seq !== pollSeq.current) return;
+      const on = r.huddle && !r.huddle.endedAt ? { id: r.huddle.id, participants: r.participants } : null;
+      setLive(on);
+      onLive?.(on ? on.id : null);
+    } catch { /* still */ }
+  };
   useEffect(() => {
-    let alive = true;
-    const tick = async () => {
-      try {
-        const r = await huddlePoll({ conversationId });
-        if (!alive) return;
-        const on = r.huddle && !r.huddle.endedAt ? { id: r.huddle.id, participants: r.participants } : null;
-        setLive(on);
-        onLive?.(on ? on.id : null);
-      } catch { /* still */ }
-    };
     tick();
-    const iv = setInterval(tick, 4000);
-    return () => { alive = false; clearInterval(iv); };
     // onLive ist stabil (setState); bewusst nicht in den Deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, reloadKey]);
+  usePolling(tick, 5_000, { immediate: false });
 
   if (!live || inThisConversation) return null;
   return (

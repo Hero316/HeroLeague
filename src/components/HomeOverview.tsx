@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { usePolling } from '../lib/usePolling';
 import { motion } from 'motion/react';
 import { Lightbulb, Clock, ChevronRight, CheckSquare, Square, Sparkles, Plus, Globe, Ticket as TicketIcon, Instagram, Play, Heart, MessageCircle, Loader2, RefreshCw } from 'lucide-react';
 import type { Task, Idea, TeamMember, Ticket, TicketPriority } from '../types';
@@ -116,11 +117,10 @@ export default function HomeOverview({
   useEffect(() => {
     load();
     fetchTeam().then(setTeam).catch(() => {});
-    fetchVisitStats().then(setVisits).catch(() => {});
     loadIg();
-    const iv = setInterval(() => fetchVisitStats().then(setVisits).catch(() => {}), 60000);
-    return () => clearInterval(iv);
   }, []);
+  // Besucherzahlen alle 2 min nachladen – nur im sichtbaren Tab (usePolling).
+  usePolling(() => fetchVisitStats().then(setVisits).catch(() => {}), 120_000);
 
   const involvesMe = (t: Task) => t.createdBy === currentUserId || t.assignees.some((a) => a.userId === currentUserId);
 

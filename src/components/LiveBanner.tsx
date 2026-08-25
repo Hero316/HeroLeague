@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { usePolling } from '../lib/usePolling';
 import { Radio, ExternalLink } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import { TwitchConfig } from '../types';
@@ -8,23 +9,16 @@ import { TwitchConfig } from '../types';
 export default function LiveBanner() {
   const [cfg, setCfg] = useState<TwitchConfig | null>(null);
 
-  useEffect(() => {
-    let active = true;
-    const load = () =>
+  // Alle 2 min prüfen – nur im sichtbaren Tab (usePolling pausiert im Hintergrund).
+  usePolling(
+    () =>
       apiFetch<TwitchConfig>('/api/twitch')
-        .then((d) => {
-          if (active) setCfg(d);
-        })
+        .then((d) => setCfg(d))
         .catch(() => {
           /* still: kein Banner, wenn nicht abrufbar */
-        });
-    load();
-    const timer = setInterval(load, 60000); // periodisch aktualisieren
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, []);
+        }),
+    120_000,
+  );
 
   if (!cfg || !cfg.isLive || !cfg.channel) return null;
 

@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { usePolling } from '../lib/usePolling';
 import { Radio, Users, CalendarDays, CalendarRange, CalendarClock } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 
@@ -11,7 +12,7 @@ interface VisitStats {
   daily: { day: string; count: number }[];
 }
 
-const REFRESH_MS = 20_000;
+const REFRESH_MS = 30_000;
 
 function StatTile({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
   return (
@@ -54,19 +55,17 @@ export default function LiveVisitors() {
   const [stats, setStats] = useState<VisitStats | null>(null);
   const [error, setError] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-    const load = () =>
+  // Nur im sichtbaren Tab aktualisieren (usePolling pausiert im Hintergrund).
+  usePolling(
+    () =>
       apiFetch<VisitStats>('/api/seasons?stats')
-        .then((data) => active && (setStats(data), setError(false)))
-        .catch(() => active && setError(true));
-    load();
-    const timer = setInterval(load, REFRESH_MS);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, []);
+        .then((data) => {
+          setStats(data);
+          setError(false);
+        })
+        .catch(() => setError(true)),
+    REFRESH_MS,
+  );
 
   return (
     <div className="hl-card p-6">

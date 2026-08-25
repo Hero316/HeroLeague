@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePolling } from '../lib/usePolling';
 import { motion, AnimatePresence } from 'motion/react';
 import { Bell, Check, Loader2 } from 'lucide-react';
 import type { AppNotification } from '../types';
@@ -31,12 +32,8 @@ export default function NotificationBell({ onOpen }: { onOpen?: (refType: 'ticke
     }
   }, []);
 
-  // Erstladen + Polling alle 20 s.
-  useEffect(() => {
-    load();
-    const iv = setInterval(load, 20000);
-    return () => clearInterval(iv);
-  }, [load]);
+  // Erstladen + Polling alle 60 s – nur im sichtbaren Tab (usePolling).
+  usePolling(load, 60_000);
 
   // Klick außerhalb schließt das Menü.
   useEffect(() => {

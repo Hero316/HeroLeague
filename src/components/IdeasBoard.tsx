@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePolling } from '../lib/usePolling';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X, Send, Trash2, Loader2, Lightbulb, Check, ListChecks, CalendarDays, Users, Image as ImageIcon, Mic, File as FileIcon, Copy, Pencil, Smile } from 'lucide-react';
 import type { Idea, IdeaComment, IdeaStatus, LinkItem, TeamMember } from '../types';
@@ -323,11 +324,10 @@ export default function IdeasBoard({
   }, []);
 
   useEffect(() => {
-    load();
     fetchTeam().then(setTeam).catch(() => {});
-    const iv = setInterval(load, 8000);
-    return () => clearInterval(iv);
-  }, [load]);
+  }, []);
+  // Ideen alle 30 s nachladen – nur im sichtbaren Tab (usePolling).
+  usePolling(load, 30_000);
 
   const didOpen = useRef(false);
   useEffect(() => {
