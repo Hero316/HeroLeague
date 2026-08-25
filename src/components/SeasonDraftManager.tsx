@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FlaskConical, Plus, Check, Trophy, Trash2, Rocket, Users } from 'lucide-react';
+import { FlaskConical, Plus, Check, Trophy, Trash2, Rocket, Users, Radio } from 'lucide-react';
 import type { Season, Team } from '../types';
 
 // ===========================================================================
@@ -13,6 +13,7 @@ import type { Season, Team } from '../types';
 
 interface Props {
   seasons: Season[]; // alle inkl. Entwurf
+  publishedSeasons: Season[]; // veröffentlichte Saisons (ohne Entwurf/Demo) – für die Übersicht
   teams: Team[]; // alle echten Vereine (voller Pool)
   currentSeason: Season | null; // aktuelle/live Saison (Quelle zum Übernehmen)
   currentSeasonName: string;
@@ -20,6 +21,7 @@ interface Props {
   onCreateDraft: (label: string) => Promise<boolean>;
   onPublish: (id: string) => Promise<boolean>;
   onDeleteDraft: (id: string) => Promise<boolean>;
+  onSetCurrent: (id: string) => Promise<boolean>;
   onAddTeam: (teamId: string, seasonId: string) => Promise<boolean>;
   onRemoveTeam: (teamId: string, seasonId: string) => Promise<boolean>;
   onCreateTeam: (team: Omit<Team, 'id'>, seasonId: string) => Promise<boolean>;
@@ -29,6 +31,7 @@ const isMemberOf = (t: Team, seasonId: string) => Array.isArray(t.seasonIds) && 
 
 export default function SeasonDraftManager({
   seasons,
+  publishedSeasons,
   teams,
   currentSeason,
   currentSeasonName,
@@ -36,6 +39,7 @@ export default function SeasonDraftManager({
   onCreateDraft,
   onPublish,
   onDeleteDraft,
+  onSetCurrent,
   onAddTeam,
   onRemoveTeam,
   onCreateTeam,
@@ -61,10 +65,53 @@ export default function SeasonDraftManager({
     }
   };
 
+  // --- Übersicht aller (veröffentlichten) Saisons + „aktuell setzen" --------
+  const overview = (
+    <div>
+      <div className="text-[11px] font-bold uppercase tracking-wider text-hl-dim mb-2">Alle Saisons</div>
+      <div className="space-y-2">
+        {publishedSeasons.length === 0 && <div className="text-sm text-hl-mute">Noch keine Saison.</div>}
+        {publishedSeasons.map((s) => (
+          <div key={s.id} className="hl-card px-3 py-2.5 flex items-center gap-3">
+            <Trophy className="w-4 h-4 text-hl-mute shrink-0" />
+            <span className="font-semibold text-sm min-w-0 truncate">{s.label}</span>
+            {s.isCurrent ? (
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-hl-green/15 border border-hl-green/40 text-hl-green flex items-center gap-1 shrink-0">
+                <Radio className="w-3 h-3" /> Aktuell · live
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-hl-dim shrink-0">
+                Archiv
+              </span>
+            )}
+            {!s.isCurrent && (
+              <button
+                onClick={() => {
+                  if (window.confirm(`„${s.label}" als AKTUELLE (live) Saison setzen? Sie wird dann als Standard auf der Startseite gezeigt. Alle Saisons bleiben über den Umschalter einsehbar.`))
+                    run(() => onSetCurrent(s.id));
+                }}
+                disabled={busy}
+                className="ml-auto px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-white/10 bg-white/5 hover:bg-white/10 cursor-pointer shrink-0 disabled:opacity-50"
+              >
+                Als aktuell setzen
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
+        Alle Saisons bleiben gespeichert. Auf der Website kann jede über den Saison-Umschalter aufgerufen werden (Tabelle,
+        Ergebnisse, Statistiken). „Aktuell" bestimmt nur, welche standardmäßig gezeigt wird.
+      </p>
+    </div>
+  );
+
   // --- Entwurf anlegen ------------------------------------------------------
   if (!draft) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
+        {overview}
+        <div className="space-y-4">
         <p className="text-sm text-hl-mute leading-relaxed">
           Bereite eine neue Saison im Hintergrund vor – <b>öffentlich unsichtbar</b>, bis du sie veröffentlichst. Danach kannst du in
           Ruhe Teams (auch neue wie „Black Eagle") und deren Kader/Logos einpflegen. Season 1 bleibt völlig unberührt.
@@ -82,6 +129,7 @@ export default function SeasonDraftManager({
           >
             <FlaskConical className="w-4 h-4" /> Als Entwurf anlegen
           </button>
+        </div>
         </div>
       </div>
     );
@@ -123,6 +171,7 @@ export default function SeasonDraftManager({
 
   return (
     <div className="space-y-5">
+      {overview}
       {/* Kopf */}
       <div className="hl-card p-4 flex flex-wrap items-center gap-3">
         <div className="w-9 h-9 rounded-xl grid place-items-center shrink-0" style={{ background: 'rgba(47,91,255,.15)', border: '1px solid rgba(47,91,255,.35)' }}>

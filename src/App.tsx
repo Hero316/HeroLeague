@@ -694,6 +694,13 @@ export default function App() {
   };
   const handleDeleteDraftSeason = (id: string) =>
     runAdminAction(() => apiFetch('/api/seasons', { method: 'POST', body: JSON.stringify({ action: 'deleteDraftSeason', id }) }));
+  const handleSetCurrentSeason = async (id: string) => {
+    const ok = await runAdminAction(() =>
+      apiFetch('/api/seasons', { method: 'POST', body: JSON.stringify({ action: 'setCurrentSeason', id }) })
+    );
+    if (ok) setSelectedSeasonId(null);
+    return ok;
+  };
   const handleAddTeamToSeason = (teamId: string, seasonId: string) =>
     runAdminAction(() => apiFetch('/api/teams', { method: 'POST', body: JSON.stringify({ action: 'addToSeason', teamId, seasonId }) }));
   const handleRemoveTeamFromSeason = (teamId: string, seasonId: string) =>
@@ -1558,13 +1565,14 @@ export default function App() {
                       <AccordionSection
                         id="season-draft"
                         category="spiele"
-                        title="Season 2 vorbereiten (Entwurf)"
-                        subtitle="Neue Saison versteckt aufbauen: Teams übernehmen/anlegen, später veröffentlichen"
+                        title="Saisons & Season 2 vorbereiten"
+                        subtitle="Saisons umschalten (aktuell/Archiv) und neue Saison versteckt aufbauen"
                         icon={<FlaskConical className="w-5 h-5" />}
                         accent="#2F5BFF"
                       >
                         <SeasonDraftManager
                           seasons={seasons}
+                          publishedSeasons={visibleSeasons}
                           teams={visibleTeams}
                           currentSeason={currentSeason}
                           currentSeasonName={currentSeasonName}
@@ -1572,6 +1580,7 @@ export default function App() {
                           onCreateDraft={handleCreateDraftSeason}
                           onPublish={handlePublishSeason}
                           onDeleteDraft={handleDeleteDraftSeason}
+                          onSetCurrent={handleSetCurrentSeason}
                           onAddTeam={handleAddTeamToSeason}
                           onRemoveTeam={handleRemoveTeamFromSeason}
                           onCreateTeam={handleAddTeamForSeason}

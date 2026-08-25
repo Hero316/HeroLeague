@@ -3218,29 +3218,17 @@ export default function AdminPanel({
       <AccordionSection
         id="season"
         category="spiele"
-        title="Saison verwalten"
-        subtitle="Neue Saison starten – Ergebnisse werden archiviert"
+        title="Demo-Modus"
+        subtitle="Zufalls-Kopie zum Vorstellen (echte Saison bleibt unberührt)"
         icon={<CalendarPlus className="w-5 h-5" />}
       >
         <div>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <p className="text-xs text-gray-400 font-sans leading-relaxed max-w-2xl">
-              Aktive Saison: <strong className="text-white font-mono">{currentSeasonLabel || '–'}</strong>. Beim Start
-              einer neuen Saison bleiben alle Vereine und Kader erhalten; die bisherigen Ergebnisse werden archiviert
-              und sind über den Saison-Umschalter auf der Website weiter einsehbar.
-            </p>
-            <button
-              type="button"
-              onClick={openSeasonModal}
-              className="shrink-0 px-5 py-2.5 bg-brand-accent-light hover:bg-brand-accent text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center space-x-1.5"
-            >
-              <CalendarPlus className="w-4 h-4" />
-              <span>Neue Saison starten</span>
-            </button>
-          </div>
-
+          <p className="text-xs text-gray-400 font-sans leading-relaxed max-w-2xl mb-6">
+            Neue Saisons legst du jetzt unter <strong className="text-white">„Season 2 vorbereiten (Entwurf)"</strong> an –
+            versteckt, mit Team-Übernahme und späterem Veröffentlichen. Der alte Sofort-Live-Knopf wurde entfernt.
+          </p>
           {/* Demo-Modus: komplette Zufalls-Kopie zum Vorstellen */}
-          <div className="mt-6 pt-6 border-t border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="max-w-2xl">
               <div className="flex items-center gap-2">
                 <span
