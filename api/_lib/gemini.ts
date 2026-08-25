@@ -184,17 +184,29 @@ Jede Taste ist ein EIGENER Zähler, der nur nach OBEN geht. Jedes Vorkommen eine
 ## Zuordnung
 1. Ordne jede erkennbare Aktion GENAU einem Spieler aus den obigen Kadern zu. Nutze im Feld "player" den EXAKTEN Namen aus dem Kader. Der Sprecher nennt oft nur Vorname, Spitzname ODER die Rückennummer ("die Nummer 5", "die 7") – ordne über die #Nummer bzw. den Namen dem richtigen Kaderspieler zu und gib trotzdem den EXAKTEN Namen aus. Im Feld "team" den passenden Team-Namen ("${ctx.homeTeam}" oder "${ctx.awayTeam}").
 2. Erkenne Synonyme und Umgangssprache (siehe Hinweise oben). Der Sprecher benutzt NICHT die exakten Button-Namen; erschließe die richtige Taste aus der Fußball-Situation.
-3. Gepaarte Ereignisse (zwei getrennte Einträge):
-   - Ein Zweikampf hat zwei Beteiligte: "X gewinnt den Zweikampf gegen Y" → duel_won für X UND duel_lost für Y (nur wenn Y klar benannt/erkennbar und im Kader ist).
-   - "X holt sich den Ball von Y" / "erobert gegen Y" → duel_won für X (und duel_lost für Y, falls benannt).
-   - Ein Schlüsselpass, der ankommt → key_pass UND pass_ok für den Passgeber.
-   - Ein Tor mit Vorlage → goal für den Torschützen UND assist für den Vorlagengeber (falls benannt).
+3. AUTOMATISCHE FUSSBALL-LOGIK – leite diese Folge-Ereignisse SELBST ab, auch wenn der Sprecher sie nicht ausspricht. Der Sprecher sagt z.B. nur „die Nummer 10 macht das Tor" – du erzeugst dann automatisch auch das Gegentor beim gegnerischen Torwart usw.
+
+   (a) Torwart – der Gegenspieler ist EINDEUTIG (der Torwart der jeweiligen Mannschaft), also OHNE dass ein Name genannt werden muss:
+   - Tor (goal) ODER verwandelter Elfmeter (penalty_goal) → zusätzlich gk_goal_against für den Torwart der GEGNERISCHEN Mannschaft.
+   - Eigentor (own_goal) → gk_goal_against für den Torwart der EIGENEN Mannschaft (der Mannschaft des Eigentor-Schützen).
+   - Schuss, den der Torwart hält/pariert/aufnimmt (KEIN Tor) → shot_on für den Schützen UND save für den gegnerischen Torwart.
+   - Gehaltener Elfmeter → penalty_save für den Torwart UND shot_on für den Schützen.
+
+   (b) Derselbe Spieler – diese Aktionen gehören zusammen und werden BEIDE gezählt:
    - Ein Tor zählt automatisch als Schuss: gib bei goal NICHT zusätzlich shot_on aus.
-   - GEGENTOR automatisch: Bei jedem Tor (goal) oder verwandelten Elfmeter (penalty_goal) bekommt der TORWART der GEGNERISCHEN Mannschaft ein Gegentor → zusätzlich gk_goal_against für den als „(Torwart)" markierten Spieler der anderen Mannschaft (nur wenn dort ein Torwart im Kader steht).
-   - Eigentor: Bei own_goal kassiert die EIGENE Mannschaft → gk_goal_against für den Torwart DERSELBEN Mannschaft wie der Eigentor-Schütze.
-4. Korrekturen: Wenn der Sprecher etwas zurücknimmt ("nein", "doch nicht", "verspreche", "streich das", "Entschuldigung, das war falsch", "Quatsch"), dann gib das zurückgenommene Ereignis GAR NICHT aus (nicht etwa mit negativem delta ausgleichen). Liefere immer das bereinigte Endergebnis.
-5. Erfinde nichts. Nur Aktionen ausgeben, die klar genannt werden und zu einem Kaderspieler passen. Unklares mit niedriger "confidence" und kurzer "note" markieren.
-6. "quote" = kurzer wörtlicher Ausschnitt aus dem Transkript, der zu diesem Ereignis führt.
+   - Verwandelter Elfmeter → penalty_goal UND goal (ein Elfmetertor ist ein Tor).
+   - Schlüsselpass, der ankommt → key_pass UND pass_ok für den Passgeber.
+   - Assist (Vorlage) → assist UND pass_ok (die Vorlage ist ein angekommener Pass).
+
+   (c) Zwei Beteiligte – NUR wenn der zweite Spieler klar benannt/erkennbar und im Kader ist (sonst nur den einen):
+   - Zweikampf: „X gewinnt gegen Y" / „X holt sich/erobert den Ball von Y" → duel_won für X UND duel_lost für Y.
+   - Dribbling: „X tunnelt/umkurvt Y" / „geht an Y vorbei" → dribble_won für X UND duel_lost für Y.
+   - Abgefangener Pass: „X fängt den Pass von Y ab" → interception für X UND pass_fail für Y.
+   - Geblockter Schuss: „Y blockt den Schuss von X" → shot_blocked_off für X UND shot_blocked_def für Y.
+4. NICHT DOPPELT zählen: Ein Ballverlust ist ENTWEDER pass_fail (verlorener Pass) ODER duel_lost (im Zweikampf verloren) ODER turnover (Ball ohne Pass/Zweikampf vertändelt) – nie mehrfach für dieselbe Situation. Eine Interception ist kein Zweikampf. Ein vom Torwart gehaltener Schuss (save) ist kein vom Feldspieler geblockter Schuss (shot_blocked_def).
+5. Korrekturen: Wenn der Sprecher etwas zurücknimmt ("nein", "doch nicht", "verspreche", "streich das", "Entschuldigung, das war falsch", "Quatsch"), dann gib das zurückgenommene Ereignis GAR NICHT aus (nicht etwa mit negativem delta ausgleichen). Liefere immer das bereinigte Endergebnis.
+6. Erfinde nichts. Nur Aktionen ausgeben, die klar genannt werden oder sich zwingend aus der Fußball-Logik (Punkt 3) ergeben und zu einem Kaderspieler passen. Unklares mit niedriger "confidence" und kurzer "note" markieren.
+7. "quote" = kurzer wörtlicher Ausschnitt aus dem Transkript, der zu diesem Ereignis führt (bei automatisch abgeleiteten Ereignissen die auslösende Stelle, z.B. das Tor).
 ${ctx.rules ? `\n## Zusätzliche, dauerhafte Liga-Regeln (immer beachten)\n${ctx.rules}\n` : ''}
 ## Ausgabe
 Gib zuerst das vollständige "transcript" (wörtliche Transkription der Aufnahme; bei reinem Text-Input den Text unverändert) und dann "events" in zeitlicher Reihenfolge – ein Eintrag pro Einzelaktion.`;
