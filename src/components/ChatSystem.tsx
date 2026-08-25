@@ -919,6 +919,23 @@ function Composer({
     }
   };
 
+  // Screenshot / Bild aus der Zwischenablage direkt mit Strg+V (⌘+V) einfügen.
+  const onPasteImage = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (it.kind === 'file' && it.type.startsWith('image/')) {
+        const file = it.getAsFile();
+        if (file) {
+          e.preventDefault(); // nicht zusätzlich als Text einfügen
+          void onFileChosen(file);
+        }
+        return;
+      }
+    }
+  };
+
   const submit = async () => {
     if (!body.trim() && !attach) return;
     setBusy(true);
@@ -1048,6 +1065,7 @@ function Composer({
             ref={taRef}
             value={body}
             onChange={(e) => onBodyChange(e.target.value)}
+            onPaste={onPasteImage}
             onBlur={() => onStopTyping?.()}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
