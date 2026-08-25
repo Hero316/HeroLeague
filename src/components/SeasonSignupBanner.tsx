@@ -30,13 +30,15 @@ export default function SeasonSignupBanner({ onOpen }: { onOpen: () => void }) {
         </div>
         <div className="min-w-0 flex-1">
           <span className="block font-sans font-extrabold text-[9px] sm:text-[11px] tracking-[.5px] sm:tracking-[1.5px] uppercase text-white/80 whitespace-nowrap">
-            Melde jetzt dich oder dein Team für
+            Melde dich oder dein Team für
           </span>
-          <div className="flex items-baseline gap-1.5 mt-0.5 whitespace-nowrap">
-            <span className="font-display font-black text-[26px] sm:text-4xl uppercase tracking-tight text-white leading-none" style={{ textShadow: '0 0 22px rgba(47,91,255,.5)' }}>
+          <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0 mt-0.5">
+            <span className="font-display font-black text-[26px] sm:text-4xl uppercase tracking-tight text-white leading-none" style={{ textShadow: '0 0 22px rgba(47,91,255,.55)' }}>
               {cfg.seasonLabel}
             </span>
-            <span className="font-display font-black text-[16px] sm:text-xl uppercase tracking-tight text-white/55 leading-none">an</span>
+            <span className="font-display font-black text-[17px] sm:text-2xl uppercase tracking-tight leading-none" style={{ color: '#8FA8FF', textShadow: '0 0 16px rgba(47,91,255,.65)' }}>
+              Jetzt anmelden
+            </span>
           </div>
           {cfg.startInfo && (
             <div className="mt-1.5 hidden sm:flex items-center gap-2 text-xs font-sans text-hl-soft">
@@ -47,7 +49,7 @@ export default function SeasonSignupBanner({ onOpen }: { onOpen: () => void }) {
         </div>
         {/* Handy: runder Pfeil (spart Platz für die einzeiligen Texte); ab sm volle Taste */}
         <span className="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-full text-white font-display font-black uppercase tracking-wide w-10 h-10 sm:w-auto sm:h-auto sm:px-5 sm:py-2.5 text-sm" style={{ background: 'linear-gradient(135deg,#16277A,#2F5BFF)' }}>
-          <span className="hidden sm:inline">Jetzt anmelden</span>
+          <span className="hidden sm:inline">Anmelden</span>
           <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
         </span>
       </div>
