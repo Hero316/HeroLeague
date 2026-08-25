@@ -22,8 +22,9 @@ import { isGeminiConfigured, uploadAudio, parseTracking, type VoiceContext, type
 //  POST /api/stats?resource=tally              -> eine Spieler-Zeile speichern (Staff)
 // ===========================================================================
 
-// Voice-Tracking (Audio-Upload zu Gemini + Auswertung) kann länger dauern.
-export const config = { maxDuration: 120 };
+// Voice-Tracking (Audio-Upload zu Gemini + Auswertung) kann bei langen
+// Aufnahmen dauern – daher die maximale Laufzeit ausschöpfen.
+export const config = { maxDuration: 300 };
 
 let statsEnsured = false;
 async function ensureStats(): Promise<void> {

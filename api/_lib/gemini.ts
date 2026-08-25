@@ -190,6 +190,8 @@ Jede Taste ist ein EIGENER Zähler, der nur nach OBEN geht. Jedes Vorkommen eine
    - Ein Schlüsselpass, der ankommt → key_pass UND pass_ok für den Passgeber.
    - Ein Tor mit Vorlage → goal für den Torschützen UND assist für den Vorlagengeber (falls benannt).
    - Ein Tor zählt automatisch als Schuss: gib bei goal NICHT zusätzlich shot_on aus.
+   - GEGENTOR automatisch: Bei jedem Tor (goal) oder verwandelten Elfmeter (penalty_goal) bekommt der TORWART der GEGNERISCHEN Mannschaft ein Gegentor → zusätzlich gk_goal_against für den als „(Torwart)" markierten Spieler der anderen Mannschaft (nur wenn dort ein Torwart im Kader steht).
+   - Eigentor: Bei own_goal kassiert die EIGENE Mannschaft → gk_goal_against für den Torwart DERSELBEN Mannschaft wie der Eigentor-Schütze.
 4. Korrekturen: Wenn der Sprecher etwas zurücknimmt ("nein", "doch nicht", "verspreche", "streich das", "Entschuldigung, das war falsch", "Quatsch"), dann gib das zurückgenommene Ereignis GAR NICHT aus (nicht etwa mit negativem delta ausgleichen). Liefere immer das bereinigte Endergebnis.
 5. Erfinde nichts. Nur Aktionen ausgeben, die klar genannt werden und zu einem Kaderspieler passen. Unklares mit niedriger "confidence" und kurzer "note" markieren.
 6. "quote" = kurzer wörtlicher Ausschnitt aus dem Transkript, der zu diesem Ereignis führt.
