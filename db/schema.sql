@@ -5,6 +5,9 @@ CREATE TABLE seasons (
   id         TEXT PRIMARY KEY,
   label      TEXT NOT NULL,
   is_current BOOLEAN NOT NULL DEFAULT false,
+  -- Entwurf-Saison: öffentlich unsichtbar (kein Umschalter-Eintrag, keine
+  -- Tabelle/Teams), bis sie veröffentlicht wird. Selbstheilend via ensureLeagueSchema.
+  draft      BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -18,6 +21,9 @@ CREATE TABLE teams (
   -- Kader: Array von { "name": string, "imageUrl": string?, "number": number? }
   -- number = feste Trikotnummer (optional). JSONB → keine Schema-Migration nötig.
   spielerliste JSONB NOT NULL DEFAULT '[]',
+  -- Saisons, zu denen dieser Verein gehört (Array von season.id). Leer/alt =
+  -- gehört zu allen bisherigen Saisons (Backfill in ensureLeagueSchema).
+  season_ids   JSONB NOT NULL DEFAULT '[]',
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

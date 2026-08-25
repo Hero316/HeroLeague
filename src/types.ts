@@ -14,6 +14,7 @@ export interface Team {
   logoIcon: string; // Emoji-Wappen
   logoUrl?: string;
   spielerliste?: Player[];
+  seasonIds?: string[]; // Saisons, zu denen dieser Verein gehört (leer/alt = alle bisherigen)
 }
 
 export interface Scorer {
@@ -76,6 +77,7 @@ export interface Season {
   id: string;
   label: string; // z.B. "2026/27"
   isCurrent: boolean;
+  draft?: boolean; // Entwurf-Saison: öffentlich unsichtbar, bis sie veröffentlicht wird
 }
 
 // Optionale eigene Hintergrundbilder der drei Hero-Slides (Startseite).

@@ -184,14 +184,29 @@ export default function App() {
     const demoIds = new Set(demo.teamIds);
     return demo.active ? teams.filter((t) => demoIds.has(t.id)) : teams.filter((t) => !demoIds.has(t.id));
   }, [teams, demo]);
-  // Saison-Umschalter: die interne Demo-Saison nie als wählbare Historie zeigen
-  const visibleSeasons = useMemo(() => seasons.filter((s) => s.id !== demo.seasonId), [seasons, demo.seasonId]);
+  // Saison-Umschalter: die interne Demo-Saison und Entwurf-Saisons (noch nicht
+  // veröffentlicht) nie als wählbare Historie zeigen – Entwürfe bleiben öffentlich
+  // komplett unsichtbar, bis sie live geschaltet werden.
+  const visibleSeasons = useMemo(
+    () => seasons.filter((s) => s.id !== demo.seasonId && !s.draft),
+    [seasons, demo.seasonId]
+  );
 
   const selectedSeason = useMemo(
     () => visibleSeasons.find((s) => s.id === selectedSeasonId) ?? currentSeason,
     [visibleSeasons, selectedSeasonId, currentSeason]
   );
   const isCurrentSeasonSelected = !selectedSeason || selectedSeason.id === currentSeason?.id;
+
+  // Teams der Liga-Ansichten (Tabelle, Statistiken, HeroOne, Team-Detail): nur
+  // die Vereine, die zur AUSGEWÄHLTEN (veröffentlichten) Saison gehören. So
+  // tauchen Entwurf-/Season-2-Teams (z.B. Black Eagle) NICHT in Season 1 auf.
+  // Rückwärtskompatibel: leere seasonIds = Altbestand → gehört zu allen Saisons.
+  // Der Demo-Modus bleibt unberührt (eigene Kopien).
+  const leagueTeams = useMemo(() => {
+    if (demo.active || !selectedSeason) return visibleTeams;
+    return visibleTeams.filter((t) => !t.seasonIds || t.seasonIds.length === 0 || t.seasonIds.includes(selectedSeason.id));
+  }, [visibleTeams, selectedSeason, demo.active]);
 
   // Fortlaufende Saison-Nummer (1 = erste je angelegte Saison) für den HERO-Award-Titel:
   // erste Saison = HERO ONE, nächste = HERO TWO … Saisons kommen chronologisch (created_at)
@@ -979,7 +994,7 @@ export default function App() {
           {team ? (
             <TeamDetail
               team={team}
-              teams={visibleTeams}
+              teams={leagueTeams}
               matches={seasonMatches}
               players={players}
               seasonLabel={selectedSeasonName}
@@ -1644,7 +1659,7 @@ export default function App() {
       {activeTab === 'home' && (
         <>
           {countdown.active && <Countdown target={countdown.target} title={countdown.title} />}
-          <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} />
+          <Hero teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} />
           <HighlightsHome
             highlights={highlights}
             editMode={editMode && canEditHighlights}
@@ -1709,7 +1724,7 @@ export default function App() {
           {seasonSwitcher}
           <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-10">
             <Tabelle
-              teams={visibleTeams}
+              teams={leagueTeams}
               matches={seasonMatches}
               seasonLabel={selectedSeasonName}
               onSelectTeam={openTeamDetail}
@@ -1723,7 +1738,7 @@ export default function App() {
           {seasonSwitcher}
           <HeroOne
             players={players}
-            teams={visibleTeams}
+            teams={leagueTeams}
             seasonNumber={selectedSeasonNumber}
             seasonLabel={selectedSeasonName}
             onSelectTeam={openTeamDetail}
@@ -1739,7 +1754,7 @@ export default function App() {
             title="Statistiken"
           />
           {seasonSwitcher}
-          <Statistiken players={players} matches={seasonMatches} teams={visibleTeams} trackingRows={trackingRows} scoringConfig={scoring} onSelectTeam={openTeamDetail} />
+          <Statistiken players={players} matches={seasonMatches} teams={leagueTeams} trackingRows={trackingRows} scoringConfig={scoring} onSelectTeam={openTeamDetail} />
         </>
       )}
       </div>
