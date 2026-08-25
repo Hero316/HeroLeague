@@ -23,7 +23,17 @@ const createMatch = requireStaff(async (req: VercelRequest, res: VercelResponse)
   const teams = await sql`SELECT id FROM teams WHERE id IN (${homeTeamId}, ${awayTeamId})`;
   if (teams.length !== 2) return badRequest(res, 'Mindestens ein Team existiert nicht.');
 
-  const season = await getCurrentSeason();
+  // Ziel-Saison: explizit übergeben (z.B. eine Entwurf-Saison beim Vorbereiten),
+  // sonst die aktuelle/live Saison wie bisher.
+  const bodySeasonId = (req.body ?? {}).seasonId;
+  let season: { id: string } | null;
+  if (isNonEmptyString(bodySeasonId)) {
+    const rows = await sql`SELECT id FROM seasons WHERE id = ${bodySeasonId} LIMIT 1`;
+    if (rows.length === 0) return badRequest(res, 'Ziel-Saison existiert nicht.');
+    season = { id: rows[0].id as string };
+  } else {
+    season = await getCurrentSeason();
+  }
   if (!season) return res.status(500).json({ error: 'Keine aktive Saison vorhanden.' });
 
   // Ort gilt pro Spieltag: ohne Eingabe den bereits am Spieltag hinterlegten Ort übernehmen

@@ -34,6 +34,7 @@ import SeasonSignup from './components/SeasonSignup';
 import SeasonSignupBanner from './components/SeasonSignupBanner';
 import EventTickets from './components/EventTickets';
 import SignupAdmin from './components/SignupAdmin';
+import SeasonDraftManager from './components/SeasonDraftManager';
 import TicketAdmin from './components/TicketAdmin';
 import EventErgebniszettel from './components/EventErgebniszettel';
 import HighlightsHome from './components/HighlightsHome';
@@ -42,7 +43,7 @@ import ChatApp from './components/ChatApp';
 import Avatar from './components/Avatar';
 import DeepLinkModal from './components/DeepLinkModal';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight, FlaskConical } from 'lucide-react';
 import TrackingCenter from './components/TrackingCenter';
 import SpielberichtPage from './components/SpielberichtPage';
 import WertungenPage from './components/WertungenPage';
@@ -184,14 +185,29 @@ export default function App() {
     const demoIds = new Set(demo.teamIds);
     return demo.active ? teams.filter((t) => demoIds.has(t.id)) : teams.filter((t) => !demoIds.has(t.id));
   }, [teams, demo]);
-  // Saison-Umschalter: die interne Demo-Saison nie als wählbare Historie zeigen
-  const visibleSeasons = useMemo(() => seasons.filter((s) => s.id !== demo.seasonId), [seasons, demo.seasonId]);
+  // Saison-Umschalter: die interne Demo-Saison und Entwurf-Saisons (noch nicht
+  // veröffentlicht) nie als wählbare Historie zeigen – Entwürfe bleiben öffentlich
+  // komplett unsichtbar, bis sie live geschaltet werden.
+  const visibleSeasons = useMemo(
+    () => seasons.filter((s) => s.id !== demo.seasonId && !s.draft),
+    [seasons, demo.seasonId]
+  );
 
   const selectedSeason = useMemo(
     () => visibleSeasons.find((s) => s.id === selectedSeasonId) ?? currentSeason,
     [visibleSeasons, selectedSeasonId, currentSeason]
   );
   const isCurrentSeasonSelected = !selectedSeason || selectedSeason.id === currentSeason?.id;
+
+  // Teams der Liga-Ansichten (Tabelle, Statistiken, HeroOne, Team-Detail): nur
+  // die Vereine, die zur AUSGEWÄHLTEN (veröffentlichten) Saison gehören. So
+  // tauchen Entwurf-/Season-2-Teams (z.B. Black Eagle) NICHT in Season 1 auf.
+  // Rückwärtskompatibel: leere seasonIds = Altbestand → gehört zu allen Saisons.
+  // Der Demo-Modus bleibt unberührt (eigene Kopien).
+  const leagueTeams = useMemo(() => {
+    if (demo.active || !selectedSeason) return visibleTeams;
+    return visibleTeams.filter((t) => !t.seasonIds || t.seasonIds.length === 0 || t.seasonIds.includes(selectedSeason.id));
+  }, [visibleTeams, selectedSeason, demo.active]);
 
   // Fortlaufende Saison-Nummer (1 = erste je angelegte Saison) für den HERO-Award-Titel:
   // erste Saison = HERO ONE, nächste = HERO TWO … Saisons kommen chronologisch (created_at)
@@ -666,6 +682,25 @@ export default function App() {
     return ok;
   };
 
+  // --- Mehr-Saison-System: Entwurf-Saison vorbereiten & veröffentlichen -------
+  const handleCreateDraftSeason = (label: string) =>
+    runAdminAction(() => apiFetch('/api/seasons', { method: 'POST', body: JSON.stringify({ label, draft: true }) }));
+  const handlePublishSeason = async (id: string) => {
+    const ok = await runAdminAction(() =>
+      apiFetch('/api/seasons', { method: 'POST', body: JSON.stringify({ action: 'publishSeason', id }) })
+    );
+    if (ok) setSelectedSeasonId(null); // auf die neu veröffentlichte (aktive) Saison springen
+    return ok;
+  };
+  const handleDeleteDraftSeason = (id: string) =>
+    runAdminAction(() => apiFetch('/api/seasons', { method: 'POST', body: JSON.stringify({ action: 'deleteDraftSeason', id }) }));
+  const handleAddTeamToSeason = (teamId: string, seasonId: string) =>
+    runAdminAction(() => apiFetch('/api/teams', { method: 'POST', body: JSON.stringify({ action: 'addToSeason', teamId, seasonId }) }));
+  const handleRemoveTeamFromSeason = (teamId: string, seasonId: string) =>
+    runAdminAction(() => apiFetch('/api/teams', { method: 'POST', body: JSON.stringify({ action: 'removeFromSeason', teamId, seasonId }) }));
+  const handleAddTeamForSeason = (newTeam: Omit<Team, 'id'>, seasonId: string) =>
+    runAdminAction(() => apiFetch('/api/teams', { method: 'POST', body: JSON.stringify({ ...newTeam, seasonIds: [seasonId] }) }));
+
   // Demo an-/ausschalten: legt die Zufalls-Kopie an bzw. entfernt sie wieder.
   const handleToggleDemo = async () => {
     const action = demo.active ? 'demoDeactivate' : 'demoActivate';
@@ -979,7 +1014,7 @@ export default function App() {
           {team ? (
             <TeamDetail
               team={team}
-              teams={visibleTeams}
+              teams={leagueTeams}
               matches={seasonMatches}
               players={players}
               seasonLabel={selectedSeasonName}
@@ -1521,6 +1556,28 @@ export default function App() {
                   {isSuperadmin && (
                     <>
                       <AccordionSection
+                        id="season-draft"
+                        category="spiele"
+                        title="Season 2 vorbereiten (Entwurf)"
+                        subtitle="Neue Saison versteckt aufbauen: Teams übernehmen/anlegen, später veröffentlichen"
+                        icon={<FlaskConical className="w-5 h-5" />}
+                        accent="#2F5BFF"
+                      >
+                        <SeasonDraftManager
+                          seasons={seasons}
+                          teams={visibleTeams}
+                          currentSeason={currentSeason}
+                          currentSeasonName={currentSeasonName}
+                          defaultLabel={nextSeasonName}
+                          onCreateDraft={handleCreateDraftSeason}
+                          onPublish={handlePublishSeason}
+                          onDeleteDraft={handleDeleteDraftSeason}
+                          onAddTeam={handleAddTeamToSeason}
+                          onRemoveTeam={handleRemoveTeamFromSeason}
+                          onCreateTeam={handleAddTeamForSeason}
+                        />
+                      </AccordionSection>
+                      <AccordionSection
                         id="season-signups"
                         category="anmeldungen"
                         title="Season 2 – Team-Anmeldungen"
@@ -1644,7 +1701,7 @@ export default function App() {
       {activeTab === 'home' && (
         <>
           {countdown.active && <Countdown target={countdown.target} title={countdown.title} />}
-          <Hero teams={visibleTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} />
+          <Hero teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} />
           <HighlightsHome
             highlights={highlights}
             editMode={editMode && canEditHighlights}
@@ -1709,7 +1766,7 @@ export default function App() {
           {seasonSwitcher}
           <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-10">
             <Tabelle
-              teams={visibleTeams}
+              teams={leagueTeams}
               matches={seasonMatches}
               seasonLabel={selectedSeasonName}
               onSelectTeam={openTeamDetail}
@@ -1723,7 +1780,7 @@ export default function App() {
           {seasonSwitcher}
           <HeroOne
             players={players}
-            teams={visibleTeams}
+            teams={leagueTeams}
             seasonNumber={selectedSeasonNumber}
             seasonLabel={selectedSeasonName}
             onSelectTeam={openTeamDetail}
@@ -1739,7 +1796,7 @@ export default function App() {
             title="Statistiken"
           />
           {seasonSwitcher}
-          <Statistiken players={players} matches={seasonMatches} teams={visibleTeams} trackingRows={trackingRows} scoringConfig={scoring} onSelectTeam={openTeamDetail} />
+          <Statistiken players={players} matches={seasonMatches} teams={leagueTeams} trackingRows={trackingRows} scoringConfig={scoring} onSelectTeam={openTeamDetail} />
         </>
       )}
       </div>
