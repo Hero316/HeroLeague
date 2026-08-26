@@ -4,6 +4,7 @@ import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Ra
 import { Player, Team, Match, EventConfig, EventArchive, NewsItem, Partner, TeamSponsor, TeamSponsorsMap, SponsorClicksMap } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
 import { fetchSponsorClicks } from '../lib/sponsors';
+import { calculateEventStandings, calculateEventAwards } from '../lib/eventStandings';
 import PlayerAvatar from './PlayerAvatar';
 import { AccordionSection } from './ui';
 
@@ -814,6 +815,24 @@ export default function AdminPanel({
 
   type EMatch = EventConfig['matches'][number];
   const selectedEvent = eventArchive?.events?.find((e) => e.id === selectedEventId) ?? null;
+
+  // Schreibgeschützte Tabelle + Abend-Statistik des AUSGEWÄHLTEN Testspiels –
+  // rein aus dessen eigenen Ergebnissen berechnet (wie auf /testspiel), völlig
+  // unabhängig davon, welches Event gerade live ist (activeId). So kann ein
+  // Super-Admin ein vergangenes Testspiel (z.B. Testspiel 1) einsehen und Daten
+  // ziehen, ohne das laufende live-Event anzufassen.
+  const selectedStandings = useMemo(
+    () => (selectedEvent ? calculateEventStandings(selectedEvent.teams, selectedEvent.matches) : []),
+    [selectedEvent]
+  );
+  const selectedAwards = useMemo(
+    () => (selectedEvent ? calculateEventAwards(selectedEvent.matches) : null),
+    [selectedEvent]
+  );
+  const selectedPlayedCount = useMemo(
+    () => (selectedEvent ? selectedEvent.matches.filter((m) => m.homeScore !== null && m.awayScore !== null).length : 0),
+    [selectedEvent]
+  );
 
   const updateArchive = (updater: (a: EventArchive) => EventArchive) =>
     setEventArchive((a) => (a ? updater(a) : a));
@@ -2643,6 +2662,109 @@ export default function AdminPanel({
                   </div>
                 );
               })()}
+
+              {/* Schreibgeschützte Tabelle & Abend-Statistik des AUSGEWÄHLTEN Testspiels.
+                  Nur zum Ansehen/Daten-Ziehen – ändert NICHTS am live-Event (activeId). */}
+              {selectedEvent && (
+                <div className="p-4 rounded-xl border border-[rgba(230,35,142,.3)] bg-[rgba(230,35,142,.06)] space-y-4">
+                  <div>
+                    <div className="font-sans font-bold text-white text-sm flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4 text-[#ff9ad4]" />
+                      Tabelle & Statistik – „{selectedEvent.label}"
+                    </div>
+                    <div className="text-xs text-gray-400 font-sans">
+                      Nur zum Ansehen (aus den Ergebnissen berechnet) · {selectedPlayedCount} von {selectedEvent.matches.length} Spielen gewertet.
+                      Ändert nichts am Live-Event.
+                    </div>
+                  </div>
+
+                  {/* Tabelle */}
+                  {selectedStandings.length === 0 ? (
+                    <p className="text-xs text-gray-400 font-sans">Noch keine Teams in diesem Testspiel.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="text-[10px] uppercase tracking-wider text-gray-400 font-mono border-b border-white/10">
+                            <th className="py-1.5 pr-2 font-medium">#</th>
+                            <th className="py-1.5 pr-2 font-medium min-w-0">Team</th>
+                            <th className="py-1.5 px-1 text-center font-medium">Sp</th>
+                            <th className="py-1.5 px-1 text-center font-medium">S</th>
+                            <th className="py-1.5 px-1 text-center font-medium">U</th>
+                            <th className="py-1.5 px-1 text-center font-medium">N</th>
+                            <th className="py-1.5 px-1 text-center font-medium whitespace-nowrap">Tore</th>
+                            <th className="py-1.5 px-1 text-center font-medium">Diff</th>
+                            <th className="py-1.5 pl-1 text-center font-bold text-white">Pkt</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedStandings.map((row, i) => (
+                            <tr key={row.team} className="text-xs font-sans text-gray-200 border-b border-white/5">
+                              <td className="py-1.5 pr-2 text-gray-400 tabular-nums">{i + 1}</td>
+                              <td className="py-1.5 pr-2 font-semibold text-white truncate max-w-[160px]">{row.team}</td>
+                              <td className="py-1.5 px-1 text-center tabular-nums">{row.played}</td>
+                              <td className="py-1.5 px-1 text-center tabular-nums">{row.won}</td>
+                              <td className="py-1.5 px-1 text-center tabular-nums">{row.drawn}</td>
+                              <td className="py-1.5 px-1 text-center tabular-nums">{row.lost}</td>
+                              <td className="py-1.5 px-1 text-center tabular-nums whitespace-nowrap">{row.goalsFor}:{row.goalsAgainst}</td>
+                              <td className="py-1.5 px-1 text-center tabular-nums">{row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}</td>
+                              <td className="py-1.5 pl-1 text-center font-black text-white tabular-nums">{row.points}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* Abend-Statistik */}
+                  {selectedAwards && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="p-3 rounded-lg bg-[#060E0F]/50 border border-white/10">
+                        <div className="text-[10px] uppercase tracking-wider text-[#ff9ad4] font-mono font-bold mb-1.5">Top-Torschützen</div>
+                        {selectedAwards.topScorers.length === 0 ? (
+                          <p className="text-xs text-gray-500 font-sans">—</p>
+                        ) : (
+                          <ul className="space-y-0.5">
+                            {selectedAwards.topScorers.slice(0, 5).map((t) => (
+                              <li key={`${t.team}|${t.player}`} className="text-xs font-sans text-gray-200 flex justify-between gap-2">
+                                <span className="truncate">{t.player} <span className="text-gray-500">· {t.team}</span></span>
+                                <span className="font-bold text-white tabular-nums shrink-0">{t.count}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                      <div className="p-3 rounded-lg bg-[#060E0F]/50 border border-white/10">
+                        <div className="text-[10px] uppercase tracking-wider text-[#ff9ad4] font-mono font-bold mb-1.5">Top-Vorlagen</div>
+                        {selectedAwards.topAssists.length === 0 ? (
+                          <p className="text-xs text-gray-500 font-sans">—</p>
+                        ) : (
+                          <ul className="space-y-0.5">
+                            {selectedAwards.topAssists.slice(0, 5).map((t) => (
+                              <li key={`${t.team}|${t.player}`} className="text-xs font-sans text-gray-200 flex justify-between gap-2">
+                                <span className="truncate">{t.player} <span className="text-gray-500">· {t.team}</span></span>
+                                <span className="font-bold text-white tabular-nums shrink-0">{t.count}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                      <div className="p-3 rounded-lg bg-[#060E0F]/50 border border-white/10 flex items-center justify-between gap-2">
+                        <span className="text-[10px] uppercase tracking-wider text-[#ff9ad4] font-mono font-bold">Bester Spieler</span>
+                        <span className="text-xs font-sans text-gray-200 truncate">
+                          {selectedAwards.bestPlayer ? `${selectedAwards.bestPlayer.player} (${selectedAwards.bestPlayer.count}×)` : '—'}
+                        </span>
+                      </div>
+                      <div className="p-3 rounded-lg bg-[#060E0F]/50 border border-white/10 flex items-center justify-between gap-2">
+                        <span className="text-[10px] uppercase tracking-wider text-[#ff9ad4] font-mono font-bold">Bester Torwart</span>
+                        <span className="text-xs font-sans text-gray-200 truncate">
+                          {selectedAwards.bestKeeper ? `${selectedAwards.bestKeeper.player} (${selectedAwards.bestKeeper.count}× zu null)` : '—'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Testspiel-Demo (nur Super-Admins) – zum Testen aller Funktionen */}
               <div className="p-4 rounded-xl border border-emerald-500/25 bg-emerald-500/[.05] space-y-2">
