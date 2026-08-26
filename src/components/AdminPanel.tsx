@@ -6,7 +6,7 @@ import { apiFetch, uploadImage } from '../lib/api';
 import { fetchSponsorClicks } from '../lib/sponsors';
 import { calculateEventStandings, calculateEventAwards } from '../lib/eventStandings';
 import PlayerAvatar from './PlayerAvatar';
-import { AccordionSection } from './ui';
+import { AccordionSection, TeamCrest } from './ui';
 
 // Teamnamen tolerant vergleichen (für den Abgleich Event-Team <-> echter Verein).
 const normTeamName = (s: string) => s.toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
@@ -833,6 +833,17 @@ export default function AdminPanel({
     () => (selectedEvent ? selectedEvent.matches.filter((m) => m.homeScore !== null && m.awayScore !== null).length : 0),
     [selectedEvent]
   );
+  // Wappen zu einem Event-Teamnamen: gleichnamiger Verein (Logo/Farbe/Kürzel),
+  // sonst die Event-Magenta-Welt (#E6238E) mit Monogramm. Rein optisch.
+  const eventCrestProps = (teamName: string) => {
+    const league = teams.find((t) => normTeamName(t.name) === normTeamName(teamName));
+    return {
+      name: teamName,
+      shortName: league?.shortName || teamName,
+      color: league?.logoColor || '#E6238E',
+      logoUrl: league?.logoUrl,
+    };
+  };
 
   const updateArchive = (updater: (a: EventArchive) => EventArchive) =>
     setEventArchive((a) => (a ? updater(a) : a));
@@ -2699,9 +2710,18 @@ export default function AdminPanel({
                         </thead>
                         <tbody>
                           {selectedStandings.map((row, i) => (
-                            <tr key={row.team} className="text-xs font-sans text-gray-200 border-b border-white/5">
-                              <td className="py-1.5 pr-2 text-gray-400 tabular-nums">{i + 1}</td>
-                              <td className="py-1.5 pr-2 font-semibold text-white truncate max-w-[160px]">{row.team}</td>
+                            <tr key={row.team} className={`text-xs font-sans text-gray-200 border-b border-white/5 ${i < 3 ? 'bg-[rgba(230,35,142,.04)]' : ''}`}>
+                              <td className="py-1.5 pr-2 tabular-nums">
+                                <span className={`inline-grid place-items-center w-5 h-5 rounded-md text-[10px] font-black ${i === 0 ? 'bg-[#E6238E] text-white' : i < 3 ? 'bg-[rgba(230,35,142,.25)] text-[#ff9ad4]' : 'text-gray-400'}`}>
+                                  {i + 1}
+                                </span>
+                              </td>
+                              <td className="py-1.5 pr-2">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <TeamCrest size="sm" {...eventCrestProps(row.team)} />
+                                  <span className="font-semibold text-white truncate max-w-[130px]">{row.team}</span>
+                                </div>
+                              </td>
                               <td className="py-1.5 px-1 text-center tabular-nums">{row.played}</td>
                               <td className="py-1.5 px-1 text-center tabular-nums">{row.won}</td>
                               <td className="py-1.5 px-1 text-center tabular-nums">{row.drawn}</td>
@@ -3087,11 +3107,17 @@ export default function AdminPanel({
                             )}
                           </span>
                           <div className="flex-1 min-w-0 flex items-center gap-2">
-                            <span className="flex-1 text-right font-sans font-semibold text-white truncate">{m.home}</span>
+                            <span className="flex-1 min-w-0 flex items-center justify-end gap-1.5">
+                              <span className="font-sans font-semibold text-white truncate">{m.home}</span>
+                              <TeamCrest size="xs" {...eventCrestProps(m.home)} />
+                            </span>
                             <span className="shrink-0 px-2 font-display font-black text-white tabular-nums">
                               {m.homeScore !== null && m.awayScore !== null ? `${m.homeScore}:${m.awayScore}` : '–:–'}
                             </span>
-                            <span className="flex-1 text-left font-sans font-semibold text-white truncate">{m.away}</span>
+                            <span className="flex-1 min-w-0 flex items-center justify-start gap-1.5">
+                              <TeamCrest size="xs" {...eventCrestProps(m.away)} />
+                              <span className="font-sans font-semibold text-white truncate">{m.away}</span>
+                            </span>
                           </div>
                           <button
                             type="button"
