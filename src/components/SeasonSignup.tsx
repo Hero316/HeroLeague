@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft, ArrowRight, Users, Sparkles, KeyRound, ShieldCheck, CheckCircle2,
-  AlertCircle, Loader2, Trophy, RefreshCw, PartyPopper, User, Building2, Dribbble, Heart,
+  AlertCircle, AlertTriangle, Loader2, Trophy, RefreshCw, PartyPopper, User, Building2, Dribbble, Heart,
 } from 'lucide-react';
 import {
   fetchSignupConfig, lookupCaptain, requestSignupCode, submitSignup, useTurnstile,
@@ -144,6 +144,10 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
   const [code, setCode] = useState('');
   const [consent, setConsent] = useState(false);
   const [devCode, setDevCode] = useState('');
+  // Es gibt schon eine Anmeldung mit dieser E-Mail (aus request-code) – Hinweis.
+  const [existing, setExisting] = useState<{ label: string; since: string } | null>(null);
+  // Rückfrage vorm Überschreiben (aus submit needsConfirm).
+  const [overwriteAsk, setOverwriteAsk] = useState<{ label: string; since: string } | null>(null);
   const honeypot = useRef('');
 
   const turnstile = useTurnstile(cfg?.turnstileSiteKey);
@@ -189,6 +193,8 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
   const requestCode = async () => {
     const r = await requestSignupCode({ email: email.trim(), website: honeypot.current, turnstileToken: turnstile.token });
     if (r.devCode) setDevCode(r.devCode);
+    setExisting(r.alreadyRegistered ? { label: r.existingLabel || '', since: r.existingSince || '' } : null);
+    setOverwriteAsk(null);
     turnstile.reset();
   };
 
@@ -221,26 +227,28 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
     finally { setBusy(false); }
   };
 
-  const finish = async () => {
+  // overwrite=true ⇒ bewusstes Überschreiben einer bestehenden Anmeldung bestätigt.
+  const finish = async (overwrite = false) => {
     if (!/^\d{6}$/.test(code.trim())) { setErr('Bitte den 6-stelligen Code eingeben.'); return; }
     if (!consent) { setErr('Bitte den Hinweis zur unverbindlichen Anmeldung bestätigen.'); return; }
     setBusy(true); setErr('');
     try {
-      const base: SignupPayload = { email: email.trim(), code: code.trim(), entry, consent, website: honeypot.current, phone: form.phone || '', motivation: form.motivation, heardFrom: form.heardFrom };
-      if (entry === 'player') {
-        await submitSignup({
-          ...base, name: form.name!.trim(), playerType, age: form.age ?? null,
-          position: form.position, foot: form.foot, ratings: form.ratings,
-          club: form.club, league: form.league, years: form.years ?? null, frequency: form.frequency,
-        });
-      } else {
-        await submitSignup({
-          ...base, kind, teamName: form.teamName!.trim(), contactName: form.contactName!.trim(),
-          s1TeamName: form.s1TeamName, keepName: form.keepName, rosterChange: form.rosterChange,
-          squadSize: form.squadSize ?? null, avgAge: form.avgAge, level: form.level,
-          clubPlayers: form.clubPlayers ?? null, hobbyPlayers: form.hobbyPlayers ?? null,
-        });
-      }
+      const base: SignupPayload = { email: email.trim(), code: code.trim(), entry, consent, confirmOverwrite: overwrite, website: honeypot.current, phone: form.phone || '', motivation: form.motivation, heardFrom: form.heardFrom };
+      const res = entry === 'player'
+        ? await submitSignup({
+            ...base, name: form.name!.trim(), playerType, age: form.age ?? null,
+            position: form.position, foot: form.foot, ratings: form.ratings,
+            club: form.club, league: form.league, years: form.years ?? null, frequency: form.frequency,
+          })
+        : await submitSignup({
+            ...base, kind, teamName: form.teamName!.trim(), contactName: form.contactName!.trim(),
+            s1TeamName: form.s1TeamName, keepName: form.keepName, rosterChange: form.rosterChange,
+            squadSize: form.squadSize ?? null, avgAge: form.avgAge, level: form.level,
+            clubPlayers: form.clubPlayers ?? null, hobbyPlayers: form.hobbyPlayers ?? null,
+          });
+      // Server meldet: zu dieser E-Mail gibt es schon eine Anmeldung → Rückfrage
+      // statt stillem Überschreiben. Erst nach Bestätigung wird gespeichert.
+      if (res.needsConfirm) { setOverwriteAsk({ label: res.existing?.label || '', since: res.existing?.createdAt || '' }); return; }
       goDone();
     } catch (e) { setErr(e instanceof Error ? e.message : 'Anmeldung fehlgeschlagen.'); }
     finally { setBusy(false); }
@@ -470,13 +478,42 @@ export default function SeasonSignup({ onNavigate }: { onNavigate: (path: string
                   <p className="text-hl-soft text-[14px] mt-1.5">Code an<br /><span className="font-semibold text-white">{email}</span> geschickt.</p>
                 </div>
                 {devCode && <div className="text-center text-[12px] text-yellow-300 bg-yellow-500/10 border border-yellow-500/20 rounded-xl py-2">Test-Modus – dein Code: <strong className="tracking-widest">{devCode}</strong></div>}
+                {existing && !overwriteAsk && (
+                  <div className="rounded-2xl border border-amber-500/40 bg-amber-500/[.09] px-4 py-3 text-[13px] text-amber-100/95 flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
+                    <span>
+                      <strong className="text-white">Achtung:</strong> Mit dieser E-Mail gibt es bereits eine Anmeldung
+                      {existing.label ? <> (<strong className="text-white">{existing.label}</strong>)</> : ''}
+                      {existing.since && !isNaN(new Date(existing.since).getTime()) ? ` vom ${new Date(existing.since).toLocaleDateString('de-DE')}` : ''}.
+                      Wenn du hier abschließt, wird die <strong className="text-white">bisherige Anmeldung überschrieben</strong>. Nutze für eine weitere Person besser eine eigene E-Mail-Adresse.
+                    </span>
+                  </div>
+                )}
                 {err && <ErrorMsg>{err}</ErrorMsg>}
                 <input value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" placeholder="••••••" className={`${inputCls} text-center text-[26px] tracking-[.5em] font-mono font-bold`} autoFocus />
                 <label className="flex items-start gap-2.5 cursor-pointer select-none">
                   <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 w-5 h-5 rounded accent-[#2F5BFF] shrink-0" />
                   <span className="text-[13px] text-hl-soft leading-relaxed">Mir ist klar, dass das eine <strong className="text-white">unverbindliche Vorregistrierung</strong> ist und kein garantierter Platz in {seasonLabel}.</span>
                 </label>
-                <PrimaryBtn onClick={finish} disabled={busy || code.length !== 6 || !consent}>{busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <><CheckCircle2 className="w-4 h-4" /> Anmeldung abschließen</>}</PrimaryBtn>
+                {overwriteAsk ? (
+                  <div className="rounded-2xl border border-amber-500/50 bg-amber-500/[.12] p-4 space-y-3">
+                    <div className="flex items-start gap-2.5 text-[13px] text-amber-100">
+                      <AlertTriangle className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
+                      <span>
+                        Zu dieser E-Mail existiert bereits eine Anmeldung
+                        {overwriteAsk.label ? <> (<strong className="text-white">{overwriteAsk.label}</strong>)</> : ''}
+                        {overwriteAsk.since && !isNaN(new Date(overwriteAsk.since).getTime()) ? ` vom ${new Date(overwriteAsk.since).toLocaleDateString('de-DE')}` : ''}.
+                        Beim Fortfahren wird sie <strong className="text-white">unwiderruflich überschrieben</strong>. Wirklich fortfahren?
+                      </span>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <button onClick={() => finish(true)} disabled={busy} className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-full bg-amber-500 text-black font-display font-black uppercase tracking-wide text-[13px] hover:bg-amber-400 transition-colors cursor-pointer disabled:opacity-50">{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Trotzdem überschreiben'}</button>
+                      <button onClick={() => setOverwriteAsk(null)} disabled={busy} className="flex-1 inline-flex items-center justify-center px-4 py-3 rounded-full border border-white/20 text-white font-display font-black uppercase tracking-wide text-[13px] hover:bg-white/10 transition-colors cursor-pointer disabled:opacity-50">Abbrechen</button>
+                    </div>
+                  </div>
+                ) : (
+                  <PrimaryBtn onClick={() => finish(false)} disabled={busy || code.length !== 6 || !consent}>{busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <><CheckCircle2 className="w-4 h-4" /> Anmeldung abschließen</>}</PrimaryBtn>
+                )}
                 <button onClick={resendCode} disabled={busy} className="w-full flex items-center justify-center gap-1.5 text-[13px] text-hl-mute hover:text-white transition-colors cursor-pointer"><RefreshCw className="w-3.5 h-3.5" /> Code erneut senden</button>
               </div>
             )}

@@ -53,6 +53,22 @@ async function getCaptains(): Promise<Captain[]> {
     return [];
   }
 }
+// Bereits vorhandene Anmeldung zu einer E-Mail (eine Anmeldung pro E-Mail).
+// Nur ein knappes Label + Zeitpunkt – kein voller Datensatz nach außen.
+async function getExistingSignup(
+  email: string
+): Promise<{ entry: string; label: string; createdAt: string } | null> {
+  try {
+    const rows = await sql`SELECT entry, team_name AS "teamName", contact_name AS "contactName", created_at AS "createdAt"
+      FROM season_signups WHERE email = ${normEmail(email)} LIMIT 1`;
+    const r = rows[0] as { entry: string; teamName: string; contactName: string; createdAt: string } | undefined;
+    if (!r) return null;
+    return { entry: r.entry, label: r.contactName || r.teamName || '', createdAt: r.createdAt };
+  } catch {
+    return null;
+  }
+}
+
 // „Hero League unterstützen"-Link: gemeinsam mit den Tickets (ein Pool). Wird aus
 // den Ticket-Einstellungen (settings key 'event_tickets') gelesen – so muss der
 // Link nur EINMAL gepflegt werden.
@@ -121,7 +137,16 @@ async function requestCode(req: VercelRequest, res: VercelResponse) {
     });
   });
   if (!result.ok) return badRequest(res, result.error || "Fehler.");
-  return res.json(result.devCode ? { ok: true, devCode: result.devCode } : { ok: true });
+  // Hinweis fürs Frontend: existiert zu dieser E-Mail schon eine Anmeldung?
+  // (Der Code wurde nur an genau diese Adresse geschickt.) Wird beim Bestätigen
+  // angezeigt, damit niemand versehentlich eine fremde Anmeldung überschreibt.
+  const existing = await getExistingSignup(email);
+  return res.json({
+    ok: true,
+    alreadyRegistered: !!existing,
+    ...(existing ? { existingLabel: existing.label, existingSince: existing.createdAt } : {}),
+    ...(result.devCode ? { devCode: result.devCode } : {}),
+  });
 }
 
 const clampRating = (v: unknown): number | null => {
@@ -187,6 +212,14 @@ async function submit(req: VercelRequest, res: VercelResponse) {
   const b = req.body ?? {};
   if (typeof b.website === 'string' && b.website.trim() !== '') return res.json({ ok: true }); // Honeypot
   if (!isEmail(b.email)) return badRequest(res, 'Bitte eine gültige E-Mail-Adresse eingeben.');
+  // Doppel-Schutz: existiert zu dieser E-Mail schon eine Anmeldung und der Nutzer
+  // hat das Überschreiben NICHT bestätigt, brechen wir hier ab (VOR checkCode,
+  // damit der Code gültig bleibt) und lassen das Frontend nachfragen. So wird
+  // keine bestehende Anmeldung mehr versehentlich überschrieben.
+  const existingBefore = await getExistingSignup(String(b.email));
+  if (existingBefore && b.confirmOverwrite !== true) {
+    return res.json({ ok: false, needsConfirm: true, existing: existingBefore });
+  }
   const check = await checkCode(PURPOSE, b.email, b.code);
   if (!check.ok) return badRequest(res, check.error || 'Code ungültig.');
   if (b.consent !== true) return badRequest(res, 'Bitte bestätige den Hinweis zur unverbindlichen Anmeldung.');

@@ -21,6 +21,7 @@ export interface SignupPayload {
   code?: string;
   entry: 'team' | 'player';
   consent?: boolean;
+  confirmOverwrite?: boolean; // bewusstes Überschreiben einer vorhandenen Anmeldung
   website?: string; // Honeypot
   turnstileToken?: string;
   phone?: string;
@@ -76,9 +77,13 @@ export const fetchSignupConfig = () => apiFetch<SignupConfig>('/api/signup?actio
 export const lookupCaptain = (email: string) =>
   apiFetch<{ found: boolean; teamName: string }>('/api/signup?action=captain-lookup', { method: 'POST', body: JSON.stringify({ email }) });
 export const requestSignupCode = (body: Partial<SignupPayload>) =>
-  apiFetch<{ ok: boolean; devCode?: string }>('/api/signup?action=request-code', { method: 'POST', body: JSON.stringify(body) });
+  apiFetch<{ ok: boolean; devCode?: string; alreadyRegistered?: boolean; existingLabel?: string; existingSince?: string }>(
+    '/api/signup?action=request-code', { method: 'POST', body: JSON.stringify(body) });
+// needsConfirm=true ⇒ zu dieser E-Mail existiert schon eine Anmeldung; das
+// Überschreiben muss mit confirmOverwrite:true ausdrücklich bestätigt werden.
 export const submitSignup = (body: SignupPayload) =>
-  apiFetch<{ ok: boolean }>('/api/signup?action=submit', { method: 'POST', body: JSON.stringify(body) });
+  apiFetch<{ ok: boolean; needsConfirm?: boolean; existing?: { entry: string; label: string; createdAt: string } }>(
+    '/api/signup?action=submit', { method: 'POST', body: JSON.stringify(body) });
 
 export const signupAdminList = () => apiFetch<SignupListItem[]>('/api/signup?action=admin-list');
 export const signupAdminDetail = (id: string) => apiFetch<SignupDetail>(`/api/signup?action=admin-detail&id=${encodeURIComponent(id)}`);
