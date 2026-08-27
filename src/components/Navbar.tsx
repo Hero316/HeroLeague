@@ -198,12 +198,11 @@ export default function Navbar({
           {eventActive && onOpenEvent && (
             <button
               onClick={onOpenEvent}
-              className="relative py-1.5 inline-flex items-center gap-1.5 font-sans font-bold text-[13px] tracking-[1.5px] text-[#ff7ac4] hover:text-white transition-[color,transform] duration-150 ease-out active:scale-[.97] cursor-pointer"
+              className="relative py-1.5 inline-flex items-center gap-1.5 whitespace-nowrap font-sans font-bold text-[13px] tracking-[1.5px] text-[#ff7ac4] hover:text-white transition-[color,transform] duration-150 ease-out active:scale-[.97] cursor-pointer"
               title={eventTitle}
             >
-              <Zap className="w-3.5 h-3.5" fill="currentColor" />
+              <Zap className="w-3.5 h-3.5 shrink-0 hl-pulse" fill="currentColor" />
               {(eventTitle || 'Testspiel').toUpperCase()}
-              <span className="absolute -top-1 -right-2 w-1.5 h-1.5 rounded-full bg-[#E6238E] hl-pulse" />
             </button>
           )}
         </nav>
