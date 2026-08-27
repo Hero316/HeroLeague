@@ -10,9 +10,13 @@ import {
   checkCode, clientIp, codeBlock, isDisposableEmail, isEmail, issueCode, mailButton,
   normEmail, sendBrandedMail, tooManyAttempts, verifyTurnstile,
 } from './publicforms.js';
+import { escapeHtml } from './mail.js';
 
 const PURPOSE = 'season-signup';
 const FROM = 'Hero League – Anmeldung <anmeldung@hero-league.de>';
+// Adresse(n), an die die interne Zusammenfassung jeder Anmeldung geht. Komma-
+// getrennt möglich. Fällt auf die 2FA-Admin-Adresse zurück, wenn nicht gesetzt.
+const NOTIFY_TO = process.env.SIGNUP_NOTIFY_EMAIL || process.env.ADMIN_2FA_EMAIL || '';
 const ACCENT = '#12A594';
 const ACCENT_DARK = '#0C7A70';
 
@@ -162,6 +166,77 @@ function buildRatings(src: unknown): Record<string, number | null> {
   return out;
 }
 
+// --- Interne Zusammenfassungs-Mail (an die Liga) ----------------------------
+// Wandelt Auswahl-Werte in lesbare Labels und baut aus einer Anmeldung eine
+// hübsche Detail-Tabelle. So habt ihr JEDE Anmeldung dauerhaft im Postfach –
+// auch wenn dieselbe E-Mail später eine neue Anmeldung schickt.
+const L = {
+  playerType: { verein: 'Vereinsspieler', hobby: 'Hobbyspieler' } as Record<string, string>,
+  position: { tor: 'Tor', abwehr: 'Abwehr', mittelfeld: 'Mittelfeld', sturm: 'Sturm', flexibel: 'Flexibel' } as Record<string, string>,
+  foot: { links: 'Links', rechts: 'Rechts', beid: 'Beidfüßig' } as Record<string, string>,
+  frequency: { selten: 'Selten', monatlich: 'Monatlich', woechentlich: 'Wöchentlich', mehrmals: 'Mehrmals pro Woche' } as Record<string, string>,
+  heardFrom: { internet: 'Internet', social: 'Social Media', freunde: 'Freunde/Bekannte', kontakte: 'Persönliche Kontakte', sonstiges: 'Sonstiges' } as Record<string, string>,
+  kind: { returning: 'Bestehendes Team (Season 1)', new: 'Neues Team' } as Record<string, string>,
+  rosterChange: { same: 'Kader unverändert', minor: 'Kleine Änderungen', major: 'Große Änderungen' } as Record<string, string>,
+  level: { hobby: 'Hobby', mixed: 'Gemischt', ambitioniert: 'Ambitioniert' } as Record<string, string>,
+};
+const lbl = (map: Record<string, string>, v: unknown): string => (typeof v === 'string' && map[v]) || (v ? String(v) : '');
+const isSet = (v: unknown): boolean => v !== null && v !== undefined && String(v).trim() !== '';
+
+// Baut Label/Wert-Zeilen und die Gesamt-HTML/-Text-Zusammenfassung.
+function buildSummary(entry: 'team' | 'player', email: string, ip: string, d: Record<string, unknown>): { html: string; text: string } {
+  const rows: [string, string][] = [];
+  const add = (label: string, value: unknown) => { if (isSet(value)) rows.push([label, String(value)]); };
+
+  if (entry === 'player') {
+    add('Name', d.name);
+    add('E-Mail', email);
+    add('Telefon', d.phone);
+    add('Alter', d.age);
+    add('Typ', lbl(L.playerType, d.playerType));
+    add('Position', lbl(L.position, d.position));
+    add('Starker Fuß', lbl(L.foot, d.foot));
+    const r = (d.ratings && typeof d.ratings === 'object' ? d.ratings : {}) as Record<string, unknown>;
+    const ratingStr = RATING_KEYS.filter((k) => isSet(r[k])).map((k) => `${k.charAt(0).toUpperCase()}${k.slice(1)} ${r[k]}`).join(' · ');
+    add('Selbsteinschätzung', ratingStr);
+    add('Verein', d.club);
+    add('Liga/Spielklasse', d.league);
+    add('Jahre Erfahrung', d.years);
+    add('Spielt', lbl(L.frequency, d.frequency));
+    add('Motivation', d.motivation);
+    add('Gehört über', lbl(L.heardFrom, d.heardFrom));
+  } else {
+    add('Teamname', d.teamName);
+    add('Ansprechpartner', d.contactName);
+    add('E-Mail', email);
+    add('Telefon', d.phone);
+    add('Art', lbl(L.kind, d.kind));
+    add('Season-1-Team', d.s1TeamName);
+    if (isSet(d.kind)) add('Name behalten', d.keepName ? 'Ja' : 'Nein');
+    add('Kader-Änderung', lbl(L.rosterChange, d.rosterChange));
+    add('Kadergröße', d.squadSize);
+    add('Ø Alter', d.avgAge);
+    add('Niveau', lbl(L.level, d.level));
+    add('Vereinsspieler im Kader', d.clubPlayers);
+    add('Hobbyspieler im Kader', d.hobbyPlayers);
+    add('Motivation', d.motivation);
+    add('Gehört über', lbl(L.heardFrom, d.heardFrom));
+  }
+
+  const trs = rows.map(([label, value], i) => `
+    <tr>
+      <td style="font-family:Arial,Helvetica,sans-serif;color:#5a6763;font-size:13px;font-weight:700;padding:10px 14px;background:${i % 2 ? '#f7faf9' : '#ffffff'};border-bottom:1px solid #eef2f1;white-space:nowrap;vertical-align:top;width:38%;">${escapeHtml(label)}</td>
+      <td style="font-family:Arial,Helvetica,sans-serif;color:#1e2a27;font-size:14px;padding:10px 14px;background:${i % 2 ? '#f7faf9' : '#ffffff'};border-bottom:1px solid #eef2f1;vertical-align:top;">${escapeHtml(value).replace(/\n/g, '<br>')}</td>
+    </tr>`).join('');
+  const html = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2ecea;border-radius:14px;border-collapse:separate;overflow:hidden;">
+      ${trs}
+    </table>
+    <p style="font-family:Arial,Helvetica,sans-serif;color:#8aa39d;font-size:11px;margin:14px 0 0;">Automatische Kopie jeder Anmeldung · IP ${escapeHtml(ip || '–')}</p>`;
+  const text = rows.map(([label, value]) => `${label}: ${value}`).join('\n');
+  return { html, text };
+}
+
 // Gemeinsames Speichern + Bestätigungs-Mail (Team ODER Spieler).
 async function saveSignup(req: VercelRequest, res: VercelResponse, opts: {
   entry: 'team' | 'player'; kind: string; teamName: string; contactName: string;
@@ -202,6 +277,27 @@ async function saveSignup(req: VercelRequest, res: VercelResponse, opts: {
       text: `${opts.mailText}\n\nWichtig: ${opts.note}${donation ? `\n\nHero League unterstützen: ${donation}` : ''}`,
     });
   } catch { /* Mail optional */ }
+
+  // Interne Kopie an die Liga: JEDE Anmeldung komplett – so bleibt sie dauerhaft
+  // im Postfach erhalten, selbst wenn dieselbe E-Mail später erneut abschickt.
+  if (NOTIFY_TO) {
+    try {
+      const who = opts.entry === 'player' ? (opts.contactName || 'Spieler') : `${opts.teamName || 'Team'}${opts.contactName ? ` (${opts.contactName})` : ''}`;
+      const summary = buildSummary(opts.entry, email, ip, opts.data);
+      await sendBrandedMail({
+        to: NOTIFY_TO, from: FROM,
+        subject: `📝 Neue ${opts.entry === 'player' ? 'Spieler' : 'Team'}-Anmeldung – ${who}`,
+        layout: {
+          preheader: `Neue ${opts.seasonLabel}-Anmeldung: ${who}`,
+          heading: `Neue Anmeldung – ${opts.seasonLabel}`, accent: ACCENT, accentDark: ACCENT_DARK,
+          intro: `${opts.entry === 'player' ? 'Ein Spieler' : 'Ein Team'} hat sich gerade vorregistriert. Hier alle Angaben:`,
+          bodyHtml: summary.html,
+          footnote: 'Interne Kopie – geht nur an die Liga.',
+        },
+        text: `Neue ${opts.entry === 'player' ? 'Spieler' : 'Team'}-Anmeldung (${opts.seasonLabel}):\n\n${summary.text}`,
+      });
+    } catch { /* interne Mail optional */ }
+  }
   return res.json({ ok: true });
 }
 
