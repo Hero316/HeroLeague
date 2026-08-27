@@ -286,7 +286,7 @@ async function saveSignup(req: VercelRequest, res: VercelResponse, opts: {
       const summary = buildSummary(opts.entry, email, ip, opts.data);
       await sendBrandedMail({
         to: NOTIFY_TO, from: FROM,
-        subject: `📝 Neue ${opts.entry === 'player' ? 'Spieler' : 'Team'}-Anmeldung – ${who}`,
+        subject: `📝 Eine ${opts.entry === 'player' ? 'Spieler' : 'Team'}-Anmeldung ist eingegangen – ${who}`,
         layout: {
           preheader: `Neue ${opts.seasonLabel}-Anmeldung: ${who}`,
           heading: `Neue Anmeldung – ${opts.seasonLabel}`, accent: ACCENT, accentDark: ACCENT_DARK,
