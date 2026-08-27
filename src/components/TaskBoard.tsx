@@ -1571,14 +1571,24 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
   const involvesMe = (t: Task) => t.assignees.some((a) => a.userId === currentUserId) || t.createdBy === currentUserId;
 
   // „Meine Termine": kommende zuerst, nach Datum + Uhrzeit.
-  const myEvents = useMemo(
-    () =>
-      tasks
-        .filter((t) => isEvent(t) && involvesMe(t))
-        .slice()
-        .sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999') || (a.startTime ?? '').localeCompare(b.startTime ?? '')),
-    [tasks, currentUserId] // eslint-disable-line react-hooks/exhaustive-deps
-  );
+  const myEvents = useMemo(() => {
+    // „Nächster anstehender oben": kommende Termine zuerst (nächster ganz oben),
+    // vergangene wandern nach unten (jüngste Vergangenheit zuerst), Termine ohne
+    // Datum ganz ans Ende. Gruppen: 0 = anstehend, 1 = vergangen, 2 = ohne Datum.
+    const rank = (t: Task) => (!t.dueDate ? 2 : taskEnd(t) < TODAY ? 1 : 0);
+    return tasks
+      .filter((t) => isEvent(t) && involvesMe(t))
+      .slice()
+      .sort((a, b) => {
+        const ra = rank(a);
+        const rb = rank(b);
+        if (ra !== rb) return ra - rb;
+        // Vergangene absteigend (jüngste zuerst), alles andere aufsteigend.
+        if (ra === 1)
+          return (b.dueDate ?? '').localeCompare(a.dueDate ?? '') || (b.startTime ?? '').localeCompare(a.startTime ?? '');
+        return (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999') || (a.startTime ?? '').localeCompare(b.startTime ?? '');
+      });
+  }, [tasks, currentUserId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // „Meine Aufgaben": To-dos mit Frist, gruppiert (überfällig/heute/…); erledigte unten.
   const myTodos = useMemo(
