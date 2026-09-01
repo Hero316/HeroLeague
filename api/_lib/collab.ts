@@ -755,11 +755,10 @@ export async function ticket(req: VercelRequest, res: VercelResponse) {
       FROM tickets t WHERE t.id = ${id}
     `;
     if (rows.length === 0) return res.status(404).json({ error: 'Ticket nicht gefunden.' });
-    const comments = await sql`
-      SELECT id, ticket_id AS "ticketId", author_id AS "authorId", author_name AS "authorName",
-             body, images, created_at AS "createdAt"
-      FROM ticket_comments WHERE ticket_id = ${id} ORDER BY created_at
-    `;
+    const comments = await sql.query(
+      `SELECT ${TICKET_COMMENT_SELECT} FROM ticket_comments c WHERE c.ticket_id = $1 ORDER BY c.created_at`,
+      [id],
+    );
     return res.json({ ...rows[0], comments });
   }
 
@@ -863,17 +862,73 @@ export async function ticket(req: VercelRequest, res: VercelResponse) {
   return res.status(405).json({ error: 'Nicht unterstützt' });
 }
 
-// Kommentar zu einem Ticket hinzufügen (jeder eingeloggte Nutzer).
+// Vollständige SELECT-Spalten eines Ticket-Beitrags (mit Anhang/Status/Reaktionen).
+// `images` (Alt-Bestand) bleibt für früher hochgeladene Screenshots erhalten.
+const TICKET_COMMENT_SELECT = `
+  c.id, c.ticket_id AS "ticketId", c.author_id AS "authorId", c.author_name AS "authorName", c.body, c.images,
+  c.attach_type AS "attachType", c.attach_url AS "attachUrl", c.attach_mime AS "attachMime", c.attach_title AS "attachTitle",
+  c.edited_at AS "editedAt", c.deleted_at AS "deletedAt", c.created_at AS "createdAt",
+  COALESCE((SELECT json_agg(json_build_object('userId', r.user_id, 'emoji', r.emoji) ORDER BY r.created_at)
+            FROM ticket_comment_reactions r WHERE r.comment_id = c.id), '[]') AS reactions
+`;
+
+// Kommentar/Verlauf zu einem Ticket – volle Chat-Funktionen (wie im Chat/bei den
+// Aufgaben & Ideen): schreiben mit Text und/oder Anhang (POST), eigenen Beitrag
+// bearbeiten (PATCH) und für alle zurücknehmen (DELETE). Darf jeder eingeloggte Nutzer.
 export async function ticketComment(req: VercelRequest, res: VercelResponse) {
   const session = await getSession(req);
   if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  const uid = session.userId;
+
+  // --- Bearbeiten (nur eigener, nicht gelöschter Beitrag) ------------------
+  if (req.method === 'PATCH') {
+    const pb = req.body ?? {};
+    const commentId = typeof pb.commentId === 'string' ? pb.commentId : typeof pb.id === 'string' ? pb.id : '';
+    if (!commentId) return badRequest(res, 'Beitrags-ID fehlt.');
+    if (!isNonEmptyString(pb.body)) return badRequest(res, 'Bitte einen Text eingeben.');
+    const own = (await sql`SELECT author_id AS "authorId", deleted_at AS "deletedAt" FROM ticket_comments WHERE id = ${commentId} LIMIT 1`) as {
+      authorId: string;
+      deletedAt: string | null;
+    }[];
+    if (own.length === 0) return res.status(404).json({ error: 'Beitrag nicht gefunden.' });
+    if (own[0].authorId !== uid) return res.status(403).json({ error: 'Nur eigene Beiträge bearbeiten.' });
+    if (own[0].deletedAt) return badRequest(res, 'Gelöschte Beiträge können nicht bearbeitet werden.');
+    await sql`UPDATE ticket_comments SET body = ${pb.body.slice(0, 8000)}, edited_at = now() WHERE id = ${commentId}`;
+    const updated = await sql.query(`SELECT ${TICKET_COMMENT_SELECT} FROM ticket_comments c WHERE c.id = $1`, [commentId]);
+    return res.json(updated[0] ?? { ok: true });
+  }
+
+  // --- Für alle löschen (nur eigener Beitrag) ------------------------------
+  if (req.method === 'DELETE') {
+    const commentId =
+      typeof req.body?.commentId === 'string' ? req.body.commentId : String(req.query.commentId ?? req.query.id ?? '');
+    if (!commentId) return badRequest(res, 'Beitrags-ID fehlt.');
+    const own = (await sql`SELECT author_id AS "authorId" FROM ticket_comments WHERE id = ${commentId} LIMIT 1`) as { authorId: string }[];
+    if (own.length === 0) return res.status(404).json({ error: 'Beitrag nicht gefunden.' });
+    if (own[0].authorId !== uid) return res.status(403).json({ error: 'Nur eigene Beiträge löschen.' });
+    await sql`UPDATE ticket_comments SET deleted_at = now(), body = '', images = '[]'::jsonb, attach_type = NULL, attach_url = NULL, attach_mime = NULL, attach_title = NULL WHERE id = ${commentId}`;
+    await sql`DELETE FROM ticket_comment_reactions WHERE comment_id = ${commentId}`;
+    return res.json({ ok: true, id: commentId });
+  }
+
   if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
 
   const b = req.body ?? {};
   const ticketId = typeof b.ticketId === 'string' ? b.ticketId : '';
   if (!ticketId) return badRequest(res, 'Ticket-ID fehlt.');
-  if (!isNonEmptyString(b.body)) return badRequest(res, 'Bitte einen Kommentar schreiben.');
+
+  // Chat-artig: Beitrag kann Text UND/ODER einen Medien-Anhang tragen. `images`
+  // (Alt-Bestand) wird weiterhin akzeptiert, damit eingefügte Screenshots gehen.
+  const hasBody = isNonEmptyString(b.body);
   const images = sanitizeImageUrls(b.images);
+  const attachType = b.attachType === 'file' || b.attachType === 'audio' ? b.attachType : null;
+  const attachUrl =
+    attachType && typeof b.attachUrl === 'string' && /^https?:\/\//i.test(b.attachUrl.trim()) ? b.attachUrl.trim() : null;
+  if (attachType && !attachUrl) return badRequest(res, 'Anhang-URL fehlt oder ist ungültig.');
+  if (!hasBody && !attachType && images.length === 0) return badRequest(res, 'Bitte einen Beitrag schreiben oder etwas anhängen.');
+  const attachMime = attachType ? String(b.attachMime ?? '').slice(0, 120) || null : null;
+  const attachTitle = attachType ? String(b.attachTitle ?? '').slice(0, 200) || null : null;
+  const body = hasBody ? b.body.slice(0, 8000) : '';
 
   const rows = await sql`SELECT created_by AS "createdBy", assigned_to AS "assignedTo", title FROM tickets WHERE id = ${ticketId}`;
   if (rows.length === 0) return res.status(404).json({ error: 'Ticket nicht gefunden.' });
@@ -881,22 +936,66 @@ export async function ticketComment(req: VercelRequest, res: VercelResponse) {
 
   const id = genId('tc');
   const name = sessionName(session);
-  const inserted = await sql`
-    INSERT INTO ticket_comments (id, ticket_id, author_id, author_name, body, images)
-    VALUES (${id}, ${ticketId}, ${session.userId}, ${name}, ${b.body.slice(0, 8000)}, ${JSON.stringify(images)}::jsonb)
-    RETURNING id, ticket_id AS "ticketId", author_id AS "authorId", author_name AS "authorName",
-              body, images, created_at AS "createdAt"
+  await sql`
+    INSERT INTO ticket_comments (id, ticket_id, author_id, author_name, body, images, attach_type, attach_url, attach_mime, attach_title)
+    VALUES (${id}, ${ticketId}, ${uid}, ${name}, ${body}, ${JSON.stringify(images)}::jsonb, ${attachType}, ${attachUrl}, ${attachMime}, ${attachTitle})
   `;
   await sql`UPDATE tickets SET updated_at = now() WHERE id = ${ticketId}`;
+  const inserted = await sql.query(`SELECT ${TICKET_COMMENT_SELECT} FROM ticket_comments c WHERE c.id = $1`, [id]);
 
-  // Benachrichtigen: Ersteller + Zuständige/r + Erwähnte.
+  // Benachrichtigen: Ersteller + Zuständige/r + Erwähnte. Vorschau wie im Chat.
   const members = await loadMembers();
-  await notify(t.createdBy, session.userId, 'ticket_comment', 'ticket', ticketId, `${name} hat dein Ticket „${t.title}“ kommentiert.`);
-  await notify(t.assignedTo, session.userId, 'ticket_comment', 'ticket', ticketId, `Neuer Kommentar zum Ticket „${t.title}“.`);
-  for (const uid of findMentions(b.body, members)) {
-    await notify(uid, session.userId, 'mention', 'ticket', ticketId, `${name} hat dich im Ticket „${t.title}“ erwähnt.`);
+  const preview = hasBody
+    ? String(b.body).slice(0, 120)
+    : attachType === 'audio'
+      ? '🎤 Sprachnachricht'
+      : (attachMime ?? '').startsWith('image/') || images.length
+        ? '🖼️ Bild'
+        : (attachMime ?? '').startsWith('video/')
+          ? '🎬 Video'
+          : '📎 Datei';
+  const mentioned = new Set<string>();
+  if (hasBody) {
+    for (const mid of findMentions(b.body, members)) {
+      if (mid === uid) continue;
+      mentioned.add(mid);
+      await notify(mid, uid, 'mention', 'ticket', ticketId, `${name} hat dich im Ticket „${t.title}“ erwähnt.`);
+    }
+  }
+  if (t.createdBy !== uid && !mentioned.has(t.createdBy)) {
+    await notify(t.createdBy, uid, 'ticket_comment', 'ticket', ticketId, `${name} hat dein Ticket „${t.title}“ kommentiert: ${preview}`);
+  }
+  if (t.assignedTo && t.assignedTo !== uid && t.assignedTo !== t.createdBy && !mentioned.has(t.assignedTo)) {
+    await notify(t.assignedTo, uid, 'ticket_comment', 'ticket', ticketId, `Neuer Kommentar zum Ticket „${t.title}“: ${preview}`);
   }
   return res.json(inserted[0]);
+}
+
+// Emoji-Reaktion auf einen Ticket-Beitrag umschalten (eine pro Nutzer & Beitrag,
+// wie im Chat). Gibt die vollständige Reaktionsliste des Beitrags zurück.
+export async function reactTicketComment(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
+  const uid = session.userId;
+  const b = req.body ?? {};
+  const commentId = typeof b.commentId === 'string' ? b.commentId : '';
+  const emoji = typeof b.emoji === 'string' ? b.emoji.slice(0, 16) : '';
+  if (!commentId || !emoji) return badRequest(res, 'Beitrag oder Emoji fehlt.');
+  const rows = (await sql`SELECT 1 FROM ticket_comments WHERE id = ${commentId} AND deleted_at IS NULL LIMIT 1`) as unknown[];
+  if (rows.length === 0) return res.status(404).json({ error: 'Beitrag nicht gefunden.' });
+  const existing = (await sql`SELECT emoji FROM ticket_comment_reactions WHERE comment_id = ${commentId} AND user_id = ${uid} LIMIT 1`) as {
+    emoji: string;
+  }[];
+  const current = existing.length ? existing[0].emoji : null;
+  if (current === emoji) {
+    await sql`DELETE FROM ticket_comment_reactions WHERE comment_id = ${commentId} AND user_id = ${uid}`;
+  } else {
+    await sql`INSERT INTO ticket_comment_reactions (comment_id, user_id, emoji) VALUES (${commentId}, ${uid}, ${emoji})
+              ON CONFLICT (comment_id, user_id) DO UPDATE SET emoji = EXCLUDED.emoji, created_at = now()`;
+  }
+  const reactions = await sql`SELECT user_id AS "userId", emoji FROM ticket_comment_reactions WHERE comment_id = ${commentId} ORDER BY created_at`;
+  return res.json({ commentId, reactions });
 }
 
 // --- Aufgaben-Board ---------------------------------------------------------

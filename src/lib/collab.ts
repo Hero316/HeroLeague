@@ -68,10 +68,39 @@ export const updateTicketLinks = (id: string, links: LinkItem[]) =>
 export const deleteTicket = (id: string) =>
   apiFetch<{ ok: boolean }>('/api/tickets', { method: 'POST', body: JSON.stringify({ id, op: 'delete' }) });
 
-export const addTicketComment = (ticketId: string, body: string, images: string[] = []) =>
+// Beitrag im Ticket-Verlauf schreiben – volle Chat-Funktionen (wie bei Aufgaben/
+// Ideen): Text und/oder Medien-Anhang (Bild/Video/Datei = 'file', 'audio'). `images`
+// (Alt-Bestand) bleibt für eingefügte Screenshots erhalten.
+export const addTicketComment = (
+  ticketId: string,
+  body: string,
+  attach?: { attachType: 'file' | 'audio'; attachUrl: string; attachMime: string; attachTitle: string } | null,
+  images: string[] = [],
+) =>
   apiFetch<TicketComment>('/api/tickets?sub=comment', {
     method: 'POST',
-    body: JSON.stringify({ ticketId, body, images }),
+    body: JSON.stringify({ ticketId, body, images, ...(attach ?? {}) }),
+  });
+
+// Beitrag bearbeiten (nur eigener) – gibt den aktualisierten Beitrag zurück.
+export const editTicketComment = (commentId: string, body: string) =>
+  apiFetch<TicketComment>('/api/tickets?sub=comment', {
+    method: 'PATCH',
+    body: JSON.stringify({ commentId, body }),
+  });
+
+// Beitrag für alle löschen (nur eigener).
+export const deleteTicketComment = (commentId: string) =>
+  apiFetch<{ ok: boolean; id: string }>(`/api/tickets?sub=comment&commentId=${encodeURIComponent(commentId)}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ commentId }),
+  });
+
+// Emoji-Reaktion auf einen Ticket-Beitrag umschalten – gibt die neue Liste zurück.
+export const reactTicketComment = (commentId: string, emoji: string) =>
+  apiFetch<{ commentId: string; reactions: { userId: string; emoji: string }[] }>('/api/tickets?sub=comment-react', {
+    method: 'POST',
+    body: JSON.stringify({ commentId, emoji }),
   });
 
 // --- Aufgaben ---------------------------------------------------------------

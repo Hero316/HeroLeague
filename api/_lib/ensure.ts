@@ -22,6 +22,11 @@ export async function ensureSchema(): Promise<void> {
   try {
     await sql`SELECT avatar_url, status, permissions, notify_prefs FROM users LIMIT 1`;
     await sql`SELECT 1 FROM tickets LIMIT 1`;
+    // Volle Chat-Funktionen im Ticket-Verlauf (wie bei Aufgaben/Ideen): Anhänge +
+    // Bearbeitet/Gelöscht + Reaktionen mitprüfen, sonst überspringt der Schnell-
+    // Check das Anlegen auf bereits bestehenden Datenbanken.
+    await sql`SELECT attach_type, edited_at, deleted_at FROM ticket_comments LIMIT 1`;
+    await sql`SELECT 1 FROM ticket_comment_reactions LIMIT 1`;
     await sql`SELECT priority, end_date, start_time, type FROM tasks LIMIT 1`;
     // WICHTIG: hier die NEUE Spalte mitprüfen (nicht nur die Tabelle!). Sonst
     // denkt der Schnell-Check, alles sei da, und überspringt das ALTER, das die
@@ -93,6 +98,20 @@ export async function ensureSchema(): Promise<void> {
     id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
     author_id TEXT NOT NULL, author_name TEXT NOT NULL DEFAULT '', body TEXT NOT NULL,
     images JSONB NOT NULL DEFAULT '[]', created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+  // Voller Chat im Ticket-Verlauf (wie im Chat/bei Aufgaben & Ideen): Medien-Anhänge
+  // (Bild/Video/Datei = 'file', 'audio'), Bearbeiten (edited_at), Für-alle-löschen
+  // (deleted_at) und Emoji-Reaktionen (eine pro Nutzer & Beitrag, Tippen togglet).
+  await run(sql`ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS attach_type TEXT`);
+  await run(sql`ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS attach_url TEXT`);
+  await run(sql`ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS attach_mime TEXT`);
+  await run(sql`ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS attach_title TEXT`);
+  await run(sql`ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ`);
+  await run(sql`ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`);
+  await run(sql`CREATE TABLE IF NOT EXISTS ticket_comment_reactions (
+    comment_id TEXT NOT NULL REFERENCES ticket_comments(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL, emoji TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (comment_id, user_id))`);
+  await run(sql`CREATE INDEX IF NOT EXISTS idx_ticket_comment_reactions_c ON ticket_comment_reactions(comment_id)`);
   await run(sql`CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY, title TEXT NOT NULL, notes TEXT NOT NULL DEFAULT '',
     due_date DATE, iso_week TEXT, status TEXT NOT NULL DEFAULT 'offen', priority TEXT NOT NULL DEFAULT 'mittel',

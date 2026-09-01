@@ -2814,6 +2814,7 @@ export default function ChatSystem({
             ticketId={attachView.id}
             team={team}
             canManage={canManageTickets}
+            currentUserId={currentUserId}
             onClose={() => setAttachView(null)}
             onChanged={() => activeId && loadMessages(activeId, true)}
           />

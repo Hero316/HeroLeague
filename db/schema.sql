@@ -177,6 +177,23 @@ CREATE TABLE ticket_comments (
 );
 CREATE INDEX idx_ticket_comments_ticket ON ticket_comments(ticket_id);
 
+-- Voller Chat im Ticket-Verlauf (wie im Chat/bei den Aufgaben & Ideen): Anhänge,
+-- Bearbeiten (edited_at), Für-alle-löschen (deleted_at) und Emoji-Reaktionen.
+ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS attach_type TEXT;
+ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS attach_url TEXT;
+ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS attach_mime TEXT;
+ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS attach_title TEXT;
+ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;
+ALTER TABLE ticket_comments ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS ticket_comment_reactions (
+  comment_id TEXT NOT NULL REFERENCES ticket_comments(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL,
+  emoji      TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (comment_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_ticket_comment_reactions_c ON ticket_comment_reactions(comment_id);
+
 -- Aufgaben (Wochen-/Tagesplanung, Monday-Style). due_date = konkreter Tag,
 -- iso_week = z.B. '2026-W33' (Wochenansicht). Beides optional.
 CREATE TABLE tasks (

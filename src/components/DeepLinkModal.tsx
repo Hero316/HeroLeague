@@ -46,6 +46,7 @@ export default function DeepLinkModal({
         ticketId={target.id}
         team={team}
         canManage={canManageTickets}
+        currentUserId={currentUserId}
         onClose={onClose}
         onChanged={() => {}}
       />

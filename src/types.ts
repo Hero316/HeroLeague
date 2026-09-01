@@ -399,8 +399,16 @@ export interface TicketComment {
   authorId: string;
   authorName: string;
   body: string;
-  images: string[];
+  images: string[]; // Alt-Bestand: früher hochgeladene Screenshots (weiter angezeigt)
+  // Chat-artige Medien-Anhänge im Ticket-Verlauf (Bild/Video/Datei = 'file', 'audio').
+  attachType?: 'file' | 'audio' | null;
+  attachUrl?: string | null;
+  attachMime?: string | null;
+  attachTitle?: string | null;
   createdAt: string;
+  editedAt?: string | null; // gesetzt = nachträglich bearbeitet
+  deletedAt?: string | null; // gesetzt = für alle zurückgenommen
+  reactions?: MessageReaction[]; // Emoji-Reaktionen (wie im Chat)
 }
 
 export interface Ticket {
