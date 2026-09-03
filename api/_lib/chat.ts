@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql } from './db.js';
 import { getSession } from './auth.js';
 import { badRequest, isNonEmptyString } from './validate.js';
-import { genId, sessionName, loadMembers, memberName, notify, findMentions } from './collab.js';
+import { genId, sessionName, loadMembers, memberName, notify, findMentions, markNotificationsReadForRef, deleteNotificationsForRef } from './collab.js';
 import { sendPushToUser } from './push.js';
 
 // Phase 3: Interner Chat – Gruppen, DMs, Slack-Threads, Ticket-/Aufgaben-Anhänge.
@@ -224,8 +224,10 @@ export async function messages(req: VercelRequest, res: VercelResponse) {
        FROM messages m WHERE m.conversation_id = $1 AND m.parent_id IS NULL ORDER BY m.created_at`,
       [conversationId, uid]
     );
-    // Beim Öffnen als gelesen markieren.
+    // Beim Öffnen als gelesen markieren – Chat-Lesestand UND offene
+    // Chat-Benachrichtigungen (Erwähnungen) dieser Unterhaltung schließen.
     await sql`UPDATE conversation_members SET last_read_at = now() WHERE conversation_id = ${conversationId} AND user_id = ${uid}`;
+    await markNotificationsReadForRef(uid, 'conversation', conversationId);
     return res.json(await attachPolls(rows as { id: string; attachType?: string | null }[], uid));
   }
 
@@ -645,6 +647,7 @@ export async function deleteConversation(req: VercelRequest, res: VercelResponse
     return res.json({ ok: true, left: true });
   }
   await sql`DELETE FROM conversations WHERE id = ${id}`; // kaskadiert
+  await deleteNotificationsForRef('conversation', id);
   return res.json({ ok: true, deleted: id });
 }
 
@@ -708,5 +711,6 @@ export async function markRead(req: VercelRequest, res: VercelResponse) {
   const conversationId = typeof req.body?.conversationId === 'string' ? req.body.conversationId : '';
   if (!conversationId) return badRequest(res, 'Unterhaltungs-ID fehlt.');
   await sql`UPDATE conversation_members SET last_read_at = now() WHERE conversation_id = ${conversationId} AND user_id = ${session.userId}`;
+  await markNotificationsReadForRef(session.userId, 'conversation', conversationId);
   return res.json({ ok: true });
 }

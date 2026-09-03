@@ -77,6 +77,39 @@ export async function notify(
   });
 }
 
+// Beim ÖFFNEN eines Tickets/einer Aufgabe/Idee/Unterhaltung deren offene
+// Benachrichtigungen für diesen Nutzer als gelesen markieren. So zeigt die
+// App-Icon-Zahl echten, auffindbaren Ungelesen-Stand – nicht ewig alte Meldungen
+// zu längst gelesenen Inhalten (wie bei WhatsApp: Chat auf = Badge weg).
+// Best-effort: ein Fehler darf das eigentliche Laden nie abbrechen.
+export async function markNotificationsReadForRef(
+  userId: string,
+  refType: 'ticket' | 'task' | 'conversation' | 'idea',
+  refId: string
+): Promise<void> {
+  try {
+    await sql`UPDATE notifications SET is_read = true
+              WHERE user_id = ${userId} AND ref_type = ${refType} AND ref_id = ${refId} AND is_read = false`;
+  } catch (err) {
+    console.error('markNotificationsReadForRef:', err);
+  }
+}
+
+// Beim LÖSCHEN eines Tickets/einer Aufgabe/Idee/Unterhaltung dessen
+// Benachrichtigungen mitentfernen. `notifications.ref_id` hat keinen Fremdschlüssel,
+// sonst blieben verwaiste Meldungen liegen, die ins Leere zeigen ("finde ich nicht
+// mehr") und die App-Icon-Zahl künstlich hochhalten. Best-effort.
+export async function deleteNotificationsForRef(
+  refType: 'ticket' | 'task' | 'conversation' | 'idea',
+  refId: string
+): Promise<void> {
+  try {
+    await sql`DELETE FROM notifications WHERE ref_type = ${refType} AND ref_id = ${refId}`;
+  } catch (err) {
+    console.error('deleteNotificationsForRef:', err);
+  }
+}
+
 // Hero-Punkte vergeben: für jeden Empfänger (zugewiesene/ausgewählte Personen)
 // eine Zeile anlegen. Der Auslöser selbst (actorId) bekommt `seen=true`, weil er
 // die Feier-Animation direkt in der App sieht; alle anderen `seen=false`, damit
@@ -759,6 +792,8 @@ export async function ticket(req: VercelRequest, res: VercelResponse) {
       `SELECT ${TICKET_COMMENT_SELECT} FROM ticket_comments c WHERE c.ticket_id = $1 ORDER BY c.created_at`,
       [id],
     );
+    // Öffnen = gelesen: offene Benachrichtigungen zu diesem Ticket schließen.
+    await markNotificationsReadForRef(session.userId, 'ticket', id);
     return res.json({ ...rows[0], comments });
   }
 
@@ -801,6 +836,7 @@ export async function ticket(req: VercelRequest, res: VercelResponse) {
 
     if (b.op === 'delete') {
       await sql`DELETE FROM tickets WHERE id = ${id}`;
+      await deleteNotificationsForRef('ticket', id);
       return res.json({ ok: true, deleted: id });
     }
 
@@ -1167,6 +1203,8 @@ export async function taskGet(req: VercelRequest, res: VercelResponse) {
   // Öffnen = gelesen: Lesestand für den „ungelesen"-Zähler im Aufgaben-Tab setzen.
   await sql`INSERT INTO task_reads (user_id, task_id, last_read_at) VALUES (${session.userId}, ${id}, now())
             ON CONFLICT (user_id, task_id) DO UPDATE SET last_read_at = now()`;
+  // …und offene Benachrichtigungen zu dieser Aufgabe schließen (App-Icon-Zahl).
+  await markNotificationsReadForRef(session.userId, 'task', id);
   return res.json({ ...t, comments });
 }
 
@@ -1189,6 +1227,7 @@ export async function task(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Nur der Ersteller oder ein Super-Admin darf die Aufgabe löschen.' });
     }
     await sql`DELETE FROM tasks WHERE id = ${id}`;
+    await deleteNotificationsForRef('task', id);
     return res.json({ ok: true, deleted: id });
   }
 
@@ -1526,6 +1565,8 @@ export async function idea(req: VercelRequest, res: VercelResponse) {
                        FROM idea_comment_reactions r WHERE r.comment_id = c.id), '[]') AS reactions
       FROM idea_comments c WHERE c.idea_id = ${id} ORDER BY c.created_at`;
     await sql`UPDATE idea_members SET last_read_at = now() WHERE idea_id = ${id} AND user_id = ${uid}`;
+    // Öffnen = gelesen: offene Benachrichtigungen zu dieser Idee schließen.
+    await markNotificationsReadForRef(uid, 'idea', id);
     return res.json({ ...base, comments });
   }
 
@@ -1543,6 +1584,7 @@ export async function idea(req: VercelRequest, res: VercelResponse) {
     if (b.op === 'delete') {
       if (!isOwner) return res.status(403).json({ error: 'Nur der Ersteller darf die Idee löschen.' });
       await sql`DELETE FROM ideas WHERE id = ${id}`;
+      await deleteNotificationsForRef('idea', id);
       return res.json({ ok: true, deleted: id });
     }
 

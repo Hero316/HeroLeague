@@ -406,8 +406,10 @@ export function PartnerSection() {
       <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-8 sm:py-12">
         {/* Durchgehender, gleichmäßiger vertikaler Rhythmus (überall derselbe
             Abstand). Reihenfolge: ganz oben die große „Hauptpartner"-Überschrift
-            + Logo, danach erst die lilane „Partner"-Überschrift mit Bankpartner
-            & weiteren Partnern darunter. */}
+            + Logo, direkt darunter der Bankpartner (Überschrift im selben
+            kursiv-fetten Stil, blau & etwas kleiner) und – nur falls es weitere,
+            kleinere Sponsoren gibt – ganz unten die „Partner"-Überschrift mit den
+            übrigen Logos. */}
         <div className="flex flex-col items-center gap-3 sm:gap-4">
           {/* Hauptüberschrift ganz oben: „Hauptpartner" – groß, kursiv und gold
               schimmernd, im Stil des früheren „Partner"-Titels. Darunter das
@@ -427,22 +429,16 @@ export function PartnerSection() {
             </>
           )}
 
-          {/* Danach erst die lilane „Partner"-Überschrift – Überschrift für den
-              Bankpartner und die weiteren (normalen) Partner. */}
-          {(banks.length > 0 || rest.length > 0) && (
-            <h2 className="hl-partner-title text-center font-sans font-black italic text-3xl sm:text-4xl tracking-tight px-3 sm:px-4">
-              Partner
-            </h2>
-          )}
-
-          {/* Bankpartner – eigene blaue Überschrift + Logo (Grau→Farbe beim
-              Hovern, auf dem Handy dauerhaft farbig). */}
+          {/* Bankpartner – direkt unter dem Hauptpartner. Eigene Überschrift jetzt
+              im Hauptpartner-Stil (dieselbe kursiv-fette Schrift), aber in Blau und
+              eine Stufe kleiner, damit der Hauptpartner der größte bleibt. Logo wie
+              gehabt (Grau→Farbe beim Hovern, auf dem Handy dauerhaft farbig). */}
           {banks.length > 0 && (
             <div className="flex flex-wrap items-end justify-center gap-x-14 sm:gap-x-20 gap-y-7 sm:gap-y-8">
               {banks.map((p) => (
                 <div key={p.id} className="flex flex-col items-center gap-3 sm:gap-4">
                   {p.label && (
-                    <span className="hl-partner-bank font-sans text-[13px] sm:text-base font-extrabold uppercase tracking-[0.16em]">
+                    <span className="hl-partner-bank text-center font-sans font-black italic text-2xl sm:text-3xl tracking-tight px-3 sm:px-4">
                       {p.label}
                     </span>
                   )}
@@ -452,12 +448,19 @@ export function PartnerSection() {
             </div>
           )}
 
+          {/* „Partner"-Überschrift erscheint ERST hier – nur wenn es weitere,
+              kleinere Sponsoren gibt – und steht damit unter dem Bankpartner. */}
           {rest.length > 0 && (
-            <div className="flex flex-wrap items-center justify-center gap-x-12 sm:gap-x-16 gap-y-8">
-              {rest.map((p) => (
-                <PartnerLogo key={p.id} partner={p} heightClass="h-12 sm:h-14" maxWClass="max-w-[190px]" />
-              ))}
-            </div>
+            <>
+              <h2 className="hl-partner-title text-center font-sans font-black italic text-3xl sm:text-4xl tracking-tight px-3 sm:px-4">
+                Partner
+              </h2>
+              <div className="flex flex-wrap items-center justify-center gap-x-12 sm:gap-x-16 gap-y-8">
+                {rest.map((p) => (
+                  <PartnerLogo key={p.id} partner={p} heightClass="h-12 sm:h-14" maxWClass="max-w-[190px]" />
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>
