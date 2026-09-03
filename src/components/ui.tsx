@@ -785,6 +785,9 @@ interface AccordionContextValue {
   openSection: (id: string, category?: string | null) => void;
   scrollTargetId: string | null;
   clearScrollTarget: () => void;
+  // Aufgeräumte Ansicht: rechts wird NUR der links gewählte Abschnitt gezeigt
+  // (kein Stapel von Aufklapp-Köpfen). Aktiv, sobald es Rubriken gibt (Backoffice).
+  singleView: boolean;
 }
 
 const AccordionContext = React.createContext<AccordionContextValue | null>(null);
@@ -873,6 +876,30 @@ export function AccordionGroup({
     : categories ?? [];
   const categoryLabel = (id?: string) => allCategories.find((c) => c.id === id)?.label ?? '';
   const isDash = !!dashboard && activeCategory === DASH_ID;
+  // Aufgeräumte Einzelansicht nur am PC (ab sm) – dort steuert die linke Sidebar,
+  // welcher Bereich rechts steht. Am Handy bleiben die Aufklapp-Köpfe die Navigation.
+  const [isDesktop, setIsDesktop] = React.useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches
+  );
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(min-width: 640px)');
+    const on = () => setIsDesktop(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  const singleView = isDesktop && allCategories.length > 0;
+
+  // Aufgeräumte Ansicht: beim Wechsel in eine Rubrik automatisch ihren ersten
+  // Menüpunkt öffnen, damit rechts sofort Inhalt steht (statt leerer Fläche).
+  React.useEffect(() => {
+    if (!singleView || isDash || activeCategory == null) return;
+    const openBelongs = openId != null && sections.some((s) => s.id === openId && s.category === activeCategory);
+    if (openBelongs) return;
+    const first = sections.find((s) => s.category === activeCategory);
+    if (first) setOpenId(first.id);
+  }, [singleView, isDash, activeCategory, sections, openId]);
 
   // Aktive „Pille" im Handy-Dock: eine dauerhafte Kachel, die NUR horizontal zur
   // aktiven Rubrik gleitet (Position gemessen). Bewusst kein layoutId – das
@@ -896,7 +923,7 @@ export function AccordionGroup({
 
   return (
     <AccordionContext.Provider
-      value={{ openId, toggle, activeCategory, register, unregister, openSection, scrollTargetId, clearScrollTarget }}
+      value={{ openId, toggle, activeCategory, register, unregister, openSection, scrollTargetId, clearScrollTarget, singleView }}
     >
       {searchable && (
         <AdminSectionSearch
@@ -1028,6 +1055,12 @@ export function AccordionGroup({
         <div className="min-w-0 flex-1 pb-32 sm:pb-0">
           {isDash && dashboard}
           {children}
+          {/* Aufgeräumte Ansicht: kurzer Hinweis, falls (noch) kein Menüpunkt offen ist. */}
+          {singleView && !isDash && (openId == null || !sections.some((s) => s.id === openId && s.category === activeCategory)) && (
+            <div className="hl-card p-8 text-center text-sm text-hl-mute font-sans">
+              Wähle links einen Menüpunkt.
+            </div>
+          )}
         </div>
       </div>
     </AccordionContext.Provider>
@@ -1178,6 +1211,34 @@ export function AccordionSection({
   // Bei aktiver Reiter-Leiste nur die Abschnitte der gewählten Rubrik zeigen.
   if (ctx?.activeCategory != null && category != null && category !== ctx.activeCategory) return null;
   const panelId = `acc-panel-${id}`;
+  const singleView = !!ctx?.singleView;
+
+  // Aufgeräumte Ansicht: rechts steht NUR der gewählte Abschnitt (offen, ohne
+  // Aufklapp-Kopf). Die Navigation läuft komplett über die linke Sidebar.
+  if (singleView) {
+    if (!open) return null;
+    return (
+      <div ref={ref} className="hl-card overflow-hidden scroll-mt-4 border-brand-accent-light/25">
+        <div className="flex items-center gap-3 sm:gap-4 p-4 sm:p-5">
+          {icon && (
+            <span
+              className="grid place-items-center w-10 h-10 rounded-xl shrink-0 border"
+              style={{ background: `${accent}1a`, borderColor: `${accent}40`, color: accent }}
+            >
+              {icon}
+            </span>
+          )}
+          <span className="flex-1 min-w-0">
+            <span className="block font-display font-black text-base sm:text-lg text-white uppercase tracking-tight leading-tight">
+              {title}
+            </span>
+            {subtitle && <span className="block text-[11px] sm:text-xs text-hl-mute font-sans mt-0.5">{subtitle}</span>}
+          </span>
+        </div>
+        <div id={panelId} className="px-4 sm:px-5 pb-5 pt-1 border-t border-white/[.06]">{children}</div>
+      </div>
+    );
+  }
 
   return (
     <div

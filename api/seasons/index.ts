@@ -100,6 +100,23 @@ const deleteDraftSeason = requireSuperadmin(async (req: VercelRequest, res: Verc
   return res.json({ ok: true });
 });
 
+// Saison umbenennen (Anzeigename/Label ändern) – gilt für aktive UND Entwurf-Saisons.
+// Ändert nur die Beschriftung, sonst nichts (IDs, Zugehörigkeiten, Spiele bleiben).
+const renameSeason = requireSuperadmin(async (req: VercelRequest, res: VercelResponse) => {
+  const { id, label } = req.body ?? {};
+  if (!isNonEmptyString(id)) return badRequest(res, 'Saison-ID fehlt.');
+  if (!isNonEmptyString(label)) return badRequest(res, 'Bitte einen Saison-Namen angeben.');
+  const trimmed = label.trim().slice(0, 60);
+  const seasons = await getSeasons();
+  const s = seasons.find((x) => x.id === id);
+  if (!s) return badRequest(res, 'Saison nicht gefunden.');
+  if (seasons.some((x) => x.id !== id && x.label === trimmed)) {
+    return badRequest(res, 'Es gibt bereits eine Saison mit diesem Namen.');
+  }
+  await sql`UPDATE seasons SET label = ${trimmed} WHERE id = ${id}`;
+  return res.json({ id, label: trimmed, isCurrent: s.isCurrent, draft: s.draft ?? false });
+});
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method === 'GET') {
@@ -119,6 +136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (action === 'publishSeason') return publishSeason(req, res);
       if (action === 'setCurrentSeason') return setCurrentSeason(req, res);
       if (action === 'deleteDraftSeason') return deleteDraftSeason(req, res);
+      if (action === 'renameSeason') return renameSeason(req, res);
       return createSeason(req, res);
     }
     return res.status(405).json({ error: 'Nicht unterstützt' });

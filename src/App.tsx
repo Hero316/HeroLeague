@@ -695,6 +695,8 @@ export default function App() {
   };
   const handleDeleteDraftSeason = (id: string) =>
     runAdminAction(() => apiFetch('/api/seasons', { method: 'POST', body: JSON.stringify({ action: 'deleteDraftSeason', id }) }));
+  const handleRenameSeason = (id: string, label: string) =>
+    runAdminAction(() => apiFetch('/api/seasons', { method: 'POST', body: JSON.stringify({ action: 'renameSeason', id, label }) }));
   const handleSetCurrentSeason = async (id: string) => {
     const ok = await runAdminAction(() =>
       apiFetch('/api/seasons', { method: 'POST', body: JSON.stringify({ action: 'setCurrentSeason', id }) })
@@ -1584,6 +1586,7 @@ export default function App() {
                           onPublish={handlePublishSeason}
                           onDeleteDraft={handleDeleteDraftSeason}
                           onSetCurrent={handleSetCurrentSeason}
+                          onRename={handleRenameSeason}
                           onAddTeam={handleAddTeamToSeason}
                           onRemoveTeam={handleRemoveTeamFromSeason}
                           onCreateTeam={handleAddTeamForSeason}

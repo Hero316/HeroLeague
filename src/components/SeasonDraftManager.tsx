@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FlaskConical, Plus, Check, Trophy, Trash2, Rocket, Users, Radio } from 'lucide-react';
+import { FlaskConical, Plus, Check, Trophy, Trash2, Rocket, Users, Radio, Pencil, X } from 'lucide-react';
 import type { Season, Team } from '../types';
 
 // ===========================================================================
@@ -22,6 +22,7 @@ interface Props {
   onPublish: (id: string) => Promise<boolean>;
   onDeleteDraft: (id: string) => Promise<boolean>;
   onSetCurrent: (id: string) => Promise<boolean>;
+  onRename: (id: string, label: string) => Promise<boolean>;
   onAddTeam: (teamId: string, seasonId: string) => Promise<boolean>;
   onRemoveTeam: (teamId: string, seasonId: string) => Promise<boolean>;
   onCreateTeam: (team: Omit<Team, 'id'>, seasonId: string) => Promise<boolean>;
@@ -40,6 +41,7 @@ export default function SeasonDraftManager({
   onPublish,
   onDeleteDraft,
   onSetCurrent,
+  onRename,
   onAddTeam,
   onRemoveTeam,
   onCreateTeam,
@@ -47,6 +49,19 @@ export default function SeasonDraftManager({
   const draft = useMemo(() => seasons.find((s) => s.draft) ?? null, [seasons]);
   const [label, setLabel] = useState(defaultLabel);
   const [busy, setBusy] = useState(false);
+  // Inline-Umbenennen einer Saison (Label ändern).
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameText, setRenameText] = useState('');
+  const startRename = (id: string, current: string) => {
+    setRenamingId(id);
+    setRenameText(current);
+  };
+  const saveRename = async (id: string) => {
+    const next = renameText.trim();
+    if (!next) return;
+    await run(() => onRename(id, next));
+    setRenamingId(null);
+  };
 
   // Neuer Verein (für die Entwurf-Saison)
   const [nName, setNName] = useState('');
@@ -74,8 +89,38 @@ export default function SeasonDraftManager({
         {publishedSeasons.map((s) => (
           <div key={s.id} className="hl-card px-3 py-2.5 flex items-center gap-3">
             <Trophy className="w-4 h-4 text-hl-mute shrink-0" />
-            <span className="font-semibold text-sm min-w-0 truncate">{s.label}</span>
-            {s.isCurrent ? (
+            {renamingId === s.id ? (
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <input
+                  autoFocus
+                  value={renameText}
+                  onChange={(e) => setRenameText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveRename(s.id);
+                    if (e.key === 'Escape') setRenamingId(null);
+                  }}
+                  className="hl-input min-w-0 flex-1 px-2.5 py-1.5 rounded-lg text-sm font-semibold"
+                />
+                <button onClick={() => saveRename(s.id)} disabled={busy || !renameText.trim()} title="Speichern" className="p-1.5 rounded-lg bg-hl-green/15 border border-hl-green/40 text-hl-green cursor-pointer disabled:opacity-50 shrink-0">
+                  <Check className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => setRenamingId(null)} title="Abbrechen" className="p-1.5 rounded-lg border border-white/10 bg-white/5 text-hl-mute hover:text-white cursor-pointer shrink-0">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <span className="font-semibold text-sm min-w-0 truncate">{s.label}</span>
+                <button
+                  onClick={() => startRename(s.id, s.label)}
+                  title="Umbenennen"
+                  className="p-1 rounded text-hl-mute hover:text-white cursor-pointer shrink-0"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
+            {renamingId !== s.id && (s.isCurrent ? (
               <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-hl-green/15 border border-hl-green/40 text-hl-green flex items-center gap-1 shrink-0">
                 <Radio className="w-3 h-3" /> Aktuell · live
               </span>
@@ -83,8 +128,8 @@ export default function SeasonDraftManager({
               <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-hl-dim shrink-0">
                 Archiv
               </span>
-            )}
-            {!s.isCurrent && (
+            ))}
+            {renamingId !== s.id && !s.isCurrent && (
               <button
                 onClick={() => {
                   if (window.confirm(`„${s.label}" als AKTUELLE (live) Saison setzen? Sie wird dann als Standard auf der Startseite gezeigt. Alle Saisons bleiben über den Umschalter einsehbar.`))
