@@ -1,6 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { ChevronDown, X, Smartphone, Search, LayoutDashboard, Star, Trophy, Home, Radio, KeyRound } from 'lucide-react';
 import { ActiveTab, Partner, PartnersConfig, Team } from '../types';
 import { apiFetch } from '../lib/api';
@@ -1061,26 +1061,30 @@ export function AccordionGroup({
             Jeder Wechsel (Rubrik am PC/Handy, Menüpunkt am PC) wird sanft ein-/ausgeblendet
             statt hart zu springen – „geführtes" Gefühl beim Durchklicken. Am Handy hängt
             der Key nur an der Rubrik (Aufklappen animiert die Sektion selbst). */}
-        <div className="min-w-0 flex-1 pb-32 sm:pb-0">
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={singleView ? `${activeCategory ?? 'none'}:${isDash ? 'dash' : openId ?? 'empty'}` : `${activeCategory ?? 'none'}`}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-            >
-              {isDash && dashboard}
-              {children}
-              {/* Aufgeräumte Ansicht: kurzer Hinweis, falls (noch) kein Menüpunkt offen ist. */}
-              {singleView && !isDash && (openId == null || !sections.some((s) => s.id === openId && s.category === activeCategory)) && (
-                <div className="hl-card p-8 text-center text-sm text-hl-mute font-sans">
-                  Wähle links einen Menüpunkt.
-                </div>
-              )}
-            </motion.div>
-          </AnimatePresence>
-        </div>
+        {/* Höhe smooth mitanimieren (layout), damit größere/kleinere Inhalte weich
+            wachsen/schrumpfen statt zu springen. Der Inhalt selbst blendet beim
+            Wechsel nur sanft ein (kein Einklappen auf 0 → kein Ruck). */}
+        <motion.div
+          layout="size"
+          transition={{ layout: { duration: 0.3, ease: [0.22, 1, 0.36, 1] } }}
+          className="min-w-0 flex-1 pb-32 sm:pb-0"
+        >
+          <motion.div
+            key={singleView ? `${activeCategory ?? 'none'}:${isDash ? 'dash' : openId ?? 'empty'}` : `${activeCategory ?? 'none'}`}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+          >
+            {isDash && dashboard}
+            {children}
+            {/* Aufgeräumte Ansicht: kurzer Hinweis, falls (noch) kein Menüpunkt offen ist. */}
+            {singleView && !isDash && (openId == null || !sections.some((s) => s.id === openId && s.category === activeCategory)) && (
+              <div className="hl-card p-8 text-center text-sm text-hl-mute font-sans">
+                Wähle links einen Menüpunkt.
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
       </div>
     </AccordionContext.Provider>
   );

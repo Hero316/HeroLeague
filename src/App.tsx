@@ -1416,7 +1416,9 @@ export default function App() {
           {!isAdmin ? (
             <AdminLogin onLoginSuccess={(user) => setSessionUser(user)} />
           ) : (
-            <div className="w-full max-w-7xl mx-auto space-y-8 py-4">
+            /* self-start: Backoffice IMMER oben ausrichten (nicht vertikal zentrieren),
+               sonst wächst/springt der Abstand oben je nach Inhaltshöhe. */
+            <div className="w-full max-w-7xl mx-auto space-y-8 py-4 self-start">
               <div className="hl-card p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-center space-x-3">
                   {sessionUser ? (
