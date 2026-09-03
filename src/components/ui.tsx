@@ -1,6 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { ChevronDown, X, Smartphone, Search, LayoutDashboard, Star, Trophy, Home, Radio, KeyRound } from 'lucide-react';
 import { ActiveTab, Partner, PartnersConfig, Team } from '../types';
 import { apiFetch } from '../lib/api';
@@ -1024,9 +1024,15 @@ export function AccordionGroup({
                       <span className="truncate">{c.label}</span>
                     </button>
                     {/* Unter der aktiven Rubrik: ihre Menüpunkte als Unterliste –
-                        Klick öffnet den Bereich rechts (und scrollt hin). */}
+                        Klick öffnet den Bereich rechts. Sanft aufklappen statt springen. */}
                     {active && catSections.length > 0 && (
-                      <div className="ml-3.5 mt-1 mb-1.5 space-y-0.5 border-l border-white/10 pl-2.5">
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        transition={{ duration: 0.2, ease: 'easeOut' }}
+                        style={{ overflow: 'hidden' }}
+                        className="ml-3.5 mt-1 mb-1.5 space-y-0.5 border-l border-white/10 pl-2.5"
+                      >
                         {catSections.map((s) => {
                           const isOpen = openId === s.id;
                           return (
@@ -1042,7 +1048,7 @@ export function AccordionGroup({
                             </button>
                           );
                         })}
-                      </div>
+                      </motion.div>
                     )}
                   </div>
                 );
@@ -1051,16 +1057,29 @@ export function AccordionGroup({
           </aside>
         )}
 
-        {/* Inhalt. Unten am Handy Platz lassen, damit nichts hinter dem Dock verschwindet. */}
+        {/* Inhalt. Unten am Handy Platz lassen, damit nichts hinter dem Dock verschwindet.
+            Jeder Wechsel (Rubrik am PC/Handy, Menüpunkt am PC) wird sanft ein-/ausgeblendet
+            statt hart zu springen – „geführtes" Gefühl beim Durchklicken. Am Handy hängt
+            der Key nur an der Rubrik (Aufklappen animiert die Sektion selbst). */}
         <div className="min-w-0 flex-1 pb-32 sm:pb-0">
-          {isDash && dashboard}
-          {children}
-          {/* Aufgeräumte Ansicht: kurzer Hinweis, falls (noch) kein Menüpunkt offen ist. */}
-          {singleView && !isDash && (openId == null || !sections.some((s) => s.id === openId && s.category === activeCategory)) && (
-            <div className="hl-card p-8 text-center text-sm text-hl-mute font-sans">
-              Wähle links einen Menüpunkt.
-            </div>
-          )}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={singleView ? `${activeCategory ?? 'none'}:${isDash ? 'dash' : openId ?? 'empty'}` : `${activeCategory ?? 'none'}`}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+            >
+              {isDash && dashboard}
+              {children}
+              {/* Aufgeräumte Ansicht: kurzer Hinweis, falls (noch) kein Menüpunkt offen ist. */}
+              {singleView && !isDash && (openId == null || !sections.some((s) => s.id === openId && s.category === activeCategory)) && (
+                <div className="hl-card p-8 text-center text-sm text-hl-mute font-sans">
+                  Wähle links einen Menüpunkt.
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
     </AccordionContext.Provider>
@@ -1201,10 +1220,12 @@ export function AccordionSection({
   const clearScrollTarget = ctx?.clearScrollTarget;
   React.useEffect(() => {
     if (open && scrollTargetId === id) {
-      ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Am PC (Einzelansicht) NICHT scrollen – der Inhalt steht ohnehin oben rechts;
+      // ein scrollIntoView würde die Seite unnötig ruckeln lassen. Nur am Handy scrollen.
+      if (!ctx?.singleView) ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       clearScrollTarget?.();
     }
-  }, [open, scrollTargetId, id, clearScrollTarget]);
+  }, [open, scrollTargetId, id, clearScrollTarget, ctx?.singleView]);
 
   // Für diese Rolle ausgeblendet.
   if (!show) return null;
