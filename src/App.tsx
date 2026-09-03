@@ -1546,6 +1546,8 @@ export default function App() {
                       matches={currentSeasonMatches}
                       currentSeasonLabel={currentSeasonName}
                       nextSeasonLabel={nextSeasonName}
+                      seasons={seasons.filter((s) => s.id !== demo.seasonId)}
+                      currentSeasonId={currentSeason?.id ?? ''}
                       isSuperadmin={isSuperadmin}
                       canManageClubs={canManageMatches}
                       canManageSeason={canManageSeason}

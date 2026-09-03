@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone, Handshake, ChevronUp, ChevronDown, Star, Landmark, BarChart3 } from 'lucide-react';
-import { Player, Team, Match, EventConfig, EventArchive, NewsItem, Partner, TeamSponsor, TeamSponsorsMap, SponsorClicksMap } from '../types';
+import { Player, Team, Match, EventConfig, EventArchive, NewsItem, Partner, TeamSponsor, TeamSponsorsMap, SponsorClicksMap, Season } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
 import { fetchSponsorClicks } from '../lib/sponsors';
 import { calculateEventStandings, calculateEventAwards } from '../lib/eventStandings';
@@ -251,6 +251,10 @@ interface AdminPanelProps {
   matches: Match[];
   currentSeasonLabel: string;
   nextSeasonLabel: string;
+  // Alle verwaltbaren Saisons (aktuell + Entwurf/Season 2), damit Vereine gezielt
+  // einer Saison zugeordnet werden können. `currentSeasonId` = die aktive Saison.
+  seasons: Season[];
+  currentSeasonId: string;
   isSuperadmin: boolean;
   // Granulare Sichtbarkeit einzelner Sektionen (Spiel-Admin sieht nur einen Teil).
   canManageClubs: boolean; // Klubs/Kader
@@ -335,6 +339,8 @@ export default function AdminPanel({
   matches,
   currentSeasonLabel,
   nextSeasonLabel,
+  seasons,
+  currentSeasonId,
   isSuperadmin,
   canManageClubs,
   canManageSeason,
@@ -360,13 +366,22 @@ export default function AdminPanel({
     { name: 'Teal', hex: '#14B8A6' },
     { name: 'Orange', hex: '#F97316' },
   ];
-  const emojis = ['🛡️', '🦁', '🦅', '🐻', '🔥', '⚓', '🐝', '🐂', '⚽', '🏆', '⚡', '🌟', '🦄'];
+  // Wappen-Emoji (logoIcon) wird nicht mehr im Formular gewählt – es wird im
+  // öffentlichen Kern-Wappen ohnehin nicht angezeigt (dort zählt Logo/Kürzel).
+  // Neue Clubs bekommen einen neutralen Default; bestehende behalten ihr Emoji.
+  const DEFAULT_CREST = '🛡️';
+
+  // Verwaltbare Saisons: aus diesem Pool wählt man beim Anlegen/Bearbeiten, zu
+  // welcher Saison ein Verein gehört (Liga 1 / Liga 2).
+  const manageableSeasons = seasons;
 
   // Neuen Club anlegen
   const [newTeamName, setNewTeamName] = useState('');
   const [newTeamShort, setNewTeamShort] = useState('');
   const [newTeamColor, setNewTeamColor] = useState('#3B82F6');
-  const [newTeamEmoji, setNewTeamEmoji] = useState('🛡️');
+  // Standard: der neue Verein gehört zur aktuellen Saison (verhindert das versehentliche
+  // Auftauchen von Season-2-Teams in Season 1). Änderbar, sobald es mehrere Saisons gibt.
+  const [newTeamSeasonIds, setNewTeamSeasonIds] = useState<string[]>(currentSeasonId ? [currentSeasonId] : []);
   const [formSuccess, setFormSuccess] = useState(false);
 
   // Club bearbeiten
@@ -374,8 +389,9 @@ export default function AdminPanel({
   const [editTeamName, setEditTeamName] = useState('');
   const [editTeamShort, setEditTeamShort] = useState('');
   const [editTeamColor, setEditTeamColor] = useState('#3B82F6');
-  const [editTeamEmoji, setEditTeamEmoji] = useState('🛡️');
   const [editTeamLogoUrl, setEditTeamLogoUrl] = useState('');
+  // Saison-Zugehörigkeit des bearbeiteten Vereins (welche Saisons zeigen ihn).
+  const [editTeamSeasonIds, setEditTeamSeasonIds] = useState<string[]>([]);
   const [editTeamRoster, setEditTeamRoster] = useState<Player[]>([]);
   const [editSuccess, setEditSuccess] = useState(false);
   // Team-/Trikot-Sponsoren: globale Map (einmal geladen) + Sponsoren des aktuell
@@ -1273,14 +1289,16 @@ export default function AdminPanel({
       name: newTeamName.trim(),
       shortName: newTeamShort.trim().toUpperCase(),
       logoColor: newTeamColor,
-      logoIcon: newTeamEmoji,
+      logoIcon: DEFAULT_CREST,
       logoUrl: '',
       spielerliste: [],
+      seasonIds: newTeamSeasonIds,
     });
 
     if (ok) {
       setNewTeamName('');
       setNewTeamShort('');
+      setNewTeamSeasonIds(currentSeasonId ? [currentSeasonId] : []);
       setFormSuccess(true);
       setTimeout(() => setFormSuccess(false), 3000);
     }
@@ -1292,8 +1310,8 @@ export default function AdminPanel({
     setEditTeamName(team?.name ?? '');
     setEditTeamShort(team?.shortName ?? '');
     setEditTeamColor(team?.logoColor ?? '#3B82F6');
-    setEditTeamEmoji(team?.logoIcon ?? '🛡️');
     setEditTeamLogoUrl(team?.logoUrl ?? '');
+    setEditTeamSeasonIds(Array.isArray(team?.seasonIds) ? [...team!.seasonIds!] : []);
     setEditTeamRoster(team?.spielerliste ? [...team.spielerliste] : []);
     setEditTeamSponsors(teamSponsorsMap[teamId] ? teamSponsorsMap[teamId].map((s) => ({ ...s })) : []);
   };
@@ -1332,9 +1350,11 @@ export default function AdminPanel({
       name: editTeamName.trim(),
       shortName: editTeamShort.trim().toUpperCase(),
       logoColor: editTeamColor,
-      logoIcon: editTeamEmoji,
+      // Bestehendes Wappen-Emoji unverändert beibehalten (nicht mehr im Formular wählbar).
+      logoIcon: teams.find((t) => t.id === selectedEditTeamId)?.logoIcon ?? DEFAULT_CREST,
       logoUrl: editTeamLogoUrl.trim(),
       spielerliste: roster,
+      seasonIds: editTeamSeasonIds,
     });
 
     if (ok) {
@@ -1519,25 +1539,42 @@ export default function AdminPanel({
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-mono text-gray-400 mb-2 uppercase tracking-wider">WAPPEN-SYMBOL (EMOJI)</label>
-              <div className="flex flex-wrap gap-2">
-                {emojis.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => setNewTeamEmoji(emoji)}
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg border transition-all duration-150 cursor-pointer ${
-                      newTeamEmoji === emoji
-                        ? 'bg-brand-accent/20 border-brand-accent-light text-white scale-105'
-                        : 'bg-[#060E0F] border-white/10 hover:bg-white/5 text-gray-300'
-                    }`}
-                  >
-                    {emoji}
-                  </button>
-                ))}
+            {/* Saison / Liga: nur nötig, sobald es mehr als eine Saison gibt (z.B.
+                Season 2 in Vorbereitung). Standard = aktuelle Saison, damit neue
+                Vereine NICHT versehentlich in der falschen Saison auftauchen. */}
+            {manageableSeasons.length > 1 && (
+              <div>
+                <label className="block text-xs font-mono text-gray-400 mb-1 uppercase tracking-wider">SAISON / LIGA</label>
+                <p className="text-[11px] text-gray-500 mb-2 font-sans">
+                  In welcher Saison spielt der Verein? Für ein reines Season-2-Team nur Season 2 wählen.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {manageableSeasons.map((s) => {
+                    const on = newTeamSeasonIds.includes(s.id);
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() =>
+                          setNewTeamSeasonIds((prev) => (on ? prev.filter((x) => x !== s.id) : [...prev, s.id]))
+                        }
+                        className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all duration-150 cursor-pointer ${
+                          on
+                            ? 'bg-brand-accent/20 border-brand-accent-light text-white'
+                            : 'bg-[#060E0F] border-white/10 hover:bg-white/5 text-gray-300'
+                        }`}
+                      >
+                        {s.label}
+                        {s.draft ? ' · Entwurf' : s.isCurrent ? ' · aktuell' : ''}
+                      </button>
+                    );
+                  })}
+                </div>
+                {newTeamSeasonIds.length === 0 && (
+                  <p className="text-[11px] text-amber-400 mt-2 font-sans">Ohne Auswahl erscheint der Verein in allen Saisons.</p>
+                )}
               </div>
-            </div>
+            )}
 
             <button
               type="submit"
@@ -1607,26 +1644,6 @@ export default function AdminPanel({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-mono text-gray-400 mb-2 uppercase tracking-wider">WAPPEN-SYMBOL (EMOJI)</label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {emojis.map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        onClick={() => setEditTeamEmoji(emoji)}
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center text-base border transition-all duration-150 cursor-pointer ${
-                          editTeamEmoji === emoji
-                            ? 'bg-brand-accent/20 border-brand-accent-light text-white scale-105'
-                            : 'bg-[#060E0F] border-white/10 hover:bg-white/5 text-gray-300'
-                        }`}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
                   <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">VEREINSFARBE</label>
                   <div className="flex items-center space-x-3">
                     <input
@@ -1655,6 +1672,45 @@ export default function AdminPanel({
                 <div className="md:col-span-2">
                   <ImageUploader label="Vereinslogo (Upload)" value={editTeamLogoUrl} onChange={setEditTeamLogoUrl} />
                 </div>
+
+                {/* Saison-Zugehörigkeit: hier lässt sich ein Verein gezielt einer Saison
+                    zuordnen bzw. aus einer Saison entfernen (behebt z.B. ein Season-2-Team,
+                    das faelschlich in Season 1 auftaucht). Nur relevant ab 2 Saisons. */}
+                {manageableSeasons.length > 1 && (
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-mono text-gray-400 mb-1 uppercase tracking-wider">SAISON / LIGA</label>
+                    <p className="text-[11px] text-gray-500 mb-2 font-sans">
+                      Welche Saisons zeigen diesen Verein? Für ein reines Season-2-Team nur Season 2 auswählen.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {manageableSeasons.map((s) => {
+                        const on = editTeamSeasonIds.includes(s.id);
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() =>
+                              setEditTeamSeasonIds((prev) => (on ? prev.filter((x) => x !== s.id) : [...prev, s.id]))
+                            }
+                            className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all duration-150 cursor-pointer ${
+                              on
+                                ? 'bg-brand-accent/20 border-brand-accent-light text-white'
+                                : 'bg-[#060E0F] border-white/10 hover:bg-white/5 text-gray-300'
+                            }`}
+                          >
+                            {s.label}
+                            {s.draft ? ' · Entwurf' : s.isCurrent ? ' · aktuell' : ''}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {editTeamSeasonIds.length === 0 && (
+                      <p className="text-[11px] text-amber-400 mt-2 font-sans">
+                        Ohne Auswahl erscheint der Verein in <strong>allen</strong> Saisons.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 <div className="md:col-span-2">
                   <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">

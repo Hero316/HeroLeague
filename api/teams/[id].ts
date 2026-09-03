@@ -43,7 +43,7 @@ async function markNewPlayersAbsentInPastMatches(teamId: string, addedNames: str
 
 const updateTeam = requireSuperadmin(async (req: VercelRequest, res: VercelResponse) => {
   const id = String(req.query.id);
-  const { name, shortName, logoUrl, logoColor, logoIcon, spielerliste } = req.body ?? {};
+  const { name, shortName, logoUrl, logoColor, logoIcon, spielerliste, seasonIds } = req.body ?? {};
 
   if (name !== undefined && !isNonEmptyString(name)) return badRequest(res, 'Name darf nicht leer sein.');
   if (shortName !== undefined && !isNonEmptyString(shortName)) return badRequest(res, 'Kürzel darf nicht leer sein.');
@@ -51,6 +51,10 @@ const updateTeam = requireSuperadmin(async (req: VercelRequest, res: VercelRespo
   if (logoColor !== undefined && !isNonEmptyString(logoColor)) return badRequest(res, 'Ungültige Vereinsfarbe.');
   if (logoIcon !== undefined && !isNonEmptyString(logoIcon)) return badRequest(res, 'Ungültiges Wappen-Symbol.');
   if (spielerliste !== undefined && !isRoster(spielerliste)) return badRequest(res, 'Ungültiges Kader-Format.');
+  // Saison-Zugehörigkeit als ganzes Array setzbar (welche Saisons zeigen den Verein).
+  // Leeres Array = Altbestand-Semantik „in allen Saisons sichtbar".
+  if (seasonIds !== undefined && !(Array.isArray(seasonIds) && seasonIds.every((x) => typeof x === 'string')))
+    return badRequest(res, 'Ungültige Saison-Zuordnung.');
 
   const rows = await sql`
     SELECT id, name, short_name AS "shortName", logo_color AS "logoColor",
@@ -69,14 +73,17 @@ const updateTeam = requireSuperadmin(async (req: VercelRequest, res: VercelRespo
   if (logoColor !== undefined) team.logoColor = logoColor;
   if (logoIcon !== undefined) team.logoIcon = logoIcon;
   if (spielerliste !== undefined) team.spielerliste = spielerliste;
+  const nextSeasonIds = seasonIds !== undefined ? (seasonIds as string[]) : undefined;
 
   await sql`
     UPDATE teams
     SET name = ${team.name}, short_name = ${team.shortName}, logo_color = ${team.logoColor},
         logo_icon = ${team.logoIcon}, logo_url = ${team.logoUrl},
-        spielerliste = ${JSON.stringify(team.spielerliste)}::jsonb
+        spielerliste = ${JSON.stringify(team.spielerliste)}::jsonb,
+        season_ids = CASE WHEN ${nextSeasonIds !== undefined} THEN ${JSON.stringify(nextSeasonIds ?? [])}::jsonb ELSE season_ids END
     WHERE id = ${id}
   `;
+  if (nextSeasonIds !== undefined) (team as Team & { seasonIds?: string[] }).seasonIds = nextSeasonIds;
 
   if (spielerliste !== undefined) {
     const addedNames = team.spielerliste
