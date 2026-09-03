@@ -475,6 +475,9 @@ export default function AdminPanel({
   const [openRosterTeam, setOpenRosterTeam] = useState<string | null>(null);
   const [addTeamMode, setAddTeamMode] = useState<'menu' | 'copy' | 'new' | null>(null);
   const [newEventTeamName, setNewEventTeamName] = useState('');
+  // Beim Kopieren eines Liga-Vereins ins Testspiel: nach Saison filtern
+  // ('' = alle Saisons). So kann man gezielt Season-1- oder Season-2-Teams wählen.
+  const [eventCopySeasonId, setEventCopySeasonId] = useState<string>('');
 
   // Neue Saison starten
   const [seasonModalOpen, setSeasonModalOpen] = useState(false);
@@ -2971,11 +2974,41 @@ export default function AdminPanel({
                     {addTeamMode === 'copy' && (
                       <div className="space-y-2">
                         <div className="text-[11px] font-sans font-bold uppercase tracking-wider text-gray-400">Verein aus der Website wählen</div>
-                        {leagueTeamsNotInEvent.length === 0 ? (
-                          <p className="text-[11px] text-gray-500 font-sans">Alle Vereine sind bereits im Testspiel.</p>
-                        ) : (
-                          <div className="max-h-56 overflow-y-auto space-y-1">
-                            {leagueTeamsNotInEvent.map((t) => (
+                        {/* Saison-Filter: gezielt Season-1- oder Season-2-Teams zeigen. Nur ab 2 Saisons. */}
+                        {manageableSeasons.length > 1 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setEventCopySeasonId('')}
+                              className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer ${
+                                eventCopySeasonId === '' ? 'bg-brand-accent-light text-brand-dark border-brand-accent-light' : 'bg-white/[.03] text-gray-300 border-white/10 hover:border-white/25'
+                              }`}
+                            >
+                              Alle
+                            </button>
+                            {manageableSeasons.map((s) => (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => setEventCopySeasonId(s.id)}
+                                className={`px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer ${
+                                  eventCopySeasonId === s.id ? 'bg-brand-accent-light text-brand-dark border-brand-accent-light' : 'bg-white/[.03] text-gray-300 border-white/10 hover:border-white/25'
+                                }`}
+                              >
+                                {s.label}{s.draft ? ' · Entwurf' : ''}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {(() => {
+                          const list = leagueTeamsNotInEvent.filter(
+                            (t) => !eventCopySeasonId || !t.seasonIds || t.seasonIds.length === 0 || t.seasonIds.includes(eventCopySeasonId)
+                          );
+                          return list.length === 0 ? (
+                            <p className="text-[11px] text-gray-500 font-sans">Keine passenden Vereine (evtl. alle schon im Testspiel oder in anderer Saison).</p>
+                          ) : (
+                            <div className="max-h-56 overflow-y-auto space-y-1">
+                              {list.map((t) => (
                               <button
                                 key={t.id}
                                 type="button"
@@ -2987,10 +3020,11 @@ export default function AdminPanel({
                                 </span>
                                 <span className="flex-1 min-w-0 truncate text-sm font-sans font-semibold text-white">{t.name}</span>
                                 <span className="shrink-0 text-[10px] font-mono text-gray-500">{t.spielerliste?.length ?? 0} Sp.</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()}
                         <button type="button" onClick={() => setAddTeamMode('menu')} className="text-[11px] text-gray-400 hover:text-white font-sans cursor-pointer">‹ zurück</button>
                       </div>
                     )}
