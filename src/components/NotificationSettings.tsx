@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Bell, BellOff, Loader2, Check, Send, AlertTriangle } from 'lucide-react';
 import type { SessionUser } from '../types';
 import { apiFetch } from '../lib/api';
+import { markAllNotificationsRead } from '../lib/collab';
+import { setNotifUnread } from '../lib/badge';
 import {
   pushSupported,
   pushIntended,
@@ -22,6 +24,7 @@ export default function NotificationSettings({ user }: { user: SessionUser }) {
   const [savedOk, setSavedOk] = useState(false);
   const [serverStatus, setServerStatus] = useState<{ canSend: boolean; subscriptions: number } | null>(null);
   const [testMsg, setTestMsg] = useState('');
+  const [clearedOk, setClearedOk] = useState(false);
   const isBootstrap = user.id === 'bootstrap';
 
   useEffect(() => {
@@ -77,6 +80,23 @@ export default function NotificationSettings({ user }: { user: SessionUser }) {
       else setTestMsg(`Senden fehlgeschlagen (${r.error ?? 'unbekannt'}). Bitte die VAPID-Schlüssel prüfen.`);
     } catch (err) {
       setTestMsg(err instanceof Error ? err.message : 'Test fehlgeschlagen.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Alle offenen Benachrichtigungen auf einmal als gelesen markieren und die
+  // Zahl am App-Icon sofort auf 0 setzen. Praktisch, um Alt-Bestand (z.B. nach
+  // einer Neuinstallation) oder Meldungen zu längst gelöschten Inhalten loszuwerden.
+  const clearAll = async () => {
+    setBusy(true);
+    try {
+      await markAllNotificationsRead();
+      setNotifUnread(0);
+      setClearedOk(true);
+      setTimeout(() => setClearedOk(false), 2500);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Konnte nicht als gelesen markieren.');
     } finally {
       setBusy(false);
     }
@@ -177,6 +197,30 @@ export default function NotificationSettings({ user }: { user: SessionUser }) {
             </div>
           </>
         )}
+      </div>
+
+      {/* Ungelesen-Zähler (Zahl am App-Icon) zurücksetzen */}
+      <div className="border-t border-white/5 pt-5">
+        <h4 className="font-display font-bold text-white uppercase tracking-tight mb-1">Zahl am App-Icon</h4>
+        <p className="text-xs text-hl-mute font-sans mb-3">
+          Setzt die rote Zahl am App-Icon zurück, indem alle Benachrichtigungen als gelesen markiert werden.
+          Praktisch für Alt-Bestand (z.B. nach einer Neuinstallation) oder Meldungen zu längst gelöschten Inhalten.
+          Neue Benachrichtigungen verschwinden sonst automatisch, sobald du den jeweiligen Chat / das Ticket / die Aufgabe öffnest.
+        </p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={clearAll}
+            disabled={busy}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider border border-white/15 bg-white/5 hover:bg-white/10 text-hl-soft cursor-pointer disabled:opacity-50 flex items-center gap-2"
+          >
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Alle als gelesen markieren
+          </button>
+          {clearedOk && (
+            <span className="text-xs text-emerald-400 font-sans flex items-center gap-1">
+              <Check className="w-4 h-4" /> Erledigt
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
