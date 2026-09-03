@@ -27,14 +27,6 @@ const createTeam = requireSuperadmin(async (req: VercelRequest, res: VercelRespo
   }
 
   const existing = await getTeams();
-  if (existing.some((t) => t.shortName.toUpperCase() === shortName.trim().toUpperCase())) {
-    return badRequest(res, 'Ein Club mit diesem Kürzel existiert bereits.');
-  }
-
-  let id = slugify(name) || `team-${Date.now()}`;
-  if (existing.some((t) => t.id === id)) {
-    id = `${id}-${Date.now()}`;
-  }
 
   // Saison-Zugehörigkeit: explizit übergeben, sonst die aktuelle Saison.
   let memberSeasonIds: string[];
@@ -43,6 +35,26 @@ const createTeam = requireSuperadmin(async (req: VercelRequest, res: VercelRespo
   } else {
     const cur = await getCurrentSeason();
     memberSeasonIds = cur ? [cur.id] : [];
+  }
+
+  // Kürzel-Eindeutigkeit gilt PRO SAISON, nicht global: derselbe Verein darf in
+  // mehreren Saisons als eigene Kopie existieren (z.B. „FOC" in Season 1 UND 2).
+  // Ein leeres seasonIds gilt als „alle Saisons" und kollidiert daher mit allem.
+  const wanted = new Set(memberSeasonIds);
+  const shortUp = shortName.trim().toUpperCase();
+  const clash = existing.some((t) => {
+    if (t.shortName.toUpperCase() !== shortUp) return false;
+    const ts = Array.isArray(t.seasonIds) ? t.seasonIds : [];
+    if (ts.length === 0 || wanted.size === 0) return true; // leere Menge = alle Saisons
+    return ts.some((x) => wanted.has(x));
+  });
+  if (clash) {
+    return badRequest(res, 'In dieser Saison gibt es bereits einen Club mit diesem Kürzel.');
+  }
+
+  let id = slugify(name) || `team-${Date.now()}`;
+  if (existing.some((t) => t.id === id)) {
+    id = `${id}-${Date.now()}`;
   }
 
   const team = {
@@ -87,6 +99,43 @@ const removeFromSeason = requireSuperadmin(async (req: VercelRequest, res: Verce
   return setMembership(teamId, seasonId, false, res);
 });
 
+// Alle Vereine einer Quell-Saison als EIGENE KOPIEN in eine Ziel-Saison übernehmen.
+// Jede Kopie ist ein neuer, unabhängiger Datensatz (eigener Kader/Logo) mit
+// season_ids = [toSeasonId] – Änderungen an der Kopie berühren die Quelle NIE.
+// Vereine, deren Kürzel in der Ziel-Saison schon existiert, werden übersprungen.
+const copyToSeason = requireSuperadmin(async (req: VercelRequest, res: VercelResponse) => {
+  const { fromSeasonId, toSeasonId } = req.body ?? {};
+  if (!isNonEmptyString(fromSeasonId) || !isNonEmptyString(toSeasonId)) {
+    return badRequest(res, 'Quell- und Ziel-Saison sind nötig.');
+  }
+  if (fromSeasonId === toSeasonId) return badRequest(res, 'Quelle und Ziel müssen unterschiedlich sein.');
+
+  const all = await getTeams();
+  const inSeason = (t: { seasonIds?: string[] }, sid: string) => {
+    const ts = Array.isArray(t.seasonIds) ? t.seasonIds : [];
+    return ts.length === 0 || ts.includes(sid); // leer = alle Saisons
+  };
+  const source = all.filter((t) => inSeason(t, fromSeasonId));
+  const targetShorts = new Set(all.filter((t) => inSeason(t, toSeasonId)).map((t) => t.shortName.toUpperCase()));
+  const usedIds = new Set(all.map((t) => t.id));
+
+  let copied = 0;
+  for (const t of source) {
+    if (targetShorts.has(t.shortName.toUpperCase())) continue; // schon in Ziel-Saison
+    let id = slugify(t.name) || 'team';
+    if (usedIds.has(id)) id = `${id}-${Date.now()}${copied}`;
+    await sql`
+      INSERT INTO teams (id, name, short_name, logo_color, logo_icon, logo_url, spielerliste, season_ids)
+      VALUES (${id}, ${t.name}, ${t.shortName}, ${t.logoColor}, ${t.logoIcon}, ${t.logoUrl ?? ''},
+              ${JSON.stringify(t.spielerliste ?? [])}::jsonb, ${JSON.stringify([toSeasonId])}::jsonb)
+    `;
+    usedIds.add(id);
+    targetShorts.add(t.shortName.toUpperCase());
+    copied++;
+  }
+  return res.json({ ok: true, copied });
+});
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method === 'GET') {
@@ -97,6 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const action = (req.body ?? {}).action;
       if (action === 'addToSeason') return addToSeason(req, res);
       if (action === 'removeFromSeason') return removeFromSeason(req, res);
+      if (action === 'copyToSeason') return copyToSeason(req, res);
       return createTeam(req, res);
     }
     return res.status(405).json({ error: 'Nicht unterstützt' });

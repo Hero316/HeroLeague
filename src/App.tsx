@@ -35,7 +35,6 @@ import SeasonSignup from './components/SeasonSignup';
 import SeasonSignupBanner from './components/SeasonSignupBanner';
 import EventTickets from './components/EventTickets';
 import SignupAdmin from './components/SignupAdmin';
-import SeasonDraftManager from './components/SeasonDraftManager';
 import TicketAdmin from './components/TicketAdmin';
 import EventErgebniszettel from './components/EventErgebniszettel';
 import HighlightsHome from './components/HighlightsHome';
@@ -44,7 +43,7 @@ import ChatApp from './components/ChatApp';
 import Avatar from './components/Avatar';
 import DeepLinkModal from './components/DeepLinkModal';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight, FlaskConical } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight } from 'lucide-react';
 import TrackingCenter from './components/TrackingCenter';
 import SpielberichtPage from './components/SpielberichtPage';
 import WertungenPage from './components/WertungenPage';
@@ -704,12 +703,8 @@ export default function App() {
     if (ok) setSelectedSeasonId(null);
     return ok;
   };
-  const handleAddTeamToSeason = (teamId: string, seasonId: string) =>
-    runAdminAction(() => apiFetch('/api/teams', { method: 'POST', body: JSON.stringify({ action: 'addToSeason', teamId, seasonId }) }));
-  const handleRemoveTeamFromSeason = (teamId: string, seasonId: string) =>
-    runAdminAction(() => apiFetch('/api/teams', { method: 'POST', body: JSON.stringify({ action: 'removeFromSeason', teamId, seasonId }) }));
-  const handleAddTeamForSeason = (newTeam: Omit<Team, 'id'>, seasonId: string) =>
-    runAdminAction(() => apiFetch('/api/teams', { method: 'POST', body: JSON.stringify({ ...newTeam, seasonIds: [seasonId] }) }));
+  const handleCopySeasonTeams = (fromSeasonId: string, toSeasonId: string) =>
+    runAdminAction(() => apiFetch('/api/teams', { method: 'POST', body: JSON.stringify({ action: 'copyToSeason', fromSeasonId, toSeasonId }) }));
 
   // Demo an-/ausschalten: legt die Zufalls-Kopie an bzw. entfernt sie wieder.
   const handleToggleDemo = async () => {
@@ -1560,6 +1555,12 @@ export default function App() {
                       onEditTeam={handleEditTeam}
                       onDeleteTeam={handleDeleteTeam}
                       onStartSeason={handleStartSeason}
+                      onCreateDraftSeason={handleCreateDraftSeason}
+                      onPublishSeason={handlePublishSeason}
+                      onSetCurrentSeason={handleSetCurrentSeason}
+                      onRenameSeason={handleRenameSeason}
+                      onDeleteDraftSeason={handleDeleteDraftSeason}
+                      onCopySeasonTeams={handleCopySeasonTeams}
                       demoActive={demo.active}
                       onToggleDemo={handleToggleDemo}
                     />
@@ -1567,31 +1568,6 @@ export default function App() {
 
                   {isSuperadmin && (
                     <>
-                      <AccordionSection
-                        id="season-draft"
-                        category="spiele"
-                        title="Saisons & Season 2 vorbereiten"
-                        subtitle="Saisons umschalten (aktuell/Archiv) und neue Saison versteckt aufbauen"
-                        icon={<FlaskConical className="w-5 h-5" />}
-                        accent="#2F5BFF"
-                      >
-                        <SeasonDraftManager
-                          seasons={seasons}
-                          publishedSeasons={visibleSeasons}
-                          teams={visibleTeams}
-                          currentSeason={currentSeason}
-                          currentSeasonName={currentSeasonName}
-                          defaultLabel={nextSeasonName}
-                          onCreateDraft={handleCreateDraftSeason}
-                          onPublish={handlePublishSeason}
-                          onDeleteDraft={handleDeleteDraftSeason}
-                          onSetCurrent={handleSetCurrentSeason}
-                          onRename={handleRenameSeason}
-                          onAddTeam={handleAddTeamToSeason}
-                          onRemoveTeam={handleRemoveTeamFromSeason}
-                          onCreateTeam={handleAddTeamForSeason}
-                        />
-                      </AccordionSection>
                       <AccordionSection
                         id="season-signups"
                         category="anmeldungen"

@@ -266,6 +266,13 @@ interface AdminPanelProps {
   onEditTeam: (teamId: string, updatedData: Partial<Team>) => Promise<boolean>;
   onDeleteTeam: (teamId: string) => Promise<boolean>;
   onStartSeason: (label: string) => Promise<boolean>;
+  // Season-Verwaltung direkt in der Klubs-Sektion (Umschalter oben).
+  onCreateDraftSeason: (label: string) => Promise<boolean>;
+  onPublishSeason: (id: string) => Promise<boolean>;
+  onSetCurrentSeason: (id: string) => Promise<boolean>;
+  onRenameSeason: (id: string, label: string) => Promise<boolean>;
+  onDeleteDraftSeason: (id: string) => Promise<boolean>;
+  onCopySeasonTeams: (fromSeasonId: string, toSeasonId: string) => Promise<boolean>;
   demoActive: boolean;
   onToggleDemo: () => Promise<boolean>;
 }
@@ -351,6 +358,12 @@ export default function AdminPanel({
   onEditTeam,
   onDeleteTeam,
   onStartSeason,
+  onCreateDraftSeason,
+  onPublishSeason,
+  onSetCurrentSeason,
+  onRenameSeason,
+  onDeleteDraftSeason,
+  onCopySeasonTeams,
   demoActive,
   onToggleDemo,
 }: AdminPanelProps) {
@@ -372,16 +385,44 @@ export default function AdminPanel({
   const DEFAULT_CREST = '🛡️';
 
   // Verwaltbare Saisons: aus diesem Pool wählt man beim Anlegen/Bearbeiten, zu
-  // welcher Saison ein Verein gehört (Liga 1 / Liga 2).
+  // welcher Saison ein Verein gehört (Liga 1 / Liga 2). Chronologisch, aktuelle
+  // zuerst dann Entwürfe – für den Umschalter oben in der Klubs-Sektion.
   const manageableSeasons = seasons;
+  // Welche Saison wird gerade bearbeitet (steuert die ganze Klubs-Sektion).
+  const [workingSeasonId, setWorkingSeasonId] = useState(currentSeasonId);
+  const workingSeason =
+    manageableSeasons.find((s) => s.id === workingSeasonId) ??
+    manageableSeasons.find((s) => s.id === currentSeasonId) ??
+    manageableSeasons[0] ??
+    null;
+  const effectiveWorkingId = workingSeason?.id ?? currentSeasonId;
+  // Season-Verwaltungs-Aktionen (anlegen/umbenennen/live/übernehmen).
+  const [seasonBusy, setSeasonBusy] = useState(false);
+  const [renamingSeasonId, setRenamingSeasonId] = useState<string | null>(null);
+  const [renameSeasonText, setRenameSeasonText] = useState('');
+  const runSeason = async (fn: () => Promise<boolean>) => {
+    setSeasonBusy(true);
+    try {
+      await fn();
+    } finally {
+      setSeasonBusy(false);
+    }
+  };
+  // Ein Verein gehört zur bearbeiteten Saison, wenn seine seasonIds sie enthalten
+  // (oder leer sind = Altbestand, zählt zu allen Saisons).
+  const belongsToWorking = (t: Team) =>
+    !Array.isArray(t.seasonIds) || t.seasonIds.length === 0 || t.seasonIds.includes(effectiveWorkingId);
+  const workingTeams = teams.filter(belongsToWorking);
+  // Andere Saison, aus der man Teams übernehmen kann (bevorzugt die aktuelle).
+  const copySourceSeason =
+    manageableSeasons.find((s) => s.id !== effectiveWorkingId && s.id === currentSeasonId) ??
+    manageableSeasons.find((s) => s.id !== effectiveWorkingId) ??
+    null;
 
   // Neuen Club anlegen
   const [newTeamName, setNewTeamName] = useState('');
   const [newTeamShort, setNewTeamShort] = useState('');
   const [newTeamColor, setNewTeamColor] = useState('#3B82F6');
-  // Standard: der neue Verein gehört zur aktuellen Saison (verhindert das versehentliche
-  // Auftauchen von Season-2-Teams in Season 1). Änderbar, sobald es mehrere Saisons gibt.
-  const [newTeamSeasonIds, setNewTeamSeasonIds] = useState<string[]>(currentSeasonId ? [currentSeasonId] : []);
   const [formSuccess, setFormSuccess] = useState(false);
 
   // Club bearbeiten
@@ -1283,8 +1324,10 @@ export default function AdminPanel({
       alert('Bitte alle Felder ausfüllen.');
       return;
     }
-    if (teams.some((t) => t.shortName.toUpperCase() === newTeamShort.trim().toUpperCase())) {
-      alert('Ein Club mit diesem Kürzel existiert bereits!');
+    // Kürzel-Prüfung gilt pro Saison: derselbe Verein darf in einer anderen Saison
+    // als eigene Kopie existieren. In DIESER (bearbeiteten) Saison muss es eindeutig sein.
+    if (workingTeams.some((t) => t.shortName.toUpperCase() === newTeamShort.trim().toUpperCase())) {
+      alert('In dieser Saison gibt es bereits einen Club mit diesem Kürzel!');
       return;
     }
 
@@ -1295,13 +1338,13 @@ export default function AdminPanel({
       logoIcon: DEFAULT_CREST,
       logoUrl: '',
       spielerliste: [],
-      seasonIds: newTeamSeasonIds,
+      // Neuer Verein gehört zur gerade bearbeiteten Saison (Umschalter oben).
+      seasonIds: [effectiveWorkingId],
     });
 
     if (ok) {
       setNewTeamName('');
       setNewTeamShort('');
-      setNewTeamSeasonIds(currentSeasonId ? [currentSeasonId] : []);
       setFormSuccess(true);
       setTimeout(() => setFormSuccess(false), 3000);
     }
@@ -1488,6 +1531,156 @@ export default function AdminPanel({
         subtitle="Neue Vereine anlegen · Kader, Logos, Farben & Wappen pflegen"
         icon={<Shield className="w-5 h-5" />}
       >
+      {/* Season-Umschalter: hier wählst du, WELCHE Saison du gerade bearbeitest.
+          Alles darunter (Clubs anlegen/bearbeiten, Kader) bezieht sich auf sie.
+          Nur Super-Admins verwalten Saisons; sonst arbeitet man in der aktuellen. */}
+      {isSuperadmin && manageableSeasons.length > 0 && (
+        <div className="mb-6 hl-surf-soft border border-white/10 rounded-2xl p-4">
+          <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+            <h4 className="text-xs font-mono uppercase tracking-wider text-hl-dim">Welche Saison bearbeiten?</h4>
+            <button
+              type="button"
+              disabled={seasonBusy}
+              onClick={() => {
+                const label = window.prompt('Name der neuen Saison (z.B. „SEASON TWO"):', '');
+                if (label && label.trim()) runSeason(() => onCreateDraftSeason(label.trim()));
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-white/15 bg-white/5 hover:bg-white/10 text-hl-soft cursor-pointer disabled:opacity-50"
+            >
+              <CalendarPlus className="w-3.5 h-3.5" /> Neue Season
+            </button>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {manageableSeasons.map((s) => {
+              const active = s.id === effectiveWorkingId;
+              if (renamingSeasonId === s.id) {
+                return (
+                  <div key={s.id} className="flex items-center gap-1.5">
+                    <input
+                      autoFocus
+                      value={renameSeasonText}
+                      onChange={(e) => setRenameSeasonText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && renameSeasonText.trim()) {
+                          runSeason(() => onRenameSeason(s.id, renameSeasonText.trim()));
+                          setRenamingSeasonId(null);
+                        }
+                        if (e.key === 'Escape') setRenamingSeasonId(null);
+                      }}
+                      className={`${inputClass} py-1.5 w-40`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (renameSeasonText.trim()) runSeason(() => onRenameSeason(s.id, renameSeasonText.trim()));
+                        setRenamingSeasonId(null);
+                      }}
+                      className="p-1.5 rounded-lg bg-brand-accent-light/15 border border-brand-accent-light/40 text-brand-accent-light cursor-pointer"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button type="button" onClick={() => setRenamingSeasonId(null)} className="p-1.5 rounded-lg border border-white/10 bg-white/5 text-hl-mute hover:text-white cursor-pointer">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              }
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setWorkingSeasonId(s.id)}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer flex items-center gap-1.5 ${
+                    active
+                      ? 'bg-brand-accent-light/15 border-brand-accent-light/50 text-white'
+                      : 'bg-[#060E0F] border-white/10 hover:bg-white/5 text-gray-300'
+                  }`}
+                >
+                  {s.isCurrent && <Radio className="w-3 h-3 text-hl-green" />}
+                  {s.label}
+                  <span className="text-[10px] font-normal text-hl-dim">
+                    {s.draft ? '· Entwurf' : s.isCurrent ? '· live' : '· Archiv'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Aktionen für die gerade gewählte Saison */}
+          {workingSeason && renamingSeasonId == null && (
+            <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-white/[.06]">
+              <button
+                type="button"
+                onClick={() => { setRenamingSeasonId(workingSeason.id); setRenameSeasonText(workingSeason.label); }}
+                className="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-white/10 bg-white/5 hover:bg-white/10 text-hl-soft cursor-pointer"
+              >
+                Umbenennen
+              </button>
+              {copySourceSeason && (
+                <button
+                  type="button"
+                  disabled={seasonBusy}
+                  onClick={() => {
+                    if (window.confirm(`Alle Teams aus „${copySourceSeason.label}" als eigene Kopien (mit Kader) in „${workingSeason.label}" übernehmen? Bereits vorhandene werden übersprungen. Änderungen an den Kopien berühren „${copySourceSeason.label}" nicht.`))
+                      runSeason(() => onCopySeasonTeams(copySourceSeason.id, workingSeason.id));
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-white/10 bg-white/5 hover:bg-white/10 text-hl-soft cursor-pointer disabled:opacity-50"
+                >
+                  Teams aus „{copySourceSeason.label}" übernehmen
+                </button>
+              )}
+              {workingSeason.draft && (
+                <button
+                  type="button"
+                  disabled={seasonBusy}
+                  onClick={() => {
+                    if (window.confirm(`„${workingSeason.label}" jetzt LIVE schalten? Sie wird zur aktuellen Saison auf der Website; die bisherige wird zu Archiv. Alle Saisons bleiben über den Umschalter erreichbar.`))
+                      runSeason(() => onPublishSeason(workingSeason.id));
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-hl-green/40 bg-hl-green/15 text-hl-green hover:bg-hl-green/25 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Radio className="w-3.5 h-3.5" /> Live schalten
+                </button>
+              )}
+              {!workingSeason.draft && !workingSeason.isCurrent && (
+                <button
+                  type="button"
+                  disabled={seasonBusy}
+                  onClick={() => {
+                    if (window.confirm(`„${workingSeason.label}" als aktuelle (live) Saison setzen?`))
+                      runSeason(() => onSetCurrentSeason(workingSeason.id));
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-white/10 bg-white/5 hover:bg-white/10 text-hl-soft cursor-pointer disabled:opacity-50"
+                >
+                  Als aktuell setzen
+                </button>
+              )}
+              {workingSeason.draft && (
+                <button
+                  type="button"
+                  disabled={seasonBusy}
+                  onClick={() => {
+                    if (window.confirm(`Entwurf „${workingSeason.label}" löschen? Nur die Zuordnung/der Entwurf geht verloren.`))
+                      runSeason(() => onDeleteDraftSeason(workingSeason.id));
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Entwurf löschen
+                </button>
+              )}
+            </div>
+          )}
+          {workingSeason && (
+            <p className="text-[11px] text-gray-500 mt-3 font-sans">
+              Du bearbeitest gerade <strong className="text-gray-300">{workingSeason.label}</strong>
+              {workingSeason.draft ? ' (Entwurf – öffentlich unsichtbar, bis „Live schalten")' : workingSeason.isCurrent ? ' (aktuell/live auf der Website)' : ' (Archiv)'}
+              . Alle Clubs & Kader unten gehören zu dieser Saison.
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
       <div className="lg:col-span-5">
         <div>
@@ -1542,41 +1735,12 @@ export default function AdminPanel({
               </div>
             </div>
 
-            {/* Saison / Liga: nur nötig, sobald es mehr als eine Saison gibt (z.B.
-                Season 2 in Vorbereitung). Standard = aktuelle Saison, damit neue
-                Vereine NICHT versehentlich in der falschen Saison auftauchen. */}
-            {manageableSeasons.length > 1 && (
-              <div>
-                <label className="block text-xs font-mono text-gray-400 mb-1 uppercase tracking-wider">SAISON / LIGA</label>
-                <p className="text-[11px] text-gray-500 mb-2 font-sans">
-                  In welcher Saison spielt der Verein? Für ein reines Season-2-Team nur Season 2 wählen.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {manageableSeasons.map((s) => {
-                    const on = newTeamSeasonIds.includes(s.id);
-                    return (
-                      <button
-                        key={s.id}
-                        type="button"
-                        onClick={() =>
-                          setNewTeamSeasonIds((prev) => (on ? prev.filter((x) => x !== s.id) : [...prev, s.id]))
-                        }
-                        className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all duration-150 cursor-pointer ${
-                          on
-                            ? 'bg-brand-accent/20 border-brand-accent-light text-white'
-                            : 'bg-[#060E0F] border-white/10 hover:bg-white/5 text-gray-300'
-                        }`}
-                      >
-                        {s.label}
-                        {s.draft ? ' · Entwurf' : s.isCurrent ? ' · aktuell' : ''}
-                      </button>
-                    );
-                  })}
-                </div>
-                {newTeamSeasonIds.length === 0 && (
-                  <p className="text-[11px] text-amber-400 mt-2 font-sans">Ohne Auswahl erscheint der Verein in allen Saisons.</p>
-                )}
-              </div>
+            {/* Info: Der neue Verein landet in der oben gewählten Saison. */}
+            {manageableSeasons.length > 1 && workingSeason && (
+              <p className="text-[11px] text-gray-500 font-sans -mt-1">
+                Wird angelegt in: <strong className="text-gray-300">{workingSeason.label}</strong>
+                {workingSeason.draft ? ' (Entwurf)' : workingSeason.isCurrent ? ' (aktuell/live)' : ''}. Oben umschaltbar.
+              </p>
             )}
 
             <button
@@ -1620,9 +1784,9 @@ export default function AdminPanel({
                 className={`${inputClass} cursor-pointer`}
               >
                 <option value="">-- Club auswählen --</option>
-                {teams.map((t) => (
+                {workingTeams.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.logoIcon} {t.name} ({t.shortName})
+                    {t.name} ({t.shortName})
                   </option>
                 ))}
               </select>
