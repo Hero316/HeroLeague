@@ -909,31 +909,6 @@ export function AccordionGroup({
 
       {allCategories.length > 0 && (
         <>
-          {/* PC: Rubriken-Leiste oben (Text-Pills). Passt nicht alles nebeneinander,
-              lässt sie sich horizontal scrollen. */}
-          <nav className="hidden sm:block mb-5" aria-label="Backoffice-Bereiche">
-            <div className="flex gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-              {allCategories.map((c) => {
-                const active = c.id === activeCategory;
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => selectCategory(c.id)}
-                    aria-pressed={active}
-                    className={`shrink-0 whitespace-nowrap px-4 py-2.5 rounded-full text-xs font-bold uppercase tracking-wider font-sans transition-colors cursor-pointer border ${
-                      active
-                        ? 'bg-brand-accent-light text-brand-dark border-brand-accent-light shadow-lg shadow-brand-accent-light/10'
-                        : 'bg-white/[.03] text-hl-mute border-white/10 hover:text-white hover:border-white/25'
-                    }`}
-                  >
-                    {c.label}
-                  </button>
-                );
-              })}
-            </div>
-          </nav>
-
           {/* Handy: Dock unten im Team-App-Look – dicker, mit fliegender Pille.
               Per Portal direkt an <body>, damit es WIRKLICH bildschirm-fest ganz
               unten sitzt (kein Eltern-Element als Bezug) und voll deckend ist –
@@ -990,11 +965,70 @@ export function AccordionGroup({
         </>
       )}
 
-      {/* Inhalt. Unten am Handy Platz lassen, damit nichts hinter dem Dock
-          verschwindet. */}
-      <div className="pb-32 sm:pb-0">
-        {isDash && dashboard}
-        {children}
+      {/* PC: seitliche Navigation (links) + Inhalt (rechts). Handy: nur Inhalt –
+          die Bereiche stecken dort im Dock unten. So ist am PC „links alles
+          aufgelistet, rechts öffnet sich der Bereich" statt langem Scrollen. */}
+      <div className="sm:flex sm:gap-6 sm:items-start">
+        {allCategories.length > 0 && (
+          <aside
+            className="hidden sm:block w-60 shrink-0 sticky top-4 self-start max-h-[calc(100vh-2rem)] overflow-y-auto pr-1 [scrollbar-width:thin]"
+            aria-label="Backoffice-Bereiche"
+          >
+            <nav className="space-y-1">
+              {allCategories.map((c) => {
+                const active = c.id === activeCategory;
+                const Icon = CAT_ICON[c.id] ?? Star;
+                // Sektionen dieser Rubrik (in Reihenfolge ihrer Registrierung =
+                // JSX-Reihenfolge). Die Übersicht (DASH_ID) hat keine.
+                const catSections = c.id === DASH_ID ? [] : sections.filter((s) => s.category === c.id);
+                return (
+                  <div key={c.id}>
+                    <button
+                      type="button"
+                      onClick={() => selectCategory(c.id)}
+                      aria-pressed={active}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold font-sans transition-colors cursor-pointer border ${
+                        active
+                          ? 'bg-brand-accent-light/12 text-white border-brand-accent-light/40'
+                          : 'bg-transparent text-hl-mute border-transparent hover:text-white hover:bg-white/[.04]'
+                      }`}
+                    >
+                      <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-brand-accent-light' : ''}`} />
+                      <span className="truncate">{c.label}</span>
+                    </button>
+                    {/* Unter der aktiven Rubrik: ihre Menüpunkte als Unterliste –
+                        Klick öffnet den Bereich rechts (und scrollt hin). */}
+                    {active && catSections.length > 0 && (
+                      <div className="ml-3.5 mt-1 mb-1.5 space-y-0.5 border-l border-white/10 pl-2.5">
+                        {catSections.map((s) => {
+                          const isOpen = openId === s.id;
+                          return (
+                            <button
+                              key={s.id}
+                              type="button"
+                              onClick={() => openSection(s.id, c.id)}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[13px] font-sans transition-colors cursor-pointer ${
+                                isOpen ? 'bg-white/[.06] text-white font-semibold' : 'text-hl-mute hover:text-white hover:bg-white/[.03]'
+                              }`}
+                            >
+                              {s.title}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </nav>
+          </aside>
+        )}
+
+        {/* Inhalt. Unten am Handy Platz lassen, damit nichts hinter dem Dock verschwindet. */}
+        <div className="min-w-0 flex-1 pb-32 sm:pb-0">
+          {isDash && dashboard}
+          {children}
+        </div>
       </div>
     </AccordionContext.Provider>
   );
