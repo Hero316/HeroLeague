@@ -138,6 +138,13 @@ export default function Navbar({
   // Saison-Pille: zeigt den Saison-Namen (z. B. „SEASON ONE").
   const seasonShort = seasonLabel || '';
 
+  // Ab welcher Breite die volle Leiste (statt Hamburger) gezeigt wird: Admins
+  // haben mehr Buttons (Backoffice/Schiri/Logout) und brauchen mehr Platz → erst
+  // ab ~1400px; Gäste schon ab lg (1024px). Darunter das Hamburger-Menü, das ALLE
+  // Punkte enthält. Vollständige Klassen-Literale, damit Tailwind sie behält.
+  const navRowCls = isAdmin ? 'hidden min-[1400px]:flex' : 'hidden lg:flex';
+  const burgerCls = isAdmin ? 'min-[1400px]:hidden' : 'lg:hidden';
+
   return (
     <div className="hl-glass-nav sticky top-0 z-50 bg-[rgba(7,10,8,.72)] backdrop-blur-xl pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       {/* Demo-Warnleiste: erscheint auf JEDER Seite ganz oben, solange der Demo-Modus
@@ -156,7 +163,7 @@ export default function Navbar({
           </div>
         </div>
       )}
-      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 h-[68px] sm:h-[76px] flex items-center gap-5 lg:gap-9">
+      <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 h-[68px] sm:h-[76px] flex items-center gap-4 lg:gap-6 xl:gap-8">
         {/* Logo */}
         <button
           onClick={() => setActiveTab('home')}
@@ -167,7 +174,7 @@ export default function Navbar({
         </button>
 
         {/* Desktop-Navigation */}
-        <nav className="hidden lg:flex gap-8 ml-3.5">
+        <nav className={`${navRowCls} gap-5 2xl:gap-7 ml-2`}>
           {navItems.map((item) => {
             const isHero = item.value === 'heroone';
             return (
@@ -238,7 +245,7 @@ export default function Navbar({
           {isAdmin && canAccessBackoffice && (
             <button
               onClick={onOpenBackoffice}
-              className="hidden lg:flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.3)] text-brand-accent-light font-sans font-bold text-[11px] tracking-wider uppercase hover:bg-[rgba(34,223,201,.2)] transition-colors cursor-pointer"
+              className="hidden min-[1400px]:flex items-center gap-1.5 px-3 py-2 rounded-full bg-[rgba(34,223,201,.1)] border border-[rgba(34,223,201,.3)] text-brand-accent-light font-sans font-bold text-[11px] tracking-wider uppercase hover:bg-[rgba(34,223,201,.2)] transition-colors cursor-pointer"
               title="Backoffice öffnen"
             >
               <LayoutDashboard className="w-3.5 h-3.5" />
@@ -248,7 +255,7 @@ export default function Navbar({
           {isAdmin && onOpenReferee && (
             <button
               onClick={onOpenReferee}
-              className="hidden lg:flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-white/[.06] border border-white/15 text-white font-sans font-bold text-[11px] tracking-wider uppercase hover:bg-white/[.12] transition-colors cursor-pointer"
+              className="hidden min-[1400px]:flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[.06] border border-white/15 text-white font-sans font-bold text-[11px] tracking-wider uppercase hover:bg-white/[.12] transition-colors cursor-pointer"
               title="Schiedsrichtermodus öffnen"
             >
               <Shield className="w-3.5 h-3.5 text-brand-accent-light" />
@@ -258,7 +265,7 @@ export default function Navbar({
           {isAdmin && (
             <button
               onClick={onLogout}
-              className="hidden lg:flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[rgba(255,84,66,.1)] border border-[rgba(255,84,66,.25)] text-hl-red-soft font-sans font-bold text-[11px] tracking-wider uppercase hover:bg-[rgba(255,84,66,.2)] transition-colors cursor-pointer"
+              className="hidden min-[1400px]:flex items-center gap-1.5 px-3 py-2 rounded-full bg-[rgba(255,84,66,.1)] border border-[rgba(255,84,66,.25)] text-hl-red-soft font-sans font-bold text-[11px] tracking-wider uppercase hover:bg-[rgba(255,84,66,.2)] transition-colors cursor-pointer"
               title="Admin abmelden"
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -272,7 +279,7 @@ export default function Navbar({
           {/* Mobile-Menü-Button */}
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="lg:hidden text-hl-soft hover:text-white p-2 rounded-lg cursor-pointer"
+            className={`${burgerCls} text-hl-soft hover:text-white p-2 rounded-lg cursor-pointer`}
             aria-label="Menü öffnen"
           >
             {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -282,7 +289,7 @@ export default function Navbar({
 
       {/* Mobile-Menü */}
       {isOpen && (
-        <div className="lg:hidden border-t border-white/[.07] bg-[#080c0a] px-4 py-3 space-y-1">
+        <div className={`${burgerCls} border-t border-white/[.07] bg-[#080c0a] px-4 py-3 space-y-1`}>
           {eventActive && onOpenEvent && (
             <button
               onClick={() => {
