@@ -49,6 +49,15 @@ const PRIORITY_CELL: Record<TicketPriority, string> = {
   hoch: 'bg-amber-100 text-amber-800',
   dringend: 'bg-rose-100 text-rose-700',
 };
+// Farbe eines Kalender-Eintrags nach DRINGLICHKEIT – wie bei den Aufgaben-Karten,
+// damit man in jeder Ansicht (Monat/Woche/Tag/Termine) sofort sieht, wie wichtig
+// etwas ist. Erledigtes bleibt grün (fertig), Abgebrochenes gedämpft grau.
+const calCell = (t: Task): string =>
+  t.status === 'erledigt'
+    ? 'bg-emerald-100 text-emerald-700'
+    : t.status === 'abgebrochen'
+      ? 'bg-slate-200 text-slate-500 line-through'
+      : PRIORITY_CELL[t.priority];
 const PRIORITIES: TicketPriority[] = ['niedrig', 'mittel', 'hoch', 'dringend'];
 
 const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
@@ -1346,7 +1355,7 @@ function DayView({
         ) : (
           <div className="space-y-1">
             {allDay.map((t) => (
-              <button key={t.id} onClick={() => onOpenTask(t)} className={`w-full text-left truncate rounded px-2 py-1 text-[12px] ${STATUS_CELL[t.status]}`}>
+              <button key={t.id} onClick={() => onOpenTask(t)} className={`w-full text-left truncate rounded px-2 py-1 text-[12px] ${calCell(t)}`}>
                 {isMultiDay(t) && <span className="opacity-80 mr-1">{t.dueDate?.slice(8)}.–{taskEnd(t).slice(8)}.</span>}
                 {t.title}
               </button>
@@ -1399,7 +1408,7 @@ function DayView({
                   key={t.id}
                   onClick={(e) => e.stopPropagation()}
                   style={{ top: dispTop, height: dispHeight, left: `${(col / cols) * 100}%`, width: `calc(${(1 / cols) * 100}% - 4px)` }}
-                  className={`absolute rounded-md overflow-hidden shadow-sm shadow-black/30 select-none ${active || editing ? 'ring-2 ring-white/70 z-10' : ''} ${STATUS_CELL[t.status]}`}
+                  className={`absolute rounded-md overflow-hidden shadow-sm shadow-black/30 select-none ${active || editing ? 'ring-2 ring-white/70 z-10' : ''} ${calCell(t)}`}
                 >
                   {editing ? (
                     <>
@@ -1833,7 +1842,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                   <button
                     onClick={(e) => openTaskAt(e, t)}
                     className={`w-full text-left hl-card hl-tint rounded-[22px] p-3.5 cursor-pointer transition-all flex items-center gap-3 ${past ? 'opacity-60' : ''}`}
-                    style={{ ['--tint' as string]: t.type === 'beides' ? '#E9C46A' : '#3B9EFF' }}
+                    style={{ ['--tint' as string]: t.status === 'erledigt' ? '#43E5A0' : PRIORITY_BAR[t.priority] }}
                   >
                     <span className="hl-tint-chip w-11 h-11 rounded-2xl shrink-0 flex items-center justify-center self-start">
                       <CalendarDays className="w-5 h-5" strokeWidth={2.4} />
@@ -1998,7 +2007,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                     <div
                       key={t.id}
                       style={{ gridColumn: `${colStart + 1} / ${colEnd + 2}`, gridRow: lane + 1, height: LANE_H }}
-                      className={`mx-0.5 rounded px-1 text-[10px] leading-[16px] text-left truncate ${STATUS_CELL[t.status]}`}
+                      className={`mx-0.5 rounded px-1 text-[10px] leading-[16px] text-left truncate ${calCell(t)}`}
                       title={t.title}
                     >
                       {t.type === 'beides' && <Check className="w-2.5 h-2.5 inline align-[-1px] mr-0.5" />}
