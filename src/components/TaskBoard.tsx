@@ -45,7 +45,9 @@ const STATUSES: TaskStatus[] = ['leer', 'offen', 'in_bearbeitung', 'erledigt', '
 const PRIORITY_LABEL: Record<TicketPriority, string> = { niedrig: 'Niedrig', mittel: 'Mittel', hoch: 'Hoch', dringend: 'Dringend' };
 const PRIORITY_CELL: Record<TicketPriority, string> = {
   niedrig: 'bg-slate-200 text-slate-600',
-  mittel: 'bg-sky-100 text-sky-700',
+  // „mittel" als gut lesbares Türkis-Pastell – passt zur Aufgaben-/Termine-Palette
+  // (dort #22DFC9) und bleibt auf dem hellen Kalender klar lesbar.
+  mittel: 'bg-teal-100 text-teal-800',
   hoch: 'bg-amber-100 text-amber-800',
   dringend: 'bg-rose-100 text-rose-700',
 };
