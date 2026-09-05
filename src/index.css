@@ -493,6 +493,28 @@ body {
     0 24px 64px rgba(0, 0, 0, 0.42);
 }
 
+/* Klickbare Karten (Buttons/Links, die die Glas-Karte tragen) bekommen ein
+   dezentes, hochwertiges Feedback: leichtes Anheben beim Hovern, spürbares
+   Eindrücken beim Klick. BEWUSST nur `transform` (kein Layout, keine Farb-/
+   Rand-/Schatten-Übernahme → eigene Hover-Ränder der Komponenten bleiben
+   erhalten). Starke Ease-Out-Kurve, respektiert „Bewegung reduzieren". Modal-
+   Karten (Framer-animiert) und die Team-App (eigener Look) sind ausgenommen. */
+@media (prefers-reduced-motion: no-preference) {
+  a.hl-card:not(.hl-modal-card),
+  button.hl-card:not(.hl-modal-card) {
+    transition: transform 200ms var(--ease-out);
+  }
+  a.hl-card:not(.hl-modal-card):hover,
+  button.hl-card:not(.hl-modal-card):hover {
+    transform: translateY(-2px);
+  }
+  a.hl-card:not(.hl-modal-card):active,
+  button.hl-card:not(.hl-modal-card):active {
+    transform: scale(0.99);
+    transition-duration: 110ms;
+  }
+}
+
 /* Modal-/Dialog-Karten: DECKEND und OHNE backdrop-filter.
    Grund: Die normale .hl-card ist eine Glas-Fläche, die auf backdrop-filter
    angewiesen ist. Liegt so eine Karte in einem abgedunkelten Overlay, das
