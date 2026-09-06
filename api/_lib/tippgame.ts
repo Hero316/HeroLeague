@@ -29,6 +29,15 @@ export function deriveVoterId(email: string): string {
   return 'v-' + createHash('sha256').update(`tipp-user:${normEmail(email)}:${pepper}`).digest('hex').slice(0, 20);
 }
 
+// Tippschluss: 19:00 Uhr (Europe/Berlin) am Spieltag – DST-korrekt.
+function tipDeadline(dateStr: string): Date {
+  const noonUTC = new Date(`${dateStr}T12:00:00Z`);
+  const berlinHour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', hour: '2-digit', hour12: false }).format(noonUTC));
+  const off = berlinHour - 12;
+  const sign = off >= 0 ? '+' : '-';
+  return new Date(`${dateStr}T19:00:00${sign}${String(Math.abs(off)).padStart(2, '0')}:00`);
+}
+
 // Anzeigename für die Rangliste: „Vorname N." (echter Name, keine Fantasienamen).
 function displayName(vorname: string, name: string): string {
   const v = vorname.trim();
@@ -181,6 +190,9 @@ export async function submitTip(req: VercelRequest, res: VercelResponse) {
   const match = matches.find((m) => m.id === matchId);
   if (!match) return res.status(404).json({ error: 'Spiel nicht gefunden.' });
   if (match.status !== 'geplant') return res.status(409).json({ error: 'Für dieses Spiel kann nicht mehr getippt werden.' });
+  if (Date.now() >= tipDeadline(match.date).getTime()) {
+    return res.status(409).json({ error: 'Tippschluss war um 19:00 Uhr am Spieltag – für diesen Abend ist kein Tipp mehr möglich.' });
+  }
 
   const rows = await sql`SELECT value FROM settings WHERE key = 'tips'`;
   const store = (rows[0]?.value && typeof rows[0].value === 'object' ? rows[0].value : {}) as { tips?: Tip[] };

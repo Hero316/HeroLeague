@@ -9,6 +9,21 @@ import { apiFetch } from './api';
 
 const IDENTITY_KEY = 'hl_tipp_identity';
 
+// Tippschluss: 19:00 Uhr (Europe/Berlin) am Spieltag – als echter Zeitpunkt,
+// DST-korrekt (Sommer +02:00, Winter +01:00).
+export function tipDeadline(dateStr: string): Date {
+  const noonUTC = new Date(`${dateStr}T12:00:00Z`);
+  const berlinHour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', hour: '2-digit', hour12: false }).format(noonUTC));
+  const off = berlinHour - 12; // 1 (Winter) oder 2 (Sommer)
+  const sign = off >= 0 ? '+' : '-';
+  return new Date(`${dateStr}T19:00:00${sign}${String(Math.abs(off)).padStart(2, '0')}:00`);
+}
+
+// Heutiges Datum in Europe/Berlin als 'YYYY-MM-DD'.
+export function berlinToday(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
+
 export interface TippIdentity {
   email: string;
   voterId: string;

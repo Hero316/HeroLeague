@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Lock, Trophy, Minus, Plus, Target, Loader2, LogOut, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Lock, Trophy, Minus, Plus, Target, Loader2, LogOut, ShieldCheck, Clock, CalendarDays } from 'lucide-react';
 import type { Match, Team, Tip } from '../types';
-import { fetchTips, submitTip, getIdentity, clearIdentity, scoreTip, leaderboard, type TippIdentity } from '../lib/tips';
+import { fetchTips, submitTip, getIdentity, clearIdentity, scoreTip, leaderboard, tipDeadline, berlinToday, type TippIdentity } from '../lib/tips';
 import { TeamCrest } from './ui';
 import { Reveal } from './anim';
 import TippRegister from './TippRegister';
@@ -26,6 +26,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
   const [drafts, setDrafts] = useState<Record<string, { home: number; away: number }>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [now, setNow] = useState(() => Date.now());
 
   const load = () => {
     fetchTips()
@@ -35,22 +36,45 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
   };
   useEffect(load, []);
 
+  // Sekunden-Ticker für den Countdown.
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
   const myTips = useMemo(() => {
     const map = new Map<string, Tip>();
     tips.forEach((t) => { if (t.voterId === voterId) map.set(t.matchId, t); });
     return map;
   }, [tips, voterId]);
 
-  const tipCountByMatch = useMemo(() => {
-    const m = new Map<string, number>();
-    tips.forEach((t) => m.set(t.matchId, (m.get(t.matchId) ?? 0) + 1));
-    return m;
-  }, [tips]);
+  // Nur EIN Spieltag-Abend zur Zeit: der nächste noch offene Spieltag (Datum
+  // heute oder später). Sobald sein Tag vorbei ist, rückt der nächste nach –
+  // die Punkte aller Spieltage bleiben in der Rangliste erhalten.
+  const { activeMatches, activeMatchday, activeDate } = useMemo(() => {
+    const today = berlinToday();
+    const geplant = matches.filter((m) => m.status === 'geplant');
+    // Spieltag -> frühestes Datum
+    const dateByDay = new Map<number, string>();
+    geplant.forEach((m) => {
+      const cur = dateByDay.get(m.matchday);
+      if (!cur || m.date < cur) dateByDay.set(m.matchday, m.date);
+    });
+    // Kandidaten: Spieltage, deren Abend heute oder in der Zukunft liegt.
+    const days = [...dateByDay.entries()]
+      .filter(([, date]) => date >= today)
+      .sort((a, b) => a[1].localeCompare(b[1]) || a[0] - b[0]);
+    if (days.length === 0) return { activeMatches: [] as Match[], activeMatchday: null as number | null, activeDate: '' };
+    const [day, date] = days[0];
+    const list = geplant
+      .filter((m) => m.matchday === day)
+      .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`) || (a.field ?? 0) - (b.field ?? 0));
+    return { activeMatches: list, activeMatchday: day, activeDate: date };
+  }, [matches]);
 
-  const upcoming = useMemo(
-    () => matches.filter((m) => m.status === 'geplant').sort((a, b) => a.matchday - b.matchday || `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`)),
-    [matches]
-  );
+  const deadlineMs = activeDate ? tipDeadline(activeDate).getTime() : 0;
+  const tipsOpen = deadlineMs > 0 && now < deadlineMs;
+  const remainingMs = Math.max(0, deadlineMs - now);
   const myFinished = useMemo(
     () =>
       matches
@@ -118,7 +142,8 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
           </div>
           <p className="text-[13px] text-hl-mute font-sans mt-4 leading-relaxed">
             Volltreffer <span className="text-brand-accent-light font-bold">3 Punkte</span>, richtige Tendenz{' '}
-            <span className="text-brand-accent-light font-bold">1 Punkt</span>. Pro Spiel nur ein Tipp – danach gesperrt.
+            <span className="text-brand-accent-light font-bold">1 Punkt</span>. Pro Spiel nur ein Tipp. Tippschluss ist{' '}
+            <span className="text-white font-bold">19:00 Uhr am Spieltag</span>.
           </p>
         </div>
       </div>
@@ -147,84 +172,97 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
           <TippRegister onVerified={(id) => { setIdentity(id); load(); }} />
         )}
 
-        {/* Kommende Spiele */}
+        {/* Aktueller Spieltag-Abend */}
         <section>
-          <h2 className="font-display font-black text-lg uppercase tracking-tight text-white mb-3">Kommende Spiele</h2>
           {loading ? (
             <div className="flex items-center justify-center py-10 text-hl-mute"><Loader2 className="w-5 h-5 animate-spin" /></div>
-          ) : upcoming.length === 0 ? (
-            <div className="hl-card rounded-2xl border border-white/10 text-center py-10 text-hl-mute font-sans text-sm">Aktuell keine offenen Spiele zum Tippen.</div>
-          ) : (
-            <div className="space-y-3">
-              {upcoming.map((m, i) => {
-                const mine = myTips.get(m.id);
-                const d = draft(m.id);
-                const err = errors[m.id];
-                return (
-                  <motion.div
-                    key={m.id}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.35, ease: EASE, delay: Math.min(i * 0.04, 0.3) }}
-                    className="hl-card rounded-2xl border border-white/10 p-4"
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-hl-dim">
-                        Spieltag {m.matchday}{typeof m.field === 'number' ? ` · Feld ${m.field}` : ''}
-                      </span>
-                      {typeof tipCountByMatch.get(m.id) === 'number' && (
-                        <span className="text-[10px] font-sans font-semibold text-hl-mute">{tipCountByMatch.get(m.id)} Tipps</span>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Crest id={m.homeTeamId} />
-                        <span className="font-display font-black uppercase tracking-tight text-white truncate">{teamName(m.homeTeamId)}</span>
-                      </div>
-
-                      {mine ? (
-                        <div className="flex items-center gap-1.5 font-display font-black tabular-nums text-2xl text-brand-accent-light px-2">
-                          {mine.home}<span className="text-hl-dim">:</span>{mine.away}
-                        </div>
-                      ) : identity ? (
-                        <div className="flex items-center gap-1.5">
-                          <Stepper value={d.home} onChange={(delta) => setDraft(m.id, 'home', delta)} />
-                          <span className="text-hl-dim font-display font-black">:</span>
-                          <Stepper value={d.away} onChange={(delta) => setDraft(m.id, 'away', delta)} />
-                        </div>
-                      ) : (
-                        <div className="font-display font-black tabular-nums text-2xl text-hl-dim px-2">–:–</div>
-                      )}
-
-                      <div className="flex items-center gap-2 min-w-0 justify-end">
-                        <span className="font-display font-black uppercase tracking-tight text-white truncate text-right">{teamName(m.awayTeamId)}</span>
-                        <Crest id={m.awayTeamId} />
-                      </div>
-                    </div>
-
-                    <div className="mt-3">
-                      {mine ? (
-                        <div className="flex items-center justify-center gap-1.5 text-[12px] font-sans font-bold uppercase tracking-wider text-hl-mute">
-                          <Lock className="w-3.5 h-3.5" /> Dein Tipp ist abgegeben
-                        </div>
-                      ) : identity ? (
-                        <button
-                          onClick={() => send(m)}
-                          disabled={busy === m.id}
-                          className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand-accent-light px-4 py-2.5 text-sm font-sans font-black uppercase tracking-wider text-[#04120d] cursor-pointer active:scale-[0.98] transition-transform disabled:opacity-60"
-                        >
-                          {busy === m.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Tipp abgeben'}
-                        </button>
-                      ) : (
-                        <div className="text-center text-[12px] font-sans text-hl-mute">Melde dich oben an, um zu tippen.</div>
-                      )}
-                      {err && <p className="text-center text-xs font-sans text-rose-300 mt-2">{err}</p>}
-                    </div>
-                  </motion.div>
-                );
-              })}
+          ) : activeMatchday === null ? (
+            <div className="hl-card rounded-2xl border border-white/10 text-center py-10 text-hl-mute font-sans text-sm">
+              Kein kommender Spieltag zum Tippen. Der nächste Abend erscheint hier automatisch. 👇
             </div>
+          ) : (
+            <>
+              {/* Spieltag-Kopf + Countdown */}
+              <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                <h2 className="flex items-center gap-2 font-display font-black text-lg uppercase tracking-tight text-white">
+                  <CalendarDays className="w-5 h-5 text-brand-accent-light" /> Spieltag {activeMatchday}
+                </h2>
+                <Countdown open={tipsOpen} remainingMs={remainingMs} date={activeDate} />
+              </div>
+
+              <div className="space-y-3">
+                {activeMatches.map((m, i) => {
+                  const mine = myTips.get(m.id);
+                  const d = draft(m.id);
+                  const err = errors[m.id];
+                  const canTip = identity && tipsOpen && !mine;
+                  return (
+                    <motion.div
+                      key={m.id}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.35, ease: EASE, delay: Math.min(i * 0.04, 0.3) }}
+                      className="hl-card rounded-2xl border border-white/10 p-4"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-hl-dim">
+                          {typeof m.field === 'number' ? `Feld ${m.field} · ` : ''}{m.time} Uhr
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Crest id={m.homeTeamId} />
+                          <span className="font-display font-black uppercase tracking-tight text-white truncate">{teamName(m.homeTeamId)}</span>
+                        </div>
+
+                        {mine ? (
+                          <div className="flex items-center gap-1.5 font-display font-black tabular-nums text-2xl text-brand-accent-light px-2">
+                            {mine.home}<span className="text-hl-dim">:</span>{mine.away}
+                          </div>
+                        ) : canTip ? (
+                          <div className="flex items-center gap-1.5">
+                            <Stepper value={d.home} onChange={(delta) => setDraft(m.id, 'home', delta)} />
+                            <span className="text-hl-dim font-display font-black">:</span>
+                            <Stepper value={d.away} onChange={(delta) => setDraft(m.id, 'away', delta)} />
+                          </div>
+                        ) : (
+                          <div className="font-display font-black tabular-nums text-2xl text-hl-dim px-2">–:–</div>
+                        )}
+
+                        <div className="flex items-center gap-2 min-w-0 justify-end">
+                          <span className="font-display font-black uppercase tracking-tight text-white truncate text-right">{teamName(m.awayTeamId)}</span>
+                          <Crest id={m.awayTeamId} />
+                        </div>
+                      </div>
+
+                      <div className="mt-3">
+                        {mine ? (
+                          <div className="flex items-center justify-center gap-1.5 text-[12px] font-sans font-bold uppercase tracking-wider text-hl-mute">
+                            <Lock className="w-3.5 h-3.5" /> Dein Tipp ist abgegeben
+                          </div>
+                        ) : !identity ? (
+                          <div className="text-center text-[12px] font-sans text-hl-mute">Melde dich oben an, um zu tippen.</div>
+                        ) : !tipsOpen ? (
+                          <div className="flex items-center justify-center gap-1.5 text-[12px] font-sans font-bold uppercase tracking-wider text-hl-dim">
+                            <Lock className="w-3.5 h-3.5" /> Tippschluss (19:00 Uhr)
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => send(m)}
+                            disabled={busy === m.id}
+                            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand-accent-light px-4 py-2.5 text-sm font-sans font-black uppercase tracking-wider text-[#04120d] cursor-pointer active:scale-[0.98] transition-transform disabled:opacity-60"
+                          >
+                            {busy === m.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Tipp abgeben'}
+                          </button>
+                        )}
+                        {err && <p className="text-center text-xs font-sans text-rose-300 mt-2">{err}</p>}
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </section>
 
@@ -274,7 +312,6 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
                     <span className="flex-1 min-w-0 truncate font-sans font-semibold text-white">
                       {r.name}{r.voterId === voterId ? ' (Du)' : ''}
                     </span>
-                    <span className="text-[11px] font-sans text-hl-mute shrink-0">{r.exact}× exakt</span>
                     <span className="w-12 text-right font-display font-black tabular-nums text-brand-accent-light shrink-0">{r.points}</span>
                   </div>
                 ))}
@@ -286,6 +323,39 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
         <div className="h-8" />
       </div>
     </div>
+  );
+}
+
+function fmtRemaining(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  if (d > 0) return `${d} Tag${d > 1 ? 'e' : ''} ${h} Std`;
+  return `${pad(h)}:${pad(m)}:${pad(sec)}`;
+}
+
+// Countdown-Pille: läuft live bis 19:00 Uhr am Spieltag runter; danach „geschlossen".
+function Countdown({ open, remainingMs, date }: { open: boolean; remainingMs: number; date: string }) {
+  if (!open) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-white/5 border border-white/10 px-3 py-1.5 text-[11px] font-sans font-bold uppercase tracking-wider text-hl-dim">
+        <Lock className="w-3.5 h-3.5" /> Tippschluss vorbei
+      </span>
+    );
+  }
+  const soon = remainingMs < 3600_000; // letzte Stunde: dringlich (rot)
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-sans font-bold tabular-nums border ${
+        soon ? 'bg-rose-500/15 border-rose-500/40 text-rose-300' : 'bg-brand-accent-light/12 border-brand-accent-light/35 text-brand-accent-light'
+      }`}
+      title={`Tippschluss ${date} · 19:00 Uhr`}
+    >
+      <Clock className={`w-3.5 h-3.5 ${soon ? 'animate-pulse' : ''}`} /> Noch {fmtRemaining(remainingMs)}
+    </span>
   );
 }
 
