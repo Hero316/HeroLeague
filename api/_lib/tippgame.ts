@@ -87,14 +87,25 @@ export async function registerRequestCode(req: VercelRequest, res: VercelRespons
   const voterId = deriveVoterId(normalized);
   const dName = displayName(vorname, name);
 
-  // Profil (noch unbestätigt) speichern/aktualisieren.
-  await sql`
-    INSERT INTO tipp_users (email, voter_id, first_name, last_name, display_name, age, found_via, suggestion, verified)
-    VALUES (${normalized}, ${voterId}, ${vorname}, ${name}, ${dName}, ${Math.round(ageNum)}, ${foundVia || null}, ${suggestion || null}, false)
-    ON CONFLICT (email) DO UPDATE SET
-      first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name, display_name = EXCLUDED.display_name,
-      age = EXCLUDED.age, found_via = EXCLUDED.found_via, suggestion = EXCLUDED.suggestion
-  `;
+  // Ist diese E-Mail schon BESTÄTIGT angemeldet? Dann die gespeicherten Daten
+  // NICHT überschreiben – wir schicken nur einen Code zum Wiedereinloggen. So
+  // kann niemand mit einer fremden E-Mail ein bestehendes Profil kapern/ändern
+  // (den Code bekommt ohnehin nur der echte Postfach-Inhaber).
+  const existing = await sql`SELECT verified FROM tipp_users WHERE email = ${normalized} LIMIT 1`;
+  const alreadyVerified = existing.length > 0 && existing[0].verified === true;
+
+  if (!alreadyVerified) {
+    // Neu oder noch unbestätigt: Profil anlegen/aktualisieren – aber nur solange
+    // die E-Mail noch NICHT bestätigt ist (WHERE-Schutz gegen Überschreiben).
+    await sql`
+      INSERT INTO tipp_users (email, voter_id, first_name, last_name, display_name, age, found_via, suggestion, verified)
+      VALUES (${normalized}, ${voterId}, ${vorname}, ${name}, ${dName}, ${Math.round(ageNum)}, ${foundVia || null}, ${suggestion || null}, false)
+      ON CONFLICT (email) DO UPDATE SET
+        first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name, display_name = EXCLUDED.display_name,
+        age = EXCLUDED.age, found_via = EXCLUDED.found_via, suggestion = EXCLUDED.suggestion
+      WHERE tipp_users.verified = false
+    `;
+  }
 
   const result = await issueCode(PURPOSE, normalized, async (code) => {
     await sendBrandedMail({
@@ -111,7 +122,7 @@ export async function registerRequestCode(req: VercelRequest, res: VercelRespons
     });
   });
   if (!result.ok) return badRequest(res, result.error || 'Fehler.');
-  return res.json({ ok: true, ...(result.devCode ? { devCode: result.devCode } : {}) });
+  return res.json({ ok: true, alreadyRegistered: alreadyVerified, ...(result.devCode ? { devCode: result.devCode } : {}) });
 }
 
 // --- Anmeldung: Code bestätigen --------------------------------------------

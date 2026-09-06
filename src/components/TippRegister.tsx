@@ -32,6 +32,7 @@ export default function TippRegister({ onVerified }: { onVerified: (id: TippIden
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [devCode, setDevCode] = useState<string | null>(null);
+  const [reloginNote, setReloginNote] = useState(false);
 
   const submitForm = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,6 +50,7 @@ export default function TippRegister({ onVerified }: { onVerified: (id: TippIden
         foundVia, suggestion: suggestion.trim(), consent, website: website.current, turnstileToken: turnstile.token,
       });
       setDevCode(r.devCode ?? null);
+      setReloginNote(!!r.alreadyRegistered);
       setStep('code');
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : 'Fehler.');
@@ -143,6 +145,11 @@ export default function TippRegister({ onVerified }: { onVerified: (id: TippIden
           <p className="text-[13px] text-hl-soft font-sans">
             Wir haben dir einen 6-stelligen Code an <span className="font-bold text-white">{email}</span> geschickt.
           </p>
+          {reloginNote && (
+            <p className="text-[12px] text-hl-gold font-sans bg-hl-gold/10 border border-hl-gold/25 rounded-lg px-3 py-2 leading-snug">
+              Diese E-Mail ist bereits angemeldet – wir loggen dich damit einfach wieder ein. Deine bisherigen Daten &amp; Tipps bleiben erhalten.
+            </p>
+          )}
           {devCode && (
             <p className="text-[12px] font-mono text-hl-gold">Dev-Code: {devCode}</p>
           )}

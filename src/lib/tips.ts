@@ -56,7 +56,7 @@ export interface RegisterProfile {
 }
 
 // Schritt 1: Anmeldung absenden → Bestätigungs-Code per E-Mail.
-export async function registerRequestCode(profile: RegisterProfile): Promise<{ ok: boolean; devCode?: string }> {
+export async function registerRequestCode(profile: RegisterProfile): Promise<{ ok: boolean; devCode?: string; alreadyRegistered?: boolean }> {
   return apiFetch('/api/twitch?resource=tipp-register', {
     method: 'POST',
     body: JSON.stringify(profile),
