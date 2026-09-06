@@ -123,14 +123,24 @@ export async function submitTip(matchId: string, home: number, away: number): Pr
   });
 }
 
-// Punkte für einen Tipp gegen das Endergebnis: exakt = 3, Tendenz = 1, sonst 0.
+// Punkte-Stufen (3-Stufen-System). Volltreffer am meisten, richtige Tendenz
+// (nur Sieger) am wenigsten, richtige Tordifferenz dazwischen.
+export const TIP_POINTS = { exact: 5, diff: 3, tendency: 2 } as const;
+
+// Punkte für einen Tipp gegen das Endergebnis:
+//   exaktes Ergebnis           → TIP_POINTS.exact (am meisten)
+//   richtige Tordifferenz      → TIP_POINTS.diff  (mittel; bei Remis = richtiges Remis)
+//   richtiger Sieger/Tendenz   → TIP_POINTS.tendency (am wenigsten)
+//   falsche Tendenz            → 0
 export function scoreTip(tip: { home: number; away: number }, match: Match): number {
   if (match.homeScore === null || match.awayScore === null) return 0;
   const rh = match.homeScore;
   const ra = match.awayScore;
-  if (tip.home === rh && tip.away === ra) return 3;
+  if (tip.home === rh && tip.away === ra) return TIP_POINTS.exact;
   const sign = (a: number, b: number) => (a > b ? 1 : a < b ? -1 : 0);
-  return sign(tip.home, tip.away) === sign(rh, ra) ? 1 : 0;
+  if (sign(tip.home, tip.away) !== sign(rh, ra)) return 0; // Sieger/Tendenz falsch
+  if (tip.home - tip.away === rh - ra) return TIP_POINTS.diff; // gleiche Tordifferenz (Remis: gleiches Remis)
+  return TIP_POINTS.tendency; // Sieger richtig, Abstand daneben
 }
 
 export interface LeaderRow {

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { ArrowLeft, Lock, Trophy, Minus, Plus, Target, Loader2, LogOut, ShieldCheck, Clock, CalendarDays, ClipboardCheck } from 'lucide-react';
 import type { Match, Team, Tip } from '../types';
-import { fetchTips, submitTip, getIdentity, clearIdentity, scoreTip, leaderboard, tipDeadline, berlinToday, type TippIdentity } from '../lib/tips';
+import { fetchTips, submitTip, getIdentity, clearIdentity, scoreTip, leaderboard, tipDeadline, berlinToday, TIP_POINTS, type TippIdentity } from '../lib/tips';
 import { TeamCrest, SegmentedControl } from './ui';
 import { Reveal } from './anim';
 import TippRegister from './TippRegister';
@@ -157,9 +157,10 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
             </div>
           </div>
           <p className="text-[13px] text-hl-mute font-sans mt-4 leading-relaxed">
-            Volltreffer <span className="text-brand-accent-light font-bold">3 Punkte</span>, richtige Tendenz{' '}
-            <span className="text-brand-accent-light font-bold">1 Punkt</span>. Pro Spiel nur ein Tipp. Tippschluss ist{' '}
-            <span className="text-white font-bold">19:00 Uhr am Spieltag</span>.
+            Volltreffer <span className="text-brand-accent-light font-bold">{TIP_POINTS.exact} Punkte</span>, richtige
+            Tordifferenz <span className="text-brand-accent-light font-bold">{TIP_POINTS.diff}</span>, richtiger Sieger{' '}
+            <span className="text-brand-accent-light font-bold">{TIP_POINTS.tendency}</span>. Pro Spiel nur ein Tipp.
+            Tippschluss ist <span className="text-white font-bold">19:00 Uhr am Spieltag</span>.
           </p>
         </div>
       </div>
@@ -303,7 +304,8 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
               {myFinished.map((m) => {
                 const mine = myTips.get(m.id)!;
                 const pts = scoreTip(mine, m);
-                const color = pts === 3 ? '#43E5A0' : pts === 1 ? '#E9C46A' : '#FF5442';
+                const color = pts === 0 ? '#FF5442' : pts >= TIP_POINTS.exact ? '#43E5A0' : pts >= TIP_POINTS.diff ? '#E9C46A' : '#8FB7AE';
+                const tier = pts >= TIP_POINTS.exact ? 'Volltreffer' : pts >= TIP_POINTS.diff ? 'Tordifferenz' : pts >= TIP_POINTS.tendency ? 'Sieger' : 'Daneben';
                 return (
                   <div key={m.id} className="hl-card rounded-2xl border border-white/10 p-3 flex items-center gap-3">
                     <div className="flex-1 min-w-0 flex items-center gap-2">
@@ -316,6 +318,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
                     <div className="shrink-0 text-right">
                       <div className="text-[11px] text-hl-mute font-sans">Tipp {mine.home}:{mine.away}</div>
                       <div className="font-display font-black tabular-nums text-sm" style={{ color }}>+{pts}</div>
+                      <div className="text-[10px] font-sans font-bold uppercase tracking-wider" style={{ color }}>{tier}</div>
                     </div>
                   </div>
                 );
