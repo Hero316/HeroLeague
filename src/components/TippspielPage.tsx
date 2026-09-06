@@ -350,7 +350,6 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
                 icon={<Star className="w-5 h-5" />}
                 title="Zusatzfragen"
                 subtitle={`Einmalig für die ganze Saison · bis zu ${BONUS_MAX} Punkte`}
-                defaultOpen={!bonusSubmitted}
                 badge={
                   bonusSubmitted ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-tipp/15 border border-tipp/35 px-2.5 py-1 text-[10px] font-sans font-black uppercase tracking-wider text-tipp"><Check className="w-3 h-3" /> Abgegeben</span>
@@ -376,7 +375,6 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
                 icon={<CalendarDays className="w-5 h-5" />}
                 title={`Spieltag ${activeMatchday}`}
                 subtitle="Tippe die Ergebnisse des Abends"
-                defaultOpen
                 badge={<Countdown open={tipsOpen} remainingMs={remainingMs} date={activeDate} />}
               >
                 {matchesList}
