@@ -25,6 +25,7 @@ import LiveBanner from './components/LiveBanner';
 import LiveMatchTakeover from './components/LiveMatchTakeover';
 import LiveTicker from './components/LiveTicker';
 import TippspielPage from './components/TippspielPage';
+import TippAdmin from './components/TippAdmin';
 import InstallPrompt from './components/InstallPrompt';
 import Ergebniszettel from './components/Ergebniszettel';
 import LegalPage from './components/LegalPage';
@@ -1586,6 +1587,16 @@ export default function App() {
                         accent="#12A594"
                       >
                         <SignupAdmin />
+                      </AccordionSection>
+                      <AccordionSection
+                        id="tipp-users"
+                        category="anmeldungen"
+                        title="Tippspiel – Teilnehmer"
+                        subtitle="Angemeldete Tipper (Name, E-Mail, Alter) · CSV-Export für Gewinne"
+                        icon={<Target className="w-5 h-5" />}
+                        accent="#22DFC9"
+                      >
+                        <TippAdmin />
                       </AccordionSection>
                       <AccordionSection
                         id="event-tickets"

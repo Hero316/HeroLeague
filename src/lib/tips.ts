@@ -2,42 +2,96 @@ import type { Match, Tip } from '../types';
 import { apiFetch } from './api';
 
 // ---------------------------------------------------------------------------
-// Tippspiel-Helfer (öffentlich, ohne Login). Jedes Gerät bekommt eine stabile
-// anonyme voterId + einen Anzeigenamen (localStorage). Ein Tipp pro Spiel –
-// die Sperre erzwingt zusätzlich der Server.
+// Tippspiel-Helfer. Teilnehmen nur nach Anmeldung mit bestätigter E-Mail
+// (6-stelliger Code) – so sind die Daten für Gewinne echt und Bots draußen.
+// Die bestätigte Identität (E-Mail, voterId, Anzeigename) liegt im localStorage.
 // ---------------------------------------------------------------------------
 
-const ID_KEY = 'hl_tipp_id';
-const NAME_KEY = 'hl_tipp_name';
+const IDENTITY_KEY = 'hl_tipp_identity';
 
-export function getVoterId(): string {
+export interface TippIdentity {
+  email: string;
+  voterId: string;
+  displayName: string;
+}
+
+export function getIdentity(): TippIdentity | null {
   try {
-    let id = localStorage.getItem(ID_KEY);
-    if (!id) {
-      id = `v-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-      localStorage.setItem(ID_KEY, id);
-    }
-    return id;
+    const raw = localStorage.getItem(IDENTITY_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    if (p && typeof p.email === 'string' && typeof p.voterId === 'string') return p as TippIdentity;
+    return null;
   } catch {
-    // Privater Modus o. Ä. – flüchtige ID (Tippen klappt, aber ohne Wiedererkennung).
-    return `v-tmp-${Math.random().toString(36).slice(2, 10)}`;
+    return null;
   }
 }
 
-export function getVoterName(): string {
+function setIdentity(id: TippIdentity): void {
   try {
-    return localStorage.getItem(NAME_KEY) ?? '';
-  } catch {
-    return '';
-  }
-}
-
-export function setVoterName(name: string): void {
-  try {
-    localStorage.setItem(NAME_KEY, name.trim().slice(0, 24));
+    localStorage.setItem(IDENTITY_KEY, JSON.stringify(id));
   } catch {
     /* ignorieren */
   }
+}
+
+export function clearIdentity(): void {
+  try {
+    localStorage.removeItem(IDENTITY_KEY);
+  } catch {
+    /* ignorieren */
+  }
+}
+
+export interface RegisterProfile {
+  vorname: string;
+  name: string;
+  email: string;
+  age: number | string;
+  foundVia?: string;
+  suggestion?: string;
+  consent: boolean;
+  website?: string; // Honeypot
+  turnstileToken?: string;
+}
+
+// Schritt 1: Anmeldung absenden → Bestätigungs-Code per E-Mail.
+export async function registerRequestCode(profile: RegisterProfile): Promise<{ ok: boolean; devCode?: string }> {
+  return apiFetch('/api/twitch?resource=tipp-register', {
+    method: 'POST',
+    body: JSON.stringify(profile),
+  });
+}
+
+// Schritt 2: Code bestätigen → Identität speichern und zurückgeben.
+export async function registerVerify(email: string, code: string): Promise<TippIdentity> {
+  const res = await apiFetch<{ email: string; voterId: string; displayName: string }>('/api/twitch?resource=tipp-verify', {
+    method: 'POST',
+    body: JSON.stringify({ email: email.trim(), code: code.trim() }),
+  });
+  const id: TippIdentity = { email: res.email, voterId: res.voterId, displayName: res.displayName };
+  setIdentity(id);
+  return id;
+}
+
+// --- Admin: Teilnehmerliste (nur Super-Admin) ------------------------------
+export interface TippUser {
+  email: string;
+  voterId: string;
+  firstName: string;
+  lastName: string;
+  displayName: string;
+  age: number | null;
+  foundVia: string | null;
+  suggestion: string | null;
+  verified: boolean;
+  createdAt: string;
+  verifiedAt: string | null;
+}
+
+export async function fetchTippUsers(): Promise<TippUser[]> {
+  const data = await apiFetch<{ users: TippUser[] }>('/api/twitch?resource=tipp-users');
+  return Array.isArray(data.users) ? data.users : [];
 }
 
 export async function fetchTips(): Promise<Tip[]> {
@@ -45,10 +99,12 @@ export async function fetchTips(): Promise<Tip[]> {
   return Array.isArray(data.tips) ? data.tips : [];
 }
 
-export async function submitTip(matchId: string, home: number, away: number, voterName: string): Promise<Tip> {
+export async function submitTip(matchId: string, home: number, away: number): Promise<Tip> {
+  const id = getIdentity();
+  if (!id) throw new Error('Bitte zuerst zum Tippspiel anmelden.');
   return apiFetch<Tip>('/api/twitch?resource=tip', {
     method: 'POST',
-    body: JSON.stringify({ matchId, home, away, voterId: getVoterId(), voterName }),
+    body: JSON.stringify({ matchId, home, away, email: id.email, voterId: id.voterId }),
   });
 }
 
@@ -80,7 +136,7 @@ export function leaderboard(tips: Tip[], matches: Match[]): LeaderRow[] {
     if (!m || m.status !== 'beendet' || m.homeScore === null || m.awayScore === null) continue;
     const pts = scoreTip(t, m);
     const row = rows.get(t.voterId) ?? { voterId: t.voterId, name: t.voterName, points: 0, exact: 0, correct: 0, tips: 0 };
-    row.name = t.voterName || row.name; // jüngster Name gewinnt
+    row.name = t.voterName || row.name;
     row.points += pts;
     row.tips += 1;
     if (pts === 3) row.exact += 1;

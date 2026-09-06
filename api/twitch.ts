@@ -1,8 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { EventArchive, EventMatch } from '../src/types';
 import { createEventDemo, removeEventDemo } from './_lib/eventDemo.js';
-import { sql, getTeams, getMatches } from './_lib/db.js';
+import { sql, getTeams } from './_lib/db.js';
 import { requireStaff, requireMatchWrite, requireSuperadmin, getSession } from './_lib/auth.js';
+import { getTips, submitTip, registerRequestCode, registerVerify, adminListTippUsers } from './_lib/tippgame.js';
 
 const DEFAULT_TWITCH = { channel: '', isLive: false };
 const DEFAULT_SOCIAL = { instagram: '', tiktok: '', youtube: '' };
@@ -863,56 +864,12 @@ const trackSponsorClick = async (req: VercelRequest, res: VercelResponse) => {
 
 // Ein Endpunkt für alle Website-Einstellungen (Twitch + Social Media + Event +
 // Highlights + News), um unter dem Serverless-Funktionslimit (12) zu bleiben.
-// --- Tippspiel -------------------------------------------------------------
-// Besucher tippen ÖFFENTLICH (kein Login) das Ergebnis eines geplanten Spiels.
-// Genau EIN Tipp pro Gerät (voterId) und Spiel – danach gesperrt (auch während
-// des Spiels nicht mehr änderbar). Serverseitig hart geprüft. Gespeichert als
-// JSON in settings (key='tips') – wie 'game'/'event', ohne neue Tabelle.
-type Tip = { id: string; matchId: string; voterId: string; voterName: string; home: number; away: number; at: string };
-
-async function saveTip(req: VercelRequest, res: VercelResponse) {
-  const b = (req.body ?? {}) as Record<string, unknown>;
-  const matchId = typeof b.matchId === 'string' ? b.matchId.slice(0, 64) : '';
-  const voterId = typeof b.voterId === 'string' ? b.voterId.slice(0, 64) : '';
-  const voterName = typeof b.voterName === 'string' ? b.voterName.trim().slice(0, 24) : '';
-  const hn = Number(b.home);
-  const an = Number(b.away);
-  if (!matchId || !voterId || voterName.length < 2) {
-    return res.status(400).json({ error: 'Bitte Namen eingeben und Tipp vollständig ausfüllen.' });
-  }
-  if (!Number.isFinite(hn) || !Number.isFinite(an)) {
-    return res.status(400).json({ error: 'Ungültiges Ergebnis.' });
-  }
-  const home = Math.max(0, Math.min(99, Math.floor(hn)));
-  const away = Math.max(0, Math.min(99, Math.floor(an)));
-
-  const matches = await getMatches();
-  const match = matches.find((m) => m.id === matchId);
-  if (!match) return res.status(404).json({ error: 'Spiel nicht gefunden.' });
-  if (match.status !== 'geplant') {
-    return res.status(409).json({ error: 'Für dieses Spiel kann nicht mehr getippt werden.' });
-  }
-
-  const rows = await sql`SELECT value FROM settings WHERE key = 'tips'`;
-  const store = (rows[0]?.value && typeof rows[0].value === 'object' ? rows[0].value : {}) as { tips?: Tip[] };
-  const tips: Tip[] = Array.isArray(store.tips) ? store.tips : [];
-  if (tips.some((t) => t.matchId === matchId && t.voterId === voterId)) {
-    return res.status(409).json({ error: 'Du hast dieses Spiel bereits getippt.' });
-  }
-
-  const tip: Tip = { id: `tip-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, matchId, voterId, voterName, home, away, at: new Date().toISOString() };
-  tips.push(tip);
-  const trimmed = tips.slice(-8000); // Sicherheitslimit gegen unbegrenztes Wachsen
-  await sql`
-    INSERT INTO settings (key, value) VALUES ('tips', ${JSON.stringify({ tips: trimmed })}::jsonb)
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
-  `;
-  return res.json(tip);
-}
+// Tippspiel: Logik liegt in _lib/tippgame.ts (Anmeldung mit E-Mail-Bestätigung,
+// verifizierte Teilnehmer, gesperrte Einmal-Tipps). Hier nur die Verdrahtung.
 
 // Angesprochen über ?resource=social | event | highlights | hero | countdown |
-// news | roster | game | tips (GET) | sponsor-click | tip (POST);
-// Twitch ist die Vorgabe.
+// news | roster | game | tips | tipp-users (GET) | sponsor-click | tip |
+// tipp-register | tipp-verify (POST); Twitch ist die Vorgabe.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const resource = req.query.resource;
@@ -973,11 +930,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const rows = await sql`SELECT value FROM settings WHERE key = 'game'`;
         return res.json({ board: toGameBoard(rows[0]?.value) });
       }
-      if (resource === 'tips') {
-        const rows = await sql`SELECT value FROM settings WHERE key = 'tips'`;
-        const store = (rows[0]?.value && typeof rows[0].value === 'object' ? rows[0].value : {}) as { tips?: Tip[] };
-        return res.json({ tips: Array.isArray(store.tips) ? store.tips : [] });
-      }
+      if (resource === 'tips') return getTips(req, res);
+      if (resource === 'tipp-users') return adminListTippUsers(req, res);
       if (resource === 'sponsor-clicks') {
         // Auswertung nur für Super-Admin und Spiel-Admin (interne Analytics).
         const session = await getSession(req);
@@ -1006,7 +960,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'roster') return saveRoster(req, res);
       if (resource === 'game') return saveGame(req, res);
       if (resource === 'sponsor-click') return trackSponsorClick(req, res);
-      if (resource === 'tip') return saveTip(req, res);
+      if (resource === 'tip') return submitTip(req, res);
+      if (resource === 'tipp-register') return registerRequestCode(req, res);
+      if (resource === 'tipp-verify') return registerVerify(req, res);
       return saveTwitch(req, res);
     }
     return res.status(405).json({ error: 'Nicht unterstützt' });

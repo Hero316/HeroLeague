@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Lock, Check, Trophy, Minus, Plus, Target, Loader2 } from 'lucide-react';
+import { ArrowLeft, Lock, Trophy, Minus, Plus, Target, Loader2, LogOut, ShieldCheck } from 'lucide-react';
 import type { Match, Team, Tip } from '../types';
-import { fetchTips, submitTip, getVoterId, getVoterName, setVoterName, scoreTip, leaderboard } from '../lib/tips';
+import { fetchTips, submitTip, getIdentity, clearIdentity, scoreTip, leaderboard, type TippIdentity } from '../lib/tips';
 import { TeamCrest } from './ui';
 import { Reveal } from './anim';
+import TippRegister from './TippRegister';
 
 interface Props {
   matches: Match[]; // Spiele der aktuellen Saison
@@ -16,13 +17,12 @@ interface Props {
 const EASE = [0.22, 1, 0.36, 1] as const;
 
 export default function TippspielPage({ matches, teams, seasonLabel, onNavigate }: Props) {
-  const voterId = getVoterId();
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
 
+  const [identity, setIdentity] = useState<TippIdentity | null>(getIdentity());
+  const voterId = identity?.voterId ?? '';
   const [tips, setTips] = useState<Tip[]>([]);
   const [loading, setLoading] = useState(true);
-  const [name, setName] = useState(getVoterName());
-  const [nameSaved, setNameSaved] = useState(Boolean(getVoterName()));
   const [drafts, setDrafts] = useState<Record<string, { home: number; away: number }>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -69,21 +69,18 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
       return { ...d, [id]: { ...cur, [side]: next } };
     });
 
-  const saveName = () => {
-    const n = name.trim();
-    if (n.length < 2) return;
-    setVoterName(n);
-    setName(n);
-    setNameSaved(true);
+  const logout = () => {
+    clearIdentity();
+    setIdentity(null);
   };
 
   const send = async (m: Match) => {
-    if (name.trim().length < 2) { setNameSaved(false); return; }
+    if (!identity) return;
     const d = draft(m.id);
     setBusy(m.id);
     setErrors((e) => ({ ...e, [m.id]: '' }));
     try {
-      const tip = await submitTip(m.id, d.home, d.away, name.trim());
+      const tip = await submitTip(m.id, d.home, d.away);
       setTips((prev) => [...prev, tip]);
     } catch (err) {
       setErrors((e) => ({ ...e, [m.id]: err instanceof Error ? err.message : 'Fehler' }));
@@ -127,29 +124,28 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
       </div>
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 space-y-8">
-        {/* Name */}
-        <div className="hl-card rounded-2xl border border-white/10 p-4">
-          <label className="block text-[11px] font-sans font-bold uppercase tracking-wider text-hl-dim mb-2">Dein Anzeigename (für die Rangliste)</label>
-          <div className="flex gap-2">
-            <input
-              value={name}
-              onChange={(e) => { setName(e.target.value); setNameSaved(false); }}
-              maxLength={24}
-              placeholder="z. B. Max"
-              className="flex-1 min-w-0 bg-brand-dark border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white font-sans focus:outline-none focus:border-brand-accent-light"
-            />
+        {/* Anmeldung / angemeldeter Status */}
+        {identity ? (
+          <div className="hl-card rounded-2xl border border-white/10 p-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="w-9 h-9 rounded-xl grid place-items-center bg-brand-accent-light/18 text-brand-accent-light shrink-0">
+                <ShieldCheck className="w-5 h-5" />
+              </span>
+              <div className="min-w-0">
+                <div className="text-sm font-sans font-bold text-white truncate">Angemeldet als {identity.displayName}</div>
+                {myTotalPoints > 0 && <div className="text-[12px] text-hl-mute font-sans">Deine Punkte: <span className="text-brand-accent-light font-bold">{myTotalPoints}</span></div>}
+              </div>
+            </div>
             <button
-              onClick={saveName}
-              disabled={name.trim().length < 2}
-              className="shrink-0 rounded-xl bg-brand-accent-light/15 border border-brand-accent-light/35 px-4 text-sm font-sans font-bold uppercase tracking-wider text-brand-accent-light cursor-pointer disabled:opacity-40 active:scale-95 transition-transform"
+              onClick={logout}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-xl hl-surf-soft border border-white/10 px-3 py-2 text-[11px] font-sans font-bold uppercase tracking-wider text-hl-mute hover:text-white cursor-pointer active:scale-95 transition-transform"
             >
-              {nameSaved ? <Check className="w-4 h-4" /> : 'Speichern'}
+              <LogOut className="w-3.5 h-3.5" /> Abmelden
             </button>
           </div>
-          {myTotalPoints > 0 && (
-            <p className="text-[12px] text-hl-mute font-sans mt-2">Deine Punkte bisher: <span className="text-brand-accent-light font-bold">{myTotalPoints}</span></p>
-          )}
-        </div>
+        ) : (
+          <TippRegister onVerified={(id) => { setIdentity(id); load(); }} />
+        )}
 
         {/* Kommende Spiele */}
         <section>
@@ -191,12 +187,14 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
                         <div className="flex items-center gap-1.5 font-display font-black tabular-nums text-2xl text-brand-accent-light px-2">
                           {mine.home}<span className="text-hl-dim">:</span>{mine.away}
                         </div>
-                      ) : (
+                      ) : identity ? (
                         <div className="flex items-center gap-1.5">
                           <Stepper value={d.home} onChange={(delta) => setDraft(m.id, 'home', delta)} />
                           <span className="text-hl-dim font-display font-black">:</span>
                           <Stepper value={d.away} onChange={(delta) => setDraft(m.id, 'away', delta)} />
                         </div>
+                      ) : (
+                        <div className="font-display font-black tabular-nums text-2xl text-hl-dim px-2">–:–</div>
                       )}
 
                       <div className="flex items-center gap-2 min-w-0 justify-end">
@@ -210,7 +208,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
                         <div className="flex items-center justify-center gap-1.5 text-[12px] font-sans font-bold uppercase tracking-wider text-hl-mute">
                           <Lock className="w-3.5 h-3.5" /> Dein Tipp ist abgegeben
                         </div>
-                      ) : (
+                      ) : identity ? (
                         <button
                           onClick={() => send(m)}
                           disabled={busy === m.id}
@@ -218,6 +216,8 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
                         >
                           {busy === m.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Tipp abgeben'}
                         </button>
+                      ) : (
+                        <div className="text-center text-[12px] font-sans text-hl-mute">Melde dich oben an, um zu tippen.</div>
                       )}
                       {err && <p className="text-center text-xs font-sans text-rose-300 mt-2">{err}</p>}
                     </div>
