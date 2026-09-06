@@ -251,25 +251,30 @@ export default function SeasonWrapped({ open, onClose, seasonNumber, seasonLabel
 
   return (
     <ModalOverlay accent={slide.accent}>
-      {/* Fortschrittsbalken */}
+      {/* Fortschrittsbalken (aktiver Balken füllt sich über die Anzeigedauer) */}
       <div className="absolute top-0 inset-x-0 z-30 flex gap-1.5 px-3 pt-3">
         {slides.map((sl, i) => (
           <div key={sl.id} className="flex-1 h-1 rounded-full bg-white/20 overflow-hidden">
-            <div
-              className="h-full rounded-full"
-              style={{
-                background: '#fff',
-                width: i < clampedIndex ? '100%' : i === clampedIndex ? '100%' : '0%',
-                transition: 'width 120ms linear',
-              }}
-            />
+            {i < clampedIndex ? (
+              <div className="h-full rounded-full bg-white" style={{ width: '100%' }} />
+            ) : i === clampedIndex ? (
+              <motion.div
+                key={`fill-${clampedIndex}`}
+                className="h-full rounded-full bg-white"
+                initial={{ width: '0%' }}
+                animate={{ width: '100%' }}
+                transition={{ duration: isLast || shareOpen ? 0.3 : SLIDE_MS / 1000, ease: 'linear' }}
+              />
+            ) : (
+              <div className="h-full rounded-full bg-white" style={{ width: '0%' }} />
+            )}
           </div>
         ))}
       </div>
 
-      {/* Tipp-Zonen (links zurück / rechts weiter) */}
-      <button aria-label="Zurück" onClick={prev} className="absolute left-0 top-0 bottom-0 w-1/3 z-20 cursor-pointer" style={{ background: 'transparent' }} />
-      <button aria-label="Weiter" onClick={next} className="absolute right-0 top-0 bottom-0 w-1/3 z-20 cursor-pointer" style={{ background: 'transparent' }} />
+      {/* Tipp-Zonen (links zurück / rechts weiter) – oben/unten frei für Knöpfe */}
+      <button aria-label="Zurück" onClick={prev} className="absolute left-0 top-16 bottom-28 w-1/3 z-20 cursor-pointer" style={{ background: 'transparent' }} />
+      <button aria-label="Weiter" onClick={next} className="absolute right-0 top-16 bottom-28 w-1/3 z-20 cursor-pointer" style={{ background: 'transparent' }} />
 
       {/* Schließen */}
       <button
