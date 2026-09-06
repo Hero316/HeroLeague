@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Menu, X, LogOut, LayoutDashboard, Instagram, Youtube, Zap, Smartphone, Shield, MessageSquare } from 'lucide-react';
 import { ActiveTab, HighlightAlbum, Match, SocialLinks, Team } from '../types';
 import { numberWord } from '../lib/heroAward';
@@ -191,7 +192,9 @@ export default function Navbar({
               >
                 {isHero ? heroLabel() : item.label}
                 {activeTab === item.value && (
-                  <span
+                  <motion.span
+                    layoutId="nav-underline"
+                    transition={{ type: 'spring', stiffness: 500, damping: 40 }}
                     className={`absolute left-0 right-0 -bottom-[7px] h-0.5 rounded-sm ${
                       isHero
                         ? 'bg-hl-gold shadow-[0_0_8px_rgba(233,196,106,.7)]'
@@ -279,17 +282,54 @@ export default function Navbar({
           {/* Mobile-Menü-Button */}
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className={`${burgerCls} text-hl-soft hover:text-white p-2 rounded-lg cursor-pointer`}
+            className={`${burgerCls} text-hl-soft hover:text-white p-2 rounded-lg cursor-pointer active:scale-90 transition-transform`}
             aria-label="Menü öffnen"
+            aria-expanded={isOpen}
           >
-            {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            <span className="relative block w-6 h-6">
+              <AnimatePresence initial={false} mode="wait">
+                {isOpen ? (
+                  <motion.span
+                    key="x"
+                    initial={{ rotate: -90, opacity: 0 }}
+                    animate={{ rotate: 0, opacity: 1 }}
+                    exit={{ rotate: 90, opacity: 0 }}
+                    transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                    className="absolute inset-0"
+                  >
+                    <X className="w-6 h-6" />
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key="menu"
+                    initial={{ rotate: 90, opacity: 0 }}
+                    animate={{ rotate: 0, opacity: 1 }}
+                    exit={{ rotate: -90, opacity: 0 }}
+                    transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                    className="absolute inset-0"
+                  >
+                    <Menu className="w-6 h-6" />
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </span>
           </button>
         </div>
       </div>
 
-      {/* Mobile-Menü */}
-      {isOpen && (
-        <div className={`${burgerCls} border-t border-white/[.07] bg-[#080c0a] px-4 py-3 space-y-1`}>
+      {/* Mobile-Menü – sanftes Auf-/Zuklappen (Höhe + Fade) statt hartem Erscheinen. */}
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            key="mobile-menu"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+            style={{ overflow: 'hidden' }}
+            className={`${burgerCls} border-t border-white/[.07] bg-[#080c0a]`}
+          >
+          <div className="px-4 py-3 space-y-1">
           {eventActive && onOpenEvent && (
             <button
               onClick={() => {
@@ -406,8 +446,10 @@ export default function Navbar({
               Abmelden (Logout)
             </button>
           )}
-        </div>
-      )}
+          </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Weiche Scroll-Kante statt harter 1px-Linie: Inhalt taucht sanft unter
           die schwebende Leiste, wo er sie überlappt (§12 „scroll edge effects,
