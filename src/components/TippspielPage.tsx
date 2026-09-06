@@ -139,7 +139,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
   return (
     <div className="min-h-screen bg-brand-dark text-hl-text font-sans relative overflow-x-hidden">
       {/* Kopf */}
-      <div className="relative overflow-hidden border-b border-white/8" style={{ background: 'radial-gradient(120% 100% at 50% 0%, rgba(34,223,201,.14), transparent 60%)' }}>
+      <div className="relative overflow-hidden border-b border-white/8" style={{ background: 'radial-gradient(120% 100% at 50% 0%, rgba(168,85,247,.20), transparent 60%)' }}>
         <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-5 pb-8">
           <button
             onClick={() => onNavigate('/')}
@@ -148,7 +148,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
             <ArrowLeft className="w-4 h-4" /> Startseite
           </button>
           <div className="flex items-center gap-2.5">
-            <span className="w-11 h-11 rounded-2xl grid place-items-center bg-brand-accent-light/18 text-brand-accent-light shrink-0">
+            <span className="w-11 h-11 rounded-2xl grid place-items-center bg-tipp/18 text-tipp shrink-0">
               <Target className="w-6 h-6" />
             </span>
             <div>
@@ -157,9 +157,9 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
             </div>
           </div>
           <p className="text-[13px] text-hl-mute font-sans mt-4 leading-relaxed">
-            Volltreffer <span className="text-brand-accent-light font-bold">{TIP_POINTS.exact} Punkte</span>, richtige
-            Tordifferenz <span className="text-brand-accent-light font-bold">{TIP_POINTS.diff}</span>, richtiger Sieger{' '}
-            <span className="text-brand-accent-light font-bold">{TIP_POINTS.tendency}</span>. Pro Spiel nur ein Tipp.
+            Volltreffer <span className="text-tipp font-bold">{TIP_POINTS.exact} Punkte</span>, richtige
+            Tordifferenz <span className="text-tipp font-bold">{TIP_POINTS.diff}</span>, richtiger Sieger{' '}
+            <span className="text-tipp font-bold">{TIP_POINTS.tendency}</span>. Pro Spiel nur ein Tipp.
             Tippschluss ist <span className="text-white font-bold">19:00 Uhr am Spieltag</span>.
           </p>
         </div>
@@ -170,12 +170,12 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
         {identity ? (
           <div className="hl-card rounded-2xl border border-white/10 p-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
-              <span className="w-9 h-9 rounded-xl grid place-items-center bg-brand-accent-light/18 text-brand-accent-light shrink-0">
+              <span className="w-9 h-9 rounded-xl grid place-items-center bg-tipp/18 text-tipp shrink-0">
                 <ShieldCheck className="w-5 h-5" />
               </span>
               <div className="min-w-0">
                 <div className="text-sm font-sans font-bold text-white truncate">Angemeldet als {identity.displayName}</div>
-                {myTotalPoints > 0 && <div className="text-[12px] text-hl-mute font-sans">Deine Punkte: <span className="text-brand-accent-light font-bold">{myTotalPoints}</span></div>}
+                {myTotalPoints > 0 && <div className="text-[12px] text-hl-mute font-sans">Deine Punkte: <span className="text-tipp font-bold">{myTotalPoints}</span></div>}
               </div>
             </div>
             <button
@@ -194,6 +194,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
           <SegmentedControl
             groupId="tipp-view"
             fill
+            accent="#A855F7"
             value={activeView}
             onChange={(v) => setView(v)}
             options={viewTabs}
@@ -214,7 +215,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
               {/* Spieltag-Kopf + Countdown */}
               <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
                 <h2 className="flex items-center gap-2 font-display font-black text-lg uppercase tracking-tight text-white">
-                  <CalendarDays className="w-5 h-5 text-brand-accent-light" /> Spieltag {activeMatchday}
+                  <CalendarDays className="w-5 h-5 text-tipp" /> Spieltag {activeMatchday}
                 </h2>
                 <Countdown open={tipsOpen} remainingMs={remainingMs} date={activeDate} />
               </div>
@@ -246,7 +247,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
                         </div>
 
                         {mine ? (
-                          <div className="flex items-center gap-1.5 font-display font-black tabular-nums text-2xl text-brand-accent-light px-2">
+                          <div className="flex items-center gap-1.5 font-display font-black tabular-nums text-2xl text-tipp px-2">
                             {mine.home}<span className="text-hl-dim">:</span>{mine.away}
                           </div>
                         ) : canTip ? (
@@ -280,7 +281,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
                           <button
                             onClick={() => send(m)}
                             disabled={busy === m.id}
-                            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand-accent-light px-4 py-2.5 text-sm font-sans font-black uppercase tracking-wider text-[#04120d] cursor-pointer active:scale-[0.98] transition-transform disabled:opacity-60"
+                            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-tipp px-4 py-2.5 text-sm font-sans font-black uppercase tracking-wider text-white cursor-pointer active:scale-[0.98] transition-transform disabled:opacity-60"
                           >
                             {busy === m.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Tipp abgeben'}
                           </button>
@@ -339,11 +340,11 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
               {/* DU: eigener Platz + Punkte, immer sichtbar (auch außerhalb Top 10) */}
               {identity && (
                 <div
-                  className="mb-3 rounded-2xl border border-brand-accent-light/40 p-4 flex items-center justify-between gap-3"
-                  style={{ background: 'linear-gradient(100deg, rgba(34,223,201,.16), rgba(34,223,201,.04))' }}
+                  className="mb-3 rounded-2xl border border-tipp/40 p-4 flex items-center justify-between gap-3"
+                  style={{ background: 'linear-gradient(100deg, rgba(168,85,247,.20), rgba(226,75,214,.06))' }}
                 >
                   <div className="min-w-0">
-                    <div className="text-[11px] font-sans font-black uppercase tracking-wider text-brand-accent-light">
+                    <div className="text-[11px] font-sans font-black uppercase tracking-wider text-tipp">
                       Du{myRank ? ` · Platz ${myRank}` : ''}
                     </div>
                     <div className="text-sm font-sans font-bold text-white truncate">{identity.displayName}</div>
@@ -352,7 +353,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
                     )}
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="font-display font-black tabular-nums text-3xl text-brand-accent-light leading-none">{myTotalPoints}</div>
+                    <div className="font-display font-black tabular-nums text-3xl text-tipp leading-none">{myTotalPoints}</div>
                     <div className="text-[10px] font-sans font-bold uppercase tracking-wider text-hl-mute mt-1">Punkte</div>
                   </div>
                 </div>
@@ -362,7 +363,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
                 {board.slice(0, 10).map((r, i) => (
                   <div
                     key={r.voterId}
-                    className={`flex items-center gap-3 px-4 py-2.5 border-b border-white/5 last:border-b-0 ${r.voterId === voterId ? 'bg-brand-accent-light/10' : ''}`}
+                    className={`flex items-center gap-3 px-4 py-2.5 border-b border-white/5 last:border-b-0 ${r.voterId === voterId ? 'bg-tipp/10' : ''}`}
                   >
                     <span
                       className="w-6 text-center font-display font-black tabular-nums text-hl-mute"
@@ -373,7 +374,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
                     <span className="flex-1 min-w-0 truncate font-sans font-semibold text-white">
                       {r.name}{r.voterId === voterId ? ' (Du)' : ''}
                     </span>
-                    <span className="w-12 text-right font-display font-black tabular-nums text-brand-accent-light shrink-0">{r.points}</span>
+                    <span className="w-12 text-right font-display font-black tabular-nums text-tipp shrink-0">{r.points}</span>
                   </div>
                 ))}
               </div>
@@ -411,7 +412,7 @@ function Countdown({ open, remainingMs, date }: { open: boolean; remainingMs: nu
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-sans font-bold tabular-nums border ${
-        soon ? 'bg-rose-500/15 border-rose-500/40 text-rose-300' : 'bg-brand-accent-light/12 border-brand-accent-light/35 text-brand-accent-light'
+        soon ? 'bg-rose-500/15 border-rose-500/40 text-rose-300' : 'bg-tipp/12 border-tipp/35 text-tipp'
       }`}
       title={`Tippschluss ${date} · 19:00 Uhr`}
     >

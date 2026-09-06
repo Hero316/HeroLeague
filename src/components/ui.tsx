@@ -101,6 +101,7 @@ export function SegmentedControl<T extends string>({
   groupId,
   className = '',
   fill = false,
+  accent,
 }: {
   options: { value: T; label: string; icon?: React.ComponentType<{ className?: string }> }[];
   value: T;
@@ -108,6 +109,7 @@ export function SegmentedControl<T extends string>({
   groupId: string;
   className?: string;
   fill?: boolean;
+  accent?: string; // Hex-Farbe für die aktive Pille (Vorgabe: Marken-Türkis)
 }) {
   return (
     <div className={`relative flex items-center gap-0.5 hl-surf-soft border border-white/10 rounded-2xl p-1 max-w-full ${fill ? 'w-full' : 'overflow-x-auto no-scrollbar'} ${className}`}>
@@ -125,7 +127,8 @@ export function SegmentedControl<T extends string>({
             {active && (
               <motion.span
                 layoutId={`seg-${groupId}`}
-                className="absolute inset-0 rounded-xl bg-brand-accent-light shadow-sm shadow-brand-accent-light/30"
+                className={`absolute inset-0 rounded-xl shadow-sm ${accent ? '' : 'bg-brand-accent-light shadow-brand-accent-light/30'}`}
+                style={accent ? { background: accent, boxShadow: `0 1px 6px -1px ${accent}66` } : undefined}
                 transition={{ type: 'spring', stiffness: 520, damping: 40 }}
               />
             )}

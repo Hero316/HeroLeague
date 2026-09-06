@@ -1749,15 +1749,23 @@ export default function App() {
             <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-4">
               <button
                 onClick={() => navigateTo('/tippspiel')}
-                className="group w-full sm:w-auto inline-flex items-center gap-3 rounded-2xl px-5 py-3 text-left cursor-pointer transition-transform active:scale-[0.98] border border-brand-accent-light/30"
-                style={{ background: 'linear-gradient(100deg, rgba(34,223,201,.16), rgba(233,196,106,.10))' }}
+                className="group relative w-full overflow-hidden flex items-center gap-4 rounded-2xl px-5 py-4 text-left cursor-pointer transition-transform active:scale-[0.98] border border-white/15"
+                style={{
+                  background: 'linear-gradient(120deg, #7C3AED 0%, #A855F7 45%, #E24BD6 100%)',
+                  boxShadow: '0 14px 34px -12px rgba(168,85,247,.65)',
+                }}
               >
-                <span className="w-9 h-9 rounded-xl grid place-items-center bg-brand-accent-light/20 text-brand-accent-light shrink-0">
-                  <Target className="w-5 h-5 transition-transform duration-200 group-hover:scale-110" />
+                <span className="tipp-shine" aria-hidden="true" />
+                <span className="relative w-12 h-12 rounded-2xl grid place-items-center bg-white/18 shrink-0 shadow-inner">
+                  <Target className="w-6 h-6 text-white transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
                 </span>
-                <span className="min-w-0">
-                  <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">Tippspiel</span>
-                  <span className="block text-[11px] font-sans font-semibold text-hl-mute mt-0.5">Tippe die Ergebnisse &amp; sammle Punkte</span>
+                <span className="relative min-w-0 flex-1">
+                  <span className="block font-display font-black uppercase tracking-tight text-white text-xl leading-none">Tippspiel</span>
+                  <span className="block text-[12px] font-sans font-semibold text-white/85 mt-1">Tippe die Ergebnisse &amp; sammle Punkte 🏆</span>
+                </span>
+                <span className="relative shrink-0 hidden sm:inline-flex items-center gap-1 rounded-full bg-white/20 px-3 py-1.5 text-[11px] font-sans font-black uppercase tracking-wider text-white">
+                  Jetzt tippen
+                  <span className="transition-transform duration-200 group-hover:translate-x-0.5">→</span>
                 </span>
               </button>
             </div>

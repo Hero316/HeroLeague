@@ -76,7 +76,7 @@ export default function TippRegister({ onVerified }: { onVerified: (id: TippIden
   };
 
   const inputCls =
-    'w-full bg-brand-dark border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white font-sans focus:outline-none focus:border-brand-accent-light placeholder:text-hl-faint';
+    'w-full bg-brand-dark border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white font-sans focus:outline-none focus:border-tipp placeholder:text-hl-faint';
 
   return (
     <motion.div
@@ -86,7 +86,7 @@ export default function TippRegister({ onVerified }: { onVerified: (id: TippIden
       className="hl-card rounded-2xl border border-white/10 p-5"
     >
       <div className="flex items-center gap-2 mb-1">
-        <ShieldCheck className="w-5 h-5 text-brand-accent-light" />
+        <ShieldCheck className="w-5 h-5 text-tipp" />
         <h2 className="font-display font-black text-lg uppercase tracking-tight text-white">Zum Mitspielen anmelden</h2>
       </div>
       <p className="text-[13px] text-hl-mute font-sans mb-4 leading-relaxed">
@@ -122,7 +122,7 @@ export default function TippRegister({ onVerified }: { onVerified: (id: TippIden
           <input tabIndex={-1} autoComplete="off" onChange={(e) => (website.current = e.target.value)} className="hidden" aria-hidden="true" />
 
           <label className="flex items-start gap-2.5 cursor-pointer select-none py-1">
-            <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 w-4 h-4 accent-brand-accent-light shrink-0" />
+            <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 w-4 h-4 accent-tipp shrink-0" />
             <span className="text-[12px] text-hl-mute font-sans leading-snug">
               Ich bin einverstanden, dass meine Daten zur Teilnahme am Tippspiel gespeichert werden.
             </span>
@@ -134,7 +134,7 @@ export default function TippRegister({ onVerified }: { onVerified: (id: TippIden
           <button
             type="submit"
             disabled={busy}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand-accent-light px-4 py-3 text-sm font-sans font-black uppercase tracking-wider text-[#04120d] cursor-pointer active:scale-[0.98] transition-transform disabled:opacity-60"
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-tipp px-4 py-3 text-sm font-sans font-black uppercase tracking-wider text-white cursor-pointer active:scale-[0.98] transition-transform disabled:opacity-60"
           >
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
             Code anfordern
@@ -164,7 +164,7 @@ export default function TippRegister({ onVerified }: { onVerified: (id: TippIden
           <button
             type="submit"
             disabled={busy}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand-accent-light px-4 py-3 text-sm font-sans font-black uppercase tracking-wider text-[#04120d] cursor-pointer active:scale-[0.98] transition-transform disabled:opacity-60"
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-tipp px-4 py-3 text-sm font-sans font-black uppercase tracking-wider text-white cursor-pointer active:scale-[0.98] transition-transform disabled:opacity-60"
           >
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
             Bestätigen &amp; mitspielen
