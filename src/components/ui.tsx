@@ -1,6 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { ChevronDown, X, Smartphone, Search, LayoutDashboard, Star, Trophy, Home, Radio, KeyRound } from 'lucide-react';
 import { ActiveTab, Partner, PartnersConfig, Team } from '../types';
 import { apiFetch } from '../lib/api';
@@ -724,37 +724,51 @@ export function ImageZoom({
         <img src={src} alt={alt} loading="lazy" decoding="async" referrerPolicy="no-referrer" className={className} style={style} />
       </button>
 
-      {open &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-            onClick={() => setOpen(false)}
-            role="dialog"
-            aria-modal="true"
-            aria-label={alt}
-          >
-            <div className="relative flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Schließen"
-                className="absolute -top-3 -right-3 z-10 w-9 h-9 rounded-full bg-brand-deep border border-white/20 text-hl-soft hover:text-white flex items-center justify-center shadow-lg cursor-pointer"
+      {createPortal(
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+              onClick={() => setOpen(false)}
+              role="dialog"
+              aria-modal="true"
+              aria-label={alt}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <motion.div
+                className="relative flex flex-col items-center"
+                onClick={(e) => e.stopPropagation()}
+                initial={{ opacity: 0, scale: 0.94 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.96 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
               >
-                <X className="w-4 h-4" />
-              </button>
-              <img
-                src={src}
-                alt={alt}
-                referrerPolicy="no-referrer"
-                className={zoomClassName ?? 'w-64 sm:w-80 max-w-[80vw] max-h-[80vh] object-contain'}
-              />
-              <span className="mt-4 font-display font-black text-lg text-white uppercase tracking-tight text-center">
-                {alt}
-              </span>
-            </div>
-          </div>,
-          document.body
-        )}
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Schließen"
+                  className="absolute -top-3 -right-3 z-10 w-9 h-9 rounded-full bg-brand-deep border border-white/20 text-hl-soft hover:text-white flex items-center justify-center shadow-lg cursor-pointer active:scale-90 transition-transform"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <img
+                  src={src}
+                  alt={alt}
+                  referrerPolicy="no-referrer"
+                  className={zoomClassName ?? 'w-64 sm:w-80 max-w-[80vw] max-h-[80vh] object-contain'}
+                />
+                <span className="mt-4 font-display font-black text-lg text-white uppercase tracking-tight text-center">
+                  {alt}
+                </span>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </>
   );
 }
