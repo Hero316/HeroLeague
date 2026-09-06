@@ -159,9 +159,8 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
           <p className="text-[13px] text-hl-mute font-sans mt-4 leading-relaxed">
             Volltreffer <span className="text-brand-accent-light font-bold">{TIP_POINTS.exact} Punkte</span>, richtige
             Tordifferenz <span className="text-brand-accent-light font-bold">{TIP_POINTS.diff}</span>, richtiger Sieger{' '}
-            <span className="text-brand-accent-light font-bold">{TIP_POINTS.tendency}</span>. Bei Unentschieden zählt nur
-            das exakte Ergebnis. Pro Spiel nur ein Tipp. Tippschluss ist{' '}
-            <span className="text-white font-bold">19:00 Uhr am Spieltag</span>.
+            <span className="text-brand-accent-light font-bold">{TIP_POINTS.tendency}</span>. Pro Spiel nur ein Tipp.
+            Tippschluss ist <span className="text-white font-bold">19:00 Uhr am Spieltag</span>.
           </p>
         </div>
       </div>

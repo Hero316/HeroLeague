@@ -129,22 +129,19 @@ export const TIP_POINTS = { exact: 5, diff: 3, tendency: 2 } as const;
 
 // Punkte für einen Tipp gegen das Endergebnis:
 //   exaktes Ergebnis              → TIP_POINTS.exact (am meisten)
-//   Sieger + gleiche Tordifferenz → TIP_POINTS.diff
-//   nur Sieger richtig            → TIP_POINTS.tendency (am wenigsten)
+//   richtige Tordifferenz         → TIP_POINTS.diff (auch: richtiges Remis, aber
+//                                   nicht exakt – die Tordifferenz 0 stimmt ja)
+//   nur Sieger/Tendenz richtig    → TIP_POINTS.tendency (am wenigsten)
 //   falsch                        → 0
-// Bei einem REMIS-Ergebnis gibt es keinen Sieger und keine Tordifferenz zum
-// teilweisen Treffen – daher zählt dort NUR das exakte Ergebnis (sonst 0).
 export function scoreTip(tip: { home: number; away: number }, match: Match): number {
   if (match.homeScore === null || match.awayScore === null) return 0;
   const rh = match.homeScore;
   const ra = match.awayScore;
   if (tip.home === rh && tip.away === ra) return TIP_POINTS.exact; // exakt (auch exaktes Remis)
-  if (rh === ra) return 0; // Remis: nur das exakte Ergebnis zählt
 
-  // Ergebnis mit Sieger:
   const sign = (a: number, b: number) => (a > b ? 1 : a < b ? -1 : 0);
-  if (sign(tip.home, tip.away) !== sign(rh, ra)) return 0; // Sieger/Tendenz falsch
-  if (tip.home - tip.away === rh - ra) return TIP_POINTS.diff; // richtige Tordifferenz
+  if (sign(tip.home, tip.away) !== sign(rh, ra)) return 0; // Sieger/Tendenz falsch (bei Remis: kein Remis getippt)
+  if (tip.home - tip.away === rh - ra) return TIP_POINTS.diff; // richtige Tordifferenz (Remis: richtiges Remis, nicht exakt)
   return TIP_POINTS.tendency; // Sieger richtig, Abstand daneben
 }
 
