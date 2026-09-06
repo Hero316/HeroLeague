@@ -3,9 +3,11 @@ import { motion } from 'motion/react';
 import { PlayerStat, Match, Team, MatchPlayerStat, ScoringConfig } from '../types';
 import { scorerRanking as trackScorers, assistRanking as trackAssists, goldenGloveRanking } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
+import { Swords } from 'lucide-react';
 import PlayerCrest from './PlayerCrest';
 import { TeamCrest } from './ui';
 import { CountUp, Reveal, useSettledList } from './anim';
+import CompareOverlay from './CompareOverlay';
 
 interface StatistikenProps {
   players: PlayerStat[];
@@ -39,6 +41,7 @@ const VALUE_COLOR: Record<Accent, string> = {
 
 // Statistik-Seite: Liga-Kennzahlen als Kachelzeile + Leader-Cards für Spieler und Teams.
 export default function Statistiken({ players, matches, teams, trackingRows = [], scoringConfig, onSelectTeam }: StatistikenProps) {
+  const [compareOpen, setCompareOpen] = React.useState(false);
   const finished = matches.filter((m) => m.status === 'beendet' && m.homeScore !== null && m.awayScore !== null);
   const totalGoals = finished.reduce((acc, m) => acc + (m.homeScore || 0) + (m.awayScore || 0), 0);
   const avgGoals = finished.length ? totalGoals / finished.length : 0;
@@ -316,6 +319,28 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
           </div>
         ))}
       </div>
+
+      {/* Head-to-Head: zwei Spieler vergleichen */}
+      {players.length >= 2 && (
+        <div className="mt-4 flex justify-center sm:justify-end">
+          <button
+            onClick={() => setCompareOpen(true)}
+            className="group inline-flex items-center gap-2 rounded-full bg-brand-accent-light/12 border border-brand-accent-light/35 px-5 py-2.5 text-sm font-sans font-bold uppercase tracking-wider text-brand-accent-light cursor-pointer transition-all duration-200 hover:bg-brand-accent-light/20 active:scale-95"
+          >
+            <Swords className="w-4 h-4 transition-transform duration-200 group-hover:-rotate-12" />
+            Spieler vergleichen
+          </button>
+        </div>
+      )}
+
+      <CompareOverlay
+        open={compareOpen}
+        onClose={() => setCompareOpen(false)}
+        players={players}
+        teams={teams}
+        trackingRows={trackingRows}
+        scoringConfig={scoringConfig}
+      />
 
       {/* Leader-Cards */}
       {cards.length === 0 ? (
