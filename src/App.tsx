@@ -1789,7 +1789,7 @@ export default function App() {
             title="Statistiken"
           />
           {seasonSwitcher}
-          <Statistiken players={players} matches={seasonMatches} teams={leagueTeams} trackingRows={trackingRows} scoringConfig={scoring} onSelectTeam={openTeamDetail} />
+          <Statistiken players={players} matches={seasonMatches} teams={leagueTeams} trackingRows={trackingRows} scoringConfig={scoring} seasonNumber={selectedSeasonNumber} seasonLabel={selectedSeasonName} onSelectTeam={openTeamDetail} />
         </>
       )}
       </div>

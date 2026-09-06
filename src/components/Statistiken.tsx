@@ -3,11 +3,12 @@ import { motion } from 'motion/react';
 import { PlayerStat, Match, Team, MatchPlayerStat, ScoringConfig } from '../types';
 import { scorerRanking as trackScorers, assistRanking as trackAssists, goldenGloveRanking } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
-import { Swords } from 'lucide-react';
+import { Swords, Sparkles } from 'lucide-react';
 import PlayerCrest from './PlayerCrest';
 import { TeamCrest } from './ui';
 import { CountUp, Reveal, useSettledList } from './anim';
 import CompareOverlay from './CompareOverlay';
+import SeasonWrapped from './SeasonWrapped';
 
 interface StatistikenProps {
   players: PlayerStat[];
@@ -15,6 +16,8 @@ interface StatistikenProps {
   teams: Team[];
   trackingRows?: MatchPlayerStat[]; // veröffentlichte getrackte Werte (für die Award-Rechnung)
   scoringConfig?: ScoringConfig; // Score-Einstellungen (Torschützen/Torwart-Score)
+  seasonNumber?: number; // laufende Nummer der ausgewählten Saison (für den Rückblick)
+  seasonLabel?: string; // Anzeigename der Saison, z. B. „Season 1"
   onSelectTeam?: (teamId: string, playerName?: string) => void;
 }
 
@@ -40,8 +43,9 @@ const VALUE_COLOR: Record<Accent, string> = {
 };
 
 // Statistik-Seite: Liga-Kennzahlen als Kachelzeile + Leader-Cards für Spieler und Teams.
-export default function Statistiken({ players, matches, teams, trackingRows = [], scoringConfig, onSelectTeam }: StatistikenProps) {
+export default function Statistiken({ players, matches, teams, trackingRows = [], scoringConfig, seasonNumber = 1, seasonLabel = '', onSelectTeam }: StatistikenProps) {
   const [compareOpen, setCompareOpen] = React.useState(false);
+  const [wrappedOpen, setWrappedOpen] = React.useState(false);
   const finished = matches.filter((m) => m.status === 'beendet' && m.homeScore !== null && m.awayScore !== null);
   const totalGoals = finished.reduce((acc, m) => acc + (m.homeScore || 0) + (m.awayScore || 0), 0);
   const avgGoals = finished.length ? totalGoals / finished.length : 0;
@@ -320,16 +324,35 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
         ))}
       </div>
 
-      {/* Head-to-Head: zwei Spieler vergleichen */}
-      {players.length >= 2 && (
-        <div className="mt-4 flex justify-center sm:justify-end">
-          <button
-            onClick={() => setCompareOpen(true)}
-            className="group inline-flex items-center gap-2 rounded-full bg-brand-accent-light/12 border border-brand-accent-light/35 px-5 py-2.5 text-sm font-sans font-bold uppercase tracking-wider text-brand-accent-light cursor-pointer transition-all duration-200 hover:bg-brand-accent-light/20 active:scale-95"
-          >
-            <Swords className="w-4 h-4 transition-transform duration-200 group-hover:-rotate-12" />
-            Spieler vergleichen
-          </button>
+      {/* Aktionen: Season-Rückblick + Spieler-Vergleich */}
+      {(finished.length > 0 || players.length >= 2) && (
+        <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {finished.length > 0 ? (
+            <button
+              onClick={() => setWrappedOpen(true)}
+              className="group relative overflow-hidden inline-flex items-center gap-3 rounded-2xl px-5 py-3 text-left cursor-pointer transition-transform active:scale-[0.98] border border-brand-accent-light/30"
+              style={{ background: 'linear-gradient(100deg, rgba(34,223,201,.16), rgba(230,35,142,.12))' }}
+            >
+              <span className="w-9 h-9 rounded-xl grid place-items-center bg-brand-accent-light/20 text-brand-accent-light shrink-0">
+                <Sparkles className="w-5 h-5 transition-transform duration-300 group-hover:rotate-12" />
+              </span>
+              <span className="min-w-0">
+                <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">Season-Rückblick</span>
+                <span className="block text-[11px] font-sans font-semibold text-hl-mute mt-0.5">Deine Saison in Zahlen · zum Teilen</span>
+              </span>
+            </button>
+          ) : (
+            <span />
+          )}
+          {players.length >= 2 && (
+            <button
+              onClick={() => setCompareOpen(true)}
+              className="group inline-flex items-center justify-center gap-2 rounded-full bg-brand-accent-light/12 border border-brand-accent-light/35 px-5 py-2.5 text-sm font-sans font-bold uppercase tracking-wider text-brand-accent-light cursor-pointer transition-all duration-200 hover:bg-brand-accent-light/20 active:scale-95 shrink-0"
+            >
+              <Swords className="w-4 h-4 transition-transform duration-200 group-hover:-rotate-12" />
+              Spieler vergleichen
+            </button>
+          )}
         </div>
       )}
 
@@ -339,6 +362,16 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
         players={players}
         teams={teams}
         trackingRows={trackingRows}
+        scoringConfig={scoringConfig}
+      />
+      <SeasonWrapped
+        open={wrappedOpen}
+        onClose={() => setWrappedOpen(false)}
+        seasonNumber={seasonNumber}
+        seasonLabel={seasonLabel}
+        players={players}
+        matches={matches}
+        teams={teams}
         scoringConfig={scoringConfig}
       />
 
