@@ -22,6 +22,7 @@ import MatchManager from './components/MatchManager';
 import RefereeMode from './components/RefereeMode';
 import TeamDetail from './components/TeamDetail';
 import LiveBanner from './components/LiveBanner';
+import LiveMatchTakeover from './components/LiveMatchTakeover';
 import LiveTicker from './components/LiveTicker';
 import InstallPrompt from './components/InstallPrompt';
 import Ergebniszettel from './components/Ergebniszettel';
@@ -1693,6 +1694,12 @@ export default function App() {
       <div key={activeTab} className={`hl-fade ${mobileMode ? 'pb-36 lg:pb-0' : ''}`}>
       {activeTab === 'home' && (
         <>
+          <LiveMatchTakeover
+            matches={currentSeasonMatches}
+            teams={leagueTeams}
+            onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
+            onSeeAll={() => goToTab('spielplan')}
+          />
           {countdown.active && <Countdown target={countdown.target} title={countdown.title} />}
           <Hero teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} />
           <HighlightsHome

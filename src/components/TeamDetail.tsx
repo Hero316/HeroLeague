@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronDown } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Share2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Match, MatchPlayerStat, Player, PlayerStat, ScoringConfig, StatRole, Team, TeamSponsorsMap } from '../types';
 import { calculateStandings } from '../lib/standings';
@@ -8,6 +8,7 @@ import { apiFetch } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
 import BestLineup from './BestLineup';
 import FifaCard from './FifaCard';
+import { ShareSheet } from './ShareCard';
 import { TeamCrest, FormPill, MatchStatusBadge, shortDate, shade, monogram, ImageZoom, SponsorLink } from './ui';
 
 // Note-Farbe (rot → gelb → grün) relativ zur Rating-Skala.
@@ -270,6 +271,7 @@ export default function TeamDetail({
 
   // Lange „Spiele"-Liste standardmäßig eingeklappt (weniger Scrollen).
   const [showAllMatches, setShowAllMatches] = useState(false);
+  const [cardShareOpen, setCardShareOpen] = useState(false);
   // Spiele mit veröffentlichten Einzelnoten → deren Balken führen zum Spielbericht.
   const reportMatchIds = useMemo(() => new Set(trackingRows.map((r) => r.matchId)), [trackingRows]);
 
@@ -365,6 +367,12 @@ export default function TeamDetail({
                     imageUrl={sizingPlayer.imageUrl}
                     team={team}
                   />
+                  <button
+                    onClick={() => setCardShareOpen(true)}
+                    className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand-accent-light/12 border border-brand-accent-light/30 px-4 py-2 text-xs font-sans font-bold uppercase tracking-wider text-brand-accent-light cursor-pointer transition-all duration-200 hover:bg-brand-accent-light/20 active:scale-95"
+                  >
+                    <Share2 className="w-3.5 h-3.5" /> Karte teilen
+                  </button>
                 </div>
               ) : (
                 <div className="relative shrink-0 mx-auto lg:mx-0">
@@ -389,6 +397,26 @@ export default function TeamDetail({
                     </span>
                   )}
                 </div>
+              )}
+
+              {playerCardData && (
+                <ShareSheet
+                  open={cardShareOpen}
+                  onClose={() => setCardShareOpen(false)}
+                  accent={color}
+                  filename={`hero-league-${sizingPlayer.name.replace(/\s+/g, '-').toLowerCase()}.png`}
+                  shareText={`${sizingPlayer.name} · ${team.name} – meine Hero League Karte ⚽ hero-league.de`}
+                >
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ margin: '0 auto', width: '78%', maxWidth: 220 }}>
+                      <FifaCard card={playerCardData} name={sizingPlayer.name} imageUrl={sizingPlayer.imageUrl} team={team} />
+                    </div>
+                    <div style={{ marginTop: 18, fontFamily: '"Saira Condensed","Saira",sans-serif', fontWeight: 900, textTransform: 'uppercase', fontSize: 24, lineHeight: 1 }}>
+                      {sizingPlayer.name}
+                    </div>
+                    <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 4 }}>{team.name}{seasonLabel ? ` · ${seasonLabel}` : ''}</div>
+                  </div>
+                </ShareSheet>
               )}
 
               <div className="flex-1 w-full sm:w-auto min-w-0 sm:min-w-[260px]">
