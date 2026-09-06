@@ -1751,8 +1751,8 @@ export default function App() {
                 onClick={() => navigateTo('/tippspiel')}
                 className="group relative w-full overflow-hidden flex items-center gap-4 rounded-2xl px-5 py-4 text-left cursor-pointer transition-transform active:scale-[0.98] border border-white/15"
                 style={{
-                  background: 'linear-gradient(120deg, #7C3AED 0%, #A855F7 45%, #E24BD6 100%)',
-                  boxShadow: '0 14px 34px -12px rgba(168,85,247,.65)',
+                  background: 'linear-gradient(120deg, #F1541F 0%, #FF7A1A 45%, #FFB020 100%)',
+                  boxShadow: '0 14px 34px -12px rgba(255,122,26,.65)',
                 }}
               >
                 <span className="tipp-shine" aria-hidden="true" />

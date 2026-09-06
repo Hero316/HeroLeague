@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Lock, Trophy, Minus, Plus, Target, Loader2, LogOut, ShieldCheck, Clock, CalendarDays, ClipboardCheck } from 'lucide-react';
+import { ArrowLeft, Lock, Trophy, Minus, Plus, Target, Loader2, LogOut, ShieldCheck, Clock, CalendarDays, ClipboardCheck, Flame } from 'lucide-react';
 import type { Match, Team, Tip } from '../types';
 import { fetchTips, submitTip, getIdentity, clearIdentity, scoreTip, leaderboard, tipDeadline, berlinToday, TIP_POINTS, type TippIdentity } from '../lib/tips';
 import { TeamCrest, SegmentedControl } from './ui';
@@ -130,7 +130,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
     }
   };
 
-  const Crest = ({ id, size = 'md' as const }: { id: string; size?: 'sm' | 'md' | 'lg' }) => {
+  const Crest = ({ id, size = 'md' as const }: { id: string; size?: 'sm' | 'md' | 'lg' | 'xl' }) => {
     const t = teamById.get(id);
     return <TeamCrest name={t?.name || '?'} shortName={t?.shortName || ''} color={t?.logoColor || '#22DFC9'} logoUrl={t?.logoUrl} size={size} />;
   };
@@ -138,30 +138,50 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
 
   return (
     <div className="min-h-screen bg-brand-dark text-hl-text font-sans relative overflow-x-hidden">
-      {/* Kopf */}
-      <div className="relative overflow-hidden border-b border-white/8" style={{ background: 'radial-gradient(120% 100% at 50% 0%, rgba(168,85,247,.20), transparent 60%)' }}>
-        <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-5 pb-8">
+      {/* Kopf – Arcade/Scoreboard-Look */}
+      <div className="relative overflow-hidden border-b border-white/8" style={{ background: 'radial-gradient(130% 100% at 50% 0%, rgba(255,122,26,.22), transparent 62%)' }}>
+        {/* Dezentes Scoreboard-Punktmuster */}
+        <div
+          className="absolute inset-0 opacity-[0.14] pointer-events-none"
+          style={{ backgroundImage: 'radial-gradient(rgba(255,193,46,.55) 1px, transparent 1px)', backgroundSize: '15px 15px' }}
+          aria-hidden="true"
+        />
+        <div className="relative max-w-2xl mx-auto px-4 sm:px-6 pt-5 pb-8">
           <button
             onClick={() => onNavigate('/')}
             className="inline-flex items-center gap-1.5 text-xs font-sans font-bold uppercase tracking-wider text-hl-dim hover:text-white transition-colors cursor-pointer mb-5"
           >
             <ArrowLeft className="w-4 h-4" /> Startseite
           </button>
-          <div className="flex items-center gap-2.5">
-            <span className="w-11 h-11 rounded-2xl grid place-items-center bg-tipp/18 text-tipp shrink-0">
+          <div className="flex items-center gap-3">
+            <span
+              className="w-12 h-12 rounded-2xl grid place-items-center shrink-0 text-white shadow-lg"
+              style={{ background: 'linear-gradient(135deg, #F1541F, #FFB020)', boxShadow: '0 8px 22px -8px rgba(255,122,26,.7)' }}
+            >
               <Target className="w-6 h-6" />
             </span>
             <div>
-              <h1 className="font-display font-black text-3xl sm:text-4xl uppercase tracking-tight text-white leading-none">Tippspiel</h1>
-              <p className="text-sm text-hl-mute font-sans mt-1">{seasonLabel || 'Hero League'} · tippe die Ergebnisse</p>
+              <div className="text-[11px] font-sans font-black uppercase tracking-[0.22em] text-tipp">{seasonLabel || 'Hero League'}</div>
+              <h1 className="font-display font-black text-4xl sm:text-5xl uppercase tracking-tight text-white leading-[0.9]">Tippspiel</h1>
             </div>
           </div>
-          <p className="text-[13px] text-hl-mute font-sans mt-4 leading-relaxed">
-            Volltreffer <span className="text-tipp font-bold">{TIP_POINTS.exact} Punkte</span>, richtige
-            Tordifferenz <span className="text-tipp font-bold">{TIP_POINTS.diff}</span>, richtiger Sieger{' '}
-            <span className="text-tipp font-bold">{TIP_POINTS.tendency}</span>. Pro Spiel nur ein Tipp.
-            Tippschluss ist <span className="text-white font-bold">19:00 Uhr am Spieltag</span>.
+          <p className="text-sm text-hl-soft font-sans font-semibold mt-3">
+            Zeig, dass du's besser weißt – tippe die Ergebnisse &amp; klettere in der Rangliste. 🏆
           </p>
+          {/* Punkte-Regeln als Chips */}
+          <div className="flex flex-wrap gap-2 mt-4">
+            {[
+              { val: TIP_POINTS.exact, label: 'Volltreffer' },
+              { val: TIP_POINTS.diff, label: 'Tordifferenz' },
+              { val: TIP_POINTS.tendency, label: 'Sieger' },
+            ].map((r) => (
+              <span key={r.label} className="inline-flex items-center gap-1.5 rounded-full bg-tipp/12 border border-tipp/30 pl-1 pr-3 py-1">
+                <span className="w-5 h-5 rounded-full grid place-items-center bg-tipp text-white font-display font-black text-[11px] tabular-nums">{r.val}</span>
+                <span className="text-[11px] font-sans font-bold uppercase tracking-wider text-hl-soft">{r.label}</span>
+              </span>
+            ))}
+          </div>
+          <p className="text-[12px] text-hl-mute font-sans mt-3">⏱️ Tippschluss: <span className="text-white font-bold">19:00 Uhr</span> am Spieltag · pro Spiel nur ein Tipp</p>
         </div>
       </div>
 
@@ -194,7 +214,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
           <SegmentedControl
             groupId="tipp-view"
             fill
-            accent="#A855F7"
+            accent="#FF7A1A"
             value={activeView}
             onChange={(v) => setView(v)}
             options={viewTabs}
@@ -232,43 +252,63 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
                       initial={{ opacity: 0, y: 12 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.35, ease: EASE, delay: Math.min(i * 0.04, 0.3) }}
-                      className="hl-card rounded-2xl border border-white/10 p-4"
+                      className="relative overflow-hidden rounded-2xl border border-tipp/20 p-4"
+                      style={{ background: 'linear-gradient(180deg, rgba(255,122,26,.06), rgba(10,20,21,0) 55%), var(--color-brand-deep)' }}
                     >
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-hl-dim">
-                          {typeof m.field === 'number' ? `Feld ${m.field} · ` : ''}{m.time} Uhr
+                      {/* Anstoß-Chip */}
+                      <div className="flex items-center justify-center mb-3">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/5 border border-white/10 px-3 py-1 text-[10px] font-sans font-bold uppercase tracking-wider text-hl-dim">
+                          <Clock className="w-3 h-3" /> {typeof m.field === 'number' ? `Feld ${m.field} · ` : ''}{m.time} Uhr
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Crest id={m.homeTeamId} />
-                          <span className="font-display font-black uppercase tracking-tight text-white truncate">{teamName(m.homeTeamId)}</span>
+                      {/* Duell: Wappen + VS */}
+                      <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2">
+                        <div className="flex flex-col items-center gap-2 min-w-0">
+                          <Crest id={m.homeTeamId} size="xl" />
+                          <span className="font-display font-black uppercase tracking-tight text-white text-center text-[13px] leading-tight line-clamp-2">{teamName(m.homeTeamId)}</span>
                         </div>
-
-                        {mine ? (
-                          <div className="flex items-center gap-1.5 font-display font-black tabular-nums text-2xl text-tipp px-2">
-                            {mine.home}<span className="text-hl-dim">:</span>{mine.away}
-                          </div>
-                        ) : canTip ? (
-                          <div className="flex items-center gap-1.5">
-                            <Stepper value={d.home} onChange={(delta) => setDraft(m.id, 'home', delta)} />
-                            <span className="text-hl-dim font-display font-black">:</span>
-                            <Stepper value={d.away} onChange={(delta) => setDraft(m.id, 'away', delta)} />
-                          </div>
-                        ) : (
-                          <div className="font-display font-black tabular-nums text-2xl text-hl-dim px-2">–:–</div>
-                        )}
-
-                        <div className="flex items-center gap-2 min-w-0 justify-end">
-                          <span className="font-display font-black uppercase tracking-tight text-white truncate text-right">{teamName(m.awayTeamId)}</span>
-                          <Crest id={m.awayTeamId} />
+                        <div className="mt-2.5">
+                          <span className="grid place-items-center w-9 h-9 rounded-full bg-tipp/15 border border-tipp/40 font-display font-black text-tipp text-sm">VS</span>
+                        </div>
+                        <div className="flex flex-col items-center gap-2 min-w-0">
+                          <Crest id={m.awayTeamId} size="xl" />
+                          <span className="font-display font-black uppercase tracking-tight text-white text-center text-[13px] leading-tight line-clamp-2">{teamName(m.awayTeamId)}</span>
                         </div>
                       </div>
 
-                      <div className="mt-3">
+                      {/* Anzeigetafel: Ergebnis-Eingabe */}
+                      <div className="mt-4 flex items-center justify-center gap-3">
                         {mine ? (
-                          <div className="flex items-center justify-center gap-1.5 text-[12px] font-sans font-bold uppercase tracking-wider text-hl-mute">
+                          <motion.div
+                            initial={{ scale: 0.8, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                            className="flex items-center gap-3"
+                          >
+                            <LedTile value={mine.home} />
+                            <span className="font-display font-black text-2xl text-hl-dim">:</span>
+                            <LedTile value={mine.away} />
+                          </motion.div>
+                        ) : canTip ? (
+                          <>
+                            <ScoreStepper value={d.home} onChange={(delta) => setDraft(m.id, 'home', delta)} />
+                            <span className="font-display font-black text-2xl text-hl-dim">:</span>
+                            <ScoreStepper value={d.away} onChange={(delta) => setDraft(m.id, 'away', delta)} />
+                          </>
+                        ) : (
+                          <div className="flex items-center gap-3">
+                            <LedTile value="–" muted />
+                            <span className="font-display font-black text-2xl text-hl-dim">:</span>
+                            <LedTile value="–" muted />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Aktion / Status */}
+                      <div className="mt-4">
+                        {mine ? (
+                          <div className="flex items-center justify-center gap-1.5 text-[12px] font-sans font-bold uppercase tracking-wider text-tipp">
                             <Lock className="w-3.5 h-3.5" /> Dein Tipp ist abgegeben
                           </div>
                         ) : !identity ? (
@@ -281,9 +321,10 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
                           <button
                             onClick={() => send(m)}
                             disabled={busy === m.id}
-                            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-tipp px-4 py-2.5 text-sm font-sans font-black uppercase tracking-wider text-white cursor-pointer active:scale-[0.98] transition-transform disabled:opacity-60"
+                            className="w-full inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-sans font-black uppercase tracking-wider text-white cursor-pointer active:scale-[0.98] transition-transform disabled:opacity-60 shadow-lg"
+                            style={{ background: 'linear-gradient(120deg, #F1541F, #FF7A1A 55%, #FFB020)', boxShadow: '0 10px 26px -12px rgba(255,122,26,.7)' }}
                           >
-                            {busy === m.id ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Tipp abgeben'}
+                            {busy === m.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Flame className="w-4 h-4" /> Tipp abgeben</>}
                           </button>
                         )}
                         {err && <p className="text-center text-xs font-sans text-rose-300 mt-2">{err}</p>}
@@ -341,7 +382,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
               {identity && (
                 <div
                   className="mb-3 rounded-2xl border border-tipp/40 p-4 flex items-center justify-between gap-3"
-                  style={{ background: 'linear-gradient(100deg, rgba(168,85,247,.20), rgba(226,75,214,.06))' }}
+                  style={{ background: 'linear-gradient(100deg, rgba(255,122,26,.20), rgba(255,176,32,.06))' }}
                 >
                   <div className="min-w-0">
                     <div className="text-[11px] font-sans font-black uppercase tracking-wider text-tipp">
@@ -421,24 +462,29 @@ function Countdown({ open, remainingMs, date }: { open: boolean; remainingMs: nu
   );
 }
 
-function Stepper({ value, onChange }: { value: number; onChange: (delta: number) => void }) {
+// Anzeigetafel-Kachel: großes LED-artiges Zahlenfeld (für abgegebene Tipps &
+// gesperrte Spiele).
+function LedTile({ value, muted }: { value: React.ReactNode; muted?: boolean }) {
   return (
-    <div className="flex flex-col items-center gap-1">
-      <button
-        onClick={() => onChange(1)}
-        aria-label="mehr"
-        className="w-7 h-7 rounded-lg hl-surf-soft border border-white/10 text-hl-soft hover:text-white flex items-center justify-center cursor-pointer active:scale-90 transition-transform"
-      >
-        <Plus className="w-3.5 h-3.5" />
-      </button>
-      <span className="font-display font-black tabular-nums text-2xl text-white w-8 text-center leading-none">{value}</span>
-      <button
-        onClick={() => onChange(-1)}
-        aria-label="weniger"
-        className="w-7 h-7 rounded-lg hl-surf-soft border border-white/10 text-hl-soft hover:text-white flex items-center justify-center cursor-pointer active:scale-90 transition-transform"
-      >
-        <Minus className="w-3.5 h-3.5" />
-      </button>
+    <div
+      className={`w-16 h-16 rounded-2xl grid place-items-center border ${muted ? 'bg-black/25 border-white/10' : 'bg-black/50 border-tipp/45'}`}
+      style={muted ? undefined : { boxShadow: 'inset 0 0 18px rgba(255,122,26,.18)' }}
+    >
+      <span className={`font-display font-black tabular-nums text-4xl leading-none ${muted ? 'text-hl-dim' : 'text-tipp'}`}>{value}</span>
+    </div>
+  );
+}
+
+// Ergebnis-Eingabe im Scoreboard-Stil: LED-Kachel mit chunky +/- darüber/darunter.
+function ScoreStepper({ value, onChange }: { value: number; onChange: (delta: number) => void }) {
+  const btn = 'w-11 h-8 rounded-lg bg-tipp/15 border border-tipp/35 text-tipp grid place-items-center cursor-pointer active:scale-90 transition-all hover:bg-tipp/25';
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <button onClick={() => onChange(1)} aria-label="Tor mehr" className={btn}><Plus className="w-4 h-4" /></button>
+      <div className="w-16 h-16 rounded-2xl grid place-items-center bg-black/50 border border-tipp/45" style={{ boxShadow: 'inset 0 0 18px rgba(255,122,26,.18)' }}>
+        <span className="font-display font-black tabular-nums text-4xl leading-none text-tipp">{value}</span>
+      </div>
+      <button onClick={() => onChange(-1)} aria-label="Tor weniger" className={btn}><Minus className="w-4 h-4" /></button>
     </div>
   );
 }

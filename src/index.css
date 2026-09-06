@@ -28,11 +28,12 @@
   --color-hl-magenta: #E83E8C;
   --color-hl-magenta-soft: #F79AC4;
 
-  /* Tippspiel-Farbwelt („Game"-Look): Violett → Magenta, Gold für Punkte.
-     Bewusst abgesetzt vom türkisen Liga-Look, damit es wie ein eigenes Spiel wirkt. */
-  --color-tipp: #A855F7;
-  --color-tipp-deep: #7C3AED;
-  --color-tipp-bright: #E24BD6;
+  /* Tippspiel-Farbwelt („Arcade/Scoreboard"-Look): warmes Orange → Amber.
+     Bewusst abgesetzt vom türkisen Liga-Look UND vom Magenta des Testspieltags,
+     damit es wie ein eigenes Spiel wirkt und Lust aufs Tippen macht. */
+  --color-tipp: #FF7A1A;
+  --color-tipp-deep: #F1541F;
+  --color-tipp-bright: #FFC12E;
 }
 
 /* Tippspiel-Button: dezenter Licht-Sweep, damit die Taste „lebt" und auffällt. */
