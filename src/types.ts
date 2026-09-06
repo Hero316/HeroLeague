@@ -372,6 +372,18 @@ export interface PlayerStat {
 
 export type ActiveTab = 'home' | 'spielplan' | 'tabelle' | 'heroone' | 'statistiken' | 'highlights';
 
+// Ein öffentlicher Ergebnis-Tipp eines Besuchers (Tippspiel). Genau ein Tipp
+// pro Gerät (voterId) und Spiel – danach gesperrt.
+export interface Tip {
+  id: string;
+  matchId: string;
+  voterId: string;
+  voterName: string;
+  home: number;
+  away: number;
+  at: string;
+}
+
 // --- Team-Zusammenarbeit: Tickets, Aufgaben, Benachrichtigungen -------------
 
 // Mitglied des internen Teams (für Zuweisungen/Erwähnungen). Reduzierte, für

@@ -24,6 +24,7 @@ import TeamDetail from './components/TeamDetail';
 import LiveBanner from './components/LiveBanner';
 import LiveMatchTakeover from './components/LiveMatchTakeover';
 import LiveTicker from './components/LiveTicker';
+import TippspielPage from './components/TippspielPage';
 import InstallPrompt from './components/InstallPrompt';
 import Ergebniszettel from './components/Ergebniszettel';
 import LegalPage from './components/LegalPage';
@@ -44,7 +45,7 @@ import ChatApp from './components/ChatApp';
 import Avatar from './components/Avatar';
 import DeepLinkModal from './components/DeepLinkModal';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight, Target } from 'lucide-react';
 import TrackingCenter from './components/TrackingCenter';
 import SpielberichtPage from './components/SpielberichtPage';
 import WertungenPage from './components/WertungenPage';
@@ -1055,6 +1056,11 @@ export default function App() {
     return <SeasonSignup onNavigate={navigateTo} />;
   }
 
+  // ROUTE: /tippspiel – öffentliches Tippspiel (Ergebnis-Tipps + Rangliste).
+  if (currentPath.startsWith('/tippspiel')) {
+    return <TippspielPage matches={currentSeasonMatches} teams={leagueTeams} seasonLabel={currentSeasonName} onNavigate={navigateTo} />;
+  }
+
   // ROUTE: /testspiel/tickets – öffentliche Zuschauer-Ticket-Anmeldung. Muss VOR
   // dem generischen /testspiel stehen.
   if (currentPath.startsWith('/testspiel/tickets')) {
@@ -1728,6 +1734,23 @@ export default function App() {
             kicker={selectedSeasonName || 'HERO LEAGUE'}
             title="Spielplan"
           />
+          {isCurrentSeasonSelected && currentSeasonMatches.some((m) => m.status === 'geplant') && (
+            <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-4">
+              <button
+                onClick={() => navigateTo('/tippspiel')}
+                className="group w-full sm:w-auto inline-flex items-center gap-3 rounded-2xl px-5 py-3 text-left cursor-pointer transition-transform active:scale-[0.98] border border-brand-accent-light/30"
+                style={{ background: 'linear-gradient(100deg, rgba(34,223,201,.16), rgba(233,196,106,.10))' }}
+              >
+                <span className="w-9 h-9 rounded-xl grid place-items-center bg-brand-accent-light/20 text-brand-accent-light shrink-0">
+                  <Target className="w-5 h-5 transition-transform duration-200 group-hover:scale-110" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">Tippspiel</span>
+                  <span className="block text-[11px] font-sans font-semibold text-hl-mute mt-0.5">Tippe die Ergebnisse &amp; sammle Punkte</span>
+                </span>
+              </button>
+            </div>
+          )}
           {seasonSwitcher}
           {canManageMatches && (
             <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 flex justify-end pb-4">
