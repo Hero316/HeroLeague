@@ -159,9 +159,9 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
           <p className="text-[13px] text-hl-mute font-sans mt-4 leading-relaxed">
             Volltreffer <span className="text-brand-accent-light font-bold">{TIP_POINTS.exact} Punkte</span>, richtige
             Tordifferenz <span className="text-brand-accent-light font-bold">{TIP_POINTS.diff}</span>, richtiger Sieger{' '}
-            <span className="text-brand-accent-light font-bold">{TIP_POINTS.tendency}</span>. Unentschieden richtig
-            getippt = <span className="text-brand-accent-light font-bold">{TIP_POINTS.exact}</span>. Pro Spiel nur ein
-            Tipp. Tippschluss ist <span className="text-white font-bold">19:00 Uhr am Spieltag</span>.
+            <span className="text-brand-accent-light font-bold">{TIP_POINTS.tendency}</span>. Bei Unentschieden zählt nur
+            das exakte Ergebnis. Pro Spiel nur ein Tipp. Tippschluss ist{' '}
+            <span className="text-white font-bold">19:00 Uhr am Spieltag</span>.
           </p>
         </div>
       </div>
@@ -307,7 +307,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
                 const pts = scoreTip(mine, m);
                 const isExact = mine.home === m.homeScore && mine.away === m.awayScore;
                 const color = pts === 0 ? '#FF5442' : pts >= TIP_POINTS.exact ? '#43E5A0' : pts >= TIP_POINTS.diff ? '#E9C46A' : '#8FB7AE';
-                const tier = isExact ? 'Volltreffer' : pts >= TIP_POINTS.exact ? 'Remis' : pts >= TIP_POINTS.diff ? 'Tordifferenz' : pts >= TIP_POINTS.tendency ? 'Sieger' : 'Daneben';
+                const tier = isExact ? 'Volltreffer' : pts >= TIP_POINTS.diff ? 'Tordifferenz' : pts >= TIP_POINTS.tendency ? 'Sieger' : 'Daneben';
                 return (
                   <div key={m.id} className="hl-card rounded-2xl border border-white/10 p-3 flex items-center gap-3">
                     <div className="flex-1 min-w-0 flex items-center gap-2">
