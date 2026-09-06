@@ -84,7 +84,10 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
     [matches, myTips]
   );
   const board = useMemo(() => leaderboard(tips, matches), [tips, matches]);
-  const myTotalPoints = board.find((r) => r.voterId === voterId)?.points ?? 0;
+  const myBoardIndex = board.findIndex((r) => r.voterId === voterId);
+  const myRow = myBoardIndex >= 0 ? board[myBoardIndex] : null;
+  const myTotalPoints = myRow?.points ?? 0;
+  const myRank = myBoardIndex >= 0 ? myBoardIndex + 1 : null;
 
   // „Weitere Menüs" erscheinen erst, sobald es ausgewertete Ergebnisse gibt.
   const hasResults = board.length > 0;
@@ -328,6 +331,29 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
               <h2 className="flex items-center gap-2 font-display font-black text-lg uppercase tracking-tight text-white mb-3">
                 <Trophy className="w-5 h-5 text-hl-gold" /> Rangliste · Top 10
               </h2>
+
+              {/* DU: eigener Platz + Punkte, immer sichtbar (auch außerhalb Top 10) */}
+              {identity && (
+                <div
+                  className="mb-3 rounded-2xl border border-brand-accent-light/40 p-4 flex items-center justify-between gap-3"
+                  style={{ background: 'linear-gradient(100deg, rgba(34,223,201,.16), rgba(34,223,201,.04))' }}
+                >
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-sans font-black uppercase tracking-wider text-brand-accent-light">
+                      Du{myRank ? ` · Platz ${myRank}` : ''}
+                    </div>
+                    <div className="text-sm font-sans font-bold text-white truncate">{identity.displayName}</div>
+                    {myRow && myRow.exact > 0 && (
+                      <div className="text-[11px] font-sans text-hl-mute mt-0.5">{myRow.exact}× Volltreffer</div>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-display font-black tabular-nums text-3xl text-brand-accent-light leading-none">{myTotalPoints}</div>
+                    <div className="text-[10px] font-sans font-bold uppercase tracking-wider text-hl-mute mt-1">Punkte</div>
+                  </div>
+                </div>
+              )}
+
               <div className="hl-card rounded-2xl border border-white/10 overflow-hidden">
                 {board.slice(0, 10).map((r, i) => (
                   <div
