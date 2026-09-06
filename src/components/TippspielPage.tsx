@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, Lock, Trophy, Minus, Plus, Target, Loader2, LogOut, ShieldCheck, Clock, CalendarDays } from 'lucide-react';
+import { ArrowLeft, Lock, Trophy, Minus, Plus, Target, Loader2, LogOut, ShieldCheck, Clock, CalendarDays, ClipboardCheck } from 'lucide-react';
 import type { Match, Team, Tip } from '../types';
 import { fetchTips, submitTip, getIdentity, clearIdentity, scoreTip, leaderboard, tipDeadline, berlinToday, type TippIdentity } from '../lib/tips';
-import { TeamCrest } from './ui';
+import { TeamCrest, SegmentedControl } from './ui';
 import { Reveal } from './anim';
 import TippRegister from './TippRegister';
 
@@ -27,6 +27,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
   const [busy, setBusy] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [now, setNow] = useState(() => Date.now());
+  const [view, setView] = useState<'tippen' | 'rangliste' | 'meine'>('tippen');
 
   const load = () => {
     fetchTips()
@@ -84,6 +85,18 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
   );
   const board = useMemo(() => leaderboard(tips, matches), [tips, matches]);
   const myTotalPoints = board.find((r) => r.voterId === voterId)?.points ?? 0;
+
+  // „Weitere Menüs" erscheinen erst, sobald es ausgewertete Ergebnisse gibt.
+  const hasResults = board.length > 0;
+  const activeView = hasResults ? view : 'tippen';
+  const viewTabs = useMemo(() => {
+    const t: { value: 'tippen' | 'rangliste' | 'meine'; label: string; icon: typeof Target }[] = [
+      { value: 'tippen', label: 'Tippen', icon: Target },
+      { value: 'rangliste', label: 'Rangliste', icon: Trophy },
+    ];
+    if (myFinished.length > 0) t.push({ value: 'meine', label: 'Deine Tipps', icon: ClipboardCheck });
+    return t;
+  }, [myFinished.length]);
 
   const draft = (id: string) => drafts[id] ?? { home: 0, away: 0 };
   const setDraft = (id: string, side: 'home' | 'away', delta: number) =>
@@ -172,7 +185,19 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
           <TippRegister onVerified={(id) => { setIdentity(id); load(); }} />
         )}
 
+        {/* Weitere Menüs – erscheinen, sobald Ergebnisse ausgewertet sind */}
+        {hasResults && (
+          <SegmentedControl
+            groupId="tipp-view"
+            fill
+            value={activeView}
+            onChange={(v) => setView(v)}
+            options={viewTabs}
+          />
+        )}
+
         {/* Aktueller Spieltag-Abend */}
+        {activeView === 'tippen' && (
         <section>
           {loading ? (
             <div className="flex items-center justify-center py-10 text-hl-mute"><Loader2 className="w-5 h-5 animate-spin" /></div>
@@ -265,9 +290,10 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
             </>
           )}
         </section>
+        )}
 
-        {/* Meine ausgewerteten Tipps */}
-        {myFinished.length > 0 && (
+        {/* Deine ausgewerteten Tipps */}
+        {activeView === 'meine' && myFinished.length > 0 && (
           <section>
             <h2 className="font-display font-black text-lg uppercase tracking-tight text-white mb-3">Deine Auswertung</h2>
             <div className="space-y-2">
@@ -295,20 +321,25 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
           </section>
         )}
 
-        {/* Rangliste */}
-        {board.length > 0 && (
+        {/* Rangliste (Top 10) */}
+        {activeView === 'rangliste' && board.length > 0 && (
           <Reveal>
             <section>
               <h2 className="flex items-center gap-2 font-display font-black text-lg uppercase tracking-tight text-white mb-3">
-                <Trophy className="w-5 h-5 text-hl-gold" /> Rangliste
+                <Trophy className="w-5 h-5 text-hl-gold" /> Rangliste · Top 10
               </h2>
               <div className="hl-card rounded-2xl border border-white/10 overflow-hidden">
-                {board.slice(0, 20).map((r, i) => (
+                {board.slice(0, 10).map((r, i) => (
                   <div
                     key={r.voterId}
                     className={`flex items-center gap-3 px-4 py-2.5 border-b border-white/5 last:border-b-0 ${r.voterId === voterId ? 'bg-brand-accent-light/10' : ''}`}
                   >
-                    <span className="w-6 text-center font-display font-black tabular-nums text-hl-mute">{i + 1}</span>
+                    <span
+                      className="w-6 text-center font-display font-black tabular-nums text-hl-mute"
+                      style={{ color: i === 0 ? '#F4D588' : i === 1 ? '#D6DEE0' : i === 2 ? '#E0A46A' : undefined }}
+                    >
+                      {i + 1}
+                    </span>
                     <span className="flex-1 min-w-0 truncate font-sans font-semibold text-white">
                       {r.name}{r.voterId === voterId ? ' (Du)' : ''}
                     </span>
