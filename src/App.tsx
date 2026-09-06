@@ -26,6 +26,7 @@ import LiveMatchTakeover from './components/LiveMatchTakeover';
 import LiveTicker from './components/LiveTicker';
 import TippspielPage from './components/TippspielPage';
 import TippAdmin from './components/TippAdmin';
+import TippBonusAdmin from './components/TippBonusAdmin';
 import InstallPrompt from './components/InstallPrompt';
 import Ergebniszettel from './components/Ergebniszettel';
 import LegalPage from './components/LegalPage';
@@ -46,7 +47,7 @@ import ChatApp from './components/ChatApp';
 import Avatar from './components/Avatar';
 import DeepLinkModal from './components/DeepLinkModal';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight, Target } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight, Target, Star } from 'lucide-react';
 import TrackingCenter from './components/TrackingCenter';
 import SpielberichtPage from './components/SpielberichtPage';
 import WertungenPage from './components/WertungenPage';
@@ -1597,6 +1598,16 @@ export default function App() {
                         accent="#22DFC9"
                       >
                         <TippAdmin />
+                      </AccordionSection>
+                      <AccordionSection
+                        id="tipp-bonus"
+                        category="anmeldungen"
+                        title="Tippspiel – Zusatzfragen (Lösung)"
+                        subtitle="Am Saisonende die richtigen Antworten setzen · vergibt die Zusatzpunkte"
+                        icon={<Star className="w-5 h-5" />}
+                        accent="#FF7A1A"
+                      >
+                        <TippBonusAdmin teams={leagueTeams} />
                       </AccordionSection>
                       <AccordionSection
                         id="event-tickets"

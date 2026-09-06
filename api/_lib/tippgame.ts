@@ -4,7 +4,7 @@
 // Bausteine aus publicforms.ts (wie die Season-Anmeldung & Event-Tickets).
 import { createHash } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { sql, getMatches } from './db.js';
+import { sql, getMatches, getCurrentSeason } from './db.js';
 import { getSession } from './auth.js';
 import {
   checkCode, clientIp, codeBlock, isDisposableEmail, isEmail, issueCode,
@@ -208,6 +208,135 @@ export async function submitTip(req: VercelRequest, res: VercelResponse) {
     INSERT INTO settings (key, value) VALUES ('tips', ${JSON.stringify({ tips: trimmed })}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`;
   return res.json(tip);
+}
+
+// --- Saison-Zusatzfragen ----------------------------------------------------
+const BONUS_POINTS: Record<string, number> = {
+  champion: 10, place2: 5, place3: 5, heroone: 5, glove: 5, offense: 5, defense: 5, last: 5,
+};
+
+let bonusSchemaReady = false;
+async function ensureBonus(): Promise<void> {
+  if (bonusSchemaReady) return;
+  try {
+    await sql`CREATE TABLE IF NOT EXISTS tipp_bonus (
+      voter_id TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      season_id TEXT,
+      answers JSONB NOT NULL DEFAULT '{}',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`;
+    bonusSchemaReady = true;
+  } catch (err) {
+    console.error('ensureBonus:', err);
+  }
+}
+
+// Tippschluss der Zusatzfragen = 19:00 Uhr am 1. Spieltag der aktuellen Saison.
+async function bonusInfo(): Promise<{ deadlineMs: number; seasonId: string | null }> {
+  const [season, matches] = await Promise.all([getCurrentSeason(), getMatches()]);
+  const sid = season?.id ?? null;
+  const seasonMatches = sid ? matches.filter((m) => m.seasonId === sid) : matches;
+  if (seasonMatches.length === 0) return { deadlineMs: 0, seasonId: sid };
+  const firstDay = Math.min(...seasonMatches.map((m) => m.matchday));
+  const firstDate = seasonMatches.filter((m) => m.matchday === firstDay).map((m) => m.date).sort()[0];
+  return { deadlineMs: firstDate ? tipDeadline(firstDate).getTime() : 0, seasonId: sid };
+}
+
+async function getBonusSolution(): Promise<Record<string, string>> {
+  const rows = await sql`SELECT value FROM settings WHERE key = 'tipp_bonus_solution'`;
+  const v = (rows[0]?.value && typeof rows[0].value === 'object' ? rows[0].value : {}) as { answers?: Record<string, string> };
+  return v.answers && typeof v.answers === 'object' ? v.answers : {};
+}
+
+function scoreBonus(answers: Record<string, string>, solution: Record<string, string>): number {
+  let pts = 0;
+  for (const [qid, points] of Object.entries(BONUS_POINTS)) {
+    if (solution[qid] && answers[qid] && answers[qid] === solution[qid]) pts += points;
+  }
+  return pts;
+}
+
+export async function getBonus(req: VercelRequest, res: VercelResponse) {
+  await ensureBonus();
+  const email = typeof req.query.email === 'string' ? normEmail(req.query.email) : '';
+  const voterId = typeof req.query.voterId === 'string' ? req.query.voterId : '';
+  const { seasonId } = await bonusInfo();
+  const solution = await getBonusSolution();
+
+  const rows = seasonId
+    ? await sql`
+        SELECT b.voter_id AS "voterId", b.answers, b.created_at AS "createdAt", u.display_name AS "name"
+        FROM tipp_bonus b LEFT JOIN tipp_users u ON u.voter_id = b.voter_id
+        WHERE b.season_id = ${seasonId}`
+    : await sql`
+        SELECT b.voter_id AS "voterId", b.answers, b.created_at AS "createdAt", u.display_name AS "name"
+        FROM tipp_bonus b LEFT JOIN tipp_users u ON u.voter_id = b.voter_id`;
+
+  const scores = rows.map((r) => ({
+    voterId: r.voterId as string,
+    name: (r.name as string) || 'Teilnehmer',
+    points: scoreBonus((r.answers || {}) as Record<string, string>, solution),
+  }));
+
+  let mine: Record<string, string> | null = null;
+  let submittedAt: string | null = null;
+  if (email && voterId) {
+    const row = rows.find((r) => r.voterId === voterId);
+    if (row) { mine = (row.answers || {}) as Record<string, string>; submittedAt = row.createdAt as string; }
+  }
+  return res.json({ mine, submittedAt, solution, scores });
+}
+
+export async function submitBonus(req: VercelRequest, res: VercelResponse) {
+  await ensureTippUsers();
+  await ensureBonus();
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const email = typeof b.email === 'string' ? b.email.trim() : '';
+  const voterId = typeof b.voterId === 'string' ? b.voterId.slice(0, 64) : '';
+  const rawAnswers = (b.answers && typeof b.answers === 'object' ? b.answers : {}) as Record<string, unknown>;
+
+  if (!isEmail(email) || !voterId) return res.status(400).json({ error: 'Fehlende Angaben.' });
+  const name = await verifiedDisplayName(email, voterId);
+  if (!name) return res.status(403).json({ error: 'Bitte zuerst zum Tippspiel anmelden und E-Mail bestätigen.' });
+
+  const { deadlineMs, seasonId } = await bonusInfo();
+  if (!deadlineMs || Date.now() >= deadlineMs) {
+    return res.status(409).json({ error: 'Die Zusatzfragen sind geschlossen (Tippschluss war zum 1. Spieltag um 19:00 Uhr).' });
+  }
+
+  const existing = await sql`SELECT 1 FROM tipp_bonus WHERE voter_id = ${voterId} LIMIT 1`;
+  if (existing.length > 0) return res.status(409).json({ error: 'Du hast die Zusatzfragen bereits abgegeben.' });
+
+  // Nur bekannte Fragen + string-Team-IDs übernehmen.
+  const answers: Record<string, string> = {};
+  for (const qid of Object.keys(BONUS_POINTS)) {
+    const val = rawAnswers[qid];
+    if (typeof val === 'string' && val) answers[qid] = val.slice(0, 64);
+  }
+
+  await sql`
+    INSERT INTO tipp_bonus (voter_id, email, season_id, answers)
+    VALUES (${voterId}, ${normEmail(email)}, ${seasonId}, ${JSON.stringify(answers)}::jsonb)
+    ON CONFLICT (voter_id) DO NOTHING`;
+  return res.json({ ok: true, submittedAt: new Date().toISOString() });
+}
+
+export async function adminSetBonusSolution(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (session.role !== 'superadmin') return res.status(403).json({ error: 'Keine Berechtigung.' });
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const raw = (b.answers && typeof b.answers === 'object' ? b.answers : {}) as Record<string, unknown>;
+  const answers: Record<string, string> = {};
+  for (const qid of Object.keys(BONUS_POINTS)) {
+    const val = raw[qid];
+    if (typeof val === 'string' && val) answers[qid] = val.slice(0, 64);
+  }
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('tipp_bonus_solution', ${JSON.stringify({ answers })}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`;
+  return res.json({ ok: true });
 }
 
 // --- Admin: Teilnehmerliste (für Gewinner-Auswahl) -------------------------
