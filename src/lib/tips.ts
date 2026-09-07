@@ -78,6 +78,15 @@ export async function registerRequestCode(profile: RegisterProfile): Promise<{ o
   });
 }
 
+// Wieder-Einloggen (nur E-Mail): schickt einen Code an eine bereits
+// angemeldete Adresse. Danach mit registerVerify bestätigen → alle Daten zurück.
+export async function loginRequestCode(email: string, turnstileToken?: string, website?: string): Promise<{ ok: boolean; devCode?: string }> {
+  return apiFetch('/api/twitch?resource=tipp-register', {
+    method: 'POST',
+    body: JSON.stringify({ mode: 'relogin', email: email.trim(), turnstileToken, website }),
+  });
+}
+
 // Schritt 2: Code bestätigen → Identität speichern und zurückgeben.
 export async function registerVerify(email: string, code: string): Promise<TippIdentity> {
   const res = await apiFetch<{ email: string; voterId: string; displayName: string }>('/api/twitch?resource=tipp-verify', {

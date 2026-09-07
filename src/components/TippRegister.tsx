@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Mail, Loader2, ShieldCheck, ArrowLeft } from 'lucide-react';
-import { registerRequestCode, registerVerify, type TippIdentity } from '../lib/tips';
+import { Mail, Loader2, ShieldCheck, ArrowLeft, LogIn, UserPlus } from 'lucide-react';
+import { registerRequestCode, registerVerify, loginRequestCode, type TippIdentity } from '../lib/tips';
 import { fetchSignupConfig, useTurnstile } from '../lib/register';
 
 // ---------------------------------------------------------------------------
@@ -18,6 +18,7 @@ export default function TippRegister({ onVerified }: { onVerified: (id: TippIden
   }, []);
   const turnstile = useTurnstile(siteKey);
 
+  const [mode, setMode] = useState<'register' | 'login'>('register');
   const [step, setStep] = useState<'form' | 'code'>('form');
   const [vorname, setVorname] = useState('');
   const [name, setName] = useState('');
@@ -37,12 +38,31 @@ export default function TippRegister({ onVerified }: { onVerified: (id: TippIden
   const submitForm = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr('');
-    if (vorname.trim().length < 2 || name.trim().length < 2) return setErr('Bitte Vor- und Nachnamen angeben.');
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr('Bitte eine gültige E-Mail-Adresse eingeben.');
+    if (!turnstile.ready) return setErr('Bitte kurz die Bot-Prüfung abschließen.');
+
+    // Wieder-Einloggen: nur E-Mail → Code.
+    if (mode === 'login') {
+      setBusy(true);
+      try {
+        const r = await loginRequestCode(email.trim(), turnstile.token, website.current);
+        setDevCode(r.devCode ?? null);
+        setReloginNote(true);
+        setStep('code');
+      } catch (e2) {
+        setErr(e2 instanceof Error ? e2.message : 'Fehler.');
+        turnstile.reset();
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
+    // Neu anmelden: volles Profil.
+    if (vorname.trim().length < 2 || name.trim().length < 2) return setErr('Bitte Vor- und Nachnamen angeben.');
     const ageNum = Number(age);
     if (!Number.isFinite(ageNum) || ageNum < 6 || ageNum > 120) return setErr('Bitte ein gültiges Alter eingeben.');
     if (!consent) return setErr('Bitte der Datenverarbeitung zustimmen.');
-    if (!turnstile.ready) return setErr('Bitte kurz die Bot-Prüfung abschließen.');
     setBusy(true);
     try {
       const r = await registerRequestCode({
@@ -87,46 +107,78 @@ export default function TippRegister({ onVerified }: { onVerified: (id: TippIden
     >
       <div className="flex items-center gap-2 mb-1">
         <ShieldCheck className="w-5 h-5 text-tipp" />
-        <h2 className="font-display font-black text-lg uppercase tracking-tight text-white">Zum Mitspielen anmelden</h2>
+        <h2 className="font-display font-black text-lg uppercase tracking-tight text-white">
+          {mode === 'login' ? 'Wieder einloggen' : 'Zum Mitspielen anmelden'}
+        </h2>
       </div>
       <p className="text-[13px] text-hl-mute font-sans mb-4 leading-relaxed">
-        Einmalig anmelden &amp; E-Mail bestätigen – dann kannst du tippen. So bleibt das Tippspiel fair (keine Bots) und
-        bei Gewinnen erreichen wir dich sicher.
+        {mode === 'login'
+          ? 'Schon dabei? Gib nur deine E-Mail ein – wir schicken dir einen Code und du bist wieder drin. Alle deine Tipps & Punkte sind gespeichert.'
+          : 'Einmalig anmelden & E-Mail bestätigen – dann kannst du tippen. So bleibt das Tippspiel fair (keine Bots) und bei Gewinnen erreichen wir dich sicher.'}
       </p>
+
+      {/* Umschalter: Neu anmelden / Wieder einloggen */}
+      {step === 'form' && (
+        <div className="flex gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => { setMode('register'); setErr(''); }}
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-sans font-bold uppercase tracking-wider transition-colors cursor-pointer ${mode === 'register' ? 'bg-tipp text-white' : 'hl-surf-soft border border-white/10 text-hl-mute hover:text-white'}`}
+          >
+            <UserPlus className="w-3.5 h-3.5" /> Neu anmelden
+          </button>
+          <button
+            type="button"
+            onClick={() => { setMode('login'); setErr(''); }}
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-sans font-bold uppercase tracking-wider transition-colors cursor-pointer ${mode === 'login' ? 'bg-tipp text-white' : 'hl-surf-soft border border-white/10 text-hl-mute hover:text-white'}`}
+          >
+            <LogIn className="w-3.5 h-3.5" /> Schon dabei?
+          </button>
+        </div>
+      )}
 
       {step === 'form' ? (
         <form onSubmit={submitForm} className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <input value={vorname} onChange={(e) => setVorname(e.target.value)} placeholder="Vorname" className={inputCls} maxLength={40} autoComplete="given-name" />
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nachname" className={inputCls} maxLength={40} autoComplete="family-name" />
-          </div>
-          <div className="grid grid-cols-[1fr_90px] gap-3">
-            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-Mail" type="email" className={inputCls} maxLength={120} autoComplete="email" />
-            <input value={age} onChange={(e) => setAge(e.target.value.replace(/\D/g, '').slice(0, 3))} placeholder="Alter" inputMode="numeric" className={inputCls} />
-          </div>
-          <select value={foundVia} onChange={(e) => setFoundVia(e.target.value)} className={`${inputCls} cursor-pointer`}>
-            <option value="">Wie hast du von Hero League erfahren? (optional)</option>
-            {FOUND_OPTIONS.map((o) => (
-              <option key={o} value={o}>{o}</option>
-            ))}
-          </select>
-          <textarea
-            value={suggestion}
-            onChange={(e) => setSuggestion(e.target.value)}
-            placeholder="Verbesserungsvorschläge für die Hero League? (optional)"
-            rows={2}
-            maxLength={600}
-            className={`${inputCls} resize-none`}
-          />
+          {mode === 'register' && (
+            <div className="grid grid-cols-2 gap-3">
+              <input value={vorname} onChange={(e) => setVorname(e.target.value)} placeholder="Vorname" className={inputCls} maxLength={40} autoComplete="given-name" />
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nachname" className={inputCls} maxLength={40} autoComplete="family-name" />
+            </div>
+          )}
+          {mode === 'register' ? (
+            <div className="grid grid-cols-[1fr_90px] gap-3">
+              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-Mail" type="email" className={inputCls} maxLength={120} autoComplete="email" />
+              <input value={age} onChange={(e) => setAge(e.target.value.replace(/\D/g, '').slice(0, 3))} placeholder="Alter" inputMode="numeric" className={inputCls} />
+            </div>
+          ) : (
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Deine E-Mail" type="email" className={inputCls} maxLength={120} autoComplete="email" />
+          )}
+          {mode === 'register' && (
+            <>
+              <select value={foundVia} onChange={(e) => setFoundVia(e.target.value)} className={`${inputCls} cursor-pointer`}>
+                <option value="">Wie hast du von Hero League erfahren? (optional)</option>
+                {FOUND_OPTIONS.map((o) => (
+                  <option key={o} value={o}>{o}</option>
+                ))}
+              </select>
+              <textarea
+                value={suggestion}
+                onChange={(e) => setSuggestion(e.target.value)}
+                placeholder="Verbesserungsvorschläge für die Hero League? (optional)"
+                rows={2}
+                maxLength={600}
+                className={`${inputCls} resize-none`}
+              />
+              <label className="flex items-start gap-2.5 cursor-pointer select-none py-1">
+                <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 w-4 h-4 accent-tipp shrink-0" />
+                <span className="text-[12px] text-hl-mute font-sans leading-snug">
+                  Ich bin einverstanden, dass meine Daten zur Teilnahme am Tippspiel gespeichert werden.
+                </span>
+              </label>
+            </>
+          )}
           {/* Honeypot (für Menschen unsichtbar) */}
           <input tabIndex={-1} autoComplete="off" onChange={(e) => (website.current = e.target.value)} className="hidden" aria-hidden="true" />
-
-          <label className="flex items-start gap-2.5 cursor-pointer select-none py-1">
-            <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 w-4 h-4 accent-tipp shrink-0" />
-            <span className="text-[12px] text-hl-mute font-sans leading-snug">
-              Ich bin einverstanden, dass meine Daten zur Teilnahme am Tippspiel gespeichert werden.
-            </span>
-          </label>
 
           {siteKey && <div ref={turnstile.ref} className="flex justify-center" />}
           {err && <p className="text-xs font-sans text-rose-300">{err}</p>}
@@ -136,8 +188,8 @@ export default function TippRegister({ onVerified }: { onVerified: (id: TippIden
             disabled={busy}
             className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-tipp px-4 py-3 text-sm font-sans font-black uppercase tracking-wider text-white cursor-pointer active:scale-[0.98] transition-transform disabled:opacity-60"
           >
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-            Code anfordern
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : mode === 'login' ? <LogIn className="w-4 h-4" /> : <Mail className="w-4 h-4" />}
+            {mode === 'login' ? 'Login-Code anfordern' : 'Code anfordern'}
           </button>
         </form>
       ) : (

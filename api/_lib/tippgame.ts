@@ -74,6 +74,37 @@ export async function registerRequestCode(req: VercelRequest, res: VercelRespons
   const b = (req.body ?? {}) as Record<string, unknown>;
   if (typeof b.website === 'string' && b.website.trim() !== '') return res.json({ ok: true }); // Honeypot
 
+  // Reiner Wieder-Einlog-Modus: nur E-Mail nötig. Nur für bereits bestätigte
+  // Teilnehmer – schickt einen Code, ändert KEINE Daten.
+  if (b.mode === 'relogin') {
+    const email = typeof b.email === 'string' ? b.email.trim() : '';
+    if (!isEmail(email)) return badRequest(res, 'Bitte eine gültige E-Mail-Adresse eingeben.');
+    const ip = clientIp(req);
+    if (!(await verifyTurnstile(b.turnstileToken, ip))) return badRequest(res, 'Bot-Prüfung fehlgeschlagen. Bitte Seite neu laden.');
+    if (await tooManyAttempts('tipp-code', ip, 8, 15)) return res.status(429).json({ error: 'Zu viele Versuche. Bitte später erneut.' });
+    const normalized = normEmail(email);
+    const rows = await sql`SELECT verified FROM tipp_users WHERE email = ${normalized} LIMIT 1`;
+    if (rows.length === 0 || rows[0].verified !== true) {
+      return badRequest(res, 'Diese E-Mail ist noch nicht angemeldet. Bitte melde dich neu an.');
+    }
+    const result = await issueCode(PURPOSE, normalized, async (code) => {
+      await sendBrandedMail({
+        to: normalized, from: FROM,
+        subject: `Dein Login-Code: ${code}`,
+        layout: {
+          preheader: 'Dein Code, um dich wieder ins Tippspiel einzuloggen.',
+          heading: 'Wieder einloggen', accent: ACCENT, accentDark: ACCENT_DARK,
+          intro: 'Gib diesen Code ein, um dich wieder ins Hero-League-Tippspiel einzuloggen. Deine Daten & Tipps sind alle noch da:',
+          bodyHtml: codeBlock(code, ACCENT),
+          footnote: 'Der Code ist 15 Minuten gültig. Wenn du das nicht warst, ignoriere diese E-Mail.',
+        },
+        text: `Dein Login-Code fürs Hero-League-Tippspiel: ${code}\nGültig für 15 Minuten.`,
+      });
+    });
+    if (!result.ok) return badRequest(res, result.error || 'Fehler.');
+    return res.json({ ok: true, alreadyRegistered: true, ...(result.devCode ? { devCode: result.devCode } : {}) });
+  }
+
   const vorname = typeof b.vorname === 'string' ? b.vorname.trim().slice(0, 40) : '';
   const name = typeof b.name === 'string' ? b.name.trim().slice(0, 40) : '';
   const email = typeof b.email === 'string' ? b.email.trim() : '';
