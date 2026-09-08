@@ -9,14 +9,37 @@ import { apiFetch } from './api';
 
 const IDENTITY_KEY = 'hl_tipp_identity';
 
-// Tippschluss: 19:00 Uhr (Europe/Berlin) am Spieltag – als echter Zeitpunkt,
-// DST-korrekt (Sommer +02:00, Winter +01:00).
-export function tipDeadline(dateStr: string): Date {
+// Ein echter Zeitpunkt (Europe/Berlin, DST-korrekt: Sommer +02:00, Winter +01:00)
+// am Datum dateStr zur vollen Stunde hh:00.
+export function berlinInstant(dateStr: string, hh: number): Date {
   const noonUTC = new Date(`${dateStr}T12:00:00Z`);
   const berlinHour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', hour: '2-digit', hour12: false }).format(noonUTC));
   const off = berlinHour - 12; // 1 (Winter) oder 2 (Sommer)
   const sign = off >= 0 ? '+' : '-';
-  return new Date(`${dateStr}T19:00:00${sign}${String(Math.abs(off)).padStart(2, '0')}:00`);
+  return new Date(`${dateStr}T${String(hh).padStart(2, '0')}:00:00${sign}${String(Math.abs(off)).padStart(2, '0')}:00`);
+}
+
+// Tippschluss: 19:00 Uhr (Europe/Berlin) am Spieltag.
+export function tipDeadline(dateStr: string): Date {
+  return berlinInstant(dateStr, 19);
+}
+
+// Datum + n Tage (kalendarisch), Rückgabe 'YYYY-MM-DD'.
+function addDays(dateStr: string, n: number): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+// Freigabe des nächsten Spieltags: 00:00 Uhr (Europe/Berlin) am nächsten Montag
+// STRIKT nach dateStr (dem Datum des vorherigen Spieltags).
+export function mondayOpenAfter(dateStr: string): Date {
+  const noonUTC = new Date(`${dateStr}T12:00:00Z`);
+  const wd = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Berlin', weekday: 'short' }).format(noonUTC);
+  const order: Record<string, number> = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+  const idx = order[wd] ?? 0;
+  const daysToMonday = idx === 0 ? 7 : 7 - idx; // Mo→+7, Di→+6, … So→+1
+  return berlinInstant(addDays(dateStr, daysToMonday), 0);
 }
 
 // Heutiges Datum in Europe/Berlin als 'YYYY-MM-DD'.

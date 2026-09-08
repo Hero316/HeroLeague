@@ -20,8 +20,8 @@ const STAND = 'Juli 2026';
 // Version + Stand der Tippspiel-Teilnahmebedingungen. Wird beim Zustimmen
 // gespeichert – bei inhaltlichen Änderungen HOCHZÄHLEN (siehe TERMS_VERSION im
 // Backend, muss identisch sein).
-export const TIPP_TERMS_VERSION = '1.0-entwurf';
-const TIPP_TERMS_STAND = '08.09.2026 (Entwurf – wird vor dem offiziellen Start finalisiert)';
+export const TIPP_TERMS_VERSION = '1.0';
+const TIPP_TERMS_STAND = '08.09.2026';
 // ====================================================================
 
 // Kleine Bausteine für einheitliches Aussehen der Rechtstexte
@@ -234,12 +234,6 @@ function Teilnahme() {
         Diese Teilnahmebedingungen regeln das kostenlose Tippspiel der HERO League zur <b className="text-white">Season One</b>.
         Mit der Anmeldung erklärst du dich mit diesen Bedingungen einverstanden.
       </P>
-      <P>
-        <span className="text-hl-faint">
-          Hinweis: Dies ist ein Entwurf. Einzelne, unten als „wird noch festgelegt" markierte Punkte werden vor dem
-          offiziellen Start ergänzt.
-        </span>
-      </P>
 
       <H>1. Veranstalter</H>
       <P>
@@ -250,12 +244,13 @@ function Teilnahme() {
 
       <H>2. Teilnahme &amp; Anmeldung</H>
       <ul className="list-disc pl-5 space-y-1.5">
-        <L>Die Teilnahme ist kostenlos. Es besteht keine Kauf- oder Zahlungspflicht.</L>
+        <L>Die Teilnahme ist kostenlos. Es besteht keine Kauf-, Einsatz- oder Zahlungspflicht.</L>
+        <L>Teilnehmen können natürliche Personen ab <b className="text-white">13 Jahren</b> mit Wohnsitz in Deutschland. Bei Minderjährigen ist die Zustimmung der Erziehungsberechtigten erforderlich.</L>
         <L>Die Anmeldung erfolgt mit Vorname, Nachname, E-Mail-Adresse und Alter sowie einer Bestätigung der E-Mail über einen Code.</L>
         <L>Die Anmeldung kommt erst nach aktiver Zustimmung zu diesen Teilnahmebedingungen zustande.</L>
         <L>Pro Person ist nur eine Teilnahme (eine E-Mail-Adresse) zulässig. Mehrfachanmeldungen können zum Ausschluss führen.</L>
-        <L>Mindestalter und zugelassener Wohnsitz: <i>wird noch festgelegt.</i></L>
-        <L>Ob Spieler, Manager, Schiedsrichter und Organisatoren am Preiswettbewerb teilnehmen dürfen: <i>wird noch festgelegt</i> (Personen mit Zugriff auf Tipp-Daten werden vom Gewinn ausgeschlossen).</L>
+        <L>Spieler, Manager und Schiedsrichter dürfen mitspielen. Vom <b className="text-white">Gewinn ausgeschlossen</b> sind ausschließlich Personen, die technisch Zugriff auf die abgegebenen Tipps haben (Organisatoren/Super-Administratoren).</L>
+        <L>Ein Einstieg ist jederzeit während der laufenden Saison möglich. Für bereits gesperrte Spieltage und die bereits gesperrten Bonusfragen werden dann keine Punkte nachträglich vergeben.</L>
       </ul>
 
       <H>3. Ablauf &amp; Fristen</H>
@@ -263,7 +258,7 @@ function Teilnahme() {
         <L>Getippt wird das Ergebnis jeder Begegnung eines Spieltags.</L>
         <L>Alle Tipps eines Spieltags werden um <b className="text-white">exakt 19:00 Uhr</b> dieses Spieltags gesperrt – ab 19:00:00 Uhr sind keine neuen Tipps oder Änderungen mehr möglich, auch nicht für später beginnende Begegnungen.</L>
         <L>Die Bonusfragen (Saisontipps) können ausschließlich <b className="text-white">vor dem ersten Spieltag</b> beantwortet und geändert werden. Ab 19:00:00 Uhr am ersten Spieltag bleiben sie für die gesamte Saison gesperrt.</L>
-        <L>Der nächste Spieltag öffnet zur Tippabgabe erst am Montag nach dem vorherigen Spieltag (genaue Uhrzeit: <i>wird noch festgelegt</i>).</L>
+        <L>Der nächste Spieltag öffnet zur Tippabgabe jeweils am <b className="text-white">Montag um 00:00 Uhr</b> nach dem vorherigen Spieltag.</L>
         <L>Alle Fristen gelten nach deutscher Ortszeit (Europe/Berlin, inkl. Sommer-/Winterzeit). Maßgeblich ist die Serverzeit.</L>
       </ul>
 
@@ -277,40 +272,47 @@ function Teilnahme() {
         <L>Bonusfragen bringen je 5 Punkte, der Saisonsieger-Tipp 10 Punkte (aufgelöst anhand der offiziellen Abschlusswerte der Season One).</L>
       </ul>
 
-      <H>5. Rangliste &amp; Gewinn</H>
+      <H>5. Wertungszeitraum</H>
+      <P>
+        Gewertet werden alle regulären Spieltage der Season One (erster bis letzter Spieltag). Testspieltage zählen nicht
+        zur Wertung. Das Tippspiel endet automatisch mit dem letzten Spieltag der Season One.
+      </P>
+
+      <H>6. Gewinn &amp; Rangliste</H>
       <ul className="list-disc pl-5 space-y-1.5">
         <L>Es gewinnt die Person mit der höchsten Gesamtpunktzahl aus Spieltags- und Bonuspunkten.</L>
-        <L>Preis: ein Amazon.de-Gutschein im Wert von 100&nbsp;Euro.</L>
+        <L>Preis: ein Amazon.de-Gutschein im Wert von <b className="text-white">100&nbsp;Euro</b>.</L>
+        <L>Gewinnvoraussetzung ist, dass die gewinnende Person dem offiziellen HERO-League-Kanal folgt. Folgt sie nicht, rückt die nächstplatzierte Person nach (usw.).</L>
         <L>Bei Punktgleichheit an der Spitze entscheidet das Los unter den punktgleichen Erstplatzierten.</L>
-        <L>Welche Spieltage in die Wertung zählen, ob Playoffs/Finals mitzählen und wann die Wertung endet: <i>wird noch festgelegt.</i></L>
-        <L>Benachrichtigung des Gewinners, Übergabe des Gutscheins und Vorgehen bei Nichterreichbarkeit: <i>wird noch festgelegt.</i></L>
+        <L>Die Benachrichtigung erfolgt per E-Mail an die bei der Anmeldung angegebene Adresse; der Gutschein wird per E-Mail übermittelt.</L>
         <L>In der öffentlichen Rangliste werden nur ein verkürzter Anzeigename (Vorname + erster Buchstabe des Nachnamens) und die Punkte angezeigt – keine E-Mail-Adresse oder sonstige Kontaktdaten.</L>
       </ul>
 
-      <H>6. Verlegte oder ausgefallene Begegnungen</H>
+      <H>7. Spielausfälle &amp; Korrekturen</H>
       <P>
-        Verlegte, abgebrochene, ausgefallene oder administrativ gewertete Begegnungen werden anhand der offiziellen
-        Wertung der HERO League behandelt. Die genaue Regelung <i>wird noch festgelegt.</i>
+        Grundsätzlich finden alle Begegnungen wie geplant statt. Sollte eine Begegnung dennoch verlegt, abgebrochen,
+        ausgefallen oder nachträglich korrigiert werden, richtet sich die Wertung nach dem offiziellen Endergebnis der
+        HERO League; die Rangliste wird dann entsprechend neu berechnet.
       </P>
 
-      <H>7. Manipulation &amp; Ausschluss</H>
+      <H>8. Manipulation &amp; Ausschluss</H>
       <P>
         Bei Manipulationsversuchen, technischem Missbrauch, Mehrfachanmeldungen oder Verstößen gegen diese Bedingungen
-        kann der Veranstalter Teilnehmer von der Wertung ausschließen. Der Rechtsweg zur Überprüfung von
-        Ausschlussentscheidungen ist nicht ausgeschlossen; eine Auszahlung des Gewinns in bar ist ausgeschlossen.
+        kann der Veranstalter Teilnehmer von der Wertung ausschließen. Eine Auszahlung des Gewinns in bar ist
+        ausgeschlossen.
       </P>
 
-      <H>8. Datenschutz</H>
+      <H>9. Datenschutz</H>
       <P>
         Informationen zur Verarbeitung deiner personenbezogenen Daten findest du in unserer{' '}
         <a href="/datenschutz" className="text-brand-accent-light hover:underline">Datenschutzerklärung</a>. Deine
         Teilnahme ist nicht an eine Einwilligung in Werbung, Newsletter oder die Veröffentlichung von Fotos gekoppelt.
       </P>
 
-      <H>9. Sonstiges</H>
+      <H>10. Sonstiges</H>
       <ul className="list-disc pl-5 space-y-1.5">
-        <L>Dieses Tippspiel steht in keiner Verbindung zu Amazon; Amazon ist weder Sponsor noch Partner.</L>
-        <L>Der Veranstalter kann das Tippspiel bei technischen Störungen oder wichtigem Grund anpassen oder beenden.</L>
+        <L>Dieses Tippspiel steht in keiner Verbindung zu Amazon; Amazon ist weder Sponsor noch Partner und unterstützt oder verwaltet das Tippspiel nicht.</L>
+        <L>Der Veranstalter kann das Tippspiel bei technischen Störungen oder aus wichtigem Grund anpassen oder beenden.</L>
         <L>Es gilt deutsches Recht. Sollten einzelne Bestimmungen unwirksam sein, bleibt der übrige Teil wirksam.</L>
       </ul>
 

@@ -15,7 +15,7 @@ const PURPOSE = 'tipp';
 const FROM = 'Hero League – Tippspiel <tippspiel@hero-league.de>';
 // Version der Teilnahmebedingungen, der bei der Anmeldung zugestimmt wird.
 // MUSS mit TIPP_TERMS_VERSION im Frontend (LegalPage.tsx) übereinstimmen.
-const TERMS_VERSION = '1.0-entwurf';
+const TERMS_VERSION = '1.0';
 const ACCENT = '#12A594';
 const ACCENT_DARK = '#0C7A70';
 
@@ -32,13 +32,31 @@ export function deriveVoterId(email: string): string {
   return 'v-' + createHash('sha256').update(`tipp-user:${normEmail(email)}:${pepper}`).digest('hex').slice(0, 20);
 }
 
-// Tippschluss: 19:00 Uhr (Europe/Berlin) am Spieltag – DST-korrekt.
-function tipDeadline(dateStr: string): Date {
+// Zeitpunkt zur vollen Stunde in Europe/Berlin (DST-korrekt).
+function berlinInstant(dateStr: string, hh: number): Date {
   const noonUTC = new Date(`${dateStr}T12:00:00Z`);
   const berlinHour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', hour: '2-digit', hour12: false }).format(noonUTC));
   const off = berlinHour - 12;
   const sign = off >= 0 ? '+' : '-';
-  return new Date(`${dateStr}T19:00:00${sign}${String(Math.abs(off)).padStart(2, '0')}:00`);
+  return new Date(`${dateStr}T${String(hh).padStart(2, '0')}:00:00${sign}${String(Math.abs(off)).padStart(2, '0')}:00`);
+}
+// Tippschluss: 19:00 Uhr am Spieltag.
+function tipDeadline(dateStr: string): Date {
+  return berlinInstant(dateStr, 19);
+}
+function addDays(dateStr: string, n: number): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+// Freigabe: 00:00 Uhr am nächsten Montag STRIKT nach dateStr.
+function mondayOpenAfter(dateStr: string): Date {
+  const noonUTC = new Date(`${dateStr}T12:00:00Z`);
+  const wd = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Berlin', weekday: 'short' }).format(noonUTC);
+  const order: Record<string, number> = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+  const idx = order[wd] ?? 0;
+  const daysToMonday = idx === 0 ? 7 : 7 - idx;
+  return berlinInstant(addDays(dateStr, daysToMonday), 0);
 }
 
 // Anzeigename für die Rangliste: „Vorname N." (echter Name, keine Fantasienamen).
@@ -230,6 +248,16 @@ export async function submitTip(req: VercelRequest, res: VercelResponse) {
   if (match.status !== 'geplant') return res.status(409).json({ error: 'Für dieses Spiel kann nicht mehr getippt werden.' });
   if (Date.now() >= tipDeadline(match.date).getTime()) {
     return res.status(409).json({ error: 'Tippschluss war um 19:00 Uhr am Spieltag – für diesen Abend ist kein Tipp mehr möglich.' });
+  }
+  // Freigabe-Sperre: Ein Spieltag (außer dem ersten) ist erst ab 00:00 Uhr am
+  // Montag nach dem vorherigen Spieltag tippbar.
+  const seasonMatches = matches.filter((m) => m.seasonId === match.seasonId);
+  const firstMd = Math.min(...seasonMatches.map((m) => m.matchday));
+  if (match.matchday > firstMd) {
+    const prevDates = seasonMatches.filter((m) => m.matchday === match.matchday - 1).map((m) => m.date).sort();
+    if (prevDates.length > 0 && Date.now() < mondayOpenAfter(prevDates[0]).getTime()) {
+      return res.status(409).json({ error: 'Dieser Spieltag ist noch nicht zum Tippen freigegeben (Freigabe am Montag um 00:00 Uhr).' });
+    }
   }
 
   const rows = await sql`SELECT value FROM settings WHERE key = 'tips'`;

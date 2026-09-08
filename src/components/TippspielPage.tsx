@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Lock, Trophy, Minus, Plus, Target, Loader2, LogOut, ShieldCheck, Clock, CalendarDays, ClipboardCheck, Flame, ChevronDown, Star, Check, X } from 'lucide-react';
 import type { Match, Team, Tip } from '../types';
-import { fetchTips, submitTip, getIdentity, clearIdentity, scoreTip, leaderboard, tipDeadline, berlinToday, TIP_POINTS, fetchBonus, submitBonus, BONUS_QUESTIONS, BONUS_MAX, type TippIdentity, type BonusState, type BonusAnswers } from '../lib/tips';
+import { fetchTips, submitTip, getIdentity, clearIdentity, scoreTip, leaderboard, tipDeadline, mondayOpenAfter, TIP_POINTS, fetchBonus, submitBonus, BONUS_QUESTIONS, BONUS_MAX, type TippIdentity, type BonusState, type BonusAnswers } from '../lib/tips';
 import { TeamCrest, SegmentedControl } from './ui';
 import { Reveal } from './anim';
 import TippRegister from './TippRegister';
@@ -57,30 +57,42 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
   // Nur EIN Spieltag-Abend zur Zeit: der nächste noch offene Spieltag (Datum
   // heute oder später). Sobald sein Tag vorbei ist, rückt der nächste nach –
   // die Punkte aller Spieltage bleiben in der Rangliste erhalten.
-  const { activeMatches, activeMatchday, activeDate } = useMemo(() => {
-    const today = berlinToday();
+  const { activeMatches, activeMatchday, activeDate, openAtMs } = useMemo(() => {
     const geplant = matches.filter((m) => m.status === 'geplant');
-    // Spieltag -> frühestes Datum
-    const dateByDay = new Map<number, string>();
-    geplant.forEach((m) => {
-      const cur = dateByDay.get(m.matchday);
-      if (!cur || m.date < cur) dateByDay.set(m.matchday, m.date);
+    // Datum je Spieltag (aus ALLEN Spielen – auch beendeten, für die Freigabe-Berechnung).
+    const dateByDayAll = new Map<number, string>();
+    matches.forEach((m) => {
+      const cur = dateByDayAll.get(m.matchday);
+      if (!cur || m.date < cur) dateByDayAll.set(m.matchday, m.date);
     });
-    // Kandidaten: Spieltage, deren Abend heute oder in der Zukunft liegt.
-    const days = [...dateByDay.entries()]
-      .filter(([, date]) => date >= today)
+    const firstMd = matches.length ? Math.min(...matches.map((m) => m.matchday)) : null;
+    // Aktiver Spieltag = frühester noch offener Spieltag (Tippschluss 19:00 noch in der Zukunft).
+    const nowMs = Date.now();
+    const openDays = [...dateByDayAll.entries()]
+      .filter(([day]) => geplant.some((m) => m.matchday === day))
+      .filter(([, date]) => tipDeadline(date).getTime() > nowMs)
       .sort((a, b) => a[1].localeCompare(b[1]) || a[0] - b[0]);
-    if (days.length === 0) return { activeMatches: [] as Match[], activeMatchday: null as number | null, activeDate: '' };
-    const [day, date] = days[0];
+    if (openDays.length === 0) return { activeMatches: [] as Match[], activeMatchday: null as number | null, activeDate: '', openAtMs: 0 };
+    const [day, date] = openDays[0];
+    // Freigabe: erster Spieltag sofort; sonst 00:00 Uhr am Montag nach dem vorherigen Spieltag.
+    let openAt = 0;
+    if (firstMd !== null && day > firstMd) {
+      const prevDate = dateByDayAll.get(day - 1);
+      if (prevDate) openAt = mondayOpenAfter(prevDate).getTime();
+    }
     const list = geplant
       .filter((m) => m.matchday === day)
       .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`) || (a.field ?? 0) - (b.field ?? 0));
-    return { activeMatches: list, activeMatchday: day, activeDate: date };
+    return { activeMatches: list, activeMatchday: day, activeDate: date, openAtMs: openAt };
   }, [matches]);
 
   const deadlineMs = activeDate ? tipDeadline(activeDate).getTime() : 0;
-  const tipsOpen = deadlineMs > 0 && now < deadlineMs;
+  const notYetOpen = openAtMs > 0 && now < openAtMs;
+  const tipsOpen = deadlineMs > 0 && now >= openAtMs && now < deadlineMs;
   const remainingMs = Math.max(0, deadlineMs - now);
+  const openDateLabel = openAtMs
+    ? new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', weekday: 'short', day: '2-digit', month: '2-digit' }).format(new Date(openAtMs))
+    : '';
   const myFinished = useMemo(
     () =>
       matches
@@ -160,6 +172,11 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
   // Die Spiel-Liste des aktiven Spieltags (einmal gebaut, in Collapsible oder frei genutzt).
   const matchesList = (
     <div className="space-y-3">
+      {notYetOpen && (
+        <div className="rounded-xl bg-tipp/10 border border-tipp/25 px-4 py-3 text-[13px] text-hl-soft font-sans leading-snug">
+          Dieser Spieltag öffnet zum Tippen am <b className="text-white">Montag, {openDateLabel} um 00:00 Uhr</b>. Tippschluss ist dann um 19:00 Uhr am Spieltag.
+        </div>
+      )}
       {activeMatches.map((m, i) => {
         const mine = myTips.get(m.id);
         const d = draft(m.id);
@@ -228,6 +245,10 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
                 </div>
               ) : !identity ? (
                 <div className="text-center text-[12px] font-sans text-hl-mute">Melde dich oben an, um zu tippen.</div>
+              ) : notYetOpen ? (
+                <div className="flex items-center justify-center gap-1.5 text-[12px] font-sans font-bold uppercase tracking-wider text-hl-dim">
+                  <Lock className="w-3.5 h-3.5" /> Freigabe {openDateLabel}, 00:00 Uhr
+                </div>
               ) : !tipsOpen ? (
                 <div className="flex items-center justify-center gap-1.5 text-[12px] font-sans font-bold uppercase tracking-wider text-hl-dim">
                   <Lock className="w-3.5 h-3.5" /> Tippschluss (19:00 Uhr)
@@ -375,7 +396,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
                 icon={<CalendarDays className="w-5 h-5" />}
                 title={`Spieltag ${activeMatchday}`}
                 subtitle="Tippe die Ergebnisse des Abends"
-                badge={<Countdown open={tipsOpen} remainingMs={remainingMs} date={activeDate} />}
+                badge={<Countdown open={tipsOpen} remainingMs={remainingMs} date={activeDate} notYetOpen={notYetOpen} openLabel={openDateLabel} />}
               >
                 {matchesList}
               </Collapsible>
@@ -386,7 +407,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
                 <h2 className="flex items-center gap-2 font-display font-black text-lg uppercase tracking-tight text-white">
                   <CalendarDays className="w-5 h-5 text-tipp" /> Spieltag {activeMatchday}
                 </h2>
-                <Countdown open={tipsOpen} remainingMs={remainingMs} date={activeDate} />
+                <Countdown open={tipsOpen} remainingMs={remainingMs} date={activeDate} notYetOpen={notYetOpen} openLabel={openDateLabel} />
               </div>
               {matchesList}
             </>
@@ -504,7 +525,14 @@ function fmtRemaining(ms: number): string {
 }
 
 // Countdown-Pille: läuft live bis 19:00 Uhr am Spieltag runter; danach „geschlossen".
-function Countdown({ open, remainingMs, date }: { open: boolean; remainingMs: number; date: string }) {
+function Countdown({ open, remainingMs, date, notYetOpen, openLabel }: { open: boolean; remainingMs: number; date: string; notYetOpen?: boolean; openLabel?: string }) {
+  if (notYetOpen) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-white/5 border border-white/10 px-3 py-1.5 text-[11px] font-sans font-bold uppercase tracking-wider text-hl-dim">
+        <Lock className="w-3.5 h-3.5" /> Freigabe {openLabel}, 00:00
+      </span>
+    );
+  }
   if (!open) {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-white/5 border border-white/10 px-3 py-1.5 text-[11px] font-sans font-bold uppercase tracking-wider text-hl-dim">
