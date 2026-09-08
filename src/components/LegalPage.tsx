@@ -12,7 +12,7 @@ const BETREIBER = {
   name: 'Maik Schirling',
   strasse: 'Schulstraße 26',
   ort: '78647 Trossingen',
-  email: 'maikyschirling@gmail.com',
+  email: 'heroleague.de@gmail.com',
   telefon: '0173 4756557',
 };
 // Stand der Rechtstexte (bei inhaltlichen Änderungen aktualisieren)
