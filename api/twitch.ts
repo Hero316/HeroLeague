@@ -3,7 +3,7 @@ import type { EventArchive, EventMatch } from '../src/types';
 import { createEventDemo, removeEventDemo } from './_lib/eventDemo.js';
 import { sql, getTeams } from './_lib/db.js';
 import { requireStaff, requireMatchWrite, requireSuperadmin, getSession } from './_lib/auth.js';
-import { getTips, submitTip, registerRequestCode, registerVerify, adminListTippUsers, getBonus, submitBonus, adminSetBonusSolution } from './_lib/tippgame.js';
+import { getTips, submitTip, registerRequestCode, registerVerify, adminListTippUsers, getBonus, submitBonus, adminSetBonusSolution, acceptTerms } from './_lib/tippgame.js';
 
 const DEFAULT_TWITCH = { channel: '', isLive: false };
 const DEFAULT_SOCIAL = { instagram: '', tiktok: '', youtube: '' };
@@ -966,6 +966,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'tipp-verify') return registerVerify(req, res);
       if (resource === 'tipp-bonus') return submitBonus(req, res);
       if (resource === 'tipp-bonus-solution') return adminSetBonusSolution(req, res);
+      if (resource === 'tipp-accept-terms') return acceptTerms(req, res);
       return saveTwitch(req, res);
     }
     return res.status(405).json({ error: 'Nicht unterstützt' });

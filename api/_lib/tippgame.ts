@@ -217,6 +217,31 @@ async function verifiedDisplayName(email: string, voterId: string): Promise<stri
   return rows.length > 0 ? (rows[0].displayName as string) : null;
 }
 
+// Hat dieser (bestätigte) Teilnehmer der AKTUELLEN Version der
+// Teilnahmebedingungen zugestimmt?
+async function hasAcceptedTerms(email: string, voterId: string): Promise<boolean> {
+  const rows = await sql`
+    SELECT terms_version AS "termsVersion" FROM tipp_users
+    WHERE email = ${normEmail(email)} AND voter_id = ${voterId} AND verified = true LIMIT 1`;
+  return rows.length > 0 && rows[0].termsVersion === TERMS_VERSION;
+}
+
+// Nachträgliche Zustimmung (z. B. für bereits Angemeldete nach einer
+// Aktualisierung der Bedingungen).
+export async function acceptTerms(req: VercelRequest, res: VercelResponse) {
+  await ensureTippUsers();
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const email = typeof b.email === 'string' ? b.email.trim() : '';
+  const voterId = typeof b.voterId === 'string' ? b.voterId.slice(0, 64) : '';
+  if (!isEmail(email) || !voterId) return res.status(400).json({ error: 'Fehlende Angaben.' });
+  const name = await verifiedDisplayName(email, voterId);
+  if (!name) return res.status(403).json({ error: 'Bitte zuerst zum Tippspiel anmelden.' });
+  await sql`
+    UPDATE tipp_users SET terms_version = ${TERMS_VERSION}, terms_accepted_at = now()
+    WHERE email = ${normEmail(email)} AND voter_id = ${voterId}`;
+  return res.json({ ok: true, termsVersion: TERMS_VERSION });
+}
+
 // --- Tipps lesen/schreiben (in settings-JSON, wie 'game'/'event') ----------
 export async function getTips(_req: VercelRequest, res: VercelResponse) {
   const rows = await sql`SELECT value FROM settings WHERE key = 'tips'`;
@@ -238,6 +263,7 @@ export async function submitTip(req: VercelRequest, res: VercelResponse) {
   await ensureTippUsers();
   const name = await verifiedDisplayName(email, voterId);
   if (!name) return res.status(403).json({ error: 'Bitte zuerst zum Tippspiel anmelden und E-Mail bestätigen.' });
+  if (!(await hasAcceptedTerms(email, voterId))) return res.status(403).json({ error: 'Bitte akzeptiere die aktualisierten Teilnahmebedingungen, um weiter mitzuspielen.' });
 
   const home = Math.max(0, Math.min(99, Math.floor(hn)));
   const away = Math.max(0, Math.min(99, Math.floor(an)));
@@ -351,7 +377,9 @@ export async function getBonus(req: VercelRequest, res: VercelResponse) {
     const row = rows.find((r) => r.voterId === voterId);
     if (row) { mine = (row.answers || {}) as Record<string, string>; submittedAt = row.createdAt as string; }
   }
-  return res.json({ mine, submittedAt, solution, scores });
+  // Hat der aktuelle Teilnehmer der aktuellen Version der Bedingungen zugestimmt?
+  const termsAccepted = email && voterId ? await hasAcceptedTerms(email, voterId) : true;
+  return res.json({ mine, submittedAt, solution, scores, termsAccepted });
 }
 
 export async function submitBonus(req: VercelRequest, res: VercelResponse) {
@@ -365,6 +393,7 @@ export async function submitBonus(req: VercelRequest, res: VercelResponse) {
   if (!isEmail(email) || !voterId) return res.status(400).json({ error: 'Fehlende Angaben.' });
   const name = await verifiedDisplayName(email, voterId);
   if (!name) return res.status(403).json({ error: 'Bitte zuerst zum Tippspiel anmelden und E-Mail bestätigen.' });
+  if (!(await hasAcceptedTerms(email, voterId))) return res.status(403).json({ error: 'Bitte akzeptiere die aktualisierten Teilnahmebedingungen, um weiter mitzuspielen.' });
 
   const { deadlineMs, seasonId } = await bonusInfo();
   if (!deadlineMs || Date.now() >= deadlineMs) {

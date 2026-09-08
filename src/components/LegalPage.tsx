@@ -173,6 +173,14 @@ function Datenschutz() {
         Cloudflare übermittelt. Rechtsgrundlage ist unser berechtigtes Interesse an einem missbrauchsfreien Betrieb
         (Art. 6 Abs. 1 lit. f DSGVO). Für Übermittlungen in die USA bestehen Standardvertragsklauseln.
       </P>
+      <P>
+        Zur Wiedererkennung deiner Anmeldung speichern wir eine Kennung lokal in deinem Browser (localStorage). Diese
+        verlässt dein Gerät nicht und dient nur dazu, dich für das Tippspiel eingeloggt zu halten; du kannst sie durch
+        Abmelden oder Leeren der Browserdaten entfernen. Deine Zustimmung zu den Teilnahmebedingungen wird mit Zeitpunkt
+        und Dokumentversion gespeichert (Nachweis der Einwilligung). Deine Tippspiel-Daten werden weder verkauft noch an
+        Amazon oder sonstige Dritte zu Werbezwecken weitergegeben. Die Löschung deiner Tippspiel-Daten kannst du
+        jederzeit formlos per E-Mail an {BETREIBER.email} verlangen.
+      </P>
 
       <H>Kontaktaufnahme</H>
       <P>

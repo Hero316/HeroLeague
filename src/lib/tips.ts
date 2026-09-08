@@ -165,6 +165,7 @@ export interface BonusState {
   submittedAt: string | null;
   solution: BonusAnswers; // qid -> teamId (korrekt); leer, bis der Admin es setzt
   scores: { voterId: string; name: string; points: number }[];
+  termsAccepted: boolean; // hat der aktuelle Teilnehmer die aktuellen Bedingungen akzeptiert?
 }
 
 export async function fetchBonus(identity: TippIdentity | null): Promise<BonusState> {
@@ -176,7 +177,16 @@ export async function fetchBonus(identity: TippIdentity | null): Promise<BonusSt
     submittedAt: d.submittedAt ?? null,
     solution: d.solution ?? {},
     scores: Array.isArray(d.scores) ? d.scores : [],
+    termsAccepted: d.termsAccepted !== false,
   };
+}
+
+// Nachträgliche Zustimmung zu den (aktualisierten) Teilnahmebedingungen.
+export async function acceptTerms(identity: TippIdentity): Promise<{ ok: boolean }> {
+  return apiFetch('/api/twitch?resource=tipp-accept-terms', {
+    method: 'POST',
+    body: JSON.stringify({ email: identity.email, voterId: identity.voterId }),
+  });
 }
 
 export async function submitBonus(identity: TippIdentity, answers: BonusAnswers): Promise<{ ok: boolean; submittedAt: string }> {

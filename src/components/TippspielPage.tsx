@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Lock, Trophy, Minus, Plus, Target, Loader2, LogOut, ShieldCheck, Clock, CalendarDays, ClipboardCheck, Flame, ChevronDown, Star, Check, X } from 'lucide-react';
 import type { Match, Team, Tip } from '../types';
-import { fetchTips, submitTip, getIdentity, clearIdentity, scoreTip, leaderboard, tipDeadline, mondayOpenAfter, TIP_POINTS, fetchBonus, submitBonus, BONUS_QUESTIONS, BONUS_MAX, type TippIdentity, type BonusState, type BonusAnswers } from '../lib/tips';
+import { fetchTips, submitTip, getIdentity, clearIdentity, scoreTip, leaderboard, tipDeadline, mondayOpenAfter, TIP_POINTS, fetchBonus, submitBonus, acceptTerms, BONUS_QUESTIONS, BONUS_MAX, type TippIdentity, type BonusState, type BonusAnswers } from '../lib/tips';
 import { TeamCrest, SegmentedControl } from './ui';
 import { Reveal } from './anim';
 import TippRegister from './TippRegister';
@@ -29,6 +29,8 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
   const [now, setNow] = useState(() => Date.now());
   const [view, setView] = useState<'tippen' | 'rangliste' | 'meine'>('tippen');
   const [bonus, setBonus] = useState<BonusState | null>(null);
+  const [reConsent, setReConsent] = useState(false);
+  const [reConsentBusy, setReConsentBusy] = useState(false);
 
   const load = () => {
     fetchTips()
@@ -342,6 +344,41 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
           </div>
         ) : (
           <TippRegister onVerified={(id) => { setIdentity(id); load(); }} />
+        )}
+
+        {/* Nachträgliche Zustimmung: bereits Angemeldete, die die (aktualisierten)
+            Teilnahmebedingungen noch nicht akzeptiert haben. Tippen ist bis dahin
+            serverseitig gesperrt. */}
+        {identity && bonus && bonus.termsAccepted === false && (
+          <div className="rounded-2xl border border-tipp/40 p-4" style={{ background: 'linear-gradient(120deg, rgba(255,122,26,.14), rgba(255,176,32,.05))' }}>
+            <div className="flex items-center gap-2 mb-1.5">
+              <ShieldCheck className="w-5 h-5 text-tipp" />
+              <h3 className="font-display font-black text-base uppercase tracking-tight text-white">Kurz bestätigen</h3>
+            </div>
+            <p className="text-[13px] text-hl-soft font-sans mb-3 leading-relaxed">
+              Bitte akzeptiere einmalig unsere Teilnahmebedingungen, um weiter mitzuspielen. Deine Anmeldung und Tipps bleiben erhalten.
+            </p>
+            <label className="flex items-start gap-2.5 cursor-pointer select-none py-1 mb-3">
+              <input type="checkbox" checked={reConsent} onChange={(e) => setReConsent(e.target.checked)} className="mt-0.5 w-4 h-4 accent-tipp shrink-0" />
+              <span className="text-[12px] text-hl-mute font-sans leading-snug">
+                Ich habe die{' '}
+                <a href="/teilnahmebedingungen" target="_blank" rel="noopener noreferrer" className="text-tipp font-semibold hover:underline">Teilnahmebedingungen</a>{' '}
+                gelesen und akzeptiere sie. Zur Datenverarbeitung siehe{' '}
+                <a href="/datenschutz" target="_blank" rel="noopener noreferrer" className="text-tipp font-semibold hover:underline">Datenschutz</a>.
+              </span>
+            </label>
+            <button
+              onClick={async () => {
+                if (!identity || !reConsent) return;
+                setReConsentBusy(true);
+                try { await acceptTerms(identity); loadBonus(); } catch { /* Fehler ignorieren, Nutzer kann erneut tippen */ } finally { setReConsentBusy(false); }
+              }}
+              disabled={!reConsent || reConsentBusy}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-tipp px-4 py-2.5 text-sm font-sans font-black uppercase tracking-wider text-white cursor-pointer active:scale-[0.98] transition-transform disabled:opacity-50"
+            >
+              {reConsentBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Akzeptieren &amp; weiter
+            </button>
+          </div>
         )}
 
         {/* Weitere Menüs – erscheinen, sobald Ergebnisse ausgewertet sind */}
