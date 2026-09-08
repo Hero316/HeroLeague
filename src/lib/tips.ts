@@ -42,6 +42,46 @@ export function mondayOpenAfter(dateStr: string): Date {
   return berlinInstant(addDays(dateStr, daysToMonday), 0);
 }
 
+// Aktuell zum Tippen OFFENER Spieltag (freigegeben & vor Tippschluss 19:00),
+// oder null. Für die Startseiten-Erinnerung.
+export function openTippMatchday(matches: Match[]): { matchday: number; seasonId: string } | null {
+  const geplant = matches.filter((m) => m.status === 'geplant');
+  if (geplant.length === 0) return null;
+  const dateByDayAll = new Map<number, string>();
+  matches.forEach((m) => {
+    const c = dateByDayAll.get(m.matchday);
+    if (!c || m.date < c) dateByDayAll.set(m.matchday, m.date);
+  });
+  const firstMd = Math.min(...matches.map((m) => m.matchday));
+  const nowMs = Date.now();
+  const openDays = [...dateByDayAll.entries()]
+    .filter(([day]) => geplant.some((m) => m.matchday === day))
+    .filter(([, date]) => tipDeadline(date).getTime() > nowMs)
+    .sort((a, b) => a[1].localeCompare(b[1]) || a[0] - b[0]);
+  if (openDays.length === 0) return null;
+  const [day, date] = openDays[0];
+  let openAt = 0;
+  if (day > firstMd) {
+    const prev = dateByDayAll.get(day - 1);
+    if (prev) openAt = mondayOpenAfter(prev).getTime();
+  }
+  if (nowMs < openAt) return null; // noch nicht freigegeben
+  if (nowMs >= tipDeadline(date).getTime()) return null; // schon gesperrt
+  return { matchday: day, seasonId: geplant.find((m) => m.matchday === day)?.seasonId ?? '' };
+}
+
+// „Bereits gesehen"-Merker der Startseiten-Erinnerung (pro Saison + Spieltag),
+// damit sie nach dem ersten Besuch nicht mehr nervt.
+export function tippReminderKey(seasonId: string, matchday: number): string {
+  return `hl_tipp_seen:${seasonId}:${matchday}`;
+}
+export function isTippReminderSeen(key: string): boolean {
+  try { return localStorage.getItem(key) === '1'; } catch { return false; }
+}
+export function markTippReminderSeen(key: string): void {
+  try { localStorage.setItem(key, '1'); } catch { /* ignorieren */ }
+}
+
 // Heutiges Datum in Europe/Berlin als 'YYYY-MM-DD'.
 export function berlinToday(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());

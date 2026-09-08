@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Lock, Trophy, Minus, Plus, Target, Loader2, LogOut, ShieldCheck, Clock, CalendarDays, ClipboardCheck, Flame, ChevronDown, Star, Check, X } from 'lucide-react';
 import type { Match, Team, Tip } from '../types';
-import { fetchTips, submitTip, getIdentity, clearIdentity, scoreTip, leaderboard, tipDeadline, mondayOpenAfter, TIP_POINTS, fetchBonus, submitBonus, acceptTerms, BONUS_QUESTIONS, BONUS_MAX, type TippIdentity, type BonusState, type BonusAnswers } from '../lib/tips';
+import { fetchTips, submitTip, getIdentity, clearIdentity, scoreTip, leaderboard, tipDeadline, mondayOpenAfter, TIP_POINTS, fetchBonus, submitBonus, acceptTerms, tippReminderKey, markTippReminderSeen, BONUS_QUESTIONS, BONUS_MAX, type TippIdentity, type BonusState, type BonusAnswers } from '../lib/tips';
 import { TeamCrest, SegmentedControl } from './ui';
 import { Reveal } from './anim';
 import TippRegister from './TippRegister';
@@ -95,6 +95,14 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
   const openDateLabel = openAtMs
     ? new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', weekday: 'short', day: '2-digit', month: '2-digit' }).format(new Date(openAtMs))
     : '';
+
+  // Besuch der Tippspiel-Seite räumt die Startseiten-Erinnerung des offenen
+  // Spieltags ab (damit sie nicht erneut nervt).
+  useEffect(() => {
+    if (!identity || !tipsOpen || activeMatchday === null) return;
+    const sid = activeMatches[0]?.seasonId ?? '';
+    markTippReminderSeen(tippReminderKey(sid, activeMatchday));
+  }, [identity, tipsOpen, activeMatchday, activeMatches]);
   const myFinished = useMemo(
     () =>
       matches

@@ -27,6 +27,7 @@ import LiveTicker from './components/LiveTicker';
 import TippspielPage from './components/TippspielPage';
 import TippAdmin from './components/TippAdmin';
 import TippBonusAdmin from './components/TippBonusAdmin';
+import TippReminder from './components/TippReminder';
 import InstallPrompt from './components/InstallPrompt';
 import Ergebniszettel from './components/Ergebniszettel';
 import LegalPage from './components/LegalPage';
@@ -1722,6 +1723,7 @@ export default function App() {
       <div key={activeTab} className={`hl-fade ${mobileMode ? 'pb-36 lg:pb-0' : ''}`}>
       {activeTab === 'home' && (
         <>
+          <TippReminder matches={currentSeasonMatches} onOpen={() => navigateTo('/tippspiel')} />
           <LiveMatchTakeover
             matches={currentSeasonMatches}
             teams={leagueTeams}
