@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Download } from 'lucide-react';
 import { PageHeader } from './ui';
 
 // Rechtstexte: Impressum (§ 5 DDG) und Datenschutzerklärung (Art. 13 DSGVO).
@@ -242,6 +242,16 @@ function Teilnahme() {
         Diese Teilnahmebedingungen regeln das kostenlose Tippspiel der HERO League zur <b className="text-white">Season One</b>.
         Mit der Anmeldung erklärst du dich mit diesen Bedingungen einverstanden.
       </P>
+      <p className="pt-1">
+        <a
+          href="/teilnahmebedingungen-hero-league.pdf"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-accent-light/15 border border-brand-accent-light/35 px-3 py-2 text-xs font-sans font-bold uppercase tracking-wider text-brand-accent-light hover:bg-brand-accent-light/25 transition-colors"
+        >
+          <Download className="w-3.5 h-3.5" /> Als PDF herunterladen
+        </a>
+      </p>
 
       <H>1. Veranstalter</H>
       <P>
