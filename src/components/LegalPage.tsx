@@ -290,7 +290,7 @@ function Teilnahme() {
       <ul className="list-disc pl-5 space-y-1.5">
         <L>Es gewinnt die Person mit der höchsten Gesamtpunktzahl aus Spieltags- und Bonuspunkten.</L>
         <L>Preis: ein Amazon.de-Gutschein im Wert von <b className="text-white">100&nbsp;Euro</b>.</L>
-        <L>Gewinnvoraussetzung ist, dass die gewinnende Person dem offiziellen HERO-League-Kanal folgt. Folgt sie nicht, rückt die nächstplatzierte Person nach (usw.).</L>
+        <L>Gewinnvoraussetzung ist, dass die gewinnende Person mindestens einem offiziellen HERO-League-Kanal (YouTube, TikTok oder Instagram) folgt. Ist das nicht der Fall, rückt die nächstplatzierte Person nach (usw.).</L>
         <L>Bei Punktgleichheit an der Spitze entscheidet das Los unter den punktgleichen Erstplatzierten.</L>
         <L>Die Benachrichtigung erfolgt per E-Mail an die bei der Anmeldung angegebene Adresse; der Gutschein wird per E-Mail übermittelt.</L>
         <L>In der öffentlichen Rangliste werden nur ein verkürzter Anzeigename (Vorname + erster Buchstabe des Nachnamens) und die Punkte angezeigt – keine E-Mail-Adresse oder sonstige Kontaktdaten.</L>
