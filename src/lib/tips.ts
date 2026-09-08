@@ -111,6 +111,8 @@ export interface TippUser {
   verified: boolean;
   createdAt: string;
   verifiedAt: string | null;
+  termsVersion?: string | null;
+  termsAcceptedAt?: string | null;
 }
 
 export async function fetchTippUsers(): Promise<TippUser[]> {

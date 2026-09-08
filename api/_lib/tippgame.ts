@@ -13,6 +13,9 @@ import {
 
 const PURPOSE = 'tipp';
 const FROM = 'Hero League – Tippspiel <tippspiel@hero-league.de>';
+// Version der Teilnahmebedingungen, der bei der Anmeldung zugestimmt wird.
+// MUSS mit TIPP_TERMS_VERSION im Frontend (LegalPage.tsx) übereinstimmen.
+const TERMS_VERSION = '1.0-entwurf';
 const ACCENT = '#12A594';
 const ACCENT_DARK = '#0C7A70';
 
@@ -62,6 +65,9 @@ async function ensureTippUsers(): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       verified_at TIMESTAMPTZ
     )`;
+    // Nachweis der Zustimmung zu den Teilnahmebedingungen (selbstheilend).
+    await sql`ALTER TABLE tipp_users ADD COLUMN IF NOT EXISTS terms_version TEXT`;
+    await sql`ALTER TABLE tipp_users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ`;
     tippSchemaReady = true;
   } catch (err) {
     console.error('ensureTippUsers:', err);
@@ -138,11 +144,12 @@ export async function registerRequestCode(req: VercelRequest, res: VercelRespons
     // Neu oder noch unbestätigt: Profil anlegen/aktualisieren – aber nur solange
     // die E-Mail noch NICHT bestätigt ist (WHERE-Schutz gegen Überschreiben).
     await sql`
-      INSERT INTO tipp_users (email, voter_id, first_name, last_name, display_name, age, found_via, suggestion, verified)
-      VALUES (${normalized}, ${voterId}, ${vorname}, ${name}, ${dName}, ${Math.round(ageNum)}, ${foundVia || null}, ${suggestion || null}, false)
+      INSERT INTO tipp_users (email, voter_id, first_name, last_name, display_name, age, found_via, suggestion, verified, terms_version, terms_accepted_at)
+      VALUES (${normalized}, ${voterId}, ${vorname}, ${name}, ${dName}, ${Math.round(ageNum)}, ${foundVia || null}, ${suggestion || null}, false, ${TERMS_VERSION}, now())
       ON CONFLICT (email) DO UPDATE SET
         first_name = EXCLUDED.first_name, last_name = EXCLUDED.last_name, display_name = EXCLUDED.display_name,
-        age = EXCLUDED.age, found_via = EXCLUDED.found_via, suggestion = EXCLUDED.suggestion
+        age = EXCLUDED.age, found_via = EXCLUDED.found_via, suggestion = EXCLUDED.suggestion,
+        terms_version = EXCLUDED.terms_version, terms_accepted_at = EXCLUDED.terms_accepted_at
       WHERE tipp_users.verified = false
     `;
   }
@@ -379,7 +386,8 @@ export async function adminListTippUsers(req: VercelRequest, res: VercelResponse
   const rows = await sql`
     SELECT email, voter_id AS "voterId", first_name AS "firstName", last_name AS "lastName",
            display_name AS "displayName", age, found_via AS "foundVia", suggestion, verified,
-           created_at AS "createdAt", verified_at AS "verifiedAt"
+           created_at AS "createdAt", verified_at AS "verifiedAt",
+           terms_version AS "termsVersion", terms_accepted_at AS "termsAcceptedAt"
     FROM tipp_users ORDER BY created_at DESC`;
   return res.json({ users: rows });
 }

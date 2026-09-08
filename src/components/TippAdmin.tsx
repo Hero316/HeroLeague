@@ -20,11 +20,11 @@ export default function TippAdmin() {
   const verified = users.filter((u) => u.verified);
 
   const exportCsv = () => {
-    const head = ['Vorname', 'Nachname', 'E-Mail', 'Alter', 'Gefunden über', 'Bestätigt', 'Vorschlag', 'Angemeldet am'];
+    const head = ['Vorname', 'Nachname', 'E-Mail', 'Alter', 'Gefunden über', 'Bestätigt', 'Vorschlag', 'Angemeldet am', 'AGB-Version', 'AGB akzeptiert am'];
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const lines = [head.map(esc).join(',')];
     users.forEach((u) => {
-      lines.push([u.firstName, u.lastName, u.email, u.age ?? '', u.foundVia ?? '', u.verified ? 'ja' : 'nein', u.suggestion ?? '', u.createdAt].map(esc).join(','));
+      lines.push([u.firstName, u.lastName, u.email, u.age ?? '', u.foundVia ?? '', u.verified ? 'ja' : 'nein', u.suggestion ?? '', u.createdAt, u.termsVersion ?? '', u.termsAcceptedAt ?? ''].map(esc).join(','));
     });
     const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');

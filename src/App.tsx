@@ -826,9 +826,9 @@ export default function App() {
     );
   }
 
-  // ROUTE: /impressum & /datenschutz – rechtliche Pflichtseiten (aus dem Footer erreichbar)
-  if (currentPath === '/impressum' || currentPath === '/datenschutz') {
-    const kind = currentPath === '/impressum' ? 'impressum' : 'datenschutz';
+  // ROUTE: /impressum, /datenschutz & /teilnahmebedingungen – rechtliche Pflichtseiten
+  if (currentPath === '/impressum' || currentPath === '/datenschutz' || currentPath === '/teilnahmebedingungen') {
+    const kind = currentPath === '/impressum' ? 'impressum' : currentPath === '/teilnahmebedingungen' ? 'teilnahme' : 'datenschutz';
     return (
       <div className="min-h-screen text-hl-text font-sans flex flex-col">
         <PageBackground page="default" />

@@ -479,7 +479,14 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
           </Reveal>
         )}
 
-        <div className="h-8" />
+        {/* Rechtliches – immer erreichbar */}
+        <div className="pt-2 pb-8 text-center">
+          <p className="text-[11px] font-sans text-hl-dim">
+            <button onClick={() => onNavigate('/teilnahmebedingungen')} className="hover:text-tipp transition-colors cursor-pointer underline-offset-2 hover:underline">Teilnahmebedingungen</button>
+            <span className="mx-2 text-hl-faint">·</span>
+            <button onClick={() => onNavigate('/datenschutz')} className="hover:text-tipp transition-colors cursor-pointer underline-offset-2 hover:underline">Datenschutz</button>
+          </p>
+        </div>
       </div>
     </div>
   );

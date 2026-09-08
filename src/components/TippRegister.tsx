@@ -172,7 +172,10 @@ export default function TippRegister({ onVerified }: { onVerified: (id: TippIden
               <label className="flex items-start gap-2.5 cursor-pointer select-none py-1">
                 <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 w-4 h-4 accent-tipp shrink-0" />
                 <span className="text-[12px] text-hl-mute font-sans leading-snug">
-                  Ich bin einverstanden, dass meine Daten zur Teilnahme am Tippspiel gespeichert werden.
+                  Ich habe die{' '}
+                  <a href="/teilnahmebedingungen" target="_blank" rel="noopener noreferrer" className="text-tipp font-semibold hover:underline">Teilnahmebedingungen</a>{' '}
+                  für das HERO League-Tippspiel gelesen und akzeptiere sie. Zur Datenverarbeitung siehe{' '}
+                  <a href="/datenschutz" target="_blank" rel="noopener noreferrer" className="text-tipp font-semibold hover:underline">Datenschutz</a>.
                 </span>
               </label>
             </>
