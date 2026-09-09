@@ -201,7 +201,7 @@ export default function RefereeMode({
   // ---- Übersicht: Spieltag, Feld-Filter, Spiel-Liste -----------------------
   return (
     <div className="min-h-screen bg-brand-dark text-white font-sans flex flex-col">
-      <header className="sticky top-0 z-10 bg-brand-dark/95 backdrop-blur border-b border-white/10 px-4 py-3 flex items-center justify-between gap-3">
+      <header className="sticky top-0 z-10 bg-brand-dark/95 backdrop-blur border-b border-white/10 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <Shield className="w-6 h-6 text-brand-accent-light shrink-0" />
           <div className="min-w-0">
@@ -478,7 +478,7 @@ function MatchScreen({
 
   return (
     <div className="min-h-screen bg-brand-dark text-white font-sans flex flex-col">
-      <header className="sticky top-0 z-10 bg-brand-dark/95 backdrop-blur border-b border-white/10 px-4 py-3 flex items-center justify-between gap-3">
+      <header className="sticky top-0 z-10 bg-brand-dark/95 backdrop-blur border-b border-white/10 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] flex items-center justify-between gap-3">
         <button type="button" onClick={onBack} className="flex items-center gap-1.5 text-sm font-semibold text-hl-dim hover:text-white">
           <ArrowLeft className="w-5 h-5" /> Zurück
         </button>
@@ -817,7 +817,7 @@ function RosterEditor({
 
   return (
     <div className="min-h-screen bg-brand-dark text-white font-sans flex flex-col">
-      <header className="sticky top-0 z-10 bg-brand-dark/95 backdrop-blur border-b border-white/10 px-4 py-3 flex items-center justify-between gap-3">
+      <header className="sticky top-0 z-10 bg-brand-dark/95 backdrop-blur border-b border-white/10 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] flex items-center justify-between gap-3">
         <button type="button" onClick={onBack} className="flex items-center gap-1.5 text-sm font-semibold text-hl-dim hover:text-white">
           <ArrowLeft className="w-5 h-5" /> Zurück
         </button>

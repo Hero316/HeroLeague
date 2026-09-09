@@ -291,7 +291,7 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
           style={{ backgroundImage: 'radial-gradient(rgba(255,193,46,.55) 1px, transparent 1px)', backgroundSize: '15px 15px' }}
           aria-hidden="true"
         />
-        <div className="relative max-w-2xl mx-auto px-4 sm:px-6 pt-5 pb-8">
+        <div className="relative max-w-2xl mx-auto px-4 sm:px-6 pb-8" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1.25rem)' }}>
           <button
             onClick={() => onNavigate('/')}
             className="inline-flex items-center gap-1.5 text-xs font-sans font-bold uppercase tracking-wider text-hl-dim hover:text-white transition-colors cursor-pointer mb-5"
