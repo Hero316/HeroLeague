@@ -36,6 +36,11 @@
   --color-tipp-bright: #FFC12E;
 }
 
+/* Twitch-Stream: eigenes Vollbild des Wrappers (iframe + Overlay), damit das
+   selbstgebaute Scoreboard auch im Vollbild sichtbar bleibt. */
+.hl-stream:fullscreen { width: 100vw; height: 100vh; aspect-ratio: auto; background: #000; }
+.hl-stream:fullscreen iframe { width: 100%; height: 100%; }
+
 /* Tippspiel-Button: dezenter Licht-Sweep, damit die Taste „lebt" und auffällt. */
 @keyframes tippShine {
   0% { transform: translateX(-130%) skewX(-20deg); }

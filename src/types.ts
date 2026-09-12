@@ -126,6 +126,15 @@ export interface TwitchConfig {
   isLive: boolean; // manuell im Admin geschaltet
 }
 
+// Zwei parallele Twitch-Streams (Feld 1 / Feld 2) für den Testspieltag. Über
+// dem eingebetteten Bild liegt ein selbstgebautes Live-Scoreboard, das sich aus
+// dem laufenden Event-Spiel des jeweiligen Feldes speist (Teams, Tore, Minute).
+export interface StreamsConfig {
+  active: boolean; // Streams-Bereich auf der Seite anzeigen
+  field1: string; // Twitch-Kanalname Feld 1 (ohne URL)
+  field2: string; // Twitch-Kanalname Feld 2 (ohne URL)
+}
+
 export interface SocialLinks {
   instagram: string; // volle URL zum Kanal (leer = Symbol wird ausgeblendet)
   tiktok: string;

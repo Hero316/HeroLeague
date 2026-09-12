@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePolling } from './lib/usePolling';
-import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster, PlayerOfMonth, MatchPlayerStat, ScoringConfig } from './types';
+import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster, PlayerOfMonth, MatchPlayerStat, ScoringConfig, StreamsConfig } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
 import { fetchPublicStats, fetchEventStats, fetchScoring, saveEventMatch, saveEventAttendance } from './lib/stats';
 import { eventTeamsAsTeams, eventMatchesAsMatches, eventPlayers } from './lib/eventView';
@@ -28,6 +28,9 @@ import TippspielPage from './components/TippspielPage';
 import TippAdmin from './components/TippAdmin';
 import TippBonusAdmin from './components/TippBonusAdmin';
 import TippReminder from './components/TippReminder';
+import StreamStage from './components/StreamStage';
+import StreamAdmin from './components/StreamAdmin';
+import { fetchStreams } from './lib/streams';
 import InstallPrompt from './components/InstallPrompt';
 import Ergebniszettel from './components/Ergebniszettel';
 import LegalPage from './components/LegalPage';
@@ -48,7 +51,7 @@ import ChatApp from './components/ChatApp';
 import Avatar from './components/Avatar';
 import DeepLinkModal from './components/DeepLinkModal';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight, Target, Star } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight, Target, Star, Twitch } from 'lucide-react';
 import TrackingCenter from './components/TrackingCenter';
 import SpielberichtPage from './components/SpielberichtPage';
 import WertungenPage from './components/WertungenPage';
@@ -97,6 +100,7 @@ export default function App() {
   const [countdown, setCountdown] = useState<CountdownConfig>({ active: false, target: '2026-10-04T19:00', title: 'Till Season begins' });
   // Freie News fürs Laufband (im Admin gepflegt) – leer = nur automatische Ticker-Einträge
   const [news, setNews] = useState<NewsItem[]>([]);
+  const [streams, setStreams] = useState<StreamsConfig | null>(null);
   // Handy-Modus: Bottom-Dock zur Daumen-Steuerung. Pro Gerät gespeichert.
   const [mobileMode, setMobileMode] = useState<boolean>(() => {
     try {
@@ -308,6 +312,11 @@ export default function App() {
       .catch(() => {
         /* noch keine News gepflegt – Ticker zeigt nur automatische Einträge */
       });
+  }, []);
+
+  // Testspieltag-Streams (Feld 1 / Feld 2) laden – Fallback: aus.
+  useEffect(() => {
+    fetchStreams().then(setStreams).catch(() => { /* nicht konfiguriert – Bereich bleibt aus */ });
   }, []);
 
   // Spielerstatistiken hängen an der ausgewählten Saison
@@ -1274,6 +1283,7 @@ export default function App() {
                   </div>
                 </div>
               )}
+              <StreamStage streams={streams} event={previewEvent} />
               <EventPage
                 event={previewEvent}
                 teams={visibleTeams}
@@ -1578,6 +1588,19 @@ export default function App() {
                     />
                   )}
 
+                  {canManageChannels && (
+                    <AccordionSection
+                      id="streams"
+                      category="kanaele"
+                      title="Live-Streams (Testspieltag)"
+                      subtitle="Zwei Twitch-Kanäle (Feld 1 & 2) + automatisches Live-Scoreboard"
+                      icon={<Twitch className="w-5 h-5" />}
+                      accent="#9147FF"
+                    >
+                      <StreamAdmin />
+                    </AccordionSection>
+                  )}
+
                   {isSuperadmin && (
                     <>
                       <AccordionSection
@@ -1730,6 +1753,7 @@ export default function App() {
             onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
             onSeeAll={() => goToTab('spielplan')}
           />
+          <StreamStage streams={streams} event={activeEvent} />
           {countdown.active && <Countdown target={countdown.target} title={countdown.title} />}
           <Hero teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} />
           <HighlightsHome
