@@ -1,9 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Loader2, Check, Twitch } from 'lucide-react';
-import { fetchStreams, saveStreams } from '../lib/streams';
+import type { StreamsConfig } from '../types';
+import { fetchStreams, saveStreams, fetchLeagueStreams, saveLeagueStreams } from '../lib/streams';
 
-// Admin: die beiden Testspieltag-Streams (Feld 1 / Feld 2) konfigurieren.
-export default function StreamAdmin() {
+// Admin: die beiden Streams (Feld 1 / Feld 2) konfigurieren.
+// variant='event'  → Testspieltag-Kanäle (Settings-Key 'streams')
+// variant='league' → echte Liga-Kanäle   (Settings-Key 'leagueStreams')
+export default function StreamAdmin({ variant = 'event' }: { variant?: 'event' | 'league' }) {
+  const load = variant === 'league' ? fetchLeagueStreams : fetchStreams;
+  const persist: (cfg: StreamsConfig) => Promise<StreamsConfig> = variant === 'league' ? saveLeagueStreams : saveStreams;
+  const context = variant === 'league' ? 'die echte Liga' : 'den Testspieltag';
+
   const [active, setActive] = useState(false);
   const [field1, setField1] = useState('');
   const [field2, setField2] = useState('');
@@ -12,18 +19,18 @@ export default function StreamAdmin() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    fetchStreams()
+    load()
       .then((c) => { setActive(!!c.active); setField1(c.field1 || ''); setField2(c.field2 || ''); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [variant]);
 
   const save = async (nextActive?: boolean) => {
     const a = nextActive ?? active;
     setSaving(true);
     setSaved(false);
     try {
-      const c = await saveStreams({ active: a, field1: field1.trim(), field2: field2.trim() });
+      const c = await persist({ active: a, field1: field1.trim(), field2: field2.trim() });
       setActive(!!c.active); setField1(c.field1 || ''); setField2(c.field2 || '');
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
@@ -39,7 +46,7 @@ export default function StreamAdmin() {
   return (
     <div>
       <p className="text-[13px] text-hl-mute font-sans mb-4 leading-relaxed">
-        Zwei parallele Twitch-Streams für den Testspieltag (Feld 1 &amp; Feld 2). Trage nur den <b>Kanalnamen</b> ein
+        Zwei parallele Twitch-Streams für {context} (Feld 1 &amp; Feld 2). Trage nur den <b>Kanalnamen</b> ein
         (nicht die ganze URL), z. B. <span className="font-mono text-hl-soft">heroleague1</span>. Das Live-Scoreboard
         (Teams, Tore, Minute) erscheint automatisch über dem Bild, sobald der Schiedsrichter das Spiel auf dem Feld live
         schaltet.
@@ -48,7 +55,7 @@ export default function StreamAdmin() {
       <div className="flex items-center justify-between gap-3 hl-surf-soft border border-white/10 rounded-xl px-4 py-3 mb-4">
         <div className="min-w-0">
           <div className="text-sm font-sans font-bold text-white">Streams anzeigen</div>
-          <div className="text-[12px] text-hl-mute font-sans">Blendet den Live-Bereich auf Startseite &amp; Testspiel-Seite ein.</div>
+          <div className="text-[12px] text-hl-mute font-sans">Blendet den Live-Bereich auf der Startseite ein.</div>
         </div>
         <button
           onClick={() => save(!active)}

@@ -7,6 +7,9 @@ import { getTips, submitTip, registerRequestCode, registerVerify, adminListTippU
 
 const DEFAULT_TWITCH = { channel: '', isLive: false };
 const DEFAULT_STREAMS = { active: false, field1: '', field2: '' };
+// Getrennte Konfiguration für die echte Liga (eigene Twitch-Kanäle, eigener Schalter),
+// damit Liga-Streams und Testspieltag-Streams unabhängig voneinander laufen.
+const DEFAULT_LEAGUE_STREAMS = { active: false, field1: '', field2: '' };
 const DEFAULT_SOCIAL = { instagram: '', tiktok: '', youtube: '' };
 
 // Partner / Sponsoren-Logos (Sektion unten auf jeder Seite). Leere Liste =
@@ -132,6 +135,20 @@ const saveStreams = requireStaff(async (req: VercelRequest, res: VercelResponse)
   };
   await sql`
     INSERT INTO settings (key, value) VALUES ('streams', ${JSON.stringify(cfg)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+  return res.json(cfg);
+});
+
+const saveLeagueStreams = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+  const b = req.body ?? {};
+  const cfg = {
+    active: Boolean(b.active),
+    field1: normalizeChannel(b.field1),
+    field2: normalizeChannel(b.field2),
+  };
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('leagueStreams', ${JSON.stringify(cfg)}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
   `;
   return res.json(cfg);
@@ -900,6 +917,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const rows = await sql`SELECT value FROM settings WHERE key = 'streams'`;
         return res.json(rows[0]?.value ?? DEFAULT_STREAMS);
       }
+      if (resource === 'leagueStreams') {
+        const rows = await sql`SELECT value FROM settings WHERE key = 'leagueStreams'`;
+        return res.json(rows[0]?.value ?? DEFAULT_LEAGUE_STREAMS);
+      }
       if (resource === 'partners') {
         const rows = await sql`SELECT value FROM settings WHERE key = 'partners'`;
         return res.json(rows[0]?.value ?? DEFAULT_PARTNERS);
@@ -969,6 +990,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'POST') {
       if (resource === 'social') return saveSocial(req, res);
       if (resource === 'streams') return saveStreams(req, res);
+      if (resource === 'leagueStreams') return saveLeagueStreams(req, res);
       if (resource === 'partners') return savePartners(req, res);
       if (resource === 'team-sponsors') return saveTeamSponsors(req, res);
       if (resource === 'event') return saveEvent(req, res);

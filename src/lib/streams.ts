@@ -10,6 +10,15 @@ export const saveStreams = (cfg: StreamsConfig) =>
     body: JSON.stringify(cfg),
   });
 
+// Dasselbe für die echte Liga (eigene Kanäle, unabhängig vom Testspieltag).
+export const fetchLeagueStreams = () => apiFetch<StreamsConfig>('/api/twitch?resource=leagueStreams');
+
+export const saveLeagueStreams = (cfg: StreamsConfig) =>
+  apiFetch<StreamsConfig>('/api/twitch?resource=leagueStreams', {
+    method: 'POST',
+    body: JSON.stringify(cfg),
+  });
+
 // Twitch-Player-Einbettung. `parent` muss der Host der einbettenden Seite sein –
 // wir nehmen ihn dynamisch aus window.location, damit es auf hero-league.de,
 // dev.hero-league.de und localhost gleichermaßen funktioniert.

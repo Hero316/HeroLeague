@@ -28,9 +28,9 @@ import TippspielPage from './components/TippspielPage';
 import TippAdmin from './components/TippAdmin';
 import TippBonusAdmin from './components/TippBonusAdmin';
 import TippReminder from './components/TippReminder';
-import StreamStage from './components/StreamStage';
+import StreamStage, { LeagueStreamStage } from './components/StreamStage';
 import StreamAdmin from './components/StreamAdmin';
-import { fetchStreams } from './lib/streams';
+import { fetchStreams, fetchLeagueStreams } from './lib/streams';
 import InstallPrompt from './components/InstallPrompt';
 import Ergebniszettel from './components/Ergebniszettel';
 import LegalPage from './components/LegalPage';
@@ -101,6 +101,7 @@ export default function App() {
   // Freie News fürs Laufband (im Admin gepflegt) – leer = nur automatische Ticker-Einträge
   const [news, setNews] = useState<NewsItem[]>([]);
   const [streams, setStreams] = useState<StreamsConfig | null>(null);
+  const [leagueStreams, setLeagueStreams] = useState<StreamsConfig | null>(null);
   // Handy-Modus: Bottom-Dock zur Daumen-Steuerung. Pro Gerät gespeichert.
   const [mobileMode, setMobileMode] = useState<boolean>(() => {
     try {
@@ -317,6 +318,7 @@ export default function App() {
   // Testspieltag-Streams (Feld 1 / Feld 2) laden – Fallback: aus.
   useEffect(() => {
     fetchStreams().then(setStreams).catch(() => { /* nicht konfiguriert – Bereich bleibt aus */ });
+    fetchLeagueStreams().then(setLeagueStreams).catch(() => { /* nicht konfiguriert – Bereich bleibt aus */ });
   }, []);
 
   // Spielerstatistiken hängen an der ausgewählten Saison
@@ -926,6 +928,59 @@ export default function App() {
     );
   }
 
+  // ROUTE: /streams – beide Twitch-Felder untereinander, je eigener Ton-Schalter
+  if (currentPath.startsWith('/streams')) {
+    const anyStreams = !!(streams?.active && (streams.field1?.trim() || streams.field2?.trim()))
+      || !!(leagueStreams?.active && (leagueStreams.field1?.trim() || leagueStreams.field2?.trim()));
+    return (
+      <div className="min-h-screen text-hl-text font-sans flex flex-col overflow-x-clip">
+        <PageBackground page="heroone" />
+        {renderMobileDock()}
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={goToTab}
+          isAdmin={isAdmin}
+          canAccessBackoffice={canAccessBackoffice}
+          onLogout={handleLogout}
+          onOpenLogin={() => navigateTo('/admin')}
+          onOpenBackoffice={() => navigateTo('/admin')} onOpenChat={canUseTeamApp ? () => navigateTo('/chat') : undefined}
+          onOpenReferee={(canManageMatches || isReferee) ? () => navigateTo('/schiedsrichter') : undefined}
+          demoActive={demo.active}
+          seasonLabel={selectedSeasonName}
+          seasonNumber={currentSeasonNumber}
+          hasLiveMatch={hasLiveMatch}
+          eventActive={!!activeEvent}
+          eventTitle={activeEvent?.title}
+          onOpenEvent={() => navigateTo('/testspiel')}
+          hasHighlights={hasHighlights}
+          mobileMode={mobileMode}
+          onToggleMobileMode={toggleMobileMode}
+          teams={visibleTeams}
+          matches={currentSeasonMatches}
+          onSelectTeam={openTeamDetail}
+          onGoToMatchday={goToMatchday}
+          albums={highlights.albums}
+          onOpenAlbum={openHighlightsAlbum}
+        />
+        <main className="flex-1">
+          <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pt-4">
+            <button onClick={goBack} className="inline-flex items-center gap-1.5 text-xs font-sans font-bold uppercase tracking-wider text-hl-mute hover:text-white cursor-pointer active:scale-95 transition-all">
+              <ArrowLeft className="w-3.5 h-3.5" /> Zurück
+            </button>
+          </div>
+          <StreamStage streams={streams} event={activeEvent} mode="page" />
+          <LeagueStreamStage streams={leagueStreams} teams={leagueTeams} matches={currentSeasonMatches} mode="page" />
+          {!anyStreams && (
+            <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 py-16 text-center">
+              <p className="text-hl-mute font-sans">Aktuell läuft kein Stream. Sobald es losgeht, siehst du hier beide Felder.</p>
+            </div>
+          )}
+        </main>
+        <Footer onNavigate={goToTab} onNavigatePath={navigateTo} />
+      </div>
+    );
+  }
+
   // ROUTE: /spiel/:id – öffentlicher Spielbericht (Einzelnoten aus getrackten Daten)
   if (currentPath.startsWith('/spiel/')) {
     const matchId = decodeURIComponent(currentPath.slice('/spiel/'.length).replace(/\/+$/, ''));
@@ -1283,7 +1338,7 @@ export default function App() {
                   </div>
                 </div>
               )}
-              <StreamStage streams={streams} event={previewEvent} />
+              <StreamStage streams={streams} event={previewEvent} mode="page" />
               <EventPage
                 event={previewEvent}
                 teams={visibleTeams}
@@ -1597,7 +1652,20 @@ export default function App() {
                       icon={<Twitch className="w-5 h-5" />}
                       accent="#9147FF"
                     >
-                      <StreamAdmin />
+                      <StreamAdmin variant="event" />
+                    </AccordionSection>
+                  )}
+
+                  {canManageChannels && (
+                    <AccordionSection
+                      id="league-streams"
+                      category="kanaele"
+                      title="Live-Streams (Liga)"
+                      subtitle="Eigene Twitch-Kanäle für den echten Ligabetrieb (Feld 1 & 2)"
+                      icon={<Twitch className="w-5 h-5" />}
+                      accent="#9147FF"
+                    >
+                      <StreamAdmin variant="league" />
                     </AccordionSection>
                   )}
 
@@ -1753,7 +1821,8 @@ export default function App() {
             onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
             onSeeAll={() => goToTab('spielplan')}
           />
-          <StreamStage streams={streams} event={activeEvent} />
+          <StreamStage streams={streams} event={activeEvent} mode="home" onOpenFull={() => navigateTo('/streams')} />
+          <LeagueStreamStage streams={leagueStreams} teams={leagueTeams} matches={currentSeasonMatches} mode="home" onOpenFull={() => navigateTo('/streams')} />
           {countdown.active && <Countdown target={countdown.target} title={countdown.title} />}
           <Hero teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} />
           <HighlightsHome

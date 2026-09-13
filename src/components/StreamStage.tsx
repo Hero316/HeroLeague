@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Radio, ExternalLink, Maximize2, Twitch } from 'lucide-react';
-import type { EventConfig, EventMatch, Player, StreamsConfig } from '../types';
+import { Radio, ExternalLink, Maximize2, Twitch, Volume2, VolumeX, MonitorPlay } from 'lucide-react';
+import type { EventConfig, Match, Player, StreamsConfig, Team } from '../types';
 import { twitchPlayerSrc, twitchChannelUrl } from '../lib/streams';
 import { LiveBadge } from './ui';
 
@@ -10,11 +10,28 @@ import { LiveBadge } from './ui';
 //  • oben links: Live-Scoreboard (Teams, Tore, Minute) – sobald der Schiri live macht
 //  • Tor-Einblendung mit Foto des Torschützen (animiert), wenn ein Tor fällt
 //  • kurzer Aufstellungs-Durchlauf unten beim Anpfiff
-// Alles aus den Live-Daten des laufenden Event-Spiels. Anschauen & Vollbild vor Ort;
-// „Auf Twitch öffnen" führt zum Interagieren/Chatten zu Twitch.
+// Zwei Anwendungsfälle über dieselbe Anzeige-Maschine:
+//  • Testspieltag  → <StreamStage>        (Daten aus dem Event-Archiv)
+//  • echte Liga    → <LeagueStreamStage>  (Daten aus den echten Liga-Spielen)
+// Beide reichen ein normalisiertes Live-Spiel (`LiveStreamMatch`) hinein – Event
+// nutzt Team-NAMEN, die Liga Team-IDs; die Adapter unten gleichen das an.
+// Anschauen & Vollbild vor Ort; „Auf Twitch öffnen" führt zum Interagieren zu Twitch.
 // ---------------------------------------------------------------------------
 
 const PURPLE = '#9147FF';
+
+// Vereinheitlichtes Live-Spiel für die Overlays – team = ANZEIGENAME.
+export interface LiveStreamMatch {
+  id: string;
+  home: string;
+  away: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  liveStartedAt?: string | null;
+  durationMinutes?: number | null;
+  pausedAt?: string | null;
+  scorers: { player: string; team: string }[];
+}
 
 function initials(name: string): string {
   const p = name.trim().split(/\s+/);
@@ -32,7 +49,7 @@ function Avatar({ name, imageUrl, size = 40 }: { name: string; imageUrl?: string
 }
 
 // Live-Scoreboard oben links.
-function Scoreboard({ match }: { match: EventMatch }) {
+function Scoreboard({ match }: { match: LiveStreamMatch }) {
   return (
     <div className="absolute top-0 left-0 p-2 sm:p-3 pointer-events-none z-10">
       <motion.div
@@ -135,7 +152,7 @@ function LineupFlyby({ homeTeam, awayTeam, homePlayers, awayPlayers }: { homeTea
   );
 }
 
-function StreamCard({ field, channel, liveMatch, rosterByTeam }: { field: number; channel: string; liveMatch: EventMatch | null; rosterByTeam: Map<string, Player[]> }) {
+function StreamCard({ field, channel, liveMatch, rosterByTeam, muted, onToggleAudio }: { field: number; channel: string; liveMatch: LiveStreamMatch | null; rosterByTeam: Map<string, Player[]>; muted: boolean; onToggleAudio?: () => void }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const prevId = useRef<string | null>(null);
   const prevScorers = useRef(0);
@@ -200,7 +217,7 @@ function StreamCard({ field, channel, liveMatch, rosterByTeam }: { field: number
       <div ref={wrapRef} className="hl-stream relative w-full aspect-video bg-black">
         <iframe
           title={`Twitch Feld ${field}`}
-          src={twitchPlayerSrc(channel, { muted: true, autoplay: true })}
+          src={twitchPlayerSrc(channel, { muted, autoplay: true })}
           className="absolute inset-0 w-full h-full"
           allowFullScreen
           allow="autoplay; fullscreen; picture-in-picture"
@@ -222,7 +239,17 @@ function StreamCard({ field, channel, liveMatch, rosterByTeam }: { field: number
         <AnimatePresence>{goal && <GoalCard key={`goal-${goal.name}`} name={goal.name} team={goal.team} imageUrl={goal.imageUrl} />}</AnimatePresence>
       </div>
 
-      <div className="flex items-center gap-2 px-3 py-2.5">
+      <div className="flex items-center gap-2 px-3 py-2.5 flex-wrap">
+        {onToggleAudio && (
+          <button
+            onClick={onToggleAudio}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-sans font-black uppercase tracking-wider cursor-pointer active:scale-95 transition-all border ${muted ? 'hl-surf-soft border-white/10 text-hl-mute hover:text-white' : 'border-transparent text-[#04120d]'}`}
+            style={muted ? undefined : { background: 'var(--color-brand-accent-light, #22DFC9)' }}
+          >
+            {muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+            {muted ? 'Ton an' : 'Ton aus'}
+          </button>
+        )}
         <a href={twitchChannelUrl(channel)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-sans font-bold uppercase tracking-wider text-white cursor-pointer active:scale-95 transition-transform" style={{ background: PURPLE }}>
           <ExternalLink className="w-3.5 h-3.5" /> Auf Twitch öffnen
         </a>
@@ -234,21 +261,34 @@ function StreamCard({ field, channel, liveMatch, rosterByTeam }: { field: number
   );
 }
 
-export default function StreamStage({ streams, event }: { streams: StreamsConfig | null; event: EventConfig | null }) {
-  const rosterByTeam = useMemo(() => {
-    const m = new Map<string, Player[]>();
-    event?.rosters?.forEach((r) => m.set(r.team, r.players ?? []));
-    return m;
-  }, [event]);
+// Gemeinsame Anzeige-Maschine für beide Anwendungsfälle.
+//  • mode='home' → nur Feld 1 (stumm) auf der Startseite + Knopf zur Stream-Seite
+//  • mode='page' → alle Felder untereinander, je eigener Ton-Schalter (nur einer an)
+function Stage({ streams, subtitle, rosterByTeam, liveOn, mode = 'home', onOpenFull }: {
+  streams: StreamsConfig | null;
+  subtitle: string;
+  rosterByTeam: Map<string, Player[]>;
+  liveOn: (field: number) => LiveStreamMatch | null;
+  mode?: 'home' | 'page';
+  onOpenFull?: () => void;
+}) {
+  const allFields = useMemo(() => {
+    const list: { field: number; channel: string }[] = [];
+    if (streams?.field1.trim()) list.push({ field: 1, channel: streams.field1.trim() });
+    if (streams?.field2.trim()) list.push({ field: 2, channel: streams.field2.trim() });
+    return list;
+  }, [streams?.field1, streams?.field2]);
 
-  if (!streams?.active) return null;
-  const fields: { field: number; channel: string }[] = [];
-  if (streams.field1.trim()) fields.push({ field: 1, channel: streams.field1.trim() });
-  if (streams.field2.trim()) fields.push({ field: 2, channel: streams.field2.trim() });
-  if (fields.length === 0) return null;
+  // Welches Feld hat auf der Stream-Seite gerade Ton? (immer nur eins gleichzeitig).
+  // Start: alles stumm – so spielt der Autoplay zuverlässig, der Besucher tippt
+  // dann bei einem Feld „Ton an" (echte Nutzer-Geste, kein Ton-Durcheinander).
+  const [audioField, setAudioField] = useState<number | null>(null);
 
-  const liveOn = (field: number): EventMatch | null =>
-    event?.matches?.find((mm) => mm.field === field && mm.status === 'live') ?? null;
+  if (!streams?.active || allFields.length === 0) return null;
+
+  // Startseite: nur das erste Feld, stumm; darunter ein Knopf zur vollen Ansicht.
+  const shownFields = mode === 'home' ? allFields.slice(0, 1) : allFields;
+  const hasMore = mode === 'home' && allFields.length > 1;
 
   return (
     <div className="relative border-b border-white/8" style={{ background: `radial-gradient(120% 100% at 50% 0%, ${PURPLE}22, transparent 62%), #070510` }}>
@@ -256,14 +296,95 @@ export default function StreamStage({ streams, event }: { streams: StreamsConfig
         <div className="flex items-center gap-2.5 mb-4">
           <Radio className="w-5 h-5" style={{ color: PURPLE }} />
           <h2 className="font-display font-black uppercase tracking-tight text-white text-xl sm:text-2xl">Live auf Twitch</h2>
-          <span className="text-[11px] font-sans font-semibold text-hl-mute hidden sm:inline">· beide Felder gleichzeitig</span>
+          <span className="text-[11px] font-sans font-semibold text-hl-mute hidden sm:inline">· {subtitle}</span>
         </div>
-        <div className={`grid gap-4 ${fields.length > 1 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1 max-w-3xl'}`}>
-          {fields.map((f) => (
-            <StreamCard key={f.field} field={f.field} channel={f.channel} liveMatch={liveOn(f.field)} rosterByTeam={rosterByTeam} />
+
+        <div className={mode === 'page' ? 'space-y-5 max-w-4xl' : 'grid grid-cols-1 max-w-3xl gap-4'}>
+          {shownFields.map((f) => (
+            <StreamCard
+              key={f.field}
+              field={f.field}
+              channel={f.channel}
+              liveMatch={liveOn(f.field)}
+              rosterByTeam={rosterByTeam}
+              muted={mode === 'page' ? audioField !== f.field : true}
+              onToggleAudio={mode === 'page' ? () => setAudioField((cur) => (cur === f.field ? null : f.field)) : undefined}
+            />
           ))}
         </div>
+
+        {hasMore && onOpenFull && (
+          <button
+            onClick={onOpenFull}
+            className="mt-4 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-sans font-black uppercase tracking-wider text-white cursor-pointer active:scale-[0.98] transition-transform shadow-[0_10px_30px_-10px_rgba(145,71,255,.8)]"
+            style={{ background: PURPLE }}
+          >
+            <MonitorPlay className="w-4 h-4" /> Beide Felder ansehen
+          </button>
+        )}
       </div>
     </div>
   );
+}
+
+// --- Adapter: Testspieltag (Event-Archiv, Team-Namen) --------------------------
+export default function StreamStage({ streams, event, mode = 'home', onOpenFull }: { streams: StreamsConfig | null; event: EventConfig | null; mode?: 'home' | 'page'; onOpenFull?: () => void }) {
+  const rosterByTeam = useMemo(() => {
+    const m = new Map<string, Player[]>();
+    event?.rosters?.forEach((r) => m.set(r.team, r.players ?? []));
+    return m;
+  }, [event]);
+
+  const liveOn = (field: number): LiveStreamMatch | null => {
+    const mm = event?.matches?.find((x) => x.field === field && x.status === 'live');
+    if (!mm) return null;
+    return {
+      id: mm.id,
+      home: mm.home,
+      away: mm.away,
+      homeScore: mm.homeScore ?? 0,
+      awayScore: mm.awayScore ?? 0,
+      liveStartedAt: mm.liveStartedAt,
+      durationMinutes: mm.durationMinutes,
+      pausedAt: mm.pausedAt,
+      scorers: (mm.scorers ?? []).map((s) => ({ player: s.player, team: s.team })),
+    };
+  };
+
+  const subtitle = mode === 'home' ? 'Feld 1 – beide Felder auf der Stream-Seite' : 'beide Felder gleichzeitig';
+  return <Stage streams={streams} subtitle={subtitle} rosterByTeam={rosterByTeam} liveOn={liveOn} mode={mode} onOpenFull={onOpenFull} />;
+}
+
+// --- Adapter: echte Liga (Liga-Spiele, Team-IDs → Namen) -----------------------
+export function LeagueStreamStage({ streams, teams, matches, mode = 'home', onOpenFull }: { streams: StreamsConfig | null; teams: Team[]; matches: Match[]; mode?: 'home' | 'page'; onOpenFull?: () => void }) {
+  const rosterByTeam = useMemo(() => {
+    const m = new Map<string, Player[]>();
+    teams.forEach((t) => m.set(t.name, t.spielerliste ?? []));
+    return m;
+  }, [teams]);
+
+  const nameById = useMemo(() => {
+    const m = new Map<string, string>();
+    teams.forEach((t) => m.set(t.id, t.name));
+    return m;
+  }, [teams]);
+
+  const liveOn = (field: number): LiveStreamMatch | null => {
+    const mm = matches.find((x) => x.field === field && x.status === 'live');
+    if (!mm) return null;
+    return {
+      id: mm.id,
+      home: nameById.get(mm.homeTeamId) ?? '?',
+      away: nameById.get(mm.awayTeamId) ?? '?',
+      homeScore: mm.homeScore,
+      awayScore: mm.awayScore,
+      liveStartedAt: mm.liveStartedAt,
+      durationMinutes: mm.durationMinutes,
+      pausedAt: mm.pausedAt,
+      scorers: (mm.scorers ?? []).map((s) => ({ player: s.playerName, team: nameById.get(s.teamId) ?? '?' })),
+    };
+  };
+
+  const subtitle = mode === 'home' ? 'Feld 1 – beide Felder auf der Stream-Seite' : 'beide Felder gleichzeitig';
+  return <Stage streams={streams} subtitle={subtitle} rosterByTeam={rosterByTeam} liveOn={liveOn} mode={mode} onOpenFull={onOpenFull} />;
 }
