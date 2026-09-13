@@ -3,7 +3,10 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Radio, ExternalLink, Maximize2, Twitch, Volume2, VolumeX, MonitorPlay } from 'lucide-react';
 import type { EventConfig, Match, Player, StreamsConfig, Team } from '../types';
 import { twitchPlayerSrc, twitchChannelUrl } from '../lib/streams';
-import { LiveBadge } from './ui';
+import { LiveBadge, TeamCrest } from './ui';
+
+// Sichtbares Team-Wappen (Logo-Bild oder Monogramm-Farbe) je Team-Name.
+export interface TeamVisual { logoUrl?: string; color: string; shortName?: string }
 
 // ---------------------------------------------------------------------------
 // Zwei parallele Twitch-Streams (Feld 1 / Feld 2) mit selbstgebauten Overlays:
@@ -33,6 +36,19 @@ export interface LiveStreamMatch {
   scorers: { player: string; team: string }[];
 }
 
+// Ist der Bildschirm breit genug für zwei Streams nebeneinander? (>= Tailwind xl)
+function useWideScreen(query = '(min-width: 1280px)'): boolean {
+  const [wide, setWide] = useState(() => (typeof window !== 'undefined' ? window.matchMedia(query).matches : false));
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const on = () => setWide(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, [query]);
+  return wide;
+}
+
 function initials(name: string): string {
   const p = name.trim().split(/\s+/);
   return ((p[0]?.[0] ?? '') + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase() || '?';
@@ -48,19 +64,29 @@ function Avatar({ name, imageUrl, size = 40 }: { name: string; imageUrl?: string
   );
 }
 
-// Live-Scoreboard oben links.
-function Scoreboard({ match }: { match: LiveStreamMatch }) {
+// Live-Scoreboard oben links – Wappen + Name je Team, große animierte Tore, Live-Minute.
+function TeamSide({ name, crest, align }: { name: string; crest?: TeamVisual; align: 'left' | 'right' }) {
+  const badge = <TeamCrest name={name} shortName={crest?.shortName} color={crest?.color ?? '#22DFC9'} logoUrl={crest?.logoUrl} size="md" />;
+  const label = <span className="font-display font-black uppercase tracking-tight text-white text-sm sm:text-lg leading-none truncate max-w-[26vw] sm:max-w-[190px]">{name}</span>;
   return (
-    <div className="absolute top-0 left-0 p-2 sm:p-3 pointer-events-none z-10">
+    <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+      {align === 'left' ? <>{badge}{label}</> : <>{label}{badge}</>}
+    </div>
+  );
+}
+
+function Scoreboard({ match, crestByTeam }: { match: LiveStreamMatch; crestByTeam: Map<string, TeamVisual> }) {
+  return (
+    <div className="absolute top-0 left-0 p-2.5 sm:p-3.5 pointer-events-none z-10 max-w-full">
       <motion.div
         initial={{ opacity: 0, x: -16 }}
         animate={{ opacity: 1, x: 0 }}
         exit={{ opacity: 0, x: -16 }}
         transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-        className="inline-flex items-center gap-2 sm:gap-2.5 rounded-xl bg-black/72 backdrop-blur-md border border-white/12 px-2.5 sm:px-3 py-1.5 sm:py-2 shadow-[0_8px_28px_-8px_rgba(0,0,0,.85)] max-w-full"
+        className="inline-flex items-center gap-2.5 sm:gap-3.5 rounded-2xl bg-black/75 backdrop-blur-md border border-white/12 px-3 sm:px-4 py-2 sm:py-2.5 shadow-[0_10px_34px_-8px_rgba(0,0,0,.9)] max-w-full"
       >
-        <span className="font-display font-black uppercase tracking-tight text-white text-xs sm:text-sm truncate max-w-[24vw] sm:max-w-[150px]">{match.home}</span>
-        <span className="relative shrink-0 font-display font-black tabular-nums text-white text-lg sm:text-2xl leading-none px-0.5">
+        <TeamSide name={match.home} crest={crestByTeam.get(match.home)} align="left" />
+        <span className="relative shrink-0 font-display font-black tabular-nums text-white text-2xl sm:text-4xl leading-none px-0.5">
           <AnimatePresence mode="popLayout" initial={false}>
             <motion.span
               key={`${match.homeScore ?? 0}-${match.awayScore ?? 0}`}
@@ -70,12 +96,12 @@ function Scoreboard({ match }: { match: LiveStreamMatch }) {
               transition={{ type: 'spring', stiffness: 500, damping: 22 }}
               className="inline-block"
             >
-              {match.homeScore ?? 0}<span className="text-hl-dim mx-0.5 sm:mx-1">:</span>{match.awayScore ?? 0}
+              {match.homeScore ?? 0}<span className="text-hl-dim mx-1 sm:mx-1.5">:</span>{match.awayScore ?? 0}
             </motion.span>
           </AnimatePresence>
         </span>
-        <span className="font-display font-black uppercase tracking-tight text-white text-xs sm:text-sm truncate max-w-[24vw] sm:max-w-[150px]">{match.away}</span>
-        <span className="shrink-0 ml-0.5"><LiveBadge liveStartedAt={match.liveStartedAt} durationMinutes={match.durationMinutes} pausedAt={match.pausedAt} /></span>
+        <TeamSide name={match.away} crest={crestByTeam.get(match.away)} align="right" />
+        <span className="shrink-0 ml-0.5 sm:ml-1"><LiveBadge liveStartedAt={match.liveStartedAt} durationMinutes={match.durationMinutes} pausedAt={match.pausedAt} /></span>
       </motion.div>
     </div>
   );
@@ -152,7 +178,7 @@ function LineupFlyby({ homeTeam, awayTeam, homePlayers, awayPlayers }: { homeTea
   );
 }
 
-function StreamCard({ field, channel, liveMatch, rosterByTeam, muted, onToggleAudio }: { field: number; channel: string; liveMatch: LiveStreamMatch | null; rosterByTeam: Map<string, Player[]>; muted: boolean; onToggleAudio?: () => void }) {
+function StreamCard({ field, channel, liveMatch, rosterByTeam, crestByTeam, muted, onToggleAudio }: { field: number; channel: string; liveMatch: LiveStreamMatch | null; rosterByTeam: Map<string, Player[]>; crestByTeam: Map<string, TeamVisual>; muted: boolean; onToggleAudio?: () => void }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const prevId = useRef<string | null>(null);
   const prevScorers = useRef(0);
@@ -224,7 +250,7 @@ function StreamCard({ field, channel, liveMatch, rosterByTeam, muted, onToggleAu
           frameBorder={0}
           scrolling="no"
         />
-        <AnimatePresence>{liveMatch && <Scoreboard key="sb" match={liveMatch} />}</AnimatePresence>
+        <AnimatePresence>{liveMatch && <Scoreboard key="sb" match={liveMatch} crestByTeam={crestByTeam} />}</AnimatePresence>
         <AnimatePresence>
           {lineup && liveMatch && (
             <LineupFlyby
@@ -262,12 +288,15 @@ function StreamCard({ field, channel, liveMatch, rosterByTeam, muted, onToggleAu
 }
 
 // Gemeinsame Anzeige-Maschine für beide Anwendungsfälle.
-//  • mode='home' → nur Feld 1 (stumm) auf der Startseite + Knopf zur Stream-Seite
+//  • mode='home' → Startseite: schmal nur Feld 1, breiter Bildschirm beide
+//    nebeneinander (Feld 2 wird nur bei breitem Screen wirklich geladen);
+//    dazu ein Knopf zur Stream-Seite, solange nicht beide zu sehen sind.
 //  • mode='page' → alle Felder untereinander, je eigener Ton-Schalter (nur einer an)
-function Stage({ streams, subtitle, rosterByTeam, liveOn, mode = 'home', onOpenFull }: {
+function Stage({ streams, subtitle, rosterByTeam, crestByTeam, liveOn, mode = 'home', onOpenFull }: {
   streams: StreamsConfig | null;
   subtitle: string;
   rosterByTeam: Map<string, Player[]>;
+  crestByTeam: Map<string, TeamVisual>;
   liveOn: (field: number) => LiveStreamMatch | null;
   mode?: 'home' | 'page';
   onOpenFull?: () => void;
@@ -283,12 +312,22 @@ function Stage({ streams, subtitle, rosterByTeam, liveOn, mode = 'home', onOpenF
   // Start: alles stumm – so spielt der Autoplay zuverlässig, der Besucher tippt
   // dann bei einem Feld „Ton an" (echte Nutzer-Geste, kein Ton-Durcheinander).
   const [audioField, setAudioField] = useState<number | null>(null);
+  const wide = useWideScreen();
 
   if (!streams?.active || allFields.length === 0) return null;
 
-  // Startseite: nur das erste Feld, stumm; darunter ein Knopf zur vollen Ansicht.
-  const shownFields = mode === 'home' ? allFields.slice(0, 1) : allFields;
-  const hasMore = mode === 'home' && allFields.length > 1;
+  // Auf der Startseite bei schmalem Screen nur Feld 1 (Feld 2 wird gar nicht erst
+  // geladen → spart am Handy Daten). Breiter Screen: beide nebeneinander.
+  const bothOnHome = mode === 'home' && wide && allFields.length > 1;
+  const shownFields = mode === 'page' || bothOnHome ? allFields : allFields.slice(0, 1);
+  const showButton = mode === 'home' && allFields.length > 1 && !bothOnHome;
+
+  const gridClass =
+    mode === 'page'
+      ? 'space-y-5 max-w-4xl'
+      : bothOnHome
+        ? 'grid grid-cols-2 gap-4'
+        : 'grid grid-cols-1 max-w-3xl gap-4';
 
   return (
     <div className="relative border-b border-white/8" style={{ background: `radial-gradient(120% 100% at 50% 0%, ${PURPLE}22, transparent 62%), #070510` }}>
@@ -299,7 +338,7 @@ function Stage({ streams, subtitle, rosterByTeam, liveOn, mode = 'home', onOpenF
           <span className="text-[11px] font-sans font-semibold text-hl-mute hidden sm:inline">· {subtitle}</span>
         </div>
 
-        <div className={mode === 'page' ? 'space-y-5 max-w-4xl' : 'grid grid-cols-1 max-w-3xl gap-4'}>
+        <div className={gridClass}>
           {shownFields.map((f) => (
             <StreamCard
               key={f.field}
@@ -307,13 +346,14 @@ function Stage({ streams, subtitle, rosterByTeam, liveOn, mode = 'home', onOpenF
               channel={f.channel}
               liveMatch={liveOn(f.field)}
               rosterByTeam={rosterByTeam}
+              crestByTeam={crestByTeam}
               muted={mode === 'page' ? audioField !== f.field : true}
               onToggleAudio={mode === 'page' ? () => setAudioField((cur) => (cur === f.field ? null : f.field)) : undefined}
             />
           ))}
         </div>
 
-        {hasMore && onOpenFull && (
+        {showButton && onOpenFull && (
           <button
             onClick={onOpenFull}
             className="mt-4 inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-sans font-black uppercase tracking-wider text-white cursor-pointer active:scale-[0.98] transition-transform shadow-[0_10px_30px_-10px_rgba(145,71,255,.8)]"
@@ -328,12 +368,34 @@ function Stage({ streams, subtitle, rosterByTeam, liveOn, mode = 'home', onOpenF
 }
 
 // --- Adapter: Testspieltag (Event-Archiv, Team-Namen) --------------------------
-export default function StreamStage({ streams, event, mode = 'home', onOpenFull }: { streams: StreamsConfig | null; event: EventConfig | null; mode?: 'home' | 'page'; onOpenFull?: () => void }) {
+// `teams` = echte Liga-Vereine: darüber holen wir Wappen/Logo und – falls im Event
+// kein Kader gepflegt ist – ersatzweise die echte Spielerliste (Namensabgleich).
+export default function StreamStage({ streams, event, teams = [], mode = 'home', onOpenFull }: { streams: StreamsConfig | null; event: EventConfig | null; teams?: Team[]; mode?: 'home' | 'page'; onOpenFull?: () => void }) {
+  const teamByName = useMemo(() => {
+    const m = new Map<string, Team>();
+    teams.forEach((t) => m.set(t.name.trim().toLowerCase(), t));
+    return m;
+  }, [teams]);
+
   const rosterByTeam = useMemo(() => {
     const m = new Map<string, Player[]>();
-    event?.rosters?.forEach((r) => m.set(r.team, r.players ?? []));
+    event?.rosters?.forEach((r) => {
+      const own = r.players ?? [];
+      // Kein Event-Kader gepflegt? → echte Vereins-Spielerliste als Fallback.
+      const fallback = own.length ? own : teamByName.get(r.team.trim().toLowerCase())?.spielerliste ?? [];
+      m.set(r.team, fallback);
+    });
     return m;
-  }, [event]);
+  }, [event, teamByName]);
+
+  const crestByTeam = useMemo(() => {
+    const m = new Map<string, TeamVisual>();
+    (event?.teams ?? []).forEach((name) => {
+      const t = teamByName.get(name.trim().toLowerCase());
+      m.set(name, { logoUrl: t?.logoUrl, color: t?.logoColor ?? PURPLE, shortName: t?.shortName });
+    });
+    return m;
+  }, [event, teamByName]);
 
   const liveOn = (field: number): LiveStreamMatch | null => {
     const mm = event?.matches?.find((x) => x.field === field && x.status === 'live');
@@ -352,7 +414,7 @@ export default function StreamStage({ streams, event, mode = 'home', onOpenFull 
   };
 
   const subtitle = mode === 'home' ? 'Feld 1 – beide Felder auf der Stream-Seite' : 'beide Felder gleichzeitig';
-  return <Stage streams={streams} subtitle={subtitle} rosterByTeam={rosterByTeam} liveOn={liveOn} mode={mode} onOpenFull={onOpenFull} />;
+  return <Stage streams={streams} subtitle={subtitle} rosterByTeam={rosterByTeam} crestByTeam={crestByTeam} liveOn={liveOn} mode={mode} onOpenFull={onOpenFull} />;
 }
 
 // --- Adapter: echte Liga (Liga-Spiele, Team-IDs → Namen) -----------------------
@@ -360,6 +422,12 @@ export function LeagueStreamStage({ streams, teams, matches, mode = 'home', onOp
   const rosterByTeam = useMemo(() => {
     const m = new Map<string, Player[]>();
     teams.forEach((t) => m.set(t.name, t.spielerliste ?? []));
+    return m;
+  }, [teams]);
+
+  const crestByTeam = useMemo(() => {
+    const m = new Map<string, TeamVisual>();
+    teams.forEach((t) => m.set(t.name, { logoUrl: t.logoUrl, color: t.logoColor ?? PURPLE, shortName: t.shortName }));
     return m;
   }, [teams]);
 
@@ -386,5 +454,5 @@ export function LeagueStreamStage({ streams, teams, matches, mode = 'home', onOp
   };
 
   const subtitle = mode === 'home' ? 'Feld 1 – beide Felder auf der Stream-Seite' : 'beide Felder gleichzeitig';
-  return <Stage streams={streams} subtitle={subtitle} rosterByTeam={rosterByTeam} liveOn={liveOn} mode={mode} onOpenFull={onOpenFull} />;
+  return <Stage streams={streams} subtitle={subtitle} rosterByTeam={rosterByTeam} crestByTeam={crestByTeam} liveOn={liveOn} mode={mode} onOpenFull={onOpenFull} />;
 }

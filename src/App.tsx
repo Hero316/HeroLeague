@@ -387,7 +387,7 @@ export default function App() {
         .then((data) => setEventArchive(data))
         .catch(() => {});
     },
-    eventHasLive ? 8_000 : hasLiveMatch ? 20_000 : 60_000,
+    eventHasLive ? 8_000 : streams?.active ? 10_000 : hasLiveMatch ? 20_000 : 60_000,
     { immediate: false },
   );
 
@@ -968,7 +968,7 @@ export default function App() {
               <ArrowLeft className="w-3.5 h-3.5" /> Zurück
             </button>
           </div>
-          <StreamStage streams={streams} event={activeEvent} mode="page" />
+          <StreamStage streams={streams} event={activeEvent} teams={visibleTeams} mode="page" />
           <LeagueStreamStage streams={leagueStreams} teams={leagueTeams} matches={currentSeasonMatches} mode="page" />
           {!anyStreams && (
             <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 py-16 text-center">
@@ -1338,7 +1338,7 @@ export default function App() {
                   </div>
                 </div>
               )}
-              <StreamStage streams={streams} event={previewEvent} mode="page" />
+              <StreamStage streams={streams} event={previewEvent} teams={visibleTeams} mode="page" />
               <EventPage
                 event={previewEvent}
                 teams={visibleTeams}
@@ -1821,7 +1821,7 @@ export default function App() {
             onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
             onSeeAll={() => goToTab('spielplan')}
           />
-          <StreamStage streams={streams} event={activeEvent} mode="home" onOpenFull={() => navigateTo('/streams')} />
+          <StreamStage streams={streams} event={activeEvent} teams={visibleTeams} mode="home" onOpenFull={() => navigateTo('/streams')} />
           <LeagueStreamStage streams={leagueStreams} teams={leagueTeams} matches={currentSeasonMatches} mode="home" onOpenFull={() => navigateTo('/streams')} />
           {countdown.active && <Countdown target={countdown.target} title={countdown.title} />}
           <Hero teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} />
