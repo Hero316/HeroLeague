@@ -385,7 +385,7 @@ export default function App() {
         .then((data) => setEventArchive(data))
         .catch(() => {});
     },
-    eventHasLive || hasLiveMatch ? 20_000 : 60_000,
+    eventHasLive ? 8_000 : hasLiveMatch ? 20_000 : 60_000,
     { immediate: false },
   );
 

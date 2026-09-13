@@ -41,6 +41,12 @@
 .hl-stream:fullscreen { width: 100vw; height: 100vh; aspect-ratio: auto; background: #000; }
 .hl-stream:fullscreen iframe { width: 100%; height: 100%; }
 
+/* Aufstellungs-Laufband unten im Stream (fliegt kurz durch). Inhalt ist
+   doppelt vorhanden → -50% läuft nahtlos. */
+@keyframes hlMarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.hl-marquee-track { display: inline-flex; width: max-content; animation: hlMarquee 22s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .hl-marquee-track { animation: none; } }
+
 /* Tippspiel-Button: dezenter Licht-Sweep, damit die Taste „lebt" und auffällt. */
 @keyframes tippShine {
   0% { transform: translateX(-130%) skewX(-20deg); }
