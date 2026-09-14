@@ -23,9 +23,16 @@ Deshalb wird **nie Bild für Bild identifiziert**. Stattdessen:
    Reihenfolge der Verlässlichkeit: **Schuhfarbe → Stutzen/Socken → Haare/Frisur → Statur**.
    *Nicht* am Gesicht, *nicht* an der Nummer.
 3. Ereignisse hängen **an der Clip-ID**, nicht am Namen.
-4. Sobald die Nummer **einmal** lesbar ist, wird die Clip-ID aufgelöst — und **alle früheren
-   Ereignisse dieser ID gelten rückwirkend** für diesen Spieler. Ein guter Blick pro Spieler
-   pro Clip genügt.
+4. **Auflösung zum Namen — der Normalfall ist die Rückfrage, nicht die Nummer.**
+   Die meisten Trikots haben **keine Nummer**. Deshalb gilt diese Rangfolge:
+   - **a) Frage-Runde (Regelfall):** Vor dem Tracking werden alle Tracklets einmal dem Menschen
+     vorgelegt — ID, Merkmale, erster Auftritt. Er nennt die Namen. Danach läuft die Auswertung
+     mit echten Namen durch.
+   - **b) Nummer (Glücksfall):** Ist bei jemandem eine Nummer lesbar, löst sie die ID sofort
+     auf — und **alle früheren Ereignisse dieser ID gelten rückwirkend**. Ein Blick genügt.
+   - **c) Steckbrief (nur als Vorschlag):** Passt ein Tracklet klar auf einen gespeicherten
+     Steckbrief, darf es vorgeschlagen werden — aber mit `konfidenz` ≤ 0.7 und trotzdem als
+     Rückfrage. Niemals still zuordnen.
 5. Reißt die Kette (Spieler kreuzen sich, verlässt das Bild, fliegender Wechsel), wird eine
    **neue** Clip-ID angelegt. Niemals raten. Nicht aufgelöste IDs landen unter `offeneFragen`
    und werden von einem Menschen beantwortet — sie werden **nie verworfen**.
@@ -188,8 +195,9 @@ Eine JSON-Datei pro Spiel. Name: `<datum>_<block>_<heim>-vs-<auswaerts>.json`
   gegnerischen Team.
 - `konfidenz` — 0..1. Alles **unter 0,7** muss in `offeneFragen` auftauchen.
 - `begruendung` — ein Halbsatz, was im Bild zu sehen war. Kein Roman, aber prüfbar.
-- `aufloesungBasis` — `"nummer"` (Nummer gelesen), `"mensch"` (nachträglich bestätigt),
-  `"merkmal"` (nur über Steckbrief — dann Konfidenz ≤ 0.7 setzen).
+- `aufloesungBasis` — `"mensch"` (Regelfall: vom Menschen benannt), `"nummer"` (Nummer gelesen,
+  der zuverlässigste Fall), `"merkmal"` (nur über Steckbrief geraten — dann Konfidenz ≤ 0.7 und
+  zusätzlich als Rückfrage ausgeben).
 - Nichts erfinden. Kein Ereignis ohne sichtbaren Anlass. Lieber `offeneFragen` als geraten.
 
 ---
@@ -213,7 +221,34 @@ durchsagen. Zwei Minuten pro Team.
 
 ---
 
-## 5. Der Weg der Datei
+## 5. Ablauf pro Spiel: erst fragen, dann tracken
+
+Weil Nummern fehlen, läuft jedes Spiel in **zwei Durchgängen**:
+
+**Durchgang 1 — Aufstellung erkennen und erfragen.**
+Aus den ersten Bildern (oder einem Aufstellungs-Clip) wird pro Spieler ein Tracklet mit
+Merkmalen angelegt. Das Ergebnis geht als Liste an den Menschen:
+
+```
+A1  graues Shirt · rote Schuhe · blonder Dutt · eher klein        → wer?
+A2  graues Shirt · weiße Schuhe · dunkle Locken · groß            → wer?
+B1  blaues Shirt · schwarze Schuhe · kahl                         → wer?
+```
+
+Der Mensch beantwortet das **einmal** — bei 2 Teams sind das ~12–16 Zeilen, zwei Minuten
+Arbeit. Erst danach beginnt die eigentliche Auswertung. Das ist kein Notbehelf, sondern der
+vorgesehene Weg: Der Mensch löst die Identität, die KI übernimmt das Mitzählen.
+
+**Durchgang 2 — Ereignisse erfassen.**
+Ab hier tragen die Tracklets echte Namen. Ein- und Auswechslungen erzeugen **neue** Tracklets,
+die am Ende als Rückfrage nachgereicht werden.
+
+> Faustregel: **Identität = Mensch. Vollständigkeit = KI.** Beides zu verlangen, funktioniert
+> ohne Nummern nicht zuverlässig.
+
+---
+
+## 6. Der Weg der Datei
 
 1. Sitzung A wertet aus und schreibt die JSON-Datei (Drive/lokal).
 2. Übergabe an Sitzung B — eine der drei Wege:
@@ -227,11 +262,13 @@ durchsagen. Zwei Minuten pro Team.
 
 ---
 
-## 6. Kurzanweisung für Sitzung A (kopierfertig)
+## 7. Kurzanweisung für Sitzung A (kopierfertig)
 
 > Du wertest ein Hero-League-Spiel (Kleinfeld/Halle, kein Abseits) aus Einzelbildern aus.
 > Halte dich **exakt** an `docs/tracking-uebergabe.md`: anonyme Tracklets (A1…/B1…) statt Namen,
 > Verankerung über Schuhfarbe/Stutzen/Haare/Statur, Nummern rückwirkend auflösen, nur die 21
 > erlaubten `action`-Schlüssel, `delta` immer positiv, automatische Fußball-Logik anwenden,
 > nichts erfinden, alles Unklare unter `konfidenz < 0.7` in `offeneFragen`.
+> Die Trikots haben meist **keine Nummern** — erwarte sie nicht. Lege zuerst die Tracklets an
+> und gib sie als Frage-Liste aus, damit der Mensch die Namen nennt. Erst danach die Ereignisse.
 > Ergebnis: **eine** JSON-Datei in genau dem dokumentierten Aufbau.
