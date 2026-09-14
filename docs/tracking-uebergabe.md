@@ -262,13 +262,66 @@ die am Ende als Rückfrage nachgereicht werden.
 
 ---
 
-## 7. Kurzanweisung für Sitzung A (kopierfertig)
+## 7. Ablauf für Sitzung A: Häppchen mit Zustandsdatei
 
-> Du wertest ein Hero-League-Spiel (Kleinfeld/Halle, kein Abseits) aus Einzelbildern aus.
-> Halte dich **exakt** an `docs/tracking-uebergabe.md`: anonyme Tracklets (A1…/B1…) statt Namen,
-> Verankerung über Schuhfarbe/Stutzen/Haare/Statur, Nummern rückwirkend auflösen, nur die 21
-> erlaubten `action`-Schlüssel, `delta` immer positiv, automatische Fußball-Logik anwenden,
-> nichts erfinden, alles Unklare unter `konfidenz < 0.7` in `offeneFragen`.
-> Die Trikots haben meist **keine Nummern** — erwarte sie nicht. Lege zuerst die Tracklets an
-> und gib sie als Frage-Liste aus, damit der Mensch die Namen nennt. Erst danach die Ereignisse.
-> Ergebnis: **eine** JSON-Datei in genau dem dokumentierten Aufbau.
+Ein ganzes Spiel passt **nicht** in einen Kontext. 7 Min bei 3 fps = ~1.260 Bilder. Deshalb wird
+in Abschnitten gearbeitet, und der Zustand lebt in einer **Datei**, nicht im Gedächtnis.
+
+### Ordner
+```
+tracking/<spiel>/
+  frames/        f_00001.jpg …   (Proxy-Bilder, 960 px)
+  state.json     laufender Zustand — Tracklets + Events + Fortschritt
+  ergebnis.json  Endergebnis im Format aus Abschnitt 3
+```
+
+### Bilder erzeugen
+```bash
+ffmpeg -i "<video>" -vf "fps=3,scale=960:-1" -q:v 4 frames/f_%05d.jpg
+```
+960 px genügt für Schuh-/Trikotfarbe und Statur. Nur wenn eine **Nummer** gelesen werden soll,
+zusätzlich einen hochauflösenden Ausschnitt ziehen:
+```bash
+ffmpeg -ss <sek> -i "<video>" -frames:v 1 -vf "crop=iw/3:ih/3:<x>:<y>,scale=1280:-1" crop.jpg
+```
+
+### Die Schleife
+Pro Durchgang **90 Bilder** (= 30 Sekunden bei 3 fps). Das sind ~65.000 Tokens und lässt genug
+Luft zum Nachdenken.
+
+1. **`state.json` lesen.** Immer zuerst. Nie aus dem Gedächtnis weiterarbeiten.
+2. **Tracklets wiedererkennen.** Jedes Tracklet aus `state.json` in den neuen Bildern anhand der
+   gespeicherten Merkmale suchen. Passt keines eindeutig → **neues** Tracklet anlegen und in
+   `offeneFragen` eintragen. **Niemals raten, niemals stillschweigend gleichsetzen.**
+3. **Die 90 Bilder auswerten** und Ereignisse nach Abschnitt 2 und 3 erzeugen.
+4. **`state.json` zurückschreiben** — Tracklets, alle Events bisher, `letztesBild`.
+5. Nächster Durchgang. Am Ende alles zu `ergebnis.json` zusammenfassen.
+
+### `state.json`
+```json
+{
+  "letztesBild": 270,
+  "standSek": 90,
+  "tracklets": [
+    { "id": "A1", "team": "New Way", "merkmale": "rote Schuhe, blonder Dutt, klein",
+      "ersterAuftritt": "0:04", "aufgeloestAls": "Max Müller",
+      "aufloesungBasis": "mensch", "konfidenz": 0.9 }
+  ],
+  "events": [
+    { "t": "0:12", "tracklet": "A1", "action": "pass_ok", "delta": 1,
+      "gegner": null, "konfidenz": 0.9, "begruendung": "Ablage nach links, kommt an" }
+  ],
+  "offeneFragen": []
+}
+```
+
+### Die Häppchen-Grenze ist die Gefahrenstelle
+Dort verrutscht die Zuordnung. Deshalb gilt: **Merkmale sind der Anker, nicht die Reihenfolge.**
+Ein Tracklet darf nur fortgeführt werden, wenn die Merkmale passen — sonst neue ID und Rückfrage.
+Eine ehrliche Rückfrage kostet zwei Sekunden, eine falsche Zuordnung verdirbt eine ganze
+Spielerstatistik.
+
+### Zu messen und zu berichten
+Nach dem **ersten** 30-Sekunden-Durchgang drei Zahlen nennen: Bilder verarbeitet, Dauer,
+Kontext verbraucht. Daraus lässt sich der Aufwand für ein ganzes Spiel (×14) abschätzen,
+**bevor** eines komplett durchläuft.
