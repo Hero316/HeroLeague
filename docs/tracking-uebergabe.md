@@ -21,6 +21,9 @@ Deshalb wird **nie Bild für Bild identifiziert**. Stattdessen:
    `A1, A2, …` = Heimteam · `B1, B2, …` = Auswärtsteam.
    Ist die Team-Zugehörigkeit **nicht** eindeutig sichtbar (gemischte Trikotfarben), werden
    neutrale IDs `P1, P2, …` mit `"team": null` verwendet — siehe Abschnitt 5.
+   **Eine einmal vergebene ID wird nie umbenannt.** Sie ist der Schlüssel, an dem die Events
+   hängen — sie umzubenennen würde jedes Event anfassen und widerspricht der Regel
+   „Korrektur an einer Stelle".
 2. Verankert wird an dem, was **von hinten und in Bewegung** sichtbar ist — in dieser
    Reihenfolge der Verlässlichkeit: **Schuhfarbe → Stutzen/Socken → Haare/Frisur → Statur**.
    *Nicht* am Gesicht, *nicht* an der Nummer.
@@ -254,8 +257,9 @@ die Identität, die KI übernimmt das Mitzählen.
 Solange keine einheitlichen Trikots existieren, tragen Spieler desselben Teams **verschiedene
 Farben**. Dann darf die Farbe **nicht** zur Team-Zuordnung benutzt werden:
 
-- Tracklets werden mit `"team": null` angelegt. Das Präfix (`A…`/`B…`) wird erst vergeben, wenn
-  das Team bekannt ist — vorher heißen sie neutral `P1, P2, P3 …`.
+- Tracklets werden als `P1, P2, P3 …` mit `"team": null` angelegt und **behalten diese ID für
+  immer**. Steht das Team fest, wird **nur das Feld `team` gesetzt** — kein Umbenennen in
+  `A…`/`B…`. Sitzung B liest ohnehin `team`, nicht das Präfix.
 - Die Frage-Runde fragt **beides** ab: `P1 → wer, und welches Team?`
 - **Querprobe aus dem Spielverlauf:** Wer gegeneinander spielt, verrät die Teams. Bei
   „P4 dribbelt P9 aus" sind P4 und P9 zwangsläufig in **verschiedenen** Teams, bei einem
@@ -316,8 +320,21 @@ ffmpeg -ss <sek> -i "<video>" -frames:v 1 -vf "crop=iw/3:ih/3:<x>:<y>,scale=1280
 ```
 
 ### Die Schleife
-Pro Durchgang **90 Bilder** (= 30 Sekunden bei 3 fps). Das sind ~65.000 Tokens und lässt genug
-Luft zum Nachdenken.
+Pro Durchgang **90 Bilder** (= 30 Sekunden bei 3 fps).
+
+**Gemessene Kosten** (nicht geschätzt): ein Bild mit 960 px ≈ **930 Tokens**, mit 1280 px ≈
+**1.650**. 90 Bilder à 960 px sind damit ~**84.000 Tokens**. Ein ganzes Spiel (1.260 Bilder)
+wären ~1,17 Mio. Tokens — passt in **keinen** Kontext, die Verdichtung käme sicher und würde
+mitten im Spiel fast alles wegwerfen.
+
+**Warum 90 und nicht das technische Maximum:** Selbst wo mehr hineinpasst, ist nicht messbar, ob
+Bild 12 und Bild 800 im selben langen Kontext noch gleich genau verglichen werden. Darauf wird
+keine Spielerstatistik gewettet.
+
+**Zeitbedarf** (Erfahrungswert, am ersten Häppchen zu prüfen): normales Häppchen 15–25 Min,
+erstes Häppchen 30–40 Min (Tracklets, Crops, Frageliste entstehen zusätzlich), ganzes Spiel
+also **4–5 Stunden**. Die Häppchen laufen zwingend nacheinander, weil jedes auf den Tracklets
+des vorigen aufbaut.
 
 1. **`state.json` lesen.** Immer zuerst. Nie aus dem Gedächtnis weiterarbeiten.
 2. **Tracklets wiedererkennen.** Jedes Tracklet aus `state.json` in den neuen Bildern anhand der
@@ -347,12 +364,15 @@ Luft zum Nachdenken.
 
 ### Bei unklaren Stellen nachziehen statt raten
 3 fps heißt 0,33 s Abstand — ein Pass ist in 1–2 Bildern vorbei. Ist eine Stelle unklar, **erst
-nachziehen, dann entscheiden**: für diese 2–3 Sekunden zusätzliche Bilder mit 10 fps holen.
+nachziehen, dann entscheiden**. Aber **nur den Bildbereich um die Szene und nur 1,5–2 s** —
+nicht das ganze Bild über 3 s:
 ```bash
-ffmpeg -ss <sek> -t 3 -i "<video>" -vf "fps=10,scale=1280:-1" -q:v 3 zoom/z_%03d.jpg
+ffmpeg -ss <sek> -t 2 -i "<video>" \
+  -vf "fps=10,crop=iw/2:ih/2:<x>:<y>,scale=1280:-1" -q:v 3 zoom/z_%03d.jpg
 ```
-Erst wenn es **danach** noch unklar ist, kommt die Stelle in `offeneFragen`. Das kostet wenige
-Bilder an genau den Stellen, wo es darauf ankommt, statt das ganze Spiel teuer zu machen.
+Das kostet **5.000–10.000 Tokens** statt ~50.000 für einen Vollbild-Zoom über 3 s — und ist auf
+die Szene bezogen sogar **schärfer**, weil die Auflösung im Ausschnitt landet statt im Publikum.
+Erst wenn es **danach** noch unklar ist, kommt die Stelle in `offeneFragen`.
 
 ### Die Häppchen-Grenze ist die Gefahrenstelle
 Dort verrutscht die Zuordnung. Deshalb gilt: **Merkmale sind der Anker, nicht die Reihenfolge.**
@@ -431,3 +451,55 @@ Rote Karte. (`card` im Code ist der FIFA-**Kartenwert** eines Spielers, nicht ei
 
 **Deshalb: niemals einen eigenen Schlüssel dafür erfinden.** Ein Foul erzeugt kein Ereignis. Was
 davon sichtbar ist, gehört in `begruendung` oder `offeneFragen` — nie in `action`.
+
+---
+
+## 9. Betriebsregeln für den Auswerter
+
+Erprobte Vorgaben, damit ein langer Lauf nicht auf halber Strecke wertlos wird.
+
+### Ein Hilfs-Agent pro Häppchen
+Jedes Häppchen wird von einem **eigenen Agenten mit leerem Kontext** ausgewertet (~120.000
+Tokens, weit unter jeder Grenze). Die Hauptsitzung verteilt nur die Arbeit und sammelt die
+Ergebnisse (~3.000–5.000 Tokens je Häppchen). So läuft der Kontext gar nicht erst voll, statt
+ihn zu verwalten.
+
+Preis dafür: Der Hilfs-Agent kann den Menschen **nicht** direkt fragen. Er schreibt seine Fragen
+in `offeneFragen`, die Hauptsitzung reicht sie weiter.
+
+### Ein Häppchen zählt ganz oder gar nicht
+`state.json` wird **nie** direkt beschrieben. Der Agent schreibt `state.neu.json`, die erst nach
+einer Prüfung übernommen wird:
+
+- nur die 21 erlaubten Schlüssel, `delta` positiv
+- Folge-Ereignisse vorhanden (Tor ⇒ Gegentor beim Keeper usw.)
+- alles unter `konfidenz` 0,7 steht in `offeneFragen`
+- keine Doppelzählung, keine Team-Widersprüche
+- kein Tracklet und kein Event verschwunden, `letztesBild` springt nicht zurück
+
+Erst wenn das durchläuft: alten Stand als **Snapshot** sichern, dann tauschen. Bricht ein
+Durchgang ab (Kontext voll, Absturz, Mac zugeklappt), bleibt nur eine halbe `state.neu.json`
+liegen — die wird gelöscht und das Häppchen ab `letztesBild` **komplett neu** gerechnet. Halb
+gezählte Ereignisse gibt es damit nicht.
+
+### Drei Anker an der Häppchen-Grenze statt Erinnerung
+1. **Position:** Für jedes Tracklet steht die Stelle im letzten Bild in `state.json`. Jeder
+   Durchgang startet mit **6 Bildern Überlappung** (2 s) — dort muss der Spieler dort stehen.
+2. **Aussehen:** Vor dem ersten neuen Bild sieht der Agent die **Crops** aller Tracklets an. Er
+   vergleicht Bild mit Bild, nicht Text mit Bild.
+3. **Mensch:** Pro Häppchen kommt ein neuer Crop je Tracklet dazu. Die Frageliste zeigt sie als
+   Reihe (`P4` bei 0:30, 1:00, 1:30) — ein Verrutschen ist in 20 Sekunden zu sehen.
+
+Passen **Position und Aussehen nicht beide**, gibt es eine neue ID und eine Rückfrage.
+
+### Reparierbar bleiben
+Ein vertauschter Spieler erzeugt meist Widersprüche in der Team-Querprobe (z. B. angekommener
+Pass zu einem früheren Gegenspieler) — dann lehnt die Prüfung die Übernahme ab. Fällt erst bei
+Häppchen 6 auf, dass ID `P4` schon ab Häppchen 4 falsch ist, wird der **Snapshot** von dort
+zurückgeholt und ab da neu gerechnet.
+
+### Projektwissen gehört in Dateien, nicht ins Gedächtnis
+Teams, Kader, Steckbriefe, beantwortete Rückfragen und getroffene Entscheidungen stehen in
+Dateien (`state.json`, `ABLAUF.md`, Steckbrief-Datei) — **nie nur im Sitzungsgedächtnis.** Nach
+einer Verdichtung wird weitergearbeitet, indem die Dateien gelesen werden und bei `letztesBild`
+fortgesetzt wird. Was nur im Gedächtnis stand, ist verloren.
