@@ -503,3 +503,39 @@ Teams, Kader, Steckbriefe, beantwortete Rückfragen und getroffene Entscheidunge
 Dateien (`state.json`, `ABLAUF.md`, Steckbrief-Datei) — **nie nur im Sitzungsgedächtnis.** Nach
 einer Verdichtung wird weitergearbeitet, indem die Dateien gelesen werden und bei `letztesBild`
 fortgesetzt wird. Was nur im Gedächtnis stand, ist verloren.
+
+---
+
+## 10. Pilot-Modus: Technik prüfen ohne echte Namen
+
+Bevor ein Spiel mit echten Kadern ausgewertet wird, wird die **Maschinerie** getestet — ohne
+dass die Spielernamen bekannt sein müssen.
+
+### So läuft der Pilot
+- Die Tracklets bekommen **sprechende Platzhalter** statt echter Namen — nach dem, was sichtbar
+  ist: `Blau-1`, `Blau-2`, `Weiss-1`, `Schwarz-1`. Nicht `Spieler A`: der Platzhalter soll später
+  nachvollziehbar machen, wen die KI gemeint hat.
+- `aufloesungBasis: "pilot"` markiert diese Zuordnung. Die Datei ist damit **eindeutig als
+  Testdatei erkennbar**.
+- Die Team-Querprobe läuft normal mit: sie ist hier sogar der interessanteste Teil, weil sie
+  Teams aus dem Spielverlauf herleitet statt aus der Trikotfarbe.
+
+### Was der Pilot beweist
+- Proxys lassen sich erzeugen, Bilder lesen, Ausschnitte schneiden
+- Tracklets überleben die **Häppchen-Grenze** (der eigentliche Knackpunkt)
+- `state.json`, Prüfung, Snapshot und Übernahme funktionieren
+- die Frageliste rendert im Browser
+- die **drei Messwerte**: Bilder, Dauer, Kontext
+
+### Was der Pilot NICHT beweist
+Ob die Namen stimmen — dafür fehlt die Wahrheit zum Vergleich. Das ist aber der **leichte** Teil:
+Namen werden beantwortet, nicht erraten. Der schwere Teil — bleibt eine ID über Minuten hinweg
+dieselbe Person — wird sehr wohl geprüft.
+
+### Erfolgskriterium (ohne Namen prüfbar)
+Die Crop-Reihe je Tracklet in der Frageliste anschauen: Ist `P4` bei 0:30, 1:00 und 1:30
+**derselbe Mensch**? Dann trägt das Verfahren. Verrutscht eine ID, sieht man es dort sofort.
+
+### Pilot-Daten kommen NICHT in die Datenbank
+Platzhalter-Namen dürfen **nie** ins Statistics Center importiert werden — sie würden echte
+Spielerstatistiken verfälschen. Die Pilot-Datei bleibt eine Datei und wird nur angeschaut.
