@@ -322,10 +322,20 @@ ffmpeg -ss <sek> -i "<video>" -frames:v 1 -vf "crop=iw/3:ih/3:<x>:<y>,scale=1280
 ### Die Schleife
 Pro Durchgang **90 Bilder** (= 30 Sekunden bei 3 fps).
 
-**Gemessene Kosten** (nicht geschätzt): ein Bild mit 960 px ≈ **930 Tokens**, mit 1280 px ≈
-**1.650**. 90 Bilder à 960 px sind damit ~**84.000 Tokens**. Ein ganzes Spiel (1.260 Bilder)
-wären ~1,17 Mio. Tokens — passt in **keinen** Kontext, die Verdichtung käme sicher und würde
-mitten im Spiel fast alles wegwerfen.
+**Gemessene Kosten** — am echten Material nachgemessen, deutlich höher als zuerst gerechnet:
+
+| | Häppchen 1 | Häppchen 2 |
+|---|---|---|
+| neue Bilder | 90 | 90 + 6 Überlappung |
+| **tatsächliche Bildaufrufe** | 207 (93 Proxy · 94 Zoom · 20 Crops) | 223 (98 · 84 · 41) |
+| Dauer | 19,3 min | 22,6 min |
+| **Kontext (max.)** | **278.524** | **319.524** |
+
+Die naive Rechnung (90 × 930 ≈ 84.000) ist **um Faktor 3,5 zu niedrig**. Gründe: eine Grundlast
+von ~86.000 Tokens (Werkzeuge, Regelwerk, Auftrag) noch vor dem ersten Spielbild, und die Zooms
+kosten fast so viele Bildaufrufe wie die Proxys selbst.
+
+**Hochrechnung pro Spiel (14 Häppchen): ~4,2 Mio. Tokens, ~5 Stunden.**
 
 **Warum 90 und nicht das technische Maximum:** Selbst wo mehr hineinpasst, ist nicht messbar, ob
 Bild 12 und Bild 800 im selben langen Kontext noch gleich genau verglichen werden. Darauf wird
@@ -539,3 +549,53 @@ Die Crop-Reihe je Tracklet in der Frageliste anschauen: Ist `P4` bei 0:30, 1:00 
 ### Pilot-Daten kommen NICHT in die Datenbank
 Platzhalter-Namen dürfen **nie** ins Statistics Center importiert werden — sie würden echte
 Spielerstatistiken verfälschen. Die Pilot-Datei bleibt eine Datei und wird nur angeschaut.
+
+---
+
+## 11. Ergebnis des ersten Pilots (14.09.2026)
+
+60 s in 2 Häppchen, Testspiel The Royal Five gegen Phalanx United, 5 gegen 5.
+
+### Was funktioniert hat
+- **Die Häppchen-Grenze hat gehalten.** Alle 10 Tracklets fortgeführt, keins verloren, keins neu
+  erfunden. Das war das zentrale Risiko — es ist bestanden.
+- Prüfung, Snapshots und atomare Übernahme liefen fehlerfrei (0 Prüffehler).
+- Die Team-Querprobe hat den **schwarz gekleideten Spieler korrekt dem blauen Team** zugeordnet,
+  über drei Belege aus dem Spielverlauf, nicht über die Farbe.
+- Crops, Frageliste und die Zwei-Agenten-Aufteilung funktionierten wie vorgesehen.
+
+### Was nicht funktioniert hat
+1. **Unauffällige Spieler sind nicht belegbar.** Die Kette hält nur bei starken Merkmalen
+   (Handschuhe, Glatze, dunkles Shirt). Drei Weiße mit schwarzer Hose sind im Proxy **und** im
+   Crop austauschbar. Verwechslungspaare: Blau-2↔Blau-4 (nur Farbton hellblau/türkis),
+   Weiss-1↔Weiss-4 (beide wirken kahl), Weiss-3↔Weiss-5 (nichts Unterscheidendes).
+2. **Die Querprobe verbindet nicht alles.** Es entstanden **zwei unverbundene Gruppen**. Für
+   Gruppe 2 (Blau-3 · Weiss-3 · Weiss-5) entschied am Ende doch die Trikotfarbe — genau das,
+   was sie ersetzen sollte.
+3. **Die Kamera sieht das Feld nicht vollständig.** Linkes Tor und nahe Ecke liegen teils
+   außerhalb des Bildes. Bei zwei Szenen ist **ein Tor nicht ausgeschlossen**. Damit ist der
+   Spielstand selbst nicht gesichert — der schwerste Einzelbefund.
+4. **Menge der Rückfragen:** 24 offene Fragen in 60 s ⇒ **~170 pro Spiel**. Das beantwortet
+   niemand.
+5. **Konfidenz:** 5 von 13 Ereignissen unter 0,7 — knapp **40 % Ratespiel**.
+6. **Vollständigkeit:** nur 13 Ereignisse in 60 s; Zweikämpfe im Gedränge bewusst nicht gebucht.
+
+### Schlussfolgerung
+Der Engpass ist **nicht das Verfahren, sondern das Material**: eine Kamera, die nicht das ganze
+Feld zeigt, und Spieler, die sich nicht unterscheiden lassen. Beides ist durch **keine** bessere
+Auswertung zu beheben.
+
+**Voraussetzungen für einen zweiten Versuch:**
+1. **Trikotnummern** — sie beseitigen die Verwechslungspaare, die Frage-Runde und den größten
+   Teil der 170 Rückfragen in einem Schritt.
+2. **Eine Kamera, die das komplette Feld samt beider Tore zeigt** (höher, weiter, oder ein
+   zweiter Blickwinkel). Ohne das ist keine belastbare Spielstatistik möglich — auch nicht von
+   Hand.
+
+Bis dahin bleibt das eingesprochene Voice-Tracking das Mittel der Wahl.
+
+### Offene Werkzeug-Lücken (vor einem zweiten Versuch beheben)
+- `pruefen` akzeptiert `teamBasis: "querprobe"` auch für Gruppen, die mit keiner farblich
+  eindeutigen Gruppe verbunden sind → muss `team: null` erzwingen oder warnen.
+- **Spielfortsetzungen dürfen kein Team-Beleg sein** (ein Anstoß belegt keine Zugehörigkeit).
+- Crop-Boxen nur nach erneutem Ansehen setzen, nie aus der Erinnerung schätzen.
