@@ -85,6 +85,9 @@ Deshalb wird **nie Bild für Bild identifiziert**. Stattdessen:
 - „X fängt den Pass von Y ab" → `interception` für X **und** `pass_fail` für Y
 - „Y blockt X' Schuss" → `shot_blocked_off` für X **und** `shot_blocked_def` für Y
 
+> **Achtung:** Welche Liga-Regeln das Zählen verändern (Torwart, Netzberührung, Freistöße,
+> Feldverweis), steht in **Abschnitt 8**. Ohne das entstehen Phantom-Ereignisse.
+
 ### Nicht doppelt zählen
 Ein Ballverlust ist **entweder** `pass_fail` **oder** `duel_lost` **oder** `turnover` — nie mehreres
 für dieselbe Situation. Eine Interception ist kein Zweikampf. Ein gehaltener Schuss (`save`)
@@ -361,3 +364,70 @@ Spielerstatistik.
 Nach dem **ersten** 30-Sekunden-Durchgang drei Zahlen nennen: Bilder verarbeitet, Dauer,
 Kontext verbraucht. Daraus lässt sich der Aufwand für ein ganzes Spiel (×14) abschätzen,
 **bevor** eines komplett durchläuft.
+
+---
+
+## 8. Liga-Regeln, die das Zählen beeinflussen
+
+Aus dem *Regelwerk für Schiedsrichter* der Hero League. Nur die Punkte, die sich auf die
+Erfassung auswirken — nicht das ganze Regelwerk.
+
+### Spieldauer: 7 Minuten
+Ein Spiel dauert **7 Minuten**. Ein Zeitstempel jenseits von `7:00` ist ein Fehler, kein
+Ereignis. Bei 30-Sekunden-Häppchen sind das genau **14 Durchgänge**.
+
+### Der Torwart ist nicht an seiner Position erkennbar
+- Er darf den Strafraum verlassen und sich über das **ganze Feld** bewegen, auch über die
+  Mittellinie.
+- Er darf **selbst Tore schießen**.
+
+Folgen für die Auswertung:
+- **Wer der Torwart ist, muss in der Frage-Runde erfragt werden.** Nie aus der Position
+  ableiten — ein Spieler in der gegnerischen Hälfte kann der Torwart sein.
+- Die Tasten `save`, `gk_goal_against`, `gk_position_save`, `penalty_save` gelten **nur** für
+  das ausdrücklich als Torwart benannte Tracklet.
+- Ein `goal` kann vom Torwart kommen. Nicht als Fehler behandeln.
+
+### Netzberührung = Aus → Spiel ist tot
+Jede Berührung des Netzes (**Decke oder Seite**) gilt als Aus. Ab diesem Moment ist das Spiel
+unterbrochen: **bis zur Fortsetzung keine Ereignisse erfassen.** Wer den Ball dann aufnimmt oder
+weitergibt, macht keinen Pass und keinen Ballverlust. Das ist die häufigste Quelle für
+Phantom-Ereignisse in der Halle.
+
+### Spielfortsetzungen erkennen (= Anfang einer neuen Sequenz)
+- **Anstoß:** vom Tor aus, Gegner muss in der eigenen Hälfte stehen
+- **Seitenaus:** Ball wird eingerollt oder eingeschossen
+- **Toraus:** Ecke oder Abstoß
+
+Diese Momente markieren den Beginn einer Sequenz — nützlich, um totes Spiel von laufendem zu
+trennen.
+
+### Alle Freistöße sind indirekt
+Ein **direktes** Freistoßtor ist nach diesen Regeln unmöglich. Wird eines "gesehen", ist die
+Auswertung falsch — eine kostenlose Plausibilitätsprobe.
+
+### Grätschen sind erlaubt
+Eine saubere Grätsche ist ein **gewonnener Zweikampf** (`duel_won`), kein Foul. Nicht
+verwerfen, nur weil der Spieler rutscht. Bestraft werden nur **harte** Fouls und übermäßiges
+Einsteigen.
+
+### Feldverweis: Rot gilt für das restliche Spiel
+Bei hartem Foul bzw. übermäßigem Einsteigen wird der Spieler für das **restliche Spiel** vom
+Feld verwiesen. Für das Tracking: Das Tracklet verschwindet **endgültig** und die Mannschaft
+spielt in Unterzahl weiter. Nicht als Häppchen-Fehler deuten — als Hinweis in `offeneFragen`
+melden (`"A4 ab 4:12 nicht mehr auf dem Feld — Feldverweis?"`).
+
+### Tore von jeder Position
+Tore dürfen von überall erzielt werden. Kein Schuss ist "zu weit weg", um zu zählen.
+
+### Handspiel: entscheidet der Schiedsrichter
+Jede Handberührung ist ein Foul und führt zu einem **indirekten Freistoß** — ob Hand vorlag,
+**entscheidet der Schiedsrichter**, nicht die Bildanalyse. Bewertet wird nicht, ob es Hand war,
+sondern nur die Folge: Spiel unterbrochen, keine Ereignisse bis zur Fortsetzung.
+
+### Lücke im Katalog: Fouls und Karten werden NICHT getrackt
+Die 21 Tasten aus Abschnitt 2 enthalten **kein** Foul, **kein** Handspiel und **keine** Gelb-/
+Rote Karte. (`card` im Code ist der FIFA-**Kartenwert** eines Spielers, nicht eine Verwarnung.)
+
+**Deshalb: niemals einen eigenen Schlüssel dafür erfinden.** Ein Foul erzeugt kein Ereignis. Was
+davon sichtbar ist, gehört in `begruendung` oder `offeneFragen` — nie in `action`.
