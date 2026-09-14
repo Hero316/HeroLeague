@@ -19,6 +19,8 @@ Deshalb wird **nie Bild für Bild identifiziert**. Stattdessen:
 
 1. Jeder Spieler bekommt beim ersten Auftauchen eine **anonyme Clip-ID**:
    `A1, A2, …` = Heimteam · `B1, B2, …` = Auswärtsteam.
+   Ist die Team-Zugehörigkeit **nicht** eindeutig sichtbar (gemischte Trikotfarben), werden
+   neutrale IDs `P1, P2, …` mit `"team": null` verwendet — siehe Abschnitt 5.
 2. Verankert wird an dem, was **von hinten und in Bewegung** sichtbar ist — in dieser
    Reihenfolge der Verlässlichkeit: **Schuhfarbe → Stutzen/Socken → Haare/Frisur → Statur**.
    *Nicht* am Gesicht, *nicht* an der Nummer.
@@ -230,14 +232,39 @@ Aus den ersten Bildern (oder einem Aufstellungs-Clip) wird pro Spieler ein Track
 Merkmalen angelegt. Das Ergebnis geht als Liste an den Menschen:
 
 ```
-A1  graues Shirt · rote Schuhe · blonder Dutt · eher klein        → wer?
-A2  graues Shirt · weiße Schuhe · dunkle Locken · groß            → wer?
-B1  blaues Shirt · schwarze Schuhe · kahl                         → wer?
+A1  0:04  graues Shirt · rote Schuhe · blonder Dutt · eher klein   → wer?
+A2  0:06  graues Shirt · weiße Schuhe · dunkle Locken · groß       → wer?
+B1  0:09  blaues Shirt · schwarze Schuhe · kahl                    → wer?
 ```
 
-Der Mensch beantwortet das **einmal** — bei 2 Teams sind das ~12–16 Zeilen, zwei Minuten
-Arbeit. Erst danach beginnt die eigentliche Auswertung. Das ist kein Notbehelf, sondern der
-vorgesehene Weg: Der Mensch löst die Identität, die KI übernimmt das Mitzählen.
+**Zu jeder Zeile gehört ein Bildausschnitt** des Spielers (lokale Übersichtsdatei, z. B.
+`tracking/<spiel>/frageliste.html` mit den Crops). Ein Mensch erkennt jemanden auf einem Bild
+sofort, aus „rote Schuhe, eher klein" dagegen kaum. Der Ausschnitt ist nicht Kür, sondern der
+Grund, warum die Frage-Runde in zwei Minuten statt in zwanzig erledigt ist.
+
+Der Mensch beantwortet das **einmal** — bei 2 Teams sind das ~12–16 Zeilen. Erst danach beginnt
+die eigentliche Auswertung. Das ist kein Notbehelf, sondern der vorgesehene Weg: Der Mensch löst
+die Identität, die KI übernimmt das Mitzählen.
+
+### Sonderfall: Trikotfarbe sagt nichts über das Team
+
+Solange keine einheitlichen Trikots existieren, tragen Spieler desselben Teams **verschiedene
+Farben**. Dann darf die Farbe **nicht** zur Team-Zuordnung benutzt werden:
+
+- Tracklets werden mit `"team": null` angelegt. Das Präfix (`A…`/`B…`) wird erst vergeben, wenn
+  das Team bekannt ist — vorher heißen sie neutral `P1, P2, P3 …`.
+- Die Frage-Runde fragt **beides** ab: `P1 → wer, und welches Team?`
+- **Querprobe aus dem Spielverlauf:** Wer gegeneinander spielt, verrät die Teams. Bei
+  „P4 dribbelt P9 aus" sind P4 und P9 zwangsläufig in **verschiedenen** Teams, bei einem
+  angekommenen Pass im **gleichen**. Diese Paarungen als Constraints sammeln und dem Menschen
+  als Vorschlag zeigen (`P4 und P9 sind sicher gegnerisch`) — das halbiert die Rückfragen.
+- Erst wenn alle Teams stehen, greift die automatische Fußball-Logik aus Abschnitt 2 (sie setzt
+  voraus, dass „der Unterlegene gehört zum Gegner" gilt).
+
+> **Ehrliche Grenze:** Sehen sich zwei Spieler wirklich zum Verwechseln ähnlich (gleiche Statur,
+> gleiche Haare, gleiche Schuhe), trennt sie **kein** Verfahren zuverlässig. Dann werden beide
+> als ein gemeinsames, ausdrücklich unsicheres Tracklet geführt und in `offeneFragen` gemeldet —
+> nicht geraten und nicht stillschweigend aufgeteilt.
 
 **Durchgang 2 — Ereignisse erfassen.**
 Ab hier tragen die Tracklets echte Namen. Ein- und Auswechslungen erzeugen **neue** Tracklets,
@@ -314,6 +341,15 @@ Luft zum Nachdenken.
   "offeneFragen": []
 }
 ```
+
+### Bei unklaren Stellen nachziehen statt raten
+3 fps heißt 0,33 s Abstand — ein Pass ist in 1–2 Bildern vorbei. Ist eine Stelle unklar, **erst
+nachziehen, dann entscheiden**: für diese 2–3 Sekunden zusätzliche Bilder mit 10 fps holen.
+```bash
+ffmpeg -ss <sek> -t 3 -i "<video>" -vf "fps=10,scale=1280:-1" -q:v 3 zoom/z_%03d.jpg
+```
+Erst wenn es **danach** noch unklar ist, kommt die Stelle in `offeneFragen`. Das kostet wenige
+Bilder an genau den Stellen, wo es darauf ankommt, statt das ganze Spiel teuer zu machen.
 
 ### Die Häppchen-Grenze ist die Gefahrenstelle
 Dort verrutscht die Zuordnung. Deshalb gilt: **Merkmale sind der Anker, nicht die Reihenfolge.**
