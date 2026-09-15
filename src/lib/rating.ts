@@ -129,10 +129,21 @@ export function quotas(c: ActionCounts, cfg: ScoringConfig): Quotas {
 // --- Kartenwerte ------------------------------------------------------------
 
 // Elite-Index aus Quote + Menge (Index 1,00 = Elite-Ziel).
-function attrIndex(quote: number, menge: number, t: CardAttrTarget): number {
+// capMenge=true → Menge über dem Ziel gibt keinen Extra-Bonus mehr (das Ziel
+// ist „genug"). Dann entscheidet die Quote über die Spitze, statt dass reine
+// Masse jeden Wert auf 94 drückt. Genutzt im Testspiel-Modus.
+function attrIndex(quote: number, menge: number, t: CardAttrTarget, capMenge = false): number {
   const q = t.zielQuote > 0 ? quote / t.zielQuote : 0;
-  const m = t.zielMenge > 0 ? menge / t.zielMenge : 0;
+  let m = t.zielMenge > 0 ? menge / t.zielMenge : 0;
+  if (capMenge) m = Math.min(1, m);
   return t.gewQuote * q + t.gewMenge * m;
+}
+
+// Reine Mengen-Quote (z.B. Schlüsselpässe/Spiel) — im Testspiel-Modus bei 1
+// gedeckelt, damit das Ziel „genug" ist und nicht Masse allein maxt.
+function mengeRatio(value: number, ziel: number, capMenge: boolean): number {
+  const r = safeDiv(value, ziel);
+  return capMenge ? Math.min(1, r) : r;
 }
 
 // Kappen-Obergrenze abhängig von der Spielzahl (schützt vor Ausreißern bei
@@ -200,20 +211,24 @@ export function fieldCard(total: ActionCounts, games: number, cfg: ScoringConfig
   const cap = ignoreGamesCap ? cfg.card.caps.g8plus : capForGames(games, cfg);
   const p = cfg.card.pas;
 
+  // Im Testspiel-Modus: Menge bei 1 deckeln, damit Masse allein nicht maxt.
+  const capMenge = ignoreGamesCap;
+
   // PAS = gewichteter Index aus Pass-Index (Quote+Menge), Schlüsselpässen und Vorlagen.
   const passIndex =
     p.indexGewQuote * safeDiv(passRate(total), p.zielPassquote) +
-    p.indexGewMenge * safeDiv(passversuche(total) / g, p.zielPaesseSpiel);
-  const keyIndex = safeDiv(total.key_pass / g, p.zielKeySpiel);
-  const assistIndex = safeDiv(total.assist / g, p.zielAssistsSpiel);
+    p.indexGewMenge * mengeRatio(passversuche(total) / g, p.zielPaesseSpiel, capMenge);
+  const keyIndex = mengeRatio(total.key_pass / g, p.zielKeySpiel, capMenge);
+  const assistIndex = mengeRatio(total.assist / g, p.zielAssistsSpiel, capMenge);
   const pasIndex = p.gewPassindex * passIndex + p.gewKey * keyIndex + p.gewAssist * assistIndex;
 
-  const schIndex = attrIndex(schussQ(total, cfg), gesamtschuesse(total) / g, cfg.card.sch);
-  const driIndex = attrIndex(dribRate(total), total.dribble_won / g, cfg.card.dri);
+  const schIndex = attrIndex(schussQ(total, cfg), gesamtschuesse(total) / g, cfg.card.sch, capMenge);
+  const driIndex = attrIndex(dribRate(total), total.dribble_won / g, cfg.card.dri, capMenge);
   const defIndex = attrIndex(
     duelRate(total),
     (total.duel_won + total.interception + total.shot_blocked_def) / g,
-    cfg.card.def
+    cfg.card.def,
+    capMenge
   );
 
   let PAS: number, SCH: number, DRI: number, DEF: number;
@@ -254,16 +269,18 @@ export function keeperCard(total: ActionCounts, games: number, cfg: ScoringConfi
   const cleanRate = total.gk_goal_against === 0 ? 1 : 0; // grob – Feinschliff später
   const p = cfg.card.pas;
 
-  const parIndex = attrIndex(saveRate, total.save / g, cfg.card.par);
-  const sicIndex = attrIndex(cleanRate, clampMin(cfg.card.sic.zielMenge - total.gk_goal_against / g, 0), cfg.card.sic);
+  const capMenge = ignoreGamesCap;
+  const parIndex = attrIndex(saveRate, total.save / g, cfg.card.par, capMenge);
+  const sicIndex = attrIndex(cleanRate, clampMin(cfg.card.sic.zielMenge - total.gk_goal_against / g, 0), cfg.card.sic, capMenge);
   const stlIndex = attrIndex(
     saveRate,
     (total.gk_position_save + total.penalty_save) / g,
-    cfg.card.stl
+    cfg.card.stl,
+    capMenge
   );
   const passIndex =
     p.indexGewQuote * safeDiv(passRate(total), p.zielPassquote) +
-    p.indexGewMenge * safeDiv(passversuche(total) / g, p.zielPaesseSpiel);
+    p.indexGewMenge * mengeRatio(passversuche(total) / g, p.zielPaesseSpiel, capMenge);
 
   let STL: number, PAR: number, PAS: number, SIC: number;
   if (ignoreGamesCap) {
