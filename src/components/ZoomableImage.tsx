@@ -128,7 +128,9 @@ export default function ZoomableImage({
       tap.current = null;
     } else {
       tap.current = { x: p.x, y: p.y, t: Date.now(), touch: e.pointerType === 'touch' };
-      if (e.pointerType === 'touch') {
+      // Gedrückt-Halten meldet Pause – am Handy (Touch) und, wenn der Nutzer es
+      // will (onHoldChange gesetzt, z.B. Story), auch mit der Maus.
+      if (e.pointerType === 'touch' || onHoldChange) {
         holdTimer.current = window.setTimeout(() => {
           holding.current = true;
           onHoldChange?.(true);
@@ -186,11 +188,10 @@ export default function ZoomableImage({
         const dy = p.y - start.y;
         const moved = Math.abs(dx) > 10 || Math.abs(dy) > 10;
         if (!moved) {
-          // Sauberes Tippen (nur Touch) → Zone melden (Story blättert weiter).
-          if (start.touch) {
-            const cw = containerRef.current?.clientWidth ?? 1;
-            onTapZone?.(p.x < cw / 3 ? 'left' : p.x > (cw * 2) / 3 ? 'right' : 'center');
-          }
+          // Sauberes Tippen/Klicken → Zone melden (Story: rechts weiter, links zurück).
+          // Gilt für Touch UND Maus, damit es am PC wie am Handy funktioniert.
+          const cw = containerRef.current?.clientWidth ?? 1;
+          onTapZone?.(p.x < cw / 3 ? 'left' : p.x > (cw * 2) / 3 ? 'right' : 'center');
         } else if (start.touch && Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) {
           onSwipe?.(dx < 0 ? 1 : -1);
         }

@@ -13,7 +13,7 @@ export default function StoryPills({
   onOpen: (index: number) => void;
 }) {
   return (
-    <div className="flex gap-4 sm:gap-5 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="flex gap-4 sm:gap-5 overflow-x-auto py-2 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {albums.map((album, i) => {
         const c = albumCoverInfo(album);
         return (
