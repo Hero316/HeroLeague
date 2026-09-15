@@ -66,7 +66,7 @@ export const ShareCardFrame = React.forwardRef<
               color: 'rgba(255,255,255,0.6)',
             }}
           >
-            hero-league.de
+            heroleague.de
           </span>
         </div>
       </div>

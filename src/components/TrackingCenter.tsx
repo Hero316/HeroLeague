@@ -81,6 +81,8 @@ interface Props {
   eventArchive: EventArchive | null;
   activeSeasonId: string; // real ODER Demo – bestimmt die Tracking-Schlüssel
   demoActive?: boolean; // im Demo-Modus: kein Excel-Export
+  // Spontan angelegten Spieler auch in den echten Kader aufnehmen (Event/Liga).
+  onAddRosterPlayer?: (opts: { eventId: string | null; teamKey: string; name: string }) => void;
   onBack: () => void;
 }
 
@@ -112,6 +114,7 @@ export default function TrackingCenter({
   eventArchive,
   activeSeasonId,
   demoActive,
+  onAddRosterPlayer,
   onBack,
 }: Props) {
   // --- Theme (Hell/Dunkel), pro Gerät gespeichert -------------------------
@@ -548,8 +551,10 @@ export default function TrackingCenter({
       const updated: EditRow = { teamId, teamName, playerName: name, role: 'field', counts: emptyCounts() };
       setRows((prev) => (prev[k] ? prev : { ...prev, [k]: updated }));
       saveTally({ dayKey, matchId, teamId, playerName: name, role: 'field', counts: emptyCounts() }).catch(() => {});
+      // Auch in den echten Kader aufnehmen (öffentlicher Kader/Schiri/Tracking bleiben synchron).
+      onAddRosterPlayer?.({ eventId: selectedEventId, teamKey: teamId, name });
     },
-    [dayKey, resolveTeam]
+    [dayKey, resolveTeam, onAddRosterPlayer, selectedEventId]
   );
 
   // Den aktuell offenen Tag neu aus der DB laden (nach einer Umbuchung).

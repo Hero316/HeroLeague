@@ -678,6 +678,41 @@ export default function App() {
   const handleDeleteTeam = (teamId: string) =>
     runAdminAction(() => apiFetch(`/api/teams/${teamId}`, { method: 'DELETE' }));
 
+  // Spieler, den man im Tracking Center spontan anlegt, auch in den echten Kader
+  // aufnehmen – damit öffentlicher Kader, Schiedsrichter-Modus und Tracking
+  // zusammenpassen. Event → Event-Kader, Liga → Vereins-Spielerliste.
+  const handleTrackingAddPlayer = useCallback(
+    async (opts: { eventId: string | null; teamKey: string; name: string }) => {
+      const name = opts.name.trim();
+      if (!name) return;
+      const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+      if (opts.eventId) {
+        const arch = eventArchive;
+        const ev = arch?.events.find((e) => e.id === opts.eventId);
+        if (!arch || !ev) return;
+        const teamName = opts.teamKey;
+        const leagueTeam = teams.find((t) => norm(t.name) === norm(teamName));
+        const existing = ev.rosters?.find((r) => norm(r.team) === norm(teamName))?.players ?? leagueTeam?.spielerliste ?? [];
+        if (existing.some((p) => norm(p.name) === norm(name))) return;
+        const players = [...existing.map((p) => ({ ...p })), { name }];
+        const rosters = [...(ev.rosters ?? []).filter((r) => norm(r.team) !== norm(teamName)), { team: teamName, players }];
+        const nextArch = { ...arch, events: arch.events.map((e) => (e.id === ev.id ? { ...ev, rosters } : e)) };
+        setEventArchive(nextArch);
+        try {
+          await apiFetch('/api/twitch?resource=event', { method: 'POST', body: JSON.stringify(nextArch) });
+        } catch {
+          /* lokal ist es schon aktualisiert; nächster Poll gleicht ab */
+        }
+      } else {
+        const team = teams.find((t) => t.id === opts.teamKey) ?? teams.find((t) => norm(t.name) === norm(opts.teamKey));
+        if (!team) return;
+        if ((team.spielerliste ?? []).some((p) => norm(p.name) === norm(name))) return;
+        handleEditTeam(team.id, { spielerliste: [...(team.spielerliste ?? []), { name }] });
+      }
+    },
+    [eventArchive, teams]
+  );
+
   const handleAddMatch = (data: {
     matchday: number;
     homeTeamId: string;
@@ -1455,6 +1490,7 @@ export default function App() {
         eventArchive={eventArchive}
         activeSeasonId={currentSeason?.id ?? ''}
         demoActive={demo.active}
+        onAddRosterPlayer={handleTrackingAddPlayer}
         onBack={() => navigateTo('/admin')}
       />
     );
