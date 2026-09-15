@@ -30,8 +30,16 @@ export function publishDay(dayKey: string, live: boolean): Promise<{ days: strin
   });
 }
 
-// Alle Zeilen eines Spieltags/Abends (+ ob er live geschaltet ist).
-export function fetchDayStats(dayKey: string): Promise<{ rows: MatchPlayerStat[]; live: boolean }> {
+// Ein einzelnes Spiel live schalten (unabhängig vom ganzen Tag/Event).
+export function publishMatch(matchId: string, live: boolean): Promise<{ days: string[] }> {
+  return apiFetch('/api/stats?resource=publish', {
+    method: 'POST',
+    body: JSON.stringify({ matchId, live }),
+  });
+}
+
+// Alle Zeilen eines Spieltags/Abends (+ ob er live ist, + einzeln live geschaltete Spiele).
+export function fetchDayStats(dayKey: string): Promise<{ rows: MatchPlayerStat[]; live: boolean; liveMatchIds?: string[] }> {
   return apiFetch(`/api/stats?resource=day&day=${encodeURIComponent(dayKey)}`);
 }
 

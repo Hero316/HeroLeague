@@ -272,11 +272,13 @@ const exportScoring = requireStaff(async (req: VercelRequest, res: VercelRespons
 });
 
 const savePublish = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
-  const b = (req.body ?? {}) as { dayKey?: unknown; live?: unknown };
-  if (!isNonEmptyString(b.dayKey)) return badRequest(res, 'dayKey ist Pflicht.');
+  const b = (req.body ?? {}) as { dayKey?: unknown; matchId?: unknown; live?: unknown };
+  // Einzelnes Spiel live schalten (key `match:<id>`) ODER den ganzen Tag/das Event (dayKey).
+  const key = isNonEmptyString(b.matchId) ? `match:${b.matchId}` : isNonEmptyString(b.dayKey) ? b.dayKey : '';
+  if (!key) return badRequest(res, 'dayKey oder matchId ist Pflicht.');
   const current = new Set(await readLiveDays());
-  if (b.live) current.add(b.dayKey);
-  else current.delete(b.dayKey);
+  if (b.live) current.add(key);
+  else current.delete(key);
   const days = [...current];
   await sql`
     INSERT INTO settings (key, value) VALUES ('tracking-live', ${JSON.stringify({ days })}::jsonb)
@@ -399,11 +401,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (eventId) {
           const key = `event:${eventId}`;
           const live = await readLiveDays();
-          if (!live.includes(key)) return res.json({ rows: [], days: [] });
-          const rows = (await sql`
+          const eventLive = live.includes(key);
+          const liveMatchIds = live.filter((k) => k.startsWith('match:')).map((k) => k.slice('match:'.length));
+          if (!eventLive && liveMatchIds.length === 0) return res.json({ rows: [], days: [] });
+          const all = (await sql`
             SELECT day_key AS "dayKey", match_id AS "matchId", team_id AS "teamId",
                    player_name AS "playerName", role, counts
             FROM match_player_stats WHERE day_key = ${key}`) as StatRow[];
+          // Ganzes Event live ⇒ alles; sonst nur einzeln live geschaltete Spiele.
+          const rows = eventLive ? all : all.filter((r) => liveMatchIds.includes(r.matchId));
+          if (rows.length === 0) return res.json({ rows: [], days: [] });
           return res.json({ rows, days: [key] });
         }
         // Demo-Saison darf auch Entwürfe zeigen (all=1) – zum Testen ohne „Live schalten".
@@ -419,11 +426,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
         const live = await readLiveDays();
         const days = season ? live.filter((d) => d.startsWith(`s:${season}:`)) : live;
-        if (days.length === 0) return res.json({ rows: [], days: [] });
-        const rows = (await sql`
-          SELECT day_key AS "dayKey", match_id AS "matchId", team_id AS "teamId",
-                 player_name AS "playerName", role, counts
-          FROM match_player_stats WHERE day_key = ANY(${days}::text[])`) as StatRow[];
+        const liveMatchIds = live.filter((k) => k.startsWith('match:')).map((k) => k.slice('match:'.length));
+        if (days.length === 0 && liveMatchIds.length === 0) return res.json({ rows: [], days: [] });
+        // Live geschaltete Tage ODER einzeln live geschaltete Spiele (auf die Saison begrenzt).
+        const rows = (season
+          ? await sql`
+              SELECT day_key AS "dayKey", match_id AS "matchId", team_id AS "teamId",
+                     player_name AS "playerName", role, counts
+              FROM match_player_stats
+              WHERE day_key = ANY(${days}::text[])
+                 OR (match_id = ANY(${liveMatchIds}::text[]) AND day_key LIKE ${'s:' + season + ':%'})`
+          : await sql`
+              SELECT day_key AS "dayKey", match_id AS "matchId", team_id AS "teamId",
+                     player_name AS "playerName", role, counts
+              FROM match_player_stats
+              WHERE day_key = ANY(${days}::text[]) OR match_id = ANY(${liveMatchIds}::text[])`) as StatRow[];
         return res.json({ rows, days });
       }
 
@@ -438,8 +455,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           SELECT day_key AS "dayKey", match_id AS "matchId", team_id AS "teamId",
                  player_name AS "playerName", role, counts
           FROM match_player_stats WHERE day_key = ${day}`) as StatRow[];
-        const live = (await readLiveDays()).includes(day);
-        return res.json({ rows, live });
+        const liveSet = await readLiveDays();
+        const live = liveSet.includes(day);
+        const liveMatchIds = liveSet.filter((k) => k.startsWith('match:')).map((k) => k.slice('match:'.length));
+        return res.json({ rows, live, liveMatchIds });
       }
       if (resource === 'match') {
         const matchId = typeof req.query.matchId === 'string' ? req.query.matchId : '';

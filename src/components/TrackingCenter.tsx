@@ -54,6 +54,7 @@ import {
   saveTally,
   tallyOp,
   publishDay,
+  publishMatch,
   leagueDayKey,
   eventDayKey,
   testSheet,
@@ -191,6 +192,7 @@ export default function TrackingCenter({
   const rowsRef = useRef<RowMap>({});
   useEffect(() => { rowsRef.current = rows; }, [rows]);
   const [dayLive, setDayLive] = useState(false);
+  const [liveMatchIds, setLiveMatchIds] = useState<Set<string>>(new Set());
   const [loadingDay, setLoadingDay] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
 
@@ -325,7 +327,8 @@ export default function TrackingCenter({
     async (key: string, games: Match[], rk: string | null, rmap?: RosterMap) => {
       setLoadingDay(true);
       try {
-        const { rows: saved, live } = await fetchDayStats(key);
+        const { rows: saved, live, liveMatchIds: liveIds } = await fetchDayStats(key);
+        setLiveMatchIds(new Set(liveIds ?? []));
         const savedMap: Record<string, { role: string; counts: ActionCounts }> = {};
         saved.forEach((r) => {
           savedMap[rowKey(r.matchId, r.teamId, r.playerName)] = { role: r.role, counts: normalizeCounts(r.counts) };
@@ -596,6 +599,27 @@ export default function TrackingCenter({
     }
   }, [dayLive, dayKey]);
 
+  // Ein einzelnes Spiel live schalten/verstecken – unabhängig vom ganzen Tag/Event.
+  const toggleMatchLive = useCallback(async (matchId: string) => {
+    const next = !liveMatchIds.has(matchId);
+    setLiveMatchIds((prev) => {
+      const s = new Set(prev);
+      if (next) s.add(matchId);
+      else s.delete(matchId);
+      return s;
+    });
+    try {
+      await publishMatch(matchId, next);
+    } catch {
+      setLiveMatchIds((prev) => {
+        const s = new Set(prev);
+        if (next) s.delete(matchId);
+        else s.add(matchId);
+        return s;
+      });
+    }
+  }, [liveMatchIds]);
+
   const saveScoring = useCallback(async (c: ScoringConfig) => {
     setCfg(c);
     try {
@@ -822,6 +846,8 @@ export default function TrackingCenter({
               loading={loadingDay}
               live={dayLive}
               onTogglePublish={togglePublish}
+              liveMatchIds={liveMatchIds}
+              onToggleMatchLive={toggleMatchLive}
               onOpenMatch={setSelectedMatchId}
               onExport={selectedEvent || demoActive ? undefined : runExport}
               exporting={exporting}
@@ -971,6 +997,8 @@ function DayView({
   loading,
   live,
   onTogglePublish,
+  liveMatchIds,
+  onToggleMatchLive,
   onOpenMatch,
   onExport,
   exporting,
@@ -984,6 +1012,8 @@ function DayView({
   loading: boolean;
   live: boolean;
   onTogglePublish: () => void;
+  liveMatchIds: Set<string>;
+  onToggleMatchLive: (matchId: string) => void;
   onOpenMatch: (id: string) => void;
   onExport?: () => void;
   exporting?: boolean;
@@ -1041,39 +1071,63 @@ function DayView({
             const home = resolveTeam(m.homeTeamId);
             const away = resolveTeam(m.awayTeamId);
             const tracked = trackedCount(m.id);
+            const matchLive = liveMatchIds.has(m.id);
             return (
-              <button
+              <div
                 key={m.id}
-                onClick={() => onOpenMatch(m.id)}
-                className="hl-card p-4 flex items-center gap-3 text-left min-w-0 hover:border-brand-accent/40 transition-colors cursor-pointer"
+                className="hl-card p-3 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0 hover:border-brand-accent/40 transition-colors"
               >
-                <TeamBadge team={home} />
-                <div className="flex-1 min-w-0">
-                  {(m.time || m.date) && (
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-hl-faint mb-0.5">
-                      {m.date ? shortDate(m.date) : ''}
-                      {m.date && m.time ? ' · ' : ''}
-                      {m.time ? `${m.time} Uhr` : ''}
+                <button onClick={() => onOpenMatch(m.id)} className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer">
+                  <TeamBadge team={home} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                      {typeof m.field === 'number' && (
+                        <span className="text-[9px] font-black uppercase tracking-wider text-brand-accent-light bg-brand-accent/12 border border-brand-accent/25 rounded px-1.5 py-0.5">
+                          Feld {m.field}
+                        </span>
+                      )}
+                      {(m.time || m.date) && (
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-hl-faint">
+                          {m.date ? shortDate(m.date) : ''}
+                          {m.date && m.time ? ' · ' : ''}
+                          {m.time ? `${m.time} Uhr` : ''}
+                        </span>
+                      )}
                     </div>
-                  )}
-                  <div className="font-semibold truncate">
-                    {home?.name ?? m.homeTeamId} <span className="text-hl-faint">vs</span> {away?.name ?? m.awayTeamId}
+                    <div className="font-semibold truncate">
+                      {home?.name ?? m.homeTeamId} <span className="text-hl-faint">vs</span> {away?.name ?? m.awayTeamId}
+                    </div>
+                    <div className="text-[11px] text-hl-dim mt-0.5">
+                      {m.homeScore !== null && m.awayScore !== null ? `${m.homeScore}:${m.awayScore} · ` : ''}
+                      {tracked > 0 ? `${tracked} Spieler erfasst` : 'noch nicht erfasst'}
+                    </div>
                   </div>
-                  <div className="text-[11px] text-hl-dim mt-0.5">
-                    {m.homeScore !== null && m.awayScore !== null ? `${m.homeScore}:${m.awayScore} · ` : ''}
-                    {tracked > 0 ? `${tracked} Spieler erfasst` : 'noch nicht erfasst'}
-                  </div>
-                </div>
-                <TeamBadge team={away} />
+                  <TeamBadge team={away} />
+                </button>
+                {tracked > 0 && (
+                  <button
+                    onClick={() => onToggleMatchLive(m.id)}
+                    title="Nur dieses Spiel live schalten"
+                    className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 border cursor-pointer transition-colors ${
+                      matchLive ? 'bg-hl-green/15 border-hl-green/40 text-hl-green' : 'bg-white/5 border-white/10 text-hl-mute hover:text-hl-text'
+                    }`}
+                  >
+                    <Radio className="w-3 h-3" /> {matchLive ? 'Live' : 'Live schalten'}
+                  </button>
+                )}
                 <ChevronRight className="w-4 h-4 text-hl-faint shrink-0" />
-              </button>
+              </div>
             );
           })}
         </div>
       )}
-      <p className="text-[11px] text-hl-dim mt-5 flex items-center gap-1.5">
-        <Shield className="w-3.5 h-3.5" /> „Live schalten" macht die Werte {isEvent ? 'dieses Testspiels' : 'dieses Spieltags'} auf der
-        Website sichtbar. Ohne das bleiben sie interner Entwurf.
+      <p className="text-[11px] text-hl-dim mt-5 flex items-start gap-1.5">
+        <Shield className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+        <span>
+          Oben „Live schalten" macht {isEvent ? 'das ganze Testspiel' : 'den ganzen Spieltag'} auf einmal sichtbar. Oder pro Spiel
+          rechts einzeln live schalten (sobald erfasst) – so kannst du fertige Spiele schon zeigen, während der Rest noch läuft.
+          Ohne das bleiben die Werte interner Entwurf.
+        </span>
       </p>
     </div>
   );
@@ -1500,9 +1554,13 @@ function PlayerCard({
             <div key={g} className="min-w-[116px] lg:min-w-[280px] flex-1">
               <div className="text-[9px] font-black uppercase tracking-[.14em] text-hl-dim mb-1 pl-0.5">{g}</div>
               <div className="grid grid-cols-2 gap-1">
-                {acts.map((a) => (
-                  <ActionPill key={a.key} meta={a} value={row.counts[a.key] || 0} onDelta={(d) => onDelta(a.key, d)} />
-                ))}
+                {acts.map((a) => {
+                  // Ein Tor IST ein Torschuss: der Torschuss-Zähler zeigt shot_on + Tore
+                  // (sichtbar mitzählend beim Tor-Klick). Gespeichert bleibt beides
+                  // getrennt – die Auswertung zählt das Tor nur einmal als Schuss.
+                  const value = a.key === 'shot_on' ? (row.counts.shot_on || 0) + (row.counts.goal || 0) : row.counts[a.key] || 0;
+                  return <ActionPill key={a.key} meta={a} value={value} onDelta={(d) => onDelta(a.key, d)} />;
+                })}
               </div>
             </div>
           );
