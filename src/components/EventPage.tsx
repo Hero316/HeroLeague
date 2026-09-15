@@ -117,7 +117,8 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
   const shooters = useMemo(() => shotLeaders(trackingRows, cfg), [trackingRows, cfg]);
   const ballWinners = useMemo(() => ballWinnerLeaders(trackingRows, cfg), [trackingRows, cfg]);
   const keyPassers = useMemo(() => keyPassLeaders(trackingRows, cfg), [trackingRows, cfg]);
-  const hasLeaderboards = passers.length + dribblers.length + duellists.length + shooters.length > 0;
+  const hasLeaderboards =
+    passers.length + dribblers.length + duellists.length + shooters.length + ballWinners.length + keyPassers.length > 0;
   const hasAwards = Boolean(scorerKing || assistKing || bestPlayer || glove);
 
   // Aktives Untermenü. Wird von außen über die URL gesteuert (tabProp/onSelectTab),
@@ -544,9 +545,9 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
             </div>
             <p className="text-[12px] text-hl-mute font-sans mb-4">Aus den live getrackten Spielen — Top 10 je Kategorie.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 hl-cascade">
-              <LeaderboardCard title="Beste Passspieler" accent="#22DFC9" icon={<Send className="w-4 h-4" />} rows={passers} crestFor={crestFor} onPlayer={playerClick} />
-              <LeaderboardCard title="Beste Dribbler" accent="#E9C46A" icon={<Zap className="w-4 h-4" />} rows={dribblers} crestFor={crestFor} onPlayer={playerClick} />
-              <LeaderboardCard title="Beste Zweikämpfer" accent="#43E5A0" icon={<Swords className="w-4 h-4" />} rows={duellists} crestFor={crestFor} onPlayer={playerClick} />
+              <LeaderboardCard title="Beste Passquote" accent="#22DFC9" icon={<Send className="w-4 h-4" />} rows={passers} crestFor={crestFor} onPlayer={playerClick} mode="quote" />
+              <LeaderboardCard title="Beste Zweikampfquote" accent="#43E5A0" icon={<Swords className="w-4 h-4" />} rows={duellists} crestFor={crestFor} onPlayer={playerClick} mode="quote" />
+              <LeaderboardCard title="Beste Dribbling-Quote" accent="#E9C46A" icon={<Zap className="w-4 h-4" />} rows={dribblers} crestFor={crestFor} onPlayer={playerClick} mode="quote" />
               <LeaderboardCard title="Meiste Torschüsse" accent="#ff7ac4" icon={<Target className="w-4 h-4" />} rows={shooters} crestFor={crestFor} onPlayer={playerClick} />
               <LeaderboardCard title="Balleroberer" accent="#58F0CD" icon={<Shield className="w-4 h-4" />} rows={ballWinners} crestFor={crestFor} onPlayer={playerClick} />
               <LeaderboardCard title="Schlüsselpässe" accent="#c99bff" icon={<Sparkles className="w-4 h-4" />} rows={keyPassers} crestFor={crestFor} onPlayer={playerClick} />
@@ -648,6 +649,7 @@ function LeaderboardCard({
   rows,
   crestFor,
   onPlayer,
+  mode = 'count',
 }: {
   title: string;
   accent: string;
@@ -655,6 +657,7 @@ function LeaderboardCard({
   rows: StatLeader[];
   crestFor: (name: string) => Team | undefined;
   onPlayer: (teamName: string, playerName: string) => () => void;
+  mode?: 'count' | 'quote'; // 'quote' = Prozent groß (nach Quote sortiert), 'count' = Menge groß
 }) {
   if (!rows.length) return null;
   return (
@@ -666,6 +669,7 @@ function LeaderboardCard({
       <ol className="space-y-0.5">
         {rows.map((p, i) => {
           const t = crestFor(p.teamId);
+          const pct = p.quote != null ? `${Math.round(p.quote * 100)}%` : null;
           return (
             <li key={`${p.teamId}::${p.playerName}`}>
               <button
@@ -680,8 +684,17 @@ function LeaderboardCard({
                 </span>
                 <TeamCrest name={p.teamId} shortName={t?.shortName} color={t?.logoColor ?? '#E6238E'} logoUrl={t?.logoUrl} size="xs" />
                 <span className="flex-1 min-w-0 truncate font-sans font-semibold text-sm text-white">{p.playerName}</span>
-                {p.quote != null && <span className="shrink-0 font-mono text-[11px] text-hl-dim tabular-nums">{Math.round(p.quote * 100)}%</span>}
-                <span className="shrink-0 w-7 text-right font-display font-black tabular-nums text-white text-sm">{p.value}</span>
+                {mode === 'quote' ? (
+                  <>
+                    <span className="shrink-0 font-mono text-[11px] text-hl-dim tabular-nums">{p.value}×</span>
+                    <span className="shrink-0 w-10 text-right font-display font-black tabular-nums text-white text-sm">{pct ?? '–'}</span>
+                  </>
+                ) : (
+                  <>
+                    {pct && <span className="shrink-0 font-mono text-[11px] text-hl-dim tabular-nums">{pct}</span>}
+                    <span className="shrink-0 w-7 text-right font-display font-black tabular-nums text-white text-sm">{p.value}</span>
+                  </>
+                )}
               </button>
             </li>
           );

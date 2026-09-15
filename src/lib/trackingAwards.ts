@@ -83,45 +83,79 @@ const ratio = (a: number, b: number): number | null => (b > 0 ? a / b : null);
 function leaders(
   rows: MatchPlayerStat[],
   cfg: ScoringConfig,
-  value: (t: ActionCounts) => number,
-  quote?: (t: ActionCounts) => number | null,
-  limit = 10
+  o: {
+    value: (t: ActionCounts) => number; // Menge (z.B. angekommene Pässe / gewonnene Zweikämpfe)
+    quote?: (t: ActionCounts) => number | null;
+    attempts?: (t: ActionCounts) => number; // Nenner der Quote (für Mindestanzahl + Quote-Sortierung)
+    minAttempts?: number; // nur bei Quote-Sortierung: Mindestversuche, damit z.B. 1/1 nicht führt
+    sortByQuote?: boolean; // true = nach Quote sortieren, sonst nach Menge
+    limit?: number;
+  }
 ): StatLeader[] {
+  const min = o.minAttempts ?? 1;
   return aggregate(rows, cfg)
-    .map((p) => ({ teamId: p.teamId, playerName: p.playerName, value: value(p.total), quote: quote ? quote(p.total) : null, games: p.games }))
-    .filter((p) => p.value > 0)
-    .sort((a, b) => b.value - a.value || (b.quote ?? 0) - (a.quote ?? 0) || a.playerName.localeCompare(b.playerName))
-    .slice(0, limit);
+    .map((p) => ({
+      teamId: p.teamId,
+      playerName: p.playerName,
+      value: o.value(p.total),
+      quote: o.quote ? o.quote(p.total) : null,
+      attempts: o.attempts ? o.attempts(p.total) : o.value(p.total),
+      games: p.games,
+    }))
+    .filter((p) => (o.sortByQuote ? p.attempts >= min && p.quote != null : p.value > 0))
+    .sort((a, b) =>
+      o.sortByQuote
+        ? (b.quote ?? 0) - (a.quote ?? 0) || b.value - a.value || a.playerName.localeCompare(b.playerName)
+        : b.value - a.value || (b.quote ?? 0) - (a.quote ?? 0) || a.playerName.localeCompare(b.playerName)
+    )
+    .slice(0, o.limit ?? 10)
+    .map(({ teamId, playerName, value, quote, games }) => ({ teamId, playerName, value, quote, games }));
 }
 
-// Beste Passspieler: angekommene Pässe (inkl. Assists/Schlüsselpässe) + Passquote.
+// Beste Passquote: nach Quote sortiert (ab genügend Pässen), Menge = angekommene Pässe.
 export function passLeaders(rows: MatchPlayerStat[], cfg: ScoringConfig): StatLeader[] {
-  return leaders(rows, cfg, (t) => t.pass_ok, (t) => ratio(t.pass_ok, t.pass_ok + t.pass_fail));
+  return leaders(rows, cfg, {
+    value: (t) => t.pass_ok,
+    quote: (t) => ratio(t.pass_ok, t.pass_ok + t.pass_fail),
+    attempts: (t) => t.pass_ok + t.pass_fail,
+    minAttempts: 5,
+    sortByQuote: true,
+  });
 }
-// Beste Dribbler: gewonnene Dribblings + Dribbling-Quote.
+// Beste Dribbling-Quote: nach Quote sortiert (ab genügend Dribblings).
 export function dribbleLeaders(rows: MatchPlayerStat[], cfg: ScoringConfig): StatLeader[] {
-  return leaders(rows, cfg, (t) => t.dribble_won, (t) => ratio(t.dribble_won, t.dribble_won + t.dribble_lost));
+  return leaders(rows, cfg, {
+    value: (t) => t.dribble_won,
+    quote: (t) => ratio(t.dribble_won, t.dribble_won + t.dribble_lost),
+    attempts: (t) => t.dribble_won + t.dribble_lost,
+    minAttempts: 5,
+    sortByQuote: true,
+  });
 }
-// Beste Zweikämpfer: gewonnene Zweikämpfe + Zweikampfquote.
+// Beste Zweikampfquote: nach Quote sortiert (ab genügend Zweikämpfen).
 export function duelLeaders(rows: MatchPlayerStat[], cfg: ScoringConfig): StatLeader[] {
-  return leaders(rows, cfg, (t) => t.duel_won, (t) => ratio(t.duel_won, t.duel_won + t.duel_lost));
+  return leaders(rows, cfg, {
+    value: (t) => t.duel_won,
+    quote: (t) => ratio(t.duel_won, t.duel_won + t.duel_lost),
+    attempts: (t) => t.duel_won + t.duel_lost,
+    minAttempts: 5,
+    sortByQuote: true,
+  });
 }
-// Torgefährlichkeit: Schüsse aufs Tor (inkl. Tore) + Schussgenauigkeit.
+// Meiste Torschüsse: Schüsse aufs Tor (inkl. Tore) nach Menge, mit Genauigkeit.
 export function shotLeaders(rows: MatchPlayerStat[], cfg: ScoringConfig): StatLeader[] {
-  return leaders(
-    rows,
-    cfg,
-    (t) => t.goal + t.shot_on,
-    (t) => ratio(t.goal + t.shot_on, t.goal + t.shot_on + t.shot_blocked_off + t.shot_miss)
-  );
+  return leaders(rows, cfg, {
+    value: (t) => t.goal + t.shot_on,
+    quote: (t) => ratio(t.goal + t.shot_on, t.goal + t.shot_on + t.shot_blocked_off + t.shot_miss),
+  });
 }
 // Balleroberer: Interceptions + gewonnene Zweikämpfe (reine Menge).
 export function ballWinnerLeaders(rows: MatchPlayerStat[], cfg: ScoringConfig): StatLeader[] {
-  return leaders(rows, cfg, (t) => t.interception + t.duel_won);
+  return leaders(rows, cfg, { value: (t) => t.interception + t.duel_won });
 }
 // Kreativste: Schlüsselpässe (reine Menge).
 export function keyPassLeaders(rows: MatchPlayerStat[], cfg: ScoringConfig): StatLeader[] {
-  return leaders(rows, cfg, (t) => t.key_pass);
+  return leaders(rows, cfg, { value: (t) => t.key_pass });
 }
 
 // HERO ONE: Saison-Rangliste nach Gesamt-Score.
