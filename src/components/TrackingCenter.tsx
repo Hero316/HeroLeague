@@ -341,17 +341,22 @@ export default function TrackingCenter({
         games.forEach((m) => {
           ([m.homeTeamId, m.awayTeamId] as const).forEach((tid) => {
             const teamName = resolveTeam(tid)?.name ?? tid;
-            squadFor(tid, rk, absentByTeam[tid], rmap).forEach((pl) => {
+            const squad = squadFor(tid, rk, absentByTeam[tid], rmap);
+            // Ist für das Team ein Torwart bestimmt (Aufstellung/Anwesenheit oder
+            // Schiedsrichter-Modus), gilt DIESE Zuordnung – auch für bereits
+            // getrackte Spieler. Nur wenn kein Torwart bestimmt ist, greift die
+            // zuletzt getrackte/manuell im Tracker gesetzte Rolle.
+            const teamHasKeeper = squad.some((p) => p.role === 'keeper');
+            squad.forEach((pl) => {
               const k = rowKey(m.id, tid, pl.name);
               const sv = savedMap[k];
-              next[k] = {
-                teamId: tid,
-                teamName,
-                playerName: pl.name,
-                role: (sv?.role as StatRole) || pl.role,
-                counts: sv?.counts ?? emptyCounts(),
-                number: pl.number,
-              };
+              const role: StatRole = teamHasKeeper ? pl.role : (sv?.role as StatRole) || pl.role;
+              next[k] = { teamId: tid, teamName, playerName: pl.name, role, counts: sv?.counts ?? emptyCounts(), number: pl.number };
+              // Korrigierte Rolle (Torwart-Zuordnung) auch in der DB festschreiben,
+              // damit Auswertung/Export sie nutzen – nur bei echter Abweichung.
+              if (sv && sv.role !== role) {
+                saveTally({ dayKey: key, matchId: m.id, teamId: tid, playerName: pl.name, role, counts: sv.counts }).catch(() => {});
+              }
             });
           });
         });
