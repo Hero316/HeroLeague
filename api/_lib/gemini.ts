@@ -42,10 +42,10 @@ export const ACTION_CATALOG: ActionDef[] = [
   { key: 'dribble_won', label: 'Dribbling gewonnen', hint: 'erfolgreicher Dribbling/Haken, "setzt sich durch", "tunnelt", "lässt stehen", "geht vorbei".' },
   { key: 'dribble_lost', label: 'Dribbling verloren', hint: 'Dribbling misslingt, "wird abgelaufen", "verstolpert im Dribbling".' },
   { key: 'duel_won', label: 'Zweikampf gewonnen', hint: 'gewonnener Zweikampf/Tackling, "gewinnt den Zweikampf", "grätscht sauber", "erobert den Ball", "holt sich den Ball".' },
-  { key: 'duel_lost', label: 'Zweikampf verloren', hint: 'verlorener Zweikampf, "verliert das Duell", "wird überlaufen".' },
+  { key: 'duel_lost', label: 'Zweikampf verloren', hint: 'NUR der VERTEIDIGER, der vom ballführenden Gegner ausgespielt/überdribbelt wird und das Dribbling nicht verteidigen kann (Spiegelbild zu dribble_won des Angreifers): "wird ausgedribbelt", "wird überlaufen", "lässt sich austanzen". NIEMALS für einen Spieler, der selbst den Ball verliert – das ist turnover oder dribble_lost.' },
   { key: 'interception', label: 'Interception', hint: 'abgefangener Pass, "fängt ab", "geht dazwischen", "liest den Pass".' },
   { key: 'shot_blocked_def', label: 'Schuss geblockt (defensiv)', hint: 'blockt einen gegnerischen Schuss, "wirft sich rein", "blockt den Abschluss".' },
-  { key: 'turnover', label: 'Ballverlust', hint: 'verliert den Ball ohne Zweikampf/Pass, "verliert den Ball", "Ballverlust", "wird der Ball abgenommen".' },
+  { key: 'turnover', label: 'Ballverlust', hint: 'der Ballführende verliert den Ball (auch „Ballverlust gegen Y", „verliert den Ball an Y", „wird der Ball abgenommen"), sofern es KEIN misslungenes Dribbling (dribble_lost) und KEIN Fehlpass (pass_fail) ist. Der Ballverlierer bekommt turnover – NIEMALS duel_lost.' },
   { key: 'own_goal', label: 'Eigentor', hint: '"Eigentor", "fälscht ins eigene Tor ab".' },
   { key: 'penalty_goal', label: 'Strafstoßtor', hint: 'verwandelter Elfmeter. Gib zusätzlich goal aus, da es ein Tor ist.' },
   { key: 'save', label: 'Parade', hint: 'Torwart hält, "pariert", "hält stark", "lenkt über die Latte". Nur Torwart.' },
@@ -200,12 +200,13 @@ Jede Taste ist ein EIGENER Zähler, der nur nach OBEN geht. Jedes Vorkommen eine
    - Assist (Vorlage) → nur assist ausgeben (die App zählt die Vorlage automatisch als pass_ok; gib NICHT zusätzlich pass_ok aus).
 
    (c) Zwei Beteiligte – NUR wenn der zweite Spieler klar benannt/erkennbar und im Kader ist (sonst nur den einen). Der zweite/unterlegene Spieler (Y) gehört IMMER zur GEGNERISCHEN Mannschaft des Handelnden (X) – nutze das, um bei einer Rückennummer, die es in BEIDEN Teams gibt, das richtige Team zu wählen:
-   - Zweikampf: „X gewinnt gegen Y" / „X holt sich/erobert den Ball von Y" → duel_won für X UND duel_lost für Y.
+   - Zweikampf: „X gewinnt gegen Y" / „X holt sich/erobert/grätscht den Ball von Y" → duel_won für X UND turnover für Y (Y verliert den Ball – das ist Ballverlust, KEIN duel_lost).
+   - Ballverlust: „Y verliert den Ball / Ballverlust gegen X / verliert den Ball an X" → turnover für Y (NIEMALS duel_lost für Y). X bekommt nur dann etwas, wenn klar ein gewonnener Zweikampf/Tackling genannt ist (dann duel_won) bzw. ein abgefangener Pass (dann interception).
    - Dribbling: „X tunnelt/umkurvt Y" / „geht an Y vorbei" → dribble_won für X UND duel_lost für Y.
    - MEHRERE ausgespielte Gegner in EINER Aktion: „X dribbelt Y und Z aus" / „lässt Y und Z stehen" / „geht an Y und Z vorbei" → dribble_won für X so oft wie Gegner ausgespielt wurden (hier +2) UND duel_lost je Gegner (Y +1, Z +1). Beispiel: „Maik dribbelt Justin und Darius aus" → Maik dribble_won +2, Justin duel_lost +1, Darius duel_lost +1.
    - Abgefangener Pass: „X fängt den Pass von Y ab" → interception für X UND pass_fail für Y.
    - Geblockter Schuss: „Y blockt den Schuss von X" → shot_blocked_off für X UND shot_blocked_def für Y.
-4. NICHT DOPPELT zählen: Ein Ballverlust ist ENTWEDER pass_fail (verlorener Pass) ODER duel_lost (im Zweikampf verloren) ODER turnover (Ball ohne Pass/Zweikampf vertändelt) – nie mehrfach für dieselbe Situation. Eine Interception ist kein Zweikampf. Ein vom Torwart gehaltener Schuss (save) ist kein vom Feldspieler geblockter Schuss (shot_blocked_def).
+4. NICHT DOPPELT zählen: Der Ballverlust des Ballführenden ist ENTWEDER pass_fail (verlorener Pass) ODER dribble_lost (misslungenes Dribbling) ODER turnover (sonstiger Ballverlust, auch „gegen Y") – nie mehrfach für dieselbe Situation und NIEMALS duel_lost. duel_lost bekommt ausschließlich der ausgespielte Verteidiger (Spiegelbild zu dribble_won des Angreifers). Eine Interception ist kein Zweikampf. Ein vom Torwart gehaltener Schuss (save) ist kein vom Feldspieler geblockter Schuss (shot_blocked_def).
 5. Korrekturen: Wenn der Sprecher etwas zurücknimmt ("nein", "doch nicht", "verspreche", "streich das", "Entschuldigung, das war falsch", "Quatsch"), dann gib das zurückgenommene Ereignis GAR NICHT aus (nicht etwa mit negativem delta ausgleichen). Liefere immer das bereinigte Endergebnis.
 6. Erfinde nichts. Nur Aktionen ausgeben, die klar genannt werden oder sich zwingend aus der Fußball-Logik (Punkt 3) ergeben und zu einem Kaderspieler passen. Unklares mit niedriger "confidence" und kurzer "note" markieren.
 7. "quote" = kurzer wörtlicher Ausschnitt aus dem Transkript, der zu diesem Ereignis führt (bei automatisch abgeleiteten Ereignissen die auslösende Stelle, z.B. das Tor).
