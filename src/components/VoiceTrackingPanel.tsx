@@ -39,9 +39,13 @@ interface Props {
   matchId: string;
   homeName: string;
   awayName: string;
+  homeTeamId: string;
+  awayTeamId: string;
   players: VoicePlayer[];
   onApply: (items: ApplyItem[]) => void;
   onClose: () => void;
+  // Fehlt ein erkannter Spieler im Kader: hier neu anlegen (kommt auch in den Kader).
+  onCreatePlayer?: (teamId: string, name: string) => void;
 }
 
 const ACTION_BY_KEY: Record<string, { label: string; icon: string }> = Object.fromEntries(
@@ -65,7 +69,7 @@ function fmtTime(sec: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export default function VoiceTrackingPanel({ matchId, homeName, awayName, players, onApply, onClose }: Props) {
+export default function VoiceTrackingPanel({ matchId, homeName, awayName, homeTeamId, awayTeamId, players, onApply, onClose, onCreatePlayer }: Props) {
   useBackClose(true, onClose);
 
   // Erkanntes Ergebnis pro Spiel zwischenspeichern, damit versehentliches
@@ -603,7 +607,20 @@ export default function VoiceTrackingPanel({ matchId, homeName, awayName, player
                         <div className="mt-2 flex items-center gap-2 pl-[26px]">
                           <select
                             value={r.sel}
-                            onChange={(e) => patchRow(r.id, { sel: e.target.value, include: e.target.value !== '' })}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              // Spieler fehlt im Kader → neu anlegen (kommt auch in den Kader).
+                              if (v === '__new_home__' || v === '__new_away__') {
+                                const teamId = v === '__new_home__' ? homeTeamId : awayTeamId;
+                                const suggested = (r.ev.player || '').trim();
+                                const name = (window.prompt('Name des neuen Spielers:', suggested) || '').trim();
+                                if (!name || !teamId) return;
+                                onCreatePlayer?.(teamId, name);
+                                patchRow(r.id, { sel: `${teamId}::${name}`, include: true });
+                                return;
+                              }
+                              patchRow(r.id, { sel: v, include: v !== '' });
+                            }}
                             className={`hl-input rounded-lg px-2 py-1.5 text-[12px] font-semibold flex-1 min-w-0 ${
                               unmatched ? 'border-hl-gold/50' : ''
                             }`}
@@ -617,6 +634,7 @@ export default function VoiceTrackingPanel({ matchId, homeName, awayName, player
                                   {p.role === 'keeper' ? ' (TW)' : ''}
                                 </option>
                               ))}
+                              {onCreatePlayer && <option value="__new_home__">＋ Neuer Spieler …</option>}
                             </optgroup>
                             <optgroup label={awayName}>
                               {selectOptions.away.map((p) => (
@@ -626,6 +644,7 @@ export default function VoiceTrackingPanel({ matchId, homeName, awayName, player
                                   {p.role === 'keeper' ? ' (TW)' : ''}
                                 </option>
                               ))}
+                              {onCreatePlayer && <option value="__new_away__">＋ Neuer Spieler …</option>}
                             </optgroup>
                           </select>
                           {unmatched && <span className="text-[10px] text-hl-gold shrink-0">nicht erkannt</span>}

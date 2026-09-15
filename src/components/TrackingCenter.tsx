@@ -1270,9 +1270,12 @@ function MatchEditor({
           matchId={match.id}
           homeName={home?.name ?? match.homeTeamId}
           awayName={away?.name ?? match.awayTeamId}
+          homeTeamId={match.homeTeamId}
+          awayTeamId={match.awayTeamId}
           players={voicePlayers}
           onApply={applyVoice}
           onClose={() => setVoiceOpen(false)}
+          onCreatePlayer={(teamId, name) => onAddPlayer(match.id, teamId, name)}
         />
       )}
 
