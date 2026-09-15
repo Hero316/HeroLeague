@@ -739,7 +739,7 @@ export default function TeamDetail({
                         )}
                       </div>
                       <div className="font-sans text-[11px] lg:text-[13px] text-hl-dim">
-                        {player.matchesPlayed} Sp. · {player.assists} Assists
+                        {player.matchesPlayed} Sp. · {player.goals} Tore · {player.assists} Assists
                         {player.winRate !== null ? ` · ${player.winRate}% Siege` : ''}
                       </div>
                     </div>

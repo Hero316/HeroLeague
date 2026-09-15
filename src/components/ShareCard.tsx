@@ -48,42 +48,26 @@ export const ShareCardFrame = React.forwardRef<
       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', padding: '7% 7% 0' }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>{children}</div>
 
-        {/* Wasserzeichen / Footer */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: '6%', paddingTop: '4%' }}>
-          <div
+        {/* Wasserzeichen / Footer – echtes Hero-League-Logo + Domain */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: '6%', paddingTop: '4%' }}>
+          <img
+            src="/assets/hero-league-logo.png"
+            alt="Hero League"
+            crossOrigin="anonymous"
+            style={{ height: 42, width: 'auto', objectFit: 'contain', display: 'block' }}
+          />
+          <span
             style={{
-              width: 30,
-              height: 30,
-              borderRadius: 9,
-              background: accent,
-              color: '#04120d',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
               fontFamily: '"Saira Condensed", "Saira", sans-serif',
-              fontWeight: 900,
-              fontSize: 20,
-              lineHeight: 1,
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.14em',
+              fontSize: 13,
+              color: 'rgba(255,255,255,0.6)',
             }}
           >
-            H
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.05 }}>
-            <span
-              style={{
-                fontFamily: '"Saira Condensed", "Saira", sans-serif',
-                fontWeight: 900,
-                textTransform: 'uppercase',
-                letterSpacing: '0.04em',
-                fontSize: 17,
-              }}
-            >
-              Hero League
-            </span>
-            <span style={{ fontSize: 11, letterSpacing: '0.12em', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase' }}>
-              hero-league.de
-            </span>
-          </div>
+            hero-league.de
+          </span>
         </div>
       </div>
     </div>
