@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shield, Lock, Goal, Crown, Star, Hand, Handshake, Printer, Ticket, ArrowRight } from 'lucide-react';
+import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shield, Lock, Goal, Crown, Star, Hand, Handshake, Printer, Ticket, ArrowRight, Target, Zap, Send, Sparkles } from 'lucide-react';
 import { EventConfig, MatchPlayerStat, ScoringConfig, Team } from '../types';
 import { TeamCrest, LiveBadge } from './ui';
 import { calculateEventStandings } from '../lib/eventStandings';
-import { scorerRanking, assistRanking, goldenGloveRanking, seasonRanking } from '../lib/trackingAwards';
+import { scorerRanking, assistRanking, goldenGloveRanking, seasonRanking, passLeaders, dribbleLeaders, duelLeaders, shotLeaders, ballWinnerLeaders, keyPassLeaders, type StatLeader } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
 
 interface EventPageProps {
@@ -109,6 +109,15 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
   const assistKing = assists[0] ?? null;
   const glove = keepers[0] ?? null;
   const bestPlayer = hero[0] ?? null;
+
+  // Bestenlisten (Top 10) aus den getrackten Werten für die Statistik-Seite.
+  const passers = useMemo(() => passLeaders(trackingRows, cfg), [trackingRows, cfg]);
+  const dribblers = useMemo(() => dribbleLeaders(trackingRows, cfg), [trackingRows, cfg]);
+  const duellists = useMemo(() => duelLeaders(trackingRows, cfg), [trackingRows, cfg]);
+  const shooters = useMemo(() => shotLeaders(trackingRows, cfg), [trackingRows, cfg]);
+  const ballWinners = useMemo(() => ballWinnerLeaders(trackingRows, cfg), [trackingRows, cfg]);
+  const keyPassers = useMemo(() => keyPassLeaders(trackingRows, cfg), [trackingRows, cfg]);
+  const hasLeaderboards = passers.length + dribblers.length + duellists.length + shooters.length > 0;
   const hasAwards = Boolean(scorerKing || assistKing || bestPlayer || glove);
 
   // Aktives Untermenü. Wird von außen über die URL gesteuert (tabProp/onSelectTab),
@@ -526,6 +535,24 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
             Sobald die ersten Ergebnisse eingetragen sind, erscheinen hier die Bestwerte des Abends.
           </div>
         )}
+
+        {hasLeaderboards && (
+          <div className="mt-9">
+            <div className="flex items-center gap-2 mb-1">
+              <BarChart3 className="w-5 h-5 text-[#ff7ac4]" />
+              <h3 className="font-display font-black text-lg uppercase tracking-tight text-white">Bestenlisten des Abends</h3>
+            </div>
+            <p className="text-[12px] text-hl-mute font-sans mb-4">Aus den live getrackten Spielen — Top 10 je Kategorie.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 hl-cascade">
+              <LeaderboardCard title="Beste Passspieler" accent="#22DFC9" icon={<Send className="w-4 h-4" />} rows={passers} crestFor={crestFor} onPlayer={playerClick} />
+              <LeaderboardCard title="Beste Dribbler" accent="#E9C46A" icon={<Zap className="w-4 h-4" />} rows={dribblers} crestFor={crestFor} onPlayer={playerClick} />
+              <LeaderboardCard title="Beste Zweikämpfer" accent="#43E5A0" icon={<Swords className="w-4 h-4" />} rows={duellists} crestFor={crestFor} onPlayer={playerClick} />
+              <LeaderboardCard title="Meiste Torschüsse" accent="#ff7ac4" icon={<Target className="w-4 h-4" />} rows={shooters} crestFor={crestFor} onPlayer={playerClick} />
+              <LeaderboardCard title="Balleroberer" accent="#58F0CD" icon={<Shield className="w-4 h-4" />} rows={ballWinners} crestFor={crestFor} onPlayer={playerClick} />
+              <LeaderboardCard title="Schlüsselpässe" accent="#c99bff" icon={<Sparkles className="w-4 h-4" />} rows={keyPassers} crestFor={crestFor} onPlayer={playerClick} />
+            </div>
+          </div>
+        )}
         </div>
         )}
 
@@ -613,6 +640,57 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
 }
 
 // Kompakte Statistik-Kachel
+// Bestenliste (Top 10) mit Rang, Wappen, Name, Hauptwert und optionaler Quote.
+function LeaderboardCard({
+  title,
+  accent,
+  icon,
+  rows,
+  crestFor,
+  onPlayer,
+}: {
+  title: string;
+  accent: string;
+  icon: React.ReactNode;
+  rows: StatLeader[];
+  crestFor: (name: string) => Team | undefined;
+  onPlayer: (teamName: string, playerName: string) => () => void;
+}) {
+  if (!rows.length) return null;
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,.02)] p-3.5 min-w-0">
+      <div className="flex items-center gap-2 mb-2.5">
+        <span style={{ color: accent }}>{icon}</span>
+        <h4 className="font-display font-black uppercase tracking-tight text-white text-sm truncate">{title}</h4>
+      </div>
+      <ol className="space-y-0.5">
+        {rows.map((p, i) => {
+          const t = crestFor(p.teamId);
+          return (
+            <li key={`${p.teamId}::${p.playerName}`}>
+              <button
+                onClick={onPlayer(p.teamId, p.playerName)}
+                className="w-full flex items-center gap-2 rounded-lg px-1.5 py-1.5 hover:bg-white/[.05] transition-colors cursor-pointer text-left"
+              >
+                <span
+                  className="w-4 shrink-0 text-center font-display font-black tabular-nums text-xs"
+                  style={{ color: i === 0 ? accent : undefined }}
+                >
+                  {i + 1}
+                </span>
+                <TeamCrest name={p.teamId} shortName={t?.shortName} color={t?.logoColor ?? '#E6238E'} logoUrl={t?.logoUrl} size="xs" />
+                <span className="flex-1 min-w-0 truncate font-sans font-semibold text-sm text-white">{p.playerName}</span>
+                {p.quote != null && <span className="shrink-0 font-mono text-[11px] text-hl-dim tabular-nums">{Math.round(p.quote * 100)}%</span>}
+                <span className="shrink-0 w-7 text-right font-display font-black tabular-nums text-white text-sm">{p.value}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
 function StatTile({
   icon,
   label,

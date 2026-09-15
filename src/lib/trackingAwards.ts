@@ -68,6 +68,62 @@ function aggregate(rows: MatchPlayerStat[], cfg: ScoringConfig, matchFilter?: Se
   return out;
 }
 
+// --- Bestenlisten je Kategorie (Pässe, Dribblings, Zweikämpfe, Schüsse …) -----
+// Top-Spieler nach einem Hauptwert (Menge), plus optionaler Quote.
+export interface StatLeader {
+  teamId: string;
+  playerName: string;
+  value: number; // Hauptwert (z.B. angekommene Pässe)
+  quote: number | null; // 0..1 (z.B. Passquote), optional
+  games: number;
+}
+
+const ratio = (a: number, b: number): number | null => (b > 0 ? a / b : null);
+
+function leaders(
+  rows: MatchPlayerStat[],
+  cfg: ScoringConfig,
+  value: (t: ActionCounts) => number,
+  quote?: (t: ActionCounts) => number | null,
+  limit = 10
+): StatLeader[] {
+  return aggregate(rows, cfg)
+    .map((p) => ({ teamId: p.teamId, playerName: p.playerName, value: value(p.total), quote: quote ? quote(p.total) : null, games: p.games }))
+    .filter((p) => p.value > 0)
+    .sort((a, b) => b.value - a.value || (b.quote ?? 0) - (a.quote ?? 0) || a.playerName.localeCompare(b.playerName))
+    .slice(0, limit);
+}
+
+// Beste Passspieler: angekommene Pässe (inkl. Assists/Schlüsselpässe) + Passquote.
+export function passLeaders(rows: MatchPlayerStat[], cfg: ScoringConfig): StatLeader[] {
+  return leaders(rows, cfg, (t) => t.pass_ok, (t) => ratio(t.pass_ok, t.pass_ok + t.pass_fail));
+}
+// Beste Dribbler: gewonnene Dribblings + Dribbling-Quote.
+export function dribbleLeaders(rows: MatchPlayerStat[], cfg: ScoringConfig): StatLeader[] {
+  return leaders(rows, cfg, (t) => t.dribble_won, (t) => ratio(t.dribble_won, t.dribble_won + t.dribble_lost));
+}
+// Beste Zweikämpfer: gewonnene Zweikämpfe + Zweikampfquote.
+export function duelLeaders(rows: MatchPlayerStat[], cfg: ScoringConfig): StatLeader[] {
+  return leaders(rows, cfg, (t) => t.duel_won, (t) => ratio(t.duel_won, t.duel_won + t.duel_lost));
+}
+// Torgefährlichkeit: Schüsse aufs Tor (inkl. Tore) + Schussgenauigkeit.
+export function shotLeaders(rows: MatchPlayerStat[], cfg: ScoringConfig): StatLeader[] {
+  return leaders(
+    rows,
+    cfg,
+    (t) => t.goal + t.shot_on,
+    (t) => ratio(t.goal + t.shot_on, t.goal + t.shot_on + t.shot_blocked_off + t.shot_miss)
+  );
+}
+// Balleroberer: Interceptions + gewonnene Zweikämpfe (reine Menge).
+export function ballWinnerLeaders(rows: MatchPlayerStat[], cfg: ScoringConfig): StatLeader[] {
+  return leaders(rows, cfg, (t) => t.interception + t.duel_won);
+}
+// Kreativste: Schlüsselpässe (reine Menge).
+export function keyPassLeaders(rows: MatchPlayerStat[], cfg: ScoringConfig): StatLeader[] {
+  return leaders(rows, cfg, (t) => t.key_pass);
+}
+
 // HERO ONE: Saison-Rangliste nach Gesamt-Score.
 export function seasonRanking(rows: MatchPlayerStat[], cfg: ScoringConfig): RankedPlayer[] {
   return aggregate(rows, cfg).sort(
