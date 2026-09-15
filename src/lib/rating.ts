@@ -128,22 +128,26 @@ export function quotas(c: ActionCounts, cfg: ScoringConfig): Quotas {
 
 // --- Kartenwerte ------------------------------------------------------------
 
+// Obergrenze für den Mengen-Anteil im Testspiel-Modus: Volumen wird belohnt,
+// auch über dem Ziel (bis 1,5×), aber nicht unbegrenzt — sonst würde reine
+// Masse allein davonlaufen.
+const VOL_CAP = 1.5;
+
 // Elite-Index aus Quote + Menge (Index 1,00 = Elite-Ziel).
-// capMenge=true → Menge über dem Ziel gibt keinen Extra-Bonus mehr (das Ziel
-// ist „genug"). Dann entscheidet die Quote über die Spitze, statt dass reine
-// Masse jeden Wert auf 94 drückt. Genutzt im Testspiel-Modus.
+// capMenge=true → Menge über dem Ziel zählt weiter, aber gedeckelt bei VOL_CAP
+// (Testspiel-Modus). So wird Volumen belohnt, ohne dass Masse allein maxt.
 function attrIndex(quote: number, menge: number, t: CardAttrTarget, capMenge = false): number {
   const q = t.zielQuote > 0 ? quote / t.zielQuote : 0;
   let m = t.zielMenge > 0 ? menge / t.zielMenge : 0;
-  if (capMenge) m = Math.min(1, m);
+  if (capMenge) m = Math.min(VOL_CAP, m);
   return t.gewQuote * q + t.gewMenge * m;
 }
 
-// Reine Mengen-Quote (z.B. Schlüsselpässe/Spiel) — im Testspiel-Modus bei 1
-// gedeckelt, damit das Ziel „genug" ist und nicht Masse allein maxt.
+// Reine Mengen-Quote (z.B. Schlüsselpässe/Spiel) — im Testspiel-Modus bei
+// VOL_CAP gedeckelt.
 function mengeRatio(value: number, ziel: number, capMenge: boolean): number {
   const r = safeDiv(value, ziel);
-  return capMenge ? Math.min(1, r) : r;
+  return capMenge ? Math.min(VOL_CAP, r) : r;
 }
 
 // Kappen-Obergrenze abhängig von der Spielzahl (schützt vor Ausreißern bei
@@ -166,14 +170,20 @@ function attrValue(index: number, cap: number, cfg: ScoringConfig): number {
 // verlässlich (R = 1). Bewusst so gewählt, dass ein Testspiel-Abend (mehrere
 // Spiele) sie erreichen kann, eine Handvoll Aktionen aber nicht.
 const VOLL = {
-  pas: 30, // Passversuche
+  pas: 18, // Passversuche
   sch: 6, // Gesamtschüsse
   dri: 8, // Dribblings (gewonnen + verloren)
-  def: 12, // Defensiv-Aktionen (Zweikämpfe + Interceptions + Blocks)
+  def: 10, // Defensiv-Aktionen (Zweikämpfe + Interceptions + Blocks)
   par: 8, // Torwart-Aktionen (Paraden + Gegentore)
   sic: 8, // Torwart-Aktionen (Sicherheit)
   stl: 4, // Stellungs-/Elfer-Paraden
 } as const;
+
+// Testspiel-Spanne: „Ziel erreicht" (Index 1,0) ergibt ~80, nicht 94. Für die
+// echte Spitze (90+) muss das Ziel deutlich übertroffen werden — Top-Quote UND
+// viel Volumen. So bleibt 94 selten statt Standard. (Echte Saison nutzt den
+// vollen Sprung basis→elite über attrValue, hier bewusst flacher.)
+const EVENT_SPAN = 40;
 
 // Verlässlichkeit aus dem Stichprobenumfang: R = min(1, √(vol / VOLL)).
 // √-Kurve = sanft (früher Anstieg, dann abflachend). Bei wenig Aktionen zieht
@@ -183,23 +193,13 @@ function reliability(vol: number, voll: number): number {
   return Math.min(1, Math.sqrt(Math.max(0, vol) / voll));
 }
 
-// Wie attrValue, aber zusätzlich Richtung Basis gedämpft, je nach Stichprobe:
-// Wert = basis + R · (roh − basis). Nur im Testspiel-Modus (ohne Spiele-Deckel),
-// damit 2–3 starke Aktionen nicht direkt eine 94 ergeben.
-function attrValueRel(
-  index: number,
-  cap: number,
-  vol: number,
-  voll: number,
-  cfg: ScoringConfig
-): number {
-  const roh = clamp(
-    cfg.card.basis + Math.max(0, index) * (cfg.card.elite - cfg.card.basis),
-    cfg.card.basis,
-    cap
-  );
+// Testspiel-Kartenwert: Wert = basis + R · Index · EVENT_SPAN, gedeckelt bei 94.
+// R (Verlässlichkeit) dämpft bei wenig Aktionen; die flachere Spanne macht die
+// Spitze schwerer. Volumen zählt über den Index weiter mit (bis VOL_CAP).
+function eventValue(index: number, vol: number, voll: number, cfg: ScoringConfig): number {
   const R = reliability(vol, voll);
-  return Math.round(cfg.card.basis + R * (roh - cfg.card.basis));
+  const raw = cfg.card.basis + R * Math.max(0, index) * EVENT_SPAN;
+  return Math.round(clamp(raw, cfg.card.basis, cfg.card.caps.g8plus));
 }
 
 // Feldspieler-Karte: PAS · SCH · DRI · DEF → GES (gerundeter Schnitt).
@@ -233,12 +233,12 @@ export function fieldCard(total: ActionCounts, games: number, cfg: ScoringConfig
 
   let PAS: number, SCH: number, DRI: number, DEF: number;
   if (ignoreGamesCap) {
-    // Testspiel: kein Spiele-Deckel, aber Verlässlichkeits-Dämpfung je Attribut.
+    // Testspiel: kein Spiele-Deckel; flachere Spanne + Verlässlichkeits-Dämpfung.
     const defVol = total.duel_won + total.duel_lost + total.interception + total.shot_blocked_def;
-    PAS = attrValueRel(pasIndex, cap, passversuche(total), VOLL.pas, cfg);
-    SCH = attrValueRel(schIndex, cap, gesamtschuesse(total), VOLL.sch, cfg);
-    DRI = attrValueRel(driIndex, cap, total.dribble_won + total.dribble_lost, VOLL.dri, cfg);
-    DEF = attrValueRel(defIndex, cap, defVol, VOLL.def, cfg);
+    PAS = eventValue(pasIndex, passversuche(total), VOLL.pas, cfg);
+    SCH = eventValue(schIndex, gesamtschuesse(total), VOLL.sch, cfg);
+    DRI = eventValue(driIndex, total.dribble_won + total.dribble_lost, VOLL.dri, cfg);
+    DEF = eventValue(defIndex, defVol, VOLL.def, cfg);
   } else {
     PAS = attrValue(pasIndex, cap, cfg);
     SCH = attrValue(schIndex, cap, cfg);
@@ -284,10 +284,10 @@ export function keeperCard(total: ActionCounts, games: number, cfg: ScoringConfi
 
   let STL: number, PAR: number, PAS: number, SIC: number;
   if (ignoreGamesCap) {
-    STL = attrValueRel(stlIndex, cap, total.gk_position_save + total.penalty_save, VOLL.stl, cfg);
-    PAR = attrValueRel(parIndex, cap, gkActions, VOLL.par, cfg);
-    PAS = attrValueRel(passIndex, cap, passversuche(total), VOLL.pas, cfg);
-    SIC = attrValueRel(sicIndex, cap, gkActions, VOLL.sic, cfg);
+    STL = eventValue(stlIndex, total.gk_position_save + total.penalty_save, VOLL.stl, cfg);
+    PAR = eventValue(parIndex, gkActions, VOLL.par, cfg);
+    PAS = eventValue(passIndex, passversuche(total), VOLL.pas, cfg);
+    SIC = eventValue(sicIndex, gkActions, VOLL.sic, cfg);
   } else {
     STL = attrValue(stlIndex, cap, cfg);
     PAR = attrValue(parIndex, cap, cfg);
