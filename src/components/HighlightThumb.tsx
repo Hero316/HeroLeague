@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Trash2, Maximize2, Play, Star } from 'lucide-react';
 import type { HighlightMedia } from '../types';
 import { toEmbed, youtubeThumb } from '../lib/videoEmbed';
+import Watermark from './Watermark';
 
 // Eine Highlight-Kachel im Hero-League-Look – für Bild ODER Video.
 // - Bild: volles Seitenverhältnis (kein Zuschnitt), Verlauf + Bildunterschrift.
@@ -98,6 +99,7 @@ export default function HighlightThumb({
               )
             )}
           </div>
+          {!isVideo && <Watermark className="bottom-2 left-2 w-14 sm:w-16" />}
         </button>
 
         {editMode && (

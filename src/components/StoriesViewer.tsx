@@ -7,6 +7,7 @@ import { albumCoverInfo } from './highlightsEdit';
 import { downloadImage } from '../lib/download';
 import HighlightClip from './HighlightClip';
 import ZoomableImage from './ZoomableImage';
+import Watermark from './Watermark';
 
 const IMAGE_MS = 10000; // 10 Sek. pro Bild
 const VIDEO_MAX_MS = 60000; // Sicherheits-Fallback, falls ein Video kein Ende meldet
@@ -218,6 +219,7 @@ export default function StoriesViewer({
               onHoldChange={setPaused}
               onZoomChange={setZoomed}
             />
+            {!zoomed && <Watermark className="bottom-24 left-4 w-20 sm:w-24" />}
           </div>
         )}
       </div>

@@ -7,6 +7,7 @@ import { toEmbed } from '../lib/videoEmbed';
 import { downloadImage } from '../lib/download';
 import HighlightClip from './HighlightClip';
 import ZoomableImage from './ZoomableImage';
+import Watermark from './Watermark';
 
 // Dateiname fürs Herunterladen: aus der Bildunterschrift (falls vorhanden) + echter
 // Endung der Blob-URL, sonst ein neutraler Name.
@@ -145,7 +146,7 @@ export default function HighlightsLightbox({
             ) : isVideo ? (
               <p className="text-white/70 font-sans">Video-Link nicht erkannt.</p>
             ) : (
-              <div className="relative w-[90vw] max-w-5xl h-[82vh]">
+              <div className="relative w-[90vw] max-w-5xl h-[82vh] flex items-center justify-center">
                 <ZoomableImage
                   key={media.id}
                   src={media.url}
@@ -154,6 +155,7 @@ export default function HighlightsLightbox({
                   onSwipe={(d) => multiple && go(d)}
                   onZoomChange={setZoomed}
                 />
+                {!zoomed && <Watermark className="bottom-3 left-3 w-24 sm:w-28" />}
               </div>
             )}
           </motion.div>
