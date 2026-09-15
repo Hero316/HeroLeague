@@ -15,6 +15,9 @@ import {
   FileSpreadsheet,
   Users,
   Mic,
+  UserPlus,
+  ArrowLeftRight,
+  Trash2,
 } from 'lucide-react';
 import type {
   ActionCounts,
@@ -47,6 +50,7 @@ import {
   saveScoring as apiSaveScoring,
   fetchDayStats,
   saveTally,
+  tallyOp,
   publishDay,
   leagueDayKey,
   eventDayKey,
@@ -182,6 +186,8 @@ export default function TrackingCenter({
   }, [selectedMatchday, selectedEventId, selectedMatchId]);
 
   const [rows, setRows] = useState<RowMap>({});
+  const rowsRef = useRef<RowMap>({});
+  useEffect(() => { rowsRef.current = rows; }, [rows]);
   const [dayLive, setDayLive] = useState(false);
   const [loadingDay, setLoadingDay] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -510,6 +516,61 @@ export default function TrackingCenter({
     [scheduleSave]
   );
 
+  // Spontan einen Spieler zu einem Spiel hinzufügen (Name kommt oft erst später,
+  // z.B. „Weißer Schuh"). Zeile sofort anlegen + leer speichern, damit sie auch
+  // nach einem Neuladen bleibt. Bereits vorhandene Namen werden nicht überschrieben.
+  const addPlayerRow = useCallback(
+    (matchId: string, teamId: string, rawName: string) => {
+      const name = rawName.trim();
+      if (!name) return;
+      const k = rowKey(matchId, teamId, name);
+      if (rowsRef.current[k]) return; // gibt es schon – nichts überschreiben
+      const teamName = resolveTeam(teamId)?.name ?? teamId;
+      const updated: EditRow = { teamId, teamName, playerName: name, role: 'field', counts: emptyCounts() };
+      setRows((prev) => (prev[k] ? prev : { ...prev, [k]: updated }));
+      saveTally({ dayKey, matchId, teamId, playerName: name, role: 'field', counts: emptyCounts() }).catch(() => {});
+    },
+    [dayKey, resolveTeam]
+  );
+
+  // Den aktuell offenen Tag neu aus der DB laden (nach einer Umbuchung).
+  const reloadDay = useCallback(async () => {
+    if (selectedEvent) {
+      await buildRows(eventDayKey(selectedEvent.id), eventGamesAsMatches(selectedEvent), null);
+    } else if (selectedMatchday !== null && seasonId) {
+      const games = matches.filter((m) => m.seasonId === seasonId && m.matchday === selectedMatchday).sort(cmpMatches);
+      await buildRows(leagueDayKey(seasonId, selectedMatchday), games, `${seasonId}:${selectedMatchday}`);
+    }
+  }, [selectedEvent, selectedMatchday, seasonId, matches, buildRows, eventGamesAsMatches]);
+
+  // Getrackte Daten umbuchen: zusammenführen (from→to), tauschen (from⇄to) oder
+  // löschen (from). `wholeDay` wendet es auf alle Spiele des Tages an, sonst nur
+  // auf das aktuell offene Spiel. Danach frisch aus der DB laden.
+  const [reassignBusy, setReassignBusy] = useState(false);
+  const reassignPlayers = useCallback(
+    async (teamId: string, from: string, to: string | undefined, op: 'merge' | 'swap' | 'delete', wholeDay: boolean) => {
+      const ids = wholeDay ? dayMatches.map((m) => m.id) : selectedMatchId ? [selectedMatchId] : [];
+      if (ids.length === 0) return;
+      // Laufende Debounce-Speicherungen abbrechen – sonst überschreiben sie die Umbuchung.
+      Object.values(timers.current).forEach((t) => clearTimeout(t));
+      timers.current = {};
+      pending.current.clear();
+      setReassignBusy(true);
+      try {
+        await tallyOp({ dayKey, matchIds: ids, teamId, op, from, to });
+        // Undo-Verlauf verwerfen – er zeigt evtl. auf jetzt umgebuchte Zeilen.
+        undoStack.current = [];
+        setUndoCount(0);
+        await reloadDay();
+      } catch {
+        /* still – der Nutzer kann es erneut versuchen */
+      } finally {
+        setReassignBusy(false);
+      }
+    },
+    [dayKey, dayMatches, selectedMatchId, reloadDay]
+  );
+
   const togglePublish = useCallback(async () => {
     const next = !dayLive;
     setDayLive(next);
@@ -731,6 +792,10 @@ export default function TrackingCenter({
               onUndo={undo}
               undoCount={undoCount}
               onBack={goBackLayer}
+              onAddPlayer={addPlayerRow}
+              onReassign={reassignPlayers}
+              reassignBusy={reassignBusy}
+              dayGameCount={dayMatches.length}
             />
           ) : dayActive ? (
             <DayView
@@ -1012,6 +1077,10 @@ function MatchEditor({
   onUndo,
   undoCount,
   onBack,
+  onAddPlayer,
+  onReassign,
+  reassignBusy,
+  dayGameCount,
 }: {
   match: Match;
   resolveTeam: (key: string) => Team | undefined;
@@ -1022,6 +1091,10 @@ function MatchEditor({
   onUndo: (matchId: string) => void;
   undoCount: number;
   onBack: () => void;
+  onAddPlayer: (matchId: string, teamId: string, name: string) => void;
+  onReassign: (teamId: string, from: string, to: string | undefined, op: 'merge' | 'swap' | 'delete', wholeDay: boolean) => void;
+  reassignBusy: boolean;
+  dayGameCount: number;
 }) {
   const home = resolveTeam(match.homeTeamId);
   const away = resolveTeam(match.awayTeamId);
@@ -1030,6 +1103,19 @@ function MatchEditor({
     Object.entries(rows)
       .filter(([k]) => k.startsWith(`${match.id}::${teamId}::`))
       .map(([k, r]) => ({ k, r }));
+
+  // Kandidaten-Namen fürs Umbuchen: aktuell getrackte Spieler + echter Kader.
+  const candidateNames = (teamId: string): string[] => {
+    const set = new Set<string>();
+    teamRows(teamId).forEach(({ r }) => set.add(r.playerName));
+    (resolveTeam(teamId)?.spielerliste ?? []).forEach((p) => p.name && set.add(p.name));
+    return [...set];
+  };
+
+  // Offene Zusatz-UI je Team: Spieler hinzufügen bzw. Umbuchen-Panel.
+  const [addTeam, setAddTeam] = useState<string | null>(null);
+  const [addName, setAddName] = useState('');
+  const [reassignTeam, setReassignTeam] = useState<string | null>(null);
 
   const [voiceOpen, setVoiceOpen] = useState(false);
 
@@ -1113,7 +1199,7 @@ function MatchEditor({
             </div>
             {list.length === 0 ? (
               <div className="hl-card p-4 text-center text-hl-mute text-xs">
-                Kein Kader hinterlegt. Bei Testspielen muss der Team-Name mit einem Verein übereinstimmen.
+                Noch kein Spieler. Über <b>„+ Spieler"</b> unten kannst du jederzeit welche hinzufügen (auch mit Platzhalter-Namen).
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-2 hl-cascade-soft">
@@ -1129,6 +1215,46 @@ function MatchEditor({
                 ))}
               </div>
             )}
+
+            {/* Werkzeuge: spontan Spieler hinzufügen + getrackte Daten umbuchen */}
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <button
+                onClick={() => { setAddTeam(addTeam === teamId ? null : teamId); setAddName(''); }}
+                className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 border border-white/10 bg-white/5 hover:bg-white/10 cursor-pointer"
+              >
+                <UserPlus className="w-3.5 h-3.5" /> Spieler
+              </button>
+              <button
+                onClick={() => setReassignTeam(teamId)}
+                className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5 border border-white/10 bg-white/5 hover:bg-white/10 cursor-pointer"
+              >
+                <ArrowLeftRight className="w-3.5 h-3.5" /> Daten umbuchen
+              </button>
+            </div>
+
+            {addTeam === teamId && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const n = addName.trim();
+                  if (!n) return;
+                  onAddPlayer(match.id, teamId, n);
+                  setAddName('');
+                }}
+                className="mt-2 flex items-center gap-2"
+              >
+                <input
+                  autoFocus
+                  value={addName}
+                  onChange={(e) => setAddName(e.target.value)}
+                  placeholder={'Name oder Platzhalter, z. B. „Weißer Schuh"'}
+                  className="hl-input flex-1 min-w-0 px-3 py-2 rounded-lg text-sm"
+                />
+                <button type="submit" className="shrink-0 px-3 py-2 rounded-lg text-xs font-black uppercase tracking-wider text-white cursor-pointer active:scale-95" style={{ background: 'var(--color-brand-accent-light, #22DFC9)', color: '#04120d' }}>
+                  Hinzufügen
+                </button>
+              </form>
+            )}
           </div>
         );
       })}
@@ -1136,6 +1262,135 @@ function MatchEditor({
       <p className="text-[11px] text-hl-dim mt-1">
         <b>Linksklick +1 · Rechtsklick −1</b> · am Handy lang drücken = −1 · „Tor" zählt automatisch als Torschuss.
       </p>
+
+      {reassignTeam && (
+        <ReassignPanel
+          teamName={resolveTeam(reassignTeam)?.name ?? reassignTeam}
+          trackedNames={teamRows(reassignTeam).map(({ r }) => r.playerName)}
+          candidateNames={candidateNames(reassignTeam)}
+          dayGameCount={dayGameCount}
+          busy={reassignBusy}
+          onClose={() => setReassignTeam(null)}
+          onSubmit={(from, to, op, wholeDay) => onReassign(reassignTeam, from, to, op, wholeDay)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Umbuchen-Panel: getrackte Daten einem echten Spieler zuordnen/zusammenführen,
+// zwei Spieler tauschen (verwechselt) oder einen (Platzhalter-)Spieler entfernen.
+// ---------------------------------------------------------------------------
+function ReassignPanel({
+  teamName,
+  trackedNames,
+  candidateNames,
+  dayGameCount,
+  busy,
+  onClose,
+  onSubmit,
+}: {
+  teamName: string;
+  trackedNames: string[]; // Quelle: nur Spieler, die in diesem Spiel Zeilen haben
+  candidateNames: string[]; // Ziel: getrackte + echter Kader
+  dayGameCount: number;
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (from: string, to: string | undefined, op: 'merge' | 'swap' | 'delete', wholeDay: boolean) => void;
+}) {
+  useBackClose(true, onClose);
+  const [op, setOp] = useState<'merge' | 'swap' | 'delete'>('merge');
+  const [from, setFrom] = useState(trackedNames[0] ?? '');
+  const [to, setTo] = useState('');
+  const [wholeDay, setWholeDay] = useState(false);
+
+  const needsTarget = op !== 'delete';
+  const targets = candidateNames.filter((n) => normName(n) !== normName(from));
+  const canSubmit = !!from && (!needsTarget || !!to) && !busy;
+
+  const submit = () => {
+    if (!canSubmit) return;
+    if (op === 'delete' && !window.confirm(`„${from}" aus ${wholeDay ? 'allen Spielen des Tages' : 'diesem Spiel'} wirklich entfernen? Getrackte Werte gehen verloren.`)) return;
+    onSubmit(from, needsTarget ? to : undefined, op, wholeDay);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm grid place-items-center p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-md hl-card p-5 rounded-2xl"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1.25rem)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="font-display font-black uppercase tracking-tight text-lg">Daten umbuchen</h3>
+          <button onClick={onClose} className="text-hl-mute hover:text-hl-text cursor-pointer"><X className="w-5 h-5" /></button>
+        </div>
+        <p className="text-[12px] text-hl-mute mb-4">{teamName}</p>
+
+        {/* Aktion wählen */}
+        <div className="grid grid-cols-3 gap-1.5 mb-4">
+          {([
+            { key: 'merge', label: 'Zuordnen', icon: <UserPlus className="w-3.5 h-3.5" /> },
+            { key: 'swap', label: 'Tauschen', icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
+            { key: 'delete', label: 'Löschen', icon: <Trash2 className="w-3.5 h-3.5" /> },
+          ] as const).map((o) => (
+            <button
+              key={o.key}
+              onClick={() => setOp(o.key)}
+              className={`px-2 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border cursor-pointer transition ${op === o.key ? 'border-brand-accent-light text-brand-accent-light bg-brand-accent/10' : 'border-white/10 bg-white/5 text-hl-mute hover:text-hl-text'}`}
+            >
+              {o.icon} {o.label}
+            </button>
+          ))}
+        </div>
+
+        <label className="block text-[11px] font-bold uppercase tracking-wider text-hl-dim mb-1">
+          {op === 'swap' ? 'Spieler A' : 'Von (Quelle)'}
+        </label>
+        <select value={from} onChange={(e) => setFrom(e.target.value)} className="hl-input w-full px-3 py-2 rounded-lg text-sm mb-3">
+          <option value="">– wählen –</option>
+          {trackedNames.map((n) => <option key={n} value={n}>{n}</option>)}
+        </select>
+
+        {needsTarget && (
+          <>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-hl-dim mb-1">
+              {op === 'swap' ? 'Spieler B' : 'Auf (echter Spieler)'}
+            </label>
+            <select value={to} onChange={(e) => setTo(e.target.value)} className="hl-input w-full px-3 py-2 rounded-lg text-sm mb-3">
+              <option value="">– wählen –</option>
+              {targets.map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </>
+        )}
+
+        <p className="text-[11px] text-hl-dim mb-3 leading-relaxed">
+          {op === 'merge' && 'Die getrackten Werte der Quelle werden zum Zielspieler addiert; die Quelle wird danach entfernt.'}
+          {op === 'swap' && 'Die getrackten Werte von A und B werden vertauscht (falls ihr sie verwechselt habt).'}
+          {op === 'delete' && 'Die Quelle wird samt getrackten Werten entfernt.'}
+        </p>
+
+        {dayGameCount > 1 && (
+          <label className="flex items-center gap-2 mb-4 cursor-pointer select-none">
+            <input type="checkbox" checked={wholeDay} onChange={(e) => setWholeDay(e.target.checked)} className="w-4 h-4 accent-[#22DFC9]" />
+            <span className="text-[12px] text-hl-text">Auf <b>alle {dayGameCount} Spiele</b> des Tages anwenden (sonst nur dieses Spiel)</span>
+          </label>
+        )}
+
+        <div className="flex items-center gap-2">
+          <button onClick={onClose} className="flex-1 px-3 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider border border-white/10 bg-white/5 hover:bg-white/10 cursor-pointer">Abbrechen</button>
+          <button
+            onClick={submit}
+            disabled={!canSubmit}
+            className="flex-1 px-3 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider text-[#04120d] cursor-pointer active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+            style={{ background: 'var(--color-brand-accent-light, #22DFC9)' }}
+          >
+            {busy ? 'Wird gespeichert…' : op === 'delete' ? 'Entfernen' : op === 'swap' ? 'Tauschen' : 'Zuordnen'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

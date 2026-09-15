@@ -106,6 +106,21 @@ export function saveTally(row: MatchPlayerStat): Promise<{ ok: boolean }> {
   return apiFetch('/api/stats?resource=tally', { method: 'POST', body: JSON.stringify(row) });
 }
 
+// Getrackte Werte innerhalb eines Teams umbuchen:
+//  • op='merge'  → `from` auf `to` addieren, `from` löschen (Zuordnen/Kopieren)
+//  • op='swap'   → `from` und `to` vertauschen (2 Spieler verwechselt)
+//  • op='delete' → `from` entfernen (versehentlich angelegt)
+export function tallyOp(body: {
+  dayKey: string;
+  matchIds: string[];
+  teamId: string;
+  op: 'merge' | 'swap' | 'delete';
+  from: string;
+  to?: string;
+}): Promise<{ ok: boolean }> {
+  return apiFetch('/api/stats?resource=tally-op', { method: 'POST', body: JSON.stringify(body) });
+}
+
 // Anwesenheit/Torwart eines Spieltags speichern (Abend-Aufstellung). Schreibt
 // zusätzlich die Abwesenden in die Einzelspiele zurück (für Einsätze/Excel).
 export function saveAttendance(

@@ -120,6 +120,105 @@ const saveTally = requireStaff(async (req: VercelRequest, res: VercelResponse) =
   return res.json({ ok: true });
 });
 
+// --- Getrackte Daten umbuchen: zusammenführen / tauschen / löschen -----------
+// Eine Zeile lesen (Zähler + Rolle) für (matchId, teamId, playerName).
+async function readTallyRow(
+  matchId: string,
+  teamId: string,
+  playerName: string
+): Promise<{ role: string; counts: Record<string, number> } | null> {
+  const rows = (await sql`
+    SELECT role, counts FROM match_player_stats
+    WHERE match_id = ${matchId} AND team_id = ${teamId} AND player_name = ${playerName}`) as {
+    role: string;
+    counts: unknown;
+  }[];
+  if (!rows[0]) return null;
+  return { role: rows[0].role === 'keeper' ? 'keeper' : 'field', counts: sanitizeCounts(rows[0].counts) };
+}
+
+async function upsertTallyRow(
+  dayKey: string,
+  matchId: string,
+  teamId: string,
+  playerName: string,
+  role: string,
+  counts: Record<string, number>
+): Promise<void> {
+  const r = role === 'keeper' ? 'keeper' : 'field';
+  await sql`
+    INSERT INTO match_player_stats (day_key, match_id, team_id, player_name, role, counts, updated_at)
+    VALUES (${dayKey}, ${matchId}, ${teamId}, ${playerName}, ${r}, ${JSON.stringify(counts)}::jsonb, now())
+    ON CONFLICT (match_id, team_id, player_name)
+    DO UPDATE SET counts = EXCLUDED.counts, role = EXCLUDED.role, day_key = EXCLUDED.day_key, updated_at = now()`;
+}
+
+async function deleteTallyRow(matchId: string, teamId: string, playerName: string): Promise<void> {
+  await sql`DELETE FROM match_player_stats WHERE match_id = ${matchId} AND team_id = ${teamId} AND player_name = ${playerName}`;
+}
+
+function addCounts(a: Record<string, number>, b: Record<string, number>): Record<string, number> {
+  const out: Record<string, number> = { ...a };
+  for (const [k, v] of Object.entries(b)) out[k] = (out[k] ?? 0) + v;
+  return sanitizeCounts(out);
+}
+
+// Umbucht getrackte Werte innerhalb EINES Teams über ein oder mehrere Spiele:
+//  • op='merge'  → Zähler von `from` auf `to` addieren, `from` löschen (Zuordnen/Kopieren)
+//  • op='swap'   → Zähler von `from` und `to` vertauschen (2 Spieler verwechselt)
+//  • op='delete' → `from` komplett entfernen (versehentlich angelegter Spieler)
+// Jede Zeile bleibt an ihre (matchId, teamId, Name); Rollen bleiben am Namen.
+const tallyOp = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+  const b = (req.body ?? {}) as {
+    dayKey?: unknown;
+    matchIds?: unknown;
+    teamId?: unknown;
+    op?: unknown;
+    from?: unknown;
+    to?: unknown;
+  };
+  const op = b.op;
+  const teamId = b.teamId;
+  const from = b.from;
+  const to = b.to;
+  const dayKey = b.dayKey;
+  const matchIds = Array.isArray(b.matchIds) ? b.matchIds.filter(isNonEmptyString) : [];
+  if (op !== 'merge' && op !== 'swap' && op !== 'delete') return badRequest(res, 'op muss merge, swap oder delete sein.');
+  if (!isNonEmptyString(teamId) || !isNonEmptyString(from) || matchIds.length === 0) {
+    return badRequest(res, 'teamId, from und mindestens ein Spiel sind Pflicht.');
+  }
+  if (op === 'merge' || op === 'swap') {
+    if (!isNonEmptyString(to)) return badRequest(res, 'Zielspieler (to) fehlt.');
+    if (to.trim().toLowerCase() === from.trim().toLowerCase()) return badRequest(res, 'from und to sind identisch.');
+    if (!isNonEmptyString(dayKey)) return badRequest(res, 'dayKey fehlt.');
+  }
+
+  for (const mid of matchIds) {
+    const fromRow = await readTallyRow(mid, teamId, from);
+    if (op === 'delete') {
+      await deleteTallyRow(mid, teamId, from);
+      continue;
+    }
+    const toRow = await readTallyRow(mid, teamId, to as string);
+    if (op === 'merge') {
+      if (!fromRow) continue; // in diesem Spiel nichts zu verschieben
+      const merged = addCounts(toRow?.counts ?? {}, fromRow.counts);
+      await upsertTallyRow(dayKey as string, mid, teamId, to as string, toRow?.role ?? fromRow.role, merged);
+      await deleteTallyRow(mid, teamId, from);
+    } else {
+      // swap: Momentaufnahmen zuerst lesen, dann beide Seiten setzen.
+      if (!fromRow && !toRow) continue;
+      // Ziel bekommt die Werte von `from` (bzw. wird geleert, wenn from leer war).
+      if (fromRow) await upsertTallyRow(dayKey as string, mid, teamId, to as string, toRow?.role ?? fromRow.role, fromRow.counts);
+      else await deleteTallyRow(mid, teamId, to as string);
+      // `from` bekommt die Werte von `to` (bzw. wird geleert, wenn to leer war).
+      if (toRow) await upsertTallyRow(dayKey as string, mid, teamId, from, fromRow?.role ?? toRow.role, toRow.counts);
+      else await deleteTallyRow(mid, teamId, from);
+    }
+  }
+  return res.json({ ok: true });
+});
+
 // Verbindungstest zum Google Sheet (schreibt nichts – liest nur Titel/Blätter).
 const testSheet = requireStaff(async (_req: VercelRequest, res: VercelResponse) => {
   try {
@@ -362,6 +461,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'POST') {
       if (resource === 'scoring') return saveScoring(req, res);
       if (resource === 'tally') return saveTally(req, res);
+      if (resource === 'tally-op') return tallyOp(req, res);
       if (resource === 'publish') return savePublish(req, res);
       if (resource === 'sheet-test') return testSheet(req, res);
       if (resource === 'export') return exportDay(req, res);
