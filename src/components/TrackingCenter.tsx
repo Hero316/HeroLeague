@@ -1119,6 +1119,16 @@ function MatchEditor({
       .filter(([k]) => k.startsWith(`${match.id}::${teamId}::`))
       .map(([k, r]) => ({ k, r }));
 
+  // Live-Spielstand aus den getrackten Toren: eigene Tore + Eigentore des Gegners.
+  const goalsFor = (teamId: string, oppId: string) => {
+    let g = 0;
+    teamRows(teamId).forEach(({ r }) => (g += r.counts.goal || 0));
+    teamRows(oppId).forEach(({ r }) => (g += r.counts.own_goal || 0));
+    return g;
+  };
+  const homeScore = goalsFor(match.homeTeamId, match.awayTeamId);
+  const awayScore = goalsFor(match.awayTeamId, match.homeTeamId);
+
   // Kandidaten-Namen fürs Umbuchen: aktuell getrackte Spieler + echter Kader.
   const candidateNames = (teamId: string): string[] => {
     const set = new Set<string>();
@@ -1171,8 +1181,12 @@ function MatchEditor({
         >
           <ArrowLeft className="w-4 h-4" /> Spiele
         </button>
-        <h1 className="font-display font-black text-xl uppercase tracking-tight">
-          {home?.name ?? match.homeTeamId} <span className="text-hl-faint">–</span> {away?.name ?? match.awayTeamId}
+        <h1 className="font-display font-black text-xl uppercase tracking-tight flex items-center gap-2 min-w-0">
+          <span className="truncate max-w-[26vw] sm:max-w-none">{home?.name ?? match.homeTeamId}</span>
+          <span className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-brand-accent/12 border border-brand-accent/30 px-2.5 py-1 tabular-nums text-brand-accent-light">
+            {homeScore}<span className="text-hl-faint">:</span>{awayScore}
+          </span>
+          <span className="truncate max-w-[26vw] sm:max-w-none">{away?.name ?? match.awayTeamId}</span>
         </h1>
         <button
           onClick={() => setVoiceOpen(true)}
