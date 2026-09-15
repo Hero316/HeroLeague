@@ -151,6 +151,46 @@ function attrValue(index: number, cap: number, cfg: ScoringConfig): number {
   return Math.round(clamp(raw, cfg.card.basis, cap));
 }
 
+// „Volle" Stichprobe je Attribut: ab so vielen Aktionen zählt ein Attribut als
+// verlässlich (R = 1). Bewusst so gewählt, dass ein Testspiel-Abend (mehrere
+// Spiele) sie erreichen kann, eine Handvoll Aktionen aber nicht.
+const VOLL = {
+  pas: 30, // Passversuche
+  sch: 6, // Gesamtschüsse
+  dri: 8, // Dribblings (gewonnen + verloren)
+  def: 12, // Defensiv-Aktionen (Zweikämpfe + Interceptions + Blocks)
+  par: 8, // Torwart-Aktionen (Paraden + Gegentore)
+  sic: 8, // Torwart-Aktionen (Sicherheit)
+  stl: 4, // Stellungs-/Elfer-Paraden
+} as const;
+
+// Verlässlichkeit aus dem Stichprobenumfang: R = min(1, √(vol / VOLL)).
+// √-Kurve = sanft (früher Anstieg, dann abflachend). Bei wenig Aktionen zieht
+// der Wert Richtung Basis, statt sofort Elite zu erreichen.
+function reliability(vol: number, voll: number): number {
+  if (voll <= 0) return 1;
+  return Math.min(1, Math.sqrt(Math.max(0, vol) / voll));
+}
+
+// Wie attrValue, aber zusätzlich Richtung Basis gedämpft, je nach Stichprobe:
+// Wert = basis + R · (roh − basis). Nur im Testspiel-Modus (ohne Spiele-Deckel),
+// damit 2–3 starke Aktionen nicht direkt eine 94 ergeben.
+function attrValueRel(
+  index: number,
+  cap: number,
+  vol: number,
+  voll: number,
+  cfg: ScoringConfig
+): number {
+  const roh = clamp(
+    cfg.card.basis + Math.max(0, index) * (cfg.card.elite - cfg.card.basis),
+    cfg.card.basis,
+    cap
+  );
+  const R = reliability(vol, voll);
+  return Math.round(cfg.card.basis + R * (roh - cfg.card.basis));
+}
+
 // Feldspieler-Karte: PAS · SCH · DRI · DEF → GES (gerundeter Schnitt).
 // ignoreGamesCap=true → kein „wenig-Spiele-Deckel" (z.B. Testspieltag): rein aus
 // den echten Stats, voller Wertebereich bis zur Elite-Kappe.
@@ -176,10 +216,20 @@ export function fieldCard(total: ActionCounts, games: number, cfg: ScoringConfig
     cfg.card.def
   );
 
-  const PAS = attrValue(pasIndex, cap, cfg);
-  const SCH = attrValue(schIndex, cap, cfg);
-  const DRI = attrValue(driIndex, cap, cfg);
-  const DEF = attrValue(defIndex, cap, cfg);
+  let PAS: number, SCH: number, DRI: number, DEF: number;
+  if (ignoreGamesCap) {
+    // Testspiel: kein Spiele-Deckel, aber Verlässlichkeits-Dämpfung je Attribut.
+    const defVol = total.duel_won + total.duel_lost + total.interception + total.shot_blocked_def;
+    PAS = attrValueRel(pasIndex, cap, passversuche(total), VOLL.pas, cfg);
+    SCH = attrValueRel(schIndex, cap, gesamtschuesse(total), VOLL.sch, cfg);
+    DRI = attrValueRel(driIndex, cap, total.dribble_won + total.dribble_lost, VOLL.dri, cfg);
+    DEF = attrValueRel(defIndex, cap, defVol, VOLL.def, cfg);
+  } else {
+    PAS = attrValue(pasIndex, cap, cfg);
+    SCH = attrValue(schIndex, cap, cfg);
+    DRI = attrValue(driIndex, cap, cfg);
+    DEF = attrValue(defIndex, cap, cfg);
+  }
   const ges = Math.round((PAS + SCH + DRI + DEF) / 4);
 
   return {
@@ -215,10 +265,18 @@ export function keeperCard(total: ActionCounts, games: number, cfg: ScoringConfi
     p.indexGewQuote * safeDiv(passRate(total), p.zielPassquote) +
     p.indexGewMenge * safeDiv(passversuche(total) / g, p.zielPaesseSpiel);
 
-  const STL = attrValue(stlIndex, cap, cfg);
-  const PAR = attrValue(parIndex, cap, cfg);
-  const PAS = attrValue(passIndex, cap, cfg);
-  const SIC = attrValue(sicIndex, cap, cfg);
+  let STL: number, PAR: number, PAS: number, SIC: number;
+  if (ignoreGamesCap) {
+    STL = attrValueRel(stlIndex, cap, total.gk_position_save + total.penalty_save, VOLL.stl, cfg);
+    PAR = attrValueRel(parIndex, cap, gkActions, VOLL.par, cfg);
+    PAS = attrValueRel(passIndex, cap, passversuche(total), VOLL.pas, cfg);
+    SIC = attrValueRel(sicIndex, cap, gkActions, VOLL.sic, cfg);
+  } else {
+    STL = attrValue(stlIndex, cap, cfg);
+    PAR = attrValue(parIndex, cap, cfg);
+    PAS = attrValue(passIndex, cap, cfg);
+    SIC = attrValue(sicIndex, cap, cfg);
+  }
   const ges = Math.round((STL + PAR + PAS + SIC) / 4);
 
   return {
