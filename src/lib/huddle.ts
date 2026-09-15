@@ -4,10 +4,32 @@
 import { apiFetch } from './api';
 import type { HuddleState, HuddleParticipant } from '../types';
 
-// Nur gratis, öffentliche STUN-Server (keine Registrierung, keine Kosten).
-const ICE: RTCConfiguration = {
-  iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
-};
+// STUN (direkte Verbindung) + TURN (Vermittler als Rückfallebene). TURN ist
+// nötig, wenn keine direkte P2P-Verbindung zustande kommt — typisch bei iPhones
+// (iCloud Private Relay, strenge NAT) oder am Mobilfunknetz. Ohne TURN klappt
+// oft nur Android↔Android, aber nicht Apple↔Android.
+// TURN-Zugang per ENV überschreibbar (VITE_TURN_URL/USER/CRED); sonst gratis
+// öffentlicher OpenRelay-Server als Fallback.
+const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
+const turnUrl = env.VITE_TURN_URL;
+const iceServers: RTCIceServer[] = [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+];
+if (turnUrl) {
+  iceServers.push({ urls: turnUrl.split(','), username: env.VITE_TURN_USER, credential: env.VITE_TURN_CRED });
+} else {
+  // Gratis öffentlicher TURN (OpenRelay) — 80 + 443 + TLS/TCP für schwierige Netze.
+  iceServers.push({
+    urls: [
+      'turn:openrelay.metered.ca:80',
+      'turn:openrelay.metered.ca:443',
+      'turns:openrelay.metered.ca:443?transport=tcp',
+    ],
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  });
+}
+const ICE: RTCConfiguration = { iceServers };
 
 interface PollResult {
   huddle: HuddleState | null;
@@ -86,6 +108,11 @@ export class HuddleSession {
   async start(): Promise<void> {
     this.local = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     this.setupLevels();
+    // iOS: AudioContext startet „suspended" und muss nach der Nutzer-Geste (Beitreten-Tipp)
+    // aufgeweckt werden, sonst bleibt der Ton stumm.
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume().catch(() => {});
+    }
     this.loop();
   }
 
