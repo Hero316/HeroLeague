@@ -33,10 +33,12 @@ import type {
 } from '../types';
 import {
   ACTION_META,
+  COUPLED_ACTIONS,
   DEFAULT_SCORING,
   FIELD_GROUPS,
   KEEPER_GROUPS,
   KEEPER_PASS_KEYS,
+  KEEPER_EXTRA_KEYS,
   type ActionGroup,
   type ActionMeta,
   type ActionTone,
@@ -480,13 +482,21 @@ export default function TrackingCenter({
 
   const applyDelta = useCallback(
     (k: string, matchId: string, action: keyof ActionCounts, delta: number, track = true) => {
+      // Gekoppelte Aktion (Assist/Schlüsselpass ⇒ erfolgreicher Pass): dieselbe
+      // Änderung mitführen. Gilt für Klick UND Sprechen, da beide hier durchlaufen.
+      const coupled = COUPLED_ACTIONS[action] as keyof ActionCounts | undefined;
       setRows((prev) => {
         const row = prev[k];
         if (!row) return prev;
         const cur = row.counts[action] || 0;
         const nextVal = Math.max(0, Math.min(999, cur + delta));
         if (nextVal === cur) return prev;
-        const updated: EditRow = { ...row, counts: { ...row.counts, [action]: nextVal } };
+        const counts = { ...row.counts, [action]: nextVal };
+        if (coupled) {
+          const cc = counts[coupled] || 0;
+          counts[coupled] = Math.max(0, Math.min(999, cc + delta));
+        }
+        const updated: EditRow = { ...row, counts };
         scheduleSave(k, updated, matchId);
         return { ...prev, [k]: updated };
       });
@@ -1265,7 +1275,7 @@ function MatchEditor({
       })}
       </div>
       <p className="text-[11px] text-hl-dim mt-1">
-        <b>Linksklick +1 · Rechtsklick −1</b> · am Handy lang drücken = −1 · „Tor" zählt automatisch als Torschuss.
+        <b>Linksklick +1 · Rechtsklick −1</b> · am Handy lang drücken = −1 · „Tor" zählt automatisch als Torschuss · „Assist" und „Schlüsselpass" zählen automatisch als erfolgreicher Pass.
       </p>
 
       {reassignTeam && (
@@ -1419,8 +1429,17 @@ function PlayerCard({
   const note = matchNote(row.counts, cfg, row.role);
   const score = rohscore(row.counts, cfg, row.role);
   const groups = isKeeper ? KEEPER_GROUPS : FIELD_GROUPS;
-  const actionsOf = (g: ActionGroup) =>
-    ACTION_META.filter((a) => a.group === g && (!isKeeper || g !== 'Pass' || KEEPER_PASS_KEYS.includes(a.key)));
+  const actionsOf = (g: ActionGroup) => {
+    if (!isKeeper) return ACTION_META.filter((a) => a.group === g);
+    // Torwart: nur ausgewählte Pässe; in der Torwart-Gruppe zusätzlich z.B. Interception.
+    if (g === 'Pass') return ACTION_META.filter((a) => a.group === 'Pass' && KEEPER_PASS_KEYS.includes(a.key));
+    if (g === 'Torwart')
+      return [
+        ...ACTION_META.filter((a) => a.group === 'Torwart'),
+        ...ACTION_META.filter((a) => KEEPER_EXTRA_KEYS.includes(a.key)),
+      ];
+    return ACTION_META.filter((a) => a.group === g);
+  };
 
   return (
     <div className="hl-card p-2 flex flex-col lg:flex-row gap-2 min-w-0">

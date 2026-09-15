@@ -33,7 +33,7 @@ interface ActionDef {
 export const ACTION_CATALOG: ActionDef[] = [
   { key: 'pass_ok', label: 'Pass erfolgreich', hint: 'angekommener/gespielter Pass, Ablage, Abspiel, "passt zu", "legt ab", "findet"' },
   { key: 'pass_fail', label: 'Fehlpass', hint: 'Pass kommt nicht an, "verspringt", "Fehlpass", "zu ungenau", "vertändelt den Pass"' },
-  { key: 'key_pass', label: 'Schlüsselpass', hint: 'gefährlicher Pass, der eine Torchance einleitet: Steilpass, tödlicher Pass, Zuckerpass, "legt auf". Zählt ZUSÄTZLICH auch als pass_ok, wenn er ankommt.' },
+  { key: 'key_pass', label: 'Schlüsselpass', hint: 'gefährlicher Pass, der eine Torchance einleitet: Steilpass, tödlicher Pass, Zuckerpass, "legt auf". Nur key_pass ausgeben – die App zählt ihn automatisch als pass_ok.' },
   { key: 'assist', label: 'Assist', hint: 'Vorlage – der letzte Pass VOR einem Tor. "Vorlage von", "bereitet das Tor vor", "assistiert".' },
   { key: 'shot_on', label: 'Torschuss', hint: 'Schuss aufs Tor, gehalten oder geblockt vom Torwart, "prüft den Keeper", "aufs Tor".' },
   { key: 'shot_miss', label: 'Fehlschuss', hint: 'Schuss daneben/drüber/an den Pfosten, "verzieht", "vorbei".' },
@@ -196,8 +196,8 @@ Jede Taste ist ein EIGENER Zähler, der nur nach OBEN geht. Jedes Vorkommen eine
    (b) Derselbe Spieler – diese Aktionen gehören zusammen und werden BEIDE gezählt:
    - Ein Tor zählt automatisch als Schuss: gib bei goal NICHT zusätzlich shot_on aus.
    - Verwandelter Elfmeter → penalty_goal UND goal (ein Elfmetertor ist ein Tor).
-   - Schlüsselpass, der ankommt → key_pass UND pass_ok für den Passgeber.
-   - Assist (Vorlage) → assist UND pass_ok (die Vorlage ist ein angekommener Pass).
+   - Schlüsselpass, der ankommt → nur key_pass ausgeben (die App zählt ihn automatisch als pass_ok; gib NICHT zusätzlich pass_ok aus).
+   - Assist (Vorlage) → nur assist ausgeben (die App zählt die Vorlage automatisch als pass_ok; gib NICHT zusätzlich pass_ok aus).
 
    (c) Zwei Beteiligte – NUR wenn der zweite Spieler klar benannt/erkennbar und im Kader ist (sonst nur den einen). Der zweite/unterlegene Spieler (Y) gehört IMMER zur GEGNERISCHEN Mannschaft des Handelnden (X) – nutze das, um bei einer Rückennummer, die es in BEIDEN Teams gibt, das richtige Team zu wählen:
    - Zweikampf: „X gewinnt gegen Y" / „X holt sich/erobert den Ball von Y" → duel_won für X UND duel_lost für Y.

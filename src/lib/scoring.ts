@@ -145,4 +145,15 @@ export const ACTION_KEYS: ActionKey[] = ACTION_META.map((a) => a.key);
 // Sichtbare Gruppen je Rolle (wie im HERO Match Tracker).
 export const FIELD_GROUPS: ActionGroup[] = ['Pass', 'Schuss', 'Dribbling', 'Defensive', 'Sonstiges'];
 export const KEEPER_GROUPS: ActionGroup[] = ['Pass', 'Torwart'];
-export const KEEPER_PASS_KEYS: ActionKey[] = ['pass_ok', 'pass_fail'];
+export const KEEPER_PASS_KEYS: ActionKey[] = ['pass_ok', 'pass_fail', 'key_pass'];
+// Zusätzliche Feld-Aktionen, die auch beim Torwart auftauchen (in der Torwart-Gruppe).
+export const KEEPER_EXTRA_KEYS: ActionKey[] = ['interception'];
+
+// Gekoppelte Aktionen: Wird die linke Aktion getrackt, zählt automatisch auch die
+// rechte mit (Assist/Schlüsselpass sind angekommene Pässe). Das Tor ⇒ Torschuss
+// wird NICHT hier gekoppelt, sondern steckt bereits in der Auswertung
+// (gesamtschuesse zählt Tore als Schüsse) – so ändern sich keine Alt-Daten.
+export const COUPLED_ACTIONS: Partial<Record<ActionKey, ActionKey>> = {
+  assist: 'pass_ok',
+  key_pass: 'pass_ok',
+};
