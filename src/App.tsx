@@ -1289,6 +1289,7 @@ export default function App() {
               onSelectTeam={(id) => navigateTo(`/testspiel/team/${encodeURIComponent(id)}`)}
               trackingRows={eventTrackingRows}
               scoringConfig={scoring}
+              ignoreGamesCap
               onOpenMatch={(id) => navigateTo(`/testspiel/spiel/${encodeURIComponent(id)}`)}
               onOpenPlayer={(name) => navigateTo(`/testspiel/team/${encodeURIComponent(teamName)}/spieler/${encodeURIComponent(name)}`)}
             />

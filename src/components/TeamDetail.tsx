@@ -36,6 +36,7 @@ interface TeamDetailProps {
   scoringConfig?: ScoringConfig; // Score-Einstellungen (für Note/Quoten/Karte)
   onOpenMatch?: (matchId: string) => void; // öffnet den Spielbericht
   onOpenPlayer?: (name: string) => void; // öffnet einen Spieler über die URL (/verein/…/spieler/…)
+  ignoreGamesCap?: boolean; // Testspieltag: Karte rein aus echten Stats, ohne wenig-Spiele-Deckel
 }
 
 // Ein Kaderspieler mit den aus den Spieldaten berechneten Werten.
@@ -64,6 +65,7 @@ export default function TeamDetail({
   scoringConfig,
   onOpenMatch,
   onOpenPlayer,
+  ignoreGamesCap = false,
 }: TeamDetailProps) {
   const color = team.logoColor || '#22DFC9';
   const accentSoft = shade(color, 1.25); // hellere Variante für Text auf dunklem Grund
@@ -219,9 +221,9 @@ export default function TeamDetail({
   const playerCardData = useMemo(
     () =>
       selected && playerRows.length > 0 && scoringConfig
-        ? playerCard(trackedTotal, playerRows.length, trackedRole, scoringConfig)
+        ? playerCard(trackedTotal, playerRows.length, trackedRole, scoringConfig, ignoreGamesCap)
         : null,
-    [selected, playerRows.length, trackedTotal, trackedRole, scoringConfig]
+    [selected, playerRows.length, trackedTotal, trackedRole, scoringConfig, ignoreGamesCap]
   );
   const trackedQuotas = useMemo(
     () => (playerRows.length > 0 && scoringConfig ? quotas(trackedTotal, scoringConfig) : null),

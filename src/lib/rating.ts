@@ -152,10 +152,12 @@ function attrValue(index: number, cap: number, cfg: ScoringConfig): number {
 }
 
 // Feldspieler-Karte: PAS · SCH · DRI · DEF → GES (gerundeter Schnitt).
-export function fieldCard(total: ActionCounts, games: number, cfg: ScoringConfig): PlayerCard {
+// ignoreGamesCap=true → kein „wenig-Spiele-Deckel" (z.B. Testspieltag): rein aus
+// den echten Stats, voller Wertebereich bis zur Elite-Kappe.
+export function fieldCard(total: ActionCounts, games: number, cfg: ScoringConfig, ignoreGamesCap = false): PlayerCard {
   const g = Math.max(1, games);
   const q = quotas(total, cfg);
-  const cap = capForGames(games, cfg);
+  const cap = ignoreGamesCap ? cfg.card.caps.g8plus : capForGames(games, cfg);
   const p = cfg.card.pas;
 
   // PAS = gewichteter Index aus Pass-Index (Quote+Menge), Schlüsselpässen und Vorlagen.
@@ -194,9 +196,9 @@ export function fieldCard(total: ActionCounts, games: number, cfg: ScoringConfig
 }
 
 // Torwart-Karte: STL · PAR · PAS · SIC → GK-GES. (Kalibrierung vorläufig.)
-export function keeperCard(total: ActionCounts, games: number, cfg: ScoringConfig): PlayerCard {
+export function keeperCard(total: ActionCounts, games: number, cfg: ScoringConfig, ignoreGamesCap = false): PlayerCard {
   const g = Math.max(1, games);
-  const cap = capForGames(games, cfg);
+  const cap = ignoreGamesCap ? cfg.card.caps.g8plus : capForGames(games, cfg);
   const gkActions = total.save + total.gk_goal_against;
   const saveRate = gkActions > 0 ? total.save / gkActions : 0;
   const cleanRate = total.gk_goal_against === 0 ? 1 : 0; // grob – Feinschliff später
@@ -232,8 +234,8 @@ export function keeperCard(total: ActionCounts, games: number, cfg: ScoringConfi
   };
 }
 
-export function playerCard(total: ActionCounts, games: number, role: StatRole, cfg: ScoringConfig): PlayerCard {
-  return role === 'keeper' ? keeperCard(total, games, cfg) : fieldCard(total, games, cfg);
+export function playerCard(total: ActionCounts, games: number, role: StatRole, cfg: ScoringConfig, ignoreGamesCap = false): PlayerCard {
+  return role === 'keeper' ? keeperCard(total, games, cfg, ignoreGamesCap) : fieldCard(total, games, cfg, ignoreGamesCap);
 }
 
 // Kartenstufe aus dem Gesamtwert.
