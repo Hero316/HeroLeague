@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Mic, Pause, Play, Square, X, Loader2, Check, Keyboard, Settings2, Trash2, AlertTriangle, Sparkles } from 'lucide-react';
 import type { ActionKey } from '../types';
 import { ACTION_META } from '../lib/scoring';
@@ -357,7 +358,9 @@ export default function VoiceTrackingPanel({ matchId, homeName, awayName, player
   const patchRow = (id: number, patch: Partial<ReviewRow>) =>
     setReview((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
-  return (
+  // Via Portal an <body>, damit das Overlay nicht in einem transformierten
+  // Vorfahren (z.B. .hl-fade) „gefangen" ist – sonst am PC verschoben/schwarz.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       {/* Kein Schließen bei Klick daneben – sonst geht die erkannte Liste versehentlich verloren. */}
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
@@ -668,7 +671,8 @@ export default function VoiceTrackingPanel({ matchId, homeName, awayName, player
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

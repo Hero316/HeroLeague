@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ArrowLeft,
   Sun,
@@ -1399,7 +1400,7 @@ function ReassignPanel({
     onClose();
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm grid place-items-center p-4" onClick={onClose}>
       <div
         className="w-full max-w-md hl-card p-5 rounded-2xl"
@@ -1474,7 +1475,8 @@ function ReassignPanel({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

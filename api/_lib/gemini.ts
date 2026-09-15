@@ -202,6 +202,7 @@ Jede Taste ist ein EIGENER Zähler, der nur nach OBEN geht. Jedes Vorkommen eine
    (c) Zwei Beteiligte – NUR wenn der zweite Spieler klar benannt/erkennbar und im Kader ist (sonst nur den einen). Der zweite/unterlegene Spieler (Y) gehört IMMER zur GEGNERISCHEN Mannschaft des Handelnden (X) – nutze das, um bei einer Rückennummer, die es in BEIDEN Teams gibt, das richtige Team zu wählen:
    - Zweikampf: „X gewinnt gegen Y" / „X holt sich/erobert den Ball von Y" → duel_won für X UND duel_lost für Y.
    - Dribbling: „X tunnelt/umkurvt Y" / „geht an Y vorbei" → dribble_won für X UND duel_lost für Y.
+   - MEHRERE ausgespielte Gegner in EINER Aktion: „X dribbelt Y und Z aus" / „lässt Y und Z stehen" / „geht an Y und Z vorbei" → dribble_won für X so oft wie Gegner ausgespielt wurden (hier +2) UND duel_lost je Gegner (Y +1, Z +1). Beispiel: „Maik dribbelt Justin und Darius aus" → Maik dribble_won +2, Justin duel_lost +1, Darius duel_lost +1.
    - Abgefangener Pass: „X fängt den Pass von Y ab" → interception für X UND pass_fail für Y.
    - Geblockter Schuss: „Y blockt den Schuss von X" → shot_blocked_off für X UND shot_blocked_def für Y.
 4. NICHT DOPPELT zählen: Ein Ballverlust ist ENTWEDER pass_fail (verlorener Pass) ODER duel_lost (im Zweikampf verloren) ODER turnover (Ball ohne Pass/Zweikampf vertändelt) – nie mehrfach für dieselbe Situation. Eine Interception ist kein Zweikampf. Ein vom Torwart gehaltener Schuss (save) ist kein vom Feldspieler geblockter Schuss (shot_blocked_def).
