@@ -1179,6 +1179,45 @@ function MatchEditor({
       .filter(([k]) => k.startsWith(`${match.id}::${teamId}::`))
       .map(([k, r]) => ({ k, r }));
 
+  // Temporäre Trikotnummern NUR fürs Tracking (gerissenes Trikot, spontaner
+  // Einwechsler …). Sie werden NIE in den Kader oder ins Backend geschrieben —
+  // nur auf diesem Gerät gemerkt, damit ein Neuladen sie nicht verliert.
+  const numStoreKey = `hl-tracknum:${match.id}`;
+  const [numOverrides, setNumOverrides] = useState<Record<string, number>>({});
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(numStoreKey);
+      const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+      const out: Record<string, number> = {};
+      if (parsed && typeof parsed === 'object') {
+        for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+          if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
+        }
+      }
+      setNumOverrides(out);
+    } catch {
+      setNumOverrides({});
+    }
+  }, [numStoreKey]);
+
+  const setRowNumber = (k: string, n: number | null) => {
+    setNumOverrides((prev) => {
+      const next = { ...prev };
+      if (n === null) delete next[k];
+      else next[k] = n;
+      try {
+        localStorage.setItem(numStoreKey, JSON.stringify(next));
+      } catch {
+        /* Speicher voll/blockiert – Nummer gilt dann nur bis zum Neuladen */
+      }
+      return next;
+    });
+  };
+
+  // Angezeigte Nummer: temporäre Tracking-Nummer schlägt die Kadernummer.
+  const effNumber = (k: string, r: EditRow) =>
+    typeof numOverrides[k] === 'number' ? numOverrides[k] : r.number;
+
   // Live-Spielstand aus den getrackten Toren: eigene Tore + Eigentore des Gegners.
   const goalsFor = (teamId: string, oppId: string) => {
     let g = 0;
@@ -1211,16 +1250,17 @@ function MatchEditor({
       const side: 'home' | 'away' = idx === 0 ? 'home' : 'away';
       const team = resolveTeam(teamId);
       const teamName = team?.name ?? teamId;
-      teamRows(teamId).forEach(({ r }) => {
-        // Echte Trikotnummer aus der Spielerliste (falls hinterlegt) mitgeben,
-        // damit die KI „die Nummer 5" korrekt zuordnen kann.
-        const num = team?.spielerliste?.find((p) => normName(p.name) === normName(r.playerName))?.number;
+      teamRows(teamId).forEach(({ k, r }) => {
+        // Trikotnummer mitgeben, damit die KI „die Nummer 5" korrekt zuordnet.
+        // Eine temporäre Tracking-Nummer schlägt dabei die Kadernummer.
+        const rosterNum = team?.spielerliste?.find((p) => normName(p.name) === normName(r.playerName))?.number;
+        const num = typeof numOverrides[k] === 'number' ? numOverrides[k] : rosterNum;
         out.push({ side, teamId, teamName, name: r.playerName, role: r.role, ...(typeof num === 'number' ? { number: num } : {}) });
       });
     });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [match.id, rows]);
+  }, [match.id, rows, numOverrides]);
 
   // Erkannte Ereignisse ins Raster übernehmen (delta pro Aktion).
   const applyVoice = useCallback(
@@ -1303,6 +1343,9 @@ function MatchEditor({
                     cfg={cfg}
                     onDelta={(action, delta) => onDelta(k, match.id, action, delta)}
                     onToggleRole={() => onRole(k, match.id, r.role === 'keeper' ? 'field' : 'keeper')}
+                    displayNumber={effNumber(k, r)}
+                    tempNumber={typeof numOverrides[k] === 'number'}
+                    onSetNumber={(n) => setRowNumber(k, n)}
                   />
                 ))}
               </div>
@@ -1496,12 +1539,18 @@ function PlayerCard({
   cfg,
   onDelta,
   onToggleRole,
+  displayNumber,
+  tempNumber,
+  onSetNumber,
 }: {
   slot: number;
   row: EditRow;
   cfg: ScoringConfig;
   onDelta: (action: keyof ActionCounts, delta: number) => void;
   onToggleRole: () => void;
+  displayNumber?: number;
+  tempNumber?: boolean;
+  onSetNumber?: (n: number | null) => void;
 }) {
   const isKeeper = row.role === 'keeper';
   const note = matchNote(row.counts, cfg, row.role);
@@ -1523,16 +1572,45 @@ function PlayerCard({
     <div className="hl-card p-2 flex flex-col lg:flex-row gap-2 min-w-0">
       {/* Identität */}
       <div className="lg:w-40 shrink-0 flex items-center gap-2.5 px-1">
-        <div
-          className="w-8 h-8 rounded-full bg-brand-accent/12 border border-brand-accent/25 grid place-items-center text-brand-accent-light font-black text-base shrink-0 tabular-nums"
-          title={typeof row.number === 'number' ? `Trikotnummer ${row.number}` : 'noch keine Nummer eingetragen'}
+        <button
+          type="button"
+          onClick={() => {
+            if (!onSetNumber) return;
+            const cur = typeof displayNumber === 'number' ? String(displayNumber) : '';
+            const input = window.prompt(
+              'Trikotnummer nur fürs Tracking (Kader/Backend bleiben unverändert).\nLeer lassen = zurück zur Kadernummer:',
+              cur
+            );
+            if (input === null) return;
+            const t = input.trim();
+            if (!t) return onSetNumber(null);
+            const n = Number(t);
+            if (!Number.isFinite(n) || n < 0 || n > 999) return;
+            onSetNumber(Math.floor(n));
+          }}
+          title={
+            tempNumber
+              ? `Tracking-Nummer ${displayNumber} (nur für heute – nicht im Kader). Tippen zum Ändern.`
+              : typeof displayNumber === 'number'
+                ? `Trikotnummer ${displayNumber}. Tippen, um sie nur fürs Tracking zu ändern.`
+                : 'Keine Nummer. Tippen, um eine fürs Tracking zu setzen.'
+          }
+          className={`w-8 h-8 rounded-full grid place-items-center font-black text-base shrink-0 tabular-nums cursor-pointer border ${
+            tempNumber
+              ? 'bg-hl-gold/15 border-hl-gold/50 text-hl-gold'
+              : 'bg-brand-accent/12 border-brand-accent/25 text-brand-accent-light'
+          }`}
         >
-          {typeof row.number === 'number' ? row.number : '–'}
-        </div>
+          {typeof displayNumber === 'number' ? displayNumber : '–'}
+        </button>
         <div className="min-w-0 flex-1">
           <div className="font-display font-black text-[15px] truncate leading-tight">{row.playerName}</div>
-          {typeof row.number !== 'number' && (
-            <div className="text-[9px] text-hl-faint leading-tight mt-0.5">noch keine Nummer eingetragen</div>
+          {tempNumber ? (
+            <div className="text-[9px] text-hl-gold leading-tight mt-0.5">Tracking-Nummer (nicht im Kader)</div>
+          ) : (
+            typeof displayNumber !== 'number' && (
+              <div className="text-[9px] text-hl-faint leading-tight mt-0.5">noch keine Nummer – tippen zum Setzen</div>
+            )
           )}
           <div className="flex items-center gap-2 mt-0.5">
             <span
