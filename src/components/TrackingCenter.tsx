@@ -28,6 +28,7 @@ import type {
   Match,
   RosterMap,
   ScoringConfig,
+  CardAttrTarget,
   Season,
   StatRole,
   Team,
@@ -1866,6 +1867,30 @@ function AttendancePanel({
 }
 
 // ---------------------------------------------------------------------------
+// Eine Zeile „Elite-Ziel" für einen Kartenwert: Ziel-Quote, Ziel-Menge und die
+// beiden Gewichte — alles frei einstellbar.
+function AttrTargetRow({
+  label,
+  t,
+  onChange,
+}: {
+  label: string;
+  t: CardAttrTarget;
+  onChange: (key: keyof CardAttrTarget, v: number) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[.03] px-2.5 py-2">
+      <div className="text-[11px] font-bold text-hl-soft mb-1.5">{label}</div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <NumField label="Ziel-Quote" value={t.zielQuote} step={0.01} onChange={(v) => onChange('zielQuote', v)} />
+        <NumField label="Ziel-Menge" value={t.zielMenge} step={0.5} onChange={(v) => onChange('zielMenge', v)} />
+        <NumField label="Gew. Quote" value={t.gewQuote} step={0.05} onChange={(v) => onChange('gewQuote', v)} />
+        <NumField label="Gew. Menge" value={t.gewMenge} step={0.05} onChange={(v) => onChange('gewMenge', v)} />
+      </div>
+    </div>
+  );
+}
+
 // Score-Einstellungen
 // ---------------------------------------------------------------------------
 function ScoringPanel({ cfg, onSave, onClose }: { cfg: ScoringConfig; onSave: (c: ScoringConfig) => void; onClose: () => void }) {
@@ -1874,6 +1899,18 @@ function ScoringPanel({ cfg, onSave, onClose }: { cfg: ScoringConfig; onSave: (c
   useBackClose(true, onClose);
 
   const setPoint = (key: keyof ActionCounts, v: number) => setDraft((d) => ({ ...d, points: { ...d.points, [key]: v } }));
+
+  // --- FIFA-Karten-Regler ---------------------------------------------------
+  type CardNumKey = 'basis' | 'elite' | 'spanne' | 'mengeMax' | 'fullGames' | 'totsStart';
+  const setCard = (key: CardNumKey, v: number) => setDraft((d) => ({ ...d, card: { ...d.card, [key]: v } }));
+  const setVoll = (key: keyof ScoringConfig['card']['vollAktionen'], v: number) =>
+    setDraft((d) => ({ ...d, card: { ...d.card, vollAktionen: { ...d.card.vollAktionen, [key]: v } } }));
+  const setCap = (key: keyof ScoringConfig['card']['caps'], v: number) =>
+    setDraft((d) => ({ ...d, card: { ...d.card, caps: { ...d.card.caps, [key]: v } } }));
+  const setAttr = (attr: 'sch' | 'dri' | 'def' | 'par' | 'sic' | 'stl', key: keyof CardAttrTarget, v: number) =>
+    setDraft((d) => ({ ...d, card: { ...d.card, [attr]: { ...d.card[attr], [key]: v } } }));
+  const setPas = (key: keyof ScoringConfig['card']['pas'], v: number) =>
+    setDraft((d) => ({ ...d, card: { ...d.card, pas: { ...d.card.pas, [key]: v } } }));
 
   // Diese Einstellungen zusätzlich ins Google Sheet („Score-Einstellungen") kopieren,
   // damit die Excel-Rechnung mit unserer übereinstimmt. Speichert vorher für die Website.
@@ -1951,6 +1988,110 @@ function ScoringPanel({ cfg, onSave, onClose }: { cfg: ScoringConfig; onSave: (c
               Bronze ist die Standardstufe (unter Silber). TOTS wird von euch manuell vergeben – automatisch
               erreicht niemand mehr als <span className="text-hl-soft font-semibold">94</span>, TOTS bleibt also den
               handverlesenen Sonderkarten vorbehalten.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-[11px] uppercase tracking-[2px] text-hl-dim mb-2">FIFA-Karte — Grundrechnung</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <NumField label="Basis" value={draft.card.basis} step={1} onChange={(v) => setCard('basis', v)} />
+              <NumField label="Höchstwert" value={draft.card.elite} step={1} onChange={(v) => setCard('elite', v)} />
+              <NumField label="Spanne" value={draft.card.spanne} step={1} onChange={(v) => setCard('spanne', v)} />
+              <NumField label="Mengen-Deckel" value={draft.card.mengeMax} step={0.1} onChange={(v) => setCard('mengeMax', v)} />
+            </div>
+            <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
+              So wird jeder Kartenwert gerechnet:{' '}
+              <span className="text-hl-soft font-semibold">Wert = Basis + Verlässlichkeit × Index × Spanne</span>.
+              Der <b>Index</b> ist 1,00, wenn ein Spieler das Elite-Ziel unten genau erreicht.
+              <br />
+              <b>Spanne</b> = wie viele Punkte „Ziel erreicht" bringt. Höher = großzügiger (Werte steigen,
+              Höchstwerte leichter), niedriger = strenger. Bei {draft.card.spanne} ergibt „Ziel erreicht" ={' '}
+              <span className="text-hl-soft font-semibold">{Math.round(draft.card.basis + draft.card.spanne)}</span>, der
+              Höchstwert {draft.card.elite} wird ab Index{' '}
+              <span className="text-hl-soft font-semibold">
+                {draft.card.spanne > 0 ? ((draft.card.elite - draft.card.basis) / draft.card.spanne).toFixed(2) : '–'}
+              </span>{' '}
+              erreicht.
+              <br />
+              <b>Mengen-Deckel</b> = wie weit Volumen ÜBER dem Ziel noch zählt (1,0 = gar nicht, 1,5 = bis zum
+              1,5-fachen). Verhindert, dass reine Masse allein den Höchstwert bringt.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-[11px] uppercase tracking-[2px] text-hl-dim mb-2">Ab wie vielen Aktionen zählt ein Wert voll</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <NumField label="Pässe" value={draft.card.vollAktionen.pas} step={1} onChange={(v) => setVoll('pas', v)} />
+              <NumField label="Abschluss" value={draft.card.vollAktionen.sch} step={1} onChange={(v) => setVoll('sch', v)} />
+              <NumField label="Dribbling" value={draft.card.vollAktionen.dri} step={1} onChange={(v) => setVoll('dri', v)} />
+              <NumField label="Defensive" value={draft.card.vollAktionen.def} step={1} onChange={(v) => setVoll('def', v)} />
+              <NumField label="TW Paraden" value={draft.card.vollAktionen.par} step={1} onChange={(v) => setVoll('par', v)} />
+              <NumField label="TW Sicherheit" value={draft.card.vollAktionen.sic} step={1} onChange={(v) => setVoll('sic', v)} />
+              <NumField label="TW Stellung" value={draft.card.vollAktionen.stl} step={1} onChange={(v) => setVoll('stl', v)} />
+            </div>
+            <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
+              Schutz gegen kleine Stichproben: Wer erst wenige Aktionen hat, wird Richtung Basis gedämpft
+              (√-Kurve). Beispiel Dribbling bei {draft.card.vollAktionen.dri}: 2 von 2 gewonnen (100 %) zählt nur zu{' '}
+              <span className="text-hl-soft font-semibold">
+                {Math.round(Math.min(1, Math.sqrt(2 / Math.max(1, draft.card.vollAktionen.dri))) * 100)} %
+              </span>
+              , erst ab {draft.card.vollAktionen.dri} Dribblings zählt der Wert voll.{' '}
+              <b>Kleiner = großzügiger</b> (Werte steigen schneller), größer = strenger.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-[11px] uppercase tracking-[2px] text-hl-dim mb-2">Spiele-Deckel (nur Liga)</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              <NumField label="1–2 Sp." value={draft.card.caps.g1_2} step={1} onChange={(v) => setCap('g1_2', v)} />
+              <NumField label="3–4 Sp." value={draft.card.caps.g3_4} step={1} onChange={(v) => setCap('g3_4', v)} />
+              <NumField label="5–7 Sp." value={draft.card.caps.g5_7} step={1} onChange={(v) => setCap('g5_7', v)} />
+              <NumField label="ab 8 Sp." value={draft.card.caps.g8plus} step={1} onChange={(v) => setCap('g8plus', v)} />
+              <NumField label="voll ab Sp." value={draft.card.fullGames} step={1} onChange={(v) => setCard('fullGames', v)} />
+            </div>
+            <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
+              Obergrenze je nach Anzahl gespielter Spiele. Gilt <b>nur in der Liga</b> — beim Testspieltag zählen
+              die echten Stats ohne Spiele-Deckel.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-[11px] uppercase tracking-[2px] text-hl-dim mb-2">Elite-Ziele je Kartenwert</h3>
+            <div className="space-y-2">
+              <AttrTargetRow label="Abschluss (SCH)" t={draft.card.sch} onChange={(k, v) => setAttr('sch', k, v)} />
+              <AttrTargetRow label="Dribbling (DRI)" t={draft.card.dri} onChange={(k, v) => setAttr('dri', k, v)} />
+              <AttrTargetRow label="Defensive (DEF)" t={draft.card.def} onChange={(k, v) => setAttr('def', k, v)} />
+              <AttrTargetRow label="TW Paraden (PAR)" t={draft.card.par} onChange={(k, v) => setAttr('par', k, v)} />
+              <AttrTargetRow label="TW Sicherheit (SIC)" t={draft.card.sic} onChange={(k, v) => setAttr('sic', k, v)} />
+              <AttrTargetRow label="TW Stellung (STL)" t={draft.card.stl} onChange={(k, v) => setAttr('stl', k, v)} />
+            </div>
+            <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
+              <b>Ziel-Quote</b> = welche Quote als Weltklasse gilt (0,70 = 70 %). <b>Ziel-Menge</b> = wie viele
+              Aktionen pro Spiel dazugehören. <b>Gew. Quote / Gew. Menge</b> = wie stark beides zählt (zusammen
+              idealerweise 1,00). Mehr Gewicht auf die Quote = Können zählt mehr; mehr auf die Menge = Fleiß zählt mehr.
+              <br />
+              <span className="text-hl-soft">Zu streng?</span> Ziel-Quote senken (z.&nbsp;B. 0,70 → 0,60) oder die
+              Spanne oben erhöhen — dann steigen die Werte.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-[11px] uppercase tracking-[2px] text-hl-dim mb-2">Passspiel (PAS) im Detail</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <NumField label="Ziel-Passquote" value={draft.card.pas.zielPassquote} step={0.01} onChange={(v) => setPas('zielPassquote', v)} />
+              <NumField label="Pässe/Spiel" value={draft.card.pas.zielPaesseSpiel} step={1} onChange={(v) => setPas('zielPaesseSpiel', v)} />
+              <NumField label="Schlüsselp./Sp." value={draft.card.pas.zielKeySpiel} step={0.1} onChange={(v) => setPas('zielKeySpiel', v)} />
+              <NumField label="Assists/Spiel" value={draft.card.pas.zielAssistsSpiel} step={0.05} onChange={(v) => setPas('zielAssistsSpiel', v)} />
+              <NumField label="Gew. Passindex" value={draft.card.pas.gewPassindex} step={0.05} onChange={(v) => setPas('gewPassindex', v)} />
+              <NumField label="Gew. Schlüsselp." value={draft.card.pas.gewKey} step={0.05} onChange={(v) => setPas('gewKey', v)} />
+              <NumField label="Gew. Assists" value={draft.card.pas.gewAssist} step={0.05} onChange={(v) => setPas('gewAssist', v)} />
+              <NumField label="Gew. Quote" value={draft.card.pas.indexGewQuote} step={0.05} onChange={(v) => setPas('indexGewQuote', v)} />
+              <NumField label="Gew. Menge" value={draft.card.pas.indexGewMenge} step={0.05} onChange={(v) => setPas('indexGewMenge', v)} />
+            </div>
+            <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
+              PAS mischt drei Teile: den Pass-Index (Quote + Menge), Schlüsselpässe und Assists — mit den drei
+              „Gew."-Reglern gewichtet (zusammen idealerweise 1,00). Die letzten beiden bestimmen innerhalb des
+              Pass-Index, wie stark Quote gegenüber Menge zählt.
             </p>
           </section>
 

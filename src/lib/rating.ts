@@ -128,26 +128,19 @@ export function quotas(c: ActionCounts, cfg: ScoringConfig): Quotas {
 
 // --- Kartenwerte ------------------------------------------------------------
 
-// Obergrenze für den Mengen-Anteil im Testspiel-Modus: Volumen wird belohnt,
-// auch über dem Ziel (bis 1,5×), aber nicht unbegrenzt — sonst würde reine
-// Masse allein davonlaufen.
-const VOL_CAP = 1.5;
-
-// Elite-Index aus Quote + Menge (Index 1,00 = Elite-Ziel).
-// capMenge=true → Menge über dem Ziel zählt weiter, aber gedeckelt bei VOL_CAP
-// (Testspiel-Modus). So wird Volumen belohnt, ohne dass Masse allein maxt.
-function attrIndex(quote: number, menge: number, t: CardAttrTarget, capMenge = false): number {
+// Elite-Index aus Quote + Menge (Index 1,00 = Elite-Ziel). Die Menge über dem
+// Ziel wird bei `mengeMax` gedeckelt (einstellbar): Volumen wird belohnt, ohne
+// dass reine Masse allein den Höchstwert erreicht.
+function attrIndex(quote: number, menge: number, t: CardAttrTarget, mengeMax: number): number {
   const q = t.zielQuote > 0 ? quote / t.zielQuote : 0;
   let m = t.zielMenge > 0 ? menge / t.zielMenge : 0;
-  if (capMenge) m = Math.min(VOL_CAP, m);
+  m = Math.min(mengeMax, m);
   return t.gewQuote * q + t.gewMenge * m;
 }
 
-// Reine Mengen-Quote (z.B. Schlüsselpässe/Spiel) — im Testspiel-Modus bei
-// VOL_CAP gedeckelt.
-function mengeRatio(value: number, ziel: number, capMenge: boolean): number {
-  const r = safeDiv(value, ziel);
-  return capMenge ? Math.min(VOL_CAP, r) : r;
+// Reine Mengen-Quote (z.B. Schlüsselpässe/Spiel), bei `mengeMax` gedeckelt.
+function mengeRatio(value: number, ziel: number, mengeMax: number): number {
+  return Math.min(mengeMax, safeDiv(value, ziel));
 }
 
 // Kappen-Obergrenze abhängig von der Spielzahl (schützt vor Ausreißern bei
@@ -160,40 +153,21 @@ export function capForGames(games: number, cfg: ScoringConfig): number {
   return c.g1_2;
 }
 
-// „Volle" Stichprobe je Attribut: ab so vielen Aktionen zählt ein Attribut als
-// verlässlich (R = 1). Bewusst so gewählt, dass ein Testspiel-Abend (mehrere
-// Spiele) sie erreichen kann, eine Handvoll Aktionen aber nicht.
-const VOLL = {
-  pas: 18, // Passversuche
-  sch: 6, // Gesamtschüsse
-  dri: 8, // Dribblings (gewonnen + verloren)
-  def: 10, // Defensiv-Aktionen (Zweikämpfe + Interceptions + Blocks)
-  par: 8, // Torwart-Aktionen (Paraden + Gegentore)
-  sic: 8, // Torwart-Aktionen (Sicherheit)
-  stl: 4, // Stellungs-/Elfer-Paraden
-} as const;
-
-// Testspiel-Spanne: „Ziel erreicht" (Index 1,0) ergibt ~80, nicht 94. Für die
-// echte Spitze (90+) muss das Ziel deutlich übertroffen werden — Top-Quote UND
-// viel Volumen. So bleibt 94 selten statt Standard. (Echte Saison nutzt den
-// vollen Sprung basis→elite über attrValue, hier bewusst flacher.)
-const EVENT_SPAN = 40;
-
-// Verlässlichkeit aus dem Stichprobenumfang: R = min(1, √(vol / VOLL)).
+// Verlässlichkeit aus dem Stichprobenumfang: R = min(1, √(vol / vollAktionen)).
 // √-Kurve = sanft (früher Anstieg, dann abflachend). Bei wenig Aktionen zieht
-// der Wert Richtung Basis, statt sofort Elite zu erreichen.
+// der Wert Richtung Basis, statt sofort den Höchstwert zu erreichen.
 function reliability(vol: number, voll: number): number {
   if (voll <= 0) return 1;
   return Math.min(1, Math.sqrt(Math.max(0, vol) / voll));
 }
 
-// Fairer Kartenwert: Wert = basis + R · Index · EVENT_SPAN, gedeckelt bei `cap`.
-// R (Verlässlichkeit) dämpft bei wenig Aktionen; die flachere Spanne macht die
-// Spitze schwerer. Volumen zählt über den Index weiter mit (bis VOL_CAP).
-// Liga: cap = Spiele-Deckel (zusätzlicher Schutz). Testspiel: cap = 94.
-function eventValue(index: number, vol: number, voll: number, cap: number, cfg: ScoringConfig): number {
+// Kartenwert: Wert = basis + R · Index · Spanne, gedeckelt bei `cap`.
+// R (Verlässlichkeit) dämpft bei wenig Aktionen; die Spanne bestimmt, wie viel
+// „Ziel erreicht" (Index 1,00) einbringt. Alle Werte kommen aus den
+// Score-Einstellungen und sind im Tracking Center justierbar.
+function cardValue(index: number, vol: number, voll: number, cap: number, cfg: ScoringConfig): number {
   const R = reliability(vol, voll);
-  const raw = cfg.card.basis + R * Math.max(0, index) * EVENT_SPAN;
+  const raw = cfg.card.basis + R * Math.max(0, index) * cfg.card.spanne;
   return Math.round(clamp(raw, cfg.card.basis, cap));
 }
 
@@ -206,32 +180,32 @@ export function fieldCard(total: ActionCounts, games: number, cfg: ScoringConfig
   const cap = ignoreGamesCap ? cfg.card.caps.g8plus : capForGames(games, cfg);
   const p = cfg.card.pas;
 
-  // Volumen wird belohnt, aber bei VOL_CAP gedeckelt — in Liga UND Testspiel gleich.
-  const capMenge = true;
+  const mm = cfg.card.mengeMax;
+  const voll = cfg.card.vollAktionen;
 
   // PAS = gewichteter Index aus Pass-Index (Quote+Menge), Schlüsselpässen und Vorlagen.
   const passIndex =
     p.indexGewQuote * safeDiv(passRate(total), p.zielPassquote) +
-    p.indexGewMenge * mengeRatio(passversuche(total) / g, p.zielPaesseSpiel, capMenge);
-  const keyIndex = mengeRatio(total.key_pass / g, p.zielKeySpiel, capMenge);
-  const assistIndex = mengeRatio(total.assist / g, p.zielAssistsSpiel, capMenge);
+    p.indexGewMenge * mengeRatio(passversuche(total) / g, p.zielPaesseSpiel, mm);
+  const keyIndex = mengeRatio(total.key_pass / g, p.zielKeySpiel, mm);
+  const assistIndex = mengeRatio(total.assist / g, p.zielAssistsSpiel, mm);
   const pasIndex = p.gewPassindex * passIndex + p.gewKey * keyIndex + p.gewAssist * assistIndex;
 
-  const schIndex = attrIndex(schussQ(total, cfg), gesamtschuesse(total) / g, cfg.card.sch, capMenge);
-  const driIndex = attrIndex(dribRate(total), total.dribble_won / g, cfg.card.dri, capMenge);
+  const schIndex = attrIndex(schussQ(total, cfg), gesamtschuesse(total) / g, cfg.card.sch, mm);
+  const driIndex = attrIndex(dribRate(total), total.dribble_won / g, cfg.card.dri, mm);
   const defIndex = attrIndex(
     duelRate(total),
     (total.duel_won + total.interception + total.shot_blocked_def) / g,
     cfg.card.def,
-    capMenge
+    mm
   );
 
-  // Gleiche faire Rechnung für Liga und Testspiel; Unterschied ist nur der Cap.
+  // Gleiche Rechnung für Liga und Testspiel; Unterschied ist nur der Cap.
   const defVol = total.duel_won + total.duel_lost + total.interception + total.shot_blocked_def;
-  const PAS = eventValue(pasIndex, passversuche(total), VOLL.pas, cap, cfg);
-  const SCH = eventValue(schIndex, gesamtschuesse(total), VOLL.sch, cap, cfg);
-  const DRI = eventValue(driIndex, total.dribble_won + total.dribble_lost, VOLL.dri, cap, cfg);
-  const DEF = eventValue(defIndex, defVol, VOLL.def, cap, cfg);
+  const PAS = cardValue(pasIndex, passversuche(total), voll.pas, cap, cfg);
+  const SCH = cardValue(schIndex, gesamtschuesse(total), voll.sch, cap, cfg);
+  const DRI = cardValue(driIndex, total.dribble_won + total.dribble_lost, voll.dri, cap, cfg);
+  const DEF = cardValue(defIndex, defVol, voll.def, cap, cfg);
   const ges = Math.round((PAS + SCH + DRI + DEF) / 4);
 
   return {
@@ -256,24 +230,20 @@ export function keeperCard(total: ActionCounts, games: number, cfg: ScoringConfi
   const cleanRate = total.gk_goal_against === 0 ? 1 : 0; // grob – Feinschliff später
   const p = cfg.card.pas;
 
-  const capMenge = true;
-  const parIndex = attrIndex(saveRate, total.save / g, cfg.card.par, capMenge);
-  const sicIndex = attrIndex(cleanRate, clampMin(cfg.card.sic.zielMenge - total.gk_goal_against / g, 0), cfg.card.sic, capMenge);
-  const stlIndex = attrIndex(
-    saveRate,
-    (total.gk_position_save + total.penalty_save) / g,
-    cfg.card.stl,
-    capMenge
-  );
+  const mm = cfg.card.mengeMax;
+  const voll = cfg.card.vollAktionen;
+  const parIndex = attrIndex(saveRate, total.save / g, cfg.card.par, mm);
+  const sicIndex = attrIndex(cleanRate, clampMin(cfg.card.sic.zielMenge - total.gk_goal_against / g, 0), cfg.card.sic, mm);
+  const stlIndex = attrIndex(saveRate, (total.gk_position_save + total.penalty_save) / g, cfg.card.stl, mm);
   const passIndex =
     p.indexGewQuote * safeDiv(passRate(total), p.zielPassquote) +
-    p.indexGewMenge * mengeRatio(passversuche(total) / g, p.zielPaesseSpiel, capMenge);
+    p.indexGewMenge * mengeRatio(passversuche(total) / g, p.zielPaesseSpiel, mm);
 
-  // Gleiche faire Rechnung für Liga und Testspiel; Unterschied ist nur der Cap.
-  const STL = eventValue(stlIndex, total.gk_position_save + total.penalty_save, VOLL.stl, cap, cfg);
-  const PAR = eventValue(parIndex, gkActions, VOLL.par, cap, cfg);
-  const PAS = eventValue(passIndex, passversuche(total), VOLL.pas, cap, cfg);
-  const SIC = eventValue(sicIndex, gkActions, VOLL.sic, cap, cfg);
+  // Gleiche Rechnung für Liga und Testspiel; Unterschied ist nur der Cap.
+  const STL = cardValue(stlIndex, total.gk_position_save + total.penalty_save, voll.stl, cap, cfg);
+  const PAR = cardValue(parIndex, gkActions, voll.par, cap, cfg);
+  const PAS = cardValue(passIndex, passversuche(total), voll.pas, cap, cfg);
+  const SIC = cardValue(sicIndex, gkActions, voll.sic, cap, cfg);
   const ges = Math.round((STL + PAR + PAS + SIC) / 4);
 
   return {

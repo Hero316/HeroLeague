@@ -727,10 +727,20 @@ export interface ScoringConfig {
   minimums: { apps: number; passes: number; shots: number; duels: number; gk: number };
   card: {
     basis: number; // Kartenwert-Untergrenze (40)
-    elite: number; // Index 1,00 entspricht diesem Wert (94)
+    elite: number; // Höchstwert der Karte (94)
     totsStart: number; // ab hier TOTS (95) – nur Sonderkarten, nicht automatisch
     fullGames: number; // ab dieser Spielzahl volle Wertung (8)
     caps: { g1_2: number; g3_4: number; g5_7: number; g8plus: number }; // Kappen je Spielzahl
+    // Spanne: Wie viele Punkte über der Basis ein Index von 1,00 („Ziel erreicht")
+    // bringt. Größer = großzügiger (Höchstwerte leichter), kleiner = strenger.
+    spanne: number;
+    // Mengen-Deckel: Wie weit die Menge ÜBER dem Ziel noch belohnt wird
+    // (1,0 = gar nicht, 1,5 = bis zum 1,5-fachen des Ziels).
+    mengeMax: number;
+    // Verlässlichkeit: ab so vielen Aktionen zählt ein Attribut voll. Darunter
+    // wird der Wert Richtung Basis gedämpft (√-Kurve), damit 2 Aktionen mit
+    // 100 % nicht sofort Höchstwert ergeben.
+    vollAktionen: { pas: number; sch: number; dri: number; def: number; par: number; sic: number; stl: number };
     pas: {
       zielPassquote: number;
       zielPaesseSpiel: number;
