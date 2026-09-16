@@ -19,7 +19,11 @@ import {
   UserPlus,
   ArrowLeftRight,
   Trash2,
+  ChevronDown,
+  RotateCcw,
+  IdCard,
 } from 'lucide-react';
+import FifaCard from './FifaCard';
 import type {
   ActionCounts,
   EveningRoster,
@@ -45,7 +49,7 @@ import {
   type ActionMeta,
   type ActionTone,
 } from '../lib/scoring';
-import { emptyCounts, matchNote, normalizeCounts, rohscore } from '../lib/rating';
+import { emptyCounts, matchNote, normalizeCounts, playerCard, rohscore } from '../lib/rating';
 import { shortDate } from './ui';
 import { useBackClose, goBackLayer } from '../lib/backStack';
 import VoiceTrackingPanel, { type VoicePlayer } from './VoiceTrackingPanel';
@@ -136,6 +140,7 @@ export default function TrackingCenter({
 
   const [cfg, setCfg] = useState<ScoringConfig>(DEFAULT_SCORING);
   const [scoringOpen, setScoringOpen] = useState(false);
+  const [cardTuningOpen, setCardTuningOpen] = useState(false);
 
   // Aktive Saison (echt ODER Demo) bestimmt alle Tracking-Schlüssel → automatische
   // Trennung: Demo-Tracking landet unter der Demo-Saison-ID, nie bei echten Daten.
@@ -810,10 +815,17 @@ export default function TrackingCenter({
               )}
               <button
                 onClick={() => setScoringOpen(true)}
-                title="Score-Einstellungen"
+                title="Score-Einstellungen (Punkte je Aktion & Noten)"
                 className="w-9 h-9 grid place-items-center rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
               >
                 <SlidersHorizontal className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setCardTuningOpen(true)}
+                title="FIFA-Karten-Rechnung (mit Live-Vorschau)"
+                className="w-9 h-9 grid place-items-center rounded-xl border border-hl-gold/40 bg-hl-gold/10 text-hl-gold hover:bg-hl-gold/20 transition-colors cursor-pointer"
+              >
+                <IdCard className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setTheme(light ? 'dark' : 'light')}
@@ -876,6 +888,7 @@ export default function TrackingCenter({
       </div>
 
       {scoringOpen && <ScoringPanel cfg={cfg} onSave={saveScoring} onClose={() => setScoringOpen(false)} />}
+      {cardTuningOpen && <CardTuningPanel cfg={cfg} onSave={saveScoring} onClose={() => setCardTuningOpen(false)} />}
       {attendanceOpen && selectedMatchday !== null && (
         <AttendancePanel
           teamIds={dayTeamIds}
@@ -1867,6 +1880,151 @@ function AttendancePanel({
 }
 
 // ---------------------------------------------------------------------------
+// Beispiel-Spieler für die Live-Vorschau der FIFA-Karte. Bewusst drei typische
+// Fälle, damit man beim Drehen sofort sieht, ob die Rechnung fair ist:
+// ein Top-Spieler, ein Durchschnitt und einer mit ganz wenigen Aktionen
+// (letzterer zeigt, ob die Verlässlichkeits-Dämpfung greift).
+const PREVIEW_PLAYERS: { name: string; hint: string; games: number; counts: Partial<ActionCounts> }[] = [
+  {
+    name: 'Top Spieler',
+    hint: 'starke Quoten, viel Volumen',
+    games: 5,
+    counts: {
+      pass_ok: 78, pass_fail: 12, key_pass: 6, assist: 2,
+      goal: 4, shot_on: 6, shot_miss: 6, shot_blocked_off: 2,
+      dribble_won: 14, dribble_lost: 4,
+      duel_won: 22, duel_lost: 8, interception: 6, shot_blocked_def: 2,
+    },
+  },
+  {
+    name: 'Mittel Kicker',
+    hint: 'solider Durchschnitt',
+    games: 5,
+    counts: {
+      pass_ok: 40, pass_fail: 15, key_pass: 2,
+      goal: 1, shot_on: 2, shot_miss: 5, shot_blocked_off: 1,
+      dribble_won: 5, dribble_lost: 6,
+      duel_won: 10, duel_lost: 12, interception: 3,
+    },
+  },
+  {
+    name: 'Kurz Drin',
+    hint: 'nur wenige Aktionen, alle erfolgreich',
+    games: 1,
+    counts: {
+      pass_ok: 6, pass_fail: 1,
+      goal: 1,
+      dribble_won: 2,
+      duel_won: 2,
+    },
+  },
+];
+
+// Live-Vorschau: rechnet die Beispiel-Spieler mit den GERADE eingestellten
+// Werten durch und zeigt echte Karten. So sieht man jede Änderung sofort.
+function CardPreview({ cfg, eventMode }: { cfg: ScoringConfig; eventMode: boolean }) {
+  const cards = useMemo(
+    () =>
+      PREVIEW_PLAYERS.map((p) => ({
+        ...p,
+        card: playerCard({ ...emptyCounts(), ...p.counts }, p.games, 'field', cfg, eventMode),
+      })),
+    [cfg, eventMode]
+  );
+
+  return (
+    <div className="grid grid-cols-3 gap-2 sm:gap-3">
+      {cards.map((c) => (
+        <div key={c.name} className="min-w-0">
+          <FifaCard card={c.card} name={c.name} />
+          <div className="mt-1.5 text-center">
+            <div className="text-[10px] font-bold text-hl-soft truncate">{c.name}</div>
+            <div className="text-[9px] text-hl-faint leading-tight">{c.hint}</div>
+            <div className="text-[9px] text-hl-dim mt-0.5 tabular-nums">
+              {c.games} {c.games === 1 ? 'Spiel' : 'Spiele'}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Schieberegler mit Zahlenfeld – zum Spielen viel angenehmer als nur tippen.
+function SliderField({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  hint,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+  hint?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[.03] px-3 py-2.5">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <span className="text-[11px] font-bold text-hl-soft">{label}</span>
+        <input
+          type="number"
+          step={step}
+          value={value}
+          onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+          className="hl-input w-16 text-right px-1.5 py-1 rounded-md text-sm tabular-nums shrink-0"
+        />
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={Math.min(max, Math.max(min, value))}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="w-full accent-brand-accent cursor-pointer"
+      />
+      {hint && <div className="text-[10px] text-hl-faint mt-1 leading-snug">{hint}</div>}
+    </div>
+  );
+}
+
+// Aufklappbare Gruppe – hält das Fenster aufgeräumt, Details nur bei Bedarf.
+function Collapse({
+  title,
+  subtitle,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[.02] overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left cursor-pointer hover:bg-white/[.03]"
+      >
+        <span className="min-w-0">
+          <span className="block text-[12px] font-black uppercase tracking-wider text-hl-soft truncate">{title}</span>
+          {subtitle && <span className="block text-[10px] text-hl-faint truncate">{subtitle}</span>}
+        </span>
+        <ChevronDown className={`w-4 h-4 shrink-0 text-hl-dim transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && <div className="px-3 pb-3 pt-0.5">{children}</div>}
+    </div>
+  );
+}
+
 // Eine Zeile „Elite-Ziel" für einen Kartenwert: Ziel-Quote, Ziel-Menge und die
 // beiden Gewichte — alles frei einstellbar.
 function AttrTargetRow({
@@ -1886,6 +2044,217 @@ function AttrTargetRow({
         <NumField label="Ziel-Menge" value={t.zielMenge} step={0.5} onChange={(v) => onChange('zielMenge', v)} />
         <NumField label="Gew. Quote" value={t.gewQuote} step={0.05} onChange={(v) => onChange('gewQuote', v)} />
         <NumField label="Gew. Menge" value={t.gewMenge} step={0.05} onChange={(v) => onChange('gewMenge', v)} />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// FIFA-Karten-Rechnung – eigenes Fenster mit Live-Vorschau
+// ---------------------------------------------------------------------------
+function CardTuningPanel({ cfg, onSave, onClose }: { cfg: ScoringConfig; onSave: (c: ScoringConfig) => void; onClose: () => void }) {
+  const [draft, setDraft] = useState<ScoringConfig>(cfg);
+  const [previewEvent, setPreviewEvent] = useState(true);
+  useBackClose(true, onClose);
+
+  type CardNumKey = 'basis' | 'elite' | 'spanne' | 'mengeMax' | 'fullGames' | 'totsStart';
+  const setCard = (key: CardNumKey, v: number) => setDraft((d) => ({ ...d, card: { ...d.card, [key]: v } }));
+  const setVoll = (key: keyof ScoringConfig['card']['vollAktionen'], v: number) =>
+    setDraft((d) => ({ ...d, card: { ...d.card, vollAktionen: { ...d.card.vollAktionen, [key]: v } } }));
+  const setCap = (key: keyof ScoringConfig['card']['caps'], v: number) =>
+    setDraft((d) => ({ ...d, card: { ...d.card, caps: { ...d.card.caps, [key]: v } } }));
+  const setAttr = (attr: 'sch' | 'dri' | 'def' | 'par' | 'sic' | 'stl', key: keyof CardAttrTarget, v: number) =>
+    setDraft((d) => ({ ...d, card: { ...d.card, [attr]: { ...d.card[attr], [key]: v } } }));
+  const setPas = (key: keyof ScoringConfig['card']['pas'], v: number) =>
+    setDraft((d) => ({ ...d, card: { ...d.card, pas: { ...d.card.pas, [key]: v } } }));
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="hl-modal-card relative w-full sm:max-w-2xl max-h-[92vh] rounded-t-3xl sm:rounded-3xl border border-white/10 overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+          <div className="min-w-0">
+            <h2 className="font-display font-black uppercase tracking-tight text-lg leading-none">FIFA-Karten-Rechnung</h2>
+            <p className="text-[11px] text-hl-faint mt-1">Dreh an den Reglern – die Karten oben ändern sich sofort.</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 grid place-items-center rounded-lg hover:bg-white/10 cursor-pointer shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto px-5 py-4 space-y-4">
+          {/* Live-Vorschau bleibt beim Scrollen oben stehen */}
+          <div className="sticky -top-4 z-10 -mx-5 px-5 pt-1 pb-3 bg-[color:var(--hl-modal-bg,#0c0f0e)]/95 backdrop-blur-sm border-b border-white/10">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <h3 className="text-[11px] uppercase tracking-[2px] text-hl-dim">Live-Vorschau</h3>
+              <div className="flex gap-1">
+                {([
+                  [true, 'Testspiel'],
+                  [false, 'Liga'],
+                ] as const).map(([v, l]) => (
+                  <button
+                    key={l}
+                    onClick={() => setPreviewEvent(v)}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider cursor-pointer border ${
+                      previewEvent === v
+                        ? 'bg-white/10 border-white/20 text-hl-text'
+                        : 'bg-transparent border-white/10 text-hl-faint hover:text-hl-soft'
+                    }`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <CardPreview cfg={draft} eventMode={previewEvent} />
+            <p className="text-[10px] text-hl-faint mt-2 leading-snug">
+              Drei Beispiel-Spieler, gerechnet mit deinen aktuellen Werten. Dreh unten an den Reglern — die
+              Karten ändern sich sofort mit.
+            </p>
+          </div>
+
+          <Collapse
+            title="Wie großzügig?"
+            subtitle="Die zwei wichtigsten Regler"
+            defaultOpen
+          >
+            <div className="grid sm:grid-cols-2 gap-2">
+              <SliderField
+                label="Spanne"
+                value={draft.card.spanne}
+                min={20}
+                max={60}
+                step={1}
+                onChange={(v) => setCard('spanne', v)}
+                hint={`„Ziel erreicht" ergibt ${Math.round(draft.card.basis + draft.card.spanne)}. Höher = großzügiger.`}
+              />
+              <SliderField
+                label="Mengen-Deckel"
+                value={draft.card.mengeMax}
+                min={1}
+                max={3}
+                step={0.1}
+                onChange={(v) => setCard('mengeMax', v)}
+                hint={`Volumen zählt bis zum ${draft.card.mengeMax.toFixed(1)}-fachen des Ziels. 1,0 = gar kein Bonus.`}
+              />
+            </div>
+            <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
+              <span className="text-hl-soft font-semibold">Wert = Basis + Verlässlichkeit × Index × Spanne.</span>{' '}
+              Der Index ist 1,00, wenn ein Spieler das Elite-Ziel genau erreicht. Höchstwert {draft.card.elite}{' '}
+              gibt's ab Index{' '}
+              <span className="text-hl-soft font-semibold">
+                {draft.card.spanne > 0 ? ((draft.card.elite - draft.card.basis) / draft.card.spanne).toFixed(2) : '–'}
+              </span>
+              .
+            </p>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <NumField label="Basis" value={draft.card.basis} step={1} onChange={(v) => setCard('basis', v)} />
+              <NumField label="Höchstwert" value={draft.card.elite} step={1} onChange={(v) => setCard('elite', v)} />
+            </div>
+          </Collapse>
+
+          <Collapse title="Elite-Ziele je Kartenwert" subtitle="Ab welcher Quote gilt jemand als Weltklasse">
+            <div className="space-y-2">
+              <AttrTargetRow label="Abschluss (SCH)" t={draft.card.sch} onChange={(k, v) => setAttr('sch', k, v)} />
+              <AttrTargetRow label="Dribbling (DRI)" t={draft.card.dri} onChange={(k, v) => setAttr('dri', k, v)} />
+              <AttrTargetRow label="Defensive (DEF)" t={draft.card.def} onChange={(k, v) => setAttr('def', k, v)} />
+              <AttrTargetRow label="TW Paraden (PAR)" t={draft.card.par} onChange={(k, v) => setAttr('par', k, v)} />
+              <AttrTargetRow label="TW Sicherheit (SIC)" t={draft.card.sic} onChange={(k, v) => setAttr('sic', k, v)} />
+              <AttrTargetRow label="TW Stellung (STL)" t={draft.card.stl} onChange={(k, v) => setAttr('stl', k, v)} />
+            </div>
+            <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
+              <b>Ziel-Quote</b> = welche Quote als Weltklasse gilt (0,70 = 70 %). <b>Ziel-Menge</b> = wie viele
+              Aktionen pro Spiel dazugehören. <b>Gew.</b> = wie stark Quote bzw. Menge zählt (zusammen
+              idealerweise 1,00). <span className="text-hl-soft">Zu streng?</span> Ziel-Quote senken.
+            </p>
+          </Collapse>
+
+          <Collapse title="Verlässlichkeit" subtitle="Ab wie vielen Aktionen zählt ein Wert voll">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <NumField label="Pässe" value={draft.card.vollAktionen.pas} step={1} onChange={(v) => setVoll('pas', v)} />
+              <NumField label="Abschluss" value={draft.card.vollAktionen.sch} step={1} onChange={(v) => setVoll('sch', v)} />
+              <NumField label="Dribbling" value={draft.card.vollAktionen.dri} step={1} onChange={(v) => setVoll('dri', v)} />
+              <NumField label="Defensive" value={draft.card.vollAktionen.def} step={1} onChange={(v) => setVoll('def', v)} />
+              <NumField label="TW Paraden" value={draft.card.vollAktionen.par} step={1} onChange={(v) => setVoll('par', v)} />
+              <NumField label="TW Sicherheit" value={draft.card.vollAktionen.sic} step={1} onChange={(v) => setVoll('sic', v)} />
+              <NumField label="TW Stellung" value={draft.card.vollAktionen.stl} step={1} onChange={(v) => setVoll('stl', v)} />
+            </div>
+            <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
+              Schutz gegen kleine Stichproben (siehe „Kurz Drin" in der Vorschau). Bei Dribbling{' '}
+              {draft.card.vollAktionen.dri} zählt „2 von 2" nur zu{' '}
+              <span className="text-hl-soft font-semibold">
+                {Math.round(Math.min(1, Math.sqrt(2 / Math.max(1, draft.card.vollAktionen.dri))) * 100)} %
+              </span>
+              . <b>Kleiner = großzügiger.</b>
+            </p>
+          </Collapse>
+
+          <Collapse title="Passspiel (PAS) im Detail" subtitle="Pass-Index, Schlüsselpässe und Assists mischen">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <NumField label="Ziel-Passquote" value={draft.card.pas.zielPassquote} step={0.01} onChange={(v) => setPas('zielPassquote', v)} />
+              <NumField label="Pässe/Spiel" value={draft.card.pas.zielPaesseSpiel} step={1} onChange={(v) => setPas('zielPaesseSpiel', v)} />
+              <NumField label="Schlüsselp./Sp." value={draft.card.pas.zielKeySpiel} step={0.1} onChange={(v) => setPas('zielKeySpiel', v)} />
+              <NumField label="Assists/Spiel" value={draft.card.pas.zielAssistsSpiel} step={0.05} onChange={(v) => setPas('zielAssistsSpiel', v)} />
+              <NumField label="Gew. Passindex" value={draft.card.pas.gewPassindex} step={0.05} onChange={(v) => setPas('gewPassindex', v)} />
+              <NumField label="Gew. Schlüsselp." value={draft.card.pas.gewKey} step={0.05} onChange={(v) => setPas('gewKey', v)} />
+              <NumField label="Gew. Assists" value={draft.card.pas.gewAssist} step={0.05} onChange={(v) => setPas('gewAssist', v)} />
+              <NumField label="Gew. Quote" value={draft.card.pas.indexGewQuote} step={0.05} onChange={(v) => setPas('indexGewQuote', v)} />
+              <NumField label="Gew. Menge" value={draft.card.pas.indexGewMenge} step={0.05} onChange={(v) => setPas('indexGewMenge', v)} />
+            </div>
+          </Collapse>
+
+          <Collapse title="Spiele-Deckel (nur Liga)" subtitle="Obergrenze je nach Anzahl Spiele">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              <NumField label="1–2 Sp." value={draft.card.caps.g1_2} step={1} onChange={(v) => setCap('g1_2', v)} />
+              <NumField label="3–4 Sp." value={draft.card.caps.g3_4} step={1} onChange={(v) => setCap('g3_4', v)} />
+              <NumField label="5–7 Sp." value={draft.card.caps.g5_7} step={1} onChange={(v) => setCap('g5_7', v)} />
+              <NumField label="ab 8 Sp." value={draft.card.caps.g8plus} step={1} onChange={(v) => setCap('g8plus', v)} />
+              <NumField label="voll ab Sp." value={draft.card.fullGames} step={1} onChange={(v) => setCard('fullGames', v)} />
+            </div>
+            <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
+              Gilt <b>nur in der Liga</b> — beim Testspieltag zählen die echten Stats ohne Spiele-Deckel. Oben in
+              der Vorschau umschaltbar.
+            </p>
+          </Collapse>
+
+          <Collapse title="Kartenstufen" subtitle="Ab welchem Gesamtwert Silber, Gold, Hero">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <NumField label="Silber" value={draft.tiers.silber} step={1} onChange={(v) => setDraft((d) => ({ ...d, tiers: { ...d.tiers, silber: v } }))} />
+              <NumField label="Gold" value={draft.tiers.gold} step={1} onChange={(v) => setDraft((d) => ({ ...d, tiers: { ...d.tiers, gold: v } }))} />
+              <NumField label="Hero" value={draft.tiers.hero} step={1} onChange={(v) => setDraft((d) => ({ ...d, tiers: { ...d.tiers, hero: v } }))} />
+              <NumField label="TOTS" value={draft.tiers.tots} step={1} onChange={(v) => setDraft((d) => ({ ...d, tiers: { ...d.tiers, tots: v } }))} />
+            </div>
+            <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
+              Bronze ist die Standardstufe. TOTS vergebt ihr manuell — automatisch erreicht niemand mehr als den
+              Höchstwert.
+            </p>
+          </Collapse>
+
+          <button
+            onClick={() => {
+              if (!window.confirm('Alle FIFA-Karten-Werte auf die Standardwerte zurücksetzen?')) return;
+              setDraft((d) => ({ ...d, card: DEFAULT_SCORING.card, tiers: DEFAULT_SCORING.tiers }));
+            }}
+            className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-hl-mute hover:text-hl-text cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> Auf Standard zurücksetzen
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-2 px-5 py-4 border-t border-white/10">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider text-hl-mute hover:text-hl-text cursor-pointer">
+            Abbrechen
+          </button>
+          <button
+            onClick={() => {
+              onSave(draft);
+              onClose();
+            }}
+            className="px-5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-brand-accent text-brand-dark hover:bg-brand-accent-light transition-colors cursor-pointer flex items-center gap-1.5"
+          >
+            <Check className="w-3.5 h-3.5" /> Speichern
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1941,6 +2310,7 @@ function ScoringPanel({ cfg, onSave, onClose }: { cfg: ScoringConfig; onSave: (c
           </button>
         </div>
 
+
         <div className="overflow-y-auto px-5 py-4 space-y-6">
           <section>
             <h3 className="text-[11px] uppercase tracking-[2px] text-hl-dim mb-2">Punkte je Aktion</h3>
@@ -1973,125 +2343,6 @@ function ScoringPanel({ cfg, onSave, onClose }: { cfg: ScoringConfig; onSave: (c
             <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
               Zu viele 9–10er? <b>„je Punkt"</b> senken (z.&nbsp;B. 0,20 → 0,12) – dann steigt die Note langsamer. Oder einzelne Aktionen oben
               weniger Punkte geben (z.&nbsp;B. „Pass erfolgreich" 0,10 → 0,05). Wirkt sofort auf alle Noten.
-            </p>
-          </section>
-
-          <section>
-            <h3 className="text-[11px] uppercase tracking-[2px] text-hl-dim mb-2">Kartenstufen (ab Wert)</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <NumField label="Silber" value={draft.tiers.silber} step={1} onChange={(v) => setDraft((d) => ({ ...d, tiers: { ...d.tiers, silber: v } }))} />
-              <NumField label="Gold" value={draft.tiers.gold} step={1} onChange={(v) => setDraft((d) => ({ ...d, tiers: { ...d.tiers, gold: v } }))} />
-              <NumField label="Hero" value={draft.tiers.hero} step={1} onChange={(v) => setDraft((d) => ({ ...d, tiers: { ...d.tiers, hero: v } }))} />
-              <NumField label="TOTS" value={draft.tiers.tots} step={1} onChange={(v) => setDraft((d) => ({ ...d, tiers: { ...d.tiers, tots: v } }))} />
-            </div>
-            <p className="text-[11px] leading-relaxed text-hl-dim mt-2">
-              Bronze ist die Standardstufe (unter Silber). TOTS wird von euch manuell vergeben – automatisch
-              erreicht niemand mehr als <span className="text-hl-soft font-semibold">94</span>, TOTS bleibt also den
-              handverlesenen Sonderkarten vorbehalten.
-            </p>
-          </section>
-
-          <section>
-            <h3 className="text-[11px] uppercase tracking-[2px] text-hl-dim mb-2">FIFA-Karte — Grundrechnung</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <NumField label="Basis" value={draft.card.basis} step={1} onChange={(v) => setCard('basis', v)} />
-              <NumField label="Höchstwert" value={draft.card.elite} step={1} onChange={(v) => setCard('elite', v)} />
-              <NumField label="Spanne" value={draft.card.spanne} step={1} onChange={(v) => setCard('spanne', v)} />
-              <NumField label="Mengen-Deckel" value={draft.card.mengeMax} step={0.1} onChange={(v) => setCard('mengeMax', v)} />
-            </div>
-            <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
-              So wird jeder Kartenwert gerechnet:{' '}
-              <span className="text-hl-soft font-semibold">Wert = Basis + Verlässlichkeit × Index × Spanne</span>.
-              Der <b>Index</b> ist 1,00, wenn ein Spieler das Elite-Ziel unten genau erreicht.
-              <br />
-              <b>Spanne</b> = wie viele Punkte „Ziel erreicht" bringt. Höher = großzügiger (Werte steigen,
-              Höchstwerte leichter), niedriger = strenger. Bei {draft.card.spanne} ergibt „Ziel erreicht" ={' '}
-              <span className="text-hl-soft font-semibold">{Math.round(draft.card.basis + draft.card.spanne)}</span>, der
-              Höchstwert {draft.card.elite} wird ab Index{' '}
-              <span className="text-hl-soft font-semibold">
-                {draft.card.spanne > 0 ? ((draft.card.elite - draft.card.basis) / draft.card.spanne).toFixed(2) : '–'}
-              </span>{' '}
-              erreicht.
-              <br />
-              <b>Mengen-Deckel</b> = wie weit Volumen ÜBER dem Ziel noch zählt (1,0 = gar nicht, 1,5 = bis zum
-              1,5-fachen). Verhindert, dass reine Masse allein den Höchstwert bringt.
-            </p>
-          </section>
-
-          <section>
-            <h3 className="text-[11px] uppercase tracking-[2px] text-hl-dim mb-2">Ab wie vielen Aktionen zählt ein Wert voll</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <NumField label="Pässe" value={draft.card.vollAktionen.pas} step={1} onChange={(v) => setVoll('pas', v)} />
-              <NumField label="Abschluss" value={draft.card.vollAktionen.sch} step={1} onChange={(v) => setVoll('sch', v)} />
-              <NumField label="Dribbling" value={draft.card.vollAktionen.dri} step={1} onChange={(v) => setVoll('dri', v)} />
-              <NumField label="Defensive" value={draft.card.vollAktionen.def} step={1} onChange={(v) => setVoll('def', v)} />
-              <NumField label="TW Paraden" value={draft.card.vollAktionen.par} step={1} onChange={(v) => setVoll('par', v)} />
-              <NumField label="TW Sicherheit" value={draft.card.vollAktionen.sic} step={1} onChange={(v) => setVoll('sic', v)} />
-              <NumField label="TW Stellung" value={draft.card.vollAktionen.stl} step={1} onChange={(v) => setVoll('stl', v)} />
-            </div>
-            <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
-              Schutz gegen kleine Stichproben: Wer erst wenige Aktionen hat, wird Richtung Basis gedämpft
-              (√-Kurve). Beispiel Dribbling bei {draft.card.vollAktionen.dri}: 2 von 2 gewonnen (100 %) zählt nur zu{' '}
-              <span className="text-hl-soft font-semibold">
-                {Math.round(Math.min(1, Math.sqrt(2 / Math.max(1, draft.card.vollAktionen.dri))) * 100)} %
-              </span>
-              , erst ab {draft.card.vollAktionen.dri} Dribblings zählt der Wert voll.{' '}
-              <b>Kleiner = großzügiger</b> (Werte steigen schneller), größer = strenger.
-            </p>
-          </section>
-
-          <section>
-            <h3 className="text-[11px] uppercase tracking-[2px] text-hl-dim mb-2">Spiele-Deckel (nur Liga)</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-              <NumField label="1–2 Sp." value={draft.card.caps.g1_2} step={1} onChange={(v) => setCap('g1_2', v)} />
-              <NumField label="3–4 Sp." value={draft.card.caps.g3_4} step={1} onChange={(v) => setCap('g3_4', v)} />
-              <NumField label="5–7 Sp." value={draft.card.caps.g5_7} step={1} onChange={(v) => setCap('g5_7', v)} />
-              <NumField label="ab 8 Sp." value={draft.card.caps.g8plus} step={1} onChange={(v) => setCap('g8plus', v)} />
-              <NumField label="voll ab Sp." value={draft.card.fullGames} step={1} onChange={(v) => setCard('fullGames', v)} />
-            </div>
-            <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
-              Obergrenze je nach Anzahl gespielter Spiele. Gilt <b>nur in der Liga</b> — beim Testspieltag zählen
-              die echten Stats ohne Spiele-Deckel.
-            </p>
-          </section>
-
-          <section>
-            <h3 className="text-[11px] uppercase tracking-[2px] text-hl-dim mb-2">Elite-Ziele je Kartenwert</h3>
-            <div className="space-y-2">
-              <AttrTargetRow label="Abschluss (SCH)" t={draft.card.sch} onChange={(k, v) => setAttr('sch', k, v)} />
-              <AttrTargetRow label="Dribbling (DRI)" t={draft.card.dri} onChange={(k, v) => setAttr('dri', k, v)} />
-              <AttrTargetRow label="Defensive (DEF)" t={draft.card.def} onChange={(k, v) => setAttr('def', k, v)} />
-              <AttrTargetRow label="TW Paraden (PAR)" t={draft.card.par} onChange={(k, v) => setAttr('par', k, v)} />
-              <AttrTargetRow label="TW Sicherheit (SIC)" t={draft.card.sic} onChange={(k, v) => setAttr('sic', k, v)} />
-              <AttrTargetRow label="TW Stellung (STL)" t={draft.card.stl} onChange={(k, v) => setAttr('stl', k, v)} />
-            </div>
-            <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
-              <b>Ziel-Quote</b> = welche Quote als Weltklasse gilt (0,70 = 70 %). <b>Ziel-Menge</b> = wie viele
-              Aktionen pro Spiel dazugehören. <b>Gew. Quote / Gew. Menge</b> = wie stark beides zählt (zusammen
-              idealerweise 1,00). Mehr Gewicht auf die Quote = Können zählt mehr; mehr auf die Menge = Fleiß zählt mehr.
-              <br />
-              <span className="text-hl-soft">Zu streng?</span> Ziel-Quote senken (z.&nbsp;B. 0,70 → 0,60) oder die
-              Spanne oben erhöhen — dann steigen die Werte.
-            </p>
-          </section>
-
-          <section>
-            <h3 className="text-[11px] uppercase tracking-[2px] text-hl-dim mb-2">Passspiel (PAS) im Detail</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <NumField label="Ziel-Passquote" value={draft.card.pas.zielPassquote} step={0.01} onChange={(v) => setPas('zielPassquote', v)} />
-              <NumField label="Pässe/Spiel" value={draft.card.pas.zielPaesseSpiel} step={1} onChange={(v) => setPas('zielPaesseSpiel', v)} />
-              <NumField label="Schlüsselp./Sp." value={draft.card.pas.zielKeySpiel} step={0.1} onChange={(v) => setPas('zielKeySpiel', v)} />
-              <NumField label="Assists/Spiel" value={draft.card.pas.zielAssistsSpiel} step={0.05} onChange={(v) => setPas('zielAssistsSpiel', v)} />
-              <NumField label="Gew. Passindex" value={draft.card.pas.gewPassindex} step={0.05} onChange={(v) => setPas('gewPassindex', v)} />
-              <NumField label="Gew. Schlüsselp." value={draft.card.pas.gewKey} step={0.05} onChange={(v) => setPas('gewKey', v)} />
-              <NumField label="Gew. Assists" value={draft.card.pas.gewAssist} step={0.05} onChange={(v) => setPas('gewAssist', v)} />
-              <NumField label="Gew. Quote" value={draft.card.pas.indexGewQuote} step={0.05} onChange={(v) => setPas('indexGewQuote', v)} />
-              <NumField label="Gew. Menge" value={draft.card.pas.indexGewMenge} step={0.05} onChange={(v) => setPas('indexGewMenge', v)} />
-            </div>
-            <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
-              PAS mischt drei Teile: den Pass-Index (Quote + Menge), Schlüsselpässe und Assists — mit den drei
-              „Gew."-Reglern gewichtet (zusammen idealerweise 1,00). Die letzten beiden bestimmen innerhalb des
-              Pass-Index, wie stark Quote gegenüber Menge zählt.
             </p>
           </section>
 
