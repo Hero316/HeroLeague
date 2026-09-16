@@ -22,8 +22,17 @@ import {
   ChevronDown,
   RotateCcw,
   IdCard,
+  Camera,
 } from 'lucide-react';
 import FifaCard from './FifaCard';
+import {
+  downscaleToDataUrl,
+  imageFromClipboard,
+  imageFromDataTransfer,
+  loadMatchPhotos,
+  saveMatchPhotos,
+  type PhotoMap,
+} from '../lib/trackPhotos';
 import type {
   ActionCounts,
   EveningRoster,
@@ -1240,6 +1249,23 @@ function MatchEditor({
   const effNumber = (k: string, r: EditRow) =>
     typeof numOverrides[k] === 'number' ? numOverrides[k] : r.number;
 
+  // Spiel-Fotos: genau wie die Nummern nur für DIESES Spiel und nur lokal.
+  // Screenshots werden beim Speichern verkleinert (siehe lib/trackPhotos).
+  const [photoOverrides, setPhotoOverrides] = useState<PhotoMap>({});
+  useEffect(() => setPhotoOverrides(loadMatchPhotos(match.id)), [match.id]);
+
+  const setRowPhoto = (k: string, dataUrl: string | null) => {
+    setPhotoOverrides((prev) => {
+      const next = { ...prev };
+      if (dataUrl === null) delete next[k];
+      else next[k] = dataUrl;
+      if (!saveMatchPhotos(match.id, next)) {
+        window.alert('Der Browser-Speicher ist voll – das Foto gilt nur bis zum Neuladen.');
+      }
+      return next;
+    });
+  };
+
   // Live-Spielstand aus den getrackten Toren: eigene Tore + Eigentore des Gegners.
   const goalsFor = (teamId: string, oppId: string) => {
     let g = 0;
@@ -1368,6 +1394,9 @@ function MatchEditor({
                     displayNumber={effNumber(k, r)}
                     tempNumber={typeof numOverrides[k] === 'number'}
                     onSetNumber={(n) => setRowNumber(k, n)}
+                    displayImage={photoOverrides[k] || r.imageUrl}
+                    tempPhoto={!!photoOverrides[k]}
+                    onSetPhoto={(url) => setRowPhoto(k, url)}
                   />
                 ))}
               </div>
@@ -1553,6 +1582,169 @@ function ReassignPanel({
   );
 }
 
+// Foto NUR für dieses Spiel setzen (z.B. Screenshot vom Stream, weil der
+// Spieler heute anders aussieht als auf dem Kaderbild). Kader und Backend
+// bleiben unangetastet; beim nächsten Spiel gilt wieder das normale Bild.
+function PhotoEditDialog({
+  current,
+  original,
+  name,
+  hasOverride,
+  onPick,
+  onReset,
+  onClose,
+}: {
+  current?: string;
+  original?: string;
+  name: string;
+  hasOverride: boolean;
+  onPick: (dataUrl: string) => void;
+  onReset: () => void;
+  onClose: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  useBackClose(true, onClose);
+
+  const take = useCallback(
+    async (blob: Blob | null | undefined) => {
+      if (!blob) return;
+      setBusy(true);
+      setErr(null);
+      try {
+        onPick(await downscaleToDataUrl(blob));
+      } catch {
+        setErr('Das Bild konnte nicht gelesen werden.');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [onPick]
+  );
+
+  // Screenshot direkt mit Strg+V / Cmd+V einfügen, solange der Dialog offen ist.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const f = imageFromDataTransfer(e.clipboardData);
+      if (f) {
+        e.preventDefault();
+        void take(f);
+      }
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, [take]);
+
+  const fromClipboard = async () => {
+    setErr(null);
+    try {
+      const blob = await imageFromClipboard();
+      if (!blob) {
+        setErr('Kein Bild in der Zwischenablage. Mach einen Screenshot und drück dann Strg+V.');
+        return;
+      }
+      await take(blob);
+    } catch {
+      setErr('Der Browser lässt das Auslesen nicht zu. Drück stattdessen einfach Strg+V.');
+    }
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-6"
+      role="dialog"
+      aria-modal="true"
+      onDrop={(e) => {
+        e.preventDefault();
+        void take(imageFromDataTransfer(e.dataTransfer));
+      }}
+      onDragOver={(e) => e.preventDefault()}
+    >
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="hl-modal-card relative w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl border border-white/10 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+          <div className="min-w-0">
+            <h2 className="font-display font-black uppercase tracking-tight text-base leading-none truncate">Foto für dieses Spiel</h2>
+            <p className="text-[11px] text-hl-faint mt-1 truncate">{name}</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 grid place-items-center rounded-lg hover:bg-white/10 cursor-pointer shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-3">
+          <div className="flex justify-center">
+            <div className="w-32 h-32 rounded-2xl overflow-hidden bg-white/5 border border-white/10 grid place-items-center">
+              {current ? (
+                <img src={current} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="font-display font-black text-hl-faint text-2xl">
+                  {name.trim().slice(0, 2).toUpperCase()}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {hasOverride && (
+            <div className="text-[10px] text-hl-gold text-center font-bold uppercase tracking-wider">
+              Spiel-Foto aktiv
+            </div>
+          )}
+
+          {err && <div className="text-[11px] text-red-400 text-center leading-snug">{err}</div>}
+
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              void take(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
+
+          <div className="grid gap-2">
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={busy}
+              className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-brand-accent text-brand-dark hover:bg-brand-accent-light transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {busy ? 'Moment…' : 'Bild wählen / Foto aufnehmen'}
+            </button>
+            <button
+              onClick={fromClipboard}
+              disabled={busy}
+              className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider border border-white/10 bg-white/5 text-hl-soft hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+            >
+              Aus Zwischenablage einfügen
+            </button>
+            {hasOverride && (
+              <button
+                onClick={() => {
+                  onReset();
+                  onClose();
+                }}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider border border-white/10 text-hl-mute hover:text-hl-text transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                {original ? 'Zurück zum Kaderbild' : 'Foto entfernen'}
+              </button>
+            )}
+          </div>
+
+          <p className="text-[10px] text-hl-faint leading-snug text-center">
+            Screenshot einfach mit <b>Strg+V</b> einfügen oder hier reinziehen. Das Foto gilt <b>nur für dieses
+            Spiel</b> — Kader und Backend bleiben unverändert. In anderen Spielen erscheint wieder das normale Bild.
+          </p>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // Spielerfoto in groß. Als Portal an den <body>, weil die umgebende
 // .hl-fade-Animation ein transform behält – darin würde position:fixed am
 // falschen Element kleben. Handy-Zurück schließt die Ansicht.
@@ -1598,6 +1790,9 @@ function PlayerCard({
   displayNumber,
   tempNumber,
   onSetNumber,
+  displayImage,
+  tempPhoto,
+  onSetPhoto,
 }: {
   slot: number;
   row: EditRow;
@@ -1607,8 +1802,12 @@ function PlayerCard({
   displayNumber?: number;
   tempNumber?: boolean;
   onSetNumber?: (n: number | null) => void;
+  displayImage?: string;
+  tempPhoto?: boolean;
+  onSetPhoto?: (dataUrl: string | null) => void;
 }) {
   const [photoOpen, setPhotoOpen] = useState(false);
+  const [photoEdit, setPhotoEdit] = useState(false);
   const isKeeper = row.role === 'keeper';
   const note = matchNote(row.counts, cfg, row.role);
   const score = rohscore(row.counts, cfg, row.role);
@@ -1627,27 +1826,67 @@ function PlayerCard({
 
   return (
     <div className="hl-card p-2 flex flex-col lg:flex-row gap-2 min-w-0">
-      {photoOpen && row.imageUrl && (
-        <PhotoLightbox url={row.imageUrl} name={row.playerName} onClose={() => setPhotoOpen(false)} />
+      {photoOpen && displayImage && (
+        <PhotoLightbox url={displayImage} name={row.playerName} onClose={() => setPhotoOpen(false)} />
+      )}
+      {photoEdit && onSetPhoto && (
+        <PhotoEditDialog
+          current={displayImage}
+          original={row.imageUrl}
+          name={row.playerName}
+          hasOverride={!!tempPhoto}
+          onPick={(url) => {
+            onSetPhoto(url);
+            setPhotoEdit(false);
+          }}
+          onReset={() => onSetPhoto(null)}
+          onClose={() => setPhotoEdit(false)}
+        />
       )}
       {/* Identität */}
       <div className="lg:w-64 shrink-0 flex items-center gap-2.5 px-1">
         {/* Großes Foto – damit beim Tracken sofort klar ist, wer gemeint ist,
             ohne auf der Website nachschlagen zu müssen. */}
-        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden shrink-0 bg-white/5 border border-white/10 grid place-items-center">
-          {row.imageUrl ? (
+        <div className="relative w-20 h-20 sm:w-24 sm:h-24 shrink-0">
+          <div
+            className={`w-full h-full rounded-xl overflow-hidden bg-white/5 border grid place-items-center ${
+              tempPhoto ? 'border-hl-gold/60' : 'border-white/10'
+            }`}
+          >
+            {displayImage ? (
+              <button
+                type="button"
+                onClick={() => setPhotoOpen(true)}
+                title="Foto groß ansehen"
+                className="w-full h-full cursor-zoom-in"
+              >
+                <img src={displayImage} alt={row.playerName} loading="lazy" className="w-full h-full object-cover" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setPhotoEdit(true)}
+                title="Foto für dieses Spiel setzen"
+                className="w-full h-full cursor-pointer font-display font-black text-hl-faint text-xl"
+              >
+                {row.playerName.trim().slice(0, 2).toUpperCase()}
+              </button>
+            )}
+          </div>
+          {onSetPhoto && (
             <button
               type="button"
-              onClick={() => setPhotoOpen(true)}
-              title="Foto groß ansehen"
-              className="w-full h-full cursor-zoom-in"
+              onClick={() => setPhotoEdit(true)}
+              title="Foto nur für dieses Spiel ändern"
+              aria-label="Foto nur für dieses Spiel ändern"
+              className={`absolute -bottom-1 -right-1 w-7 h-7 rounded-full grid place-items-center border cursor-pointer transition-colors ${
+                tempPhoto
+                  ? 'bg-hl-gold/20 border-hl-gold/60 text-hl-gold'
+                  : 'bg-black/70 border-white/25 text-white hover:bg-black/85'
+              }`}
             >
-              <img src={row.imageUrl} alt={row.playerName} loading="lazy" className="w-full h-full object-cover" />
+              <Camera className="w-3.5 h-3.5" />
             </button>
-          ) : (
-            <span className="font-display font-black text-hl-faint text-xl">
-              {row.playerName.trim().slice(0, 2).toUpperCase()}
-            </span>
           )}
         </div>
         <button
