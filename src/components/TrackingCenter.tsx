@@ -98,6 +98,7 @@ interface EditRow {
   role: StatRole;
   counts: ActionCounts;
   number?: number; // feste Trikotnummer (aus dem Kader), optional
+  imageUrl?: string; // Spielerfoto aus dem Kader – damit man beim Tracken sofort weiß, wer gemeint ist
 }
 
 type RowMap = Record<string, EditRow>; // Schlüssel: `${matchId}::${teamId}::${name}`
@@ -296,7 +297,7 @@ export default function TrackingCenter({
   //    ausgeblendet (aus der Spiel-Verwaltung, `absent`).
   // Bei Events (kein rk) wird nicht nach Aufstellung gefiltert.
   const squadFor = useCallback(
-    (key: string, rk: string | null, absent?: Set<string>, rmap?: RosterMap): { name: string; role: StatRole; number?: number }[] => {
+    (key: string, rk: string | null, absent?: Set<string>, rmap?: RosterMap): { name: string; role: StatRole; number?: number; imageUrl?: string }[] => {
       // Event-Modus: zuerst der EIGENE Event-Kader (namensbasiert), sonst der
       // gleichnamige Liga-Verein. So lassen sich auch reine Gastteams tracken.
       if (selectedEvent) {
@@ -306,14 +307,20 @@ export default function TrackingCenter({
         const eveningKeeper = selectedEvent.matches
           .flatMap((m) => m.goalkeepers ?? [])
           .find((g) => normName(g.team) === normName(key))?.player;
+        const club = resolveTeam(key)?.spielerliste ?? [];
         return list
           .filter((p) => p.name)
           .filter((p) => !absent || !absent.has(p.name))
-          .map((p) => ({
-            name: p.name,
-            role: ((eveningKeeper ? p.name === eveningKeeper : p.goalkeeper) ? 'keeper' : 'field') as StatRole,
-            number: (p as { number?: number }).number,
-          }));
+          .map((p) => {
+            // Event-Kader hat oft kein Foto – dann das des gleichnamigen Vereinsspielers nehmen.
+            const fromClub = club.find((c) => normName(c.name) === normName(p.name));
+            return {
+              name: p.name,
+              role: ((eveningKeeper ? p.name === eveningKeeper : p.goalkeeper) ? 'keeper' : 'field') as StatRole,
+              number: (p as { number?: number }).number ?? fromClub?.number,
+              imageUrl: (p as { imageUrl?: string }).imageUrl || fromClub?.imageUrl,
+            };
+          });
       }
       const team = resolveTeam(key);
       if (!team) return [];
@@ -327,6 +334,7 @@ export default function TrackingCenter({
           name: p.name,
           role: (keeper ? p.name === keeper : p.goalkeeper) ? ('keeper' as StatRole) : ('field' as StatRole),
           number: p.number,
+          imageUrl: p.imageUrl,
         }));
     },
     [resolveTeam, rosterState, selectedEvent]
@@ -366,7 +374,7 @@ export default function TrackingCenter({
               const k = rowKey(m.id, tid, pl.name);
               const sv = savedMap[k];
               const role: StatRole = teamHasKeeper ? pl.role : (sv?.role as StatRole) || pl.role;
-              next[k] = { teamId: tid, teamName, playerName: pl.name, role, counts: sv?.counts ?? emptyCounts(), number: pl.number };
+              next[k] = { teamId: tid, teamName, playerName: pl.name, role, counts: sv?.counts ?? emptyCounts(), number: pl.number, imageUrl: pl.imageUrl };
               // Korrigierte Rolle (Torwart-Zuordnung) auch in der DB festschreiben,
               // damit Auswertung/Export sie nutzen – nur bei echter Abweichung.
               if (sv && sv.role !== role) {
@@ -1585,7 +1593,18 @@ function PlayerCard({
   return (
     <div className="hl-card p-2 flex flex-col lg:flex-row gap-2 min-w-0">
       {/* Identität */}
-      <div className="lg:w-40 shrink-0 flex items-center gap-2.5 px-1">
+      <div className="lg:w-56 shrink-0 flex items-center gap-2.5 px-1">
+        {/* Großes Foto – damit beim Tracken sofort klar ist, wer gemeint ist,
+            ohne auf der Website nachschlagen zu müssen. */}
+        <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-white/5 border border-white/10 grid place-items-center">
+          {row.imageUrl ? (
+            <img src={row.imageUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
+          ) : (
+            <span className="font-display font-black text-hl-faint text-base">
+              {row.playerName.trim().slice(0, 2).toUpperCase()}
+            </span>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => {
@@ -1609,7 +1628,7 @@ function PlayerCard({
                 ? `Trikotnummer ${displayNumber}. Tippen, um sie nur fürs Tracking zu ändern.`
                 : 'Keine Nummer. Tippen, um eine fürs Tracking zu setzen.'
           }
-          className={`w-8 h-8 rounded-full grid place-items-center font-black text-base shrink-0 tabular-nums cursor-pointer border ${
+          className={`w-10 h-10 rounded-full grid place-items-center font-black text-lg shrink-0 tabular-nums cursor-pointer border ${
             tempNumber
               ? 'bg-hl-gold/15 border-hl-gold/50 text-hl-gold'
               : 'bg-brand-accent/12 border-brand-accent/25 text-brand-accent-light'
@@ -1618,7 +1637,7 @@ function PlayerCard({
           {typeof displayNumber === 'number' ? displayNumber : '–'}
         </button>
         <div className="min-w-0 flex-1">
-          <div className="font-display font-black text-[15px] truncate leading-tight">{row.playerName}</div>
+          <div className="font-display font-black text-[17px] truncate leading-tight">{row.playerName}</div>
           {tempNumber ? (
             <div className="text-[9px] text-hl-gold leading-tight mt-0.5">Tracking-Nummer (nicht im Kader)</div>
           ) : (
