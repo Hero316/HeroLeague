@@ -1553,6 +1553,40 @@ function ReassignPanel({
   );
 }
 
+// Spielerfoto in groß. Als Portal an den <body>, weil die umgebende
+// .hl-fade-Animation ein transform behält – darin würde position:fixed am
+// falschen Element kleben. Handy-Zurück schließt die Ansicht.
+function PhotoLightbox({ url, name, onClose }: { url: string; name: string; onClose: () => void }) {
+  useBackClose(true, onClose);
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[60] grid place-items-center bg-black/85 backdrop-blur-sm p-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <button
+        onClick={onClose}
+        aria-label="Schließen"
+        title="Schließen"
+        className="absolute right-3 w-10 h-10 grid place-items-center rounded-xl bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+        style={{ top: 'calc(env(safe-area-inset-top) + 0.75rem)' }}
+      >
+        <X className="w-5 h-5" />
+      </button>
+      <div className="flex flex-col items-center gap-3 min-w-0" onClick={(e) => e.stopPropagation()}>
+        <img
+          src={url}
+          alt={name}
+          className="max-w-[92vw] max-h-[72vh] object-contain rounded-2xl border border-white/15 shadow-2xl"
+        />
+        <div className="font-display font-black text-white text-lg text-center px-2">{name}</div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // Eine Spieler-Karte: Identität (Slot, Name, Live-Note, Rolle) + Gruppen mit
 // farbigen Aktions-Pillen (wie im HERO Match Tracker).
 function PlayerCard({
@@ -1574,6 +1608,7 @@ function PlayerCard({
   tempNumber?: boolean;
   onSetNumber?: (n: number | null) => void;
 }) {
+  const [photoOpen, setPhotoOpen] = useState(false);
   const isKeeper = row.role === 'keeper';
   const note = matchNote(row.counts, cfg, row.role);
   const score = rohscore(row.counts, cfg, row.role);
@@ -1592,15 +1627,25 @@ function PlayerCard({
 
   return (
     <div className="hl-card p-2 flex flex-col lg:flex-row gap-2 min-w-0">
+      {photoOpen && row.imageUrl && (
+        <PhotoLightbox url={row.imageUrl} name={row.playerName} onClose={() => setPhotoOpen(false)} />
+      )}
       {/* Identität */}
-      <div className="lg:w-56 shrink-0 flex items-center gap-2.5 px-1">
+      <div className="lg:w-64 shrink-0 flex items-center gap-2.5 px-1">
         {/* Großes Foto – damit beim Tracken sofort klar ist, wer gemeint ist,
             ohne auf der Website nachschlagen zu müssen. */}
-        <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-white/5 border border-white/10 grid place-items-center">
+        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden shrink-0 bg-white/5 border border-white/10 grid place-items-center">
           {row.imageUrl ? (
-            <img src={row.imageUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
+            <button
+              type="button"
+              onClick={() => setPhotoOpen(true)}
+              title="Foto groß ansehen"
+              className="w-full h-full cursor-zoom-in"
+            >
+              <img src={row.imageUrl} alt={row.playerName} loading="lazy" className="w-full h-full object-cover" />
+            </button>
           ) : (
-            <span className="font-display font-black text-hl-faint text-base">
+            <span className="font-display font-black text-hl-faint text-xl">
               {row.playerName.trim().slice(0, 2).toUpperCase()}
             </span>
           )}
