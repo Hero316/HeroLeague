@@ -2035,7 +2035,9 @@ function ThreadsOverview({ threads, onOpen, onClose }: { threads: ThreadSummary[
           </div>
           <div className="flex-1 overflow-y-auto">
             {threads.length === 0 ? (
-              <p className="text-center text-sm text-hl-mute font-sans py-10 px-4">Keine ungelesenen Threads. 🎉</p>
+              <p className="text-center text-sm text-hl-mute font-sans py-10 px-4">
+                Noch keine Threads. Antworte auf eine Nachricht, dann findest du sie hier wieder.
+              </p>
             ) : (
               threads.map((t) => (
                 <button
@@ -2048,9 +2050,13 @@ function ThreadsOverview({ threads, onOpen, onClose }: { threads: ThreadSummary[
                       {t.convKind === 'group' && <Hash className="w-3 h-3 shrink-0" />}
                       {t.source || 'Chat'}
                     </span>
-                    <span className="min-w-[18px] h-[18px] px-1 bg-brand-accent-light text-[#04120f] text-[10px] font-bold rounded-full flex items-center justify-center shrink-0">
-                      {t.unreadCount}
-                    </span>
+                    {t.unreadCount > 0 ? (
+                      <span className="min-w-[18px] h-[18px] px-1 bg-brand-accent-light text-[#04120f] text-[10px] font-bold rounded-full flex items-center justify-center shrink-0">
+                        {t.unreadCount}
+                      </span>
+                    ) : (
+                      t.lastReplyAt && <span className="text-[10px] text-hl-faint font-mono shrink-0">{fmtTime(t.lastReplyAt)}</span>
+                    )}
                   </div>
                   <div className="text-sm text-white truncate">
                     <span className="text-hl-dim">{t.authorName}: </span>
@@ -2466,26 +2472,47 @@ export default function ChatSystem({
             )}
           </div>
         </div>
-        {/* Threads-Übersicht: damit ungelesene Thread-Antworten nicht untergehen */}
-        {threadList.length > 0 && (
-          <div className="px-2 pt-2">
-          <button
-            onClick={() => setShowThreads(true)}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl border border-brand-accent-light/30 bg-brand-accent-light/[.10] hover:bg-brand-accent-light/[.16] cursor-pointer text-left transition-all active:scale-[.99]"
-          >
-            <div className="w-9 h-9 rounded-full bg-brand-accent-light/20 border border-brand-accent-light/40 flex items-center justify-center text-brand-accent-light shrink-0">
-              <MessageSquare className="w-4 h-4" />
+        {/* Threads-Übersicht: IMMER erreichbar. Früher erschien der Knopf nur bei
+            ungelesenen Antworten – dadurch war ein Thread, in dem man zuletzt
+            selbst geschrieben hatte, nur noch durch Hochscrollen wiederzufinden. */}
+        {threadList.length > 0 && (() => {
+          const unread = threadList.reduce((sum, t) => sum + t.unreadCount, 0);
+          return (
+            <div className="px-2 pt-2">
+              <button
+                onClick={() => setShowThreads(true)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-2xl border cursor-pointer text-left transition-all active:scale-[.99] ${
+                  unread > 0
+                    ? 'border-brand-accent-light/30 bg-brand-accent-light/[.10] hover:bg-brand-accent-light/[.16]'
+                    : 'border-white/10 bg-white/[.03] hover:bg-white/[.06]'
+                }`}
+              >
+                <div
+                  className={`w-9 h-9 rounded-full border flex items-center justify-center shrink-0 ${
+                    unread > 0
+                      ? 'bg-brand-accent-light/20 border-brand-accent-light/40 text-brand-accent-light'
+                      : 'bg-white/[.06] border-white/10 text-hl-soft'
+                  }`}
+                >
+                  <MessageSquare className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-sans font-semibold text-white">Threads</div>
+                  <div className={`text-[12px] font-sans ${unread > 0 ? 'text-brand-accent-light' : 'text-hl-mute'}`}>
+                    {unread > 0
+                      ? `${unread} neue Antwort${unread === 1 ? '' : 'en'}`
+                      : `${threadList.length} Thread${threadList.length === 1 ? '' : 's'}`}
+                  </div>
+                </div>
+                {unread > 0 && (
+                  <span className="min-w-[20px] h-5 px-1.5 bg-brand-accent-light text-[#04120f] text-[11px] font-bold rounded-full flex items-center justify-center shrink-0">
+                    {unread}
+                  </span>
+                )}
+              </button>
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-sans font-semibold text-white">Threads</div>
-              <div className="text-[12px] text-brand-accent-light font-sans">{threadList.length} Thread{threadList.length === 1 ? '' : 's'} mit neuen Antworten</div>
-            </div>
-            <span className="min-w-[20px] h-5 px-1.5 bg-brand-accent-light text-[#04120f] text-[11px] font-bold rounded-full flex items-center justify-center shrink-0">
-              {threadList.reduce((s, t) => s + t.unreadCount, 0)}
-            </span>
-          </button>
-          </div>
-        )}
+          );
+        })()}
         <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1.5 hl-cascade-soft">
           {loadingConvs ? (
             <div className="flex justify-center py-8 text-hl-mute">
@@ -2779,7 +2806,12 @@ export default function ChatSystem({
             highlightId={threadHighlightId}
             onClose={goBackLayer}
             onOpenAttachment={openAttachment}
-            onReplyAdded={() => activeId && loadMessages(activeId, true)}
+            onReplyAdded={() => {
+              if (activeId) loadMessages(activeId, true);
+              // Threads-Liste sofort auffrischen, damit der Thread, in dem man
+              // gerade geantwortet hat, direkt oben in der Übersicht steht.
+              loadThreads();
+            }}
             onParentChanged={(um) => setMessages((prev) => prev.map((x) => (x.id === um.id ? { ...x, ...um } : x)))}
           />
         )}

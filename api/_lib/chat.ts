@@ -500,7 +500,12 @@ export async function reactMessage(req: VercelRequest, res: VercelResponse) {
 }
 
 // --- Ungelesene Threads (Übersicht „damit nichts untergeht") ----------------
-// GET /api/chat?resource=threads -> Threads mit neuen Antworten (von anderen,
+// GET /api/chat?resource=threads -> Threads, an denen ich beteiligt bin:
+// selbst gestartet, selbst geantwortet ODER mit neuen Antworten von anderen.
+// Neueste zuerst. Früher nur ungelesene – dadurch verschwand ein Thread, sobald
+// man selbst darin geschrieben hatte, und war nur noch durch Hochscrollen im
+// Chat wiederzufinden.
+// (alt: Threads mit neuen Antworten (von anderen,
 // neuer als mein letzter Blick), quer über alle meine Unterhaltungen.
 export async function threads(req: VercelRequest, res: VercelResponse) {
   const session = await getSession(req);
@@ -525,8 +530,18 @@ export async function threads(req: VercelRequest, res: VercelResponse) {
      JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = $1
      LEFT JOIN thread_reads tr ON tr.parent_id = m.id AND tr.user_id = $1
      WHERE m.parent_id IS NULL
-       AND EXISTS (SELECT 1 FROM messages r WHERE r.parent_id = m.id AND r.author_id <> $1 AND r.deleted_at IS NULL
-                     AND r.created_at > COALESCE(tr.last_read_at, to_timestamp(0)))
+       -- Überhaupt ein Thread (hat mindestens eine Antwort)
+       AND EXISTS (SELECT 1 FROM messages r WHERE r.parent_id = m.id AND r.deleted_at IS NULL)
+       AND (
+         -- Ich habe den Thread gestartet …
+         m.author_id = $1
+         -- … oder darin geantwortet (dann will ich ihn wiederfinden, auch wenn
+         -- ich zuletzt selbst geschrieben habe und nichts ungelesen ist) …
+         OR EXISTS (SELECT 1 FROM messages r WHERE r.parent_id = m.id AND r.author_id = $1 AND r.deleted_at IS NULL)
+         -- … oder es gibt neue Antworten für mich (damit nichts untergeht).
+         OR EXISTS (SELECT 1 FROM messages r WHERE r.parent_id = m.id AND r.author_id <> $1 AND r.deleted_at IS NULL
+                      AND r.created_at > COALESCE(tr.last_read_at, to_timestamp(0)))
+       )
      ORDER BY "lastReplyAt" DESC NULLS LAST LIMIT 50`,
     [uid]
   );
