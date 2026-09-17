@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { motion, AnimatePresence, LayoutGroup, useReducedMotion } from 'motion/react';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shield, Lock, Goal, Crown, Star, Hand, Handshake, Printer, Ticket, ArrowRight, Target, Zap, Send, Sparkles, ChevronDown } from 'lucide-react';
 import { EventConfig, MatchPlayerStat, ScoringConfig, Team } from '../types';
 import { TeamCrest, LiveBadge } from './ui';
@@ -140,9 +140,49 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
   const hasAwards = Boolean(scorerKing || assistKing || bestPlayer || glove);
 
   // Aufgeklappte Auszeichnung (Akkordeon: es ist immer höchstens eine offen).
-  const [openAward, setOpenAward] = useState<'scorer' | 'assist' | 'points' | 'best' | 'keeper' | null>(null);
-  const toggleAward = (id: 'scorer' | 'assist' | 'points' | 'best' | 'keeper') =>
-    setOpenAward((cur) => (cur === id ? null : id));
+  const [openAward, setOpenAward] = useState<string | null>(null);
+  const toggleAward = (id: string) => setOpenAward((cur) => (cur === id ? null : id));
+
+  // Alle Auszeichnungen an einer Stelle – Kopf (Erstplatzierter) + volle Rangliste.
+  const awardItems: AwardItem[] = useMemo(() => {
+    const list: AwardItem[] = [];
+    if (scorerKing)
+      list.push({
+        id: 'scorer', icon: <Crown className="w-4 h-4" />, label: 'Torschützenkönig',
+        playerName: scorerKing.playerName, teamId: scorerKing.teamId,
+        sub: `${scorerKing.goals} ${scorerKing.goals === 1 ? 'Tor' : 'Tore'} · ${scorerKing.teamId}`,
+        rows: scorers.map((r) => ({ playerName: r.playerName, teamId: r.teamId, value: String(r.goals) })),
+      });
+    if (assistKing)
+      list.push({
+        id: 'assist', icon: <Handshake className="w-4 h-4" />, label: 'Meiste Vorlagen',
+        playerName: assistKing.playerName, teamId: assistKing.teamId,
+        sub: `${assistKing.assists} ${assistKing.assists === 1 ? 'Vorlage' : 'Vorlagen'} · ${assistKing.teamId}`,
+        rows: assists.map((r) => ({ playerName: r.playerName, teamId: r.teamId, value: String(r.assists) })),
+      });
+    if (topScorer)
+      list.push({
+        id: 'points', icon: <Target className="w-4 h-4" />, label: 'Bester Scorer',
+        playerName: topScorer.playerName, teamId: topScorer.teamId,
+        sub: `${topScorer.total} Scorerpunkte · ${topScorer.goals} T / ${topScorer.assists} V`,
+        rows: scorerPoints.map((r) => ({
+          playerName: r.playerName, teamId: r.teamId, value: String(r.total), note: `${r.goals} T / ${r.assists} V`,
+        })),
+      });
+    if (bestPlayer)
+      list.push({
+        id: 'best', icon: <Star className="w-4 h-4" />, label: 'Bester Spieler',
+        playerName: bestPlayer.playerName, teamId: bestPlayer.teamId, sub: bestPlayer.teamId,
+        rows: hero.map((r) => ({ playerName: r.playerName, teamId: r.teamId, value: r.score.toFixed(1) })),
+      });
+    if (glove)
+      list.push({
+        id: 'keeper', icon: <Hand className="w-4 h-4" />, label: 'Bester Torwart',
+        playerName: glove.playerName, teamId: glove.teamId, sub: glove.teamId,
+        rows: keepers.map((r) => ({ playerName: r.playerName, teamId: r.teamId, value: r.score.toFixed(1) })),
+      });
+    return list;
+  }, [scorerKing, assistKing, topScorer, bestPlayer, glove, scorers, assists, scorerPoints, hero, keepers]);
 
   // Aktives Untermenü. Wird von außen über die URL gesteuert (tabProp/onSelectTab),
   // damit es Refresh und „Zurück" übersteht; ohne Steuerung als Fallback intern.
@@ -587,91 +627,13 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
               <Star className="w-5 h-5 text-[#E9C46A]" />
               <h2 className="font-display font-black text-xl uppercase tracking-tight text-white">Auszeichnungen</h2>
             </div>
-            <LayoutGroup id="awards">
-            <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 hl-cascade">
-              {scorerKing && (
-                <StatTile
-                  icon={<Crown className="w-4 h-4" />}
-                  label="Torschützenkönig"
-                  value={scorerKing.playerName}
-                  sub={`${scorerKing.goals} ${scorerKing.goals === 1 ? 'Tor' : 'Tore'} · ${scorerKing.teamId}`}
-                  crest={crestFor(scorerKing.teamId)}
-                  onSelect={playerClick(scorerKing.teamId, scorerKing.playerName)}
-                  rows={scorers.map((r) => ({ playerName: r.playerName, teamId: r.teamId, value: String(r.goals) }))}
-                  open={openAward === 'scorer'}
-                  onToggle={() => toggleAward('scorer')}
-                  crestFor={crestFor}
-                  playerClick={playerClick}
-                />
-              )}
-              {assistKing && (
-                <StatTile
-                  icon={<Handshake className="w-4 h-4" />}
-                  label="Meiste Vorlagen"
-                  value={assistKing.playerName}
-                  sub={`${assistKing.assists} ${assistKing.assists === 1 ? 'Vorlage' : 'Vorlagen'} · ${assistKing.teamId}`}
-                  crest={crestFor(assistKing.teamId)}
-                  onSelect={playerClick(assistKing.teamId, assistKing.playerName)}
-                  rows={assists.map((r) => ({ playerName: r.playerName, teamId: r.teamId, value: String(r.assists) }))}
-                  open={openAward === 'assist'}
-                  onToggle={() => toggleAward('assist')}
-                  crestFor={crestFor}
-                  playerClick={playerClick}
-                />
-              )}
-              {topScorer && (
-                <StatTile
-                  icon={<Target className="w-4 h-4" />}
-                  label="Bester Scorer"
-                  value={topScorer.playerName}
-                  sub={`${topScorer.total} Scorerpunkte · ${topScorer.goals} T / ${topScorer.assists} V`}
-                  crest={crestFor(topScorer.teamId)}
-                  onSelect={playerClick(topScorer.teamId, topScorer.playerName)}
-                  rows={scorerPoints.map((r) => ({
-                    playerName: r.playerName,
-                    teamId: r.teamId,
-                    value: `${r.total}`,
-                    note: `${r.goals} T / ${r.assists} V`,
-                  }))}
-                  open={openAward === 'points'}
-                  onToggle={() => toggleAward('points')}
-                  crestFor={crestFor}
-                  playerClick={playerClick}
-                />
-              )}
-              {bestPlayer && (
-                <StatTile
-                  icon={<Star className="w-4 h-4" />}
-                  label="Bester Spieler"
-                  value={bestPlayer.playerName}
-                  sub={bestPlayer.teamId}
-                  crest={crestFor(bestPlayer.teamId)}
-                  onSelect={playerClick(bestPlayer.teamId, bestPlayer.playerName)}
-                  rows={hero.map((r) => ({ playerName: r.playerName, teamId: r.teamId, value: r.score.toFixed(1) }))}
-                  open={openAward === 'best'}
-                  onToggle={() => toggleAward('best')}
-                  crestFor={crestFor}
-                  playerClick={playerClick}
-                />
-              )}
-              {glove && (
-                <StatTile
-                  icon={<Hand className="w-4 h-4" />}
-                  label="Bester Torwart"
-                  value={glove.playerName}
-                  sub={glove.teamId}
-                  crest={crestFor(glove.teamId)}
-                  onSelect={playerClick(glove.teamId, glove.playerName)}
-                  rows={keepers.map((r) => ({ playerName: r.playerName, teamId: r.teamId, value: r.score.toFixed(1) }))}
-                  open={openAward === 'keeper'}
-                  onToggle={() => toggleAward('keeper')}
-                  crestFor={crestFor}
-                  playerClick={playerClick}
-                />
-              )}
-            </motion.div>
-            </LayoutGroup>
-
+            <AwardsBoard
+              items={awardItems}
+              openId={openAward}
+              onToggle={toggleAward}
+              crestFor={crestFor}
+              playerClick={playerClick}
+            />
           </div>
         )}
         </motion.div>
@@ -744,6 +706,7 @@ function LeaderboardCard({
   );
 }
 
+// Kompakte Statistik-Kachel (Abend-Statistiken – ohne Aufklappen).
 function StatTile({
   icon,
   label,
@@ -751,11 +714,6 @@ function StatTile({
   sub,
   crest,
   onSelect,
-  rows,
-  open,
-  onToggle,
-  crestFor,
-  playerClick,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -763,116 +721,206 @@ function StatTile({
   sub: string;
   crest?: Team;
   onSelect?: () => void;
-  // Vollständige Rangliste dieser Kategorie. Ist sie gesetzt, lässt sich die
-  // Kachel aufklappen und zeigt die Top 10 direkt an Ort und Stelle.
-  rows?: { playerName: string; teamId: string; value: string; note?: string }[];
-  open?: boolean;
-  onToggle?: () => void;
-  crestFor?: (teamId: string) => Team | undefined;
-  playerClick?: (teamId: string, playerName: string) => (() => void) | undefined;
 }) {
-  const expandable = !!rows && rows.length > 1 && !!onToggle;
-  // Die GANZE Kachel klappt auf – man muss nicht den Pfeil treffen. Name und
-  // Wappen behalten ihr eigenes Ziel (Spieler/Team) und stoppen den Klick.
-  const stop = (e: React.MouseEvent) => e.stopPropagation();
-  const reduce = useReducedMotion();
-  // Bewegung auf dem Bildschirm (Kachel wächst, Nachbarn weichen). Feder statt
-  // fester Kurve, weil das Akkordeon mitten in der Bewegung erneut geklickt
-  // werden kann – eine Feder trägt die Geschwindigkeit sauber weiter.
-  // Bei „weniger Bewegung" bleibt nur das Ein-/Ausblenden.
-  const move = reduce ? { duration: 0 } : ({ type: 'spring', duration: 0.42, bounce: 0.14 } as const);
-  const fade = reduce ? { duration: 0.15 } : ({ type: 'spring', duration: 0.38, bounce: 0 } as const);
   return (
-    <motion.div
-      layout
-      transition={move}
-      onClick={expandable ? onToggle : undefined}
-      role={expandable ? 'button' : undefined}
-      tabIndex={expandable ? 0 : undefined}
-      onKeyDown={
-        expandable
-          ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle?.(); }
-            }
-          : undefined
-      }
-      aria-expanded={expandable ? open : undefined}
-      className={`rounded-2xl border bg-[rgba(255,255,255,.02)] p-4 transition-colors ${
-        expandable ? 'cursor-pointer hover:border-white/25 hover:bg-white/[.04]' : ''
-      } ${open ? 'border-hl-magenta/45 sm:col-span-full' : 'border-white/10'}`}
-    >
-      {/* Kopfzeile bleibt an ihrer Stelle – nur der Inhalt darunter wächst. */}
-      <motion.div layout="position" className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-hl-mute mb-3">
+    <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,.02)] p-4">
+      <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-hl-mute mb-3">
         <span className="text-[#ff7ac4]">{icon}</span>
         {label}
-        {expandable && (
-          <span
-            className={`ml-auto w-7 h-7 shrink-0 grid place-items-center rounded-lg border transition-colors ${
-              open ? 'border-hl-magenta/50 bg-hl-magenta/15 text-hl-magenta-soft' : 'border-white/15 bg-white/[.06] text-hl-soft'
-            }`}
-          >
-            <ChevronDown className={`w-5 h-5 transition-transform ${open ? 'rotate-180' : ''}`} strokeWidth={2.75} />
-          </span>
-        )}
-      </motion.div>
-      <motion.div layout="position" className="flex items-center gap-2 min-w-0">
+      </div>
+      <div className="flex items-center gap-2 min-w-0">
         {crest && (
-          <span className="shrink-0" onClick={stop}>
+          <span className="shrink-0">
             <TeamCrest name={crest.name} shortName={crest.shortName} color={crest.logoColor} logoUrl={crest.logoUrl} size="sm" onSelect={onSelect} />
           </span>
         )}
         {onSelect ? (
-          <button onClick={(e) => { stop(e); onSelect(); }} className="font-display font-black text-white text-lg leading-tight truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{value}</button>
+          <button onClick={onSelect} className="font-display font-black text-white text-lg leading-tight truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{value}</button>
         ) : (
           <span className="font-display font-black text-white text-lg leading-tight truncate min-w-0">{value}</span>
         )}
-      </motion.div>
-      <motion.div layout="position" className="mt-1 text-xs font-sans text-hl-soft">{sub}</motion.div>
+      </div>
+      <div className="mt-1 text-xs font-sans text-hl-soft">{sub}</div>
+    </div>
+  );
+}
 
-      <AnimatePresence initial={false}>
-        {open && rows && (
+// Auszeichnungen als eine zusammenhängende Blase:
+// Die Kachelreihe bleibt IMMER stehen – keine Kachel rutscht weg. Die geöffnete
+// Kachel wächst nach unten in ein Feld über die volle Breite, das nahtlos an ihr
+// hängt: die Naht unter der aktiven Kachel wird mit einem Verbinder überdeckt,
+// dessen Position und Breite live an der Kachel gemessen werden (damit es bei
+// jeder Spaltenzahl und jeder Fenstergröße passt).
+export interface AwardItem {
+  id: string;
+  icon: React.ReactNode;
+  label: string;
+  playerName: string;
+  teamId: string;
+  sub: string;
+  rows: { playerName: string; teamId: string; value: string; note?: string }[];
+}
+
+const AWARD_BORDER = 'rgba(232, 62, 140, .45)';
+
+function AwardsBoard({
+  items,
+  openId,
+  onToggle,
+  crestFor,
+  playerClick,
+}: {
+  items: AwardItem[];
+  openId: string | null;
+  onToggle: (id: string) => void;
+  crestFor: (teamId: string) => Team | undefined;
+  playerClick: (teamId: string, playerName: string) => (() => void) | undefined;
+}) {
+  const reduce = useReducedMotion();
+  const wrapRef = React.useRef<HTMLDivElement>(null);
+  const tileRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
+  const [seam, setSeam] = React.useState<{ left: number; width: number } | null>(null);
+
+  const open = items.find((a) => a.id === openId) ?? null;
+
+  // Naht (Verbinder) unter der aktiven Kachel ausmessen – und bei jeder
+  // Größenänderung neu, damit er nie verrutscht.
+  React.useLayoutEffect(() => {
+    if (!openId) { setSeam(null); return; }
+    const measure = () => {
+      const wrap = wrapRef.current;
+      const tile = tileRefs.current[openId];
+      if (!wrap || !tile) return;
+      const w = wrap.getBoundingClientRect();
+      const t = tile.getBoundingClientRect();
+      setSeam({ left: t.left - w.left, width: t.width });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (wrapRef.current) ro.observe(wrapRef.current);
+    window.addEventListener('resize', measure);
+    return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
+  }, [openId, items.length]);
+
+  // Bouncy, aber kurz. Feder, weil man mitten in der Bewegung eine andere
+  // Kachel anklicken kann – sie trägt die Geschwindigkeit weiter.
+  const grow = reduce
+    ? { duration: 0 }
+    : ({ type: 'spring', duration: 0.5, bounce: 0.22 } as const);
+
+  return (
+    <div ref={wrapRef} className="relative">
+      {/* Kachelreihe – steht fest, egal was aufgeklappt ist. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
+        {items.map((a) => {
+          const isOpen = a.id === openId;
+          const crest = crestFor(a.teamId);
+          const go = playerClick(a.teamId, a.playerName);
+          const expandable = a.rows.length > 1;
+          const stop = (e: React.MouseEvent) => e.stopPropagation();
+          return (
+            <div
+              key={a.id}
+              ref={(el) => { tileRefs.current[a.id] = el; }}
+              onClick={expandable ? () => onToggle(a.id) : undefined}
+              role={expandable ? 'button' : undefined}
+              tabIndex={expandable ? 0 : undefined}
+              onKeyDown={
+                expandable
+                  ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(a.id); } }
+                  : undefined
+              }
+              aria-expanded={expandable ? isOpen : undefined}
+              className={`relative z-10 rounded-2xl border p-4 transition-colors duration-200 ${
+                expandable ? 'cursor-pointer' : ''
+              } ${isOpen ? 'rounded-b-none bg-[rgba(232,62,140,.06)]' : 'bg-[rgba(255,255,255,.02)] hover:bg-white/[.045] hover:border-white/25'}`}
+              style={isOpen ? { borderColor: AWARD_BORDER, borderBottomColor: 'transparent' } : { borderColor: 'rgba(255,255,255,.1)' }}
+            >
+              <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-hl-mute mb-3">
+                <span className="text-[#ff7ac4]">{a.icon}</span>
+                <span className="truncate">{a.label}</span>
+                {expandable && (
+                  <span
+                    className={`ml-auto w-7 h-7 shrink-0 grid place-items-center rounded-lg border transition-colors duration-200 ${
+                      isOpen ? 'border-hl-magenta/60 bg-hl-magenta/20 text-hl-magenta-soft' : 'border-white/15 bg-white/[.06] text-hl-soft'
+                    }`}
+                  >
+                    <ChevronDown className={`w-5 h-5 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} strokeWidth={2.75} />
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 min-w-0">
+                {crest && (
+                  <span className="shrink-0" onClick={stop}>
+                    <TeamCrest name={crest.name} shortName={crest.shortName} color={crest.logoColor} logoUrl={crest.logoUrl} size="sm" onSelect={go} />
+                  </span>
+                )}
+                {go ? (
+                  <button onClick={(e) => { stop(e); go(); }} className="font-display font-black text-white text-lg leading-tight truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{a.playerName}</button>
+                ) : (
+                  <span className="font-display font-black text-white text-lg leading-tight truncate min-w-0">{a.playerName}</span>
+                )}
+              </div>
+              <div className="mt-1 text-xs font-sans text-hl-soft truncate">{a.sub}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Die Blase: wächst unter der Reihe auf und hängt nahtlos an der Kachel. */}
+      <AnimatePresence initial={false} mode="wait">
+        {open && (
           <motion.div
-            key="liste"
-            layout
-            initial={{ opacity: 0, transform: 'translateY(-8px)' }}
-            animate={{ opacity: 1, transform: 'translateY(0px)' }}
-            exit={{ opacity: 0, transform: 'translateY(-8px)' }}
-            transition={fade}
-            className="mt-4 pt-3 border-t border-white/10 overflow-hidden"
+            key={open.id}
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={grow}
+            style={{ borderColor: AWARD_BORDER, willChange: 'height' }}
+            className="relative overflow-hidden rounded-2xl rounded-t-none border border-t-0 bg-[rgba(232,62,140,.06)]"
           >
-          <div className="grid gap-x-6 gap-y-0 sm:grid-cols-2">
-            {rows.slice(0, 10).map((r, i) => {
-              const team = crestFor?.(r.teamId);
-              const go = playerClick?.(r.teamId, r.playerName);
-              return (
-                <motion.div
-                  key={`${r.teamId}-${r.playerName}`}
-                  initial={{ opacity: 0, transform: 'translateY(-6px)' }}
-                  animate={{ opacity: 1, transform: 'translateY(0px)' }}
-                  transition={reduce ? { duration: 0.15 } : { duration: 0.24, ease: [0.23, 1, 0.32, 1], delay: 0.04 + i * 0.022 }}
-                  className="flex items-center gap-3 py-2 border-b border-white/[.06] text-sm"
-                >
-                  <span className={`w-5 shrink-0 text-center font-display font-black ${i === 0 ? 'text-hl-magenta-soft' : 'text-hl-mute'}`}>{i + 1}</span>
-                  {team && (
-                    <span className="shrink-0" onClick={stop}>
-                      <TeamCrest name={team.name} shortName={team.shortName} color={team.logoColor} logoUrl={team.logoUrl} size="sm" />
-                    </span>
-                  )}
-                  {go ? (
-                    <button onClick={(e) => { stop(e); go(); }} className="font-sans font-semibold text-white truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{r.playerName}</button>
-                  ) : (
-                    <span className="font-sans font-semibold text-white truncate min-w-0">{r.playerName}</span>
-                  )}
-                  <span className="text-xs text-hl-mute truncate min-w-0 hidden sm:inline">{r.teamId}</span>
-                  {r.note && <span className="ml-auto shrink-0 text-[11px] text-hl-faint tabular-nums">{r.note}</span>}
-                  <span className={`shrink-0 font-display font-black text-white tabular-nums ${r.note ? 'ml-3' : 'ml-auto'}`}>{r.value}</span>
-                </motion.div>
-              );
-            })}
-          </div>
+            {/* Verbinder: überdeckt die Naht genau unter der aktiven Kachel. */}
+            {seam && (
+              <span
+                aria-hidden="true"
+                className="absolute -top-px h-px bg-[rgba(232,62,140,.06)]"
+                style={{ left: seam.left + 1, width: Math.max(0, seam.width - 2) }}
+              />
+            )}
+            <div className="px-4 pt-4 pb-3 grid gap-x-6 sm:grid-cols-2">
+              {open.rows.slice(0, 10).map((r, i) => {
+                const team = crestFor(r.teamId);
+                const go = playerClick(r.teamId, r.playerName);
+                const stop = (e: React.MouseEvent) => e.stopPropagation();
+                return (
+                  <motion.div
+                    key={`${r.teamId}-${r.playerName}`}
+                    initial={{ opacity: 0, transform: 'translateY(-6px)' }}
+                    animate={{ opacity: 1, transform: 'translateY(0px)' }}
+                    transition={reduce ? { duration: 0.15 } : { duration: 0.24, ease: [0.23, 1, 0.32, 1], delay: 0.06 + i * 0.022 }}
+                    className="flex items-center gap-3 py-2 border-b border-white/[.06] text-sm"
+                  >
+                    <span className={`w-5 shrink-0 text-center font-display font-black ${i === 0 ? 'text-hl-magenta-soft' : 'text-hl-mute'}`}>{i + 1}</span>
+                    {team && (
+                      <span className="shrink-0" onClick={stop}>
+                        <TeamCrest name={team.name} shortName={team.shortName} color={team.logoColor} logoUrl={team.logoUrl} size="sm" />
+                      </span>
+                    )}
+                    {go ? (
+                      <button onClick={(e) => { stop(e); go(); }} className="font-sans font-semibold text-white truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{r.playerName}</button>
+                    ) : (
+                      <span className="font-sans font-semibold text-white truncate min-w-0">{r.playerName}</span>
+                    )}
+                    <span className="text-xs text-hl-mute truncate min-w-0 hidden sm:inline">{r.teamId}</span>
+                    {r.note && <span className="ml-auto shrink-0 text-[11px] text-hl-faint tabular-nums">{r.note}</span>}
+                    <span className={`shrink-0 font-display font-black text-white tabular-nums ${r.note ? 'ml-3' : 'ml-auto'}`}>{r.value}</span>
+                  </motion.div>
+                );
+              })}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }
