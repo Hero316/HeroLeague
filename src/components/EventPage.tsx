@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { motion, useReducedMotion } from 'motion/react';
+import { motion, AnimatePresence, LayoutGroup, useReducedMotion } from 'motion/react';
 import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shield, Lock, Goal, Crown, Star, Hand, Handshake, Printer, Ticket, ArrowRight, Target, Zap, Send, Sparkles, ChevronDown } from 'lucide-react';
 import { EventConfig, MatchPlayerStat, ScoringConfig, Team } from '../types';
 import { TeamCrest, LiveBadge } from './ui';
@@ -587,7 +587,8 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
               <Star className="w-5 h-5 text-[#E9C46A]" />
               <h2 className="font-display font-black text-xl uppercase tracking-tight text-white">Auszeichnungen</h2>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 hl-cascade">
+            <LayoutGroup id="awards">
+            <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 hl-cascade">
               {scorerKing && (
                 <StatTile
                   icon={<Crown className="w-4 h-4" />}
@@ -668,7 +669,8 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                   playerClick={playerClick}
                 />
               )}
-            </div>
+            </motion.div>
+            </LayoutGroup>
 
           </div>
         )}
@@ -773,8 +775,17 @@ function StatTile({
   // Die GANZE Kachel klappt auf – man muss nicht den Pfeil treffen. Name und
   // Wappen behalten ihr eigenes Ziel (Spieler/Team) und stoppen den Klick.
   const stop = (e: React.MouseEvent) => e.stopPropagation();
+  const reduce = useReducedMotion();
+  // Bewegung auf dem Bildschirm (Kachel wächst, Nachbarn weichen). Feder statt
+  // fester Kurve, weil das Akkordeon mitten in der Bewegung erneut geklickt
+  // werden kann – eine Feder trägt die Geschwindigkeit sauber weiter.
+  // Bei „weniger Bewegung" bleibt nur das Ein-/Ausblenden.
+  const move = reduce ? { duration: 0 } : ({ type: 'spring', duration: 0.42, bounce: 0.14 } as const);
+  const fade = reduce ? { duration: 0.15 } : ({ type: 'spring', duration: 0.38, bounce: 0 } as const);
   return (
-    <div
+    <motion.div
+      layout
+      transition={move}
       onClick={expandable ? onToggle : undefined}
       role={expandable ? 'button' : undefined}
       tabIndex={expandable ? 0 : undefined}
@@ -786,13 +797,12 @@ function StatTile({
           : undefined
       }
       aria-expanded={expandable ? open : undefined}
-      title={expandable ? (open ? 'Liste schließen' : 'Top 10 anzeigen') : undefined}
       className={`rounded-2xl border bg-[rgba(255,255,255,.02)] p-4 transition-colors ${
         expandable ? 'cursor-pointer hover:border-white/25 hover:bg-white/[.04]' : ''
       } ${open ? 'border-hl-magenta/45 sm:col-span-full' : 'border-white/10'}`}
     >
       {/* Kopfzeile bleibt an ihrer Stelle – nur der Inhalt darunter wächst. */}
-      <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-hl-mute mb-3">
+      <motion.div layout="position" className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-hl-mute mb-3">
         <span className="text-[#ff7ac4]">{icon}</span>
         {label}
         {expandable && (
@@ -804,8 +814,8 @@ function StatTile({
             <ChevronDown className={`w-5 h-5 transition-transform ${open ? 'rotate-180' : ''}`} strokeWidth={2.75} />
           </span>
         )}
-      </div>
-      <div className="flex items-center gap-2 min-w-0">
+      </motion.div>
+      <motion.div layout="position" className="flex items-center gap-2 min-w-0">
         {crest && (
           <span className="shrink-0" onClick={stop}>
             <TeamCrest name={crest.name} shortName={crest.shortName} color={crest.logoColor} logoUrl={crest.logoUrl} size="sm" onSelect={onSelect} />
@@ -816,17 +826,32 @@ function StatTile({
         ) : (
           <span className="font-display font-black text-white text-lg leading-tight truncate min-w-0">{value}</span>
         )}
-      </div>
-      <div className="mt-1 text-xs font-sans text-hl-soft">{sub}</div>
+      </motion.div>
+      <motion.div layout="position" className="mt-1 text-xs font-sans text-hl-soft">{sub}</motion.div>
 
-      {open && rows && (
-        <div className="mt-4 pt-3 border-t border-white/10 hl-fade">
+      <AnimatePresence initial={false}>
+        {open && rows && (
+          <motion.div
+            key="liste"
+            layout
+            initial={{ opacity: 0, transform: 'translateY(-8px)' }}
+            animate={{ opacity: 1, transform: 'translateY(0px)' }}
+            exit={{ opacity: 0, transform: 'translateY(-8px)' }}
+            transition={fade}
+            className="mt-4 pt-3 border-t border-white/10 overflow-hidden"
+          >
           <div className="grid gap-x-6 gap-y-0 sm:grid-cols-2">
             {rows.slice(0, 10).map((r, i) => {
               const team = crestFor?.(r.teamId);
               const go = playerClick?.(r.teamId, r.playerName);
               return (
-                <div key={`${r.teamId}-${r.playerName}`} className="flex items-center gap-3 py-2 border-b border-white/[.06] text-sm">
+                <motion.div
+                  key={`${r.teamId}-${r.playerName}`}
+                  initial={{ opacity: 0, transform: 'translateY(-6px)' }}
+                  animate={{ opacity: 1, transform: 'translateY(0px)' }}
+                  transition={reduce ? { duration: 0.15 } : { duration: 0.24, ease: [0.23, 1, 0.32, 1], delay: 0.04 + i * 0.022 }}
+                  className="flex items-center gap-3 py-2 border-b border-white/[.06] text-sm"
+                >
                   <span className={`w-5 shrink-0 text-center font-display font-black ${i === 0 ? 'text-hl-magenta-soft' : 'text-hl-mute'}`}>{i + 1}</span>
                   {team && (
                     <span className="shrink-0" onClick={stop}>
@@ -841,12 +866,13 @@ function StatTile({
                   <span className="text-xs text-hl-mute truncate min-w-0 hidden sm:inline">{r.teamId}</span>
                   {r.note && <span className="ml-auto shrink-0 text-[11px] text-hl-faint tabular-nums">{r.note}</span>}
                   <span className={`shrink-0 font-display font-black text-white tabular-nums ${r.note ? 'ml-3' : 'ml-auto'}`}>{r.value}</span>
-                </div>
+                </motion.div>
               );
             })}
           </div>
-        </div>
-      )}
-    </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
