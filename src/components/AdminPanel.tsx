@@ -4,6 +4,7 @@ import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Ra
 import { Player, Team, Match, EventConfig, EventArchive, NewsItem, Partner, TeamSponsor, TeamSponsorsMap, SponsorClicksMap, Season } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
 import { fetchSponsorClicks } from '../lib/sponsors';
+import { ticketAdminList, type TicketAdminConfig } from '../lib/register';
 import { calculateEventStandings, calculateEventAwards } from '../lib/eventStandings';
 import PlayerAvatar from './PlayerAvatar';
 import { AccordionSection, TeamCrest } from './ui';
@@ -503,6 +504,12 @@ export default function AdminPanel({
   const [countdownGold, setCountdownGold] = useState(false);
   const [countdownCtaLabel, setCountdownCtaLabel] = useState('');
   const [countdownCtaKey, setCountdownCtaKey] = useState('');
+  // Ticket-Veranstaltungen, damit der Countdown direkt mit einer verknüpft
+  // werden kann (Datum, Schlüssel und Tastentext kommen dann von dort).
+  const [ticketEvents, setTicketEvents] = useState<TicketAdminConfig[]>([]);
+  useEffect(() => {
+    ticketAdminList().then((d) => setTicketEvents(d.events ?? [])).catch(() => setTicketEvents([]));
+  }, []);
   const [countdownSuccess, setCountdownSuccess] = useState(false);
 
   // News-Laufband (Ticker unter der Navigation)
@@ -2306,6 +2313,37 @@ export default function AdminPanel({
                 />
               </div>
               <div className="sm:col-span-2 space-y-3 pt-1">
+                {/* Ein Klick statt dreimal dasselbe eintippen: Datum, Schlüssel und
+                    Tastentext kommen aus der gewählten Ticket-Anmeldung. */}
+                <div>
+                  <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
+                    Mit Ticket-Anmeldung verknüpfen
+                  </label>
+                  <select
+                    value={countdownCtaKey}
+                    onChange={(e) => {
+                      const key = e.target.value;
+                      setCountdownCtaKey(key);
+                      const ev = ticketEvents.find((t) => t.eventKey === key);
+                      if (!ev) return;
+                      if (ev.startsAt) setCountdownTarget(ev.startsAt);
+                      if (!countdownCtaLabel.trim()) setCountdownCtaLabel('Tickets sichern');
+                      if (!countdownTitle.trim()) setCountdownTitle(ev.title);
+                    }}
+                    className={inputClass}
+                  >
+                    <option value="">— keine (Countdown ohne Taste) —</option>
+                    {ticketEvents.map((t) => (
+                      <option key={t.eventKey} value={t.eventKey}>
+                        {t.title}{t.dateLabel ? ` · ${t.dateLabel}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                    Wählst du hier eine Veranstaltung, übernimmt der Countdown automatisch <b>Beginn</b> als Zielzeit
+                    und die Taste führt genau dorthin. Die Felder darunter kannst du danach noch überschreiben.
+                  </p>
+                </div>
                 <label className="flex items-center gap-2.5 cursor-pointer">
                   <input
                     type="checkbox"
@@ -2329,18 +2367,7 @@ export default function AdminPanel({
                       className={inputClass}
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
-                      Event-Schlüssel der Anmeldung
-                    </label>
-                    <input
-                      type="text"
-                      value={countdownCtaKey}
-                      onChange={(e) => setCountdownCtaKey(e.target.value)}
-                      placeholder="z.B. opening-night-2026"
-                      className={inputClass}
-                    />
-                  </div>
+
                 </div>
                 <p className="text-xs text-gray-500 leading-relaxed">
                   Die Taste führt direkt zur Zuschauer-Anmeldung dieser Veranstaltung. Den Event-Schlüssel findest du

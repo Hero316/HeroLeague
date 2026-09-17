@@ -299,6 +299,11 @@ export default function App() {
           active: !!data.active,
           target: data.target || '2026-10-04T19:00',
           title: typeof data.title === 'string' ? data.title : 'Till Season begins',
+          // Diese drei wurden hier früher verschluckt – dadurch blieb der
+          // Countdown türkis und ohne Taste, obwohl im Backend alles stand.
+          gold: !!data.gold,
+          ctaLabel: typeof data.ctaLabel === 'string' ? data.ctaLabel : '',
+          ctaTicketKey: typeof data.ctaTicketKey === 'string' ? data.ctaTicketKey : '',
         })
       )
       .catch(() => {
