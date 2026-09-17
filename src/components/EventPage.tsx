@@ -770,35 +770,49 @@ function StatTile({
   playerClick?: (teamId: string, playerName: string) => (() => void) | undefined;
 }) {
   const expandable = !!rows && rows.length > 1 && !!onToggle;
+  // Die GANZE Kachel klappt auf – man muss nicht den Pfeil treffen. Name und
+  // Wappen behalten ihr eigenes Ziel (Spieler/Team) und stoppen den Klick.
+  const stop = (e: React.MouseEvent) => e.stopPropagation();
   return (
     <div
+      onClick={expandable ? onToggle : undefined}
+      role={expandable ? 'button' : undefined}
+      tabIndex={expandable ? 0 : undefined}
+      onKeyDown={
+        expandable
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle?.(); }
+            }
+          : undefined
+      }
+      aria-expanded={expandable ? open : undefined}
+      title={expandable ? (open ? 'Liste schließen' : 'Top 10 anzeigen') : undefined}
       className={`rounded-2xl border bg-[rgba(255,255,255,.02)] p-4 transition-colors ${
-        open ? 'border-hl-magenta/45 sm:col-span-full' : 'border-white/10'
-      }`}
+        expandable ? 'cursor-pointer hover:border-white/25 hover:bg-white/[.04]' : ''
+      } ${open ? 'border-hl-magenta/45 sm:col-span-full' : 'border-white/10'}`}
     >
       {/* Kopfzeile bleibt an ihrer Stelle – nur der Inhalt darunter wächst. */}
-      <button
-        type="button"
-        onClick={expandable ? onToggle : undefined}
-        disabled={!expandable}
-        className={`w-full flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-hl-mute mb-3 ${
-          expandable ? 'cursor-pointer hover:text-hl-text' : 'cursor-default'
-        }`}
-      >
+      <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-hl-mute mb-3">
         <span className="text-[#ff7ac4]">{icon}</span>
         {label}
         {expandable && (
-          <ChevronDown className={`w-3.5 h-3.5 ml-auto transition-transform ${open ? 'rotate-180' : ''}`} />
+          <span
+            className={`ml-auto w-7 h-7 shrink-0 grid place-items-center rounded-lg border transition-colors ${
+              open ? 'border-hl-magenta/50 bg-hl-magenta/15 text-hl-magenta-soft' : 'border-white/15 bg-white/[.06] text-hl-soft'
+            }`}
+          >
+            <ChevronDown className={`w-5 h-5 transition-transform ${open ? 'rotate-180' : ''}`} strokeWidth={2.75} />
+          </span>
         )}
-      </button>
+      </div>
       <div className="flex items-center gap-2 min-w-0">
         {crest && (
-          <span className="shrink-0">
+          <span className="shrink-0" onClick={stop}>
             <TeamCrest name={crest.name} shortName={crest.shortName} color={crest.logoColor} logoUrl={crest.logoUrl} size="sm" onSelect={onSelect} />
           </span>
         )}
         {onSelect ? (
-          <button onClick={onSelect} className="font-display font-black text-white text-lg leading-tight truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{value}</button>
+          <button onClick={(e) => { stop(e); onSelect(); }} className="font-display font-black text-white text-lg leading-tight truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{value}</button>
         ) : (
           <span className="font-display font-black text-white text-lg leading-tight truncate min-w-0">{value}</span>
         )}
@@ -815,12 +829,12 @@ function StatTile({
                 <div key={`${r.teamId}-${r.playerName}`} className="flex items-center gap-3 py-2 border-b border-white/[.06] text-sm">
                   <span className={`w-5 shrink-0 text-center font-display font-black ${i === 0 ? 'text-hl-magenta-soft' : 'text-hl-mute'}`}>{i + 1}</span>
                   {team && (
-                    <span className="shrink-0">
+                    <span className="shrink-0" onClick={stop}>
                       <TeamCrest name={team.name} shortName={team.shortName} color={team.logoColor} logoUrl={team.logoUrl} size="sm" />
                     </span>
                   )}
                   {go ? (
-                    <button onClick={go} className="font-sans font-semibold text-white truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{r.playerName}</button>
+                    <button onClick={(e) => { stop(e); go(); }} className="font-sans font-semibold text-white truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{r.playerName}</button>
                   ) : (
                     <span className="font-sans font-semibold text-white truncate min-w-0">{r.playerName}</span>
                   )}
