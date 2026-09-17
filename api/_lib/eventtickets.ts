@@ -34,6 +34,9 @@ interface TicketConfig {
   accent: string; // Farbwelt für Seite und Mails (z.B. Gold für Opening Night)
   accentDark: string;
   consentText: string; // Einwilligungstext, im Backend editierbar
+  // Beginn der Veranstaltung ('YYYY-MM-DDTHH:mm'). Ab diesem Zeitpunkt werden
+  // KEINE Tickets mehr ausgegeben – auch wenn `open` noch auf true steht.
+  startsAt: string;
 }
 interface TicketArchive {
   events: TicketConfig[];
@@ -61,6 +64,7 @@ const baseEvent = (): TicketConfig => ({
   accent: DEFAULT_ACCENT,
   accentDark: DEFAULT_ACCENT_DARK,
   consentText: DEFAULT_CONSENT,
+  startsAt: '',
 });
 
 const DEFAULT_ARCHIVE: TicketArchive = {
@@ -102,11 +106,22 @@ async function getArchive(): Promise<TicketArchive> {
   }
 }
 
-// Ein Event anhand seines Schlüssels holen. Ohne Schlüssel: das erste offene.
-async function getEvent(key?: string): Promise<TicketConfig | null> {
+// Ist die Anmeldung gerade wirklich offen? Der Schalter allein reicht nicht:
+// ab Beginn der Veranstaltung gibt es keine Tickets mehr.
+function saleOpen(cfg: TicketConfig): boolean {
+  if (!cfg.open) return false;
+  if (!cfg.startsAt) return true;
+  const start = new Date(cfg.startsAt).getTime();
+  return !Number.isFinite(start) || Date.now() < start;
+}
+
+// Ein Event anhand seines Schlüssels holen. BEWUSST ohne Rückfall-Ebene:
+// früher wurde ohne Schlüssel „die erste offene Veranstaltung" genommen – damit
+// landete man vom Testspieltag aus versehentlich bei der Opening Night.
+async function getEvent(key: string): Promise<TicketConfig | null> {
+  if (!key) return null;
   const { events } = await getArchive();
-  if (key) return events.find((e) => e.eventKey === key) ?? null;
-  return events.find((e) => e.open) ?? null;
+  return events.find((e) => e.eventKey === key) ?? null;
 }
 
 const purposeFor = (cfg: TicketConfig) => PURPOSE_PREFIX + cfg.eventKey;
@@ -149,11 +164,14 @@ async function publicConfig(req: VercelRequest, res: VercelResponse) {
   const pub = async (cfg: TicketConfig) => {
     const used = await confirmedSeats(cfg.eventKey);
     return {
-      eventKey: cfg.eventKey, open: cfg.open, title: cfg.title, dateLabel: cfg.dateLabel,
+      eventKey: cfg.eventKey, open: saleOpen(cfg), title: cfg.title, dateLabel: cfg.dateLabel,
       locationLabel: cfg.locationLabel, capacity: cfg.capacity,
       remaining: Math.max(0, cfg.capacity - used), maxPerEmail: cfg.maxPerEmail,
       note: cfg.note, hasDonation: !!cfg.donationUrl,
       accent: cfg.accent, accentDark: cfg.accentDark, consentText: cfg.consentText,
+      startsAt: cfg.startsAt,
+      // Unterscheidung für die Anzeige: bewusst geschlossen vs. Anstoß vorbei.
+      started: !!cfg.startsAt && Number.isFinite(new Date(cfg.startsAt).getTime()) && Date.now() >= new Date(cfg.startsAt).getTime(),
     };
   };
 
@@ -164,20 +182,24 @@ async function publicConfig(req: VercelRequest, res: VercelResponse) {
     return res.json({ ...(await pub(cfg)), turnstileSiteKey });
   }
 
-  // Ohne Schlüssel: alle offenen Events. Zusätzlich werden die Felder des
-  // ersten offenen Events flach mitgeliefert, damit ältere Aufrufer weiter
-  // funktionieren, solange noch eine alte Seite im Browser offen ist.
+  // Ohne Schlüssel NUR die Liste der offenen Veranstaltungen. Es wird bewusst
+  // KEINE davon vorausgewählt – die Seite zeigt dann eine Auswahl. Früher wurde
+  // hier die erste offene flach mitgeliefert; genau dadurch landete man vom
+  // Testspieltag aus bei der Opening Night.
   const { events } = await getArchive();
-  const open = events.filter((e) => e.open);
-  const list = await Promise.all(open.map(pub));
-  return res.json({ events: list, ...(list[0] ?? { open: false }), turnstileSiteKey });
+  const list = await Promise.all(events.filter(saleOpen).map(pub));
+  return res.json({ events: list, turnstileSiteKey });
 }
 
 async function requestCode(req: VercelRequest, res: VercelResponse) {
   const b = req.body ?? {};
-  const cfg = await getEvent(clamp(b.eventKey, 60) || undefined);
+  const cfg = await getEvent(clamp(b.eventKey, 60));
   if (!cfg) return res.status(404).json({ error: 'Unbekannte Veranstaltung.' });
-  if (!cfg.open) return res.status(403).json({ error: 'Die Ticket-Anmeldung ist derzeit geschlossen.' });
+  if (!saleOpen(cfg)) {
+    return res.status(403).json({
+      error: cfg.open ? 'Die Veranstaltung hat begonnen – es gibt keine Tickets mehr.' : 'Die Ticket-Anmeldung ist derzeit geschlossen.',
+    });
+  }
   if (typeof b.website === 'string' && b.website.trim() !== '') return res.json({ ok: true }); // Honeypot
   const name = clamp(b.name, 80);
   if (!name) return badRequest(res, 'Bitte deinen Namen angeben.');
@@ -238,8 +260,9 @@ async function requestCode(req: VercelRequest, res: VercelResponse) {
 
 async function confirm(req: VercelRequest, res: VercelResponse) {
   const b = req.body ?? {};
-  const cfg = await getEvent(clamp(b.eventKey, 60) || undefined);
+  const cfg = await getEvent(clamp(b.eventKey, 60));
   if (!cfg) return res.status(404).json({ error: 'Unbekannte Veranstaltung.' });
+  if (!saleOpen(cfg)) return res.status(403).json({ error: 'Die Veranstaltung hat begonnen – es gibt keine Tickets mehr.' });
   if (!isEmail(b.email)) return badRequest(res, 'Bitte eine gültige E-Mail-Adresse eingeben.');
   const email = normEmail(b.email);
   const rows = await sql`SELECT id, status, quantity, code FROM event_tickets WHERE event_key = ${cfg.eventKey} AND email = ${email} LIMIT 1`;
@@ -375,6 +398,7 @@ async function adminSaveConfig(req: VercelRequest, res: VercelResponse) {
       accent: clamp(raw.accent, 20) || DEFAULT_ACCENT,
       accentDark: clamp(raw.accentDark, 20) || DEFAULT_ACCENT_DARK,
       consentText: clamp(raw.consentText, 2000) || DEFAULT_CONSENT,
+      startsAt: clamp(raw.startsAt, 40),
     });
   }
   const archive: TicketArchive = { events };

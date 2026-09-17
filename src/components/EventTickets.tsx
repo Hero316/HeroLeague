@@ -23,8 +23,9 @@ function ErrorMsg({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+// Fokusfarbe kommt aus der Variablen --tk, die je Veranstaltung gesetzt wird.
 const inputCls =
-  'w-full bg-white/[.05] border border-white/10 rounded-xl px-4 py-3 text-[15px] text-white placeholder-hl-faint focus:border-[#E6238E] focus:outline-none focus:ring-2 focus:ring-[#E6238E]/25 transition-colors';
+  'w-full bg-white/[.05] border border-white/10 rounded-xl px-4 py-3 text-[15px] text-white placeholder-hl-faint focus:border-[color:var(--tk)] focus:outline-none focus:ring-2 focus:ring-[color:var(--tk)]/25 transition-colors';
 
 const PrimaryBtn = ({ children, disabled, onClick, grad }: { children: React.ReactNode; disabled?: boolean; onClick?: () => void; grad: string }) => (
   <button type="button" disabled={disabled} onClick={onClick}
@@ -53,7 +54,22 @@ export default function EventTickets({ onNavigate, eventKey }: { onNavigate: (pa
 
   const turnstile = useTurnstile(cfg?.turnstileSiteKey);
 
-  const load = () => fetchTicketConfig(eventKey).then(setCfg).catch(() => setCfg(null));
+  // Ohne Schlüssel liefert der Server NUR die Liste der offenen Veranstaltungen.
+  // Gibt es genau eine, wird sie genommen; bei mehreren erscheint eine Auswahl.
+  // Es wird NIE stillschweigend eine „passende" Veranstaltung geraten.
+  const [choices, setChoices] = useState<TicketConfig[] | null>(null);
+  const load = () =>
+    fetchTicketConfig(eventKey)
+      .then((c) => {
+        if (!eventKey && Array.isArray(c.events)) {
+          if (c.events.length === 1) { setChoices(null); setCfg({ ...c.events[0], turnstileSiteKey: c.turnstileSiteKey }); }
+          else { setCfg(null); setChoices(c.events); }
+          return;
+        }
+        setChoices(null);
+        setCfg(c);
+      })
+      .catch(() => { setCfg(null); setChoices(null); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(); window.scrollTo(0, 0); }, [eventKey]);
 
@@ -117,8 +133,11 @@ export default function EventTickets({ onNavigate, eventKey }: { onNavigate: (pa
   const soldOut = cfg && cfg.open && remaining <= 0;
 
   return (
-    <div className="min-h-screen bg-brand-dark text-hl-text font-sans flex flex-col relative overflow-hidden">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[440px]" style={{ background: 'radial-gradient(120% 100% at 50% -10%, rgba(230,35,142,.24), transparent 60%)' }} />
+    <div
+      className="min-h-screen bg-brand-dark text-hl-text font-sans flex flex-col relative overflow-hidden"
+      style={{ ['--tk' as string]: accent } as React.CSSProperties}
+    >
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[440px]" style={{ background: `radial-gradient(120% 100% at 50% -10%, ${accent}3d, transparent 60%)` }} />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[440px]" style={{ background: 'radial-gradient(90% 80% at 100% 0%, rgba(233,196,106,.12), transparent 55%)' }} />
 
       <header className="relative border-b border-white/[.07] backdrop-blur-xl" style={{ paddingTop: 'calc(env(safe-area-inset-top) + .75rem)' }}>
@@ -138,16 +157,44 @@ export default function EventTickets({ onNavigate, eventKey }: { onNavigate: (pa
         <AnimatePresence mode="wait">
           <motion.div key={step} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} transition={{ type: 'spring', stiffness: 380, damping: 32 }}>
 
-            {step === 'form' && (
+            {/* Mehrere Veranstaltungen offen und keine ausgewählt: bewusst fragen,
+                statt eine zu raten. Genau hier ging vorher der Testspieltag
+                versehentlich auf die Opening Night. */}
+            {step === 'form' && choices && (
+              <div className="space-y-4">
+                <h1 className="font-display font-black text-3xl uppercase tracking-tight text-white leading-tight">
+                  Welche Veranstaltung?
+                </h1>
+                {choices.length === 0 && (
+                  <p className="text-hl-soft text-[15px]">Aktuell gibt es keine offene Ticket-Anmeldung.</p>
+                )}
+                {choices.map((c) => (
+                  <button
+                    key={c.eventKey}
+                    onClick={() => onNavigate(`/tickets/${encodeURIComponent(c.eventKey)}`)}
+                    className="w-full text-left hl-card rounded-2xl px-4 py-4 cursor-pointer hover:bg-white/[.06] transition-colors border"
+                    style={{ borderColor: `${c.accent}59` }}
+                  >
+                    <div className="font-display font-black text-lg text-white">{c.title}</div>
+                    {c.dateLabel && <div className="text-[13px] text-hl-soft mt-0.5">{c.dateLabel}</div>}
+                    <div className="text-[12px] mt-1.5" style={{ color: c.accent }}>
+                      Noch {c.remaining} von {c.capacity} Plätzen frei
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {step === 'form' && !choices && (
               <div className="space-y-5">
                 <div>
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider mb-3" style={{ background: 'rgba(230,35,142,.16)', color: '#ff7ac4', border: '1px solid rgba(230,35,142,.35)' }}>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider mb-3" style={{ background: `${accent}29`, color: `${accent}`, border: `1px solid ${accent}59` }}>
                     <TicketIcon className="w-3.5 h-3.5" /> Zuschauer-Tickets
                   </div>
                   <h1 className="font-display font-black text-3xl sm:text-4xl uppercase tracking-tight text-white leading-[1.05]">{cfg?.title || 'Testspieltag'}</h1>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5 text-[14px] text-hl-soft">
-                    {cfg?.dateLabel && <span className="inline-flex items-center gap-1.5"><CalendarDays className="w-4 h-4 text-[#ff7ac4]" /> {cfg.dateLabel}</span>}
-                    {cfg?.locationLabel && <span className="inline-flex items-center gap-1.5"><MapPin className="w-4 h-4 text-[#ff7ac4]" /> {cfg.locationLabel}</span>}
+                    {cfg?.dateLabel && <span className="inline-flex items-center gap-1.5"><CalendarDays className="w-4 h-4" style={{ color: accent }} /> {cfg.dateLabel}</span>}
+                    {cfg?.locationLabel && <span className="inline-flex items-center gap-1.5"><MapPin className="w-4 h-4" style={{ color: accent }} /> {cfg.locationLabel}</span>}
                   </div>
                   {cfg?.note && <p className="text-hl-soft text-[14px] mt-2 leading-relaxed">{cfg.note}</p>}
                 </div>
@@ -165,7 +212,7 @@ export default function EventTickets({ onNavigate, eventKey }: { onNavigate: (pa
                   <>
                     <div className="flex items-center justify-between hl-card rounded-2xl px-4 py-3">
                       <span className="text-[13px] text-hl-mute">Noch verfügbar</span>
-                      <span className="font-display font-black text-lg text-white tabular-nums"><span style={{ color: '#ff7ac4' }}>{remaining}</span> / {cfg.capacity}</span>
+                      <span className="font-display font-black text-lg text-white tabular-nums"><span style={{ color: `${accent}` }}>{remaining}</span> / {cfg.capacity}</span>
                     </div>
                     {err && <ErrorMsg>{err}</ErrorMsg>}
                     <label className="block">
@@ -235,8 +282,8 @@ export default function EventTickets({ onNavigate, eventKey }: { onNavigate: (pa
             {step === 'verify' && (
               <div className="space-y-5">
                 <div className="text-center">
-                  <div className="w-14 h-14 rounded-2xl grid place-items-center mx-auto mb-3" style={{ background: 'rgba(230,35,142,.16)', border: '1px solid rgba(230,35,142,.35)' }}>
-                    <KeyRound className="w-7 h-7 text-[#ff7ac4]" />
+                  <div className="w-14 h-14 rounded-2xl grid place-items-center mx-auto mb-3" style={{ background: `${accent}29`, border: `1px solid ${accent}59` }}>
+                    <KeyRound className="w-7 h-7" style={{ color: accent }} />
                   </div>
                   <h2 className="font-display font-black text-2xl uppercase tracking-tight text-white">E-Mail bestätigen</h2>
                   <p className="text-hl-soft text-[14px] mt-1.5">Code an <span className="font-semibold text-white">{email}</span> geschickt. Deine Plätze sind 15 Min reserviert.</p>
@@ -256,7 +303,7 @@ export default function EventTickets({ onNavigate, eventKey }: { onNavigate: (pa
 
             {step === 'done' && result && (
               <motion.div initial={{ scale: .9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 20 }} className="text-center py-6 space-y-4">
-                <div className="w-20 h-20 rounded-full grid place-items-center mx-auto" style={{ background: grad, boxShadow: '0 20px 50px -18px rgba(230,35,142,.85)' }}>
+                <div className="w-20 h-20 rounded-full grid place-items-center mx-auto" style={{ background: grad, boxShadow: `0 20px 50px -18px ${accent}d9` }}>
                   <PartyPopper className="w-11 h-11 text-white" />
                 </div>
                 <h2 className="font-display font-black text-3xl uppercase tracking-tight text-white">Ticket bestätigt!</h2>
@@ -270,7 +317,7 @@ export default function EventTickets({ onNavigate, eventKey }: { onNavigate: (pa
 
                 {result.donationUrl && (
                   <div className="hl-card rounded-2xl p-5 text-left">
-                    <div className="flex items-center gap-2 text-white font-display font-black uppercase tracking-tight"><Heart className="w-4 h-4 text-[#ff7ac4]" /> Uns unterstützen?</div>
+                    <div className="flex items-center gap-2 text-white font-display font-black uppercase tracking-tight"><Heart className="w-4 h-4" style={{ color: accent }} /> Uns unterstützen?</div>
                     <p className="text-[13px] text-hl-mute mt-1 mb-3">Die Tickets sind kostenlos. Wenn du magst, freuen wir uns über einen freiwilligen Beitrag – jeder Euro hilft der Liga. 💚</p>
                     <a href={result.donationUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-[14px] font-bold text-white cursor-pointer" style={{ background: grad }}>
                       <Heart className="w-4 h-4" /> Freiwillig unterstützen

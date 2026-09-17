@@ -331,6 +331,10 @@ function normalizeEvent(body: unknown, index = 0) {
     // Echtes Kalenderdatum (YYYY-MM-DD) für die Aufgaben-Kalender-Markierung.
     date: /^\d{4}-\d{2}-\d{2}$/.test(str(b.date).trim()) ? str(b.date).trim() : '',
     location: str(b.location).trim(),
+    // Welche Zuschauer-Ticket-Anmeldung zu DIESEM Testspieltag gehört. Leer =
+    // keine; dann erscheint auf der Seite auch kein Ticket-Knopf (statt auf eine
+    // fremde Veranstaltung zu zeigen).
+    ticketKey: str(b.ticketKey).trim().slice(0, 60),
     // Optionales Kopf-Hintergrundbild (Blob-URL). Leer = kein Bild.
     heroImage: str(b.heroImage).trim(),
     teams: Array.isArray(b.teams) ? b.teams.map((t) => str(t).trim()).filter(Boolean) : [],

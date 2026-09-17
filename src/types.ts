@@ -264,6 +264,10 @@ export interface EventConfig {
   date?: string; // 'YYYY-MM-DD' – echtes Datum für den Kalender (optional)
   location: string; // z.B. "Soccer Center Königsfeld"
   heroImage?: string; // optionales Kopf-Hintergrundbild (Blob-URL) – dezent mit Verlauf, wie die Startseite
+  // Welche Zuschauer-Ticket-Anmeldung gehört zu DIESEM Testspieltag?
+  // (Event-Schlüssel aus „Zuschauer-Tickets"). Leer = dieser Testspieltag hat
+  // keine eigene Ticket-Anmeldung; dann wird auch kein Ticket-Knopf angezeigt.
+  ticketKey?: string;
   teams: string[]; // Teamnamen (für die Tabelle, auch ohne Ergebnisse)
   rosters?: EventRoster[]; // eigener Kader je Event-Team (für Fotos/Noten/Aufstellung)
   matches: EventMatch[];

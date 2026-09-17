@@ -3121,6 +3121,23 @@ export default function AdminPanel({
                       <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">ORT</label>
                       <input type="text" value={selectedEvent.location} onChange={(e) => patchEvent({ location: e.target.value })} className={inputClass} />
                     </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
+                        Zuschauer-Tickets: Event-Schlüssel
+                      </label>
+                      <input
+                        type="text"
+                        value={selectedEvent.ticketKey ?? ''}
+                        onChange={(e) => patchEvent({ ticketKey: e.target.value.trim() })}
+                        placeholder="z.B. testspiel-2026-11-08 (leer = kein Ticket-Knopf)"
+                        className={inputClass}
+                      />
+                      <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                        Legt fest, welche Ticket-Anmeldung zu <b>diesem</b> Testspieltag gehört. Den Schlüssel findest du
+                        unter <b>Zuschauer-Tickets</b>. Ohne Eintrag erscheint auf der Testspieltag-Seite kein
+                        Ticket-Knopf — so kann er nie auf die falsche Veranstaltung zeigen.
+                      </p>
+                    </div>
                   </div>
 
                   {/* Kopf-Hintergrundbild (wie die Startseite) – dezent, verläuft nach unten

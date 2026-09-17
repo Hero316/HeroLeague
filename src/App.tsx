@@ -1171,10 +1171,11 @@ export default function App() {
     return <EventTickets onNavigate={navigateTo} eventKey={key || undefined} />;
   }
 
-  // ROUTE: /testspiel/tickets – alter Link auf die Testspieltag-Anmeldung. Muss
-  // VOR dem generischen /testspiel stehen.
+  // ROUTE: /testspiel/tickets – die Anmeldung DIESES Testspieltags. Der Schlüssel
+  // kommt aus dem Event selbst (`ticketKey`); es wird NICHT mehr geraten, sonst
+  // landet man beim falschen Event (z.B. Opening Night). Muss VOR /testspiel stehen.
   if (currentPath.startsWith('/testspiel/tickets')) {
-    return <EventTickets onNavigate={navigateTo} />;
+    return <EventTickets onNavigate={navigateTo} eventKey={activeEvent?.ticketKey || undefined} />;
   }
 
   // ROUTE: /testspiel/spiel/:id – öffentlicher Event-Spielbericht (Einzelnoten aus
@@ -1399,7 +1400,7 @@ export default function App() {
                 scoringConfig={scoring}
                 tab={evTab}
                 onSelectTab={(t) => navigateTo(t === 'tabelle' ? '/testspiel' : `/testspiel/${t}`, { keepScroll: true })}
-                onOpenTickets={() => navigateTo('/testspiel/tickets')}
+                onOpenTickets={activeEvent?.ticketKey ? () => navigateTo(`/tickets/${encodeURIComponent(activeEvent.ticketKey!)}`) : undefined}
               />
             </>
           ) : (
@@ -2010,7 +2011,7 @@ export default function App() {
       </div>
 
       {activeEvent && activeTab === 'home' && (
-        <EventBanner event={activeEvent} isLive={eventHasLive} staffPreview={eventStaffPreview} onOpen={() => navigateTo('/testspiel')} onOpenTickets={() => navigateTo('/testspiel/tickets')} />
+        <EventBanner event={activeEvent} isLive={eventHasLive} staffPreview={eventStaffPreview} onOpen={() => navigateTo('/testspiel')} onOpenTickets={activeEvent?.ticketKey ? () => navigateTo(`/tickets/${encodeURIComponent(activeEvent.ticketKey!)}`) : undefined} />
       )}
 
       <InstallPrompt />

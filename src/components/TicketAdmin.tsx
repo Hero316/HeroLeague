@@ -109,7 +109,7 @@ export default function TicketAdmin() {
     if (data?.events.some((e) => e.eventKey === key)) { window.alert('Dieser Schlüssel wird schon verwendet.'); return; }
     const fresh: TicketAdminConfig = {
       id: key, open: false, eventKey: key, title: 'Neue Veranstaltung', dateLabel: '', locationLabel: '',
-      capacity: 50, maxPerEmail: 4, note: '', donationUrl: '',
+      capacity: 50, maxPerEmail: 4, note: '', donationUrl: '', startsAt: '',
       accent: '#E9C46A', accentDark: '#6b4d12',
       consentText: data?.events[0]?.consentText || '',
     };
@@ -212,6 +212,14 @@ export default function TicketAdmin() {
                 <label className="block"><span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Max. Plätze</span><input type="number" value={cfg.capacity} onChange={(e) => setCfg({ ...cfg, capacity: Number(e.target.value) })} className={inp} /></label>
                 <label className="block"><span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Max. pro E-Mail</span><input type="number" value={cfg.maxPerEmail} onChange={(e) => setCfg({ ...cfg, maxPerEmail: Number(e.target.value) })} className={inp} /></label>
               </div>
+              <label className="block">
+                <span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Beginn (schließt den Verkauf automatisch)</span>
+                <input type="datetime-local" value={cfg.startsAt} onChange={(e) => setCfg({ ...cfg, startsAt: e.target.value })} className={inp} />
+                <span className="block text-[11px] text-hl-faint mt-1.5 leading-snug">
+                  Ab diesem Zeitpunkt gibt es keine Tickets mehr – auch wenn der Schalter oben noch auf „offen" steht.
+                  Leer lassen = nur der Schalter entscheidet.
+                </span>
+              </label>
               <label className="block"><span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Kurzer Hinweis</span><input value={cfg.note} onChange={(e) => setCfg({ ...cfg, note: e.target.value })} className={inp} /></label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">

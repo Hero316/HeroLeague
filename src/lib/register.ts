@@ -102,6 +102,8 @@ export interface TicketConfig {
   hasDonation: boolean; turnstileSiteKey: string;
   accent: string; accentDark: string;
   consentText: string; // Einwilligungstext, im Backend gepflegt
+  startsAt: string; // Beginn – ab dann keine Tickets mehr
+  started: boolean; // true = Veranstaltung hat begonnen
   events?: TicketConfig[]; // alle offenen Veranstaltungen (ohne ?key=)
 }
 export interface TicketPayload {
@@ -114,7 +116,7 @@ export interface TicketAdminConfig {
   id: string;
   open: boolean; eventKey: string; title: string; dateLabel: string; locationLabel: string;
   capacity: number; maxPerEmail: number; note: string; donationUrl: string;
-  accent: string; accentDark: string; consentText: string;
+  accent: string; accentDark: string; consentText: string; startsAt: string;
 }
 export interface TicketOverviewRow {
   id: string; eventKey: string; title: string; dateLabel: string;
