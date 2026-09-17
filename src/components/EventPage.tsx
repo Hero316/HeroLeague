@@ -860,6 +860,10 @@ function AwardsBoard({
       </div>
 
       {/* Die Blase: wächst unter der Reihe auf und hängt nahtlos an der Kachel. */}
+      {/* Die Blase. Oberkante GERADE (keine runden Ecken oben): nur so trifft sie
+          die geraden Unterkanten der Kachel. Runde Ecken oben kurven an den Seiten
+          weg und reißen die Form auf. -1px Überlappung, damit zwischen Reihe und
+          Blase keine Haarlinie stehen bleibt. */}
       <AnimatePresence initial={false} mode="wait">
         {open && (
           <motion.div
@@ -868,8 +872,8 @@ function AwardsBoard({
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={grow}
-            style={{ borderColor: AWARD_BORDER, background: AWARD_BG, willChange: 'height' }}
-            className="relative overflow-hidden rounded-2xl border"
+            style={{ borderColor: AWARD_BORDER, background: AWARD_BG, marginTop: -1, willChange: 'height' }}
+            className="relative overflow-hidden rounded-b-2xl border"
           >
             {/* Platz 1 steht schon oben in der Kachel – die Liste beginnt bei 2
                 und läuft untereinander durch, damit die Reihenfolge lückenlos ist. */}
