@@ -779,7 +779,7 @@ function AwardsBoard({
   const reduce = useReducedMotion();
   const wrapRef = React.useRef<HTMLDivElement>(null);
   const tileRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
-  const [seam, setSeam] = React.useState<{ left: number; width: number } | null>(null);
+  const [seam, setSeam] = React.useState<{ left: number; width: number; top: number } | null>(null);
 
   const open = items.find((a) => a.id === openId) ?? null;
 
@@ -793,7 +793,8 @@ function AwardsBoard({
       if (!wrap || !tile) return;
       const w = wrap.getBoundingClientRect();
       const t = tile.getBoundingClientRect();
-      setSeam({ left: t.left - w.left, width: t.width });
+      // Unterkante der aktiven Kachel = genau dort sitzt die obere Kante des Feldes.
+      setSeam({ left: t.left - w.left, width: t.width, top: t.bottom - w.top });
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -877,17 +878,9 @@ function AwardsBoard({
             exit={{ height: 0, opacity: 0 }}
             transition={grow}
             style={{ borderColor: AWARD_BORDER, willChange: 'height' }}
-            className="relative overflow-hidden rounded-2xl rounded-t-none border border-t-0 bg-[rgba(232,62,140,.06)]"
+            className="relative overflow-hidden rounded-2xl border bg-[rgba(232,62,140,.06)]"
           >
-            {/* Verbinder: überdeckt die Naht genau unter der aktiven Kachel. */}
-            {seam && (
-              <span
-                aria-hidden="true"
-                className="absolute -top-px h-px bg-[rgba(232,62,140,.06)]"
-                style={{ left: seam.left + 1, width: Math.max(0, seam.width - 2) }}
-              />
-            )}
-            <div className="px-4 pt-4 pb-3 grid gap-x-6 sm:grid-cols-2">
+            <div className="px-4 py-3 sm:px-5 grid gap-x-8 sm:grid-cols-2">
               {open.rows.slice(0, 10).map((r, i) => {
                 const team = crestFor(r.teamId);
                 const go = playerClick(r.teamId, r.playerName);
@@ -898,7 +891,7 @@ function AwardsBoard({
                     initial={{ opacity: 0, transform: 'translateY(-6px)' }}
                     animate={{ opacity: 1, transform: 'translateY(0px)' }}
                     transition={reduce ? { duration: 0.15 } : { duration: 0.24, ease: [0.23, 1, 0.32, 1], delay: 0.06 + i * 0.022 }}
-                    className="flex items-center gap-3 py-2 border-b border-white/[.06] text-sm"
+                    className="flex items-center gap-3 py-2.5 text-sm border-t border-white/[.06] first:border-t-0 sm:[&:nth-child(2)]:border-t-0"
                   >
                     <span className={`w-5 shrink-0 text-center font-display font-black ${i === 0 ? 'text-hl-magenta-soft' : 'text-hl-mute'}`}>{i + 1}</span>
                     {team && (
@@ -921,6 +914,17 @@ function AwardsBoard({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Verbinder: überdeckt die Kante des Feldes genau unter der aktiven Kachel,
+          damit Kachel und Blase eine durchgehende Form ergeben. Liegt bewusst
+          AUSSERHALB des Feldes – dessen overflow-hidden würde ihn abschneiden. */}
+      {open && seam && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute z-20 bg-[rgba(232,62,140,.06)]"
+          style={{ left: seam.left + 1, width: Math.max(0, seam.width - 2), top: seam.top - 1, height: 2 }}
+        />
+      )}
     </div>
   );
 }
