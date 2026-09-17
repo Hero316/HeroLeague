@@ -880,36 +880,49 @@ function AwardsBoard({
             style={{ borderColor: AWARD_BORDER, willChange: 'height' }}
             className="relative overflow-hidden rounded-2xl border bg-[rgba(232,62,140,.06)]"
           >
+            {/* Platz 1 steht schon oben in der Kachel – die Liste beginnt bei 2.
+                Spaltenweise gefüllt (links 2–6, rechts 7–10), damit man beim
+                Runterlesen einer Spalte eine lückenlose Reihenfolge sieht. */}
             <div className="px-4 py-3 sm:px-5 grid gap-x-8 sm:grid-cols-2">
-              {open.rows.slice(0, 10).map((r, i) => {
-                const team = crestFor(r.teamId);
-                const go = playerClick(r.teamId, r.playerName);
-                const stop = (e: React.MouseEvent) => e.stopPropagation();
-                return (
-                  <motion.div
-                    key={`${r.teamId}-${r.playerName}`}
-                    initial={{ opacity: 0, transform: 'translateY(-6px)' }}
-                    animate={{ opacity: 1, transform: 'translateY(0px)' }}
-                    transition={reduce ? { duration: 0.15 } : { duration: 0.24, ease: [0.23, 1, 0.32, 1], delay: 0.06 + i * 0.022 }}
-                    className="flex items-center gap-3 py-2.5 text-sm border-t border-white/[.06] first:border-t-0 sm:[&:nth-child(2)]:border-t-0"
-                  >
-                    <span className={`w-5 shrink-0 text-center font-display font-black ${i === 0 ? 'text-hl-magenta-soft' : 'text-hl-mute'}`}>{i + 1}</span>
-                    {team && (
-                      <span className="shrink-0" onClick={stop}>
-                        <TeamCrest name={team.name} shortName={team.shortName} color={team.logoColor} logoUrl={team.logoUrl} size="sm" />
-                      </span>
-                    )}
-                    {go ? (
-                      <button onClick={(e) => { stop(e); go(); }} className="font-sans font-semibold text-white truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{r.playerName}</button>
-                    ) : (
-                      <span className="font-sans font-semibold text-white truncate min-w-0">{r.playerName}</span>
-                    )}
-                    <span className="text-xs text-hl-mute truncate min-w-0 hidden sm:inline">{r.teamId}</span>
-                    {r.note && <span className="ml-auto shrink-0 text-[11px] text-hl-faint tabular-nums">{r.note}</span>}
-                    <span className={`shrink-0 font-display font-black text-white tabular-nums ${r.note ? 'ml-3' : 'ml-auto'}`}>{r.value}</span>
-                  </motion.div>
-                );
-              })}
+              {(() => {
+                const list = open.rows.slice(1, 10);
+                const half = Math.ceil(list.length / 2);
+                return [list.slice(0, half), list.slice(half)].map((col, ci) => (
+                  <div key={ci}>
+                    {col.map((r, idx) => {
+                      const rank = (ci === 0 ? 0 : half) + idx + 2;
+                      const i = rank - 2;
+                      const team = crestFor(r.teamId);
+                      const go = playerClick(r.teamId, r.playerName);
+                      const stop = (e: React.MouseEvent) => e.stopPropagation();
+                      return (
+                        <motion.div
+                          key={`${r.teamId}-${r.playerName}`}
+                          initial={{ opacity: 0, transform: 'translateY(-6px)' }}
+                          animate={{ opacity: 1, transform: 'translateY(0px)' }}
+                          transition={reduce ? { duration: 0.15 } : { duration: 0.24, ease: [0.23, 1, 0.32, 1], delay: 0.06 + i * 0.022 }}
+                          className="flex items-center gap-3 py-2.5 text-sm border-t border-white/[.06] first:border-t-0"
+                        >
+                          <span className="w-6 shrink-0 text-center font-display font-black text-hl-mute tabular-nums">{rank}</span>
+                          {team && (
+                            <span className="shrink-0" onClick={stop}>
+                              <TeamCrest name={team.name} shortName={team.shortName} color={team.logoColor} logoUrl={team.logoUrl} size="sm" />
+                            </span>
+                          )}
+                          {go ? (
+                            <button onClick={(e) => { stop(e); go(); }} className="font-sans font-semibold text-white truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{r.playerName}</button>
+                          ) : (
+                            <span className="font-sans font-semibold text-white truncate min-w-0">{r.playerName}</span>
+                          )}
+                          <span className="text-xs text-hl-mute truncate min-w-0 hidden sm:inline">{r.teamId}</span>
+                          {r.note && <span className="ml-auto shrink-0 text-[11px] text-hl-faint tabular-nums">{r.note}</span>}
+                          <span className={`shrink-0 font-display font-black text-white tabular-nums ${r.note ? 'ml-3' : 'ml-auto'}`}>{r.value}</span>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                ));
+              })()}
             </div>
           </motion.div>
         )}
