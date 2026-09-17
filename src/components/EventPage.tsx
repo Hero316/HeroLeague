@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shield, Lock, Goal, Crown, Star, Hand, Handshake, Printer, Ticket, ArrowRight, Target, Zap, Send, Sparkles } from 'lucide-react';
+import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shield, Lock, Goal, Crown, Star, Hand, Handshake, Printer, Ticket, ArrowRight, Target, Zap, Send, Sparkles, ChevronDown } from 'lucide-react';
 import { EventConfig, MatchPlayerStat, ScoringConfig, Team } from '../types';
 import { TeamCrest, LiveBadge } from './ui';
 import { calculateEventStandings } from '../lib/eventStandings';
@@ -120,6 +120,11 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
   const hasLeaderboards =
     passers.length + dribblers.length + duellists.length + shooters.length + ballWinners.length + keyPassers.length > 0;
   const hasAwards = Boolean(scorerKing || assistKing || bestPlayer || glove);
+
+  // Aufgeklappte Auszeichnung (Akkordeon: es ist immer höchstens eine offen).
+  const [openAward, setOpenAward] = useState<'scorer' | 'assist' | 'best' | 'keeper' | null>(null);
+  const toggleAward = (id: 'scorer' | 'assist' | 'best' | 'keeper') =>
+    setOpenAward((cur) => (cur === id ? null : id));
 
   // Aktives Untermenü. Wird von außen über die URL gesteuert (tabProp/onSelectTab),
   // damit es Refresh und „Zurück" übersteht; ohne Steuerung als Fallback intern.
@@ -573,6 +578,11 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                   sub={`${scorerKing.goals} ${scorerKing.goals === 1 ? 'Tor' : 'Tore'} · ${scorerKing.teamId}`}
                   crest={crestFor(scorerKing.teamId)}
                   onSelect={playerClick(scorerKing.teamId, scorerKing.playerName)}
+                  rows={scorers.map((r) => ({ playerName: r.playerName, teamId: r.teamId, value: String(r.goals) }))}
+                  open={openAward === 'scorer'}
+                  onToggle={() => toggleAward('scorer')}
+                  crestFor={crestFor}
+                  playerClick={playerClick}
                 />
               )}
               {assistKing && (
@@ -583,6 +593,11 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                   sub={`${assistKing.assists} ${assistKing.assists === 1 ? 'Vorlage' : 'Vorlagen'} · ${assistKing.teamId}`}
                   crest={crestFor(assistKing.teamId)}
                   onSelect={playerClick(assistKing.teamId, assistKing.playerName)}
+                  rows={assists.map((r) => ({ playerName: r.playerName, teamId: r.teamId, value: String(r.assists) }))}
+                  open={openAward === 'assist'}
+                  onToggle={() => toggleAward('assist')}
+                  crestFor={crestFor}
+                  playerClick={playerClick}
                 />
               )}
               {bestPlayer && (
@@ -593,6 +608,11 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                   sub={bestPlayer.teamId}
                   crest={crestFor(bestPlayer.teamId)}
                   onSelect={playerClick(bestPlayer.teamId, bestPlayer.playerName)}
+                  rows={hero.map((r) => ({ playerName: r.playerName, teamId: r.teamId, value: r.score.toFixed(1) }))}
+                  open={openAward === 'best'}
+                  onToggle={() => toggleAward('best')}
+                  crestFor={crestFor}
+                  playerClick={playerClick}
                 />
               )}
               {glove && (
@@ -603,6 +623,11 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                   sub={glove.teamId}
                   crest={crestFor(glove.teamId)}
                   onSelect={playerClick(glove.teamId, glove.playerName)}
+                  rows={keepers.map((r) => ({ playerName: r.playerName, teamId: r.teamId, value: r.score.toFixed(1) }))}
+                  open={openAward === 'keeper'}
+                  onToggle={() => toggleAward('keeper')}
+                  crestFor={crestFor}
+                  playerClick={playerClick}
                 />
               )}
             </div>
@@ -711,6 +736,11 @@ function StatTile({
   sub,
   crest,
   onSelect,
+  rows,
+  open,
+  onToggle,
+  crestFor,
+  playerClick,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -718,13 +748,36 @@ function StatTile({
   sub: string;
   crest?: Team;
   onSelect?: () => void;
+  // Vollständige Rangliste dieser Kategorie. Ist sie gesetzt, lässt sich die
+  // Kachel aufklappen und zeigt die Top 10 direkt an Ort und Stelle.
+  rows?: { playerName: string; teamId: string; value: string }[];
+  open?: boolean;
+  onToggle?: () => void;
+  crestFor?: (teamId: string) => Team | undefined;
+  playerClick?: (teamId: string, playerName: string) => (() => void) | undefined;
 }) {
+  const expandable = !!rows && rows.length > 1 && !!onToggle;
   return (
-    <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,.02)] p-4">
-      <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-hl-mute mb-3">
+    <div
+      className={`rounded-2xl border bg-[rgba(255,255,255,.02)] p-4 transition-colors ${
+        open ? 'border-hl-magenta/45 sm:col-span-2 lg:col-span-4' : 'border-white/10'
+      }`}
+    >
+      {/* Kopfzeile bleibt an ihrer Stelle – nur der Inhalt darunter wächst. */}
+      <button
+        type="button"
+        onClick={expandable ? onToggle : undefined}
+        disabled={!expandable}
+        className={`w-full flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-hl-mute mb-3 ${
+          expandable ? 'cursor-pointer hover:text-hl-text' : 'cursor-default'
+        }`}
+      >
         <span className="text-[#ff7ac4]">{icon}</span>
         {label}
-      </div>
+        {expandable && (
+          <ChevronDown className={`w-3.5 h-3.5 ml-auto transition-transform ${open ? 'rotate-180' : ''}`} />
+        )}
+      </button>
       <div className="flex items-center gap-2 min-w-0">
         {crest && (
           <span className="shrink-0">
@@ -738,6 +791,34 @@ function StatTile({
         )}
       </div>
       <div className="mt-1 text-xs font-sans text-hl-soft">{sub}</div>
+
+      {open && rows && (
+        <div className="mt-4 pt-3 border-t border-white/10 hl-fade">
+          <div className="grid gap-x-6 gap-y-0 sm:grid-cols-2">
+            {rows.slice(0, 10).map((r, i) => {
+              const team = crestFor?.(r.teamId);
+              const go = playerClick?.(r.teamId, r.playerName);
+              return (
+                <div key={`${r.teamId}-${r.playerName}`} className="flex items-center gap-3 py-2 border-b border-white/[.06] text-sm">
+                  <span className={`w-5 shrink-0 text-center font-display font-black ${i === 0 ? 'text-hl-magenta-soft' : 'text-hl-mute'}`}>{i + 1}</span>
+                  {team && (
+                    <span className="shrink-0">
+                      <TeamCrest name={team.name} shortName={team.shortName} color={team.logoColor} logoUrl={team.logoUrl} size="sm" />
+                    </span>
+                  )}
+                  {go ? (
+                    <button onClick={go} className="font-sans font-semibold text-white truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{r.playerName}</button>
+                  ) : (
+                    <span className="font-sans font-semibold text-white truncate min-w-0">{r.playerName}</span>
+                  )}
+                  <span className="text-xs text-hl-mute truncate min-w-0 hidden sm:inline">{r.teamId}</span>
+                  <span className="ml-auto shrink-0 font-display font-black text-white tabular-nums">{r.value}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
