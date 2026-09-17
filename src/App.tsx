@@ -1620,6 +1620,7 @@ export default function App() {
                   ...(canSeeStartseiteArea ? [{ id: 'startseite', label: 'Startseite' }] : []),
                   ...(canSeeChannelsArea ? [{ id: 'kanaele', label: 'Kanäle & Event' }] : []),
                   ...(isSuperadmin ? [{ id: 'anmeldungen', label: 'Anmeldungen' }] : []),
+                  ...(canManageTickets ? [{ id: 'tickets', label: 'Zuschauer-Tickets' }] : []),
                   ...(canManageUsers ? [{ id: 'zugaenge', label: 'Zugänge' }] : []),
                 ]}
               >
@@ -1719,8 +1720,8 @@ export default function App() {
                       <AccordionSection
                         id="season-signups"
                         category="anmeldungen"
-                        title="Season 2 – Team-Anmeldungen"
-                        subtitle="Vorregistrierungen ansehen, Captains hinterlegen, Fenster steuern"
+                        title="Team- & Spieler-Anmeldungen"
+                        subtitle="Season 2 · oben zwischen Teams und einzelnen Spielern umschalten · Captains, Fenster, CSV"
                         icon={<Trophy className="w-5 h-5" />}
                         accent="#12A594"
                       >
@@ -1748,9 +1749,9 @@ export default function App() {
                       </AccordionSection>
                       <AccordionSection
                         id="event-tickets"
-                        category="anmeldungen"
+                        category="tickets"
                         title="Zuschauer-Tickets"
-                        subtitle="Opening Night, Testspieltage & Spieltage · Anmeldungen, Einlass, Plätze & Spenden-Link"
+                        subtitle="Opening Night · Testspieltage · Spieltage — mehrere gleichzeitig · Einlass, Plätze & Spenden-Link"
                         icon={<Ticket className="w-5 h-5" />}
                         accent="#E9C46A"
                       >
