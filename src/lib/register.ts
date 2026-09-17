@@ -96,40 +96,58 @@ export const signupAdminSave = (body: { config?: Partial<SignupConfig>; captains
 
 // --- Zuschauer-Tickets ------------------------------------------------------
 export interface TicketConfig {
+  eventKey: string;
   open: boolean; title: string; dateLabel: string; locationLabel: string;
   capacity: number; remaining: number; maxPerEmail: number; note: string;
   hasDonation: boolean; turnstileSiteKey: string;
+  accent: string; accentDark: string;
+  consentText: string; // Einwilligungstext, im Backend gepflegt
+  events?: TicketConfig[]; // alle offenen Veranstaltungen (ohne ?key=)
 }
 export interface TicketPayload {
-  name: string; email: string; quantity: number; website?: string; turnstileToken?: string;
+  eventKey?: string;
+  name: string; email: string; quantity: number;
+  consent: boolean; // Einwilligung zur Datenspeicherung (Pflicht)
+  website?: string; turnstileToken?: string;
 }
 export interface TicketAdminConfig {
+  id: string;
   open: boolean; eventKey: string; title: string; dateLabel: string; locationLabel: string;
   capacity: number; maxPerEmail: number; note: string; donationUrl: string;
+  accent: string; accentDark: string; consentText: string;
+}
+export interface TicketOverviewRow {
+  id: string; eventKey: string; title: string; dateLabel: string;
+  open: boolean; capacity: number; soldSeats: number;
 }
 export interface TicketRow {
   id: string; email: string; name: string; quantity: number; status: string;
   code: string | null; checkedIn: boolean; createdAt: string; verifiedAt: string | null;
+  consentAt: string | null; consentText: string | null;
 }
 export interface TicketAdminData {
-  config: TicketAdminConfig; rows: TicketRow[]; capacity: number;
+  events: TicketAdminConfig[]; overview: TicketOverviewRow[];
+  config: TicketAdminConfig | null; rows: TicketRow[]; capacity: number;
   soldSeats: number; confirmedCount: number; remaining: number;
 }
 
-export const fetchTicketConfig = () => apiFetch<TicketConfig>('/api/event-tickets?action=config');
+export const fetchTicketConfig = (eventKey?: string) =>
+  apiFetch<TicketConfig>(`/api/event-tickets?action=config${eventKey ? `&key=${encodeURIComponent(eventKey)}` : ''}`);
 export const requestTicketCode = (body: TicketPayload) =>
   apiFetch<{ ok: boolean; devCode?: string }>('/api/event-tickets?action=request-code', { method: 'POST', body: JSON.stringify(body) });
-export const confirmTicket = (email: string, code: string) =>
+export const confirmTicket = (email: string, code: string, eventKey?: string) =>
   apiFetch<{ ok: boolean; code: string; quantity: number; donationUrl?: string; alreadyConfirmed?: boolean }>(
-    '/api/event-tickets?action=confirm', { method: 'POST', body: JSON.stringify({ email, code }) });
+    '/api/event-tickets?action=confirm', { method: 'POST', body: JSON.stringify({ email, code, eventKey }) });
 
-export const ticketAdminList = () => apiFetch<TicketAdminData>('/api/event-tickets?action=admin-list');
+export const ticketAdminList = (eventKey?: string) =>
+  apiFetch<TicketAdminData>(`/api/event-tickets?action=admin-list${eventKey ? `&key=${encodeURIComponent(eventKey)}` : ''}`);
 export const ticketAdminCheckin = (id: string, checkedIn: boolean) =>
   apiFetch<{ ok: boolean }>('/api/event-tickets?action=admin-checkin', { method: 'POST', body: JSON.stringify({ id, checkedIn }) });
 export const ticketAdminDelete = (id: string) =>
   apiFetch<{ ok: boolean }>('/api/event-tickets?action=admin-delete', { method: 'POST', body: JSON.stringify({ id }) });
-export const ticketAdminSave = (config: TicketAdminConfig) =>
-  apiFetch<{ ok: boolean; config: TicketAdminConfig }>('/api/event-tickets?action=admin-config', { method: 'POST', body: JSON.stringify({ config }) });
+// Speichert die GESAMTE Event-Liste (mehrere Veranstaltungen können parallel offen sein).
+export const ticketAdminSave = (events: TicketAdminConfig[]) =>
+  apiFetch<{ ok: boolean; events: TicketAdminConfig[] }>('/api/event-tickets?action=admin-config', { method: 'POST', body: JSON.stringify({ events }) });
 
 // --- Cloudflare Turnstile (optional) ----------------------------------------
 // Lädt das Widget nur, wenn ein Site-Key da ist. Ohne Key: kein Widget, Token

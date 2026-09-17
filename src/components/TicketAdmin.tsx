@@ -29,6 +29,7 @@ function TicketDetail({ row, busy, onClose, onCheckin, onDelete }: {
     ['Eingecheckt', row.checkedIn ? 'Ja' : 'Nein'],
     ['Angemeldet am', fmtDate(row.createdAt)],
     ['Bestätigt am', fmtDate(row.verifiedAt)],
+    ['Einwilligung', row.consentAt ? fmtDate(row.consentAt) : 'nicht erfasst'],
   ];
   return (
     <ModalPortal>
@@ -84,9 +85,37 @@ export default function TicketAdmin() {
   const [saved, setSaved] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  // Es können mehrere Veranstaltungen parallel offen sein (Opening Night,
+  // Testspieltag, Spieltag …) – hier wird ausgewählt, welche man gerade sieht.
+  const [selKey, setSelKey] = useState<string | null>(null);
 
-  const load = () => { setLoading(true); ticketAdminList().then((d) => { setData(d); if (!cfg) setCfg(d.config); }).catch(() => setData(null)).finally(() => setLoading(false)); };
+  const load = (key?: string) => {
+    setLoading(true);
+    ticketAdminList(key ?? selKey ?? undefined)
+      .then((d) => { setData(d); setCfg(d.config); if (d.config) setSelKey(d.config.eventKey); })
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  };
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Veranstaltung wechseln
+  const selectEvent = (key: string) => { setSelKey(key); setShowConfig(false); load(key); };
+
+  // Neue Veranstaltung anlegen (Schlüssel muss eindeutig sein und bleibt danach fest,
+  // weil die Anmeldungen in der Datenbank daran hängen).
+  const addEvent = () => {
+    const key = (window.prompt('Interner Schlüssel der neuen Veranstaltung (z. B. opening-night-2026).\nEr kann später NICHT mehr geändert werden:') || '').trim();
+    if (!key) return;
+    if (data?.events.some((e) => e.eventKey === key)) { window.alert('Dieser Schlüssel wird schon verwendet.'); return; }
+    const fresh: TicketAdminConfig = {
+      id: key, open: false, eventKey: key, title: 'Neue Veranstaltung', dateLabel: '', locationLabel: '',
+      capacity: 50, maxPerEmail: 4, note: '', donationUrl: '',
+      accent: '#E9C46A', accentDark: '#6b4d12',
+      consentText: data?.events[0]?.consentText || '',
+    };
+    const next = [...(data?.events ?? []), fresh];
+    ticketAdminSave(next).then(() => { setSelKey(key); setShowConfig(true); load(key); }).catch(() => window.alert('Speichern fehlgeschlagen.'));
+  };
 
   const toggleCheckin = async (r: TicketRow) => {
     setBusyId(r.id);
@@ -97,15 +126,20 @@ export default function TicketAdmin() {
     try { await ticketAdminDelete(id); load(); } catch { /* ignore */ } finally { setBusyId(null); }
   };
   const saveConfig = async () => {
-    if (!cfg) return;
+    if (!cfg || !data) return;
     setSaving(true);
-    try { const r = await ticketAdminSave(cfg); setCfg(r.config); setSaved(true); setTimeout(() => setSaved(false), 2000); load(); }
-    catch { /* ignore */ } finally { setSaving(false); }
+    // Die komplette Liste schicken – nur der gerade bearbeitete Eintrag ist neu.
+    const next = data.events.map((e) => (e.id === cfg.id ? cfg : e));
+    try {
+      await ticketAdminSave(next.some((e) => e.id === cfg.id) ? next : [...next, cfg]);
+      setSaved(true); setTimeout(() => setSaved(false), 2000); load(cfg.eventKey);
+    } catch { /* ignore */ } finally { setSaving(false); }
   };
   const exportCsv = () => {
     if (!data) return;
-    const head = ['Name', 'E-Mail', 'Personen', 'Status', 'Code', 'Eingecheckt', 'Bestätigt'];
-    const lines = data.rows.map((r) => [r.name, r.email, r.quantity, r.status, r.code || '', r.checkedIn ? 'ja' : 'nein', fmtDate(r.verifiedAt)]
+    // Einwilligung mit exportieren – das ist der Nachweis, wem wann was zugesagt wurde.
+    const head = ['Name', 'E-Mail', 'Personen', 'Status', 'Code', 'Eingecheckt', 'Bestätigt', 'Einwilligung am', 'Einwilligungstext'];
+    const lines = data.rows.map((r) => [r.name, r.email, r.quantity, r.status, r.code || '', r.checkedIn ? 'ja' : 'nein', fmtDate(r.verifiedAt), r.consentAt ? fmtDate(r.consentAt) : '', r.consentText || '']
       .map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','));
     const blob = new Blob(['﻿' + [head.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'zuschauer-tickets.csv'; a.click(); URL.revokeObjectURL(url);
@@ -116,6 +150,32 @@ export default function TicketAdmin() {
 
   return (
     <div className="space-y-4">
+      {/* Mehrere Veranstaltungen können gleichzeitig laufen – hier wird gewechselt. */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {(data?.overview ?? []).map((e) => (
+          <button
+            key={e.eventKey}
+            onClick={() => selectEvent(e.eventKey)}
+            title={e.dateLabel || e.eventKey}
+            className={`px-3 py-2 rounded-xl text-[12px] font-bold cursor-pointer border transition-colors min-w-0 ${
+              selKey === e.eventKey
+                ? 'bg-white/10 border-white/25 text-white'
+                : 'bg-white/[.03] border-white/10 text-hl-mute hover:text-hl-text'
+            }`}
+          >
+            <span className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle ${e.open ? 'bg-hl-green' : 'bg-hl-faint'}`} />
+            {e.title}
+            <span className="text-hl-faint font-normal ml-1.5 tabular-nums">{e.soldSeats}/{e.capacity}</span>
+          </button>
+        ))}
+        <button
+          onClick={addEvent}
+          className="px-3 py-2 rounded-xl text-[12px] font-bold cursor-pointer border border-dashed border-white/20 text-hl-mute hover:text-white"
+        >
+          + Veranstaltung
+        </button>
+      </div>
+
       <div className="grid grid-cols-3 gap-2.5">
         {[
           { l: 'Verkauft', v: `${data?.soldSeats ?? 0}`, sub: `/ ${data?.capacity ?? 40}` },
@@ -130,7 +190,7 @@ export default function TicketAdmin() {
       </div>
 
       <div className="flex items-center gap-2">
-        <button onClick={load} className="flex items-center gap-1.5 text-[12px] font-bold text-hl-mute hover:text-white cursor-pointer px-3 py-2 rounded-xl bg-white/[.04]"><RefreshCw className="w-3.5 h-3.5" /> Aktualisieren</button>
+        <button onClick={() => load()} className="flex items-center gap-1.5 text-[12px] font-bold text-hl-mute hover:text-white cursor-pointer px-3 py-2 rounded-xl bg-white/[.04]"><RefreshCw className="w-3.5 h-3.5" /> Aktualisieren</button>
         {confirmedRows.length > 0 && <button onClick={exportCsv} className="flex items-center gap-1.5 text-[12px] font-bold text-hl-mute hover:text-white cursor-pointer px-3 py-2 rounded-xl bg-white/[.04]"><Download className="w-3.5 h-3.5" /> CSV</button>}
         <button onClick={() => setShowConfig((v) => !v)} className={`ml-auto flex items-center gap-1.5 text-[12px] font-bold cursor-pointer px-3 py-2 rounded-xl ${showConfig ? 'text-[#ff7ac4] bg-[#E6238E]/10' : 'text-hl-mute bg-white/[.04] hover:text-white'}`}><Settings2 className="w-3.5 h-3.5" /> Einstellungen</button>
       </div>
@@ -153,12 +213,43 @@ export default function TicketAdmin() {
                 <label className="block"><span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Max. pro E-Mail</span><input type="number" value={cfg.maxPerEmail} onChange={(e) => setCfg({ ...cfg, maxPerEmail: Number(e.target.value) })} className={inp} /></label>
               </div>
               <label className="block"><span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Kurzer Hinweis</span><input value={cfg.note} onChange={(e) => setCfg({ ...cfg, note: e.target.value })} className={inp} /></label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Farbe</span>
+                  <div className="flex items-center gap-2">
+                    <input type="color" value={cfg.accent} onChange={(e) => setCfg({ ...cfg, accent: e.target.value })} className="w-10 h-10 rounded-lg bg-transparent border border-white/10 cursor-pointer shrink-0" />
+                    <input value={cfg.accent} onChange={(e) => setCfg({ ...cfg, accent: e.target.value })} className={inp} />
+                  </div>
+                </label>
+                <label className="block">
+                  <span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Farbe dunkel</span>
+                  <div className="flex items-center gap-2">
+                    <input type="color" value={cfg.accentDark} onChange={(e) => setCfg({ ...cfg, accentDark: e.target.value })} className="w-10 h-10 rounded-lg bg-transparent border border-white/10 cursor-pointer shrink-0" />
+                    <input value={cfg.accentDark} onChange={(e) => setCfg({ ...cfg, accentDark: e.target.value })} className={inp} />
+                  </div>
+                </label>
+              </div>
+              <label className="block">
+                <span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Einwilligungstext (Pflicht-Haken im Formular)</span>
+                <textarea
+                  value={cfg.consentText}
+                  onChange={(e) => setCfg({ ...cfg, consentText: e.target.value })}
+                  rows={5}
+                  className={`${inp} leading-relaxed`}
+                  placeholder="Text, dem die Zuschauer vor dem Absenden zustimmen müssen …"
+                />
+                <span className="block text-[11px] text-hl-faint mt-1.5 leading-snug">
+                  Wird beim Anmelden zum Aufklappen angezeigt. Bei jeder Anmeldung wird gespeichert, <b>wann</b> und
+                  <b> welchem Wortlaut</b> zugestimmt wurde – diesen Nachweis sieht man unten beim einzelnen Ticket.
+                  Lass den Text von jemandem prüfen, der sich rechtlich auskennt.
+                </span>
+              </label>
               <label className="block">
                 <span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1 flex items-center gap-1.5"><Heart className="w-3.5 h-3.5 text-[#ff7ac4]" /> Spenden-Link (optional)</span>
                 <input value={cfg.donationUrl} onChange={(e) => setCfg({ ...cfg, donationUrl: e.target.value })} placeholder="https://… (Stripe Payment Link oder PayPal.Me)" className={inp} />
                 <span className="block text-[11px] text-hl-faint mt-1">Erscheint bei Tickets UND bei der Season-2-Anmeldung (Mail + Erfolgsseite) als „Hero League unterstützen".</span>
               </label>
-              <label className="block"><span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Event-Schlüssel (intern)</span><input value={cfg.eventKey} onChange={(e) => setCfg({ ...cfg, eventKey: e.target.value })} className={inp} />
+              <label className="block"><span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Event-Schlüssel (intern)</span><input value={cfg.eventKey} readOnly disabled className={`${inp} opacity-60 cursor-not-allowed`} />
                 <span className="block text-[11px] text-hl-faint mt-1">Nur ändern für ein NEUES Event – die alten Anmeldungen bleiben unter dem alten Schlüssel.</span></label>
 
               <div className="rounded-xl bg-white/[.03] border border-white/[.06] px-3 py-2 flex items-center gap-2 text-[12px]">

@@ -72,7 +72,9 @@ export async function ensureSchema(): Promise<void> {
     // WICHTIG: die neue Spalte `entry` (Team vs. Spieler) mitprüfen, sonst
     // überspringt der Schnell-Check das ALTER auf bereits bestehenden Tabellen.
     await sql`SELECT entry FROM season_signups LIMIT 1`;
-    await sql`SELECT 1 FROM event_tickets LIMIT 1`;
+    // WICHTIG: die neue Spalte `consent_at` (Einwilligung) mitprüfen, sonst
+    // überspringt der Schnell-Check das ALTER auf bestehenden Datenbanken.
+    await sql`SELECT consent_at FROM event_tickets LIMIT 1`;
     ensured = true;
     return;
   } catch {
@@ -326,6 +328,9 @@ export async function ensureSchema(): Promise<void> {
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (event_key, email))`);
   await run(sql`CREATE INDEX IF NOT EXISTS idx_event_tickets_key ON event_tickets(event_key, status)`);
+  // Einwilligung zur Datenspeicherung: WANN und WELCHEM Wortlaut zugestimmt wurde.
+  await run(sql`ALTER TABLE event_tickets ADD COLUMN IF NOT EXISTS consent_at TIMESTAMPTZ`);
+  await run(sql`ALTER TABLE event_tickets ADD COLUMN IF NOT EXISTS consent_text TEXT NOT NULL DEFAULT ''`);
 
   // --- Constraints ganz zuletzt (unkritisch; nur für Rollen-/Anhang-Checks) -
   await run(sql`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);

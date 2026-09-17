@@ -15,13 +15,15 @@ import {
 
 const PURPOSE_PREFIX = 'event-ticket:';
 const FROM = 'Hero League – Tickets <tickets@hero-league.de>';
-const ACCENT = '#E6238E'; // Magenta/Gold-Welt des Testspiel-Events
-const ACCENT_DARK = '#7a0f49';
 const RESERVE_MIN = 15; // Reservierung gilt X Minuten bis zur Bestätigung
 
+// Ein buchbares Ticket-Event. Es können MEHRERE gleichzeitig offen sein
+// (z.B. Opening Night + ein Testspieltag + ein normaler Spieltag). Die Tickets
+// selbst sind in der Datenbank schon immer über `event_key` getrennt.
 interface TicketConfig {
+  id: string; // stabile ID des Eintrags (nur intern/Admin)
   open: boolean;
-  eventKey: string; // stabiler Schlüssel dieses Events (z.B. 'testspiel-2025-09-13')
+  eventKey: string; // stabiler Schlüssel dieses Events (z.B. 'opening-night-2026')
   title: string;
   dateLabel: string;
   locationLabel: string;
@@ -29,28 +31,84 @@ interface TicketConfig {
   maxPerEmail: number;
   note: string;
   donationUrl: string; // Stripe Payment Link oder PayPal.Me (optional)
+  accent: string; // Farbwelt für Seite und Mails (z.B. Gold für Opening Night)
+  accentDark: string;
+  consentText: string; // Einwilligungstext, im Backend editierbar
 }
-const DEFAULT_CONFIG: TicketConfig = {
-  open: true,
-  eventKey: 'testspiel-2025-09-13',
-  title: 'Hero League Testspieltag',
-  dateLabel: 'Sonntag, 13. September · ab 19 Uhr',
+interface TicketArchive {
+  events: TicketConfig[];
+}
+
+const DEFAULT_ACCENT = '#E9C46A'; // Gold – Opening Night
+const DEFAULT_ACCENT_DARK = '#6b4d12';
+const DEFAULT_CONSENT =
+  'Ich bin damit einverstanden, dass meine hier angegebenen Daten (Name und E-Mail-Adresse) ' +
+  'zur Organisation und Durchführung dieser Veranstaltung gespeichert und verarbeitet werden. ' +
+  'Die Einwilligung kann jederzeit formlos per E-Mail widerrufen werden. Weitere Informationen ' +
+  'in unserer Datenschutzerklärung.';
+
+const baseEvent = (): TicketConfig => ({
+  id: randomUUID(),
+  open: false,
+  eventKey: '',
+  title: '',
+  dateLabel: '',
   locationLabel: '',
-  capacity: 40,
+  capacity: 50,
   maxPerEmail: 4,
-  note: 'Kostenlose Zuschauer-Tickets – begrenzt. Bring gute Laune mit!',
+  note: '',
   donationUrl: '',
+  accent: DEFAULT_ACCENT,
+  accentDark: DEFAULT_ACCENT_DARK,
+  consentText: DEFAULT_CONSENT,
+});
+
+const DEFAULT_ARCHIVE: TicketArchive = {
+  events: [
+    {
+      ...baseEvent(),
+      id: 'opening-night',
+      open: false,
+      eventKey: 'opening-night-2026',
+      title: 'Hero League Opening Night',
+      dateLabel: 'Datum im Backend eintragen',
+      capacity: 50,
+      note: 'Kostenlose Zuschauer-Tickets – streng begrenzt.',
+    },
+  ],
 };
 
-async function getConfig(): Promise<TicketConfig> {
+// Gespeichert wird `{ events: [...] }`. Ältere Installationen haben dort noch
+// EINE Konfiguration liegen – die wird beim Lesen automatisch übernommen, damit
+// bestehende Testspieltag-Anmeldungen nicht verloren gehen.
+async function getArchive(): Promise<TicketArchive> {
   try {
     const rows = await sql`SELECT value FROM settings WHERE key = 'event_tickets'`;
-    const v = rows[0]?.value as Partial<TicketConfig> | undefined;
-    return { ...DEFAULT_CONFIG, ...(v || {}) };
+    const v = rows[0]?.value as Record<string, unknown> | undefined;
+    if (!v) return DEFAULT_ARCHIVE;
+    if (Array.isArray(v.events)) {
+      const events = (v.events as Partial<TicketConfig>[])
+        .filter((e) => e && typeof e.eventKey === 'string' && e.eventKey)
+        .map((e) => ({ ...baseEvent(), ...e }) as TicketConfig);
+      return events.length ? { events } : DEFAULT_ARCHIVE;
+    }
+    // Alt-Format: eine einzelne Konfiguration -> in die Liste heben.
+    if (typeof v.eventKey === 'string' && v.eventKey) {
+      return { events: [{ ...baseEvent(), id: 'legacy', accent: '#E6238E', accentDark: '#7a0f49', ...(v as Partial<TicketConfig>) } as TicketConfig] };
+    }
+    return DEFAULT_ARCHIVE;
   } catch {
-    return DEFAULT_CONFIG;
+    return DEFAULT_ARCHIVE;
   }
 }
+
+// Ein Event anhand seines Schlüssels holen. Ohne Schlüssel: das erste offene.
+async function getEvent(key?: string): Promise<TicketConfig | null> {
+  const { events } = await getArchive();
+  if (key) return events.find((e) => e.eventKey === key) ?? null;
+  return events.find((e) => e.open) ?? null;
+}
+
 const purposeFor = (cfg: TicketConfig) => PURPOSE_PREFIX + cfg.eventKey;
 
 const clamp = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -86,26 +144,48 @@ const shortCode = (): string => {
 };
 
 // --- Öffentliche Aktionen ---------------------------------------------------
-async function publicConfig(_req: VercelRequest, res: VercelResponse) {
-  const cfg = await getConfig();
-  const used = await confirmedSeats(cfg.eventKey);
-  return res.json({
-    open: cfg.open, title: cfg.title, dateLabel: cfg.dateLabel, locationLabel: cfg.locationLabel,
-    capacity: cfg.capacity, remaining: Math.max(0, cfg.capacity - used), maxPerEmail: cfg.maxPerEmail,
-    note: cfg.note, hasDonation: !!cfg.donationUrl,
-    turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || '',
-  });
+async function publicConfig(req: VercelRequest, res: VercelResponse) {
+  const turnstileSiteKey = process.env.TURNSTILE_SITE_KEY || '';
+  const pub = async (cfg: TicketConfig) => {
+    const used = await confirmedSeats(cfg.eventKey);
+    return {
+      eventKey: cfg.eventKey, open: cfg.open, title: cfg.title, dateLabel: cfg.dateLabel,
+      locationLabel: cfg.locationLabel, capacity: cfg.capacity,
+      remaining: Math.max(0, cfg.capacity - used), maxPerEmail: cfg.maxPerEmail,
+      note: cfg.note, hasDonation: !!cfg.donationUrl,
+      accent: cfg.accent, accentDark: cfg.accentDark, consentText: cfg.consentText,
+    };
+  };
+
+  const key = String(req.query.key ?? '');
+  if (key) {
+    const cfg = await getEvent(key);
+    if (!cfg) return res.status(404).json({ error: 'Unbekannte Veranstaltung.' });
+    return res.json({ ...(await pub(cfg)), turnstileSiteKey });
+  }
+
+  // Ohne Schlüssel: alle offenen Events. Zusätzlich werden die Felder des
+  // ersten offenen Events flach mitgeliefert, damit ältere Aufrufer weiter
+  // funktionieren, solange noch eine alte Seite im Browser offen ist.
+  const { events } = await getArchive();
+  const open = events.filter((e) => e.open);
+  const list = await Promise.all(open.map(pub));
+  return res.json({ events: list, ...(list[0] ?? { open: false }), turnstileSiteKey });
 }
 
 async function requestCode(req: VercelRequest, res: VercelResponse) {
-  const cfg = await getConfig();
-  if (!cfg.open) return res.status(403).json({ error: 'Die Ticket-Anmeldung ist derzeit geschlossen.' });
   const b = req.body ?? {};
+  const cfg = await getEvent(clamp(b.eventKey, 60) || undefined);
+  if (!cfg) return res.status(404).json({ error: 'Unbekannte Veranstaltung.' });
+  if (!cfg.open) return res.status(403).json({ error: 'Die Ticket-Anmeldung ist derzeit geschlossen.' });
   if (typeof b.website === 'string' && b.website.trim() !== '') return res.json({ ok: true }); // Honeypot
   const name = clamp(b.name, 80);
   if (!name) return badRequest(res, 'Bitte deinen Namen angeben.');
   if (!isEmail(b.email)) return badRequest(res, 'Bitte eine gültige E-Mail-Adresse eingeben.');
   if (isDisposableEmail(b.email)) return badRequest(res, 'Bitte eine echte E-Mail-Adresse verwenden (keine Wegwerf-Adresse).');
+  // Einwilligung ist Pflicht. Gespeichert wird WANN und WELCHEM Text zugestimmt
+  // wurde – nur so lässt sich die Zustimmung später auch belegen.
+  if (b.consent !== true) return badRequest(res, 'Bitte die Einwilligung zur Datenspeicherung bestätigen.');
   const quantity = clampInt(b.quantity, 1, cfg.maxPerEmail);
   if (!quantity) return badRequest(res, `Bitte 1 bis ${cfg.maxPerEmail} Personen wählen.`);
   const ip = clientIp(req);
@@ -135,6 +215,8 @@ async function requestCode(req: VercelRequest, res: VercelResponse) {
     ON CONFLICT (event_key, email) DO UPDATE SET
       status = 'reserved', name = EXCLUDED.name, quantity = EXCLUDED.quantity,
       reserved_until = now() + ${`${RESERVE_MIN} minutes`}::interval, updated_at = now()`;
+  await sql`UPDATE event_tickets SET consent_at = now(), consent_text = ${cfg.consentText}
+    WHERE event_key = ${cfg.eventKey} AND email = ${email}`;
 
   const result = await issueCode(purposeFor(cfg), email, async (code) => {
     await sendBrandedMail({
@@ -142,9 +224,9 @@ async function requestCode(req: VercelRequest, res: VercelResponse) {
       subject: `Dein Ticket-Code: ${code}`,
       layout: {
         preheader: 'Bestätige deine E-Mail, um deine Tickets zu sichern.',
-        heading: 'E-Mail bestätigen', accent: ACCENT, accentDark: ACCENT_DARK,
+        heading: 'E-Mail bestätigen', accent: cfg.accent, accentDark: cfg.accentDark,
         intro: `Fast fertig! Gib diesen Code ein, um ${quantity} Ticket${quantity === 1 ? '' : 's'} für „${cfg.title}" (${cfg.dateLabel}) zu sichern:`,
-        bodyHtml: codeBlock(code, ACCENT),
+        bodyHtml: codeBlock(code, cfg.accent),
         footnote: `Der Code ist 15 Minuten gültig. Deine Reservierung läuft nach ${RESERVE_MIN} Minuten ab.`,
       },
       text: `Dein Ticket-Bestätigungs-Code: ${code}\nGültig für 15 Minuten.`,
@@ -155,8 +237,9 @@ async function requestCode(req: VercelRequest, res: VercelResponse) {
 }
 
 async function confirm(req: VercelRequest, res: VercelResponse) {
-  const cfg = await getConfig();
   const b = req.body ?? {};
+  const cfg = await getEvent(clamp(b.eventKey, 60) || undefined);
+  if (!cfg) return res.status(404).json({ error: 'Unbekannte Veranstaltung.' });
   if (!isEmail(b.email)) return badRequest(res, 'Bitte eine gültige E-Mail-Adresse eingeben.');
   const email = normEmail(b.email);
   const rows = await sql`SELECT id, status, quantity, code FROM event_tickets WHERE event_key = ${cfg.eventKey} AND email = ${email} LIMIT 1`;
@@ -192,7 +275,7 @@ async function confirm(req: VercelRequest, res: VercelResponse) {
       ? `<div style="margin-top:22px;padding-top:20px;border-top:1px solid #eef2f1;">
           <p style="font-family:Arial,Helvetica,sans-serif;color:#3a4441;font-size:14px;line-height:1.6;margin:0 0 12px;">
             Die Tickets sind <strong>kostenlos</strong>. Wenn du uns unterstützen magst, freuen wir uns über einen freiwilligen Beitrag – jeder Euro hilft der Liga. 💚</p>
-          ${mailButton('Freiwillig unterstützen', cfg.donationUrl, ACCENT)}
+          ${mailButton('Freiwillig unterstützen', cfg.donationUrl, cfg.accent)}
         </div>`
       : '';
     await sendBrandedMail({
@@ -200,9 +283,9 @@ async function confirm(req: VercelRequest, res: VercelResponse) {
       subject: `🎟️ Ticket bestätigt – ${cfg.title}`,
       layout: {
         preheader: `Dein Ticket-Code: ${code}`,
-        heading: 'Dein Ticket ist bestätigt! 🎟️', accent: ACCENT, accentDark: ACCENT_DARK,
+        heading: 'Dein Ticket ist bestätigt! 🎟️', accent: cfg.accent, accentDark: cfg.accentDark,
         intro: `Wir sehen uns beim „${cfg.title}" am ${cfg.dateLabel}${cfg.locationLabel ? ` · ${cfg.locationLabel}` : ''}. Zeig diesen Code am Einlass:`,
-        bodyHtml: `${codeBlock(code, ACCENT)}
+        bodyHtml: `${codeBlock(code, cfg.accent)}
           <p style="font-family:Arial,Helvetica,sans-serif;color:#3a4441;font-size:14px;line-height:1.6;margin:16px 0 0;text-align:center;">
             Gültig für <strong>${row.quantity} Person${row.quantity === 1 ? '' : 'en'}</strong></p>`,
         footnote: 'Bitte diese E-Mail am Einlass bereithalten.',
@@ -221,15 +304,29 @@ async function requireSuper(req: VercelRequest, res: VercelResponse): Promise<bo
   if (session.role !== 'superadmin') { res.status(403).json({ error: 'Keine Berechtigung.' }); return false; }
   return true;
 }
-async function adminList(_req: VercelRequest, res: VercelResponse) {
-  const cfg = await getConfig();
+async function adminList(req: VercelRequest, res: VercelResponse) {
+  const { events } = await getArchive();
+  const key = String(req.query.key ?? '') || events.find((e) => e.open)?.eventKey || events[0]?.eventKey || '';
+  const cfg = events.find((e) => e.eventKey === key) ?? null;
+
+  // Übersicht aller Events (für die Auswahl im Backend) inkl. verkaufter Plätze.
+  const overview = await Promise.all(
+    events.map(async (e) => ({
+      id: e.id, eventKey: e.eventKey, title: e.title, dateLabel: e.dateLabel,
+      open: e.open, capacity: e.capacity, soldSeats: await confirmedSeats(e.eventKey),
+    }))
+  );
+
+  if (!cfg) return res.json({ events, overview, config: null, rows: [], capacity: 0, soldSeats: 0, confirmedCount: 0, remaining: 0 });
+
   const rows = await sql`SELECT id, email, name, quantity, status, code, checked_in AS "checkedIn",
-      created_at AS "createdAt", verified_at AS "verifiedAt"
+      created_at AS "createdAt", verified_at AS "verifiedAt",
+      consent_at AS "consentAt", consent_text AS "consentText"
     FROM event_tickets WHERE event_key = ${cfg.eventKey} ORDER BY (status='confirmed') DESC, created_at DESC`;
   const confirmed = rows.filter((r) => r.status === 'confirmed');
-  const soldSeats = confirmed.reduce((s, r) => s + Number(r.quantity || 0), 0);
+  const soldSeats = confirmed.reduce((sum, r) => sum + Number(r.quantity || 0), 0);
   return res.json({
-    config: cfg, rows, capacity: cfg.capacity,
+    events, overview, config: cfg, rows, capacity: cfg.capacity,
     soldSeats, confirmedCount: confirmed.length, remaining: Math.max(0, cfg.capacity - soldSeats),
   });
 }
@@ -246,24 +343,44 @@ async function adminDelete(req: VercelRequest, res: VercelResponse) {
   await sql`DELETE FROM event_tickets WHERE id = ${id}`;
   return res.json({ ok: true });
 }
+
+// Speichert die GESAMTE Event-Liste. Der Event-Schlüssel darf nur gesetzt
+// werden, solange es keinen gibt – sonst würden bestehende Anmeldungen
+// unauffindbar, weil die Tickets in der Datenbank daran hängen.
 async function adminSaveConfig(req: VercelRequest, res: VercelResponse) {
-  const c = req.body?.config;
-  if (!c || typeof c !== 'object') return badRequest(res, 'Konfiguration fehlt.');
-  const prev = await getConfig();
-  const cfg: TicketConfig = {
-    open: c.open !== false,
-    eventKey: clamp(c.eventKey, 60) || prev.eventKey,
-    title: clamp(c.title, 80) || DEFAULT_CONFIG.title,
-    dateLabel: clamp(c.dateLabel, 80) || DEFAULT_CONFIG.dateLabel,
-    locationLabel: clamp(c.locationLabel, 120),
-    capacity: clampInt(c.capacity, 1, 100000) ?? DEFAULT_CONFIG.capacity,
-    maxPerEmail: clampInt(c.maxPerEmail, 1, 20) ?? DEFAULT_CONFIG.maxPerEmail,
-    note: clamp(c.note, 400),
-    donationUrl: normUrl(clamp(c.donationUrl, 400)),
-  };
-  await sql`INSERT INTO settings (key, value) VALUES ('event_tickets', ${JSON.stringify(cfg)}::jsonb)
+  const body = req.body ?? {};
+  const incoming: unknown = Array.isArray(body.events) ? body.events : body.config ? [body.config] : null;
+  if (!incoming || !Array.isArray(incoming)) return badRequest(res, 'Konfiguration fehlt.');
+
+  const prev = await getArchive();
+  const seen = new Set<string>();
+  const events: TicketConfig[] = [];
+  for (const raw of incoming as Partial<TicketConfig>[]) {
+    if (!raw || typeof raw !== 'object') continue;
+    const old = prev.events.find((e) => e.id === raw.id);
+    const eventKey = (old?.eventKey || clamp(raw.eventKey, 60)).trim();
+    if (!eventKey || seen.has(eventKey)) continue; // ohne Schlüssel / doppelt: überspringen
+    seen.add(eventKey);
+    events.push({
+      id: clamp(raw.id, 60) || randomUUID(),
+      open: raw.open === true,
+      eventKey,
+      title: clamp(raw.title, 80) || 'Hero League Event',
+      dateLabel: clamp(raw.dateLabel, 80),
+      locationLabel: clamp(raw.locationLabel, 120),
+      capacity: clampInt(raw.capacity, 1, 100000) ?? 50,
+      maxPerEmail: clampInt(raw.maxPerEmail, 1, 20) ?? 4,
+      note: clamp(raw.note, 400),
+      donationUrl: normUrl(clamp(raw.donationUrl, 400)),
+      accent: clamp(raw.accent, 20) || DEFAULT_ACCENT,
+      accentDark: clamp(raw.accentDark, 20) || DEFAULT_ACCENT_DARK,
+      consentText: clamp(raw.consentText, 2000) || DEFAULT_CONSENT,
+    });
+  }
+  const archive: TicketArchive = { events };
+  await sql`INSERT INTO settings (key, value) VALUES ('event_tickets', ${JSON.stringify(archive)}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`;
-  return res.json({ ok: true, config: cfg });
+  return res.json({ ok: true, events });
 }
 
 export async function eventTickets(req: VercelRequest, res: VercelResponse) {

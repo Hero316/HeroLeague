@@ -12,8 +12,8 @@ import {
 // (E-Mail-Bestätigung, begrenzte Plätze). Eigene Magenta/Gold-Welt des Events.
 
 type Step = 'form' | 'verify' | 'done';
-const ACCENT = '#E6238E';
-const GRAD = 'linear-gradient(135deg,#7a0f49,#E6238E)';
+const FALLBACK_ACCENT = '#E9C46A';
+const FALLBACK_DARK = '#6b4d12';
 
 function ErrorMsg({ children }: { children: React.ReactNode }) {
   return (
@@ -26,15 +26,15 @@ function ErrorMsg({ children }: { children: React.ReactNode }) {
 const inputCls =
   'w-full bg-white/[.05] border border-white/10 rounded-xl px-4 py-3 text-[15px] text-white placeholder-hl-faint focus:border-[#E6238E] focus:outline-none focus:ring-2 focus:ring-[#E6238E]/25 transition-colors';
 
-const PrimaryBtn = ({ children, disabled, onClick }: { children: React.ReactNode; disabled?: boolean; onClick?: () => void }) => (
+const PrimaryBtn = ({ children, disabled, onClick, grad }: { children: React.ReactNode; disabled?: boolean; onClick?: () => void; grad: string }) => (
   <button type="button" disabled={disabled} onClick={onClick}
     className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-[15px] font-display font-black uppercase tracking-wide text-white transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-[.99]"
-    style={{ background: GRAD, boxShadow: '0 12px 30px -14px rgba(230,35,142,.7)' }}>
+    style={{ background: grad, boxShadow: '0 12px 30px -14px rgba(0,0,0,.6)' }}>
     {children}
   </button>
 );
 
-export default function EventTickets({ onNavigate }: { onNavigate: (path: string) => void }) {
+export default function EventTickets({ onNavigate, eventKey }: { onNavigate: (path: string) => void; eventKey?: string }) {
   const [cfg, setCfg] = useState<TicketConfig | null>(null);
   const [step, setStep] = useState<Step>('form');
   const [err, setErr] = useState('');
@@ -44,14 +44,18 @@ export default function EventTickets({ onNavigate }: { onNavigate: (path: string
   const [email, setEmail] = useState('');
   const [qty, setQty] = useState(1);
   const [code, setCode] = useState('');
+  // Einwilligung zur Datenspeicherung – Pflicht, bevor Daten abgeschickt werden.
+  const [consent, setConsent] = useState(false);
+  const [consentOpen, setConsentOpen] = useState(false);
   const [devCode, setDevCode] = useState('');
   const [result, setResult] = useState<{ code: string; quantity: number; donationUrl: string } | null>(null);
   const honeypot = useRef('');
 
   const turnstile = useTurnstile(cfg?.turnstileSiteKey);
 
-  const load = () => fetchTicketConfig().then(setCfg).catch(() => setCfg(null));
-  useEffect(() => { load(); window.scrollTo(0, 0); }, []);
+  const load = () => fetchTicketConfig(eventKey).then(setCfg).catch(() => setCfg(null));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); window.scrollTo(0, 0); }, [eventKey]);
 
   // Vorwärts + Handy-Zurück: History-Eintrag je Schritt, damit „zurück" einen
   // Schritt zurückgeht statt die Seite zu verlassen.
@@ -62,6 +66,11 @@ export default function EventTickets({ onNavigate }: { onNavigate: (path: string
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
+  // Farben kommen pro Veranstaltung aus dem Backend.
+  const accent = cfg?.accent || FALLBACK_ACCENT;
+  const accentDark = cfg?.accentDark || FALLBACK_DARK;
+  const grad = `linear-gradient(135deg,${accentDark},${accent})`;
+
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const maxPer = cfg?.maxPerEmail ?? 4;
   const remaining = cfg?.remaining ?? 0;
@@ -69,10 +78,11 @@ export default function EventTickets({ onNavigate }: { onNavigate: (path: string
   const requestCode = async () => {
     if (!name.trim()) { setErr('Bitte deinen Namen angeben.'); return; }
     if (!emailValid) { setErr('Bitte eine gültige E-Mail-Adresse eingeben.'); return; }
+    if (!consent) { setErr('Bitte die Einwilligung zur Datenspeicherung bestätigen.'); return; }
     if (!turnstile.ready) { setErr('Bitte kurz die Bot-Prüfung abschließen.'); return; }
     setBusy(true); setErr('');
     try {
-      const r = await requestTicketCode({ name: name.trim(), email: email.trim(), quantity: qty, website: honeypot.current, turnstileToken: turnstile.token });
+      const r = await requestTicketCode({ eventKey: cfg?.eventKey, name: name.trim(), email: email.trim(), quantity: qty, consent, website: honeypot.current, turnstileToken: turnstile.token });
       if (r.devCode) setDevCode(r.devCode);
       turnstile.reset();
       goStep('verify'); setErr(''); window.scrollTo(0, 0);
@@ -84,7 +94,7 @@ export default function EventTickets({ onNavigate }: { onNavigate: (path: string
   const resend = async () => {
     setBusy(true); setErr('');
     try {
-      const r = await requestTicketCode({ name: name.trim(), email: email.trim(), quantity: qty, website: honeypot.current, turnstileToken: turnstile.token });
+      const r = await requestTicketCode({ eventKey: cfg?.eventKey, name: name.trim(), email: email.trim(), quantity: qty, consent, website: honeypot.current, turnstileToken: turnstile.token });
       if (r.devCode) setDevCode(r.devCode);
       turnstile.reset();
     } catch (e) { setErr(e instanceof Error ? e.message : 'Erneutes Senden fehlgeschlagen.'); }
@@ -95,7 +105,7 @@ export default function EventTickets({ onNavigate }: { onNavigate: (path: string
     if (!/^\d{6}$/.test(code.trim())) { setErr('Bitte den 6-stelligen Code eingeben.'); return; }
     setBusy(true); setErr('');
     try {
-      const r = await confirmTicket(email.trim(), code.trim());
+      const r = await confirmTicket(email.trim(), code.trim(), cfg?.eventKey);
       setResult({ code: r.code, quantity: r.quantity, donationUrl: r.donationUrl || '' });
       setStep('done'); window.scrollTo(0, 0);
     } catch (e) {
@@ -175,8 +185,45 @@ export default function EventTickets({ onNavigate }: { onNavigate: (path: string
                         <span className="text-[13px] text-hl-mute">Person{qty === 1 ? '' : 'en'}</span>
                       </div>
                     </div>
+                    {/* Einwilligung: Pflicht-Haken, Wortlaut aufklappbar zum Lesen.
+                        Gespeichert wird später, WANN und WELCHEM Text zugestimmt wurde. */}
+                    <div className="rounded-2xl border border-white/10 bg-white/[.03] px-4 py-3">
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={consent}
+                          onChange={(e) => setConsent(e.target.checked)}
+                          className="mt-0.5 w-5 h-5 shrink-0 cursor-pointer accent-current"
+                          style={{ accentColor: accent }}
+                        />
+                        <span className="text-[13px] text-hl-soft leading-snug">
+                          Ich stimme der Speicherung meiner Daten zu.{' '}
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); setConsentOpen((o) => !o); }}
+                            className="underline underline-offset-2 cursor-pointer"
+                            style={{ color: accent }}
+                          >
+                            {consentOpen ? 'Text ausblenden' : 'Text lesen'}
+                          </button>
+                        </span>
+                      </label>
+                      {consentOpen && (
+                        <div className="mt-3 pt-3 border-t border-white/10 text-[12px] text-hl-mute leading-relaxed whitespace-pre-line">
+                          {cfg.consentText}
+                          <button
+                            type="button"
+                            onClick={() => onNavigate('/datenschutz')}
+                            className="block mt-2 underline underline-offset-2 cursor-pointer"
+                            style={{ color: accent }}
+                          >
+                            Zur Datenschutzerklärung
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     {cfg.turnstileSiteKey && <div ref={turnstile.ref} className="flex justify-center" />}
-                    <PrimaryBtn onClick={requestCode} disabled={busy || !name.trim() || !emailValid}>
+                    <PrimaryBtn grad={grad} onClick={requestCode} disabled={busy || !name.trim() || !emailValid || !consent}>
                       {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <><TicketIcon className="w-4 h-4" /> Tickets sichern</>}
                     </PrimaryBtn>
                     <p className="text-[12px] text-hl-faint text-center">Kostenlos · wir schicken dir einen Bestätigungs-Code per E-Mail.</p>
@@ -198,7 +245,7 @@ export default function EventTickets({ onNavigate }: { onNavigate: (path: string
                 {err && <ErrorMsg>{err}</ErrorMsg>}
                 <input value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" autoComplete="one-time-code"
                   placeholder="••••••" className={`${inputCls} text-center text-[26px] tracking-[.5em] font-mono font-bold`} autoFocus />
-                <PrimaryBtn onClick={confirm} disabled={busy || code.length !== 6}>
+                <PrimaryBtn grad={grad} onClick={confirm} disabled={busy || code.length !== 6}>
                   {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <><CheckCircle2 className="w-4 h-4" /> Ticket bestätigen</>}
                 </PrimaryBtn>
                 <button onClick={resend} disabled={busy} className="w-full flex items-center justify-center gap-1.5 text-[13px] text-hl-mute hover:text-white transition-colors cursor-pointer">
@@ -209,7 +256,7 @@ export default function EventTickets({ onNavigate }: { onNavigate: (path: string
 
             {step === 'done' && result && (
               <motion.div initial={{ scale: .9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 20 }} className="text-center py-6 space-y-4">
-                <div className="w-20 h-20 rounded-full grid place-items-center mx-auto" style={{ background: GRAD, boxShadow: '0 20px 50px -18px rgba(230,35,142,.85)' }}>
+                <div className="w-20 h-20 rounded-full grid place-items-center mx-auto" style={{ background: grad, boxShadow: '0 20px 50px -18px rgba(230,35,142,.85)' }}>
                   <PartyPopper className="w-11 h-11 text-white" />
                 </div>
                 <h2 className="font-display font-black text-3xl uppercase tracking-tight text-white">Ticket bestätigt!</h2>
@@ -225,13 +272,13 @@ export default function EventTickets({ onNavigate }: { onNavigate: (path: string
                   <div className="hl-card rounded-2xl p-5 text-left">
                     <div className="flex items-center gap-2 text-white font-display font-black uppercase tracking-tight"><Heart className="w-4 h-4 text-[#ff7ac4]" /> Uns unterstützen?</div>
                     <p className="text-[13px] text-hl-mute mt-1 mb-3">Die Tickets sind kostenlos. Wenn du magst, freuen wir uns über einen freiwilligen Beitrag – jeder Euro hilft der Liga. 💚</p>
-                    <a href={result.donationUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-[14px] font-bold text-white cursor-pointer" style={{ background: GRAD }}>
+                    <a href={result.donationUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-[14px] font-bold text-white cursor-pointer" style={{ background: grad }}>
                       <Heart className="w-4 h-4" /> Freiwillig unterstützen
                     </a>
                   </div>
                 )}
 
-                <button onClick={() => onNavigate('/testspiel')} className="inline-flex items-center gap-2 rounded-2xl px-6 py-3 mt-1 text-[14px] font-display font-black uppercase tracking-wide text-white cursor-pointer" style={{ background: GRAD }}>
+                <button onClick={() => onNavigate('/testspiel')} className="inline-flex items-center gap-2 rounded-2xl px-6 py-3 mt-1 text-[14px] font-display font-black uppercase tracking-wide text-white cursor-pointer" style={{ background: grad }}>
                   Zum Testspieltag <ArrowRight className="w-4 h-4" />
                 </button>
               </motion.div>
