@@ -762,6 +762,9 @@ export interface AwardItem {
 }
 
 const AWARD_BORDER = 'rgba(232, 62, 140, .45)';
+// DECKEND, nicht durchscheinend: Nur so kann die Kachel die Kante der Blase
+// unter sich wirklich verdecken. Entspricht optisch 6% Magenta über #0A1415.
+const AWARD_BG = '#17171c';
 
 function AwardsBoard({
   items,
@@ -777,31 +780,7 @@ function AwardsBoard({
   playerClick: (teamId: string, playerName: string) => (() => void) | undefined;
 }) {
   const reduce = useReducedMotion();
-  const wrapRef = React.useRef<HTMLDivElement>(null);
-  const tileRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
-  const [seam, setSeam] = React.useState<{ left: number; width: number; top: number } | null>(null);
-
   const open = items.find((a) => a.id === openId) ?? null;
-
-  // Naht (Verbinder) unter der aktiven Kachel ausmessen – und bei jeder
-  // Größenänderung neu, damit er nie verrutscht.
-  React.useLayoutEffect(() => {
-    if (!openId) { setSeam(null); return; }
-    const measure = () => {
-      const wrap = wrapRef.current;
-      const tile = tileRefs.current[openId];
-      if (!wrap || !tile) return;
-      const w = wrap.getBoundingClientRect();
-      const t = tile.getBoundingClientRect();
-      // Unterkante der aktiven Kachel = genau dort sitzt die obere Kante des Feldes.
-      setSeam({ left: t.left - w.left, width: t.width, top: t.bottom - w.top });
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    if (wrapRef.current) ro.observe(wrapRef.current);
-    window.addEventListener('resize', measure);
-    return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
-  }, [openId, items.length]);
 
   // Bouncy, aber kurz. Feder, weil man mitten in der Bewegung eine andere
   // Kachel anklicken kann – sie trägt die Geschwindigkeit weiter.
@@ -810,7 +789,7 @@ function AwardsBoard({
     : ({ type: 'spring', duration: 0.5, bounce: 0.22 } as const);
 
   return (
-    <div ref={wrapRef} className="relative">
+    <div className="relative">
       {/* Kachelreihe – steht fest, egal was aufgeklappt ist. */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
         {items.map((a) => {
@@ -822,7 +801,6 @@ function AwardsBoard({
           return (
             <div
               key={a.id}
-              ref={(el) => { tileRefs.current[a.id] = el; }}
               onClick={expandable ? () => onToggle(a.id) : undefined}
               role={expandable ? 'button' : undefined}
               tabIndex={expandable ? 0 : undefined}
@@ -832,11 +810,24 @@ function AwardsBoard({
                   : undefined
               }
               aria-expanded={expandable ? isOpen : undefined}
-              className={`relative z-10 rounded-2xl border p-4 transition-colors duration-200 ${
+              className={`relative rounded-2xl border p-4 transition-colors duration-200 ${
                 expandable ? 'cursor-pointer' : ''
-              } ${isOpen ? 'rounded-b-none bg-[rgba(232,62,140,.06)]' : 'bg-[rgba(255,255,255,.02)] hover:bg-white/[.045] hover:border-white/25'}`}
-              style={isOpen ? { borderColor: AWARD_BORDER, borderBottomColor: 'transparent' } : { borderColor: 'rgba(255,255,255,.1)' }}
+              } ${isOpen ? 'z-20 rounded-b-none' : 'z-10 bg-[rgba(255,255,255,.02)] hover:bg-white/[.045] hover:border-white/25'}`}
+              style={
+                isOpen
+                  ? { borderColor: AWARD_BORDER, borderBottomColor: 'transparent', background: AWARD_BG }
+                  : { borderColor: 'rgba(255,255,255,.1)' }
+              }
             >
+              {/* Deckt die obere Kante der Blase exakt unter dieser Kachel ab,
+                  damit Kachel und Blase eine durchgehende Form ergeben. */}
+              {isOpen && (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -left-px -right-px"
+                  style={{ bottom: -2, height: 3, background: AWARD_BG }}
+                />
+              )}
               <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-hl-mute mb-3">
                 <span className="text-[#ff7ac4]">{a.icon}</span>
                 <span className="truncate">{a.label}</span>
@@ -877,67 +868,47 @@ function AwardsBoard({
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={grow}
-            style={{ borderColor: AWARD_BORDER, willChange: 'height' }}
-            className="relative overflow-hidden rounded-2xl border bg-[rgba(232,62,140,.06)]"
+            style={{ borderColor: AWARD_BORDER, background: AWARD_BG, willChange: 'height' }}
+            className="relative overflow-hidden rounded-2xl border"
           >
-            {/* Platz 1 steht schon oben in der Kachel – die Liste beginnt bei 2.
-                Spaltenweise gefüllt (links 2–6, rechts 7–10), damit man beim
-                Runterlesen einer Spalte eine lückenlose Reihenfolge sieht. */}
-            <div className="px-4 py-3 sm:px-5 grid gap-x-8 sm:grid-cols-2">
-              {(() => {
-                const list = open.rows.slice(1, 10);
-                const half = Math.ceil(list.length / 2);
-                return [list.slice(0, half), list.slice(half)].map((col, ci) => (
-                  <div key={ci}>
-                    {col.map((r, idx) => {
-                      const rank = (ci === 0 ? 0 : half) + idx + 2;
-                      const i = rank - 2;
-                      const team = crestFor(r.teamId);
-                      const go = playerClick(r.teamId, r.playerName);
-                      const stop = (e: React.MouseEvent) => e.stopPropagation();
-                      return (
-                        <motion.div
-                          key={`${r.teamId}-${r.playerName}`}
-                          initial={{ opacity: 0, transform: 'translateY(-6px)' }}
-                          animate={{ opacity: 1, transform: 'translateY(0px)' }}
-                          transition={reduce ? { duration: 0.15 } : { duration: 0.24, ease: [0.23, 1, 0.32, 1], delay: 0.06 + i * 0.022 }}
-                          className="flex items-center gap-3 py-2.5 text-sm border-t border-white/[.06] first:border-t-0"
-                        >
-                          <span className="w-6 shrink-0 text-center font-display font-black text-hl-mute tabular-nums">{rank}</span>
-                          {team && (
-                            <span className="shrink-0" onClick={stop}>
-                              <TeamCrest name={team.name} shortName={team.shortName} color={team.logoColor} logoUrl={team.logoUrl} size="sm" />
-                            </span>
-                          )}
-                          {go ? (
-                            <button onClick={(e) => { stop(e); go(); }} className="font-sans font-semibold text-white truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{r.playerName}</button>
-                          ) : (
-                            <span className="font-sans font-semibold text-white truncate min-w-0">{r.playerName}</span>
-                          )}
-                          <span className="text-xs text-hl-mute truncate min-w-0 hidden sm:inline">{r.teamId}</span>
-                          {r.note && <span className="ml-auto shrink-0 text-[11px] text-hl-faint tabular-nums">{r.note}</span>}
-                          <span className={`shrink-0 font-display font-black text-white tabular-nums ${r.note ? 'ml-3' : 'ml-auto'}`}>{r.value}</span>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-                ));
-              })()}
+            {/* Platz 1 steht schon oben in der Kachel – die Liste beginnt bei 2
+                und läuft untereinander durch, damit die Reihenfolge lückenlos ist. */}
+            <div className="px-4 py-2 sm:px-5">
+              {open.rows.slice(1, 10).map((r, i) => {
+                const rank = i + 2;
+                const team = crestFor(r.teamId);
+                const go = playerClick(r.teamId, r.playerName);
+                const stop = (e: React.MouseEvent) => e.stopPropagation();
+                return (
+                  <motion.div
+                    key={`${r.teamId}-${r.playerName}`}
+                    initial={{ opacity: 0, transform: 'translateY(-6px)' }}
+                    animate={{ opacity: 1, transform: 'translateY(0px)' }}
+                    transition={reduce ? { duration: 0.15 } : { duration: 0.24, ease: [0.23, 1, 0.32, 1], delay: 0.06 + i * 0.022 }}
+                    className="flex items-center gap-3 py-2.5 text-sm border-t border-white/[.06] first:border-t-0"
+                  >
+                    <span className="w-6 shrink-0 text-center font-display font-black text-hl-mute tabular-nums">{rank}</span>
+                    {team && (
+                      <span className="shrink-0" onClick={stop}>
+                        <TeamCrest name={team.name} shortName={team.shortName} color={team.logoColor} logoUrl={team.logoUrl} size="sm" />
+                      </span>
+                    )}
+                    {go ? (
+                      <button onClick={(e) => { stop(e); go(); }} className="font-sans font-semibold text-white truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{r.playerName}</button>
+                    ) : (
+                      <span className="font-sans font-semibold text-white truncate min-w-0">{r.playerName}</span>
+                    )}
+                    <span className="text-xs text-hl-mute truncate min-w-0 hidden sm:inline">{r.teamId}</span>
+                    {r.note && <span className="ml-auto shrink-0 text-[11px] text-hl-faint tabular-nums">{r.note}</span>}
+                    <span className={`shrink-0 font-display font-black text-white tabular-nums ${r.note ? 'ml-3' : 'ml-auto'}`}>{r.value}</span>
+                  </motion.div>
+                );
+              })}
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Verbinder: überdeckt die Kante des Feldes genau unter der aktiven Kachel,
-          damit Kachel und Blase eine durchgehende Form ergeben. Liegt bewusst
-          AUSSERHALB des Feldes – dessen overflow-hidden würde ihn abschneiden. */}
-      {open && seam && (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute z-20 bg-[rgba(232,62,140,.06)]"
-          style={{ left: seam.left + 1, width: Math.max(0, seam.width - 2), top: seam.top - 1, height: 2 }}
-        />
-      )}
     </div>
   );
 }
