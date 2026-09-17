@@ -119,11 +119,29 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
   const keyPassers = useMemo(() => keyPassLeaders(trackingRows, cfg), [trackingRows, cfg]);
   const hasLeaderboards =
     passers.length + dribblers.length + duellists.length + shooters.length + ballWinners.length + keyPassers.length > 0;
+  // Bester Scorer: Tore UND Vorlagen zusammengezählt.
+  const scorerPoints = useMemo(() => {
+    const key = (t: string, p: string) => `${t}::${p}`;
+    const map = new Map<string, { playerName: string; teamId: string; goals: number; assists: number }>();
+    for (const g of scorers) map.set(key(g.teamId, g.playerName), { playerName: g.playerName, teamId: g.teamId, goals: g.goals, assists: 0 });
+    for (const a of assists) {
+      const k = key(a.teamId, a.playerName);
+      const cur = map.get(k);
+      if (cur) cur.assists = a.assists;
+      else map.set(k, { playerName: a.playerName, teamId: a.teamId, goals: 0, assists: a.assists });
+    }
+    return [...map.values()]
+      .map((v) => ({ ...v, total: v.goals + v.assists }))
+      .filter((v) => v.total > 0)
+      .sort((a, b) => b.total - a.total || b.goals - a.goals || a.playerName.localeCompare(b.playerName));
+  }, [scorers, assists]);
+  const topScorer = scorerPoints[0] ?? null;
+
   const hasAwards = Boolean(scorerKing || assistKing || bestPlayer || glove);
 
   // Aufgeklappte Auszeichnung (Akkordeon: es ist immer höchstens eine offen).
-  const [openAward, setOpenAward] = useState<'scorer' | 'assist' | 'best' | 'keeper' | null>(null);
-  const toggleAward = (id: 'scorer' | 'assist' | 'best' | 'keeper') =>
+  const [openAward, setOpenAward] = useState<'scorer' | 'assist' | 'points' | 'best' | 'keeper' | null>(null);
+  const toggleAward = (id: 'scorer' | 'assist' | 'points' | 'best' | 'keeper') =>
     setOpenAward((cur) => (cur === id ? null : id));
 
   // Aktives Untermenü. Wird von außen über die URL gesteuert (tabProp/onSelectTab),
@@ -569,7 +587,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
               <Star className="w-5 h-5 text-[#E9C46A]" />
               <h2 className="font-display font-black text-xl uppercase tracking-tight text-white">Auszeichnungen</h2>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 hl-cascade">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 hl-cascade">
               {scorerKing && (
                 <StatTile
                   icon={<Crown className="w-4 h-4" />}
@@ -596,6 +614,26 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                   rows={assists.map((r) => ({ playerName: r.playerName, teamId: r.teamId, value: String(r.assists) }))}
                   open={openAward === 'assist'}
                   onToggle={() => toggleAward('assist')}
+                  crestFor={crestFor}
+                  playerClick={playerClick}
+                />
+              )}
+              {topScorer && (
+                <StatTile
+                  icon={<Target className="w-4 h-4" />}
+                  label="Bester Scorer"
+                  value={topScorer.playerName}
+                  sub={`${topScorer.total} Scorerpunkte · ${topScorer.goals} T / ${topScorer.assists} V`}
+                  crest={crestFor(topScorer.teamId)}
+                  onSelect={playerClick(topScorer.teamId, topScorer.playerName)}
+                  rows={scorerPoints.map((r) => ({
+                    playerName: r.playerName,
+                    teamId: r.teamId,
+                    value: `${r.total}`,
+                    note: `${r.goals} T / ${r.assists} V`,
+                  }))}
+                  open={openAward === 'points'}
+                  onToggle={() => toggleAward('points')}
                   crestFor={crestFor}
                   playerClick={playerClick}
                 />
@@ -632,31 +670,6 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
               )}
             </div>
 
-            {scorers.length > 1 && (
-              <div className="mt-4 rounded-2xl border border-white/10 bg-[rgba(255,255,255,.02)] overflow-hidden">
-                <div className="px-4 py-2 bg-white/[.03] border-b border-white/[.06] text-[10px] font-mono uppercase tracking-wider text-hl-mute">
-                  Torschützenliste
-                </div>
-                <div className="divide-y divide-white/[.06] hl-cascade-soft">
-                  {scorers.slice(0, 8).map((s, i) => (
-                    <div key={`${s.teamId}-${s.playerName}`} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                      <span className="w-5 shrink-0 text-center font-display font-black text-hl-mute">{i + 1}</span>
-                      {playerClick(s.teamId, s.playerName) ? (
-                        <button onClick={playerClick(s.teamId, s.playerName)} className="font-sans font-semibold text-white truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{s.playerName}</button>
-                      ) : (
-                        <span className="font-sans font-semibold text-white truncate min-w-0">{s.playerName}</span>
-                      )}
-                      {crestClick(s.teamId) ? (
-                        <button onClick={crestClick(s.teamId)} className="text-xs text-hl-mute truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{s.teamId}</button>
-                      ) : (
-                        <span className="text-xs text-hl-mute truncate min-w-0">{s.teamId}</span>
-                      )}
-                      <span className="ml-auto shrink-0 font-display font-black text-white">{s.goals}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
         </motion.div>
@@ -750,7 +763,7 @@ function StatTile({
   onSelect?: () => void;
   // Vollständige Rangliste dieser Kategorie. Ist sie gesetzt, lässt sich die
   // Kachel aufklappen und zeigt die Top 10 direkt an Ort und Stelle.
-  rows?: { playerName: string; teamId: string; value: string }[];
+  rows?: { playerName: string; teamId: string; value: string; note?: string }[];
   open?: boolean;
   onToggle?: () => void;
   crestFor?: (teamId: string) => Team | undefined;
@@ -760,7 +773,7 @@ function StatTile({
   return (
     <div
       className={`rounded-2xl border bg-[rgba(255,255,255,.02)] p-4 transition-colors ${
-        open ? 'border-hl-magenta/45 sm:col-span-2 lg:col-span-4' : 'border-white/10'
+        open ? 'border-hl-magenta/45 sm:col-span-full' : 'border-white/10'
       }`}
     >
       {/* Kopfzeile bleibt an ihrer Stelle – nur der Inhalt darunter wächst. */}
@@ -812,7 +825,8 @@ function StatTile({
                     <span className="font-sans font-semibold text-white truncate min-w-0">{r.playerName}</span>
                   )}
                   <span className="text-xs text-hl-mute truncate min-w-0 hidden sm:inline">{r.teamId}</span>
-                  <span className="ml-auto shrink-0 font-display font-black text-white tabular-nums">{r.value}</span>
+                  {r.note && <span className="ml-auto shrink-0 text-[11px] text-hl-faint tabular-nums">{r.note}</span>}
+                  <span className={`shrink-0 font-display font-black text-white tabular-nums ${r.note ? 'ml-3' : 'ml-auto'}`}>{r.value}</span>
                 </div>
               );
             })}
