@@ -1173,14 +1173,32 @@ export default function App() {
   // wird die erste offene Veranstaltung genommen.
   if (currentPath.startsWith('/tickets')) {
     const key = decodeURIComponent(currentPath.slice('/tickets'.length).replace(/^\/+/, '').replace(/\/+$/, ''));
-    return <EventTickets onNavigate={navigateTo} eventKey={key || undefined} />;
+    // Zurück führt dorthin, wo der Knopf steht: zum Testspieltag, wenn es DESSEN
+    // Anmeldung ist – sonst zur Startseite. Früher stand dort immer
+    // „Zum Testspieltag", auch bei der Opening Night.
+    const fromTestspiel = !!key && key === activeEvent?.ticketKey;
+    return (
+      <EventTickets
+        onNavigate={navigateTo}
+        eventKey={key || undefined}
+        backTo={fromTestspiel ? '/testspiel' : '/'}
+        backLabel={fromTestspiel ? 'Zum Testspieltag' : 'Zur Startseite'}
+      />
+    );
   }
 
   // ROUTE: /testspiel/tickets – die Anmeldung DIESES Testspieltags. Der Schlüssel
   // kommt aus dem Event selbst (`ticketKey`); es wird NICHT mehr geraten, sonst
   // landet man beim falschen Event (z.B. Opening Night). Muss VOR /testspiel stehen.
   if (currentPath.startsWith('/testspiel/tickets')) {
-    return <EventTickets onNavigate={navigateTo} eventKey={activeEvent?.ticketKey || undefined} />;
+    return (
+      <EventTickets
+        onNavigate={navigateTo}
+        eventKey={activeEvent?.ticketKey || undefined}
+        backTo="/testspiel"
+        backLabel="Zum Testspieltag"
+      />
+    );
   }
 
   // ROUTE: /testspiel/spiel/:id – öffentlicher Event-Spielbericht (Einzelnoten aus

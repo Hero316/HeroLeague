@@ -8,7 +8,8 @@ import {
   fetchTicketConfig, requestTicketCode, confirmTicket, useTurnstile, type TicketConfig,
 } from '../lib/register';
 
-// Öffentliche Zuschauer-Ticket-Anmeldung für den Testspieltag. Kostenlos & fair
+// Öffentliche Zuschauer-Ticket-Anmeldung für EINE Veranstaltung (Opening Night,
+// Testspieltag, Spieltag …) – welche, bestimmt `eventKey`. Kostenlos & fair
 // (E-Mail-Bestätigung, begrenzte Plätze). Eigene Magenta/Gold-Welt des Events.
 
 type Step = 'form' | 'verify' | 'done';
@@ -35,7 +36,17 @@ const PrimaryBtn = ({ children, disabled, onClick, grad }: { children: React.Rea
   </button>
 );
 
-export default function EventTickets({ onNavigate, eventKey }: { onNavigate: (path: string) => void; eventKey?: string }) {
+export default function EventTickets({
+  onNavigate,
+  eventKey,
+  backTo = '/',
+  backLabel = 'Zur Startseite',
+}: {
+  onNavigate: (path: string) => void;
+  eventKey?: string;
+  backTo?: string; // wohin der Zurück-Knopf führt (je nachdem, woher man kam)
+  backLabel?: string;
+}) {
   const [cfg, setCfg] = useState<TicketConfig | null>(null);
   const [step, setStep] = useState<Step>('form');
   const [err, setErr] = useState('');
@@ -138,13 +149,13 @@ export default function EventTickets({ onNavigate, eventKey }: { onNavigate: (pa
       style={{ ['--tk' as string]: accent } as React.CSSProperties}
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[440px]" style={{ background: `radial-gradient(120% 100% at 50% -10%, ${accent}3d, transparent 60%)` }} />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[440px]" style={{ background: 'radial-gradient(90% 80% at 100% 0%, rgba(233,196,106,.12), transparent 55%)' }} />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[440px]" style={{ background: `radial-gradient(90% 80% at 100% 0%, ${accentDark}59, transparent 55%)` }} />
 
       <header className="relative border-b border-white/[.07] backdrop-blur-xl" style={{ paddingTop: 'calc(env(safe-area-inset-top) + .75rem)' }}>
         <div className="max-w-3xl mx-auto px-4 pb-3 flex items-center justify-between">
-          <button onClick={() => (step === 'form' || step === 'done' ? onNavigate('/testspiel') : window.history.back())}
+          <button onClick={() => (step === 'form' || step === 'done' ? onNavigate(backTo) : window.history.back())}
             className="flex items-center gap-1.5 text-[13px] text-hl-mute hover:text-white transition-colors font-semibold cursor-pointer">
-            <ArrowLeft className="w-4 h-4" /> {step === 'form' || step === 'done' ? 'Zum Testspieltag' : 'Zurück'}
+            <ArrowLeft className="w-4 h-4" /> {step === 'form' || step === 'done' ? backLabel : 'Zurück'}
           </button>
           <img src="/assets/hero-league-logo.png" alt="Hero League" className="h-8 w-auto" />
         </div>
@@ -191,7 +202,7 @@ export default function EventTickets({ onNavigate, eventKey }: { onNavigate: (pa
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider mb-3" style={{ background: `${accent}29`, color: `${accent}`, border: `1px solid ${accent}59` }}>
                     <TicketIcon className="w-3.5 h-3.5" /> Zuschauer-Tickets
                   </div>
-                  <h1 className="font-display font-black text-3xl sm:text-4xl uppercase tracking-tight text-white leading-[1.05]">{cfg?.title || 'Testspieltag'}</h1>
+                  <h1 className="font-display font-black text-3xl sm:text-4xl uppercase tracking-tight text-white leading-[1.05]">{cfg?.title || 'Zuschauer-Tickets'}</h1>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2.5 text-[14px] text-hl-soft">
                     {cfg?.dateLabel && <span className="inline-flex items-center gap-1.5"><CalendarDays className="w-4 h-4" style={{ color: accent }} /> {cfg.dateLabel}</span>}
                     {cfg?.locationLabel && <span className="inline-flex items-center gap-1.5"><MapPin className="w-4 h-4" style={{ color: accent }} /> {cfg.locationLabel}</span>}
@@ -325,8 +336,8 @@ export default function EventTickets({ onNavigate, eventKey }: { onNavigate: (pa
                   </div>
                 )}
 
-                <button onClick={() => onNavigate('/testspiel')} className="inline-flex items-center gap-2 rounded-2xl px-6 py-3 mt-1 text-[14px] font-display font-black uppercase tracking-wide text-white cursor-pointer" style={{ background: grad }}>
-                  Zum Testspieltag <ArrowRight className="w-4 h-4" />
+                <button onClick={() => onNavigate(backTo)} className="inline-flex items-center gap-2 rounded-2xl px-6 py-3 mt-1 text-[14px] font-display font-black uppercase tracking-wide text-white cursor-pointer" style={{ background: grad }}>
+                  {backLabel} <ArrowRight className="w-4 h-4" />
                 </button>
               </motion.div>
             )}
