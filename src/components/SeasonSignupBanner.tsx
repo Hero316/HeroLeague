@@ -7,7 +7,9 @@ import { fetchSignupConfig, type SignupConfig } from '../lib/register';
 // springt nie nach – der Server-Abruf aktualisiert nur die Texte und blendet es
 // aus, falls die Anmeldung geschlossen ist (seltener Admin-Fall).
 const DEFAULT_CFG: SignupConfig = { open: true, seasonLabel: 'Season 2', startInfo: 'Start im März 2027', minSquad: 8, maxSquad: 12, note: '', turnstileSiteKey: '' };
-export default function SeasonSignupBanner({ onOpen }: { onOpen: () => void }) {
+// `inline` = das Banner sitzt mitten auf der Seite (zwischen Hero und
+// Highlights) statt als randlose Leiste ganz oben: abgerundet und mit Abstand.
+export default function SeasonSignupBanner({ onOpen, inline = false }: { onOpen: () => void; inline?: boolean }) {
   const [cfg, setCfg] = useState<SignupConfig>(DEFAULT_CFG);
   const [closed, setClosed] = useState(false);
   useEffect(() => { fetchSignupConfig().then((c) => { setCfg(c); setClosed(!c.open); }).catch(() => {}); }, []);
@@ -16,7 +18,9 @@ export default function SeasonSignupBanner({ onOpen }: { onOpen: () => void }) {
   return (
     <button
       onClick={onOpen}
-      className="group relative block w-full text-left overflow-hidden cursor-pointer border-b border-[rgba(47,91,255,.32)]"
+      className={`group relative block w-full text-left overflow-hidden cursor-pointer border-[rgba(47,91,255,.32)] ${
+        inline ? 'rounded-2xl border my-5 sm:my-7' : 'border-b'
+      }`}
       aria-label={`${cfg.seasonLabel} – Team anmelden`}
     >
       <div className="absolute inset-0 bg-[linear-gradient(100deg,#050a1c_0%,#0b1745_48%,#070f30_100%)]" />

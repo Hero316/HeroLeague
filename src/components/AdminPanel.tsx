@@ -499,6 +499,10 @@ export default function AdminPanel({
   const [countdownActive, setCountdownActive] = useState(false);
   const [countdownTarget, setCountdownTarget] = useState('2026-10-04T19:00');
   const [countdownTitle, setCountdownTitle] = useState('Till Season begins');
+  // Opening Night: goldene Farbwelt + Anmelde-Taste unter dem Timer.
+  const [countdownGold, setCountdownGold] = useState(false);
+  const [countdownCtaLabel, setCountdownCtaLabel] = useState('');
+  const [countdownCtaKey, setCountdownCtaKey] = useState('');
   const [countdownSuccess, setCountdownSuccess] = useState(false);
 
   // News-Laufband (Ticker unter der Navigation)
@@ -795,11 +799,14 @@ export default function AdminPanel({
 
   // Countdown laden
   useEffect(() => {
-    apiFetch<{ active: boolean; target: string; title: string }>('/api/twitch?resource=countdown')
+    apiFetch<{ active: boolean; target: string; title: string; gold?: boolean; ctaLabel?: string; ctaTicketKey?: string }>('/api/twitch?resource=countdown')
       .then((data) => {
         setCountdownActive(!!data.active);
         setCountdownTarget(data.target || '2026-10-04T19:00');
         setCountdownTitle(typeof data.title === 'string' ? data.title : 'Till Season begins');
+        setCountdownGold(!!data.gold);
+        setCountdownCtaLabel(typeof data.ctaLabel === 'string' ? data.ctaLabel : '');
+        setCountdownCtaKey(typeof data.ctaTicketKey === 'string' ? data.ctaTicketKey : '');
       })
       .catch(() => {
         /* noch nicht konfiguriert */
@@ -811,7 +818,10 @@ export default function AdminPanel({
     try {
       const saved = await apiFetch<{ active: boolean; target: string; title: string }>('/api/twitch?resource=countdown', {
         method: 'POST',
-        body: JSON.stringify({ active: nextActive, target: countdownTarget.trim(), title: countdownTitle.trim() }),
+        body: JSON.stringify({
+          active: nextActive, target: countdownTarget.trim(), title: countdownTitle.trim(),
+          gold: countdownGold, ctaLabel: countdownCtaLabel.trim(), ctaTicketKey: countdownCtaKey.trim(),
+        }),
       });
       setCountdownActive(!!saved.active);
       setCountdownTarget(saved.target || '2026-10-04T19:00');
@@ -2294,6 +2304,49 @@ export default function AdminPanel({
                   placeholder="z.B. Till Season begins"
                   className={inputClass}
                 />
+              </div>
+              <div className="sm:col-span-2 space-y-3 pt-1">
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={countdownGold}
+                    onChange={(e) => setCountdownGold(e.target.checked)}
+                    className="w-5 h-5 cursor-pointer"
+                    style={{ accentColor: '#E9C46A' }}
+                  />
+                  <span className="text-sm text-gray-200">Goldene Opening-Night-Farbwelt (statt Türkis)</span>
+                </label>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
+                      Taste unter dem Timer
+                    </label>
+                    <input
+                      type="text"
+                      value={countdownCtaLabel}
+                      onChange={(e) => setCountdownCtaLabel(e.target.value)}
+                      placeholder="z.B. Tickets sichern (leer = keine Taste)"
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
+                      Event-Schlüssel der Anmeldung
+                    </label>
+                    <input
+                      type="text"
+                      value={countdownCtaKey}
+                      onChange={(e) => setCountdownCtaKey(e.target.value)}
+                      placeholder="z.B. opening-night-2026"
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Die Taste führt direkt zur Zuschauer-Anmeldung dieser Veranstaltung. Den Event-Schlüssel findest du
+                  unter <b>Tickets</b>. Nach Ablauf des Timers verschwindet die Taste automatisch und der Countdown
+                  schaltet auf „Anpfiff".
+                </p>
               </div>
             </div>
 

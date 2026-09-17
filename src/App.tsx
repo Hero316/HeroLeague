@@ -1163,8 +1163,16 @@ export default function App() {
     return <TippspielPage matches={currentSeasonMatches} teams={leagueTeams} seasonLabel={currentSeasonName} onNavigate={navigateTo} />;
   }
 
-  // ROUTE: /testspiel/tickets – öffentliche Zuschauer-Ticket-Anmeldung. Muss VOR
-  // dem generischen /testspiel stehen.
+  // ROUTE: /tickets/<eventKey> – Zuschauer-Anmeldung einer bestimmten
+  // Veranstaltung (Opening Night, Testspieltag, Spieltag …). Ohne Schlüssel
+  // wird die erste offene Veranstaltung genommen.
+  if (currentPath.startsWith('/tickets')) {
+    const key = decodeURIComponent(currentPath.slice('/tickets'.length).replace(/^\/+/, '').replace(/\/+$/, ''));
+    return <EventTickets onNavigate={navigateTo} eventKey={key || undefined} />;
+  }
+
+  // ROUTE: /testspiel/tickets – alter Link auf die Testspieltag-Anmeldung. Muss
+  // VOR dem generischen /testspiel stehen.
   if (currentPath.startsWith('/testspiel/tickets')) {
     return <EventTickets onNavigate={navigateTo} />;
   }
@@ -1845,7 +1853,6 @@ export default function App() {
         albums={highlights.albums}
         onOpenAlbum={openHighlightsAlbum}
       />
-      {activeTab === 'home' && <SeasonSignupBanner onOpen={() => navigateTo('/anmeldung')} />}
       <LiveTicker news={news} />
 
       <div key={activeTab} className={`hl-fade ${mobileMode ? 'pb-36 lg:pb-0' : ''}`}>
@@ -1860,8 +1867,23 @@ export default function App() {
           />
           <StreamStage streams={streams} event={activeEvent} teams={visibleTeams} mode="home" onOpenFull={() => navigateTo('/streams')} />
           <LeagueStreamStage streams={leagueStreams} teams={leagueTeams} matches={currentSeasonMatches} mode="home" onOpenFull={() => navigateTo('/streams')} />
-          {countdown.active && <Countdown target={countdown.target} title={countdown.title} />}
+          {countdown.active && (
+            <Countdown
+              target={countdown.target}
+              title={countdown.title}
+              gold={countdown.gold}
+              ctaLabel={countdown.ctaLabel}
+              onCta={
+                countdown.ctaLabel
+                  ? () => navigateTo(countdown.ctaTicketKey ? `/tickets/${encodeURIComponent(countdown.ctaTicketKey)}` : '/tickets')
+                  : undefined
+              }
+            />
+          )}
           <Hero teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} />
+          {/* Season-2-Anmeldung sitzt bewusst zwischen Hero und Highlights,
+              damit sie beim Scrollen mitten im Blickfeld liegt. */}
+          <SeasonSignupBanner inline onOpen={() => navigateTo('/anmeldung')} />
           <HighlightsHome
             highlights={highlights}
             editMode={editMode && canEditHighlights}

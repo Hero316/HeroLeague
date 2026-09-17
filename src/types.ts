@@ -93,6 +93,9 @@ export interface CountdownConfig {
   active: boolean;
   target: string; // lokale datetime-local-Zeichenkette, z. B. "2026-10-04T19:00"
   title: string; // dezenter Text dahinter, z. B. "Till Season begins"
+  gold?: boolean; // goldene Opening-Night-Farbwelt statt Türkis
+  ctaLabel?: string; // Beschriftung der Taste unter dem Timer (leer = keine Taste)
+  ctaTicketKey?: string; // Event-Schlüssel der Ticket-Anmeldung, auf die die Taste führt
 }
 
 // News-Laufband unter der Navigation. Jede Nachricht ist ein eigener Eintrag

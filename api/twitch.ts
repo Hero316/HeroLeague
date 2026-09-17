@@ -263,10 +263,15 @@ const saveHero = requireStaff(async (req: VercelRequest, res: VercelResponse) =>
 const saveCountdown = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
   const b = req.body ?? {};
   const target = typeof b.target === 'string' && b.target.trim() ? b.target.trim().slice(0, 40) : DEFAULT_COUNTDOWN.target;
+  const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
   const cfg = {
     active: Boolean(b.active),
     target,
     title: typeof b.title === 'string' ? b.title.trim().slice(0, 60) : DEFAULT_COUNTDOWN.title,
+    // Opening Night: goldene Farbwelt + Anmelde-Taste direkt unter dem Timer.
+    gold: Boolean(b.gold),
+    ctaLabel: str(b.ctaLabel, 40),
+    ctaTicketKey: str(b.ctaTicketKey, 60),
   };
 
   await sql`
