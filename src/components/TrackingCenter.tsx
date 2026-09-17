@@ -1894,7 +1894,10 @@ function PlayerCard({
         />
       )}
       {/* Identität */}
-      <div className="lg:w-64 shrink-0 flex items-center gap-2.5 px-1">
+      {/* Breite wächst mit dem Namen mit (feste 16rem schnitten lange Namen ab,
+          egal wie groß der Monitor war) – nach oben gedeckelt, damit die
+          Aktions-Tasten genug Platz behalten. */}
+      <div className="lg:w-auto lg:min-w-[15rem] lg:max-w-[22rem] shrink-0 flex items-center gap-2.5 px-1">
         {/* Großes Foto – damit beim Tracken sofort klar ist, wer gemeint ist,
             ohne auf der Website nachschlagen zu müssen. */}
         <div className="relative w-20 h-20 sm:w-24 sm:h-24 shrink-0">
@@ -1971,7 +1974,7 @@ function PlayerCard({
           {typeof displayNumber === 'number' ? displayNumber : '–'}
         </button>
         <div className="min-w-0 flex-1">
-          <div className="font-display font-black text-[17px] truncate leading-tight">{row.playerName}</div>
+          <div className="font-display font-black text-[17px] leading-tight break-words">{row.playerName}</div>
           {tempNumber ? (
             <div className="text-[9px] text-hl-gold leading-tight mt-0.5">Tracking-Nummer (nicht im Kader)</div>
           ) : (
@@ -2195,7 +2198,7 @@ function AttendancePanel({
                           on ? 'border-white/10 bg-white/[.04]' : 'border-white/[.06] opacity-55'
                         }`}
                       >
-                        <button onClick={() => toggle(tid, p.name)} className="flex-1 min-w-0 text-left text-sm font-semibold truncate cursor-pointer">
+                        <button onClick={() => toggle(tid, p.name)} className="flex-1 min-w-0 text-left text-sm font-semibold break-words cursor-pointer">
                           <span className={on ? 'text-hl-green' : 'text-hl-faint'}>{on ? '✓' : '–'}</span> {p.name}
                         </button>
                         <button
