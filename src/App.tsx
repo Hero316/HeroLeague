@@ -1749,10 +1749,10 @@ export default function App() {
                       <AccordionSection
                         id="event-tickets"
                         category="anmeldungen"
-                        title="Testspieltag – Zuschauer-Tickets"
-                        subtitle="Anmeldungen, Einlass/Check-in, Plätze & Spenden-Link"
+                        title="Zuschauer-Tickets"
+                        subtitle="Opening Night, Testspieltage & Spieltage · Anmeldungen, Einlass, Plätze & Spenden-Link"
                         icon={<Ticket className="w-5 h-5" />}
-                        accent="#E6238E"
+                        accent="#E9C46A"
                       >
                         <TicketAdmin />
                       </AccordionSection>
