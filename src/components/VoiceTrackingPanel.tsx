@@ -584,8 +584,8 @@ export default function VoiceTrackingPanel({ matchId, homeName, awayName, homeTe
                           />
                           <span className="text-lg shrink-0 w-6 text-center">{meta?.icon ?? '•'}</span>
                           <div className="min-w-0 flex-1">
-                            <div className="font-bold text-sm truncate">{meta?.label ?? r.ev.action}</div>
-                            {r.ev.quote && <div className="text-[11px] text-hl-dim truncate italic">„{r.ev.quote}"</div>}
+                            <div className="font-bold text-sm truncate text-hl-text">{meta?.label ?? r.ev.action}</div>
+                            {r.ev.quote && <div className="text-[11px] text-hl-mute truncate italic">„{r.ev.quote}"</div>}
                           </div>
                           {/* Delta */}
                           <div className="flex items-center gap-1 shrink-0">
@@ -605,7 +605,21 @@ export default function VoiceTrackingPanel({ matchId, homeName, awayName, homeTe
                           </div>
                         </div>
                         {/* Zuordnung */}
-                        <div className="mt-2 flex items-center gap-2 pl-[26px]">
+                        <div className="mt-2 flex flex-wrap items-center gap-2 pl-[26px]">
+                          {/* Aktion nachträglich korrigieren – die KI hört z.B. „Pass auf X"
+                              und macht daraus einen Assist, obwohl es nur ein Pass war. */}
+                          <select
+                            value={r.ev.action}
+                            onChange={(e) => patchRow(r.id, { ev: { ...r.ev, action: e.target.value as ActionKey } })}
+                            title="Aktion ändern"
+                            className="hl-input rounded-lg px-2 py-1.5 text-[12px] font-semibold shrink-0 max-w-[48%] sm:max-w-none"
+                          >
+                            {ACTION_META.map((a) => (
+                              <option key={a.key} value={a.key}>
+                                {a.icon} {a.label}
+                              </option>
+                            ))}
+                          </select>
                           <select
                             value={r.sel}
                             onChange={(e) => {
@@ -622,7 +636,7 @@ export default function VoiceTrackingPanel({ matchId, homeName, awayName, homeTe
                               }
                               patchRow(r.id, { sel: v, include: v !== '' });
                             }}
-                            className={`hl-input rounded-lg px-2 py-1.5 text-[12px] font-semibold flex-1 min-w-0 ${
+                            className={`hl-input rounded-lg px-2 py-1.5 text-[12px] font-semibold flex-1 min-w-[140px] ${
                               unmatched ? 'border-hl-gold/50' : ''
                             }`}
                           >
