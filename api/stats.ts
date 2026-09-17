@@ -473,10 +473,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Nur die Spiel-IDs, damit die Übersicht im Tracking Center einen Balken
       // zeigen kann, ohne alle Zähler zu laden.
       if (resource === 'tracked-matches') {
+        // WICHTIG: Es reicht NICHT, dass Zeilen existieren. Beim Hinzufügen eines
+        // Spielers oder beim Korrigieren der Torwart-Rolle wird bereits eine Zeile
+        // mit lauter Nullen angelegt – solche Spiele galten fälschlich als
+        // getrackt. Gezählt wird nur, wo mindestens EINE Aktion erfasst ist.
         const rows = (await sql`
-          SELECT match_id AS "matchId", COUNT(*)::int AS n
-          FROM match_player_stats GROUP BY match_id`) as { matchId: string; n: number }[];
-        return res.json({ matchIds: rows.filter((r) => r.n > 0).map((r) => r.matchId) });
+          SELECT DISTINCT match_id AS "matchId"
+          FROM match_player_stats t
+          WHERE jsonb_typeof(t.counts) = 'object'
+            AND EXISTS (
+              SELECT 1 FROM jsonb_each_text(t.counts) AS kv(k, v)
+              WHERE v ~ '^[0-9]+$' AND v::int > 0
+            )`) as { matchId: string }[];
+        return res.json({ matchIds: rows.map((r) => r.matchId) });
       }
       if (resource === 'tracking-rules') {
         const rows = await sql`SELECT value FROM settings WHERE key = 'tracking_rules'`;
