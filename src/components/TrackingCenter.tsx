@@ -23,6 +23,7 @@ import {
   RotateCcw,
   IdCard,
   Camera,
+  Sparkles,
 } from 'lucide-react';
 import FifaCard from './FifaCard';
 import {
@@ -1340,6 +1341,20 @@ function MatchEditor({
   const [reassignTeam, setReassignTeam] = useState<string | null>(null);
 
   const [voiceOpen, setVoiceOpen] = useState(false);
+  // Pro-Modus: Für Geübte, die nur noch per Audio tracken. Die Aktions-Tasten
+  // verschwinden, dafür stehen Foto, Nummer und Name groß da. Die Wahl bleibt
+  // auf dem Gerät gemerkt, damit man sie nicht bei jedem Spiel neu trifft.
+  const [proMode, setProMode] = useState(false);
+  useEffect(() => {
+    try { setProMode(localStorage.getItem('hl-tracking-pro') === '1'); } catch { /* egal */ }
+  }, []);
+  const togglePro = () => {
+    setProMode((v) => {
+      const next = !v;
+      try { localStorage.setItem('hl-tracking-pro', next ? '1' : '0'); } catch { /* egal */ }
+      return next;
+    });
+  };
 
   // Kader beider Teams für das Voice-Panel (aus dem aktuellen Raster).
   const voicePlayers = useMemo<VoicePlayer[]>(() => {
@@ -1387,9 +1402,20 @@ function MatchEditor({
           <span className="truncate max-w-[26vw] sm:max-w-none">{away?.name ?? match.awayTeamId}</span>
         </h1>
         <button
+          onClick={togglePro}
+          title={proMode ? 'Zurück zum manuellen Modus (mit Tasten)' : 'Pro-Modus: nur Fotos, Nummern und Namen – ohne Tasten'}
+          className={`ml-auto px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer active:scale-95 transition border ${
+            proMode
+              ? 'bg-hl-gold/15 border-hl-gold/50 text-hl-gold'
+              : 'bg-white/5 border-white/10 text-hl-mute hover:text-hl-text'
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5" /> {proMode ? 'Pro-Modus an' : 'Pro-Modus'}
+        </button>
+        <button
           onClick={() => setVoiceOpen(true)}
           title="Spiel einreden – KI trägt die Aktionen ein"
-          className="ml-auto px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-white cursor-pointer active:scale-95 transition"
+          className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-white cursor-pointer active:scale-95 transition"
           style={{ background: 'linear-gradient(135deg,#E6238E,#b81570)' }}
         >
           <Mic className="w-3.5 h-3.5" /> Audio-Tracking
@@ -1432,7 +1458,7 @@ function MatchEditor({
                 Noch kein Spieler. Über <b>„+ Spieler"</b> unten kannst du jederzeit welche hinzufügen (auch mit Platzhalter-Namen).
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-2 hl-cascade-soft">
+              <div className={`grid gap-2 hl-cascade-soft ${proMode ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-1'}`}>
                 {list.map(({ k, r }, i) => (
                   <PlayerCard
                     key={k}
@@ -1447,6 +1473,7 @@ function MatchEditor({
                     displayImage={photoOverrides[k] || r.imageUrl}
                     tempPhoto={!!photoOverrides[k]}
                     onSetPhoto={(url) => setRowPhoto(k, url)}
+                    pro={proMode}
                   />
                 ))}
               </div>
@@ -1843,6 +1870,7 @@ function PlayerCard({
   displayImage,
   tempPhoto,
   onSetPhoto,
+  pro = false,
 }: {
   slot: number;
   row: EditRow;
@@ -1855,6 +1883,7 @@ function PlayerCard({
   displayImage?: string;
   tempPhoto?: boolean;
   onSetPhoto?: (dataUrl: string | null) => void;
+  pro?: boolean; // Pro-Modus: nur Foto, Nummer, Name – keine Aktions-Tasten
 }) {
   const [photoOpen, setPhotoOpen] = useState(false);
   const [photoEdit, setPhotoEdit] = useState(false);
@@ -1873,6 +1902,99 @@ function PlayerCard({
       ];
     return ACTION_META.filter((a) => a.group === g);
   };
+
+  // Pro-Modus: Der Tracker spricht nur noch ein und muss dabei Gesicht, Nummer
+  // und Name schnell erfassen – Aktions-Tasten wären hier nur im Weg.
+  if (pro) {
+    return (
+      <div className="hl-card p-2.5 min-w-0">
+        {photoOpen && displayImage && (
+          <PhotoLightbox url={displayImage} name={row.playerName} onClose={() => setPhotoOpen(false)} />
+        )}
+        {photoEdit && onSetPhoto && (
+          <PhotoEditDialog
+            current={displayImage}
+            original={row.imageUrl}
+            name={row.playerName}
+            hasOverride={!!tempPhoto}
+            onPick={(url) => { onSetPhoto(url); setPhotoEdit(false); }}
+            onReset={() => onSetPhoto(null)}
+            onClose={() => setPhotoEdit(false)}
+          />
+        )}
+        <div className="relative">
+          <div
+            className={`w-full aspect-square rounded-xl overflow-hidden bg-white/5 border grid place-items-center ${
+              tempPhoto ? 'border-hl-gold/60' : 'border-white/10'
+            }`}
+          >
+            {displayImage ? (
+              <button type="button" onClick={() => setPhotoOpen(true)} title="Foto groß ansehen" className="w-full h-full cursor-zoom-in">
+                <img src={displayImage} alt={row.playerName} loading="lazy" className="w-full h-full object-cover" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setPhotoEdit(true)}
+                title="Foto für dieses Spiel setzen"
+                className="w-full h-full cursor-pointer font-display font-black text-hl-faint text-4xl"
+              >
+                {row.playerName.trim().slice(0, 2).toUpperCase()}
+              </button>
+            )}
+          </div>
+          {/* Nummer groß über der Ecke – beim Einsprechen das Wichtigste. */}
+          <button
+            type="button"
+            onClick={() => {
+              if (!onSetNumber) return;
+              const cur = typeof displayNumber === 'number' ? String(displayNumber) : '';
+              const input = window.prompt(
+                'Trikotnummer nur fürs Tracking (Kader/Backend bleiben unverändert).\nLeer lassen = zurück zur Kadernummer:',
+                cur
+              );
+              if (input === null) return;
+              const t = input.trim();
+              if (!t) return onSetNumber(null);
+              const n = Number(t);
+              if (!Number.isFinite(n) || n < 0 || n > 999) return;
+              onSetNumber(Math.floor(n));
+            }}
+            title="Trikotnummer nur für dieses Spiel ändern"
+            className={`absolute -top-1 -left-1 min-w-[2.5rem] h-10 px-2 rounded-xl grid place-items-center font-black text-xl tabular-nums cursor-pointer border shadow-lg ${
+              tempNumber ? 'bg-hl-gold/25 border-hl-gold/70 text-hl-gold' : 'bg-black/75 border-white/25 text-white'
+            }`}
+          >
+            {typeof displayNumber === 'number' ? displayNumber : '–'}
+          </button>
+          {onSetPhoto && (
+            <button
+              type="button"
+              onClick={() => setPhotoEdit(true)}
+              title="Foto nur für dieses Spiel ändern"
+              aria-label="Foto nur für dieses Spiel ändern"
+              className={`absolute -bottom-1 -right-1 w-8 h-8 rounded-full grid place-items-center border cursor-pointer ${
+                tempPhoto ? 'bg-hl-gold/20 border-hl-gold/60 text-hl-gold' : 'bg-black/75 border-white/25 text-white'
+              }`}
+            >
+              <Camera className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        <div className="mt-2.5 font-display font-black text-lg leading-tight break-words">{row.playerName}</div>
+        <div className="mt-1 flex items-center gap-2">
+          <span
+            className="font-display font-black tabular-nums text-base leading-none"
+            style={{ color: noteColor(note, cfg) }}
+            title={`Rohscore ${score}`}
+          >
+            {note.toFixed(1)}
+          </span>
+          {isKeeper && <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-hl-gold/15 border border-hl-gold/40 text-hl-gold">Torwart</span>}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="hl-card p-2 flex flex-col lg:flex-row gap-2 min-w-0">
