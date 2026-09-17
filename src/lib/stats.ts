@@ -43,6 +43,12 @@ export function fetchDayStats(dayKey: string): Promise<{ rows: MatchPlayerStat[]
   return apiFetch(`/api/stats?resource=day&day=${encodeURIComponent(dayKey)}`);
 }
 
+// IDs aller Spiele, zu denen schon getrackte Daten vorliegen. Damit zeigt die
+// Übersicht je Spieltag/Testspiel, wie viele Spiele bereits erledigt sind.
+export function fetchTrackedMatchIds(): Promise<{ matchIds: string[] }> {
+  return apiFetch('/api/stats?resource=tracked-matches');
+}
+
 // Alle Zeilen eines einzelnen Spiels.
 export function fetchMatchStats(matchId: string): Promise<{ rows: MatchPlayerStat[] }> {
   return apiFetch(`/api/stats?resource=match&matchId=${encodeURIComponent(matchId)}`);

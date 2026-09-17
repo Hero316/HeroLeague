@@ -66,6 +66,7 @@ import {
   fetchScoring,
   saveScoring as apiSaveScoring,
   fetchDayStats,
+  fetchTrackedMatchIds,
   saveTally,
   tallyOp,
   publishDay,
@@ -161,6 +162,15 @@ export default function TrackingCenter({
 
   // Lokale Kopie des Event-Archivs, damit Anwesenheits-Änderungen sofort wirken
   // (der Elternteil pollt erst mit Verzögerung nach).
+  // Welche Spiele sind schon getrackt? Für den Fortschrittsbalken der Übersicht.
+  const [trackedIds, setTrackedIds] = useState<Set<string>>(new Set());
+  const reloadTracked = useCallback(() => {
+    fetchTrackedMatchIds()
+      .then((d) => setTrackedIds(new Set(d.matchIds ?? [])))
+      .catch(() => { /* Übersicht funktioniert auch ohne Balken */ });
+  }, []);
+  useEffect(() => { reloadTracked(); }, [reloadTracked]);
+
   const [eventArchiveLocal, setEventArchiveLocal] = useState(eventArchive);
   useEffect(() => setEventArchiveLocal(eventArchive), [eventArchive]);
   const events = useMemo(() => eventArchiveLocal?.events ?? [], [eventArchiveLocal]);
@@ -168,6 +178,11 @@ export default function TrackingCenter({
   // Auswahl: entweder ein Liga-Spieltag ODER ein Testspielabend.
   const [selectedMatchday, setSelectedMatchday] = useState<number | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  // Zurück auf der Übersicht: Fortschritt neu holen, damit der Balken sofort
+  // den gerade getrackten Spieltag widerspiegelt.
+  useEffect(() => {
+    if (selectedMatchday === null && selectedEventId === null) reloadTracked();
+  }, [selectedMatchday, selectedEventId, reloadTracked]);
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const dayActive = selectedMatchday !== null || selectedEventId !== null;
   const selectedEvent = events.find((e) => e.id === selectedEventId) ?? null;
@@ -899,6 +914,7 @@ export default function TrackingCenter({
               activeEventId={eventArchive?.activeId ?? null}
               onOpen={openMatchday}
               onOpenEvent={openEvent}
+              trackedIds={trackedIds}
             />
           )}
         </main>
@@ -931,6 +947,28 @@ export default function TrackingCenter({
 }
 
 // ---------------------------------------------------------------------------
+// Fortschrittsbalken „X von Y Spielen getrackt" für einen Spieltag/Abend.
+function TrackProgress({ done, total, color }: { done: number; total: number; color: string }) {
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const complete = total > 0 && done >= total;
+  return (
+    <div className="mt-3">
+      <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+        <div
+          className="h-full rounded-full transition-[width] duration-500"
+          style={{ width: `${pct}%`, background: complete ? 'var(--color-hl-green)' : color }}
+        />
+      </div>
+      <div className="mt-1.5 flex items-center justify-between text-[11px]">
+        <span className={complete ? 'text-hl-green font-bold' : 'text-hl-mute'}>
+          {complete ? 'Komplett getrackt' : `${done} von ${total} Spielen getrackt`}
+        </span>
+        <span className="text-hl-faint tabular-nums">{pct}%</span>
+      </div>
+    </div>
+  );
+}
+
 // Tag-Liste: Liga-Spieltage + Testspielabende
 // ---------------------------------------------------------------------------
 function DayList({
@@ -942,6 +980,7 @@ function DayList({
   activeEventId,
   onOpen,
   onOpenEvent,
+  trackedIds,
 }: {
   seasons: Season[];
   seasonId: string;
@@ -951,6 +990,7 @@ function DayList({
   activeEventId: string | null;
   onOpen: (md: number) => void;
   onOpenEvent: (ev: EventConfig) => void;
+  trackedIds: Set<string>;
 }) {
   return (
     <div className="hl-fade space-y-8">
@@ -986,6 +1026,11 @@ function DayList({
                   <span>{d.games.length} Spiele</span>
                   {d.date && <span className="text-hl-faint">{shortDate(d.date)}</span>}
                 </div>
+                <TrackProgress
+                  done={d.games.filter((g) => trackedIds.has(g.id)).length}
+                  total={d.games.length}
+                  color="var(--color-brand-accent)"
+                />
               </button>
             ))}
           </div>
@@ -1013,6 +1058,11 @@ function DayList({
                   <span>{ev.teams?.length ?? 0} Teams</span>
                   <span className="text-hl-faint">{ev.matches?.length ?? 0} Spiele</span>
                 </div>
+                <TrackProgress
+                  done={(ev.matches ?? []).filter((m) => trackedIds.has(m.id)).length}
+                  total={ev.matches?.length ?? 0}
+                  color="var(--color-hl-magenta)"
+                />
               </button>
             ))}
           </div>

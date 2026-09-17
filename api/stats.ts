@@ -469,6 +469,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           FROM match_player_stats WHERE match_id = ${matchId}`) as StatRow[];
         return res.json({ rows });
       }
+      // Fortschritt je Spieltag/Testspiel: welche Spiele haben schon Daten?
+      // Nur die Spiel-IDs, damit die Übersicht im Tracking Center einen Balken
+      // zeigen kann, ohne alle Zähler zu laden.
+      if (resource === 'tracked-matches') {
+        const rows = (await sql`
+          SELECT match_id AS "matchId", COUNT(*)::int AS n
+          FROM match_player_stats GROUP BY match_id`) as { matchId: string; n: number }[];
+        return res.json({ matchIds: rows.filter((r) => r.n > 0).map((r) => r.matchId) });
+      }
       if (resource === 'tracking-rules') {
         const rows = await sql`SELECT value FROM settings WHERE key = 'tracking_rules'`;
         const text = (rows[0]?.value as { text?: unknown })?.text;
