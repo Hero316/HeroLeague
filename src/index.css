@@ -1187,3 +1187,14 @@ button { -webkit-tap-highlight-color: transparent; }
 .hl-th-name, .hl-td-name { background: #10201d; }
 .hl-team .hl-th { background: rgba(16, 42, 38, 0.04); }
 .hl-team .hl-th-name, .hl-team .hl-td-name { background: #FFFFFF; }
+
+/* Audio-Tracking dockt in die Seite ein: Es klappt weich auf und schiebt die
+   Mannschaften nach unten, statt sie als Overlay zu verdecken. */
+@keyframes hlVoiceDock {
+  from { opacity: 0; transform: translateY(-10px); max-height: 0; }
+  to   { opacity: 1; transform: translateY(0); max-height: 68vh; }
+}
+.hl-voice-dock { animation: hlVoiceDock .32s cubic-bezier(.22,.8,.26,1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .hl-voice-dock { animation: none; }
+}

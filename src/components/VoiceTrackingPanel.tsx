@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Mic, Pause, Play, Square, X, Loader2, Check, Keyboard, Settings2, Trash2, AlertTriangle, Sparkles } from 'lucide-react';
 import type { ActionKey } from '../types';
 import { ACTION_META } from '../lib/scoring';
@@ -362,13 +361,15 @@ export default function VoiceTrackingPanel({ matchId, homeName, awayName, homeTe
   const patchRow = (id: number, patch: Partial<ReviewRow>) =>
     setReview((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
-  // Via Portal an <body>, damit das Overlay nicht in einem transformierten
-  // Vorfahren (z.B. .hl-fade) „gefangen" ist – sonst am PC verschoben/schwarz.
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      {/* Kein Schließen bei Klick daneben – sonst geht die erkannte Liste versehentlich verloren. */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <div className="relative w-full sm:max-w-3xl max-h-[92vh] sm:max-h-[88vh] flex flex-col bg-hl-card border border-white/12 rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl">
+  // BEWUSST kein Overlay mehr: Das Panel sitzt IN der Seite und schiebt die
+  // Mannschaften nach unten, statt sie zu verdecken. So bleiben Fotos, Nummern
+  // und Aktions-Tasten sichtbar, man kann während der Aufnahme weiterscrollen
+  // und die Aufnahme läuft ununterbrochen weiter (die Komponente bleibt montiert).
+  // Dadurch entfällt auch das frühere Portal – ohne position:fixed kann es nicht
+  // mehr in einem transformierten Vorfahren (.hl-fade) hängenbleiben.
+  return (
+    <div className="hl-voice-dock mb-4">
+      <div className="relative w-full max-h-[68vh] flex flex-col bg-hl-card border border-white/12 rounded-2xl overflow-hidden shadow-2xl">
         {/* Kopf */}
         <div className="flex items-center gap-3 px-4 sm:px-5 py-3.5 border-b border-white/10 shrink-0">
           <div className="w-8 h-8 rounded-xl grid place-items-center shrink-0" style={{ background: 'rgba(230,35,142,.16)', border: '1px solid rgba(230,35,142,.35)' }}>
@@ -690,8 +691,7 @@ export default function VoiceTrackingPanel({ matchId, homeName, awayName, homeTe
           </div>
         )}
       </div>
-    </div>,
-    document.body
+    </div>
   );
 }
 
