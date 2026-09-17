@@ -1458,7 +1458,7 @@ function MatchEditor({
                 Noch kein Spieler. Über <b>„+ Spieler"</b> unten kannst du jederzeit welche hinzufügen (auch mit Platzhalter-Namen).
               </div>
             ) : (
-              <div className={`grid gap-2 hl-cascade-soft ${proMode ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-1'}`}>
+              <div className={`grid gap-2 hl-cascade-soft ${proMode ? 'grid-cols-2 sm:grid-cols-3 2xl:grid-cols-4' : 'grid-cols-1'}`}>
                 {list.map(({ k, r }, i) => (
                   <PlayerCard
                     key={k}
@@ -1967,6 +1967,15 @@ function PlayerCard({
           >
             {typeof displayNumber === 'number' ? displayNumber : '–'}
           </button>
+          {/* Live-Note groß gegenüber der Nummer – sie bewegt sich beim Einsprechen
+              mit und ist die eigentliche Rückmeldung, dass etwas angekommen ist. */}
+          <div
+            className="absolute -top-1 -right-1 min-w-[2.75rem] h-10 px-2 rounded-xl grid place-items-center font-display font-black tabular-nums text-xl border shadow-lg bg-black/80"
+            style={{ color: noteColor(note, cfg), borderColor: noteColor(note, cfg) }}
+            title={`Note ${note.toFixed(2)} · Rohscore ${score}`}
+          >
+            {note.toFixed(1)}
+          </div>
           {onSetPhoto && (
             <button
               type="button"
@@ -1981,16 +1990,13 @@ function PlayerCard({
             </button>
           )}
         </div>
-        <div className="mt-2.5 font-display font-black text-lg leading-tight break-words">{row.playerName}</div>
-        <div className="mt-1 flex items-center gap-2">
-          <span
-            className="font-display font-black tabular-nums text-base leading-none"
-            style={{ color: noteColor(note, cfg) }}
-            title={`Rohscore ${score}`}
-          >
-            {note.toFixed(1)}
-          </span>
-          {isKeeper && <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-hl-gold/15 border border-hl-gold/40 text-hl-gold">Torwart</span>}
+        <div className="mt-2.5 flex items-start gap-1.5">
+          <span className="font-display font-black text-lg leading-tight break-words min-w-0 flex-1">{row.playerName}</span>
+          {isKeeper && (
+            <span className="shrink-0 mt-0.5 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider bg-hl-gold/15 border border-hl-gold/40 text-hl-gold">
+              TW
+            </span>
+          )}
         </div>
       </div>
     );
