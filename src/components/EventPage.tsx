@@ -6,6 +6,7 @@ import { TeamCrest, LiveBadge } from './ui';
 import { calculateEventStandings } from '../lib/eventStandings';
 import { scorerRanking, assistRanking, goldenGloveRanking, seasonRanking, passLeaders, dribbleLeaders, duelLeaders, shotLeaders, ballWinnerLeaders, keyPassLeaders, type StatLeader } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
+import { useMediaQuery } from '../lib/useMediaQuery';
 
 interface EventPageProps {
   event: EventConfig;
@@ -781,12 +782,130 @@ function AwardsBoard({
 }) {
   const reduce = useReducedMotion();
   const open = items.find((a) => a.id === openId) ?? null;
+  // Am Handy ein anderer AUFBAU (nicht nur andere Größen): einfache Liste zum
+  // Aufklappen statt Kachelreihe mit Blase darunter – die Blase braucht Breite,
+  // die am Handy schlicht nicht da ist.
+  const narrow = !useMediaQuery('(min-width: 640px)');
+
+  // Plätze 2–10 (Platz 1 steht schon im Kopf der Kachel).
+  const rowsOf = (a: AwardItem) =>
+    a.rows.slice(1, 10).map((r, i) => {
+      const rank = i + 2;
+      const team = crestFor(r.teamId);
+      const go = playerClick(r.teamId, r.playerName);
+      const stop = (e: React.MouseEvent) => e.stopPropagation();
+      return (
+        <motion.div
+          key={`${r.teamId}-${r.playerName}`}
+          initial={{ opacity: 0, transform: 'translateY(-6px)' }}
+          animate={{ opacity: 1, transform: 'translateY(0px)' }}
+          transition={reduce ? { duration: 0.15 } : { duration: 0.24, ease: [0.23, 1, 0.32, 1], delay: 0.06 + i * 0.022 }}
+          className="flex items-center gap-3 py-2.5 text-sm border-t border-white/[.06] first:border-t-0"
+        >
+          <span className="w-6 shrink-0 text-center font-display font-black text-hl-mute tabular-nums">{rank}</span>
+          {team && (
+            <span className="shrink-0" onClick={stop}>
+              <TeamCrest name={team.name} shortName={team.shortName} color={team.logoColor} logoUrl={team.logoUrl} size="sm" />
+            </span>
+          )}
+          {go ? (
+            <button onClick={(e) => { stop(e); go(); }} className="font-sans font-semibold text-white truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{r.playerName}</button>
+          ) : (
+            <span className="font-sans font-semibold text-white truncate min-w-0">{r.playerName}</span>
+          )}
+          <span className="text-xs text-hl-mute truncate min-w-0 hidden sm:inline">{r.teamId}</span>
+          {r.note && <span className="ml-auto shrink-0 text-[11px] text-hl-faint tabular-nums">{r.note}</span>}
+          <span className={`shrink-0 font-display font-black text-white tabular-nums ${r.note ? 'ml-3' : 'ml-auto'}`}>{r.value}</span>
+        </motion.div>
+      );
+    });
 
   // Bouncy, aber kurz. Feder, weil man mitten in der Bewegung eine andere
   // Kachel anklicken kann – sie trägt die Geschwindigkeit weiter.
   const grow = reduce
     ? { duration: 0 }
     : ({ type: 'spring', duration: 0.5, bounce: 0.22 } as const);
+
+  // --- Handy: schlichte Liste. Die geöffnete Karte wächst an Ort und Stelle,
+  // die darunter rücken im Fluss smooth nach – keine Blase, keine Nähte.
+  if (narrow) {
+    return (
+      <div className="space-y-2">
+        {items.map((a) => {
+          const isOpen = a.id === openId;
+          const crest = crestFor(a.teamId);
+          const go = playerClick(a.teamId, a.playerName);
+          const expandable = a.rows.length > 1;
+          const stop = (e: React.MouseEvent) => e.stopPropagation();
+          return (
+            <div
+              key={a.id}
+              onClick={expandable ? () => onToggle(a.id) : undefined}
+              role={expandable ? 'button' : undefined}
+              tabIndex={expandable ? 0 : undefined}
+              onKeyDown={
+                expandable
+                  ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(a.id); } }
+                  : undefined
+              }
+              aria-expanded={expandable ? isOpen : undefined}
+              className={`rounded-2xl border transition-colors duration-200 ${expandable ? 'cursor-pointer' : ''}`}
+              style={
+                isOpen
+                  ? { borderColor: AWARD_BORDER, background: AWARD_BG }
+                  : { borderColor: 'rgba(255,255,255,.1)', background: 'rgba(255,255,255,.02)' }
+              }
+            >
+              <div className="p-4">
+                <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-hl-mute mb-3">
+                  <span className="text-[#ff7ac4]">{a.icon}</span>
+                  <span className="truncate">{a.label}</span>
+                  {expandable && (
+                    <span
+                      className={`ml-auto w-7 h-7 shrink-0 grid place-items-center rounded-lg border transition-colors duration-200 ${
+                        isOpen ? 'border-hl-magenta/60 bg-hl-magenta/20 text-hl-magenta-soft' : 'border-white/15 bg-white/[.06] text-hl-soft'
+                      }`}
+                    >
+                      <ChevronDown className={`w-5 h-5 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} strokeWidth={2.75} />
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 min-w-0">
+                  {crest && (
+                    <span className="shrink-0" onClick={stop}>
+                      <TeamCrest name={crest.name} shortName={crest.shortName} color={crest.logoColor} logoUrl={crest.logoUrl} size="sm" onSelect={go} />
+                    </span>
+                  )}
+                  {go ? (
+                    <button onClick={(e) => { stop(e); go(); }} className="font-display font-black text-white text-lg leading-tight truncate min-w-0 cursor-pointer text-left">{a.playerName}</button>
+                  ) : (
+                    <span className="font-display font-black text-white text-lg leading-tight truncate min-w-0">{a.playerName}</span>
+                  )}
+                </div>
+                <div className="mt-1 text-xs font-sans text-hl-soft">{a.sub}</div>
+              </div>
+
+              <AnimatePresence initial={false}>
+                {isOpen && (
+                  <motion.div
+                    key="liste"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={grow}
+                    style={{ willChange: 'height' }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-4 pb-3 border-t border-white/[.08] pt-1">{rowsOf(a)}</div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <div className="relative">
@@ -875,40 +994,7 @@ function AwardsBoard({
             style={{ borderColor: AWARD_BORDER, background: AWARD_BG, marginTop: -1, willChange: 'height' }}
             className="relative overflow-hidden rounded-b-2xl border"
           >
-            {/* Platz 1 steht schon oben in der Kachel – die Liste beginnt bei 2
-                und läuft untereinander durch, damit die Reihenfolge lückenlos ist. */}
-            <div className="px-4 py-2 sm:px-5">
-              {open.rows.slice(1, 10).map((r, i) => {
-                const rank = i + 2;
-                const team = crestFor(r.teamId);
-                const go = playerClick(r.teamId, r.playerName);
-                const stop = (e: React.MouseEvent) => e.stopPropagation();
-                return (
-                  <motion.div
-                    key={`${r.teamId}-${r.playerName}`}
-                    initial={{ opacity: 0, transform: 'translateY(-6px)' }}
-                    animate={{ opacity: 1, transform: 'translateY(0px)' }}
-                    transition={reduce ? { duration: 0.15 } : { duration: 0.24, ease: [0.23, 1, 0.32, 1], delay: 0.06 + i * 0.022 }}
-                    className="flex items-center gap-3 py-2.5 text-sm border-t border-white/[.06] first:border-t-0"
-                  >
-                    <span className="w-6 shrink-0 text-center font-display font-black text-hl-mute tabular-nums">{rank}</span>
-                    {team && (
-                      <span className="shrink-0" onClick={stop}>
-                        <TeamCrest name={team.name} shortName={team.shortName} color={team.logoColor} logoUrl={team.logoUrl} size="sm" />
-                      </span>
-                    )}
-                    {go ? (
-                      <button onClick={(e) => { stop(e); go(); }} className="font-sans font-semibold text-white truncate min-w-0 hover:text-hl-magenta-soft transition-colors cursor-pointer text-left">{r.playerName}</button>
-                    ) : (
-                      <span className="font-sans font-semibold text-white truncate min-w-0">{r.playerName}</span>
-                    )}
-                    <span className="text-xs text-hl-mute truncate min-w-0 hidden sm:inline">{r.teamId}</span>
-                    {r.note && <span className="ml-auto shrink-0 text-[11px] text-hl-faint tabular-nums">{r.note}</span>}
-                    <span className={`shrink-0 font-display font-black text-white tabular-nums ${r.note ? 'ml-3' : 'ml-auto'}`}>{r.value}</span>
-                  </motion.div>
-                );
-              })}
-            </div>
+            <div className="px-4 py-2 sm:px-5">{rowsOf(open)}</div>
           </motion.div>
         )}
       </AnimatePresence>
