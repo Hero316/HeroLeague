@@ -40,6 +40,7 @@ import {
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
 import MentionText from './MentionText';
+import { useStickToBottom } from '../lib/useStickToBottom';
 import LinkChips from './LinkChips';
 import { VoiceMessage } from './AudioPlayer';
 import { useBackdropDismiss, ModalPortal, SegmentedControl, EmptyState } from './ui';
@@ -510,11 +511,9 @@ export function TicketDetail({
       void onFileChosen(file);
     }
   };
-  // Verlauf immer unten (neueste Kommentare) statt ewig scrollen.
-  useEffect(() => {
-    const el = verlaufRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [ticket?.comments?.length]);
+  // Verlauf immer unten (neueste Kommentare) statt ewig scrollen – inkl.
+  // Nachziehen, wenn Bilder erst später ihre echte Höhe melden.
+  const pinVerlauf = useStickToBottom(verlaufRef, [ticket?.comments], { resetKey: ticketId });
 
   const load = useCallback(async () => {
     try {
@@ -556,6 +555,8 @@ export function TicketDetail({
       setCommentBody('');
       setAttach(null);
       onChanged();
+      // Eigener Beitrag ⇒ IMMER ans Ende springen, egal wo man vorher stand.
+      requestAnimationFrame(pinVerlauf);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Beitrag konnte nicht gespeichert werden.');
     } finally {

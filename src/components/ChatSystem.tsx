@@ -65,6 +65,7 @@ import { HuddleBanner, HuddleCard, HuddlePrejoin, type HuddleController } from '
 import { fetchTeam, fetchTickets, fetchAllTasks, fetchTask, memberMap } from '../lib/collab';
 import { setChatUnread } from '../lib/badge';
 import { setUrlParam } from '../lib/urlState';
+import { useStickToBottom } from '../lib/useStickToBottom';
 import { useBackClose, goBackLayer } from '../lib/backStack';
 import { useBackdropDismiss, ModalPortal, EmptyState } from './ui';
 import { uploadFile, uploadImage } from '../lib/api';
@@ -1701,6 +1702,13 @@ function ThreadModal({
     load();
   }, [load]);
 
+  // Immer bei der NEUESTEN Antwort landen – beim Öffnen wie nach dem Senden.
+  // Kommt man aus der Suche/einer Erwähnung, gewinnt der gesuchte Treffer.
+  const pinBottom = useStickToBottom(bodyRef, [replies, loading], {
+    ready: !loading && !highlightId,
+    resetKey: parent.id,
+  });
+
   // Nach dem Laden zur gesuchten Antwort scrollen (falls aus der Suche geöffnet).
   useEffect(() => {
     if (loading || !highlightId || !bodyRef.current) return;
@@ -1738,51 +1746,59 @@ function ThreadModal({
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div ref={bodyRef} className="flex-1 overflow-y-auto p-3 hl-chat-bg">
-          <div className="pb-3 mb-1 border-b border-white/5">
-            <MessageRow
-              m={parentMsg}
-              mine={parentMsg.authorId === currentUserId}
-              showAuthor
-              colorSeed={conversationId}
-              highlight={glowId === parentMsg.id}
-              currentUserId={currentUserId}
-              mentionNames={names}
-              myName={myName}
-              onQuote={setQuote}
-              onJumpTo={jumpTo}
-              onOpenAttachment={onOpenAttachment}
-              onChanged={(um) => { setParentMsg((p) => ({ ...p, ...um })); onParentChanged?.(um); }}
-            />
-          </div>
-          {loading ? (
-            <div className="flex justify-center py-6 text-hl-mute">
-              <Loader2 className="w-5 h-5 animate-spin" />
+        <div ref={bodyRef} className="flex-1 overflow-y-auto hl-chat-bg">
+          {/* Die Ursprungsnachricht bleibt beim Scrollen oben kleben – so weiß
+              man auch weit unten im Thread noch, worum es überhaupt ging.
+              Sehr lange Ausgangsnachrichten werden gedeckelt und scrollen
+              innerhalb des Streifens, damit sie nicht das halbe Fenster fressen. */}
+          <div className="sticky top-0 z-20 hl-chat-solid border-b border-white/10 shadow-lg shadow-black/25">
+            <div className="max-h-[32vh] overflow-y-auto overflow-x-hidden px-3 pt-3 pb-2">
+              <MessageRow
+                m={parentMsg}
+                mine={parentMsg.authorId === currentUserId}
+                showAuthor
+                colorSeed={conversationId}
+                highlight={glowId === parentMsg.id}
+                currentUserId={currentUserId}
+                mentionNames={names}
+                myName={myName}
+                onQuote={setQuote}
+                onJumpTo={jumpTo}
+                onOpenAttachment={onOpenAttachment}
+                onChanged={(um) => { setParentMsg((p) => ({ ...p, ...um })); onParentChanged?.(um); }}
+              />
             </div>
-          ) : (
-            replies.map((r, i) => {
-              const prev = i > 0 ? replies[i - 1] : null;
-              const block = sameBlock(prev, r);
-              return (
-                <MessageRow
-                  key={r.id}
-                  m={r}
-                  mine={r.authorId === currentUserId}
-                  firstOfRun={!block}
-                  showAuthor={!block}
-                  colorSeed={conversationId}
-                  highlight={glowId === r.id}
-                  currentUserId={currentUserId}
-                  mentionNames={names}
-                  myName={myName}
-                  onQuote={setQuote}
-                  onJumpTo={jumpTo}
-                  onOpenAttachment={onOpenAttachment}
-                  onChanged={(um) => setReplies((prev) => prev.map((x) => (x.id === um.id ? { ...x, ...um } : x)))}
-                />
-              );
-            })
-          )}
+          </div>
+          <div className="px-3 pt-1 pb-3">
+            {loading ? (
+              <div className="flex justify-center py-6 text-hl-mute">
+                <Loader2 className="w-5 h-5 animate-spin" />
+              </div>
+            ) : (
+              replies.map((r, i) => {
+                const prev = i > 0 ? replies[i - 1] : null;
+                const block = sameBlock(prev, r);
+                return (
+                  <MessageRow
+                    key={r.id}
+                    m={r}
+                    mine={r.authorId === currentUserId}
+                    firstOfRun={!block}
+                    showAuthor={!block}
+                    colorSeed={conversationId}
+                    highlight={glowId === r.id}
+                    currentUserId={currentUserId}
+                    mentionNames={names}
+                    myName={myName}
+                    onQuote={setQuote}
+                    onJumpTo={jumpTo}
+                    onOpenAttachment={onOpenAttachment}
+                    onChanged={(um) => setReplies((prev) => prev.map((x) => (x.id === um.id ? { ...x, ...um } : x)))}
+                  />
+                );
+              })
+            )}
+          </div>
         </div>
         <Composer
           conversationId={conversationId}
@@ -1795,6 +1811,9 @@ function ThreadModal({
           onSent={(m) => {
             setReplies((prev) => [...prev, m]);
             onReplyAdded();
+            // Nach dem Absenden IMMER zur eigenen Nachricht ans Ende – egal, wo
+            // man vorher im Thread stand.
+            requestAnimationFrame(pinBottom);
           }}
         />
       </motion.div>
@@ -2373,6 +2392,17 @@ export default function ChatSystem({
     const el = e.currentTarget;
     atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
   };
+  // Bilder/Videos melden sich erst nach dem Laden mit ihrer echten Höhe – dann
+  // nochmal ans Ende ziehen, sonst hängt man knapp über der letzten Nachricht.
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const onLoad = () => {
+      if (atBottomRef.current) el.scrollTop = el.scrollHeight;
+    };
+    el.addEventListener('load', onLoad, true); // capture: load blubbert nicht
+    return () => el.removeEventListener('load', onLoad, true);
+  }, []);
 
   // --- Präsenz: Heartbeat senden + Tipp-Status ------------------------------
   const isTypingRef = useRef(false);
@@ -3032,6 +3062,12 @@ export default function ChatSystem({
               onSent={(m) => {
                 setMessages((prev) => [...prev, m]);
                 loadConvs();
+                // Eigene Nachricht ⇒ IMMER ans Ende springen, egal wo man stand.
+                atBottomRef.current = true;
+                requestAnimationFrame(() => {
+                  const el = listRef.current;
+                  if (el) el.scrollTop = el.scrollHeight;
+                });
               }}
             />
           </>

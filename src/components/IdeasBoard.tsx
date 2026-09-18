@@ -10,6 +10,7 @@ import { uploadFile } from '../lib/api';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
 import MentionText from './MentionText';
+import { useStickToBottom } from '../lib/useStickToBottom';
 import LinkChips from './LinkChips';
 import { VoiceMessage } from './AudioPlayer';
 import { useBackdropDismiss, ModalPortal, EmptyState } from './ui';
@@ -634,11 +635,9 @@ function IdeaDetail({
     load();
   }, [load]);
 
-  // Brainstorm-Verlauf immer unten (neueste zuerst sichtbar) – kein Endlos-Scrollen.
-  useEffect(() => {
-    const el = verlaufRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [comments.length]);
+  // Brainstorm-Verlauf immer unten (neueste zuerst sichtbar) – kein
+  // Endlos-Scrollen, und Bilder ziehen nach dem Laden nochmal nach.
+  const pinVerlauf = useStickToBottom(verlaufRef, [comments], { resetKey: ideaId });
 
   // Beim Schließen einen noch offenen Beitrag/Anhang NICHT verlieren – vorher senden.
   const closeSafely = async () => {
@@ -708,6 +707,8 @@ function IdeaDetail({
       setCommentBody('');
       setAttach(null);
       onChanged();
+      // Eigener Beitrag ⇒ IMMER ans Ende springen, egal wo man vorher stand.
+      requestAnimationFrame(pinVerlauf);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Beitrag konnte nicht gespeichert werden.');
     } finally {

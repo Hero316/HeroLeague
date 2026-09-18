@@ -946,6 +946,11 @@ button { -webkit-tap-highlight-color: transparent; }
   background-repeat: no-repeat, repeat, repeat;
 }
 
+/* Deckende Variante des Chat-Hintergrunds – für Streifen, die beim Scrollen
+   oben kleben bleiben (z.B. die Ursprungsnachricht eines Threads). Muss
+   undurchsichtig sein, sonst scheinen die Antworten durch. */
+.hl-chat-solid { background-color: #0a1210; }
+
 /* „Tippt gerade" – drei sanft wippende Punkte (wie WhatsApp). */
 @keyframes hlTyping {
   0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
@@ -1039,6 +1044,7 @@ button { -webkit-tap-highlight-color: transparent; }
   background-position: 0 0, 0 0, 13px 13px;
   background-repeat: no-repeat, repeat, repeat;
 }
+.hl-team .hl-chat-solid { background-color: #F1F6F5; }
 /* Karten & Modals hell. */
 .hl-team .hl-card {
   background: linear-gradient(180deg, #FFFFFF 0%, #FAFDFC 100%);

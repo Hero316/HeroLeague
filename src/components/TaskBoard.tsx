@@ -10,6 +10,7 @@ import { zoomOriginFromEvent, zoomModalProps, ZERO_ORIGIN, type ZoomOrigin } fro
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
 import MentionText from './MentionText';
+import { useStickToBottom } from '../lib/useStickToBottom';
 import LinkChips from './LinkChips';
 import { VoiceMessage } from './AudioPlayer';
 import { useBackdropDismiss, ModalPortal, SegmentedControl, EmptyState } from './ui';
@@ -743,11 +744,10 @@ export function TaskDetail({
   const docRef = useRef<HTMLInputElement>(null);
   const verlaufRef = useRef<HTMLDivElement>(null);
   const canDelete = isSuperadmin || task.createdBy === currentUserId;
-  // Verlauf immer unten (neueste Beiträge) – kein ewiges Scrollen bei langen Chats.
-  useEffect(() => {
-    const el = verlaufRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [comments.length]);
+  // Verlauf immer unten (neueste Beiträge) – kein ewiges Scrollen bei langen
+  // Chats. Der gemeinsame Helfer zieht auch nach, wenn Bilder erst später ihre
+  // echte Höhe melden, lässt einen aber in Ruhe, wenn man weiter oben liest.
+  const pinVerlauf = useStickToBottom(verlaufRef, [comments], { resetKey: task.id });
   const recorder = useTaskRecorder(async (file) => {
     setUploading(true);
     try {
@@ -854,6 +854,8 @@ export function TaskDetail({
       setCommentBody('');
       setAttach(null);
       onChanged();
+      // Eigener Beitrag ⇒ IMMER ans Ende springen, egal wo man vorher stand.
+      requestAnimationFrame(pinVerlauf);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Beitrag fehlgeschlagen.');
     } finally {
