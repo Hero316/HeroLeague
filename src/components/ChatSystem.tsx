@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { usePolling } from '../lib/usePolling';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useMotionValue, useTransform, useReducedMotion, animate as animateValue } from 'motion/react';
 import {
   MessageSquare,
   Plus,
@@ -33,6 +33,8 @@ import {
   Eye,
   EyeOff,
   Headphones,
+  CornerUpLeft,
+  AtSign,
 } from 'lucide-react';
 import type { Conversation, ChatMessage, TeamMember, Ticket, Task, UserStatus, Poll } from '../types';
 import { USER_STATUS } from '../types';
@@ -70,6 +72,7 @@ import Avatar from './Avatar';
 import { TicketDetail } from './TicketSystem';
 import { TaskDetail } from './TaskBoard';
 import { VoiceMessage } from './AudioPlayer';
+import MentionText from './MentionText';
 
 const inputClass =
   'w-full hl-surf-0 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-accent-light';
@@ -843,6 +846,9 @@ function Composer({
   mentionable,
   onTyping,
   onStopTyping,
+  quote,
+  onClearQuote,
+  currentUserId,
 }: {
   conversationId: string;
   parentId?: string | null;
@@ -851,6 +857,9 @@ function Composer({
   mentionable?: { id: string; name: string }[];
   onTyping?: () => void;
   onStopTyping?: () => void;
+  quote?: ChatMessage | null; // zitierte Nachricht (aus dem Wischen)
+  onClearQuote?: () => void;
+  currentUserId?: string;
 }) {
   const [body, setBody] = useState('');
   const [attach, setAttach] = useState<Attachment | null>(null);
@@ -885,8 +894,17 @@ function Composer({
     if (val.trim()) onTyping?.();
     else onStopTyping?.();
   };
-  const mentionMatches =
-    mentionQuery !== null ? (mentionable ?? []).filter((mm) => mm.name.toLowerCase().includes(mentionQuery)).slice(0, 6) : [];
+  // „@alle" steht als erster Eintrag in der Liste: eine Erwähnung, die JEDEN in
+  // dieser Unterhaltung benachrichtigt (Slack-„@channel"). Der Server löst den
+  // Namen genauso auf, egal ob getippt oder ausgewählt.
+  const mentionMatches = (() => {
+    if (mentionQuery === null) return [] as { id: string; name: string; all?: boolean }[];
+    const people: { id: string; name: string; all?: boolean }[] = (mentionable ?? [])
+      .filter((mm) => mm.name.toLowerCase().includes(mentionQuery))
+      .slice(0, 6);
+    const showAll = 'alle'.startsWith(mentionQuery) || mentionQuery === '';
+    return showAll ? [{ id: '@alle', name: 'alle', all: true }, ...people] : people;
+  })();
   const pickMention = (name: string) => {
     setBody((prev) => prev.replace(/@([^\s@]*)$/, `@${name} `));
     setMentionQuery(null);
@@ -950,9 +968,11 @@ function Composer({
         attachTitle: attach?.title ?? null,
         attachUrl: attach?.kind === 'media' ? attach.url : null,
         attachMime: attach?.kind === 'media' ? attach.mime : null,
+        quoteId: quote?.id ?? null,
       });
       setBody('');
       setAttach(null);
+      onClearQuote?.();
       onStopTyping?.();
       onSent(m);
     } catch (err) {
@@ -979,6 +999,33 @@ function Composer({
 
   return (
     <div className="border-t border-white/5 px-2.5 py-2.5" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.65rem)' }}>
+      {/* Zitat-Leiste: worauf die nächste Nachricht antwortet (wie bei WhatsApp). */}
+      <AnimatePresence initial={false}>
+        {quote && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="flex items-start gap-2 mb-2 pl-2 pr-1 py-1.5 rounded-lg bg-white/[.05] border-l-[3px] border-brand-accent-light">
+              <CornerUpLeft className="w-3.5 h-3.5 text-brand-accent-light shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-sans font-bold text-brand-accent-light truncate">
+                  {quote.authorId === currentUserId ? 'Du' : quote.authorName}
+                </div>
+                <div className="text-[12px] font-sans text-hl-dim truncate">
+                  {quote.body || attachPreview(quote.attachType) || 'Anhang'}
+                </div>
+              </div>
+              <button onClick={onClearQuote} title="Zitat entfernen" className="p-1 text-hl-mute hover:text-white cursor-pointer shrink-0">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {attach && <PendingAttach attach={attach} onRemove={() => setAttach(null)} />}
       {uploading && (
         <div className="flex items-center gap-1.5 mb-2 text-[11px] text-hl-faint font-mono">
@@ -999,8 +1046,15 @@ function Composer({
                 onClick={() => pickMention(mm.name)}
                 className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/[.05] cursor-pointer"
               >
-                <Avatar name={mm.name} size={22} />
-                <span className="text-sm text-hl-soft truncate">{mm.name}</span>
+                {mm.all ? (
+                  <span className="w-[22px] h-[22px] rounded-full bg-brand-accent-light/20 text-brand-accent-light grid place-items-center shrink-0">
+                    <AtSign className="w-3.5 h-3.5" />
+                  </span>
+                ) : (
+                  <Avatar name={mm.name} size={22} />
+                )}
+                <span className={`text-sm truncate ${mm.all ? 'text-brand-accent-light font-semibold' : 'text-hl-soft'}`}>{mm.name}</span>
+                {mm.all && <span className="ml-auto text-[10px] font-mono text-hl-faint shrink-0">alle hier</span>}
               </button>
             ))}
           </div>
@@ -1226,9 +1280,13 @@ function MessageRow({
   members,
   highlight = false,
   currentUserId,
+  mentionNames,
+  myName,
   onOpenThread,
   onOpenAttachment,
   onChanged,
+  onQuote,
+  onJumpTo,
 }: {
   m: ChatMessage;
   mine: boolean;
@@ -1240,9 +1298,13 @@ function MessageRow({
   members?: Map<string, TeamMember>;
   highlight?: boolean;
   currentUserId?: string;
+  mentionNames?: string[]; // Namen für die @-Hervorhebung im Text
+  myName?: string; // eigener Name (eigene Erwähnung leuchtet stärker)
   onOpenThread?: (m: ChatMessage) => void;
   onOpenAttachment?: (type: 'ticket' | 'task', id: string) => void;
   onChanged?: (m: ChatMessage) => void;
+  onQuote?: (m: ChatMessage) => void; // zur Seite wischen / „Zitieren"
+  onJumpTo?: (messageId: string) => void; // Klick aufs Zitat → zum Original
 }) {
   const name = displayName || m.authorName;
   const deleted = !!m.deletedAt;
@@ -1303,14 +1365,84 @@ function MessageRow({
   const tailClass = firstOfRun ? (mine ? 'hl-bubble-out rounded-tr-md' : 'hl-bubble-in rounded-tl-md') : '';
   const canEdit = mine && !deleted && !!m.body;
 
+  // --- Zur Seite wischen = zitieren (wie bei WhatsApp) ---------------------
+  // Nur echte Wischgesten nach rechts zählen; senkrechtes Scrollen und der
+  // lange Druck (Aktionsmenü) bleiben unberührt. Losgelassen jenseits der
+  // Schwelle ⇒ Zitat übernehmen, sonst federt die Blase zurück.
+  const reduce = useReducedMotion();
+  const dragX = useMotionValue(0);
+  const swipe = useRef<{ x: number; y: number; lock: 'none' | 'x' | 'y'; armed: boolean } | null>(null);
+  const SWIPE_MAX = 72;
+  const SWIPE_TRIGGER = 52;
+  const swipeOpacity = useTransform(dragX, [0, SWIPE_TRIGGER], [0, 1]);
+  const canQuote = !!onQuote && !deleted;
+  const springBack = () => {
+    if (reduce) { dragX.set(0); return; }
+    animateValue(dragX, 0, { type: 'spring', stiffness: 700, damping: 40 });
+  };
+  const swipeHandlers = canQuote
+    ? {
+        onPointerDown: (e: React.PointerEvent) => {
+          if (e.pointerType === 'mouse') return; // Maus zitiert über das Menü
+          swipe.current = { x: e.clientX, y: e.clientY, lock: 'none' as const, armed: false };
+        },
+        onPointerMove: (e: React.PointerEvent) => {
+          const st = swipe.current;
+          if (!st) return;
+          const dx = e.clientX - st.x;
+          const dy = e.clientY - st.y;
+          if (st.lock === 'none') {
+            if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+            st.lock = Math.abs(dx) > Math.abs(dy) * 1.4 && dx > 0 ? 'x' : 'y';
+          }
+          if (st.lock !== 'x') return;
+          // Gummiband: je weiter, desto zäher – und nie über SWIPE_MAX hinaus.
+          const next = Math.min(SWIPE_MAX, dx * 0.7);
+          st.armed = next >= SWIPE_TRIGGER;
+          dragX.set(next);
+        },
+        onPointerUp: () => {
+          const st = swipe.current;
+          swipe.current = null;
+          if (st?.armed) {
+            navigator.vibrate?.(12);
+            onQuote?.(m);
+          }
+          springBack();
+        },
+        onPointerCancel: () => { swipe.current = null; springBack(); },
+      }
+    : {};
+
+  // Erwähnungen im Text farbig hervorheben (siehe MentionText).
+  const names = mentionNames ?? (members ? [...members.values()].map((x) => x.name) : []);
+  const meName = myName ?? (currentUserId && members ? members.get(currentUserId)?.name : undefined);
+  const bodyClass = 'text-[15px] font-sans whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-snug';
+
   return (
-    <div data-mid={m.id} className={`flex gap-2 ${mine ? 'justify-end' : 'justify-start'} ${firstOfRun ? 'mt-2.5' : 'mt-0.5'}`}>
+    <div data-mid={m.id} className={`relative flex gap-2 ${mine ? 'justify-end' : 'justify-start'} ${firstOfRun ? 'mt-2.5' : 'mt-0.5'}`}>
       {!mine && <div className="w-7 shrink-0 self-end">{firstOfRun && <Avatar name={name} url={avatarUrl} size={28} />}</div>}
-      <div className={`max-w-[82%] min-w-0 ${mine ? 'items-end' : 'items-start'} flex flex-col`}>
+      <motion.div className={`relative max-w-[82%] min-w-0 ${mine ? 'items-end' : 'items-start'} flex flex-col`} style={{ x: dragX }}>
+        {/* Antwort-Pfeil: taucht beim Wischen links neben der Blase auf und
+            wandert mit ihr mit (wie bei WhatsApp). */}
+        {canQuote && (
+          <motion.span
+            aria-hidden
+            className="pointer-events-none absolute -left-8 top-1/2 -translate-y-1/2 text-brand-accent-light"
+            style={{ opacity: swipeOpacity }}
+          >
+            <CornerUpLeft className="w-5 h-5" />
+          </motion.span>
+        )}
         <div
           {...(deleted ? {} : longPress)}
-          className={`hl-bubble px-3 py-2 rounded-2xl ${mine ? 'text-white rounded-br-md shadow-md shadow-brand-accent-light/25' : 'hl-bubble-other text-hl-text rounded-bl-md shadow-sm shadow-black/5'} ${tailClass} ${highlight ? 'ring-2 ring-brand-accent-light ring-offset-1 ring-offset-[#F1F6F5]' : ''} ${deleted ? 'opacity-70' : 'select-none'}`}
-          style={mine ? { background: BUBBLE_MINE, ...(deleted ? {} : { color: '#fff' }) } : undefined}
+          {...swipeHandlers}
+          className={`hl-bubble px-3 py-2 rounded-2xl ${mine ? 'text-white rounded-br-md shadow-md shadow-brand-accent-light/25' : 'hl-bubble-other text-hl-text rounded-bl-md shadow-sm shadow-black/5'} ${tailClass} ${highlight ? 'hl-msg-glow' : ''} ${deleted ? 'opacity-70' : 'select-none'}`}
+          style={{
+            ...(mine ? { background: BUBBLE_MINE, ...(deleted ? {} : { color: '#fff' }) } : {}),
+            // Waagerechtes Wischen gehört uns (Zitieren), senkrechtes Scrollen dem Browser.
+            ...(canQuote ? { touchAction: 'pan-y' as const } : {}),
+          }}
         >
           {/* Gruppen: Name des Absenders in seiner (konstanten) Farbe */}
           {showAuthor && !mine && (
@@ -1318,13 +1450,32 @@ function MessageRow({
               {name}
             </div>
           )}
+          {/* Zitierte Nachricht (WhatsApp-Stil): Klick springt zum Original. */}
+          {!deleted && m.quote && (
+            <button
+              type="button"
+              onClick={() => onJumpTo?.(m.quote!.id)}
+              className={`w-full text-left mb-1 pl-2 pr-2 py-1 rounded-lg border-l-[3px] cursor-pointer ${
+                mine ? 'bg-black/15 border-white/70 hover:bg-black/25' : 'bg-white/[.06] border-brand-accent-light hover:bg-white/[.1]'
+              }`}
+            >
+              <div className={`text-[11px] font-sans font-bold truncate ${mine ? 'text-white/90' : 'text-brand-accent-light'}`}>
+                {m.quote.authorId === currentUserId ? 'Du' : m.quote.authorName}
+              </div>
+              <div className={`text-[12px] font-sans truncate ${mine ? 'text-white/70' : 'text-hl-dim'}`}>
+                {m.quote.deleted
+                  ? 'Nachricht gelöscht'
+                  : m.quote.body || attachPreview(m.quote.attachType) || 'Anhang'}
+              </div>
+            </button>
+          )}
           {deleted ? (
             <p className="text-[15px] font-sans italic text-white/60 flex items-center gap-1.5">
               <Trash2 className="w-3.5 h-3.5" /> Nachricht gelöscht
             </p>
           ) : (
             <>
-              {m.body && <p className="text-[15px] font-sans whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-snug">{m.body}</p>}
+              {m.body && <MentionText text={m.body} names={names} myName={meName} mine={mine} className={bodyClass} />}
               {m.attachType === 'poll' && m.poll ? (
                 <PollCard
                   poll={m.poll}
@@ -1377,7 +1528,7 @@ function MessageRow({
             {(m.unreadReplies ?? 0) > 0 && <span className="w-1.5 h-1.5 rounded-full bg-brand-accent-light animate-pulse" />}
           </button>
         )}
-      </div>
+      </motion.div>
 
       {/* Aktions-Menü (lange drücken / Rechtsklick) */}
       {menu && (
@@ -1411,7 +1562,8 @@ function MessageRow({
                   <Plus className="w-5 h-5" />
                 </button>
               </div>
-              {onOpenThread && <ActionBtn icon={MessageSquare} label="Antworten" onClick={() => { setMenu(false); onOpenThread(m); }} />}
+              {canQuote && <ActionBtn icon={CornerUpLeft} label="Zitieren" onClick={() => { setMenu(false); onQuote?.(m); }} />}
+              {onOpenThread && <ActionBtn icon={MessageSquare} label="Im Thread antworten" onClick={() => { setMenu(false); onOpenThread(m); }} />}
               {!!m.body && <ActionBtn icon={Copy} label="Kopieren" onClick={() => { setMenu(false); navigator.clipboard?.writeText(m.body).catch(() => {}); }} />}
               {canEdit && <ActionBtn icon={Pencil} label="Bearbeiten" onClick={() => { setMenu(false); setEditText(m.body); setEditing(true); }} />}
               {mine && !deleted && <ActionBtn icon={Trash2} label="Für alle löschen" tone="rose" onClick={doDelete} />}
@@ -1492,6 +1644,7 @@ function ThreadModal({
   parent,
   currentUserId,
   mentionable,
+  myName,
   highlightId,
   onClose,
   onReplyAdded,
@@ -1502,6 +1655,7 @@ function ThreadModal({
   parent: ChatMessage;
   currentUserId: string;
   mentionable?: { id: string; name: string }[];
+  myName?: string;
   highlightId?: string | null;
   onClose: () => void;
   onReplyAdded: () => void;
@@ -1513,6 +1667,28 @@ function ThreadModal({
   const [parentMsg, setParentMsg] = useState(parent);
   useEffect(() => setParentMsg(parent), [parent]);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const [quote, setQuote] = useState<ChatMessage | null>(null);
+  const names = useMemo(() => (mentionable ?? []).map((x) => x.name), [mentionable]);
+
+  // Leuchten: entweder von außen (Suchtreffer) oder durch Tippen auf ein Zitat.
+  // Wird nach gut zwei Sekunden wieder gelöscht, damit dieselbe Nachricht beim
+  // nächsten Sprung erneut aufleuchten kann.
+  const [glowId, setGlowId] = useState<string | null>(highlightId ?? null);
+  useEffect(() => setGlowId(highlightId ?? null), [highlightId]);
+  useEffect(() => {
+    if (!glowId) return;
+    const t = setTimeout(() => setGlowId(null), 2400);
+    return () => clearTimeout(t);
+  }, [glowId]);
+  const jumpTo = (id: string) => {
+    const c = bodyRef.current;
+    const el = c?.querySelector(`[data-mid="${id}"]`) as HTMLElement | null;
+    if (c && el) c.scrollTop += el.getBoundingClientRect().top - c.getBoundingClientRect().top - 80;
+    // Erst leeren, dann setzen – sonst startet die Leucht-Animation nicht neu,
+    // wenn man zweimal hintereinander auf dasselbe Zitat tippt.
+    setGlowId(null);
+    requestAnimationFrame(() => setGlowId(id));
+  };
 
   const load = useCallback(() => {
     fetchMessages(conversationId, parent.id)
@@ -1531,6 +1707,7 @@ function ThreadModal({
     const c = bodyRef.current;
     const el = c.querySelector(`[data-mid="${highlightId}"]`) as HTMLElement | null;
     if (el) c.scrollTop += el.getBoundingClientRect().top - c.getBoundingClientRect().top - 80;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, highlightId, replies]);
   const backdrop = useBackdropDismiss(onClose);
 
@@ -1568,8 +1745,12 @@ function ThreadModal({
               mine={parentMsg.authorId === currentUserId}
               showAuthor
               colorSeed={conversationId}
-              highlight={highlightId === parentMsg.id}
+              highlight={glowId === parentMsg.id}
               currentUserId={currentUserId}
+              mentionNames={names}
+              myName={myName}
+              onQuote={setQuote}
+              onJumpTo={jumpTo}
               onOpenAttachment={onOpenAttachment}
               onChanged={(um) => { setParentMsg((p) => ({ ...p, ...um })); onParentChanged?.(um); }}
             />
@@ -1590,8 +1771,12 @@ function ThreadModal({
                   firstOfRun={!block}
                   showAuthor={!block}
                   colorSeed={conversationId}
-                  highlight={highlightId === r.id}
+                  highlight={glowId === r.id}
                   currentUserId={currentUserId}
+                  mentionNames={names}
+                  myName={myName}
+                  onQuote={setQuote}
+                  onJumpTo={jumpTo}
                   onOpenAttachment={onOpenAttachment}
                   onChanged={(um) => setReplies((prev) => prev.map((x) => (x.id === um.id ? { ...x, ...um } : x)))}
                 />
@@ -1603,6 +1788,9 @@ function ThreadModal({
           conversationId={conversationId}
           parentId={parent.id}
           mentionable={mentionable}
+          currentUserId={currentUserId}
+          quote={quote}
+          onClearQuote={() => setQuote(null)}
           placeholder="Im Thread antworten…"
           onSent={(m) => {
             setReplies((prev) => [...prev, m]);
@@ -2006,6 +2194,18 @@ function ConvSearchResults({
 // --- Threads-Übersicht (ungelesene Threads, „damit nichts untergeht") -------
 function ThreadsOverview({ threads, onOpen, onClose }: { threads: ThreadSummary[]; onOpen: (t: ThreadSummary) => void; onClose: () => void }) {
   const backdrop = useBackdropDismiss(onClose);
+  // „Erwähnungen" wird eigens vom Server geholt – so finden sich auch ältere
+  // Threads wieder, die es nicht mehr in die 50 neuesten schaffen.
+  const [tab, setTab] = useState<'all' | 'mentions'>('all');
+  const [mentionList, setMentionList] = useState<ThreadSummary[] | null>(null);
+  useEffect(() => {
+    if (tab !== 'mentions' || mentionList) return;
+    fetchThreads('mentions')
+      .then(setMentionList)
+      .catch(() => setMentionList([]));
+  }, [tab, mentionList]);
+  const list = tab === 'mentions' ? (mentionList ?? []) : threads;
+  const loading = tab === 'mentions' && mentionList === null;
   return (
     <ModalPortal>
       <motion.div
@@ -2033,13 +2233,36 @@ function ThreadsOverview({ threads, onOpen, onClose }: { threads: ThreadSummary[
               <X className="w-5 h-5" />
             </button>
           </div>
+          {/* Umschalter: alle meine Threads vs. nur die, in denen ich markiert wurde */}
+          <div className="flex gap-1 p-2 border-b border-white/5 shrink-0">
+            {([
+              { key: 'all' as const, label: 'Alle', icon: MessageSquare },
+              { key: 'mentions' as const, label: 'Erwähnungen', icon: AtSign },
+            ]).map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-sans font-semibold cursor-pointer transition-colors ${
+                  tab === t.key ? 'bg-brand-accent-light/20 text-brand-accent-light' : 'text-hl-mute hover:text-white hover:bg-white/[.04]'
+                }`}
+              >
+                <t.icon className="w-3.5 h-3.5" /> {t.label}
+              </button>
+            ))}
+          </div>
           <div className="flex-1 overflow-y-auto">
-            {threads.length === 0 ? (
+            {loading ? (
+              <div className="flex justify-center py-10 text-hl-mute">
+                <Loader2 className="w-5 h-5 animate-spin" />
+              </div>
+            ) : list.length === 0 ? (
               <p className="text-center text-sm text-hl-mute font-sans py-10 px-4">
-                Noch keine Threads. Antworte auf eine Nachricht, dann findest du sie hier wieder.
+                {tab === 'mentions'
+                  ? 'Hier landen die Threads, in denen dich jemand mit @ markiert hat.'
+                  : 'Noch keine Threads. Antworte auf eine Nachricht, dann findest du sie hier wieder.'}
               </p>
             ) : (
-              threads.map((t) => (
+              list.map((t) => (
                 <button
                   key={t.parentId}
                   onClick={() => onOpen(t)}
@@ -2049,6 +2272,14 @@ function ThreadsOverview({ threads, onOpen, onClose }: { threads: ThreadSummary[
                     <span className="text-[12px] font-mono text-brand-accent-light truncate flex items-center gap-1">
                       {t.convKind === 'group' && <Hash className="w-3 h-3 shrink-0" />}
                       {t.source || 'Chat'}
+                      {t.mentionedMe && (
+                        <span
+                          title="Du wurdest hier markiert"
+                          className="shrink-0 inline-flex items-center gap-0.5 px-1 py-px rounded bg-brand-accent-light/20 text-brand-accent-light text-[10px] font-bold"
+                        >
+                          <AtSign className="w-2.5 h-2.5" /> du
+                        </span>
+                      )}
                     </span>
                     {t.unreadCount > 0 ? (
                       <span className="min-w-[18px] h-[18px] px-1 bg-brand-accent-light text-[#04120f] text-[10px] font-bold rounded-full flex items-center justify-center shrink-0">
@@ -2123,6 +2354,7 @@ export default function ChatSystem({
   // In-Chat-Suche (inkl. Threads): Ergebnisse + Hervorhebung des Fundorts.
   const [convHits, setConvHits] = useState<ChatSearchHit[]>([]);
   const [highlightId, setHighlightId] = useState<string | null>(null); // im Haupt-Verlauf
+  const [quote, setQuote] = useState<ChatMessage | null>(null); // zitierte Nachricht (Wischen)
   const [threadHighlightId, setThreadHighlightId] = useState<string | null>(null); // im Thread
   // Aus einem (globalen) Suchtreffer heraus einen Thread öffnen, sobald die
   // Unterhaltung geladen ist.
@@ -2210,6 +2442,7 @@ export default function ChatSystem({
   // Offene Unterhaltung in der URL halten (?c=…), damit ein Reload dort bleibt.
   useEffect(() => {
     setUrlParam('c', activeId);
+    setQuote(null); // ein Zitat gehört immer zur Unterhaltung, in der es entstand
   }, [activeId]);
   // Offenen Thread in der URL halten (?thread=…).
   useEffect(() => {
@@ -2385,6 +2618,15 @@ export default function ChatSystem({
     () => (active ? active.members.map((mm) => ({ id: mm.userId, name: members.get(mm.userId)?.name ?? mm.userName })) : []),
     [active, members]
   );
+  const mentionNames = useMemo(() => activeMentionable.map((x) => x.name), [activeMentionable]);
+  const myName = members.get(currentUserId)?.name;
+  // Tippen auf ein Zitat: zur zitierten Nachricht springen und sie kurz
+  // aufleuchten lassen. Erst leeren, dann setzen, damit die Animation auch beim
+  // zweiten Tippen auf dasselbe Zitat wieder von vorn läuft.
+  const jumpToMessage = (id: string) => {
+    setHighlightId(null);
+    requestAnimationFrame(() => setHighlightId(id));
+  };
   const convSearching = convSearch.trim().length >= 2;
   const openConversation = (id: string) => {
     setActiveId(id);
@@ -2477,6 +2719,9 @@ export default function ChatSystem({
             selbst geschrieben hatte, nur noch durch Hochscrollen wiederzufinden. */}
         {threadList.length > 0 && (() => {
           const unread = threadList.reduce((sum, t) => sum + t.unreadCount, 0);
+          // Threads mit neuen Antworten, in denen ich namentlich markiert wurde –
+          // die sollen als Erstes ins Auge fallen (Slack-Logik).
+          const mentions = threadList.filter((t) => t.mentionedMe && t.unreadCount > 0).length;
           return (
             <div className="px-2 pt-2">
               <button
@@ -2498,10 +2743,15 @@ export default function ChatSystem({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-sans font-semibold text-white">Threads</div>
-                  <div className={`text-[12px] font-sans ${unread > 0 ? 'text-brand-accent-light' : 'text-hl-mute'}`}>
+                  <div className={`text-[12px] font-sans flex items-center gap-1.5 ${unread > 0 ? 'text-brand-accent-light' : 'text-hl-mute'}`}>
                     {unread > 0
                       ? `${unread} neue Antwort${unread === 1 ? '' : 'en'}`
                       : `${threadList.length} Thread${threadList.length === 1 ? '' : 's'}`}
+                    {mentions > 0 && (
+                      <span className="inline-flex items-center gap-0.5 px-1 py-px rounded bg-brand-accent-light/25 text-brand-accent-light text-[10px] font-bold shrink-0">
+                        <AtSign className="w-2.5 h-2.5" /> {mentions}
+                      </span>
+                    )}
                   </div>
                 </div>
                 {unread > 0 && (
@@ -2753,6 +3003,10 @@ export default function ChatSystem({
                           members={members}
                           highlight={highlightId === m.id}
                           currentUserId={currentUserId}
+                          mentionNames={mentionNames}
+                          myName={myName}
+                          onQuote={setQuote}
+                          onJumpTo={jumpToMessage}
                           onOpenThread={setThread}
                           onOpenAttachment={openAttachment}
                           onChanged={(um) => setMessages((prev) => prev.map((x) => (x.id === um.id ? { ...x, ...um } : x)))}
@@ -2769,6 +3023,9 @@ export default function ChatSystem({
             <Composer
               conversationId={active.id}
               mentionable={activeMentionable}
+              currentUserId={currentUserId}
+              quote={quote}
+              onClearQuote={() => setQuote(null)}
               placeholder="Nachricht schreiben…"
               onTyping={onTyping}
               onStopTyping={onStopTyping}
@@ -2803,6 +3060,7 @@ export default function ChatSystem({
             parent={thread}
             currentUserId={currentUserId}
             mentionable={activeMentionable}
+            myName={myName}
             highlightId={threadHighlightId}
             onClose={goBackLayer}
             onOpenAttachment={openAttachment}

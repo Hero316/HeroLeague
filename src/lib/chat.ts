@@ -32,6 +32,7 @@ export const sendMessage = (input: {
   attachTitle?: string | null;
   attachUrl?: string | null;
   attachMime?: string | null;
+  quoteId?: string | null; // zitierte Nachricht (zur Seite wischen)
 }) => apiFetch<ChatMessage>('/api/chat?resource=messages', { method: 'POST', body: JSON.stringify(input) });
 
 // Abstimmung (Umfrage) erstellen. Antwort = die neue (Träger-)Nachricht inkl. poll.
@@ -129,8 +130,11 @@ export interface ThreadSummary {
   unreadCount: number;
   lastReplyAt: string | null;
   lastReplyAuthor: string | null;
+  mentionedMe: boolean; // ich wurde in diesem Thread namentlich markiert
 }
-export const fetchThreads = () => apiFetch<ThreadSummary[]>('/api/chat?resource=threads');
+// filter='mentions' ⇒ nur Threads, in denen ich markiert wurde.
+export const fetchThreads = (filter?: 'mentions') =>
+  apiFetch<ThreadSummary[]>('/api/chat?resource=threads' + (filter ? `&filter=${filter}` : ''));
 
 // Anzeigename einer Unterhaltung: Gruppen tragen ihren Titel, DMs den Namen
 // des jeweils ANDEREN Teilnehmers.

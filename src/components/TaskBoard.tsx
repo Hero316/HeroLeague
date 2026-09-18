@@ -9,6 +9,7 @@ import { useBackClose } from '../lib/backStack';
 import { zoomOriginFromEvent, zoomModalProps, ZERO_ORIGIN, type ZoomOrigin } from '../lib/zoom';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
+import MentionText from './MentionText';
 import LinkChips from './LinkChips';
 import { VoiceMessage } from './AudioPlayer';
 import { useBackdropDismiss, ModalPortal, SegmentedControl, EmptyState } from './ui';
@@ -505,6 +506,8 @@ function TaskCommentRow({
   currentUserId,
   avatarUrl,
   colorSeed,
+  mentionNames,
+  myName,
   onChanged,
 }: {
   c: TaskComment;
@@ -512,6 +515,8 @@ function TaskCommentRow({
   currentUserId: string;
   avatarUrl?: string;
   colorSeed: string;
+  mentionNames?: string[]; // Namen für die @-Hervorhebung
+  myName?: string; // eigener Name (eigene Erwähnung leuchtet stärker)
   onChanged: (c: TaskComment) => void;
 }) {
   const deleted = !!c.deletedAt;
@@ -598,7 +603,15 @@ function TaskCommentRow({
             </p>
           ) : (
             <>
-              {c.body && <p className="text-[15px] font-sans whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-snug">{c.body}</p>}
+              {c.body && (
+                <MentionText
+                  text={c.body}
+                  names={mentionNames ?? []}
+                  myName={myName}
+                  mine={mine}
+                  className="text-[15px] font-sans whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-snug"
+                />
+              )}
               <TaskAttachment c={c} />
             </>
           )}
@@ -964,6 +977,8 @@ export function TaskDetail({
                   currentUserId={currentUserId}
                   avatarUrl={team.find((t) => t.id === c.authorId)?.avatarUrl}
                   colorSeed={task.id}
+                  mentionNames={team.map((t) => t.name)}
+                  myName={team.find((t) => t.id === currentUserId)?.name}
                   onChanged={patchComment}
                 />
               ))

@@ -659,6 +659,20 @@ export interface ChatMessage {
   replyCount?: number; // nur bei Top-Level-Nachrichten
   unreadReplies?: number; // ungelesene Thread-Antworten (Top-Level, für das Leuchten)
   poll?: Poll | null; // gesetzt, wenn attachType === 'poll'
+  quoteId?: string | null; // zitierte Nachricht (WhatsApp: zur Seite wischen)
+  quote?: QuotedMessage | null; // Vorschau der zitierten Nachricht (kommt fertig vom Server)
+  mentionIds?: string[]; // aufgelöste @Erwähnungen dieser Nachricht
+}
+
+// Vorschau der zitierten Nachricht – bewusst nur das Nötigste, damit die Blase
+// nicht die komplette Originalnachricht mitschleppt.
+export interface QuotedMessage {
+  id: string;
+  authorId: string;
+  authorName: string;
+  body: string; // leer, wenn das Original gelöscht wurde
+  attachType: ChatAttachType | null;
+  deleted: boolean;
 }
 
 // ===========================================================================

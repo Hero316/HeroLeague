@@ -37,7 +37,15 @@ export default function MentionTextarea({
     const m = /@([^\s@]*)$/.exec(val);
     setQuery(m ? m[1].toLowerCase() : null);
   };
-  const matches = query !== null ? mentionable.filter((mm) => mm.name.toLowerCase().includes(query)).slice(0, 6) : [];
+  // „@alle" steht als erster Eintrag – eine Erwähnung, die alle Beteiligten
+  // benachrichtigt (Server löst sie genauso auf, ob getippt oder ausgewählt).
+  const matches = (() => {
+    if (query === null) return [] as { id: string; name: string; all?: boolean }[];
+    const people: { id: string; name: string; all?: boolean }[] = mentionable
+      .filter((mm) => mm.name.toLowerCase().includes(query))
+      .slice(0, 6);
+    return 'alle'.startsWith(query) || query === '' ? [{ id: '@alle', name: 'alle', all: true }, ...people] : people;
+  })();
   const pick = (name: string) => {
     onChange(value.replace(/@([^\s@]*)$/, `@${name} `));
     setQuery(null);
@@ -55,8 +63,15 @@ export default function MentionTextarea({
               onClick={() => pick(mm.name)}
               className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/[.05] cursor-pointer"
             >
-              <Avatar name={mm.name} size={22} />
-              <span className="text-sm text-hl-soft truncate">{mm.name}</span>
+              {mm.all ? (
+                <span className="w-[22px] h-[22px] rounded-full bg-brand-accent-light/20 text-brand-accent-light grid place-items-center shrink-0 text-[13px] font-bold leading-none">
+                  @
+                </span>
+              ) : (
+                <Avatar name={mm.name} size={22} />
+              )}
+              <span className={`text-sm truncate ${mm.all ? 'text-brand-accent-light font-semibold' : 'text-hl-soft'}`}>{mm.name}</span>
+              {mm.all && <span className="ml-auto text-[10px] font-mono text-hl-faint shrink-0">alle Beteiligten</span>}
             </button>
           ))}
         </div>

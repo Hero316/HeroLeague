@@ -39,6 +39,10 @@ export async function ensureSchema(): Promise<void> {
     // Reaktionen + Bearbeitet/Gelöscht (WhatsApp-Funktionen) mitprüfen.
     await sql`SELECT edited_at, deleted_at FROM messages LIMIT 1`;
     await sql`SELECT 1 FROM message_reactions LIMIT 1`;
+    // Zitat-Antwort (WhatsApp-Wischen) + gespeicherte @Erwähnungen mitprüfen –
+    // sonst überspringt der Schnell-Check das ALTER bzw. das Anlegen der Tabelle.
+    await sql`SELECT quote_id FROM messages LIMIT 1`;
+    await sql`SELECT 1 FROM message_mentions LIMIT 1`;
     // Thread-Lesestand (ungelesene Thread-Antworten) mitprüfen.
     await sql`SELECT 1 FROM thread_reads LIMIT 1`;
     // Abstimmungen (Umfragen im Chat) mitprüfen – WICHTIG, damit auf bereits
@@ -182,7 +186,16 @@ export async function ensureSchema(): Promise<void> {
   // WhatsApp-Funktionen: Bearbeiten (edited_at) + Löschen für alle (deleted_at).
   await run(sql`ALTER TABLE messages ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ`);
   await run(sql`ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`);
+  // Zitat-Antwort (wie bei WhatsApp zur Seite wischen): die zitierte Nachricht.
+  // ON DELETE SET NULL, damit das Löschen der Originalnachricht die Antwort nicht mitreißt.
+  await run(sql`ALTER TABLE messages ADD COLUMN IF NOT EXISTS quote_id TEXT REFERENCES messages(id) ON DELETE SET NULL`);
   await run(sql`CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id, created_at)`);
+  // Aufgelöste @Erwähnungen je Nachricht – damit „Threads, in denen ich
+  // markiert wurde" ohne Textsuche funktioniert und Namensänderungen egal sind.
+  await run(sql`CREATE TABLE IF NOT EXISTS message_mentions (
+    message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL, PRIMARY KEY (message_id, user_id))`);
+  await run(sql`CREATE INDEX IF NOT EXISTS idx_message_mentions_user ON message_mentions(user_id)`);
   // Emoji-Reaktionen: eine Reaktion pro Nutzer & Nachricht (Tippen ersetzt/togglet).
   await run(sql`CREATE TABLE IF NOT EXISTS message_reactions (
     message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,

@@ -9,6 +9,7 @@ import { zoomOriginFromEvent, zoomModalProps, ZERO_ORIGIN, type ZoomOrigin } fro
 import { uploadFile } from '../lib/api';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
+import MentionText from './MentionText';
 import LinkChips from './LinkChips';
 import { VoiceMessage } from './AudioPlayer';
 import { useBackdropDismiss, ModalPortal, EmptyState } from './ui';
@@ -81,6 +82,8 @@ function IdeaCommentRow({
   currentUserId,
   avatarUrl,
   colorSeed,
+  mentionNames,
+  myName,
   onChanged,
 }: {
   c: IdeaComment;
@@ -88,6 +91,8 @@ function IdeaCommentRow({
   currentUserId: string;
   avatarUrl?: string;
   colorSeed: string;
+  mentionNames?: string[]; // Namen für die @-Hervorhebung
+  myName?: string; // eigener Name (eigene Erwähnung leuchtet stärker)
   onChanged: (c: IdeaComment) => void;
 }) {
   const deleted = !!c.deletedAt;
@@ -174,7 +179,15 @@ function IdeaCommentRow({
             </p>
           ) : (
             <>
-              {c.body && <p className="text-[15px] font-sans whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-snug">{c.body}</p>}
+              {c.body && (
+                <MentionText
+                  text={c.body}
+                  names={mentionNames ?? []}
+                  myName={myName}
+                  mine={mine}
+                  className="text-[15px] font-sans whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-snug"
+                />
+              )}
               <IdeaAttachment c={c} />
             </>
           )}
@@ -804,6 +817,8 @@ function IdeaDetail({
                       currentUserId={currentUserId}
                       avatarUrl={team.find((t) => t.id === c.authorId)?.avatarUrl}
                       colorSeed={ideaId}
+                      mentionNames={team.map((t) => t.name)}
+                      myName={team.find((t) => t.id === currentUserId)?.name}
                       onChanged={patchComment}
                     />
                   ))

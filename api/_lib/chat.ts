@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql } from './db.js';
 import { getSession } from './auth.js';
 import { badRequest, isNonEmptyString } from './validate.js';
-import { genId, sessionName, loadMembers, memberName, notify, findMentions, markNotificationsReadForRef, deleteNotificationsForRef } from './collab.js';
+import { genId, sessionName, loadMembers, memberName, notify, findMentions, mentionsEveryone, markNotificationsReadForRef, deleteNotificationsForRef } from './collab.js';
 import { sendPushToUser } from './push.js';
 
 // Phase 3: Interner Chat – Gruppen, DMs, Slack-Threads, Ticket-/Aufgaben-Anhänge.
@@ -103,6 +103,16 @@ const MSG_COLS = `
   CASE WHEN m.deleted_at IS NULL THEN m.attach_url END AS "attachUrl",
   CASE WHEN m.deleted_at IS NULL THEN m.attach_mime END AS "attachMime",
   m.edited_at AS "editedAt", m.deleted_at AS "deletedAt", m.created_at AS "createdAt",
+  m.quote_id AS "quoteId",
+  -- Zitierte Nachricht direkt mitliefern (Vorschau in der Blase). Ist das
+  -- Original gelöscht, kommt ein leerer Text – die Blase zeigt dann „gelöscht".
+  (SELECT json_build_object(
+            'id', q.id, 'authorId', q.author_id, 'authorName', q.author_name,
+            'body', CASE WHEN q.deleted_at IS NULL THEN left(q.body, 200) ELSE '' END,
+            'attachType', CASE WHEN q.deleted_at IS NULL THEN q.attach_type END,
+            'deleted', q.deleted_at IS NOT NULL)
+     FROM messages q WHERE q.id = m.quote_id) AS quote,
+  COALESCE((SELECT json_agg(r.user_id) FROM message_mentions r WHERE r.message_id = m.id), '[]'::json) AS "mentionIds",
   COALESCE((SELECT json_agg(json_build_object('userId', r.user_id, 'emoji', r.emoji) ORDER BY r.created_at)
             FROM message_reactions r WHERE r.message_id = m.id), '[]'::json) AS reactions
 `;
@@ -247,6 +257,13 @@ export async function messages(req: VercelRequest, res: VercelResponse) {
       const p = await sql`SELECT 1 FROM messages WHERE id = ${parentId} AND conversation_id = ${conversationId} LIMIT 1`;
       if (p.length === 0) return badRequest(res, 'Ungültige Thread-Nachricht.');
     }
+    // Zitat-Antwort (wie bei WhatsApp zur Seite wischen): die zitierte Nachricht
+    // muss aus DERSELBEN Unterhaltung stammen – sonst wird sie verworfen.
+    let quoteId = typeof b.quoteId === 'string' && b.quoteId ? b.quoteId : null;
+    if (quoteId) {
+      const q = await sql`SELECT 1 FROM messages WHERE id = ${quoteId} AND conversation_id = ${conversationId} LIMIT 1`;
+      if (q.length === 0) quoteId = null;
+    }
     // Ticket/Aufgabe: Verweis via attachId. Datei/Audio: Blob-URL + MIME.
     const isRef = attachType === 'ticket' || attachType === 'task';
     const isMedia = attachType === 'file' || attachType === 'audio';
@@ -259,14 +276,9 @@ export async function messages(req: VercelRequest, res: VercelResponse) {
     const id = genId('msg');
     const name = sessionName(session);
 
-    const inserted = await sql`
-      INSERT INTO messages (id, conversation_id, parent_id, author_id, author_name, body, attach_type, attach_id, attach_title, attach_url, attach_mime)
-      VALUES (${id}, ${conversationId}, ${parentId}, ${uid}, ${name}, ${body}, ${attachType}, ${attachId}, ${attachTitle}, ${attachUrl}, ${attachMime})
-      RETURNING id, conversation_id AS "conversationId", parent_id AS "parentId",
-        author_id AS "authorId", author_name AS "authorName", body,
-        attach_type AS "attachType", attach_id AS "attachId", attach_title AS "attachTitle",
-        attach_url AS "attachUrl", attach_mime AS "attachMime",
-        edited_at AS "editedAt", deleted_at AS "deletedAt", created_at AS "createdAt"
+    await sql`
+      INSERT INTO messages (id, conversation_id, parent_id, author_id, author_name, body, attach_type, attach_id, attach_title, attach_url, attach_mime, quote_id)
+      VALUES (${id}, ${conversationId}, ${parentId}, ${uid}, ${name}, ${body}, ${attachType}, ${attachId}, ${attachTitle}, ${attachUrl}, ${attachMime}, ${quoteId})
     `;
     await sql`UPDATE conversations SET updated_at = now() WHERE id = ${conversationId}`;
 
@@ -276,16 +288,7 @@ export async function messages(req: VercelRequest, res: VercelResponse) {
     const conv = (convRows[0] as { kind: string; title: string } | undefined) ?? { kind: 'group', title: '' };
     const convMembers = (await sql`SELECT user_id AS "userId" FROM conversation_members WHERE conversation_id = ${conversationId}`) as { userId: string }[];
     const memberSet = new Set(convMembers.map((m) => m.userId));
-    const mentioned = new Set<string>();
-    if (hasBody) {
-      const allMembers = await loadMembers();
-      for (const mid of findMentions(b.body, allMembers)) {
-        if (memberSet.has(mid) && mid !== uid) {
-          mentioned.add(mid);
-          await notify(mid, uid, 'mention', 'conversation', conversationId, `${name} hat dich im Chat erwähnt.`);
-        }
-      }
-    }
+
     const preview = hasBody
       ? String(b.body).slice(0, 120)
       : attachType === 'audio'
@@ -293,9 +296,48 @@ export async function messages(req: VercelRequest, res: VercelResponse) {
         : attachType === 'file'
           ? '📎 Datei'
           : '📎 Anhang';
-    const pushTitle = conv.kind === 'group' ? conv.title || 'Gruppe' : name;
+    // Klick auf die Handy-Benachrichtigung öffnet direkt DIESEN Chat (Deep-Link
+    // via /chat?c=…) – bei einer Thread-Antwort gleich den Thread (?thread=…),
+    // damit man nicht erst im Verlauf suchen muss. Der Service Worker unterdrückt
+    // den Banner zudem, wenn der Chat gerade sichtbar offen ist.
+    const chatUrl =
+      `/chat?c=${encodeURIComponent(conversationId)}` +
+      (parentId ? `&thread=${encodeURIComponent(parentId)}` : '');
+    const where = conv.kind === 'group' ? ` in „${conv.title || 'Gruppe'}"` : '';
+
+    // @Erwähnungen auflösen: „@alle" meint jedes Mitglied der Unterhaltung,
+    // sonst die namentlich genannten. Die Treffer werden gespeichert (nicht nur
+    // verschickt) – daraus speist sich später „Threads, in denen ich markiert
+    // wurde", auch wenn jemand seinen Namen ändert.
+    const mentioned = new Set<string>();
+    if (hasBody) {
+      if (mentionsEveryone(b.body)) {
+        for (const m of convMembers) if (m.userId !== uid) mentioned.add(m.userId);
+      }
+      const allMembers = await loadMembers();
+      for (const mid of findMentions(b.body, allMembers)) {
+        if (memberSet.has(mid) && mid !== uid) mentioned.add(mid);
+      }
+    }
+    for (const mid of mentioned) {
+      await sql`INSERT INTO message_mentions (message_id, user_id) VALUES (${id}, ${mid}) ON CONFLICT DO NOTHING`;
+      // Erwähnung = persönliche Ansprache: Glocke + Push mit echtem Text und
+      // Ziel-Link direkt auf den Thread/Chat (notify verschickt beides).
+      await notify(
+        mid,
+        uid,
+        'mention',
+        'conversation',
+        conversationId,
+        `${name} hat dich${parentId ? ' in einem Thread' : ''}${where} erwähnt: ${preview}`,
+        { pushTitle: `${name} hat dich erwähnt`, url: chatUrl }
+      );
+    }
+
     // Thread-Antworten benachrichtigen NUR die Thread-Beteiligten (Eltern-Autor
     // + bisherige Antwortende) – nicht die ganze Gruppe. Top-Level wie bisher alle.
+    // Wer nur „nebenbei" im Thread ist, sieht die Antwort in der Threads-Übersicht,
+    // bekommt aber keinen zweiten Push, wenn er bereits als Erwähnung dran war.
     let recipients: string[] = convMembers.map((m) => m.userId);
     if (parentId) {
       const parts = (await sql`
@@ -303,16 +345,16 @@ export async function messages(req: VercelRequest, res: VercelResponse) {
       `) as { userId: string }[];
       recipients = parts.map((p) => p.userId).filter((x) => memberSet.has(x));
     }
+    const pushTitle = conv.kind === 'group' ? conv.title || 'Gruppe' : name;
     const pushBody = (conv.kind === 'group' ? `${name}: ${preview}` : preview) + (parentId ? ' (Thread)' : '');
-    // Klick auf die Handy-Benachrichtigung öffnet direkt DIESEN Chat (Deep-Link
-    // via /chat?c=…) – nicht mehr allgemein das Backoffice. Der Service Worker
-    // unterdrückt den Banner zudem, wenn der Chat gerade sichtbar offen ist.
-    const chatUrl = `/chat?c=${encodeURIComponent(conversationId)}`;
     for (const rid of recipients) {
       if (rid === uid || mentioned.has(rid)) continue;
       await sendPushToUser(rid, { title: pushTitle, body: pushBody, url: chatUrl });
     }
-    return res.json({ ...(inserted[0] as object), reactions: [], replyCount: 0, unreadReplies: 0 });
+
+    // Die fertige Nachricht (inkl. Zitat-Vorschau + Erwähnungen) zurückgeben.
+    const created = await sql.query(`SELECT ${MSG_COLS} FROM messages m WHERE m.id = $1`, [id]);
+    return res.json({ ...(created[0] as object), replyCount: 0, unreadReplies: 0 });
   }
 
   // --- Nachricht bearbeiten (nur eigene, nicht gelöschte) -------------------
@@ -326,7 +368,43 @@ export async function messages(req: VercelRequest, res: VercelResponse) {
     if (!row) return res.status(404).json({ error: 'Nachricht nicht gefunden.' });
     if (row.author_id !== uid) return res.status(403).json({ error: 'Nur eigene Nachrichten können bearbeitet werden.' });
     if (row.deleted_at) return badRequest(res, 'Gelöschte Nachricht kann nicht bearbeitet werden.');
-    await sql`UPDATE messages SET body = ${b.body.slice(0, 8000)}, edited_at = now() WHERE id = ${messageId}`;
+    const newBody = b.body.slice(0, 8000);
+    await sql`UPDATE messages SET body = ${newBody}, edited_at = now() WHERE id = ${messageId}`;
+
+    // Erwähnungen neu auflösen: wer beim Nachbessern dazukommt, wird auch jetzt
+    // noch benachrichtigt (wer schon drinstand, bekommt keinen zweiten Push).
+    const info = (await sql`
+      SELECT m.conversation_id AS "conversationId", m.parent_id AS "parentId", c.kind, c.title
+      FROM messages m JOIN conversations c ON c.id = m.conversation_id WHERE m.id = ${messageId}
+    `)[0] as { conversationId: string; parentId: string | null; kind: string; title: string } | undefined;
+    if (info) {
+      const already = new Set(
+        ((await sql`SELECT user_id AS "userId" FROM message_mentions WHERE message_id = ${messageId}`) as { userId: string }[]).map((r) => r.userId)
+      );
+      const convMembers = (await sql`SELECT user_id AS "userId" FROM conversation_members WHERE conversation_id = ${info.conversationId}`) as { userId: string }[];
+      const memberSet = new Set(convMembers.map((m) => m.userId));
+      const now = new Set<string>();
+      if (mentionsEveryone(newBody)) for (const m of convMembers) if (m.userId !== uid) now.add(m.userId);
+      const allMembers = await loadMembers();
+      for (const mid of findMentions(newBody, allMembers)) if (memberSet.has(mid) && mid !== uid) now.add(mid);
+
+      const name = sessionName(session);
+      const where = info.kind === 'group' ? ` in „${info.title || 'Gruppe'}"` : '';
+      const url =
+        `/chat?c=${encodeURIComponent(info.conversationId)}` +
+        (info.parentId ? `&thread=${encodeURIComponent(info.parentId)}` : '');
+      for (const mid of now) {
+        await sql`INSERT INTO message_mentions (message_id, user_id) VALUES (${messageId}, ${mid}) ON CONFLICT DO NOTHING`;
+        if (already.has(mid)) continue;
+        await notify(mid, uid, 'mention', 'conversation', info.conversationId, `${name} hat dich${where} erwähnt: ${newBody.slice(0, 120)}`, {
+          pushTitle: `${name} hat dich erwähnt`,
+          url,
+        });
+      }
+      // Wer aus dem Text verschwunden ist, gilt nicht mehr als markiert.
+      for (const mid of already) if (!now.has(mid)) await sql`DELETE FROM message_mentions WHERE message_id = ${messageId} AND user_id = ${mid}`;
+    }
+
     const updated = await sql.query(`SELECT ${MSG_COLS} FROM messages m WHERE m.id = $1`, [messageId]);
     return res.json(updated[0] ?? { ok: true });
   }
@@ -513,6 +591,9 @@ export async function threads(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Nicht unterstützt' });
   res.setHeader('Cache-Control', 'no-store');
   const uid = session.userId;
+  // ?filter=mentions ⇒ nur Threads, in denen ich namentlich markiert wurde
+  // (in der Eltern-Nachricht oder in einer Antwort).
+  const onlyMentions = String(req.query.filter ?? '') === 'mentions';
   const rows = await sql.query(
     `SELECT m.id AS "parentId", m.conversation_id AS "conversationId",
             m.author_name AS "authorName",
@@ -524,7 +605,9 @@ export async function threads(req: VercelRequest, res: VercelResponse) {
             (SELECT count(*)::int FROM messages r WHERE r.parent_id = m.id AND r.author_id <> $1 AND r.deleted_at IS NULL
                AND r.created_at > COALESCE(tr.last_read_at, to_timestamp(0))) AS "unreadCount",
             (SELECT max(r.created_at) FROM messages r WHERE r.parent_id = m.id) AS "lastReplyAt",
-            (SELECT r.author_name FROM messages r WHERE r.parent_id = m.id AND r.deleted_at IS NULL ORDER BY r.created_at DESC LIMIT 1) AS "lastReplyAuthor"
+            (SELECT r.author_name FROM messages r WHERE r.parent_id = m.id AND r.deleted_at IS NULL ORDER BY r.created_at DESC LIMIT 1) AS "lastReplyAuthor",
+            EXISTS (SELECT 1 FROM message_mentions mm JOIN messages x ON x.id = mm.message_id
+                     WHERE mm.user_id = $1 AND x.deleted_at IS NULL AND (x.id = m.id OR x.parent_id = m.id)) AS "mentionedMe"
      FROM messages m
      JOIN conversations c ON c.id = m.conversation_id
      JOIN conversation_members cm ON cm.conversation_id = c.id AND cm.user_id = $1
@@ -541,7 +624,14 @@ export async function threads(req: VercelRequest, res: VercelResponse) {
          -- … oder es gibt neue Antworten für mich (damit nichts untergeht).
          OR EXISTS (SELECT 1 FROM messages r WHERE r.parent_id = m.id AND r.author_id <> $1 AND r.deleted_at IS NULL
                       AND r.created_at > COALESCE(tr.last_read_at, to_timestamp(0)))
+         -- … oder ich wurde darin markiert (auch ohne selbst geantwortet zu haben).
+         OR EXISTS (SELECT 1 FROM message_mentions mm JOIN messages x ON x.id = mm.message_id
+                      WHERE mm.user_id = $1 AND x.deleted_at IS NULL AND (x.id = m.id OR x.parent_id = m.id))
        )
+       ${onlyMentions
+         ? `AND EXISTS (SELECT 1 FROM message_mentions mm JOIN messages x ON x.id = mm.message_id
+                         WHERE mm.user_id = $1 AND x.deleted_at IS NULL AND (x.id = m.id OR x.parent_id = m.id))`
+         : ''}
      ORDER BY "lastReplyAt" DESC NULLS LAST LIMIT 50`,
     [uid]
   );

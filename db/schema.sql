@@ -353,10 +353,21 @@ CREATE TABLE messages (
   attach_mime     TEXT,        -- file: MIME-Typ
   edited_at       TIMESTAMPTZ, -- nachträglich bearbeitet (WhatsApp-Stil)
   deleted_at      TIMESTAMPTZ, -- für alle zurückgenommen (Inhalt wird geleert)
+  quote_id        TEXT REFERENCES messages(id) ON DELETE SET NULL, -- zitierte Nachricht (zur Seite wischen)
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_messages_conv ON messages(conversation_id, created_at);
 CREATE INDEX idx_messages_parent ON messages(parent_id);
+
+-- Aufgelöste @Erwähnungen je Nachricht. Bewusst als eigene Tabelle (nicht per
+-- Textsuche im Body): so bleibt „Threads, in denen ich markiert wurde" auch
+-- dann richtig, wenn jemand später seinen Anzeigenamen ändert.
+CREATE TABLE message_mentions (
+  message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL,
+  PRIMARY KEY (message_id, user_id)
+);
+CREATE INDEX idx_message_mentions_user ON message_mentions(user_id);
 
 -- Emoji-Reaktionen: eine Reaktion pro Nutzer & Nachricht (Tippen ersetzt/togglet).
 CREATE TABLE message_reactions (

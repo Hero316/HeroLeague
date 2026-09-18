@@ -588,14 +588,49 @@ function taskDeepLink(type: string, dueDate: string | null, id: string): string 
   return `/chat?tab=aufgaben&${open}`;
 }
 
-// Einfache @Name-Erwähnungen gegen die Mitgliederliste auflösen.
+// „@alle" (auch @all/@everyone/@channel) meint ALLE Beteiligten – der Aufrufer
+// entscheidet, wer das konkret ist (Gruppenmitglieder, Ticket-Beteiligte, …).
+export function mentionsEveryone(text: string): boolean {
+  return /@(alle|all|everyone|channel|team)\b/i.test(text);
+}
+
+// @Name-Erwähnungen gegen die Mitgliederliste auflösen.
+// Erkannt wird der volle Anzeigename (so fügt ihn die Auswahlliste ein) UND –
+// wenn er eindeutig ist – der reine Vorname, weil im Alltag einfach „@Timo"
+// getippt wird. Längere Namen gewinnen, damit „@Timo Berg" nicht fälschlich
+// als „@Timo" bei einer anderen Person landet.
 export function findMentions(text: string, members: Map<string, AppUser>): string[] {
   if (!text.includes('@')) return [];
   const lower = text.toLowerCase();
-  const ids: string[] = [];
+
+  // Kandidaten sammeln: voller Name (immer) + Vorname (nur wenn eindeutig).
+  const labels: { label: string; id: string }[] = [];
+  const firstCount = new Map<string, number>();
   for (const u of members.values()) {
-    const label = (u.name && u.name.trim() ? u.name : u.email).toLowerCase();
-    if (label && lower.includes(`@${label}`)) ids.push(u.id);
+    const full = (u.name && u.name.trim() ? u.name : u.email).toLowerCase();
+    if (!full) continue;
+    const first = full.split(/\s+/)[0];
+    if (first && first !== full) firstCount.set(first, (firstCount.get(first) ?? 0) + 1);
+  }
+  for (const u of members.values()) {
+    const full = (u.name && u.name.trim() ? u.name : u.email).toLowerCase();
+    if (!full) continue;
+    labels.push({ label: full, id: u.id });
+    const first = full.split(/\s+/)[0];
+    if (first && first !== full && firstCount.get(first) === 1) labels.push({ label: first, id: u.id });
+  }
+  labels.sort((a, b) => b.label.length - a.label.length);
+
+  // Treffer einsammeln und die Fundstelle „verbrauchen", damit ein bereits von
+  // einem längeren Namen belegter Abschnitt nicht nochmal zählt.
+  let rest = lower;
+  const ids: string[] = [];
+  for (const { label, id } of labels) {
+    if (ids.includes(id)) continue;
+    const at = rest.indexOf(`@${label}`);
+    if (at < 0) continue;
+    ids.push(id);
+    rest = rest.slice(0, at) + ' '.repeat(label.length + 1) + rest.slice(at + label.length + 1);
   }
   return ids;
 }
@@ -992,11 +1027,18 @@ export async function ticketComment(req: VercelRequest, res: VercelResponse) {
           : '📎 Datei';
   const mentioned = new Set<string>();
   if (hasBody) {
-    for (const mid of findMentions(b.body, members)) {
-      if (mid === uid) continue;
-      mentioned.add(mid);
-      await notify(mid, uid, 'mention', 'ticket', ticketId, `${name} hat dich im Ticket „${t.title}“ erwähnt.`);
+    // „@alle" im Ticket = alle Beteiligten (Ersteller, Zuständiger, alle, die
+    // hier schon geschrieben haben) – nicht das ganze Team.
+    if (mentionsEveryone(b.body)) {
+      const parts = (await sql`SELECT DISTINCT author_id AS "userId" FROM ticket_comments WHERE ticket_id = ${ticketId}`) as { userId: string }[];
+      for (const x of [t.createdBy, t.assignedTo, ...parts.map((p) => p.userId)]) if (x && x !== uid) mentioned.add(x);
     }
+    for (const mid of findMentions(b.body, members)) if (mid !== uid) mentioned.add(mid);
+  }
+  for (const mid of mentioned) {
+    await notify(mid, uid, 'mention', 'ticket', ticketId, `${name} hat dich im Ticket „${t.title}“ erwähnt: ${preview}`, {
+      pushTitle: `${name} hat dich erwähnt`,
+    });
   }
   if (t.createdBy !== uid && !mentioned.has(t.createdBy)) {
     await notify(t.createdBy, uid, 'ticket_comment', 'ticket', ticketId, `${name} hat dein Ticket „${t.title}“ kommentiert: ${preview}`);
@@ -1383,14 +1425,19 @@ export async function taskComment(req: VercelRequest, res: VercelResponse) {
           : '📎 Datei';
   const mentioned = new Set<string>();
   if (hasBody) {
-    for (const mid of findMentions(b.body, members)) {
-      if (mid === uid) continue;
-      mentioned.add(mid);
-      await notify(mid, uid, 'mention', 'task', taskId, `${name} hat dich in der Aufgabe „${t.title}“ erwähnt.`, {
-        pushTitle: `📋 ${t.title}`,
-        url,
-      });
+    // „@alle" in der Aufgabe = Ersteller, alle Zuständigen und alle, die hier
+    // schon geschrieben haben.
+    if (mentionsEveryone(b.body)) {
+      const parts = (await sql`SELECT DISTINCT author_id AS "userId" FROM task_comments WHERE task_id = ${taskId}`) as { userId: string }[];
+      for (const x of [t.createdBy, ...assignees.map((a) => a.userId), ...parts.map((p) => p.userId)]) if (x && x !== uid) mentioned.add(x);
     }
+    for (const mid of findMentions(b.body, members)) if (mid !== uid) mentioned.add(mid);
+  }
+  for (const mid of mentioned) {
+    await notify(mid, uid, 'mention', 'task', taskId, `${name} hat dich in der Aufgabe „${t.title}“ erwähnt: ${preview}`, {
+      pushTitle: `${name} hat dich erwähnt`,
+      url,
+    });
   }
   const recipients = new Set<string>([t.createdBy, ...assignees.map((a) => a.userId)]);
   for (const rid of recipients) {
@@ -1734,15 +1781,6 @@ export async function ideaComment(req: VercelRequest, res: VercelResponse) {
 
   const members = await loadMembers();
   const mem = (await sql`SELECT user_id AS "userId" FROM idea_members WHERE idea_id = ${ideaId}`) as { userId: string }[];
-  const mentioned = new Set<string>();
-  if (hasBody) {
-    for (const mid of findMentions(b.body, members)) {
-      if (mid !== uid && mem.some((m) => m.userId === mid)) {
-        mentioned.add(mid);
-        await notify(mid, uid, 'mention', 'idea', ideaId, `${name} hat dich in der Idee „${title}“ erwähnt.`);
-      }
-    }
-  }
   const preview = hasBody
     ? String(b.body).slice(0, 120)
     : attachType === 'audio'
@@ -1752,6 +1790,19 @@ export async function ideaComment(req: VercelRequest, res: VercelResponse) {
         : (attachMime ?? '').startsWith('video/')
           ? '🎬 Video'
           : '📎 Datei';
+  const mentioned = new Set<string>();
+  if (hasBody) {
+    // „@alle" in der Idee = alle Beteiligten dieser Idee.
+    if (mentionsEveryone(b.body)) for (const m of mem) if (m.userId !== uid) mentioned.add(m.userId);
+    for (const mid of findMentions(b.body, members)) {
+      if (mid !== uid && mem.some((m) => m.userId === mid)) mentioned.add(mid);
+    }
+  }
+  for (const mid of mentioned) {
+    await notify(mid, uid, 'mention', 'idea', ideaId, `${name} hat dich in der Idee „${title}“ erwähnt: ${preview}`, {
+      pushTitle: `${name} hat dich erwähnt`,
+    });
+  }
   for (const m of mem) {
     if (m.userId === uid || mentioned.has(m.userId)) continue;
     await sendPushToUser(m.userId, { title: `💡 ${title}`, body: `${name}: ${preview}`, url: `/chat?tab=ideen&openIdea=${encodeURIComponent(ideaId)}` });

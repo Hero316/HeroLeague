@@ -39,6 +39,7 @@ import {
 } from '../lib/collab';
 import Avatar from './Avatar';
 import MentionTextarea from './MentionTextarea';
+import MentionText from './MentionText';
 import LinkChips from './LinkChips';
 import { VoiceMessage } from './AudioPlayer';
 import { useBackdropDismiss, ModalPortal, SegmentedControl, EmptyState } from './ui';
@@ -240,6 +241,8 @@ function TicketCommentRow({
   currentUserId,
   avatarUrl,
   colorSeed,
+  mentionNames,
+  myName,
   onChanged,
 }: {
   c: TicketComment;
@@ -247,6 +250,8 @@ function TicketCommentRow({
   currentUserId: string;
   avatarUrl?: string;
   colorSeed: string;
+  mentionNames?: string[]; // Namen für die @-Hervorhebung
+  myName?: string; // eigener Name (eigene Erwähnung leuchtet stärker)
   onChanged: (c: TicketComment) => void;
 }) {
   const deleted = !!c.deletedAt;
@@ -334,7 +339,15 @@ function TicketCommentRow({
             </p>
           ) : (
             <>
-              {c.body && <p className="text-[15px] font-sans whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-snug">{c.body}</p>}
+              {c.body && (
+                <MentionText
+                  text={c.body}
+                  names={mentionNames ?? []}
+                  myName={myName}
+                  mine={mine}
+                  className="text-[15px] font-sans whitespace-pre-wrap break-words [overflow-wrap:anywhere] leading-snug"
+                />
+              )}
               <TicketAttachment c={c} />
               {hasLegacyImages && (
                 <div className="flex flex-wrap gap-2 mt-1.5">
@@ -706,6 +719,8 @@ export function TicketDetail({
                       currentUserId={currentUserId}
                       avatarUrl={team.find((t) => t.id === c.authorId)?.avatarUrl}
                       colorSeed={ticketId}
+                      mentionNames={team.map((t) => t.name)}
+                      myName={team.find((t) => t.id === currentUserId)?.name}
                       onChanged={patchComment}
                     />
                   ))
