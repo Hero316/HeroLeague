@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquare, Users, CalendarDays, ListChecks, Clock, Move, Check, Calendar, CheckSquare, Image as ImageIcon, Mic, File as FileIcon, Copy, Pencil, Smile } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquare, Users, CalendarDays, ListChecks, Clock, Move, Check, Calendar, CheckSquare, Image as ImageIcon, Mic, File as FileIcon, Copy, Pencil, Smile, SlidersHorizontal } from 'lucide-react';
 import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember, Match, EventArchive, TaskKind, LinkItem } from '../types';
 import { fetchTasksRange, fetchAllTasks, fetchTask, createTask, updateTask, deleteTask, addTaskComment, editTaskComment, deleteTaskComment, reactTaskComment, fetchTeam, memberMap } from '../lib/collab';
 import { apiFetch, uploadFile } from '../lib/api';
 import { getUrlParam, setUrlParam } from '../lib/urlState';
+import { loadPref, savePref } from '../lib/prefs';
 import { useBackClose } from '../lib/backStack';
 import { zoomOriginFromEvent, zoomModalProps, ZERO_ORIGIN, type ZoomOrigin } from '../lib/zoom';
 import Avatar from './Avatar';
@@ -63,6 +64,28 @@ const calCell = (t: Task): string =>
       ? 'bg-slate-200 text-slate-500 line-through'
       : PRIORITY_CELL[t.priority];
 const PRIORITIES: TicketPriority[] = ['niedrig', 'mittel', 'hoch', 'dringend'];
+
+// --- Art des Eintrags: Termin vs. Aufgabe -----------------------------------
+// In der gemeinsamen Wochenansicht stehen Termine und Aufgaben nebeneinander –
+// dann muss auf einen Blick klar sein, was was ist. Status und Dringlichkeit
+// behalten ihre gewohnten Farben; die ART steckt im Randstreifen der Karte und
+// im kleinen Etikett, in genau den Farben, die auch im Filter zu sehen sind.
+const KIND_COLOR: Record<TaskKind, string> = {
+  termin: '#22DFC9', // Türkis – die Kalenderfarbe
+  aufgabe: '#8B7CFF', // Violett – die Aufgabenfarbe
+  beides: '#22DFC9',
+};
+// „Beides" wird nur EINMAL angezeigt – der Streifen zeigt beide Farben.
+const kindBar = (t: Task): string =>
+  t.type === 'beides'
+    ? `linear-gradient(180deg, ${KIND_COLOR.termin} 0%, ${KIND_COLOR.termin} 50%, ${KIND_COLOR.aufgabe} 50%, ${KIND_COLOR.aufgabe} 100%)`
+    : KIND_COLOR[t.type];
+const KIND_SHORT: Record<TaskKind, string> = { termin: 'Termin', aufgabe: 'Aufgabe', beides: 'Termin + Aufgabe' };
+
+// Gerätelokal gemerkte Auswahl (siehe src/lib/prefs.ts).
+const PREF_CAL_VIEW = 'hl-cal-view'; // Monat/Woche/Tag/Termine/Aufgaben
+const PREF_TASK_VIEW = 'hl-task-view'; // Liste/Woche im Aufgaben-Tab
+const PREF_CAL_SHOW = 'hl-cal-show'; // Wochenansicht: Termine/Aufgaben einblenden
 
 const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const WEEKDAYS_FULL = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
@@ -1500,25 +1523,59 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
   const calendarViews = mode === 'calendar' ? (['month', 'week', 'day', 'termine'] as const) : (['month', 'week', 'day', 'termine', 'aufgaben'] as const);
   // Ansicht + Datum aus der URL wiederherstellen (nur in der Team-App), damit
   // man nach dem Aktualisieren dort bleibt (Tag/Woche/Monat + Datum).
+  // Die zuletzt gewählte Ansicht wird gerätelokal gemerkt (localStorage), damit
+  // sie auch das Wegtippen auf „Chats"/„Start" und das Schließen der App
+  // überlebt. Ein Deep-Link (?av=…) gewinnt, danach die gemerkte Auswahl.
   const [view, setView] = useState<'month' | 'week' | 'day' | 'termine' | 'aufgaben'>(() => {
     if (mode === 'tasks') return 'aufgaben';
-    const v = persist ? getUrlParam('av') : null;
-    return v && (calendarViews as readonly string[]).includes(v) ? (v as 'week' | 'day' | 'termine' | 'aufgaben') : 'month';
+    const ok = (v: unknown) => typeof v === 'string' && (calendarViews as readonly string[]).includes(v);
+    const fromUrl = persist ? getUrlParam('av') : null;
+    if (fromUrl && ok(fromUrl)) return fromUrl as 'week' | 'day' | 'termine' | 'aufgaben';
+    if (persist) {
+      const saved = loadPref<string>(PREF_CAL_VIEW, 'month', ok);
+      if (ok(saved)) return saved as 'week' | 'day' | 'termine' | 'aufgaben';
+    }
+    return 'month';
   });
+  // Das DATUM bleibt bewusst nur in der URL (also über ein Neuladen hinweg) und
+  // wird NICHT dauerhaft gemerkt: wer die App morgen wieder öffnet, will heute
+  // sehen – nicht die Woche von letztem Mal.
   const [anchor, setAnchor] = useState<Date>(() => {
     const d = persist ? getUrlParam('ad') : null;
     return d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? dateFromKey(d) : new Date();
   });
   // Aufgaben-Tab: Liste (alles) oder Wochenansicht (wie Kalender, aber Aufgaben).
-  const [taskView, setTaskView] = useState<'list' | 'week'>('list');
+  const [taskView, setTaskView] = useState<'list' | 'week'>(() =>
+    persist ? loadPref<'list' | 'week'>(PREF_TASK_VIEW, 'list', (v) => v === 'list' || v === 'week') : 'list'
+  );
   useEffect(() => {
     // In der reinen Aufgabenliste keine Ansicht persistieren (teilt sich ?av mit
     // dem Kalender-Tab).
-    if (persist && mode !== 'tasks') setUrlParam('av', view === 'month' ? null : view);
+    if (persist && mode !== 'tasks') {
+      setUrlParam('av', view === 'month' ? null : view);
+      savePref(PREF_CAL_VIEW, view);
+    }
   }, [view, persist, mode]);
+  useEffect(() => {
+    if (persist && mode === 'tasks') savePref(PREF_TASK_VIEW, taskView);
+  }, [taskView, persist, mode]);
   useEffect(() => {
     if (persist) setUrlParam('ad', ymd(anchor) === TODAY ? null : ymd(anchor));
   }, [anchor, persist]);
+
+  // Gemeinsame Wochenansicht: was soll in den Tagesspalten stehen? Termine sind
+  // standardmäßig an (es ist der Kalender), Aufgaben lassen sich dazuschalten.
+  // Auch diese Auswahl wird gemerkt.
+  const [calShow, setCalShow] = useState<{ termine: boolean; aufgaben: boolean }>(() =>
+    persist
+      ? loadPref(PREF_CAL_SHOW, { termine: true, aufgaben: false }, (v) => !!v && typeof v === 'object' && 'termine' in v && 'aufgaben' in v)
+      : { termine: true, aufgaben: false }
+  );
+  useEffect(() => {
+    if (persist) savePref(PREF_CAL_SHOW, calShow);
+  }, [calShow, persist]);
+  const [filterOpen, setFilterOpen] = useState(false);
+  useBackClose(filterOpen, () => setFilterOpen(false));
   const [tasks, setTasks] = useState<Task[]>([]);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1587,14 +1644,25 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
   const members = useMemo(() => memberMap(team), [team]);
   // Für den Kalender nur Termine (termin|beides).
   const eventTasks = useMemo(() => tasks.filter(isEvent), [tasks]);
-  const tasksByDay = useMemo(() => {
+  // Gemeinsame Wochenansicht: Termine und/oder Aufgaben je nach Filter. Ein
+  // Eintrag der Art „beides" erfüllt beide Haken und wird trotzdem nur EINMAL
+  // einsortiert (der Randstreifen zeigt dann beide Farben).
+  const weekItemsByDay = useMemo(() => {
     const map: Record<string, Task[]> = {};
-    for (const t of eventTasks) {
+    for (const t of tasks) {
       if (!t.dueDate) continue;
+      const show = (calShow.termine && isEvent(t)) || (calShow.aufgaben && isTodo(t));
+      if (!show) continue;
       (map[t.dueDate] ??= []).push(t);
     }
+    // Erst nach Uhrzeit (Termine mit Zeit zuerst), dann nach Titel.
+    for (const key of Object.keys(map)) {
+      map[key].sort(
+        (a, b) => (a.startTime ?? '99:99').localeCompare(b.startTime ?? '99:99') || a.title.localeCompare(b.title)
+      );
+    }
     return map;
-  }, [eventTasks]);
+  }, [tasks, calShow]);
 
   const involvesMe = (t: Task) => t.assignees.some((a) => a.userId === currentUserId) || t.createdBy === currentUserId;
 
@@ -1772,6 +1840,78 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
               )}
             </AnimatePresence>
           </div>
+          {/* Filter: nur in der Wochenansicht des Kalenders – dort passen Termine
+              UND Aufgaben nebeneinander in die Tagesspalten. Blendet smooth ein
+              und aus, damit die Leiste in den anderen Ansichten ruhig bleibt.
+              Die Farbpunkte im Menü sind zugleich die Legende der Karten. */}
+          <AnimatePresence initial={false}>
+            {mode !== 'tasks' && view === 'week' && (
+              <motion.div
+                key="calfilter"
+                initial={{ opacity: 0, scale: 0.8, width: 0 }}
+                animate={{ opacity: 1, scale: 1, width: 'auto' }}
+                exit={{ opacity: 0, scale: 0.8, width: 0 }}
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                className="relative shrink-0"
+              >
+                <button
+                  onClick={() => setFilterOpen((v) => !v)}
+                  title="Termine / Aufgaben einblenden"
+                  className={`p-2.5 rounded-2xl border cursor-pointer active:scale-95 transition-transform flex items-center gap-1.5 ${
+                    calShow.aufgaben ? 'border-[#8B7CFF]/50 bg-[#8B7CFF]/15 text-[#B9AEFF]' : 'border-white/10 bg-white/5 text-hl-soft hover:text-white'
+                  }`}
+                >
+                  <SlidersHorizontal className="w-4 h-4" />
+                  <span className="flex gap-0.5">
+                    {calShow.termine && <span className="w-1.5 h-1.5 rounded-full" style={{ background: KIND_COLOR.termin }} />}
+                    {calShow.aufgaben && <span className="w-1.5 h-1.5 rounded-full" style={{ background: KIND_COLOR.aufgabe }} />}
+                  </span>
+                </button>
+                <AnimatePresence>
+                  {filterOpen && (
+                    <>
+                      <div className="fixed inset-0 z-30" onClick={() => setFilterOpen(false)} />
+                      {/* Am Handy sitzt die Leiste UNTEN → das Menü klappt nach
+                          oben auf; ab md sitzt sie oben → dann nach unten. */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 8, scale: 0.94 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 8, scale: 0.94 }}
+                        transition={{ type: 'spring', stiffness: 420, damping: 26 }}
+                        className="absolute right-0 z-40 w-52 rounded-2xl hl-surf border border-white/10 shadow-2xl shadow-black/60 p-1.5 bottom-full mb-2 md:bottom-auto md:top-full md:mt-2 md:mb-0 origin-bottom-right md:origin-top-right"
+                      >
+                        {([
+                          { key: 'termine' as const, label: 'Termine', color: KIND_COLOR.termin },
+                          { key: 'aufgaben' as const, label: 'Aufgaben', color: KIND_COLOR.aufgabe },
+                        ]).map((o) => (
+                          <button
+                            key={o.key}
+                            onClick={() => setCalShow((c) => ({ ...c, [o.key]: !c[o.key] }))}
+                            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl hover:bg-white/[.06] cursor-pointer text-left"
+                          >
+                            <span
+                              className="w-4 h-4 rounded-[5px] border flex items-center justify-center shrink-0"
+                              style={{
+                                borderColor: o.color,
+                                background: calShow[o.key] ? o.color : 'transparent',
+                              }}
+                            >
+                              {calShow[o.key] && <Check className="w-3 h-3 text-[#04120f]" strokeWidth={3} />}
+                            </span>
+                            <span className="text-sm font-sans text-hl-soft">{o.label}</span>
+                            <span className="ml-auto w-2 h-2 rounded-full shrink-0" style={{ background: o.color }} />
+                          </button>
+                        ))}
+                        <p className="px-2.5 pt-1 pb-1.5 text-[11px] font-sans text-hl-faint leading-snug">
+                          Einträge, die beides sind, stehen nur einmal da.
+                        </p>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </AnimatePresence>
           <button
             onClick={() => setNewTask({ date: view === 'day' ? ymd(anchor) : TODAY, type: view === 'aufgaben' ? 'aufgabe' : 'termin' })}
             className="px-4 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wider bg-brand-accent-light hover:bg-brand-accent text-white cursor-pointer flex items-center gap-1.5 shrink-0 active:scale-95 transition-transform"
@@ -2057,7 +2197,7 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
           {range.weeks[0].map((d) => {
             const key = ymd(d);
             const isToday = key === TODAY;
-            const dayTasks = tasksByDay[key] ?? [];
+            const dayTasks = weekItemsByDay[key] ?? [];
             return (
               <div key={key} className={`shrink-0 w-64 hl-surf-soft border border-white/5 rounded-xl p-2.5 flex flex-col ${persist ? 'h-full' : 'min-h-[14rem]'}`}>
                 <div className="flex items-baseline justify-between px-1 mb-2">
@@ -2068,9 +2208,29 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                 </div>
                 {hl[key] && <div className="mb-2"><HighlightPill h={hl[key]} className="!text-[11px] !leading-[18px] py-0.5 text-center" /></div>}
                 <div className={`space-y-2 min-h-[2rem] ${persist ? 'flex-1 overflow-y-auto' : 'flex-1'}`}>
+                  {dayTasks.length === 0 && <p className="text-center text-[11px] text-hl-faint py-3">—</p>}
                   {dayTasks.map((t) => (
-                    <div key={t.id} onClick={(e) => openTaskAt(e, t)} className="hl-card rounded-xl p-2.5 cursor-pointer transition-all">
+                    <div
+                      key={t.id}
+                      onClick={(e) => openTaskAt(e, t)}
+                      className="relative hl-card rounded-xl p-2.5 pl-3 cursor-pointer transition-all overflow-hidden"
+                    >
+                      {/* Randstreifen = Art des Eintrags (Termin türkis, Aufgabe
+                          violett, „beides" halb/halb). Nur nötig, wenn beide
+                          Arten nebeneinander stehen können. */}
+                      {calShow.termine && calShow.aufgaben && (
+                        <span className="absolute left-0 inset-y-0 w-[3px]" style={{ background: kindBar(t) }} />
+                      )}
                       <span className="block text-sm font-sans text-white leading-snug break-words">{t.title}</span>
+                      {calShow.termine && calShow.aufgaben && (
+                        <span
+                          className="inline-flex items-center gap-1 mt-1 text-[10px] font-semibold uppercase tracking-wider"
+                          style={{ color: t.type === 'aufgabe' ? KIND_COLOR.aufgabe : KIND_COLOR.termin }}
+                        >
+                          {KIND_SHORT[t.type]}
+                          {!!t.startTime && <span className="text-hl-mute normal-case tracking-normal font-mono">{timeLabel(t)}</span>}
+                        </span>
+                      )}
                       <div className="flex items-center gap-1.5 mt-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
                         <select
                           value={t.status}
@@ -2100,8 +2260,11 @@ export default function TaskBoard({ currentUserId, isSuperadmin, persist = false
                     </div>
                   ))}
                 </div>
-                <button onClick={() => setNewTask({ date: key, type: 'termin' })} className="mt-2 w-full py-2.5 rounded-xl border border-dashed border-black/10 text-hl-mute hover:text-brand-accent-light hover:border-brand-accent-light/40 text-[13px] font-medium cursor-pointer flex items-center justify-center gap-1.5 transition-colors active:scale-[.98]">
-                  <Plus className="w-3.5 h-3.5" /> Termin
+                <button
+                  onClick={() => setNewTask({ date: key, type: calShow.termine ? 'termin' : 'aufgabe' })}
+                  className="mt-2 w-full py-2.5 rounded-xl border border-dashed border-black/10 text-hl-mute hover:text-brand-accent-light hover:border-brand-accent-light/40 text-[13px] font-medium cursor-pointer flex items-center justify-center gap-1.5 transition-colors active:scale-[.98]"
+                >
+                  <Plus className="w-3.5 h-3.5" /> {calShow.termine ? 'Termin' : 'Aufgabe'}
                 </button>
               </div>
             );
