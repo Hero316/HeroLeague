@@ -7,6 +7,7 @@ import { DEFAULT_SCORING } from '../lib/scoring';
 import { useBackClose } from '../lib/backStack';
 import { useBackdropDismiss, ModalPortal } from './ui';
 import PlayerCrest from './PlayerCrest';
+import StatAccordion from './StatAccordion';
 
 // ===========================================================================
 // Torhüter-Statistiken: eigene Rubrik, damit Keeper nicht nur als eine Zeile im
@@ -88,10 +89,18 @@ export default function KeeperStats({ open, onClose, rows, teams, players, scori
                 stehen hier die Torhüter-Ranglisten.
               </div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-4">
-                {boards.map((b) => (
-                  <BoardCard key={b.id} board={b} crestFor={crestFor} teams={teams} onSelectTeam={onSelectTeam} />
-                ))}
+              <div className="mt-4 max-w-2xl mx-auto">
+                <StatAccordion
+                  defaultOpen={boards[0]?.id ?? null}
+                  items={boards.map((b) => ({
+                    id: b.id,
+                    title: b.label,
+                    accent: '#22DFC9',
+                    icon: <Hand className="w-4 h-4" />,
+                    preview: b.rows[0] ? `1. ${b.rows[0].playerName} · ${fmtBoard(b, b.rows[0].value)}${b.unit ? ` ${b.unit}` : ''}` : undefined,
+                    content: <BoardRows board={b} crestFor={crestFor} teams={teams} onSelectTeam={onSelectTeam} />,
+                  }))}
+                />
               </div>
             )}
 
@@ -102,7 +111,10 @@ export default function KeeperStats({ open, onClose, rows, teams, players, scori
   );
 }
 
-function BoardCard({
+const fmtBoard = (board: KeeperBoard, v: number) =>
+  board.percent ? `${Math.round(v * 100)}%` : board.decimals > 0 ? v.toFixed(board.decimals) : String(v);
+
+function BoardRows({
   board,
   crestFor,
   teams,
@@ -113,57 +125,31 @@ function BoardCard({
   teams: Team[];
   onSelectTeam?: (teamId: string, playerName?: string) => void;
 }) {
-  const fmt = (v: number) =>
-    board.percent ? `${Math.round(v * 100)}%` : board.decimals > 0 ? v.toFixed(board.decimals) : String(v);
-
   return (
-    <div className="relative rounded-[20px] overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] border border-white/10 backdrop-blur-lg shadow-[0_20px_50px_rgba(0,0,0,.35)]">
-      <div
-        className="absolute top-0 right-0 w-[220px] h-[220px] pointer-events-none"
-        style={{ background: 'radial-gradient(circle,rgba(34,223,201,.16),transparent 68%)' }}
-      />
-      <div className="relative px-4 sm:px-6 pt-5 pb-3">
-        <h3 className="font-display font-black text-lg sm:text-xl uppercase tracking-tight text-white leading-none">
-          {board.label}
-        </h3>
-      </div>
-      <div className="relative divide-y divide-white/[.06]">
-        {board.rows.map((r, i) => (
-          <div key={`${r.teamId}::${r.playerName}`} className="flex items-center gap-3 px-4 sm:px-6 py-2.5">
-            <div className={`font-display font-black text-xl sm:text-2xl w-6 sm:w-7 text-center shrink-0 ${RANK_COLOR(i)}`}>
-              {i + 1}
-            </div>
-            <div className="shrink-0">
-              <PlayerCrest
-                player={crestFor(r.teamId, r.playerName)}
-                teams={teams}
-                photoSize="sm"
-                crestSize="md"
-                onSelectTeam={onSelectTeam}
-              />
-            </div>
-            <div className="min-w-0 flex-1">
-              <button
-                onClick={() => onSelectTeam?.(r.teamId, r.playerName)}
-                className={`block max-w-full text-left font-sans font-bold text-[13.5px] sm:text-sm text-white truncate ${
-                  onSelectTeam ? 'cursor-pointer hover:text-brand-accent-light transition-colors' : 'cursor-default'
-                }`}
-              >
-                {r.playerName}
-              </button>
-              <div className="font-sans text-[11px] text-hl-dim truncate mt-0.5">{r.sub}</div>
-            </div>
-            <div className="flex items-baseline gap-1 shrink-0 pl-2">
-              <span className="font-display font-black text-xl sm:text-2xl leading-none text-brand-accent-light tabular-nums">
-                {fmt(r.value)}
-              </span>
-              {!!board.unit && (
-                <span className="font-sans font-bold text-[9px] tracking-wider text-hl-dim">{board.unit}</span>
-              )}
-            </div>
+    <div className="divide-y divide-white/[.06]">
+      {board.rows.map((r, i) => (
+        <div key={`${r.teamId}::${r.playerName}`} className="flex items-center gap-3 px-2 sm:px-3 py-2.5">
+          <div className={`font-display font-black text-xl sm:text-2xl w-6 sm:w-7 text-center shrink-0 ${RANK_COLOR(i)}`}>{i + 1}</div>
+          <div className="shrink-0">
+            <PlayerCrest player={crestFor(r.teamId, r.playerName)} teams={teams} photoSize="sm" crestSize="md" onSelectTeam={onSelectTeam} />
           </div>
-        ))}
-      </div>
+          <div className="min-w-0 flex-1">
+            <button
+              onClick={() => onSelectTeam?.(r.teamId, r.playerName)}
+              className={`block max-w-full text-left font-sans font-bold text-[13.5px] sm:text-sm text-white truncate ${
+                onSelectTeam ? 'cursor-pointer hover:text-brand-accent-light transition-colors' : 'cursor-default'
+              }`}
+            >
+              {r.playerName}
+            </button>
+            <div className="font-sans text-[11px] text-hl-dim truncate mt-0.5">{r.sub}</div>
+          </div>
+          <div className="flex items-baseline gap-1 shrink-0 pl-2">
+            <span className="font-display font-black text-xl sm:text-2xl leading-none text-brand-accent-light tabular-nums">{fmtBoard(board, r.value)}</span>
+            {!!board.unit && <span className="font-sans font-bold text-[9px] tracking-wider text-hl-dim">{board.unit}</span>}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

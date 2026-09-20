@@ -3,13 +3,14 @@ import { motion } from 'motion/react';
 import { PlayerStat, Match, Team, MatchPlayerStat, ScoringConfig } from '../types';
 import { scorerRanking as trackScorers, assistRanking as trackAssists, goldenGloveRanking } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
-import { Swords, Sparkles, Hand } from 'lucide-react';
+import { Swords, Sparkles, Hand, IdCard } from 'lucide-react';
 import PlayerCrest from './PlayerCrest';
 import { TeamCrest } from './ui';
 import { CountUp, Reveal, useSettledList } from './anim';
 import CompareOverlay from './CompareOverlay';
 import SeasonWrapped from './SeasonWrapped';
 import KeeperStats from './KeeperStats';
+import PlayerSteckbrief from './PlayerSteckbrief';
 
 interface StatistikenProps {
   players: PlayerStat[];
@@ -48,6 +49,7 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
   const [compareOpen, setCompareOpen] = React.useState(false);
   const [wrappedOpen, setWrappedOpen] = React.useState(false);
   const [keeperOpen, setKeeperOpen] = React.useState(false);
+  const [steckbriefOpen, setSteckbriefOpen] = React.useState(false);
   const finished = matches.filter((m) => m.status === 'beendet' && m.homeScore !== null && m.awayScore !== null);
   const totalGoals = finished.reduce((acc, m) => acc + (m.homeScore || 0) + (m.awayScore || 0), 0);
   const avgGoals = finished.length ? totalGoals / finished.length : 0;
@@ -328,8 +330,8 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
       </div>
 
       {/* Aktionen: Season-Rückblick + Spieler-Vergleich */}
-      {(finished.length > 0 || players.length >= 2 || gloveRows.length > 0) && (
-        <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      {(finished.length > 0 || players.length > 0 || gloveRows.length > 0) && (
+        <div className="mt-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
           {finished.length > 0 ? (
             <button
               onClick={() => setWrappedOpen(true)}
@@ -346,6 +348,21 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
             </button>
           ) : (
             <span />
+          )}
+          {players.length > 0 && (
+            <button
+              onClick={() => setSteckbriefOpen(true)}
+              className="group relative overflow-hidden inline-flex items-center gap-3 rounded-2xl px-5 py-3 text-left cursor-pointer transition-transform active:scale-[0.98] border border-hl-gold/30"
+              style={{ background: 'linear-gradient(100deg, rgba(233,196,106,.16), rgba(34,223,201,.10))' }}
+            >
+              <span className="w-9 h-9 rounded-xl grid place-items-center bg-hl-gold/20 text-hl-gold shrink-0">
+                <IdCard className="w-5 h-5 transition-transform duration-300 group-hover:-rotate-6" />
+              </span>
+              <span className="min-w-0">
+                <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">Mein Steckbrief</span>
+                <span className="block text-[11px] font-sans font-semibold text-hl-mute mt-0.5">Deine Werte & Platzierungen · zum Teilen</span>
+              </span>
+            </button>
           )}
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
             {/* Eigene Rubrik für die Keeper – statt einer fünften Taste unten in
@@ -379,6 +396,15 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
         teams={teams}
         trackingRows={trackingRows}
         scoringConfig={scoringConfig}
+      />
+      <PlayerSteckbrief
+        open={steckbriefOpen}
+        onClose={() => setSteckbriefOpen(false)}
+        players={players}
+        teams={teams}
+        trackingRows={trackingRows}
+        scoringConfig={scoringConfig}
+        seasonLabel={seasonLabel}
       />
       <KeeperStats
         open={keeperOpen}

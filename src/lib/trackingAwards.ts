@@ -400,3 +400,46 @@ export function keeperBoards(rows: MatchPlayerStat[], cfg: ScoringConfig): Keepe
 
   return out.filter((b) => b.rows.length > 0);
 }
+
+// --- Platzierungen EINES Spielers über alle Bestenlisten -------------------
+// Für den Steckbrief: „#3 · Meiste Paraden · 22". Feldspieler und Torhüter
+// bekommen jeweils ihre Listen; wer in einer Liste nicht in den Top 10 steht,
+// bekommt sie nicht genannt. Beste Platzierungen zuerst.
+export interface Placement {
+  label: string;
+  rank: number;
+  value: string;
+}
+
+export function playerPlacements(rows: MatchPlayerStat[], cfg: ScoringConfig, teamId: string, playerName: string): Placement[] {
+  const me = (r: { teamId: string; playerName: string }) => r.teamId === teamId && r.playerName === playerName;
+  const out: Placement[] = [];
+  const add = <T extends { teamId: string; playerName: string }>(label: string, list: T[], value: (r: T) => string) => {
+    const i = list.findIndex(me);
+    if (i >= 0 && i < 10) out.push({ label, rank: i + 1, value: value(list[i]) });
+  };
+  const pctOf = (q: number | null) => (q == null ? '' : `${Math.round(q * 100)} %`);
+
+  const agg = aggregate(rows, cfg);
+  const self = agg.find(me);
+  if (!self) return [];
+
+  add('HERO-Score', seasonRanking(rows, cfg), (r) => r.score.toFixed(1));
+  if (self.role === 'keeper') {
+    for (const b of keeperBoards(rows, cfg)) {
+      add(b.label, b.rows, (r) => (b.percent ? `${Math.round(r.value * 100)} %` : b.decimals > 0 ? r.value.toFixed(b.decimals) : String(r.value)));
+    }
+    add('Beste Passquote', passLeaders(rows, cfg), (r) => pctOf(r.quote));
+  } else {
+    add('Torschützen', scorerRanking(rows, cfg), (r) => `${r.goals} Tore`);
+    add('Vorlagen', assistRanking(rows, cfg), (r) => `${r.assists}`);
+    add('Kopfballtore', headerGoalLeaders(rows, cfg), (r) => `${r.value}`);
+    add('Beste Passquote', passLeaders(rows, cfg), (r) => pctOf(r.quote));
+    add('Beste Zweikampfquote', duelLeaders(rows, cfg), (r) => pctOf(r.quote));
+    add('Beste Dribbling-Quote', dribbleLeaders(rows, cfg), (r) => pctOf(r.quote));
+    add('Meiste Torschüsse', shotLeaders(rows, cfg), (r) => `${r.value}`);
+    add('Balleroberer', ballWinnerLeaders(rows, cfg), (r) => `${r.value}`);
+    add('Schlüsselpässe', keyPassLeaders(rows, cfg), (r) => `${r.value}`);
+  }
+  return out.sort((a, b) => a.rank - b.rank);
+}

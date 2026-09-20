@@ -7,6 +7,7 @@ import { calculateEventStandings } from '../lib/eventStandings';
 import { scorerRanking, assistRanking, goldenGloveRanking, seasonRanking, passLeaders, dribbleLeaders, duelLeaders, shotLeaders, ballWinnerLeaders, keyPassLeaders, headerGoalLeaders, keeperBoards, type StatLeader } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
 import { useMediaQuery } from '../lib/useMediaQuery';
+import StatAccordion from './StatAccordion';
 
 interface EventPageProps {
   event: EventConfig;
@@ -624,17 +625,26 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
               <BarChart3 className="w-5 h-5 text-[#ff7ac4]" />
               <h3 className="font-display font-black text-lg uppercase tracking-tight text-white">Bestenlisten des Abends</h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 hl-cascade">
-              <LeaderboardCard title="Beste Passquote" accent="#22DFC9" icon={<Send className="w-4 h-4" />} rows={passers} crestFor={crestFor} onPlayer={playerClick} mode="quote" />
-              <LeaderboardCard title="Beste Zweikampfquote" accent="#43E5A0" icon={<Swords className="w-4 h-4" />} rows={duellists} crestFor={crestFor} onPlayer={playerClick} mode="quote" />
-              <LeaderboardCard title="Beste Dribbling-Quote" accent="#E9C46A" icon={<Zap className="w-4 h-4" />} rows={dribblers} crestFor={crestFor} onPlayer={playerClick} mode="quote" />
-              <LeaderboardCard title="Meiste Torschüsse" accent="#ff7ac4" icon={<Target className="w-4 h-4" />} rows={shooters} crestFor={crestFor} onPlayer={playerClick} />
-              <LeaderboardCard title="Balleroberer" accent="#58F0CD" icon={<Shield className="w-4 h-4" />} rows={ballWinners} crestFor={crestFor} onPlayer={playerClick} />
-              <LeaderboardCard title="Schlüsselpässe" accent="#c99bff" icon={<Sparkles className="w-4 h-4" />} rows={keyPassers} crestFor={crestFor} onPlayer={playerClick} />
-              {headers.length > 0 && (
-                <LeaderboardCard title="Kopfballtore" accent="#F0559E" icon={<Goal className="w-4 h-4" />} rows={headers} crestFor={crestFor} onPlayer={playerClick} />
-              )}
-            </div>
+            <StatAccordion
+              items={[
+                { id: 'pass', title: 'Beste Passquote', accent: '#22DFC9', icon: <Send className="w-4 h-4" />, rows: passers, mode: 'quote' as const },
+                { id: 'duel', title: 'Beste Zweikampfquote', accent: '#43E5A0', icon: <Swords className="w-4 h-4" />, rows: duellists, mode: 'quote' as const },
+                { id: 'drib', title: 'Beste Dribbling-Quote', accent: '#E9C46A', icon: <Zap className="w-4 h-4" />, rows: dribblers, mode: 'quote' as const },
+                { id: 'shots', title: 'Meiste Torschüsse', accent: '#ff7ac4', icon: <Target className="w-4 h-4" />, rows: shooters, mode: 'count' as const },
+                { id: 'win', title: 'Balleroberer', accent: '#58F0CD', icon: <Shield className="w-4 h-4" />, rows: ballWinners, mode: 'count' as const },
+                { id: 'key', title: 'Schlüsselpässe', accent: '#c99bff', icon: <Sparkles className="w-4 h-4" />, rows: keyPassers, mode: 'count' as const },
+                { id: 'head', title: 'Kopfballtore', accent: '#F0559E', icon: <Goal className="w-4 h-4" />, rows: headers, mode: 'count' as const },
+              ]
+                .filter((b) => b.rows.length > 0)
+                .map((b) => ({
+                  id: b.id,
+                  title: b.title,
+                  accent: b.accent,
+                  icon: b.icon,
+                  preview: leaderPreview(b.rows[0], b.mode),
+                  content: <LeaderboardCard title={b.title} accent={b.accent} icon={b.icon} rows={b.rows} crestFor={crestFor} onPlayer={playerClick} mode={b.mode} bare />,
+                }))}
+            />
           </div>
         )}
 
@@ -646,28 +656,31 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
               <Hand className="w-5 h-5 text-[#ff7ac4]" />
               <h3 className="font-display font-black text-lg uppercase tracking-tight text-white">Torhüter des Abends</h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 hl-cascade">
-              {gkBoards.map((b) => (
-                <LeaderboardCard
-                  key={b.id}
-                  title={b.label}
-                  accent="#58F0CD"
-                  icon={<Hand className="w-4 h-4" />}
-                  rows={b.rows.map((r) => ({
-                    teamId: r.teamId,
-                    playerName: r.playerName,
-                    value: b.percent ? Math.round(r.value * 100) : b.decimals > 0 ? Number(r.value.toFixed(b.decimals)) : r.value,
-                    quote: null,
-                    games: 0,
-                  }))}
-                  suffix={b.percent ? '%' : ''}
-                  crestFor={crestFor}
-                  onPlayer={playerClick}
-                />
-              ))}
-            </div>
+            <StatAccordion
+              items={gkBoards.map((b) => {
+                const rows = b.rows.map((r) => ({
+                  teamId: r.teamId,
+                  playerName: r.playerName,
+                  value: b.percent ? Math.round(r.value * 100) : b.decimals > 0 ? Number(r.value.toFixed(b.decimals)) : r.value,
+                  quote: null,
+                  games: 0,
+                }));
+                const suffix = b.percent ? '%' : '';
+                return {
+                  id: b.id,
+                  title: b.label,
+                  accent: '#58F0CD',
+                  icon: <Hand className="w-4 h-4" />,
+                  preview: rows[0] ? `1. ${rows[0].playerName} · ${rows[0].value}${suffix}` : undefined,
+                  content: (
+                    <LeaderboardCard title={b.label} accent="#58F0CD" icon={<Hand className="w-4 h-4" />} rows={rows} suffix={suffix} crestFor={crestFor} onPlayer={playerClick} bare />
+                  ),
+                };
+              })}
+            />
           </div>
         )}
+
         </div>
         )}
 
@@ -695,6 +708,13 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
 
 // Kompakte Statistik-Kachel
 // Bestenliste (Top 10) mit Rang, Wappen, Name, Hauptwert und optionaler Quote.
+// Erste Zeile einer Liste als Kurztext für die geschlossene Akkordeon-Taste.
+function leaderPreview(top: StatLeader | undefined, mode: 'count' | 'quote'): string | undefined {
+  if (!top) return undefined;
+  const pct = top.quote != null ? `${Math.round(top.quote * 100)}%` : null;
+  return `1. ${top.playerName} · ${mode === 'quote' ? pct ?? top.value : top.value}`;
+}
+
 function LeaderboardCard({
   title,
   accent,
@@ -704,6 +724,7 @@ function LeaderboardCard({
   onPlayer,
   mode = 'count',
   suffix = '',
+  bare = false,
 }: {
   title: string;
   accent: string;
@@ -713,14 +734,17 @@ function LeaderboardCard({
   onPlayer: (teamName: string, playerName: string) => () => void;
   mode?: 'count' | 'quote'; // 'quote' = Prozent groß (nach Quote sortiert), 'count' = Menge groß
   suffix?: string; // Einheit direkt am großen Wert, z.B. '%' bei Quoten-Listen
+  bare?: boolean; // nur die Liste – Rahmen und Kopf liefert das Akkordeon
 }) {
   if (!rows.length) return null;
   return (
-    <div className="rounded-2xl border border-white/10 bg-[rgba(255,255,255,.02)] p-3.5 min-w-0">
-      <div className="flex items-center gap-2 mb-2.5">
-        <span style={{ color: accent }}>{icon}</span>
-        <h4 className="font-display font-black uppercase tracking-tight text-white text-sm truncate">{title}</h4>
-      </div>
+    <div className={bare ? 'min-w-0 pt-1' : 'rounded-2xl border border-white/10 bg-[rgba(255,255,255,.02)] p-3.5 min-w-0'}>
+      {!bare && (
+        <div className="flex items-center gap-2 mb-2.5">
+          <span style={{ color: accent }}>{icon}</span>
+          <h4 className="font-display font-black uppercase tracking-tight text-white text-sm truncate">{title}</h4>
+        </div>
+      )}
       <ol className="space-y-0.5">
         {rows.map((p, i) => {
           const t = crestFor(p.teamId);
