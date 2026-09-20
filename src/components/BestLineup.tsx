@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Team } from '../types';
-import { shade } from './ui';
+import { shade, readable } from './ui';
 
 // Beste Aufstellung als team-farbiges Mini-Fußballfeld – NICHT die historische
 // Anwesenheits-Kombination, sondern die individuell besten Spieler nach Siegquote:
@@ -116,7 +116,7 @@ const Chip = React.memo(function Chip({
 
 export default function BestLineup({ goalkeeper, field, bench, team, onSelectPlayer }: BestLineupProps) {
   const color = team.logoColor || '#22DFC9';
-  const accent = shade(color, 1.15);
+  const accent = readable(color);
 
   // Feld in 2 Reihen (oben = beste): [0,1] oben, [2,3] unten.
   const topRow = field.slice(0, 2);

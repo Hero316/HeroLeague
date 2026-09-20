@@ -158,6 +158,52 @@ export function shade(hex: string, factor: number): string {
 }
 
 // Monogramm aus dem Kürzel bzw. Namen (max. 2 Zeichen)
+// Vereinsfarbe als TEXT-/Akzentfarbe auf dunklem Grund lesbar machen.
+// Die Farbe im Backend ist frei wählbar – ein dunkles Blau oder Weinrot ist als
+// Wappen-Hintergrund perfekt, als Schrift auf dem dunklen Design aber
+// unsichtbar. Statt Umrandung oder Glow (wirkt billig und hilft bei
+// Dunkel-auf-Dunkel nicht) heben wir die HELLIGKEIT an und behalten den
+// Farbton: aus Dunkelblau wird ein klares Blau, aus Weinrot ein kräftiges Rot.
+// Helle Farben bleiben unverändert. Gibt immer Hex zurück (für `${x}22`-Tints).
+export function readable(hex: string): string {
+  const clean = (hex || '').replace('#', '').trim();
+  const full = clean.length === 3 ? clean.split('').map((c) => c + c).join('') : clean;
+  if (!/^[0-9a-fA-F]{6}$/.test(full)) return hex || '#22DFC9';
+  const r = parseInt(full.slice(0, 2), 16) / 255;
+  const g = parseInt(full.slice(2, 4), 16) / 255;
+  const b = parseInt(full.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let sat = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    else if (max === g) h = ((b - r) / d + 2) / 6;
+    else h = ((r - g) / d + 4) / 6;
+  }
+  // Ziel: mindestens ~0,62 Helligkeit. Fast farblose Töne (Schwarz/Grau)
+  // werden zu hellem Grau, kräftige Töne behalten ihre Sättigung.
+  const MIN_L = 0.62;
+  if (l >= MIN_L) return `#${full}`;
+  const nl = sat < 0.12 ? 0.74 : MIN_L;
+  const ns = sat < 0.12 ? sat : Math.max(sat, 0.55);
+  const hue2rgb = (pp: number, q: number, t: number) => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return pp + (q - pp) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return pp + (q - pp) * (2 / 3 - t) * 6;
+    return pp;
+  };
+  const q = nl < 0.5 ? nl * (1 + ns) : nl + ns - nl * ns;
+  const pp = 2 * nl - q;
+  const to = (v: number) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0');
+  return `#${to(hue2rgb(pp, q, h + 1 / 3))}${to(hue2rgb(pp, q, h))}${to(hue2rgb(pp, q, h - 1 / 3))}`;
+}
+
 export function monogram(name: string): string {
   const trimmed = (name || '').trim();
   if (!trimmed) return '?';

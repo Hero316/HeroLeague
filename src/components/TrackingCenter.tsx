@@ -60,7 +60,7 @@ import {
   type ActionTone,
 } from '../lib/scoring';
 import { emptyCounts, matchNote, normalizeCounts, playerCard, rohscore } from '../lib/rating';
-import { shortDate } from './ui';
+import { shortDate, readable } from './ui';
 import { useBackClose, goBackLayer } from '../lib/backStack';
 import VoiceTrackingPanel, { type VoicePlayer } from './VoiceTrackingPanel';
 import {
@@ -2224,7 +2224,7 @@ function TeamBadge({ team }: { team?: Team }) {
   return team.logoUrl ? (
     <img src={team.logoUrl} alt="" className="w-8 h-8 rounded-lg object-contain shrink-0" />
   ) : (
-    <div className="w-8 h-8 rounded-lg grid place-items-center text-sm shrink-0" style={{ background: `${team.logoColor}22`, color: team.logoColor }}>
+    <div className="w-8 h-8 rounded-lg grid place-items-center text-sm shrink-0" style={{ background: `${team.logoColor}22`, color: readable(team.logoColor) }}>
       {team.logoIcon || '⚽'}
     </div>
   );

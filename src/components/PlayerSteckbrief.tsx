@@ -6,7 +6,7 @@ import { cardForPlayer } from '../lib/playerCards';
 import { playerPlacements } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
 import { useBackClose } from '../lib/backStack';
-import { useBackdropDismiss, ModalPortal, TeamCrest, monogram } from './ui';
+import { useBackdropDismiss, ModalPortal, TeamCrest, monogram, readable } from './ui';
 import { ShareSheet } from './ShareCard';
 import { TIER } from './FifaCard';
 
@@ -182,7 +182,7 @@ function Avatar({ p, color, size }: { p: PlayerStat; color: string; size: number
   ) : (
     <span
       className="rounded-full grid place-items-center font-display font-black shrink-0"
-      style={{ width: size, height: size, background: `${color}26`, color, fontSize: size * 0.38 }}
+      style={{ width: size, height: size, background: `${color}26`, color: readable(color), fontSize: size * 0.38 }}
     >
       {monogram(p.name)}
     </span>
@@ -209,6 +209,8 @@ function Steckbrief({
   inFrame?: boolean;
 }) {
   const accent = team?.logoColor ?? '#22DFC9';
+  // Für Schrift die lesbare Variante – Tints/Rahmen behalten die echte Farbe.
+  const ink = readable(accent);
   const tier = card ? TIER[card.card.tier] : null;
   const keeper = card?.role === 'keeper';
   const games = keeper ? player.gamesInGoal || player.matchesPlayed : player.matchesPlayed;
@@ -238,14 +240,14 @@ function Steckbrief({
           style={{
             width: 76, height: 76, borderRadius: 22, overflow: 'hidden', flexShrink: 0,
             border: `2px solid ${accent}`, background: `${accent}26`,
-            display: 'grid', placeItems: 'center', fontFamily: display, fontWeight: 900, fontSize: 30, color: accent,
+            display: 'grid', placeItems: 'center', fontFamily: display, fontWeight: 900, fontSize: 30, color: ink,
           }}
         >
           {player.imageUrl ? <img src={player.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} /> : monogram(player.name)}
         </div>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontFamily: display, fontWeight: 900, textTransform: 'uppercase', fontSize: 26, lineHeight: 0.92, letterSpacing: '-0.01em' }}>{player.name}</div>
-          <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: accent, marginTop: 6 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: ink, marginTop: 6 }}>
             {player.teamName}
             {seasonLabel ? ` · ${seasonLabel}` : ''}
           </div>
@@ -274,7 +276,7 @@ function Steckbrief({
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginTop: 8 }}>
         {stats.map((s) => (
           <div key={s.l} style={{ textAlign: 'center', border: '1px solid rgba(255,255,255,.1)', borderRadius: 10, padding: '7px 0 6px' }}>
-            <div style={{ fontFamily: display, fontWeight: 900, fontSize: 18, lineHeight: 1, color: accent }}>{s.v}</div>
+            <div style={{ fontFamily: display, fontWeight: 900, fontSize: 18, lineHeight: 1, color: ink }}>{s.v}</div>
             <div style={{ fontSize: 8.5, letterSpacing: '0.12em', color: 'rgba(255,255,255,.55)', marginTop: 3 }}>{s.l}</div>
           </div>
         ))}

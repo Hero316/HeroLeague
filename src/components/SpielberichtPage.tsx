@@ -5,7 +5,7 @@ import type { ActionCounts, Match, MatchPlayerStat, ScoringConfig, Team } from '
 import { notesForMatch, type MatchNoteEntry } from '../lib/trackingView';
 import { ACTION_META, type ActionTone } from '../lib/scoring';
 import { sumCounts, gesamtschuesse, passversuche } from '../lib/rating';
-import { ImageZoom } from './ui';
+import { ImageZoom, readable } from './ui';
 import { useBackClose, goBackLayer } from '../lib/backStack';
 
 // ===========================================================================
@@ -333,7 +333,7 @@ function Crest({ team }: { team?: Team }) {
   return team.logoUrl ? (
     <img src={team.logoUrl} alt="" className="w-10 h-10 lg:w-12 lg:h-12 object-contain shrink-0" />
   ) : (
-    <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl grid place-items-center text-xl shrink-0" style={{ background: `${team.logoColor}22`, color: team.logoColor }}>
+    <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl grid place-items-center text-xl shrink-0" style={{ background: `${team.logoColor}22`, color: readable(team.logoColor) }}>
       {team.logoIcon || '⚽'}
     </div>
   );
@@ -368,8 +368,9 @@ function TeamCompare({
   homeAgg: TeamAgg;
   awayAgg: TeamAgg;
 }) {
-  const hc = home?.logoColor || '#22DFC9';
-  const ac = away?.logoColor || '#E9C46A';
+  // Lesbare Varianten der Vereinsfarben (Zahlen + Balken auf dunklem Grund).
+  const hc = readable(home?.logoColor || '#22DFC9');
+  const ac = readable(away?.logoColor || '#E9C46A');
 
   type Metric = { label: string; icon: string; h: number | null; a: number | null; pct?: boolean; decimal?: boolean; lowerBetter?: boolean };
   const metrics: Metric[] = [

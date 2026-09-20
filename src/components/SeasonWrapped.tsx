@@ -4,7 +4,7 @@ import { X, ChevronLeft, ChevronRight, Share2, Sparkles, Trophy, Target, Zap, Fl
 import type { Match, PlayerStat, ScoringConfig, Team } from '../types';
 import { calculateStandings } from '../lib/standings';
 import { useBackClose } from '../lib/backStack';
-import { monogram, ModalPortal } from './ui';
+import { monogram, ModalPortal, readable } from './ui';
 import { ShareSheet } from './ShareCard';
 
 // ---------------------------------------------------------------------------
@@ -101,7 +101,7 @@ export default function SeasonWrapped({ open, onClose, seasonNumber, seasonLabel
     return (
       <div
         className="rounded-2xl grid place-items-center font-display font-black shrink-0"
-        style={{ width: size, height: size, background: `${color}26`, color, fontSize: size * 0.4 }}
+        style={{ width: size, height: size, background: `${color}26`, color: readable(color), fontSize: size * 0.4 }}
       >
         {t?.logoIcon || monogram(name)}
       </div>

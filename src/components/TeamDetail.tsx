@@ -10,7 +10,7 @@ import BestLineup from './BestLineup';
 import FifaCard from './FifaCard';
 import CardExplainSheet from './CardExplainSheet';
 import { ShareSheet } from './ShareCard';
-import { TeamCrest, FormPill, MatchStatusBadge, shortDate, shade, monogram, ImageZoom, SponsorLink } from './ui';
+import { TeamCrest, FormPill, MatchStatusBadge, shortDate, shade, monogram, readable, ImageZoom, SponsorLink } from './ui';
 
 // Note-Farbe (rot → gelb → grün) relativ zur Rating-Skala.
 function noteColorFor(note: number, cfg: ScoringConfig): string {
@@ -69,7 +69,7 @@ export default function TeamDetail({
   ignoreGamesCap = false,
 }: TeamDetailProps) {
   const color = team.logoColor || '#22DFC9';
-  const accentSoft = shade(color, 1.25); // hellere Variante für Text auf dunklem Grund
+  const accentSoft = readable(color); // Vereinsfarbe als Schrift: immer lesbar, Farbton bleibt
 
   const standings = useMemo(() => calculateStandings(teams, matches), [teams, matches]);
   const rank = standings.findIndex((s) => s.teamId === team.id) + 1;
