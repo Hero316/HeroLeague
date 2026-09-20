@@ -3,7 +3,7 @@ import { usePolling } from '../lib/usePolling';
 import { motion } from 'motion/react';
 import { Headphones, Mic, MicOff, PhoneOff, StickyNote, X, Radio, MonitorUp, Maximize2, Loader2 } from 'lucide-react';
 import type { HuddleState, HuddleParticipant, TeamMember, ChatMessage } from '../types';
-import { HuddleSession, huddleStart, huddleJoin, huddleLeave, huddlePoll, huddleSaveNotes, canShareScreen } from '../lib/huddle';
+import { HuddleSession, huddleStart, huddleJoin, huddleLeave, huddlePoll, huddleSaveNotes, canShareScreen, primeAudio } from '../lib/huddle';
 import Avatar from './Avatar';
 import { ModalPortal } from './ui';
 import { useBackClose } from '../lib/backStack';
@@ -56,6 +56,7 @@ export function useHuddleController(currentUserId: string) {
   // Neuen Huddle starten bzw. laufenden derselben Unterhaltung beitreten.
   const startInConversation = useCallback(async (conversationId: string) => {
     if (ref.current || busy) return;
+    primeAudio(); // iOS: Ton in der Tipp-Geste freischalten – VOR dem Netz-Await
     setBusy(true);
     try {
       const r = await huddleStart(conversationId);
@@ -69,6 +70,7 @@ export function useHuddleController(currentUserId: string) {
 
   const joinHuddle = useCallback(async (huddleId: string) => {
     if (ref.current || busy) return;
+    primeAudio(); // iOS: Ton in der Tipp-Geste freischalten – VOR dem Netz-Await
     setBusy(true);
     try {
       const r = await huddleJoin(huddleId);

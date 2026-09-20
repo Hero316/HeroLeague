@@ -31,6 +31,31 @@ if (turnUrl) {
 }
 const ICE: RTCConfiguration = { iceServers };
 
+// iPhone/iPad (auch iPadOS, das sich als Mac ausgibt). Safari auf iOS hat eine
+// Eigenheit, die Android/Chrome/Mac nicht haben: Sobald ein MediaStream an
+// einen AudioContext angeschlossen wird (unsere Sprech-Erkennung), gibt ein
+// <audio>-Element mit DEMSELBEN Stream nur noch Stille aus. Genau das Bild:
+// „man sieht, dass jemand spricht, hört aber nichts". Deshalb wird auf iOS der
+// Ton der anderen direkt über den AudioContext ausgegeben (Quelle → Ausgang),
+// ohne <audio>-Element. Alle anderen Plattformen bleiben wie bisher.
+export const IS_IOS =
+  typeof navigator !== 'undefined' &&
+  (/iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
+// Ein AudioContext für den ganzen Huddle – und zwar SYNCHRON in der Tipp-Geste
+// erzeugt (primeAudio), BEVOR die Netzanfrage zum Beitreten läuft. iOS erlaubt
+// das Starten von Ton nur in direkter Folge einer Nutzer-Geste; nach dem
+// Warten aufs Netz wäre die Geste „verbraucht" und der Kontext bliebe stumm.
+let sharedCtx: AudioContext | null = null;
+export function primeAudio(): void {
+  try {
+    const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return;
+    if (!sharedCtx || sharedCtx.state === 'closed') sharedCtx = new AC();
+    if (sharedCtx.state !== 'running') sharedCtx.resume().catch(() => {});
+  } catch { /* ohne WebAudio: nur Sprech-Erkennung fehlt */ }
+}
+
 interface PollResult {
   huddle: HuddleState | null;
   participants: HuddleParticipant[];
@@ -89,7 +114,10 @@ export class HuddleSession {
   // Sprech-Erkennung (leuchtender Rahmen wie bei Slack).
   private audioCtx: AudioContext | null = null;
   private analysers = new Map<string, AnalyserNode>();
+  // iOS: Ton der anderen läuft über diese Ausgangsknoten (statt <audio>).
+  private outputs = new Map<string, GainNode>();
   private levelTimer: ReturnType<typeof setInterval> | null = null;
+  private wake: (() => void) | null = null;
   muted = false;
   sharing = false;
   participants: HuddleParticipant[] = [];
@@ -106,14 +134,34 @@ export class HuddleSession {
   }
 
   async start(): Promise<void> {
-    this.local = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    this.local = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      video: false,
+    });
     this.setupLevels();
-    // iOS: AudioContext startet „suspended" und muss nach der Nutzer-Geste (Beitreten-Tipp)
-    // aufgeweckt werden, sonst bleibt der Ton stumm.
-    if (this.audioCtx && this.audioCtx.state === 'suspended') {
-      this.audioCtx.resume().catch(() => {});
-    }
+    this.resumeAudio();
+    // iOS legt den AudioContext bei Anruf, App-Wechsel oder Sperren schlafen
+    // („interrupted"/„suspended") – beim Zurückkommen wieder aufwecken, sonst
+    // bleibt es ab da still, obwohl die Verbindung steht.
+    const wake = () => this.resumeAudio();
+    document.addEventListener('visibilitychange', wake);
+    document.addEventListener('touchend', wake, true);
+    document.addEventListener('click', wake, true);
+    if (this.audioCtx) this.audioCtx.onstatechange = wake;
+    this.wake = () => {
+      document.removeEventListener('visibilitychange', wake);
+      document.removeEventListener('touchend', wake, true);
+      document.removeEventListener('click', wake, true);
+      if (this.audioCtx) this.audioCtx.onstatechange = null;
+    };
     this.loop();
+  }
+
+  private resumeAudio() {
+    const ctx = this.audioCtx;
+    if (!ctx || ctx.state === 'closed') return;
+    if (document.visibilityState !== 'visible') return;
+    if (ctx.state !== 'running') ctx.resume().catch(() => {});
   }
 
   // Lautstärke je Teilnehmer messen → wer redet, leuchtet.
@@ -121,7 +169,9 @@ export class HuddleSession {
     try {
       const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (!AC) return;
-      this.audioCtx = new AC();
+      // Den in der Tipp-Geste erzeugten Kontext weiterverwenden (siehe primeAudio).
+      if (!sharedCtx || sharedCtx.state === 'closed') sharedCtx = new AC();
+      this.audioCtx = sharedCtx;
       if (this.local) this.addAnalyser(this.myId, this.local);
       this.levelTimer = setInterval(() => {
         const speaking = new Set<string>();
@@ -138,15 +188,30 @@ export class HuddleSession {
     } catch { /* Sprech-Erkennung optional */ }
   }
 
-  private addAnalyser(key: string, stream: MediaStream) {
+  // playThrough=true (iOS, fremde Teilnehmer): zusätzlich an den Ausgang hängen –
+  // das IST dann die Tonausgabe. Der eigene Stream wird nie ausgegeben (Echo).
+  private addAnalyser(key: string, stream: MediaStream, playThrough = false): boolean {
     try {
-      if (!this.audioCtx || stream.getAudioTracks().length === 0) return;
+      if (!this.audioCtx || stream.getAudioTracks().length === 0) return false;
+      const old = this.analysers.get(key);
+      if (old) { try { old.disconnect(); } catch { /* egal */ } }
+      const oldOut = this.outputs.get(key);
+      if (oldOut) { try { oldOut.disconnect(); } catch { /* egal */ } this.outputs.delete(key); }
       const src = this.audioCtx.createMediaStreamSource(stream);
       const an = this.audioCtx.createAnalyser();
       an.fftSize = 512;
-      src.connect(an); // NICHT an destination – nur messen, kein Echo
+      src.connect(an); // nur messen
       this.analysers.set(key, an);
-    } catch { /* egal */ }
+      if (playThrough) {
+        const gain = this.audioCtx.createGain();
+        gain.gain.value = 1;
+        src.connect(gain).connect(this.audioCtx.destination);
+        this.outputs.set(key, gain);
+      }
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private loop = async () => {
@@ -189,6 +254,12 @@ export class HuddleSession {
     pc.ontrack = (e) => {
       const stream = e.streams[0];
       if (e.track.kind === 'audio') {
+        // iOS: Ausgabe über den AudioContext (siehe IS_IOS). Klappt das nicht
+        // (kein WebAudio), fällt es auf das <audio>-Element zurück.
+        if (IS_IOS && this.addAnalyser(peerId, stream, true)) {
+          this.resumeAudio();
+          return;
+        }
         let a = this.audios.get(peerId);
         if (!a) {
           a = document.createElement('audio');
@@ -263,6 +334,8 @@ export class HuddleSession {
     if (a) { a.srcObject = null; a.remove(); this.audios.delete(peerId); }
     const an = this.analysers.get(peerId);
     if (an) { try { an.disconnect(); } catch { /* egal */ } this.analysers.delete(peerId); }
+    const out = this.outputs.get(peerId);
+    if (out) { try { out.disconnect(); } catch { /* egal */ } this.outputs.delete(peerId); }
     this.pendingIce.delete(peerId);
     this.onScreen(peerId, null);
   }
@@ -314,8 +387,14 @@ export class HuddleSession {
     if (this.levelTimer) { clearInterval(this.levelTimer); this.levelTimer = null; }
     if (this.screen) { for (const t of this.screen.getTracks()) t.stop(); this.screen = null; }
     for (const id of [...this.peers.keys()]) this.closePeer(id);
+    if (this.wake) { this.wake(); this.wake = null; }
+    for (const an of this.analysers.values()) { try { an.disconnect(); } catch { /* egal */ } }
     this.analysers.clear();
-    if (this.audioCtx) { this.audioCtx.close().catch(() => {}); this.audioCtx = null; }
+    for (const out of this.outputs.values()) { try { out.disconnect(); } catch { /* egal */ } }
+    this.outputs.clear();
+    // Der geteilte Kontext bleibt offen (wird beim nächsten Huddle wiederverwendet –
+    // ein neuer Kontext bräuchte auf iOS wieder eine frische Nutzer-Geste).
+    this.audioCtx = null;
     if (this.local) for (const t of this.local.getTracks()) t.stop();
     this.local = null;
   }
