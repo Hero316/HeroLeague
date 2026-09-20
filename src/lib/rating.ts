@@ -181,54 +181,153 @@ function cardValue(index: number, vol: number, voll: number, cap: number, cfg: S
   return Math.round(clamp(raw, cfg.card.basis, cap));
 }
 
+// --- Erklärung der Karte ----------------------------------------------------
+// Die Karte wird NICHT zweimal gerechnet: `fieldCardExplain`/`keeperCardExplain`
+// bauen die komplette Herleitung (jede Quote, jede Menge, jedes Ziel, die
+// Verlässlichkeit), und die Karte selbst ist nur die Summe daraus. So zeigt die
+// Info-Ansicht auf der Spielerseite garantiert genau das, was auf der Karte steht.
+
+export interface ExplainPart {
+  label: string; // z.B. „Passquote"
+  value: number; // der Wert des Spielers
+  ziel: number; // Elite-Ziel (Index 1,00)
+  kind: 'percent' | 'perGame' | 'number';
+  weight: number; // Gewicht im Index
+  ratio: number; // value/ziel (Menge gedeckelt, bei invert umgedreht)
+  invert?: boolean; // „je weniger, desto besser" (Gegentore)
+}
+export interface ExplainAttr {
+  key: string;
+  label: string;
+  what: string; // ein Satz: was dieser Wert misst
+  value: number;
+  parts: ExplainPart[];
+  index: number; // Σ Gewicht · Verhältnis
+  vol: number; // Stichprobe (Aktionen)
+  voll: number; // ab so vielen Aktionen volle Verlässlichkeit
+  volLabel: string; // z.B. „Pässe"
+  r: number; // Verlässlichkeit 0..1
+  raw: number; // vor dem Deckel
+}
+export interface CardExplain {
+  role: StatRole;
+  games: number;
+  basis: number;
+  spanne: number;
+  cap: number;
+  capNote: string;
+  attrs: ExplainAttr[];
+  ges: number;
+  tier: CardTier;
+}
+
+function attrExplain(
+  key: string,
+  label: string,
+  what: string,
+  parts: ExplainPart[],
+  vol: number,
+  voll: number,
+  volLabel: string,
+  cap: number,
+  cfg: ScoringConfig
+): ExplainAttr {
+  const index = parts.reduce((sum, p) => sum + p.weight * p.ratio, 0);
+  const r = reliability(vol, voll);
+  const raw = cfg.card.basis + r * Math.max(0, index) * cfg.card.spanne;
+  return { key, label, what, value: cardValue(index, vol, voll, cap, cfg), parts, index, vol, voll, volLabel, r, raw };
+}
+
+function capNoteFor(games: number, cfg: ScoringConfig, ignoreGamesCap: boolean): string {
+  if (ignoreGamesCap) return 'Testspiel: kein Spiele-Deckel';
+  if (games >= cfg.card.fullGames) return `ab ${cfg.card.fullGames} Spielen: volle Kappe`;
+  if (games >= 5) return 'bei 5–7 Spielen';
+  if (games >= 3) return 'bei 3–4 Spielen';
+  return 'bei 1–2 Spielen';
+}
+
+function cardFromExplain(e: CardExplain, labels: Record<string, string>): PlayerCard {
+  return {
+    role: e.role,
+    ges: e.ges,
+    tier: e.tier,
+    attrs: e.attrs.map((a) => ({ key: a.key, label: labels[a.key] ?? a.label, value: a.value })),
+  };
+}
+
+const pct = (a: number, b: number) => (b > 0 ? a / b : 0);
+
 // Feldspieler-Karte: PAS · SCH · DRI · DEF → GES (gerundeter Schnitt).
 // ignoreGamesCap=true → kein „wenig-Spiele-Deckel" (z.B. Testspieltag): rein aus
 // den echten Stats, voller Wertebereich bis zur Elite-Kappe.
-export function fieldCard(total: ActionCounts, games: number, cfg: ScoringConfig, ignoreGamesCap = false): PlayerCard {
+export function fieldCardExplain(total: ActionCounts, games: number, cfg: ScoringConfig, ignoreGamesCap = false): CardExplain {
   const g = Math.max(1, games);
   // Cap: Testspiel = 94 (kein Spiele-Deckel), Liga = Spiele-Deckel als Extra-Schutz.
   const cap = ignoreGamesCap ? cfg.card.caps.g8plus : capForGames(games, cfg);
   const p = cfg.card.pas;
-
   const mm = cfg.card.mengeMax;
   const voll = cfg.card.vollAktionen;
+  const c = cfg.card;
 
   // PAS = gewichteter Index aus Pass-Index (Quote+Menge), Schlüsselpässen und Vorlagen.
-  const passIndex =
-    p.indexGewQuote * safeDiv(passRate(total), p.zielPassquote) +
-    p.indexGewMenge * mengeRatio(passversuche(total) / g, p.zielPaesseSpiel, mm);
-  const keyIndex = mengeRatio(total.key_pass / g, p.zielKeySpiel, mm);
-  const assistIndex = mengeRatio(total.assist / g, p.zielAssistsSpiel, mm);
-  const pasIndex = p.gewPassindex * passIndex + p.gewKey * keyIndex + p.gewAssist * assistIndex;
-
-  const schIndex = attrIndex(schussQ(total, cfg), gesamtschuesse(total) / g, cfg.card.sch, mm);
-  const driIndex = attrIndex(dribRate(total), total.dribble_won / g, cfg.card.dri, mm);
-  const defIndex = attrIndex(
-    duelRate(total),
-    (total.duel_won + total.interception + total.shot_blocked_def) / g,
-    cfg.card.def,
-    mm
+  const passes = passversuche(total);
+  const PAS = attrExplain(
+    'PAS',
+    'Passspiel',
+    'Wie sicher und wie viel du passt – plus Schlüsselpässe und Vorlagen.',
+    [
+      { label: 'Passquote', value: passRate(total), ziel: p.zielPassquote, kind: 'percent', weight: p.gewPassindex * p.indexGewQuote, ratio: safeDiv(passRate(total), p.zielPassquote) },
+      { label: 'Pässe pro Spiel', value: passes / g, ziel: p.zielPaesseSpiel, kind: 'perGame', weight: p.gewPassindex * p.indexGewMenge, ratio: mengeRatio(passes / g, p.zielPaesseSpiel, mm) },
+      { label: 'Schlüsselpässe pro Spiel', value: total.key_pass / g, ziel: p.zielKeySpiel, kind: 'perGame', weight: p.gewKey, ratio: mengeRatio(total.key_pass / g, p.zielKeySpiel, mm) },
+      { label: 'Vorlagen pro Spiel', value: total.assist / g, ziel: p.zielAssistsSpiel, kind: 'perGame', weight: p.gewAssist, ratio: mengeRatio(total.assist / g, p.zielAssistsSpiel, mm) },
+    ],
+    passes, voll.pas, 'Pässe', cap, cfg
   );
 
-  // Gleiche Rechnung für Liga und Testspiel; Unterschied ist nur der Cap.
-  const defVol = total.duel_won + total.duel_lost + total.interception + total.shot_blocked_def;
-  const PAS = cardValue(pasIndex, passversuche(total), voll.pas, cap, cfg);
-  const SCH = cardValue(schIndex, gesamtschuesse(total), voll.sch, cap, cfg);
-  const DRI = cardValue(driIndex, total.dribble_won + total.dribble_lost, voll.dri, cap, cfg);
-  const DEF = cardValue(defIndex, defVol, voll.def, cap, cfg);
-  const ges = Math.round((PAS + SCH + DRI + DEF) / 4);
-
-  return {
-    role: 'field',
-    ges,
-    tier: cardTier(ges, cfg),
-    attrs: [
-      { key: 'PAS', label: 'Passspiel', value: PAS },
-      { key: 'SCH', label: 'Abschluss', value: SCH },
-      { key: 'DRI', label: 'Dribbling', value: DRI },
-      { key: 'DEF', label: 'Defensive', value: DEF },
+  const shots = gesamtschuesse(total);
+  const SCH = attrExplain(
+    'SCH',
+    'Abschluss',
+    'Schussqualität (Tore + gehaltene Schüsse + halbe Blocks ÷ alle Schüsse) und wie oft du abschließt.',
+    [
+      { label: 'Schussqualität', value: schussQ(total, cfg), ziel: c.sch.zielQuote, kind: 'percent', weight: c.sch.gewQuote, ratio: safeDiv(schussQ(total, cfg), c.sch.zielQuote) },
+      { label: 'Schüsse pro Spiel', value: shots / g, ziel: c.sch.zielMenge, kind: 'perGame', weight: c.sch.gewMenge, ratio: mengeRatio(shots / g, c.sch.zielMenge, mm) },
     ],
-  };
+    shots, voll.sch, 'Schüsse', cap, cfg
+  );
+
+  const dribs = total.dribble_won + total.dribble_lost;
+  const DRI = attrExplain(
+    'DRI',
+    'Dribbling',
+    'Wie viele Dribblings du gewinnst und wie oft du ins Eins-gegen-eins gehst.',
+    [
+      { label: 'Dribblingquote', value: dribRate(total), ziel: c.dri.zielQuote, kind: 'percent', weight: c.dri.gewQuote, ratio: safeDiv(dribRate(total), c.dri.zielQuote) },
+      { label: 'Gewonnene Dribblings pro Spiel', value: total.dribble_won / g, ziel: c.dri.zielMenge, kind: 'perGame', weight: c.dri.gewMenge, ratio: mengeRatio(total.dribble_won / g, c.dri.zielMenge, mm) },
+    ],
+    dribs, voll.dri, 'Dribblings', cap, cfg
+  );
+
+  const defVol = total.duel_won + total.duel_lost + total.interception + total.shot_blocked_def;
+  const defActions = (total.duel_won + total.interception + total.shot_blocked_def) / g;
+  const DEF = attrExplain(
+    'DEF',
+    'Defensive',
+    'Zweikampfquote und wie viel du defensiv wegholst: Zweikämpfe, Interceptions, Blocks.',
+    [
+      { label: 'Zweikampfquote', value: duelRate(total), ziel: c.def.zielQuote, kind: 'percent', weight: c.def.gewQuote, ratio: safeDiv(duelRate(total), c.def.zielQuote) },
+      { label: 'Defensivaktionen pro Spiel', value: defActions, ziel: c.def.zielMenge, kind: 'perGame', weight: c.def.gewMenge, ratio: mengeRatio(defActions, c.def.zielMenge, mm) },
+    ],
+    defVol, voll.def, 'Defensivaktionen', cap, cfg
+  );
+
+  const attrs = [PAS, SCH, DRI, DEF];
+  const ges = Math.round(attrs.reduce((sum, a) => sum + a.value, 0) / 4);
+  return { role: 'field', games, basis: c.basis, spanne: c.spanne, cap, capNote: capNoteFor(games, cfg, ignoreGamesCap), attrs, ges, tier: cardTier(ges, cfg) };
+}
+
+export function fieldCard(total: ActionCounts, games: number, cfg: ScoringConfig, ignoreGamesCap = false): PlayerCard {
+  return cardFromExplain(fieldCardExplain(total, games, cfg, ignoreGamesCap), { PAS: 'Passspiel', SCH: 'Abschluss', DRI: 'Dribbling', DEF: 'Defensive' });
 }
 
 // Torwart-Karte: PAR · SIC · STL · PAS → GK-GES.
@@ -244,6 +343,81 @@ export function fieldCard(total: ActionCounts, games: number, cfg: ScoringConfig
 //   PAS  Passspiel      exakt dieselbe Rechnung wie beim Feldspieler.
 // `cleanSheets` kommt von außen (pro Spiel gezählt), weil die Summen-Zähler
 // nicht wissen, in welchem Spiel welches Gegentor fiel.
+export function keeperCardExplain(
+  total: ActionCounts,
+  games: number,
+  cfg: ScoringConfig,
+  ignoreGamesCap = false,
+  cleanSheets = 0
+): CardExplain {
+  const g = Math.max(1, games);
+  const cap = ignoreGamesCap ? cfg.card.caps.g8plus : capForGames(games, cfg);
+  const p = cfg.card.pas;
+  const mm = cfg.card.mengeMax;
+  const voll = cfg.card.vollAktionen;
+  const c = cfg.card;
+
+  // PAR – Reflexe: Quote der echten Torschüsse, Menge mit Glanz-Bonus.
+  const gkActions = total.save + total.gk_goal_against;
+  const saveRate = pct(total.save, gkActions);
+  const savesPerGame = (total.save + total.save_top) / g;
+  const PAR = attrExplain(
+    'PAR',
+    'Paraden',
+    'Paradenquote und wie viel du hältst – Glanzparaden zählen doppelt.',
+    [
+      { label: 'Paradenquote', value: saveRate, ziel: c.par.zielQuote, kind: 'percent', weight: c.par.gewQuote, ratio: safeDiv(saveRate, c.par.zielQuote) },
+      { label: 'Paraden pro Spiel (Glanz ×2)', value: savesPerGame, ziel: c.par.zielMenge, kind: 'perGame', weight: c.par.gewMenge, ratio: mengeRatio(savesPerGame, c.par.zielMenge, mm) },
+    ],
+    gkActions, voll.par, 'Torschüsse', cap, cfg
+  );
+
+  // SIC – Ergebnis: Anteil Spiele zu null + wenig kassiert.
+  const cleanRate = games > 0 ? Math.min(1, cleanSheets / games) : 0;
+  const concededPerGame = total.gk_goal_against / g;
+  const SIC = attrExplain(
+    'SIC',
+    'Sicherheit',
+    'Wie oft du zu null spielst und wie wenig du kassierst.',
+    [
+      { label: 'Spiele zu null', value: cleanRate, ziel: c.sic.zielQuote, kind: 'percent', weight: c.sic.gewQuote, ratio: safeDiv(cleanRate, c.sic.zielQuote) },
+      { label: 'Gegentore pro Spiel', value: concededPerGame, ziel: c.sic.zielMenge, kind: 'perGame', weight: c.sic.gewMenge, ratio: Math.min(mm, safeDiv(clampMin(c.sic.zielMenge - concededPerGame, 0), c.sic.zielMenge)), invert: true },
+    ],
+    gkActions, voll.sic, 'Torschüsse', cap, cfg
+  );
+
+  // STL – Stellungsspiel: Abwehrquote inkl. Standparaden + proaktive Aktionen.
+  const handled = total.save + total.gk_position_save;
+  const holdRate = pct(handled, handled + total.gk_goal_against);
+  const proactive = total.gk_position_save + total.interception + total.penalty_save;
+  const STL = attrExplain(
+    'STL',
+    'Stellungsspiel',
+    'Alles, was aufs Tor kam – auch die ruhigen Bälle: wie viel blieb draußen? Plus Standparaden, Interceptions, Elfmeter.',
+    [
+      { label: 'Abwehrquote inkl. Standparaden', value: holdRate, ziel: c.stl.zielQuote, kind: 'percent', weight: c.stl.gewQuote, ratio: safeDiv(holdRate, c.stl.zielQuote) },
+      { label: 'Standparaden + Interceptions + Elfmeter pro Spiel', value: proactive / g, ziel: c.stl.zielMenge, kind: 'perGame', weight: c.stl.gewMenge, ratio: mengeRatio(proactive / g, c.stl.zielMenge, mm) },
+    ],
+    proactive, voll.stl, 'Aktionen', cap, cfg
+  );
+
+  const passes = passversuche(total);
+  const PAS = attrExplain(
+    'PAS',
+    'Passspiel',
+    'Wie sicher und wie viel du passt – dieselbe Rechnung wie beim Feldspieler.',
+    [
+      { label: 'Passquote', value: passRate(total), ziel: p.zielPassquote, kind: 'percent', weight: p.indexGewQuote, ratio: safeDiv(passRate(total), p.zielPassquote) },
+      { label: 'Pässe pro Spiel', value: passes / g, ziel: p.zielPaesseSpiel, kind: 'perGame', weight: p.indexGewMenge, ratio: mengeRatio(passes / g, p.zielPaesseSpiel, mm) },
+    ],
+    passes, voll.pas, 'Pässe', cap, cfg
+  );
+
+  const attrs = [STL, PAR, PAS, SIC];
+  const ges = Math.round(attrs.reduce((sum, a) => sum + a.value, 0) / 4);
+  return { role: 'keeper', games, basis: c.basis, spanne: c.spanne, cap, capNote: capNoteFor(games, cfg, ignoreGamesCap), attrs, ges, tier: cardTier(ges, cfg) };
+}
+
 export function keeperCard(
   total: ActionCounts,
   games: number,
@@ -251,51 +425,18 @@ export function keeperCard(
   ignoreGamesCap = false,
   cleanSheets = 0
 ): PlayerCard {
-  const g = Math.max(1, games);
-  const cap = ignoreGamesCap ? cfg.card.caps.g8plus : capForGames(games, cfg);
-  const p = cfg.card.pas;
-  const mm = cfg.card.mengeMax;
-  const voll = cfg.card.vollAktionen;
+  return cardFromExplain(keeperCardExplain(total, games, cfg, ignoreGamesCap, cleanSheets), { STL: 'Stellungsspiel', PAR: 'Paraden', PAS: 'Passspiel', SIC: 'Sicherheit' });
+}
 
-  // PAR – Reflexe: Quote der echten Torschüsse, Menge mit Glanz-Bonus.
-  const gkActions = total.save + total.gk_goal_against;
-  const saveRate = gkActions > 0 ? total.save / gkActions : 0;
-  const parIndex = attrIndex(saveRate, (total.save + total.save_top) / g, cfg.card.par, mm);
-
-  // SIC – Ergebnis: Anteil Spiele zu null + wenig kassiert.
-  const cleanRate = games > 0 ? Math.min(1, cleanSheets / games) : 0;
-  const concededPerGame = total.gk_goal_against / g;
-  const sicIndex = attrIndex(cleanRate, clampMin(cfg.card.sic.zielMenge - concededPerGame, 0), cfg.card.sic, mm);
-
-  // STL – Stellungsspiel: Abwehrquote inkl. Standparaden + proaktive Aktionen.
-  const handled = total.save + total.gk_position_save;
-  const holdRate = handled + total.gk_goal_against > 0 ? handled / (handled + total.gk_goal_against) : 0;
-  const proactive = total.gk_position_save + total.interception + total.penalty_save;
-  const stlIndex = attrIndex(holdRate, proactive / g, cfg.card.stl, mm);
-
-  const passIndex =
-    p.indexGewQuote * safeDiv(passRate(total), p.zielPassquote) +
-    p.indexGewMenge * mengeRatio(passversuche(total) / g, p.zielPaesseSpiel, mm);
-
-  // Verlässlichkeit: wie oft wurde der Keeper überhaupt geprüft? PAR/SIC über
-  // die Torschüsse, STL über die proaktiven Aktionen, PAS über die Pässe.
-  const PAR = cardValue(parIndex, gkActions, voll.par, cap, cfg);
-  const SIC = cardValue(sicIndex, gkActions, voll.sic, cap, cfg);
-  const STL = cardValue(stlIndex, proactive, voll.stl, cap, cfg);
-  const PAS = cardValue(passIndex, passversuche(total), voll.pas, cap, cfg);
-  const ges = Math.round((STL + PAR + PAS + SIC) / 4);
-
-  return {
-    role: 'keeper',
-    ges,
-    tier: cardTier(ges, cfg),
-    attrs: [
-      { key: 'STL', label: 'Stellungsspiel', value: STL },
-      { key: 'PAR', label: 'Paraden', value: PAR },
-      { key: 'PAS', label: 'Passspiel', value: PAS },
-      { key: 'SIC', label: 'Sicherheit', value: SIC },
-    ],
-  };
+export function cardExplain(
+  total: ActionCounts,
+  games: number,
+  role: StatRole,
+  cfg: ScoringConfig,
+  ignoreGamesCap = false,
+  cleanSheets = 0
+): CardExplain {
+  return role === 'keeper' ? keeperCardExplain(total, games, cfg, ignoreGamesCap, cleanSheets) : fieldCardExplain(total, games, cfg, ignoreGamesCap);
 }
 
 export function playerCard(

@@ -1,13 +1,14 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ChevronDown, Share2 } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Share2, Info } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Match, MatchPlayerStat, Player, PlayerStat, ScoringConfig, StatRole, Team, TeamSponsorsMap } from '../types';
 import { calculateStandings } from '../lib/standings';
-import { matchNote, normalizeCounts, playerCard, quotas, sumCounts, countCleanSheets } from '../lib/rating';
+import { matchNote, normalizeCounts, playerCard, cardExplain, quotas, sumCounts, countCleanSheets } from '../lib/rating';
 import { apiFetch } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
 import BestLineup from './BestLineup';
 import FifaCard from './FifaCard';
+import CardExplainSheet from './CardExplainSheet';
 import { ShareSheet } from './ShareCard';
 import { TeamCrest, FormPill, MatchStatusBadge, shortDate, shade, monogram, ImageZoom, SponsorLink } from './ui';
 
@@ -232,6 +233,22 @@ export default function TeamDetail({
         : null,
     [selected, playerRows, trackedTotal, trackedRole, scoringConfig, ignoreGamesCap]
   );
+  // Herleitung der Karte („i"-Knopf) – dieselben Argumente wie die Karte selbst.
+  const cardExplainData = useMemo(
+    () =>
+      selected && playerRows.length > 0 && scoringConfig
+        ? cardExplain(
+            trackedTotal,
+            playerRows.length,
+            trackedRole,
+            scoringConfig,
+            ignoreGamesCap,
+            countCleanSheets(playerRows.map((r) => ({ role: r.role, counts: normalizeCounts(r.counts) })))
+          )
+        : null,
+    [selected, playerRows, trackedTotal, trackedRole, scoringConfig, ignoreGamesCap]
+  );
+  const [cardInfoOpen, setCardInfoOpen] = useState(false);
   const trackedQuotas = useMemo(
     () => (playerRows.length > 0 && scoringConfig ? quotas(trackedTotal, scoringConfig) : null),
     [trackedTotal, playerRows.length, scoringConfig]
@@ -369,13 +386,25 @@ export default function TeamDetail({
               {/* Große FIFA-Karte links – ersetzt das doppelte Foto. Getrackte
                   Spieler bekommen die Karte; ohne Werte zeigen wir das Porträt. */}
               {playerCardData ? (
-                <div className="w-[200px] sm:w-[220px] lg:w-[240px] shrink-0 mx-auto lg:mx-0">
+                <div className="relative w-[200px] sm:w-[220px] lg:w-[240px] shrink-0 mx-auto lg:mx-0">
                   <FifaCard
                     card={playerCardData}
                     name={sizingPlayer.name}
                     imageUrl={sizingPlayer.imageUrl}
                     team={team}
                   />
+                  {/* „i": so entsteht die Karte – oben links über der Ecke, damit es
+                      am Handy wie am PC sofort ins Auge fällt und nichts verdeckt. */}
+                  {cardExplainData && (
+                    <button
+                      onClick={() => setCardInfoOpen(true)}
+                      title="So entsteht die Karte"
+                      aria-label="So entsteht die Karte"
+                      className="absolute -top-2.5 -left-2.5 z-10 w-9 h-9 rounded-full grid place-items-center bg-[#0b1513] border border-brand-accent-light/60 text-brand-accent-light shadow-[0_6px_18px_rgba(0,0,0,.6),0_0_0_3px_rgba(34,223,201,.15)] cursor-pointer transition-transform hover:scale-110 active:scale-95"
+                    >
+                      <Info className="w-[18px] h-[18px]" />
+                    </button>
+                  )}
                   <button
                     onClick={() => setCardShareOpen(true)}
                     className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand-accent-light/12 border border-brand-accent-light/30 px-4 py-2 text-xs font-sans font-bold uppercase tracking-wider text-brand-accent-light cursor-pointer transition-all duration-200 hover:bg-brand-accent-light/20 active:scale-95"
@@ -408,6 +437,15 @@ export default function TeamDetail({
                 </div>
               )}
 
+              {cardExplainData && scoringConfig && (
+                <CardExplainSheet
+                  open={cardInfoOpen}
+                  onClose={() => setCardInfoOpen(false)}
+                  explain={cardExplainData}
+                  name={sizingPlayer.name}
+                  cfg={scoringConfig}
+                />
+              )}
               {playerCardData && (
                 <ShareSheet
                   open={cardShareOpen}
