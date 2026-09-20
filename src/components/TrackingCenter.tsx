@@ -2797,7 +2797,11 @@ function ScoringPanel({ cfg, onSave, onClose }: { cfg: ScoringConfig; onSave: (c
 
         <div className="overflow-y-auto px-5 py-4 space-y-6">
           <section>
-            <h3 className="text-[11px] uppercase tracking-[2px] text-hl-dim mb-2">Punkte je Aktion</h3>
+            <h3 className="text-[11px] uppercase tracking-[2px] text-hl-dim mb-2">Note je Aktion</h3>
+            <p className="text-[11px] text-hl-dim mb-2 leading-relaxed">
+              Jeder Wert ist direkt die Änderung der Note: Tor <b>+1,00</b> heißt, die Note steigt um 1,00. Verlorener Zweikampf
+              <b> −0,06</b> heißt, sie sinkt um 0,06. Kein Faktor, nichts Verstecktes.
+            </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {ACTION_META.map((a) => (
                 <label key={a.key} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/[.03] px-2.5 py-1.5 min-w-0">
@@ -2806,7 +2810,7 @@ function ScoringPanel({ cfg, onSave, onClose }: { cfg: ScoringConfig; onSave: (c
                   </span>
                   <input
                     type="number"
-                    step="0.05"
+                    step="0.01"
                     value={draft.points[a.key]}
                     onChange={(e) => setPoint(a.key, parseFloat(e.target.value) || 0)}
                     className="hl-input w-16 text-right px-1.5 py-1 rounded-md text-sm tabular-nums"
@@ -2817,16 +2821,15 @@ function ScoringPanel({ cfg, onSave, onClose }: { cfg: ScoringConfig; onSave: (c
           </section>
 
           <section>
-            <h3 className="text-[11px] uppercase tracking-[2px] text-hl-dim mb-2">Rating-Regler (Note)</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <h3 className="text-[11px] uppercase tracking-[2px] text-hl-dim mb-2">Note</h3>
+            <div className="grid grid-cols-3 gap-2">
               <NumField label="Start" value={draft.rating.base} step={0.1} onChange={(v) => setDraft((d) => ({ ...d, rating: { ...d.rating, base: v } }))} />
-              <NumField label="je Punkt" value={draft.rating.factor} step={0.05} onChange={(v) => setDraft((d) => ({ ...d, rating: { ...d.rating, factor: v } }))} />
               <NumField label="Minimum" value={draft.rating.min} step={0.5} onChange={(v) => setDraft((d) => ({ ...d, rating: { ...d.rating, min: v } }))} />
               <NumField label="Maximum" value={draft.rating.max} step={0.5} onChange={(v) => setDraft((d) => ({ ...d, rating: { ...d.rating, max: v } }))} />
             </div>
             <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
-              Zu viele 9–10er? <b>„je Punkt"</b> senken (z.&nbsp;B. 0,20 → 0,12) – dann steigt die Note langsamer. Oder einzelne Aktionen oben
-              weniger Punkte geben (z.&nbsp;B. „Pass erfolgreich" 0,10 → 0,05). Wirkt sofort auf alle Noten.
+              Note eines Spiels = <b>Start</b> + Summe aller Aktionen oben, begrenzt auf Minimum–Maximum. Zu viele 9–10er? Dann einzelne
+              Aktionen oben kleiner machen. Wirkt sofort auf alle Noten – auch rückwirkend.
             </p>
           </section>
 

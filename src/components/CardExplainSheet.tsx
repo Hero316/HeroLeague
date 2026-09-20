@@ -29,6 +29,11 @@ export default function CardExplainSheet({ open, onClose, explain, name, cfg }: 
   const backdrop = useBackdropDismiss(onClose);
   const tier = TIER[explain.tier];
 
+  // WICHTIG: ModalPortal sperrt beim Einhängen den Seiten-Scroll. Geschlossen
+  // darf also NICHTS gerendert werden – sonst friert die Spielerseite ein,
+  // sobald eine Karte sichtbar ist (genau der Bug „kann nicht mehr scrollen").
+  if (!open) return null;
+
   return (
     <ModalPortal>
       <AnimatePresence>

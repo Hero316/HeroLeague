@@ -8,37 +8,41 @@ import type { ActionKey, ScoringConfig } from '../types';
 // ===========================================================================
 
 export const DEFAULT_SCORING: ScoringConfig = {
+  // Jeder Wert ist DIREKT die Änderung der Note: ein Tor = +1,00 auf die Note,
+  // ein verlorener Zweikampf = −0,06. Kein versteckter Faktor mehr – was hier
+  // steht, ist das, was passiert. (Frühere Punkte × 0,20 = diese Werte.)
   points: {
-    goal: 5.0,
-    assist: 3.0,
-    shot_on: 0.5,
-    shot_miss: -0.5,
-    pass_ok: 0.1,
-    pass_fail: -0.35,
-    key_pass: 0.75,
-    dribble_won: 0.4,
-    dribble_lost: -0.4,
-    duel_won: 0.4,
-    duel_lost: -0.3,
-    interception: 0.75,
-    turnover: -0.75,
-    own_goal: -5.0,
+    goal: 1.0,
+    assist: 0.6,
+    shot_on: 0.1,
+    shot_miss: -0.1,
+    pass_ok: 0.02,
+    pass_fail: -0.07,
+    key_pass: 0.15,
+    dribble_won: 0.08,
+    dribble_lost: -0.08,
+    duel_won: 0.08,
+    duel_lost: -0.06,
+    interception: 0.15,
+    turnover: -0.15,
+    own_goal: -1.0,
     penalty_goal: 0.0,
     // Kopfballtor ist ein ganz normales Tor (die Taste zählt automatisch auch
-    // `goal` mit) – hier bewusst 0 Zusatzpunkte, es geht nur um die Statistik.
+    // `goal` mit) – hier bewusst 0 Zusatz, es geht nur um die Statistik.
     goal_header: 0.0,
     // Glanzparade zählt automatisch auch als normale Parade; dieser kleine
     // Zuschlag obendrauf macht den Unterschied zur Alltagsparade.
-    save_top: 0.2,
-    save: 0.6,
-    gk_goal_against: -0.5,
-    penalty_save: 2.0,
-    shot_blocked_off: -0.15,
-    shot_blocked_def: 1.0,
-    gk_position_save: 0.25,
+    save_top: 0.04,
+    save: 0.12,
+    gk_goal_against: -0.1,
+    penalty_save: 0.4,
+    shot_blocked_off: -0.03,
+    shot_blocked_def: 0.2,
+    gk_position_save: 0.05,
   },
-  cleanSheetBonus: 2.0,
-  rating: { base: 6.0, factor: 0.2, min: 1.0, max: 10.0 },
+  cleanSheetBonus: 0.4,
+  // factor bleibt aus Kompatibilität im Typ, ist aber immer 1: Note = Start + Summe.
+  rating: { base: 6.0, factor: 1, min: 1.0, max: 10.0 },
   shotBlockFactor: 0.5,
   minimums: { apps: 5, passes: 25, shots: 10, duels: 15, gk: 5 },
   card: {
@@ -78,12 +82,17 @@ export const DEFAULT_SCORING: ScoringConfig = {
 // Tief zusammenführen: gespeicherte (Teil-)Config über die Defaults legen, damit
 // neue Felder immer einen Wert haben (robust gegen alte gespeicherte Stände).
 export function mergeScoring(saved: unknown): ScoringConfig {
-  const s = (saved ?? {}) as Partial<ScoringConfig>;
+  const s0 = (saved ?? {}) as Partial<ScoringConfig>;
   const d = DEFAULT_SCORING;
+  // Alte Stände hatten „Punkte × Faktor (0,20) = Note". Beim Laden einmal in
+  // Notenpunkte umrechnen (Punkte × Faktor), Faktor auf 1 – dann stimmt alles
+  // Gespeicherte weiter, nur eben ohne versteckte Multiplikation. Ein Stand ohne
+  // Faktor-Feld, aber mit Punkten, stammt aus der Zeit mit Standard-Faktor 0,20.
+  const s = legacyToNotePoints(s0);
   return {
     points: { ...d.points, ...(s.points ?? {}) },
     cleanSheetBonus: num(s.cleanSheetBonus, d.cleanSheetBonus),
-    rating: { ...d.rating, ...(s.rating ?? {}) },
+    rating: { ...d.rating, ...(s.rating ?? {}), factor: 1 },
     shotBlockFactor: num(s.shotBlockFactor, d.shotBlockFactor),
     minimums: { ...d.minimums, ...(s.minimums ?? {}) },
     card: {
@@ -111,6 +120,20 @@ export function mergeScoring(saved: unknown): ScoringConfig {
       hero: num(s.tiers?.hero, d.tiers.hero),
       tots: num(s.tiers?.tots, d.tiers.tots),
     },
+  };
+}
+
+function legacyToNotePoints(s: Partial<ScoringConfig>): Partial<ScoringConfig> {
+  const f = typeof s.rating?.factor === 'number' && Number.isFinite(s.rating.factor) ? s.rating.factor : s.points ? 0.2 : 1;
+  if (f === 1) return s;
+  const r2 = (v: number) => Math.round(v * f * 1000) / 1000;
+  const points: Partial<Record<ActionKey, number>> = {};
+  for (const [k, v] of Object.entries(s.points ?? {})) if (typeof v === 'number' && Number.isFinite(v)) points[k as ActionKey] = r2(v);
+  return {
+    ...s,
+    points: points as Record<ActionKey, number>,
+    cleanSheetBonus: typeof s.cleanSheetBonus === 'number' ? r2(s.cleanSheetBonus) : s.cleanSheetBonus,
+    rating: { ...(s.rating ?? DEFAULT_SCORING.rating), factor: 1 },
   };
 }
 
