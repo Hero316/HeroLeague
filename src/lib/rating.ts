@@ -93,8 +93,16 @@ export function rohscore(c: ActionCounts, cfg: ScoringConfig, role: StatRole = '
 
 // „War der Torwart in diesem Spiel wirklich im Tor?" – irgendeine Torwart- oder
 // Feldaktion reicht, damit ein leerer Datensatz keinen Gratis-Bonus bekommt.
-function isKeeperActive(c: ActionCounts): boolean {
+export function isKeeperActive(c: ActionCounts): boolean {
   return c.save > 0 || c.gk_position_save > 0 || c.penalty_save > 0 || passversuche(c) > 0;
+}
+
+// Spiele zu null eines Torwarts – EINE Regel für Karte, Goldenen Handschuh und
+// Ranglisten: als Torwart getrackt, aktiv im Spiel, kein Gegentor.
+export function countCleanSheets(rows: { role: StatRole; counts: ActionCounts }[]): number {
+  let n = 0;
+  for (const r of rows) if (r.role === 'keeper' && r.counts.gk_goal_against === 0 && isKeeperActive(r.counts)) n++;
+  return n;
 }
 
 // Note eines Spiels: base + factor · Rohscore, begrenzt auf [min, max].
@@ -223,29 +231,58 @@ export function fieldCard(total: ActionCounts, games: number, cfg: ScoringConfig
   };
 }
 
-// Torwart-Karte: STL · PAR · PAS · SIC → GK-GES. (Kalibrierung vorläufig.)
-export function keeperCard(total: ActionCounts, games: number, cfg: ScoringConfig, ignoreGamesCap = false): PlayerCard {
+// Torwart-Karte: PAR · SIC · STL · PAS → GK-GES.
+// Jeder Wert misst etwas EIGENES, damit nicht zwei Werte dieselbe Zahl zeigen:
+//   PAR  Paraden        Paradenquote × Paraden pro Spiel (Glanzparaden zählen
+//                       in der Menge doppelt – die Karte soll sie sehen).
+//   SIC  Sicherheit     Zu-null-Quote (Anteil Spiele ohne Gegentor) × wie weit
+//                       die Gegentore pro Spiel unter dem Ziel liegen.
+//   STL  Stellungsspiel Abwehrquote INKLUSIVE Standparaden (alles, was aufs Tor
+//                       kam – wie viel blieb draußen?) × proaktive Aktionen pro
+//                       Spiel (Standparaden + Interceptions + gehaltene Elfmeter).
+//                       Gutes Stellungsspiel macht aus Glanzparaden Standparaden.
+//   PAS  Passspiel      exakt dieselbe Rechnung wie beim Feldspieler.
+// `cleanSheets` kommt von außen (pro Spiel gezählt), weil die Summen-Zähler
+// nicht wissen, in welchem Spiel welches Gegentor fiel.
+export function keeperCard(
+  total: ActionCounts,
+  games: number,
+  cfg: ScoringConfig,
+  ignoreGamesCap = false,
+  cleanSheets = 0
+): PlayerCard {
   const g = Math.max(1, games);
   const cap = ignoreGamesCap ? cfg.card.caps.g8plus : capForGames(games, cfg);
-  const gkActions = total.save + total.gk_goal_against;
-  const saveRate = gkActions > 0 ? total.save / gkActions : 0;
-  const cleanRate = total.gk_goal_against === 0 ? 1 : 0; // grob – Feinschliff später
   const p = cfg.card.pas;
-
   const mm = cfg.card.mengeMax;
   const voll = cfg.card.vollAktionen;
-  const parIndex = attrIndex(saveRate, total.save / g, cfg.card.par, mm);
-  const sicIndex = attrIndex(cleanRate, clampMin(cfg.card.sic.zielMenge - total.gk_goal_against / g, 0), cfg.card.sic, mm);
-  const stlIndex = attrIndex(saveRate, (total.gk_position_save + total.penalty_save) / g, cfg.card.stl, mm);
+
+  // PAR – Reflexe: Quote der echten Torschüsse, Menge mit Glanz-Bonus.
+  const gkActions = total.save + total.gk_goal_against;
+  const saveRate = gkActions > 0 ? total.save / gkActions : 0;
+  const parIndex = attrIndex(saveRate, (total.save + total.save_top) / g, cfg.card.par, mm);
+
+  // SIC – Ergebnis: Anteil Spiele zu null + wenig kassiert.
+  const cleanRate = games > 0 ? Math.min(1, cleanSheets / games) : 0;
+  const concededPerGame = total.gk_goal_against / g;
+  const sicIndex = attrIndex(cleanRate, clampMin(cfg.card.sic.zielMenge - concededPerGame, 0), cfg.card.sic, mm);
+
+  // STL – Stellungsspiel: Abwehrquote inkl. Standparaden + proaktive Aktionen.
+  const handled = total.save + total.gk_position_save;
+  const holdRate = handled + total.gk_goal_against > 0 ? handled / (handled + total.gk_goal_against) : 0;
+  const proactive = total.gk_position_save + total.interception + total.penalty_save;
+  const stlIndex = attrIndex(holdRate, proactive / g, cfg.card.stl, mm);
+
   const passIndex =
     p.indexGewQuote * safeDiv(passRate(total), p.zielPassquote) +
     p.indexGewMenge * mengeRatio(passversuche(total) / g, p.zielPaesseSpiel, mm);
 
-  // Gleiche Rechnung für Liga und Testspiel; Unterschied ist nur der Cap.
-  const STL = cardValue(stlIndex, total.gk_position_save + total.penalty_save, voll.stl, cap, cfg);
+  // Verlässlichkeit: wie oft wurde der Keeper überhaupt geprüft? PAR/SIC über
+  // die Torschüsse, STL über die proaktiven Aktionen, PAS über die Pässe.
   const PAR = cardValue(parIndex, gkActions, voll.par, cap, cfg);
-  const PAS = cardValue(passIndex, passversuche(total), voll.pas, cap, cfg);
   const SIC = cardValue(sicIndex, gkActions, voll.sic, cap, cfg);
+  const STL = cardValue(stlIndex, proactive, voll.stl, cap, cfg);
+  const PAS = cardValue(passIndex, passversuche(total), voll.pas, cap, cfg);
   const ges = Math.round((STL + PAR + PAS + SIC) / 4);
 
   return {
@@ -261,8 +298,15 @@ export function keeperCard(total: ActionCounts, games: number, cfg: ScoringConfi
   };
 }
 
-export function playerCard(total: ActionCounts, games: number, role: StatRole, cfg: ScoringConfig, ignoreGamesCap = false): PlayerCard {
-  return role === 'keeper' ? keeperCard(total, games, cfg, ignoreGamesCap) : fieldCard(total, games, cfg, ignoreGamesCap);
+export function playerCard(
+  total: ActionCounts,
+  games: number,
+  role: StatRole,
+  cfg: ScoringConfig,
+  ignoreGamesCap = false,
+  cleanSheets = 0
+): PlayerCard {
+  return role === 'keeper' ? keeperCard(total, games, cfg, ignoreGamesCap, cleanSheets) : fieldCard(total, games, cfg, ignoreGamesCap);
 }
 
 // Kartenstufe aus dem Gesamtwert.

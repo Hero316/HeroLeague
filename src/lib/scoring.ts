@@ -65,8 +65,12 @@ export const DEFAULT_SCORING: ScoringConfig = {
     dri: { zielQuote: 0.67, zielMenge: 3, gewQuote: 0.7, gewMenge: 0.3 },
     def: { zielQuote: 0.72, zielMenge: 4, gewQuote: 0.7, gewMenge: 0.3 },
     par: { zielQuote: 0.7, zielMenge: 4, gewQuote: 0.7, gewMenge: 0.3 },
-    sic: { zielQuote: 0.5, zielMenge: 1.5, gewQuote: 0.6, gewMenge: 0.4 },
-    stl: { zielQuote: 0.6, zielMenge: 1, gewQuote: 0.5, gewMenge: 0.5 },
+    // SIC: Ziel-Quote = Anteil Spiele zu null (0,4 = fast jedes zweite Spiel),
+    // Ziel-Menge = ab so vielen Gegentoren pro Spiel gibt es für die Menge 0.
+    sic: { zielQuote: 0.4, zielMenge: 1.5, gewQuote: 0.6, gewMenge: 0.4 },
+    // STL: Ziel-Quote = Abwehrquote inkl. Standparaden, Ziel-Menge =
+    // Standparaden + Interceptions + gehaltene Elfmeter pro Spiel.
+    stl: { zielQuote: 0.8, zielMenge: 2, gewQuote: 0.5, gewMenge: 0.5 },
   },
   tiers: { silber: 65, gold: 75, hero: 90, tots: 95 },
 };
@@ -94,8 +98,12 @@ export function mergeScoring(saved: unknown): ScoringConfig {
       dri: { ...d.card.dri, ...(s.card?.dri ?? {}) },
       def: { ...d.card.def, ...(s.card?.def ?? {}) },
       par: { ...d.card.par, ...(s.card?.par ?? {}) },
-      sic: { ...d.card.sic, ...(s.card?.sic ?? {}) },
-      stl: { ...d.card.stl, ...(s.card?.stl ?? {}) },
+      // SIC/STL haben eine neue Bedeutung bekommen (Zu-null-Quote bzw. Abwehr-
+      // quote inkl. Standparaden). Wer die ALTEN Standardwerte gespeichert hat,
+      // hat sie nie angefasst – dann gelten die neuen Standards. Eigene Werte
+      // bleiben unangetastet.
+      sic: { ...d.card.sic, ...(isLegacyKeeperTarget(s.card?.sic, LEGACY_SIC) ? {} : s.card?.sic ?? {}) },
+      stl: { ...d.card.stl, ...(isLegacyKeeperTarget(s.card?.stl, LEGACY_STL) ? {} : s.card?.stl ?? {}) },
     },
     tiers: {
       silber: num(s.tiers?.silber, d.tiers.silber),
@@ -104,6 +112,15 @@ export function mergeScoring(saved: unknown): ScoringConfig {
       tots: num(s.tiers?.tots, d.tiers.tots),
     },
   };
+}
+
+// Alte Torwart-Standardwerte (vor der Umstellung von SIC/STL).
+const LEGACY_SIC = { zielQuote: 0.5, zielMenge: 1.5, gewQuote: 0.6, gewMenge: 0.4 };
+const LEGACY_STL = { zielQuote: 0.6, zielMenge: 1, gewQuote: 0.5, gewMenge: 0.5 };
+function isLegacyKeeperTarget(saved: unknown, legacy: { zielQuote: number; zielMenge: number; gewQuote: number; gewMenge: number }): boolean {
+  if (!saved || typeof saved !== 'object') return false;
+  const t = saved as Record<string, unknown>;
+  return (Object.keys(legacy) as (keyof typeof legacy)[]).every((k) => t[k] === legacy[k]);
 }
 
 function num(v: unknown, fallback: number): number {

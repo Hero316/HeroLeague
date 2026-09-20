@@ -72,9 +72,6 @@ export default function KeeperStats({ open, onClose, rows, teams, players, scori
                 <h2 className="font-display font-black text-xl sm:text-3xl uppercase tracking-tight text-white leading-none truncate">
                   Torhüter-Statistiken
                 </h2>
-                <p className="font-sans text-[11.5px] sm:text-xs text-hl-mute mt-1">
-                  Alles aus den getrackten Torwart-Aktionen · jeweils Top 10
-                </p>
               </div>
               <button
                 onClick={onClose}
@@ -98,11 +95,6 @@ export default function KeeperStats({ open, onClose, rows, teams, players, scori
               </div>
             )}
 
-            <p className="text-[11px] font-sans text-hl-faint leading-relaxed mt-6 max-w-2xl">
-              Quoten-Listen haben bewusst eine Mindestanzahl – sonst führt ein Torwart mit „1 von 1 gehalten"
-              jede Tabelle an. Spiele im Tor zählen nur Partien, in denen jemand wirklich als Torwart getrackt wurde.
-              Alle Grenzwerte lassen sich im Tracking Center anpassen.
-            </p>
           </div>
         </div>
       </motion.div>
@@ -134,7 +126,6 @@ function BoardCard({
         <h3 className="font-display font-black text-lg sm:text-xl uppercase tracking-tight text-white leading-none">
           {board.label}
         </h3>
-        <p className="font-sans text-[11px] text-hl-dim mt-1.5">{board.hint}</p>
       </div>
       <div className="relative divide-y divide-white/[.06]">
         {board.rows.map((r, i) => (

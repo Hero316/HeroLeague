@@ -178,7 +178,12 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
         id: 'best', icon: <Star className="w-4 h-4" />, label: 'Bester Spieler',
         playerName: bestPlayer.playerName, teamId: bestPlayer.teamId,
         sub: `${bestPlayer.score.toFixed(1)} Punkte · ${bestPlayer.teamId}`,
-        rows: hero.map((r) => ({ playerName: r.playerName, teamId: r.teamId, value: r.score.toFixed(1) })),
+        rows: hero.map((r) => ({
+          playerName: r.playerName,
+          teamId: r.teamId,
+          value: r.score.toFixed(1),
+          note: `Ø ${(r.score / Math.max(1, r.games)).toFixed(1)} · ${r.games} Sp.`,
+        })),
       });
     if (glove)
       list.push({
@@ -615,11 +620,10 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
 
         {hasLeaderboards && (
           <div className="mt-9">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-4">
               <BarChart3 className="w-5 h-5 text-[#ff7ac4]" />
               <h3 className="font-display font-black text-lg uppercase tracking-tight text-white">Bestenlisten des Abends</h3>
             </div>
-            <p className="text-[12px] text-hl-mute font-sans mb-4">Aus den live getrackten Spielen — Top 10 je Kategorie.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 hl-cascade">
               <LeaderboardCard title="Beste Passquote" accent="#22DFC9" icon={<Send className="w-4 h-4" />} rows={passers} crestFor={crestFor} onPlayer={playerClick} mode="quote" />
               <LeaderboardCard title="Beste Zweikampfquote" accent="#43E5A0" icon={<Swords className="w-4 h-4" />} rows={duellists} crestFor={crestFor} onPlayer={playerClick} mode="quote" />
@@ -638,11 +642,10 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
             Zeile beim „Besten Torwart" auf. */}
         {gkBoards.length > 0 && (
           <div className="mt-9">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-4">
               <Hand className="w-5 h-5 text-[#ff7ac4]" />
               <h3 className="font-display font-black text-lg uppercase tracking-tight text-white">Torhüter des Abends</h3>
             </div>
-            <p className="text-[12px] text-hl-mute font-sans mb-4">Aus den getrackten Torwart-Aktionen — Top 10 je Kategorie.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 hl-cascade">
               {gkBoards.map((b) => (
                 <LeaderboardCard

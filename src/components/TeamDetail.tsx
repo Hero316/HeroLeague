@@ -3,7 +3,7 @@ import { ArrowLeft, ChevronDown, Share2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Match, MatchPlayerStat, Player, PlayerStat, ScoringConfig, StatRole, Team, TeamSponsorsMap } from '../types';
 import { calculateStandings } from '../lib/standings';
-import { matchNote, normalizeCounts, playerCard, quotas, sumCounts } from '../lib/rating';
+import { matchNote, normalizeCounts, playerCard, quotas, sumCounts, countCleanSheets } from '../lib/rating';
 import { apiFetch } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
 import BestLineup from './BestLineup';
@@ -221,9 +221,16 @@ export default function TeamDetail({
   const playerCardData = useMemo(
     () =>
       selected && playerRows.length > 0 && scoringConfig
-        ? playerCard(trackedTotal, playerRows.length, trackedRole, scoringConfig, ignoreGamesCap)
+        ? playerCard(
+            trackedTotal,
+            playerRows.length,
+            trackedRole,
+            scoringConfig,
+            ignoreGamesCap,
+            countCleanSheets(playerRows.map((r) => ({ role: r.role, counts: normalizeCounts(r.counts) })))
+          )
         : null,
-    [selected, playerRows.length, trackedTotal, trackedRole, scoringConfig, ignoreGamesCap]
+    [selected, playerRows, trackedTotal, trackedRole, scoringConfig, ignoreGamesCap]
   );
   const trackedQuotas = useMemo(
     () => (playerRows.length > 0 && scoringConfig ? quotas(trackedTotal, scoringConfig) : null),

@@ -1,5 +1,5 @@
 import type { ActionCounts, MatchPlayerStat, PlayerCard, ScoringConfig, StatRole } from '../types';
-import { matchNote, normalizeCounts, playerCard, rohscore, sumCounts } from './rating';
+import { isKeeperActive, matchNote, normalizeCounts, playerCard, rohscore, sumCounts } from './rating';
 
 // ===========================================================================
 // Auszeichnungen aus den getrackten Daten: Man of the Matchday, Top 5, HERO ONE
@@ -47,7 +47,7 @@ function aggregate(rows: MatchPlayerStat[], cfg: ScoringConfig, matchFilter?: Se
     a.scoreSum += rohscore(counts, cfg, role);
     a.noteSum += matchNote(counts, cfg, role);
     a.counts.push(counts);
-    if (role === 'keeper' && counts.gk_goal_against === 0) a.cleanSheets += 1;
+    if (role === 'keeper' && counts.gk_goal_against === 0 && isKeeperActive(counts)) a.cleanSheets += 1;
   }
   const out: RankedPlayer[] = [];
   for (const a of map.values()) {
@@ -61,7 +61,7 @@ function aggregate(rows: MatchPlayerStat[], cfg: ScoringConfig, matchFilter?: Se
       score: Math.round(a.scoreSum * 10) / 10,
       avgNote: Math.round((a.noteSum / Math.max(1, a.games)) * 100) / 100,
       total,
-      card: playerCard(total, a.games, role, cfg),
+      card: playerCard(total, a.games, role, cfg, false, a.cleanSheets),
       cleanSheets: a.cleanSheets,
     });
   }

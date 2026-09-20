@@ -1,5 +1,5 @@
 import type { ActionCounts, MatchPlayerStat, PlayerCard, Quotas, ScoringConfig, StatRole } from '../types';
-import { emptyCounts, matchNote, normalizeCounts, playerCard, quotas, sumCounts } from './rating';
+import { emptyCounts, matchNote, normalizeCounts, playerCard, quotas, sumCounts, countCleanSheets } from './rating';
 
 // ===========================================================================
 // Ansicht-Helfer für die öffentliche Anzeige: aus den veröffentlichten Roh-
@@ -63,7 +63,7 @@ export function aggregatePlayers(rows: MatchPlayerStat[], cfg: ScoringConfig): M
       role,
       games,
       total,
-      card: playerCard(total, games, role, cfg),
+      card: playerCard(total, games, role, cfg, false, countCleanSheets(a.perMatch)),
       quotas: quotas(total, cfg),
       perMatch: a.perMatch,
     });
