@@ -1,13 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
-import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shield, Lock, Goal, Crown, Star, Hand, Handshake, Printer, Ticket, ArrowRight, Target, Zap, Send, Sparkles, ChevronDown } from 'lucide-react';
-import { EventConfig, MatchPlayerStat, ScoringConfig, Team } from '../types';
+import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shield, Lock, Goal, Crown, Star, Hand, Handshake, Printer, Ticket, ArrowRight, Target, Zap, Send, Sparkles, ChevronDown, IdCard } from 'lucide-react';
+import { EventConfig, MatchPlayerStat, PlayerStat, ScoringConfig, Team } from '../types';
 import { TeamCrest, LiveBadge } from './ui';
 import { calculateEventStandings } from '../lib/eventStandings';
 import { scorerRanking, assistRanking, goldenGloveRanking, seasonRanking, passLeaders, dribbleLeaders, duelLeaders, shotLeaders, ballWinnerLeaders, keyPassLeaders, headerGoalLeaders, keeperBoards, type StatLeader } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
 import { useMediaQuery } from '../lib/useMediaQuery';
 import StatAccordion from './StatAccordion';
+import PlayerSteckbrief from './PlayerSteckbrief';
+import { normalizeCounts, isKeeperActive } from '../lib/rating';
 
 interface EventPageProps {
   event: EventConfig;
@@ -143,6 +145,88 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
   const topScorer = scorerPoints[0] ?? null;
 
   const hasAwards = Boolean(scorerKing || assistKing || bestPlayer || glove);
+
+  // „Mein Steckbrief" fürs Event: Teams und Spieler kommen aus den getrackten
+  // Zeilen (Team-ID = Teamname), Fotos aus dem Event-Kader bzw. dem Liga-Kader,
+  // Siege/Unentschieden/Niederlagen aus den Event-Ergebnissen des Teams.
+  const [steckbriefOpen, setSteckbriefOpen] = useState(false);
+  const eventTeams = useMemo<Team[]>(
+    () =>
+      event.teams.map((name) => {
+        const crest = crestFor(name);
+        return {
+          id: name,
+          name,
+          shortName: crest?.shortName ?? name.slice(0, 3).toUpperCase(),
+          logoColor: crest?.logoColor ?? '#E6238E',
+          logoIcon: crest?.logoIcon ?? '⚽',
+          logoUrl: crest?.logoUrl,
+        };
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [event.teams, teams]
+  );
+  const eventPlayers = useMemo<PlayerStat[]>(() => {
+    const photoOf = (teamName: string, playerName: string) => {
+      const roster = event.rosters?.find((r) => normName(r.team) === normName(teamName));
+      const fromEvent = roster?.players.find((p) => normName(p.name) === normName(playerName))?.imageUrl;
+      if (fromEvent) return fromEvent;
+      return crestFor(teamName)?.spielerliste?.find((p) => normName(p.name) === normName(playerName))?.imageUrl;
+    };
+    const recordOf = (teamName: string) => standings.find((st) => normName(st.team) === normName(teamName));
+    const map = new Map<string, PlayerStat>();
+    for (const r of trackingRows) {
+      const k = `${r.teamId}::${r.playerName}`;
+      const c = normalizeCounts(r.counts);
+      let p = map.get(k);
+      if (!p) {
+        const t = eventTeams.find((x) => x.id === r.teamId);
+        const rec = recordOf(r.teamId);
+        p = {
+          id: k,
+          name: r.playerName,
+          teamId: r.teamId,
+          teamName: r.teamId,
+          teamLogoColor: t?.logoColor ?? '#E6238E',
+          imageUrl: photoOf(r.teamId, r.playerName),
+          goals: 0,
+          assists: 0,
+          matchesPlayed: 0,
+          wins: rec?.won ?? 0,
+          draws: rec?.drawn ?? 0,
+          losses: rec?.lost ?? 0,
+          motmCount: 0,
+          cleanSheets: 0,
+          gamesInGoal: 0,
+          goalsConceded: 0,
+          points: 0,
+        };
+        map.set(k, p);
+      }
+      p.matchesPlayed += 1;
+      p.goals += c.goal + c.penalty_goal;
+      p.assists += c.assist;
+      if (r.role === 'keeper') {
+        p.gamesInGoal += 1;
+        p.goalsConceded += c.gk_goal_against;
+        if (c.gk_goal_against === 0 && isKeeperActive(c)) p.cleanSheets += 1;
+      }
+    }
+    // Siegquote auf die eigenen Spiele beziehen: das Team-Ergebnis zählt nur für
+    // Spiele, in denen der Spieler getrackt wurde – näherungsweise anteilig.
+    for (const p of map.values()) {
+      const rec = recordOf(p.teamId);
+      const played = rec?.played ?? 0;
+      if (played > 0 && p.matchesPlayed < played) {
+        const f = p.matchesPlayed / played;
+        p.wins = Math.round(p.wins * f);
+        p.draws = Math.round(p.draws * f);
+        p.losses = Math.max(0, p.matchesPlayed - p.wins - p.draws);
+      }
+    }
+    return [...map.values()];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackingRows, event.rosters, eventTeams, standings, teams]);
 
   // Aufgeklappte Auszeichnung (Akkordeon: es ist immer höchstens eine offen).
   const [openAward, setOpenAward] = useState<string | null>(null);
@@ -573,6 +657,34 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
           <BarChart3 className="w-5 h-5 text-[#ff7ac4]" />
           <h2 className="font-display font-black text-xl uppercase tracking-tight text-white">Statistiken vom Abend</h2>
         </div>
+
+        {eventPlayers.length > 0 && (
+          <>
+            <button
+              onClick={() => setSteckbriefOpen(true)}
+              className="group relative overflow-hidden w-full sm:w-auto inline-flex items-center gap-3 rounded-2xl px-5 py-3 mb-6 text-left cursor-pointer transition-transform active:scale-[0.98] border border-[#E6238E]/40"
+              style={{ background: 'linear-gradient(100deg, rgba(230,35,142,.18), rgba(233,196,106,.12))' }}
+            >
+              <span className="w-9 h-9 rounded-xl grid place-items-center bg-[#E6238E]/20 text-[#ff7ac4] shrink-0">
+                <IdCard className="w-5 h-5 transition-transform duration-300 group-hover:-rotate-6" />
+              </span>
+              <span className="min-w-0">
+                <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">Mein Steckbrief</span>
+                <span className="block text-[11px] font-sans font-semibold text-hl-mute mt-0.5">Deine Werte & Platzierungen vom Abend · zum Teilen</span>
+              </span>
+              <ArrowRight className="w-4 h-4 text-[#ff7ac4] ml-auto shrink-0 sm:ml-2" />
+            </button>
+            <PlayerSteckbrief
+              open={steckbriefOpen}
+              onClose={() => setSteckbriefOpen(false)}
+              players={eventPlayers}
+              teams={eventTeams}
+              trackingRows={trackingRows}
+              scoringConfig={scoringConfig}
+              seasonLabel={event.title}
+            />
+          </>
+        )}
 
         {stats ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 hl-cascade">
