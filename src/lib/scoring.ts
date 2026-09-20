@@ -24,6 +24,12 @@ export const DEFAULT_SCORING: ScoringConfig = {
     turnover: -0.75,
     own_goal: -5.0,
     penalty_goal: 0.0,
+    // Kopfballtor ist ein ganz normales Tor (die Taste zählt automatisch auch
+    // `goal` mit) – hier bewusst 0 Zusatzpunkte, es geht nur um die Statistik.
+    goal_header: 0.0,
+    // Glanzparade zählt automatisch auch als normale Parade; dieser kleine
+    // Zuschlag obendrauf macht den Unterschied zur Alltagsparade.
+    save_top: 0.2,
     save: 0.6,
     gk_goal_against: -0.5,
     penalty_save: 2.0,
@@ -118,18 +124,20 @@ export interface ActionMeta {
   tone: ActionTone; // Farbwelt der Taste
   sign: 1 | 0 | -1; // positiv / neutral / negativ
   keeperOnly?: boolean; // nur für Torwart relevant
+  hint?: string; // Hinweis im Tooltip – vor allem bei gekoppelten Tasten
 }
 
 // Reihenfolge & Gruppen wie im HERO Match Tracker.
 export const ACTION_META: ActionMeta[] = [
   { key: 'pass_ok', label: 'Pass erfolgreich', short: 'Pass ✓', icon: '✓', group: 'Pass', tone: 'positive', sign: 1 },
   { key: 'pass_fail', label: 'Fehlpass', short: 'Fehlpass', icon: '✕', group: 'Pass', tone: 'negative', sign: -1 },
-  { key: 'key_pass', label: 'Schlüsselpass', short: 'Schl.', icon: '🔑', group: 'Pass', tone: 'special', sign: 1 },
-  { key: 'assist', label: 'Assist', short: 'Vorlage', icon: '🅰', group: 'Pass', tone: 'special', sign: 1 },
+  { key: 'key_pass', label: 'Schlüsselpass', short: 'Schl.', icon: '🔑', group: 'Pass', tone: 'special', sign: 1, hint: 'zählt automatisch auch als angekommener Pass' },
+  { key: 'assist', label: 'Assist', short: 'Vorlage', icon: '🅰', group: 'Pass', tone: 'special', sign: 1, hint: 'zählt automatisch auch als angekommener Pass' },
   { key: 'shot_on', label: 'Torschuss', short: 'TS', icon: '🎯', group: 'Schuss', tone: 'positive', sign: 1 },
   { key: 'shot_miss', label: 'Fehlschuss', short: 'Fehl.', icon: '↗', group: 'Schuss', tone: 'negative', sign: -1 },
   { key: 'shot_blocked_off', label: 'Schuss geblockt', short: 'Block', icon: '🧱', group: 'Schuss', tone: 'neutral', sign: -1 },
   { key: 'goal', label: 'Tor', short: 'Tor', icon: '⚽', group: 'Schuss', tone: 'goal', sign: 1 },
+  { key: 'goal_header', label: 'Kopfballtor', short: 'Kopfball', icon: '🧠', group: 'Schuss', tone: 'goal', sign: 1, hint: 'zählt automatisch auch als Tor – NICHT zusätzlich „Tor“ drücken. Gleiche Punkte, nur extra in der Statistik.' },
   { key: 'dribble_won', label: 'Dribbling +', short: 'Drib ✓', icon: '✦', group: 'Dribbling', tone: 'positive', sign: 1 },
   { key: 'dribble_lost', label: 'Dribbling −', short: 'Drib ✕', icon: '✕', group: 'Dribbling', tone: 'negative', sign: -1 },
   { key: 'duel_won', label: 'Zweikampf +', short: 'ZK ✓', icon: '🛡', group: 'Defensive', tone: 'positive', sign: 1 },
@@ -140,6 +148,7 @@ export const ACTION_META: ActionMeta[] = [
   { key: 'own_goal', label: 'Eigentor', short: 'ET', icon: '🙈', group: 'Sonstiges', tone: 'negative', sign: -1 },
   { key: 'penalty_goal', label: 'Strafstoßtor', short: 'Elfm.', icon: 'P', group: 'Sonstiges', tone: 'special', sign: 0 },
   { key: 'save', label: 'Parade', short: 'Parade', icon: '🧤', group: 'Torwart', tone: 'positive', sign: 1, keeperOnly: true },
+  { key: 'save_top', label: 'Glanzparade', short: 'Glanz', icon: '🔥', group: 'Torwart', tone: 'special', sign: 1, keeperOnly: true, hint: 'zählt automatisch auch als Parade – NICHT zusätzlich „Parade“ drücken. Gibt einen kleinen Zuschlag obendrauf.' },
   { key: 'gk_goal_against', label: 'Gegentor', short: 'Gegent.', icon: '🥅', group: 'Torwart', tone: 'negative', sign: -1, keeperOnly: true },
   { key: 'gk_position_save', label: 'Standparade', short: 'Standp.', icon: '🧍', group: 'Torwart', tone: 'positive', sign: 1, keeperOnly: true },
   { key: 'penalty_save', label: 'Gehaltener Elfm.', short: 'Elfm. ✓', icon: '✋', group: 'Torwart', tone: 'special', sign: 1, keeperOnly: true },
@@ -162,4 +171,10 @@ export const KEEPER_EXTRA_KEYS: ActionKey[] = ['interception'];
 export const COUPLED_ACTIONS: Partial<Record<ActionKey, ActionKey>> = {
   assist: 'pass_ok',
   key_pass: 'pass_ok',
+  // Ein Kopfballtor IST ein Tor: die Taste zählt beides, damit Torschützenliste,
+  // Chancenverwertung und Karte unverändert weiterrechnen.
+  goal_header: 'goal',
+  // Eine Glanzparade IST eine Parade: sie zählt in die Paradenquote, in den
+  // Goldenen Handschuh und in die Karte – plus den kleinen Zuschlag.
+  save_top: 'save',
 };

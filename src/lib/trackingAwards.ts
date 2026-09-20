@@ -184,6 +184,7 @@ export interface ScorerEntry {
   playerName: string;
   goals: number;
   assists: number;
+  headerGoals: number; // davon per Kopf (Teilmenge von goals)
   games: number;
 }
 function tally(rows: MatchPlayerStat[], cfg: ScoringConfig): ScorerEntry[] {
@@ -192,6 +193,7 @@ function tally(rows: MatchPlayerStat[], cfg: ScoringConfig): ScorerEntry[] {
     playerName: p.playerName,
     goals: p.total.goal + p.total.penalty_goal,
     assists: p.total.assist,
+    headerGoals: p.total.goal_header,
     games: p.games,
   }));
 }
@@ -267,4 +269,134 @@ export function goldenGloveRanking(rows: MatchPlayerStat[], cfg: ScoringConfig):
         a.goalsConceded - b.goalsConceded ||
         a.playerName.localeCompare(b.playerName)
     );
+}
+
+// --- Kopfballtore -----------------------------------------------------------
+// `goal_header` ist eine Teilmenge von `goal` (die Taste zählt beides), deshalb
+// wird hier NICHT nochmal addiert – nur die Kopfballtore für sich.
+export function headerGoalLeaders(rows: MatchPlayerStat[], cfg: ScoringConfig): StatLeader[] {
+  return leaders(rows, cfg, {
+    value: (t) => t.goal_header,
+    quote: (t) => ratio(t.goal_header, t.goal + t.penalty_goal),
+  });
+}
+
+// --- Torhüter-Bestenlisten --------------------------------------------------
+// Eigene Rubrik, damit Keeper nicht nur als eine Zeile im Goldenen Handschuh
+// auftauchen. Jede Liste ist Top 10 und nennt ihre Sortierung im Untertitel.
+export interface KeeperBoard {
+  id: string;
+  label: string; // Überschrift der Liste
+  hint: string; // wonach sortiert wird (eine Zeile)
+  unit: string; // Einheit hinter dem großen Wert
+  decimals: number;
+  percent?: boolean; // Wert als Prozent darstellen
+  rows: { teamId: string; playerName: string; value: number; sub: string }[];
+}
+
+// Ab wie vielen Torwart-Aktionen eine Quote überhaupt gerankt wird – sonst
+// führt ein Keeper mit „1 von 1 gehalten" die Paradenquote an.
+const KEEPER_MIN_ACTIONS = 8;
+
+export function keeperBoards(rows: MatchPlayerStat[], cfg: ScoringConfig): KeeperBoard[] {
+  const glove = goldenGloveRanking(rows, cfg);
+  // Für die Mengenlisten ALLE Keeper (auch unter KEEPER_MIN_GAMES) – dort ist
+  // eine kleine Stichprobe kein Problem, anders als bei den Quoten.
+  const all = aggregate(rows, cfg).filter((p) => p.role === 'keeper');
+
+  const games = (p: RankedPlayer) => Math.max(1, p.games);
+  const gkActions = (p: RankedPlayer) => p.total.save + p.total.gk_goal_against;
+  const spiele = (p: RankedPlayer) => `${p.games} ${p.games === 1 ? 'Spiel' : 'Spiele'} im Tor`;
+
+  const board = (
+    id: string,
+    label: string,
+    hint: string,
+    unit: string,
+    decimals: number,
+    source: RankedPlayer[],
+    value: (p: RankedPlayer) => number,
+    sub: (p: RankedPlayer) => string,
+    o: { asc?: boolean; percent?: boolean; keepZero?: boolean } = {}
+  ): KeeperBoard => ({
+    id,
+    label,
+    hint,
+    unit,
+    decimals,
+    percent: o.percent,
+    rows: source
+      .map((p) => ({ teamId: p.teamId, playerName: p.playerName, value: value(p), sub: sub(p) }))
+      .filter((r) => (o.keepZero ? true : r.value > 0))
+      .sort((a, b) => (o.asc ? a.value - b.value : b.value - a.value) || a.playerName.localeCompare(b.playerName))
+      .slice(0, 10),
+  });
+
+  const out: KeeperBoard[] = [];
+
+  if (glove.length)
+    out.push({
+      id: 'glove',
+      label: 'Goldener Handschuh',
+      hint: `Gesamtwertung · ab ${KEEPER_MIN_GAMES} Spielen im Tor`,
+      unit: 'PKT',
+      decimals: 1,
+      rows: glove.slice(0, 10).map((p) => ({
+        teamId: p.teamId,
+        playerName: p.playerName,
+        value: p.goldenGloveScore,
+        sub: `${p.games} Spiele · ${p.cleanSheets}× zu null · ${p.goalsConceded} Gegentore`,
+      })),
+    });
+
+  out.push(
+    board('saves', 'Meiste Paraden', 'Summe aller Paraden', 'PAR', 0, all, (p) => p.total.save, (p) =>
+      `${spiele(p)} · ${(p.total.save / games(p)).toFixed(1)} pro Spiel`
+    ),
+    board(
+      'saveRate',
+      'Beste Paradenquote',
+      `Paraden ÷ (Paraden + Gegentore) · ab ${KEEPER_MIN_ACTIONS} Torschüssen`,
+      '',
+      0,
+      all.filter((p) => gkActions(p) >= KEEPER_MIN_ACTIONS),
+      (p) => p.total.save / Math.max(1, gkActions(p)),
+      (p) => `${p.total.save} von ${gkActions(p)} gehalten`,
+      { percent: true }
+    ),
+    board('clean', 'Meiste weiße Westen', 'Spiele ohne Gegentor', 'ZU NULL', 0, all, (p) => p.cleanSheets, (p) =>
+      `${spiele(p)} · ${p.total.gk_goal_against} Gegentore`
+    ),
+    board(
+      'conceded',
+      'Wenigste Gegentore',
+      `Gegentore pro Spiel · ab ${KEEPER_MIN_GAMES} Spielen im Tor`,
+      'Ø',
+      2,
+      all.filter((p) => p.games >= KEEPER_MIN_GAMES),
+      (p) => p.total.gk_goal_against / games(p),
+      (p) => `${p.total.gk_goal_against} Gegentore in ${p.games} Spielen`,
+      { asc: true, keepZero: true }
+    ),
+    board('top', 'Glanzparaden', 'Die Paraden, bei denen alle aufstehen', 'GLANZ', 0, all, (p) => p.total.save_top, (p) =>
+      `von ${p.total.save} Paraden insgesamt`
+    ),
+    board('pens', 'Gehaltene Elfmeter', 'Vom Punkt pariert', 'ELFM.', 0, all, (p) => p.total.penalty_save, (p) => spiele(p)),
+    board('pos', 'Standparaden', 'Sichere Beute – ohne Gefahr weggefangen', 'STAND', 0, all, (p) => p.total.gk_position_save, (p) =>
+      spiele(p)
+    ),
+    board(
+      'pass',
+      'Beste Passquote (Torhüter)',
+      'Angekommene Pässe ÷ Passversuche · ab 10 Pässen',
+      '',
+      0,
+      all.filter((p) => p.total.pass_ok + p.total.pass_fail >= 10),
+      (p) => p.total.pass_ok / Math.max(1, p.total.pass_ok + p.total.pass_fail),
+      (p) => `${p.total.pass_ok} von ${p.total.pass_ok + p.total.pass_fail} angekommen`,
+      { percent: true }
+    )
+  );
+
+  return out.filter((b) => b.rows.length > 0);
 }

@@ -2192,7 +2192,7 @@ function ActionPill({ meta, value, onDelta }: { meta: ActionMeta; value: number;
       onTouchStart={startTouch}
       onTouchEnd={endTouch}
       onTouchMove={endTouch}
-      title={`${meta.label} · Linksklick +1 · Rechtsklick −1`}
+      title={`${meta.label}${meta.hint ? ` (${meta.hint})` : ''} · Linksklick +1 · Rechtsklick −1`}
       className={`h-10 rounded-lg border px-2 grid grid-cols-[16px_1fr_auto] items-center gap-1 text-left select-none active:scale-95 transition outline-none focus:ring-2 focus:ring-brand-accent/50 ${toneClass(
         meta.tone
       )}`}

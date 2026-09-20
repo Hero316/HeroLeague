@@ -4,7 +4,7 @@ import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shie
 import { EventConfig, MatchPlayerStat, ScoringConfig, Team } from '../types';
 import { TeamCrest, LiveBadge } from './ui';
 import { calculateEventStandings } from '../lib/eventStandings';
-import { scorerRanking, assistRanking, goldenGloveRanking, seasonRanking, passLeaders, dribbleLeaders, duelLeaders, shotLeaders, ballWinnerLeaders, keyPassLeaders, type StatLeader } from '../lib/trackingAwards';
+import { scorerRanking, assistRanking, goldenGloveRanking, seasonRanking, passLeaders, dribbleLeaders, duelLeaders, shotLeaders, ballWinnerLeaders, keyPassLeaders, headerGoalLeaders, keeperBoards, type StatLeader } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
 import { useMediaQuery } from '../lib/useMediaQuery';
 
@@ -118,8 +118,11 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
   const shooters = useMemo(() => shotLeaders(trackingRows, cfg), [trackingRows, cfg]);
   const ballWinners = useMemo(() => ballWinnerLeaders(trackingRows, cfg), [trackingRows, cfg]);
   const keyPassers = useMemo(() => keyPassLeaders(trackingRows, cfg), [trackingRows, cfg]);
+  const headers = useMemo(() => headerGoalLeaders(trackingRows, cfg), [trackingRows, cfg]);
+  // Torhüter-Ranglisten des Abends (Paraden, Quote, zu null, Glanzparaden …).
+  const gkBoards = useMemo(() => keeperBoards(trackingRows, cfg), [trackingRows, cfg]);
   const hasLeaderboards =
-    passers.length + dribblers.length + duellists.length + shooters.length + ballWinners.length + keyPassers.length > 0;
+    passers.length + dribblers.length + duellists.length + shooters.length + ballWinners.length + keyPassers.length + headers.length > 0;
   // Bester Scorer: Tore UND Vorlagen zusammengezählt.
   const scorerPoints = useMemo(() => {
     const key = (t: string, p: string) => `${t}::${p}`;
@@ -173,14 +176,23 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
     if (bestPlayer)
       list.push({
         id: 'best', icon: <Star className="w-4 h-4" />, label: 'Bester Spieler',
-        playerName: bestPlayer.playerName, teamId: bestPlayer.teamId, sub: bestPlayer.teamId,
+        playerName: bestPlayer.playerName, teamId: bestPlayer.teamId,
+        sub: `${bestPlayer.score.toFixed(1)} Punkte · ${bestPlayer.teamId}`,
         rows: hero.map((r) => ({ playerName: r.playerName, teamId: r.teamId, value: r.score.toFixed(1) })),
       });
     if (glove)
       list.push({
         id: 'keeper', icon: <Hand className="w-4 h-4" />, label: 'Bester Torwart',
-        playerName: glove.playerName, teamId: glove.teamId, sub: glove.teamId,
-        rows: keepers.map((r) => ({ playerName: r.playerName, teamId: r.teamId, value: r.score.toFixed(1) })),
+        playerName: glove.playerName, teamId: glove.teamId,
+        sub: `${glove.goldenGloveScore.toFixed(1)} Punkte · ${glove.cleanSheets}× zu null · ${glove.teamId}`,
+        // WICHTIG: derselbe Wert, nach dem auch sortiert wird (Torwart-Score) –
+        // sonst steht in der Liste eine Zahlenfolge, die nicht absteigt.
+        rows: keepers.map((r) => ({
+          playerName: r.playerName,
+          teamId: r.teamId,
+          value: r.goldenGloveScore.toFixed(1),
+          note: `${r.saves} Par. · ${r.goalsConceded} Geg.`,
+        })),
       });
     return list;
   }, [scorerKing, assistKing, topScorer, bestPlayer, glove, scorers, assists, scorerPoints, hero, keepers]);
@@ -615,6 +627,41 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
               <LeaderboardCard title="Meiste Torschüsse" accent="#ff7ac4" icon={<Target className="w-4 h-4" />} rows={shooters} crestFor={crestFor} onPlayer={playerClick} />
               <LeaderboardCard title="Balleroberer" accent="#58F0CD" icon={<Shield className="w-4 h-4" />} rows={ballWinners} crestFor={crestFor} onPlayer={playerClick} />
               <LeaderboardCard title="Schlüsselpässe" accent="#c99bff" icon={<Sparkles className="w-4 h-4" />} rows={keyPassers} crestFor={crestFor} onPlayer={playerClick} />
+              {headers.length > 0 && (
+                <LeaderboardCard title="Kopfballtore" accent="#F0559E" icon={<Goal className="w-4 h-4" />} rows={headers} crestFor={crestFor} onPlayer={playerClick} />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Eigene Rubrik für die Torhüter – sonst tauchen Keeper nur als eine
+            Zeile beim „Besten Torwart" auf. */}
+        {gkBoards.length > 0 && (
+          <div className="mt-9">
+            <div className="flex items-center gap-2 mb-1">
+              <Hand className="w-5 h-5 text-[#ff7ac4]" />
+              <h3 className="font-display font-black text-lg uppercase tracking-tight text-white">Torhüter des Abends</h3>
+            </div>
+            <p className="text-[12px] text-hl-mute font-sans mb-4">Aus den getrackten Torwart-Aktionen — Top 10 je Kategorie.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 hl-cascade">
+              {gkBoards.map((b) => (
+                <LeaderboardCard
+                  key={b.id}
+                  title={b.label}
+                  accent="#58F0CD"
+                  icon={<Hand className="w-4 h-4" />}
+                  rows={b.rows.map((r) => ({
+                    teamId: r.teamId,
+                    playerName: r.playerName,
+                    value: b.percent ? Math.round(r.value * 100) : b.decimals > 0 ? Number(r.value.toFixed(b.decimals)) : r.value,
+                    quote: null,
+                    games: 0,
+                  }))}
+                  suffix={b.percent ? '%' : ''}
+                  crestFor={crestFor}
+                  onPlayer={playerClick}
+                />
+              ))}
             </div>
           </div>
         )}
@@ -653,6 +700,7 @@ function LeaderboardCard({
   crestFor,
   onPlayer,
   mode = 'count',
+  suffix = '',
 }: {
   title: string;
   accent: string;
@@ -661,6 +709,7 @@ function LeaderboardCard({
   crestFor: (name: string) => Team | undefined;
   onPlayer: (teamName: string, playerName: string) => () => void;
   mode?: 'count' | 'quote'; // 'quote' = Prozent groß (nach Quote sortiert), 'count' = Menge groß
+  suffix?: string; // Einheit direkt am großen Wert, z.B. '%' bei Quoten-Listen
 }) {
   if (!rows.length) return null;
   return (
@@ -695,7 +744,10 @@ function LeaderboardCard({
                 ) : (
                   <>
                     {pct && <span className="shrink-0 font-mono text-[11px] text-hl-dim tabular-nums">{pct}</span>}
-                    <span className="shrink-0 w-7 text-right font-display font-black tabular-nums text-white text-sm">{p.value}</span>
+                    <span className="shrink-0 min-w-7 text-right font-display font-black tabular-nums text-white text-sm">
+                      {p.value}
+                      {suffix}
+                    </span>
                   </>
                 )}
               </button>

@@ -3,12 +3,13 @@ import { motion } from 'motion/react';
 import { PlayerStat, Match, Team, MatchPlayerStat, ScoringConfig } from '../types';
 import { scorerRanking as trackScorers, assistRanking as trackAssists, goldenGloveRanking } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
-import { Swords, Sparkles } from 'lucide-react';
+import { Swords, Sparkles, Hand } from 'lucide-react';
 import PlayerCrest from './PlayerCrest';
 import { TeamCrest } from './ui';
 import { CountUp, Reveal, useSettledList } from './anim';
 import CompareOverlay from './CompareOverlay';
 import SeasonWrapped from './SeasonWrapped';
+import KeeperStats from './KeeperStats';
 
 interface StatistikenProps {
   players: PlayerStat[];
@@ -46,6 +47,7 @@ const VALUE_COLOR: Record<Accent, string> = {
 export default function Statistiken({ players, matches, teams, trackingRows = [], scoringConfig, seasonNumber = 1, seasonLabel = '', onSelectTeam }: StatistikenProps) {
   const [compareOpen, setCompareOpen] = React.useState(false);
   const [wrappedOpen, setWrappedOpen] = React.useState(false);
+  const [keeperOpen, setKeeperOpen] = React.useState(false);
   const finished = matches.filter((m) => m.status === 'beendet' && m.homeScore !== null && m.awayScore !== null);
   const totalGoals = finished.reduce((acc, m) => acc + (m.homeScore || 0) + (m.awayScore || 0), 0);
   const avgGoals = finished.length ? totalGoals / finished.length : 0;
@@ -129,6 +131,7 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
         ...resolvePlayer(e.teamId, e.playerName),
         goals: e.goals,
         assists: e.assists,
+        headerGoals: e.headerGoals,
         matchesPlayed: e.games,
       })),
     [trackingRows, cfg, resolvePlayer]
@@ -325,7 +328,7 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
       </div>
 
       {/* Aktionen: Season-Rückblick + Spieler-Vergleich */}
-      {(finished.length > 0 || players.length >= 2) && (
+      {(finished.length > 0 || players.length >= 2 || gloveRows.length > 0) && (
         <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           {finished.length > 0 ? (
             <button
@@ -344,15 +347,28 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
           ) : (
             <span />
           )}
-          {players.length >= 2 && (
-            <button
-              onClick={() => setCompareOpen(true)}
-              className="group inline-flex items-center justify-center gap-2 rounded-full bg-brand-accent-light/12 border border-brand-accent-light/35 px-5 py-2.5 text-sm font-sans font-bold uppercase tracking-wider text-brand-accent-light cursor-pointer transition-all duration-200 hover:bg-brand-accent-light/20 active:scale-95 shrink-0"
-            >
-              <Swords className="w-4 h-4 transition-transform duration-200 group-hover:-rotate-12" />
-              Spieler vergleichen
-            </button>
-          )}
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            {/* Eigene Rubrik für die Keeper – statt einer fünften Taste unten in
+                der Leiste, die am Handy nur eng würde. */}
+            {gloveRows.length > 0 && (
+              <button
+                onClick={() => setKeeperOpen(true)}
+                className="group inline-flex items-center justify-center gap-2 rounded-full bg-hl-gold/12 border border-hl-gold/35 px-5 py-2.5 text-sm font-sans font-bold uppercase tracking-wider text-hl-gold cursor-pointer transition-all duration-200 hover:bg-hl-gold/20 active:scale-95"
+              >
+                <Hand className="w-4 h-4 transition-transform duration-200 group-hover:-rotate-12" />
+                Torhüter-Statistiken
+              </button>
+            )}
+            {players.length >= 2 && (
+              <button
+                onClick={() => setCompareOpen(true)}
+                className="group inline-flex items-center justify-center gap-2 rounded-full bg-brand-accent-light/12 border border-brand-accent-light/35 px-5 py-2.5 text-sm font-sans font-bold uppercase tracking-wider text-brand-accent-light cursor-pointer transition-all duration-200 hover:bg-brand-accent-light/20 active:scale-95"
+              >
+                <Swords className="w-4 h-4 transition-transform duration-200 group-hover:-rotate-12" />
+                Spieler vergleichen
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -363,6 +379,15 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
         teams={teams}
         trackingRows={trackingRows}
         scoringConfig={scoringConfig}
+      />
+      <KeeperStats
+        open={keeperOpen}
+        onClose={() => setKeeperOpen(false)}
+        rows={trackingRows}
+        teams={teams}
+        players={players}
+        scoringConfig={scoringConfig}
+        onSelectTeam={onSelectTeam}
       />
       <SeasonWrapped
         open={wrappedOpen}
@@ -445,6 +470,8 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
                     const sub = [
                       `${p.assists} Assists`,
                       p.matchesPlayed > 0 ? `${p.matchesPlayed} Spiele` : null,
+                      // Kopfballtore sind eine Teilmenge der Tore – deshalb „davon".
+                      p.headerGoals > 0 ? `davon ${p.headerGoals} per Kopf` : null,
                     ]
                       .filter(Boolean)
                       .join(' · ');

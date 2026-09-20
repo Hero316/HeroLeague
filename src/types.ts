@@ -693,6 +693,7 @@ export interface ActionCounts {
   shot_miss: number; // Fehlschuss (vorbei / Pfosten)
   shot_blocked_off: number; // eigener Schuss geblockt (offensiv)
   goal: number; // Tor – zählt automatisch als Torschuss, NICHT zusätzlich als shot_on
+  goal_header: number; // Kopfballtor – reine Teilmenge von `goal` (gleiche Punkte, nur Statistik)
   dribble_won: number;
   dribble_lost: number;
   duel_won: number; // Zweikampf/Defensivduell gewonnen
@@ -703,6 +704,7 @@ export interface ActionCounts {
   own_goal: number; // Eigentor
   penalty_goal: number; // Strafstoßtor (Teilmenge der Tore, kein Zusatzbonus)
   save: number; // Parade (Torwart)
+  save_top: number; // Glanzparade – Teilmenge von `save`, gibt einen kleinen Zusatzbonus
   gk_goal_against: number; // Gegentor als Torwart
   penalty_save: number; // gehaltener Strafstoß
   gk_position_save: number; // Standparade
