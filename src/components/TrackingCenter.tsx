@@ -1165,15 +1165,8 @@ function DayView({
                 key={m.id}
                 className="hl-card p-3 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0 hover:border-brand-accent/40 transition-colors"
               >
-                <button onClick={() => onOpenMatch(m.id)} className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer">
-                  {/* Beide Wappen zusammen LINKS neben dem Text – vorher hat der
-                      flexible Textblock das Auswärts-Wappen an den rechten Rand
-                      geschoben, wo es zu nichts mehr gehörte. */}
-                  <span className="flex items-center gap-1.5 shrink-0">
-                    <TeamBadge team={home} />
-                    <TeamBadge team={away} />
-                  </span>
-                  <div className="flex-1 min-w-0">
+                <button onClick={() => onOpenMatch(m.id)} className="flex-1 min-w-0 text-left cursor-pointer">
+                  <div className="min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                       {typeof m.field === 'number' && (
                         <span className="text-[9px] font-black uppercase tracking-wider text-brand-accent-light bg-brand-accent/12 border border-brand-accent/25 rounded px-1.5 py-0.5">
@@ -1188,8 +1181,19 @@ function DayView({
                         </span>
                       )}
                     </div>
-                    <div className="font-semibold truncate">
-                      {home?.name ?? m.homeTeamId} <span className="text-hl-faint">vs</span> {away?.name ?? m.awayTeamId}
+                    {/* Wappen Name vs Name Wappen – jedes Wappen klebt an
+                        SEINEM Team. Bricht am Handy sauber um, weil Wappen und
+                        Name zusammen eine Einheit bilden. */}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="inline-flex items-center gap-1.5 min-w-0">
+                        <TeamBadge team={home} size="sm" />
+                        <span className="font-semibold break-words">{home?.name ?? m.homeTeamId}</span>
+                      </span>
+                      <span className="text-hl-faint shrink-0">vs</span>
+                      <span className="inline-flex items-center gap-1.5 min-w-0">
+                        <span className="font-semibold break-words">{away?.name ?? m.awayTeamId}</span>
+                        <TeamBadge team={away} size="sm" />
+                      </span>
                     </div>
                     <div className="text-[11px] text-hl-dim mt-0.5">
                       {m.homeScore !== null && m.awayScore !== null ? `${m.homeScore}:${m.awayScore} · ` : ''}
@@ -2224,12 +2228,14 @@ function toneClass(tone: ActionTone): string {
   }
 }
 
-function TeamBadge({ team }: { team?: Team }) {
-  if (!team) return <div className="w-8 h-8 rounded-lg bg-white/5 shrink-0" />;
+function TeamBadge({ team, size = 'md' }: { team?: Team; size?: 'sm' | 'md' }) {
+  // sm = direkt neben dem Teamnamen in einer Textzeile, md = eigenständig.
+  const box = size === 'sm' ? 'w-7 h-7' : 'w-8 h-8';
+  if (!team) return <div className={`${box} rounded-lg bg-white/5 shrink-0`} />;
   return team.logoUrl ? (
-    <img src={team.logoUrl} alt="" className="w-8 h-8 rounded-lg object-contain shrink-0" />
+    <img src={team.logoUrl} alt="" className={`${box} rounded-lg object-contain shrink-0`} />
   ) : (
-    <div className="w-8 h-8 rounded-lg grid place-items-center text-sm shrink-0" style={{ background: `${team.logoColor}22`, color: readable(team.logoColor) }}>
+    <div className={`${box} rounded-lg grid place-items-center text-sm shrink-0`} style={{ background: `${team.logoColor}22`, color: readable(team.logoColor) }}>
       {team.logoIcon || '⚽'}
     </div>
   );
