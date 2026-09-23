@@ -1166,7 +1166,13 @@ function DayView({
                 className="hl-card p-3 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0 hover:border-brand-accent/40 transition-colors"
               >
                 <button onClick={() => onOpenMatch(m.id)} className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer">
-                  <TeamBadge team={home} />
+                  {/* Beide Wappen zusammen LINKS neben dem Text – vorher hat der
+                      flexible Textblock das Auswärts-Wappen an den rechten Rand
+                      geschoben, wo es zu nichts mehr gehörte. */}
+                  <span className="flex items-center gap-1.5 shrink-0">
+                    <TeamBadge team={home} />
+                    <TeamBadge team={away} />
+                  </span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                       {typeof m.field === 'number' && (
@@ -1190,7 +1196,6 @@ function DayView({
                       {tracked > 0 ? `${tracked} Spieler erfasst` : 'noch nicht erfasst'}
                     </div>
                   </div>
-                  <TeamBadge team={away} />
                 </button>
                 {tracked > 0 && (
                   <button

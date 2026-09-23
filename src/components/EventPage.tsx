@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { CalendarDays, MapPin, ArrowLeft, Trophy, Clock, BarChart3, Swords, Shield, Lock, Goal, Crown, Star, Hand, Handshake, Printer, Ticket, ArrowRight, Target, Zap, Send, Sparkles, ChevronDown, IdCard } from 'lucide-react';
 import { EventConfig, MatchPlayerStat, PlayerStat, ScoringConfig, Team } from '../types';
@@ -9,6 +9,7 @@ import { DEFAULT_SCORING } from '../lib/scoring';
 import { useMediaQuery } from '../lib/useMediaQuery';
 import StatAccordion from './StatAccordion';
 import PlayerSteckbrief from './PlayerSteckbrief';
+import TeamSteckbrief, { type TeamRecord, type TeamResult } from './TeamSteckbrief';
 import { normalizeCounts, isKeeperActive } from '../lib/rating';
 
 interface EventPageProps {
@@ -227,6 +228,46 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
     return [...map.values()];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackingRows, event.rosters, eventTeams, standings, teams]);
+
+  // Team-Steckbrief: Tabellenzeile + alle Ergebnisse des Teams an diesem Abend.
+  const [teamBriefOpen, setTeamBriefOpen] = useState(false);
+  const recordFor = useCallback(
+    (teamId: string): TeamRecord | null => {
+      const i = standings.findIndex((st) => normName(st.team) === normName(teamId));
+      if (i < 0) return null;
+      const st = standings[i];
+      return {
+        rank: i + 1,
+        totalTeams: standings.length,
+        played: st.played,
+        won: st.won,
+        drawn: st.drawn,
+        lost: st.lost,
+        goalsFor: st.goalsFor,
+        goalsAgainst: st.goalsAgainst,
+        points: st.points,
+      };
+    },
+    [standings]
+  );
+  const resultsFor = useCallback(
+    (teamId: string): TeamResult[] => {
+      const out: TeamResult[] = [];
+      for (const m of event.matches) {
+        if (m.homeScore === null || m.awayScore === null) continue;
+        const isHome = normName(m.home) === normName(teamId);
+        const isAway = normName(m.away) === normName(teamId);
+        if (!isHome && !isAway) continue;
+        out.push({
+          opponent: isHome ? m.away : m.home,
+          gf: isHome ? m.homeScore : m.awayScore,
+          ga: isHome ? m.awayScore : m.homeScore,
+        });
+      }
+      return out;
+    },
+    [event.matches]
+  );
 
   // Aufgeklappte Auszeichnung (Akkordeon: es ist immer höchstens eine offen).
   const [openAward, setOpenAward] = useState<string | null>(null);
@@ -660,20 +701,36 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
 
         {eventPlayers.length > 0 && (
           <>
-            <button
-              onClick={() => setSteckbriefOpen(true)}
-              className="group relative overflow-hidden w-full sm:w-auto inline-flex items-center gap-3 rounded-2xl px-5 py-3 mb-6 text-left cursor-pointer transition-transform active:scale-[0.98] border border-[#E6238E]/40"
-              style={{ background: 'linear-gradient(100deg, rgba(230,35,142,.18), rgba(233,196,106,.12))' }}
-            >
-              <span className="w-9 h-9 rounded-xl grid place-items-center bg-[#E6238E]/20 text-[#ff7ac4] shrink-0">
-                <IdCard className="w-5 h-5 transition-transform duration-300 group-hover:-rotate-6" />
-              </span>
-              <span className="min-w-0">
-                <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">Mein Steckbrief</span>
-                <span className="block text-[11px] font-sans font-semibold text-hl-mute mt-0.5">Deine Werte & Platzierungen vom Abend · zum Teilen</span>
-              </span>
-              <ArrowRight className="w-4 h-4 text-[#ff7ac4] ml-auto shrink-0 sm:ml-2" />
-            </button>
+            <div className="flex flex-col sm:flex-row gap-2.5 mb-6">
+              <button
+                onClick={() => setSteckbriefOpen(true)}
+                className="group relative overflow-hidden flex-1 inline-flex items-center gap-3 rounded-2xl px-5 py-3 text-left cursor-pointer transition-transform active:scale-[0.98] border border-[#E6238E]/40"
+                style={{ background: 'linear-gradient(100deg, rgba(230,35,142,.18), rgba(233,196,106,.12))' }}
+              >
+                <span className="w-9 h-9 rounded-xl grid place-items-center bg-[#E6238E]/20 text-[#ff7ac4] shrink-0">
+                  <IdCard className="w-5 h-5 transition-transform duration-300 group-hover:-rotate-6" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">Mein Steckbrief</span>
+                  <span className="block text-[11px] font-sans font-semibold text-hl-mute mt-0.5">Deine Werte & Platzierungen · zum Teilen</span>
+                </span>
+                <ArrowRight className="w-4 h-4 text-[#ff7ac4] ml-auto shrink-0" />
+              </button>
+              <button
+                onClick={() => setTeamBriefOpen(true)}
+                className="group relative overflow-hidden flex-1 inline-flex items-center gap-3 rounded-2xl px-5 py-3 text-left cursor-pointer transition-transform active:scale-[0.98] border border-[#58F0CD]/40"
+                style={{ background: 'linear-gradient(100deg, rgba(88,240,205,.16), rgba(230,35,142,.10))' }}
+              >
+                <span className="w-9 h-9 rounded-xl grid place-items-center bg-[#58F0CD]/20 text-[#58F0CD] shrink-0">
+                  <Shield className="w-5 h-5 transition-transform duration-300 group-hover:-rotate-6" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">Team-Steckbrief</span>
+                  <span className="block text-[11px] font-sans font-semibold text-hl-mute mt-0.5">Platzierung, Bilanz & Beste · zum Teilen</span>
+                </span>
+                <ArrowRight className="w-4 h-4 text-[#58F0CD] ml-auto shrink-0" />
+              </button>
+            </div>
             <PlayerSteckbrief
               open={steckbriefOpen}
               onClose={() => setSteckbriefOpen(false)}
@@ -682,6 +739,17 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
               trackingRows={trackingRows}
               scoringConfig={scoringConfig}
               seasonLabel={event.title}
+            />
+            <TeamSteckbrief
+              open={teamBriefOpen}
+              onClose={() => setTeamBriefOpen(false)}
+              teams={eventTeams}
+              players={eventPlayers}
+              trackingRows={trackingRows}
+              recordFor={recordFor}
+              resultsFor={resultsFor}
+              scoringConfig={scoringConfig}
+              subtitle={event.title}
             />
           </>
         )}
