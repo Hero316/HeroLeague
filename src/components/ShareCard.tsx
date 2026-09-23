@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { X, Share2, Check, Loader2 } from 'lucide-react';
 import { shareNode } from '../lib/share';
@@ -16,6 +16,32 @@ export const ShareCardFrame = React.forwardRef<
   HTMLDivElement,
   { children: React.ReactNode; accent?: string }
 >(function ShareCardFrame({ children, accent = '#22DFC9' }, ref) {
+  // Der Rahmen ist fest 9:16 (Story-Format). Passt der Inhalt nicht hinein,
+  // wurde er bisher unten einfach abgeschnitten – z.B. beim Team-Steckbrief mit
+  // vielen Ergebnissen. Jetzt wird er stattdessen so weit verkleinert, bis er
+  // vollständig passt. Passt er ohnehin, bleibt alles unverändert (Faktor 1).
+  const boxRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    const content = contentRef.current;
+    if (!box || !content) return;
+    const fit = () => {
+      const avail = box.clientHeight;
+      // scrollHeight ist die LAYOUT-Höhe und ändert sich durch transform nicht –
+      // dadurch kann sich das Messen nicht selbst aufschaukeln.
+      const natural = content.scrollHeight;
+      if (avail <= 0 || natural <= 0) return;
+      setScale(natural > avail ? Math.max(0.5, (avail / natural) * 0.995) : 1);
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(box);
+    ro.observe(content);
+    return () => ro.disconnect();
+  }, [children]);
+
   return (
     <div
       ref={ref}
@@ -46,7 +72,11 @@ export const ShareCardFrame = React.forwardRef<
 
       {/* Inhalt */}
       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', padding: '7% 7% 0' }}>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>{children}</div>
+        <div ref={boxRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', overflow: 'hidden' }}>
+          <div ref={contentRef} style={{ width: '100%', transform: `scale(${scale})`, transformOrigin: 'center center' }}>
+            {children}
+          </div>
+        </div>
 
         {/* Wasserzeichen / Footer – echtes Hero-League-Logo + Domain */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: '6%', paddingTop: '4%' }}>

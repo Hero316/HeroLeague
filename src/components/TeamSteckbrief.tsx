@@ -332,7 +332,7 @@ function TeamCard({
             Ergebnisse
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {results.slice(0, 7).map((r, i) => {
+            {results.slice(0, 6).map((r, i) => {
               const win = r.gf > r.ga;
               const draw = r.gf === r.ga;
               const col = win ? '#5CFFAE' : draw ? '#F0CE77' : '#FF8A7A';
