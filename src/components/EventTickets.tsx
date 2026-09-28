@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft, ArrowRight, Ticket as TicketIcon, Mail, KeyRound, CheckCircle2, AlertCircle,
-  Loader2, RefreshCw, Minus, Plus, CalendarDays, MapPin, Heart, PartyPopper,
+  Loader2, RefreshCw, Minus, Plus, CalendarDays, MapPin, Heart, PartyPopper, Camera,
 } from 'lucide-react';
 import {
   fetchTicketConfig, requestTicketCode, confirmTicket, useTurnstile, type TicketConfig,
@@ -223,7 +223,7 @@ export default function EventTickets({
                   <>
                     <div className="flex items-center justify-between hl-card rounded-2xl px-4 py-3">
                       <span className="text-[13px] text-hl-mute">Noch verfügbar</span>
-                      <span className="font-display font-black text-lg text-white tabular-nums"><span style={{ color: `${accent}` }}>{remaining}</span> / {cfg.capacity}</span>
+                      <span className="font-display font-black text-lg text-white tabular-nums">{remaining} / <span style={{ color: `${accent}` }}>{cfg.capacity}</span></span>
                     </div>
                     {err && <ErrorMsg>{err}</ErrorMsg>}
                     <label className="block">
@@ -279,6 +279,15 @@ export default function EventTickets({
                           </button>
                         </div>
                       )}
+                      {/* Fester Hinweis auf Foto-/Videoaufnahmen – immer sichtbar, unabhängig vom Einwilligungstext im Admin. */}
+                      <div className="mt-3 pt-3 border-t border-white/10 flex items-start gap-2.5 text-[12px] text-hl-soft leading-relaxed">
+                        <Camera className="w-4 h-4 shrink-0 mt-0.5" style={{ color: accent }} />
+                        <p>
+                          <b className="text-white">Hinweis:</b> Bei der Veranstaltung werden Fotos und Videos gemacht,
+                          die auf unserer Website und unseren Social-Media-Kanälen veröffentlicht werden. Zuschauer können
+                          außerdem im Livestream zu sehen sein.
+                        </p>
+                      </div>
                     </div>
                     {cfg.turnstileSiteKey && <div ref={turnstile.ref} className="flex justify-center" />}
                     <PrimaryBtn grad={grad} onClick={requestCode} disabled={busy || !name.trim() || !emailValid || !consent}>
