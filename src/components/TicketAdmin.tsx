@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Ticket as TicketIcon, Trash2, Settings2, Save, Loader2, RefreshCw, Download,
-  CheckCircle2, Circle, Users, Heart, ShieldCheck, ChevronRight, X, Mail,
+  CheckCircle2, Circle, Users, Heart, ShieldCheck, ChevronRight, X, Mail, Search,
 } from 'lucide-react';
 import { ModalPortal } from './ui';
 import { useBackClose } from '../lib/backStack';
@@ -12,6 +12,21 @@ import {
 } from '../lib/register';
 
 const fmtDate = (iso: string | null) => { if (!iso) return '–'; try { return new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return iso; } };
+// Für die Suche an der Tür: Groß/Klein, Umlaute, Punkte und Leerzeichen egal.
+// „muller" findet „Müller", „a7 f3" findet den Code „A7F3K2".
+// Umlaute werden in ZWEI Schreibweisen geprüft (ü→u und ü→ue), damit es in
+// beide Richtungen klappt: wer „Süß" eingetragen hat, wird auch über „Suess"
+// gefunden – und umgekehrt.
+const base = (v: string) => (v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const normShort = (v: string) =>
+  base(v).replace(/ä/g, 'a').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/ß/g, 'ss').replace(/[^a-z0-9]/g, '');
+const normLong = (v: string) =>
+  (v || '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+// Trifft die Eingabe irgendeines der Felder – in einer der beiden Schreibweisen?
+const hit = (field: string, q: string) =>
+  normShort(field).includes(normShort(q)) || normLong(field).includes(normLong(q));
+
 const inp = 'w-full bg-white/[.05] border border-white/10 rounded-xl px-3 py-2 text-[14px] text-white placeholder-hl-faint focus:border-[#E6238E] focus:outline-none';
 
 // Detail-Overlay eines Tickets: alle Daten + Einlass + Löschen MIT Bestätigung.
@@ -85,6 +100,8 @@ export default function TicketAdmin() {
   const [saved, setSaved] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [onlyOpen, setOnlyOpen] = useState(false); // nur noch nicht Eingecheckte
   // Es können mehrere Veranstaltungen parallel offen sein (Opening Night,
   // Testspieltag, Spieltag …) – hier wird ausgewählt, welche man gerade sieht.
   const [selKey, setSelKey] = useState<string | null>(null);
@@ -145,7 +162,22 @@ export default function TicketAdmin() {
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'zuschauer-tickets.csv'; a.click(); URL.revokeObjectURL(url);
   };
 
-  const confirmedRows = data?.rows.filter((r) => r.status === 'confirmed') ?? [];
+  const confirmedRows = useMemo(
+    // Alphabetisch – an der Tür sucht man nach Namen, nicht nach Anmeldezeit.
+    () =>
+      (data?.rows.filter((r) => r.status === 'confirmed') ?? []).slice().sort((a, b) =>
+        a.name.localeCompare(b.name, 'de')
+      ),
+    [data]
+  );
+  const checkedInCount = confirmedRows.filter((r) => r.checkedIn).length;
+  // Gesucht wird in Name, E-Mail UND Code – der Gast nennt irgendeines davon.
+  const visibleRows = useMemo(() => {
+    const list = onlyOpen ? confirmedRows.filter((r) => !r.checkedIn) : confirmedRows;
+    const q = search.trim();
+    if (!q) return list;
+    return list.filter((r) => hit(r.name, q) || hit(r.email, q) || hit(r.code || '', q));
+  }, [confirmedRows, search, onlyOpen]);
   const openRow = confirmedRows.find((r) => r.id === openId) || null;
 
   return (
@@ -273,6 +305,48 @@ export default function TicketAdmin() {
         )}
       </AnimatePresence>
 
+      {/* Einlass-Suche: klebt oben, damit sie beim Durchscrollen der Liste
+          erreichbar bleibt. An der Tür tippt man den Namen, den der Gast sagt. */}
+      {confirmedRows.length > 0 && (
+        <div className="sticky top-0 z-20 -mx-1 px-1 py-2 bg-[#05100e]/95 backdrop-blur-md space-y-2">
+          <div className="relative">
+            <Search className="w-4 h-4 text-hl-faint absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Name, E-Mail oder Code suchen…"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              className="w-full bg-white/[.06] border border-white/10 rounded-xl pl-9 pr-9 py-3 text-[15px] text-white placeholder-hl-faint focus:border-[#E6238E] focus:outline-none"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                aria-label="Suche leeren"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 grid place-items-center rounded-lg text-hl-mute hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setOnlyOpen((v) => !v)}
+              className={`px-3 py-1.5 rounded-lg text-[12px] font-bold cursor-pointer border transition-colors ${
+                onlyOpen ? 'bg-[#E6238E]/15 border-[#E6238E]/40 text-[#ff7ac4]' : 'bg-white/[.04] border-white/10 text-hl-mute hover:text-white'
+              }`}
+            >
+              Nur offene
+            </button>
+            <span className="text-[12px] text-hl-mute tabular-nums ml-auto">
+              <b className="text-brand-accent-light">{checkedInCount}</b> / {confirmedRows.length} eingecheckt
+            </span>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-hl-mute" /></div>
       ) : !data || confirmedRows.length === 0 ? (
@@ -280,10 +354,22 @@ export default function TicketAdmin() {
           <TicketIcon className="w-8 h-8 mx-auto text-hl-faint mb-2" />
           <p className="text-[14px] text-hl-mute">Noch keine bestätigten Tickets.</p>
         </div>
+      ) : visibleRows.length === 0 ? (
+        <div className="hl-card rounded-2xl p-8 text-center">
+          <Search className="w-8 h-8 mx-auto text-hl-faint mb-2" />
+          <p className="text-[14px] text-hl-mute">
+            {onlyOpen && !search ? 'Alle sind eingecheckt.' : <>Niemand gefunden für „<b className="text-white">{search}</b>".</>}
+          </p>
+          {onlyOpen && (
+            <button onClick={() => setOnlyOpen(false)} className="mt-3 text-[12px] font-bold text-[#ff7ac4] cursor-pointer">
+              Auch Eingecheckte zeigen
+            </button>
+          )}
+        </div>
       ) : (
         <div className="space-y-2">
-          {confirmedRows.map((r) => (
-            <button key={r.id} onClick={() => setOpenId(r.id)} className="w-full text-left hl-card rounded-2xl p-3.5 flex items-center gap-3 hover:border-[#E6238E]/30 transition-colors cursor-pointer active:scale-[.99]">
+          {visibleRows.map((r) => (
+            <button key={r.id} onClick={() => setOpenId(r.id)} className={`w-full text-left hl-card rounded-2xl p-3.5 flex items-center gap-3 hover:border-[#E6238E]/30 transition-colors cursor-pointer active:scale-[.99] ${r.checkedIn ? 'opacity-55' : ''}`}>
               {/* Schneller Einlass-Haken (öffnet NICHT das Detail) */}
               <span onClick={(e) => { e.stopPropagation(); if (busyId !== r.id) toggleCheckin(r); }} className="shrink-0 cursor-pointer" title="Einlass">
                 {busyId === r.id ? <Loader2 className="w-6 h-6 animate-spin text-hl-mute" /> : r.checkedIn ? <CheckCircle2 className="w-6 h-6 text-brand-accent-light" /> : <Circle className="w-6 h-6 text-hl-faint" />}
