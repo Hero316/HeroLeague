@@ -223,7 +223,7 @@ export default function EventTickets({
                   <>
                     <div className="flex items-center justify-between hl-card rounded-2xl px-4 py-3">
                       <span className="text-[13px] text-hl-mute">Noch verfügbar</span>
-                      <span className="font-display font-black text-lg text-white tabular-nums"><span style={{ color: `${accent}` }}>{remaining}</span> / {cfg.capacity}</span>
+                      <span className="font-display font-black text-lg text-white tabular-nums">{remaining} / <span style={{ color: `${accent}` }}>{cfg.capacity}</span></span>
                     </div>
                     {err && <ErrorMsg>{err}</ErrorMsg>}
                     <label className="block">
