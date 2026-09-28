@@ -29,7 +29,7 @@ import TippAdmin from './components/TippAdmin';
 import TippBonusAdmin from './components/TippBonusAdmin';
 import TippReminder from './components/TippReminder';
 import StreamStage, { LeagueStreamStage } from './components/StreamStage';
-import StreamAdmin from './components/StreamAdmin';
+import StreamAdmin, { ObsLinks } from './components/StreamAdmin';
 import { fetchStreams, fetchLeagueStreams } from './lib/streams';
 import InstallPrompt from './components/InstallPrompt';
 import Ergebniszettel from './components/Ergebniszettel';
@@ -51,7 +51,7 @@ import ChatApp from './components/ChatApp';
 import Avatar from './components/Avatar';
 import DeepLinkModal from './components/DeepLinkModal';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight, Target, Star, Twitch } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight, Target, Star, Twitch, MonitorPlay } from 'lucide-react';
 import TrackingCenter from './components/TrackingCenter';
 import SpielberichtPage from './components/SpielberichtPage';
 import WertungenPage from './components/WertungenPage';
@@ -613,6 +613,14 @@ export default function App() {
     runAdminAction(() =>
       apiFetch(`/api/matches/${matchId}`, { method: 'PUT', body: JSON.stringify(data) })
     );
+
+  // Anstoßzeiten eines Spieltags neu setzen (8 Min Spiel + 3 Min Pause).
+  const handleRetimeMatchday = (changes: { id: string; time: string }[]) =>
+    runAdminAction(async () => {
+      for (const c of changes) {
+        await apiFetch(`/api/matches/${c.id}`, { method: 'PUT', body: JSON.stringify({ time: c.time }) });
+      }
+    });
 
   // Aufstellung (Anwesende + Torwart + Spieldauer) für einen Spieltag speichern.
   const handleSaveRoster = (
@@ -1679,6 +1687,7 @@ export default function App() {
                           matches={currentSeasonMatches}
                           onAddMatch={handleAddMatch}
                           onDeleteMatch={handleDeleteMatch}
+                          onRetimeMatchday={handleRetimeMatchday}
                         />
                       </AccordionSection>
                     </>
@@ -1711,6 +1720,19 @@ export default function App() {
                       demoActive={demo.active}
                       onToggleDemo={handleToggleDemo}
                     />
+                  )}
+
+                  {canManageChannels && (
+                    <AccordionSection
+                      id="obs-overlay"
+                      category="kanaele"
+                      title="OBS-Einblendung (Livestream)"
+                      subtitle="Link zum Kopieren für OBS – Scoreboard, Uhr & Tor-Einblendung für Feld 1 / Feld 2"
+                      icon={<MonitorPlay className="w-5 h-5" />}
+                      accent="#9147FF"
+                    >
+                      <ObsLinks />
+                    </AccordionSection>
                   )}
 
                   {canManageChannels && (

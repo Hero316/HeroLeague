@@ -7,6 +7,7 @@ import { apiFetch } from '../lib/api';
 import { trackSponsorClick } from '../lib/sponsors';
 import { useBackClose } from '../lib/backStack';
 import { useInstall } from './InstallProvider';
+import { GAME_MINUTES } from '../lib/matchTiming';
 
 // Gemeinsame Design-Bausteine des neuen Hero-League-Looks.
 
@@ -617,7 +618,8 @@ export function useLiveMinute(liveStartedAt?: string | null): number {
 // zurück, wenn keine Dauer gesetzt ist (dann zählt die klassische Live-Minute).
 // Tickt sekündlich, damit die mm:ss-Anzeige flüssig läuft.
 // `allowNegative`: läuft der Countdown bei 0 weiter ins Minus (für den
-// Schiedsrichtermodus – kein Auto-Abpfiff, die Nachspielzeit läuft rot mit).
+// Schiedsrichtermodus und die Live-Anzeigen – kein Auto-Abpfiff, die
+// Nachspielzeit läuft als +m:ss mit).
 // Standard bleibt bei 0 gekappt (öffentliche Anzeige zeigt nie Minuszeit).
 export function useCountdown(
   liveStartedAt?: string | null,
@@ -653,18 +655,31 @@ export function useCountdown(
   return remaining;
 }
 
-// Sekunden als m:ss darstellen (z. B. 7:00, 0:09). Negative Werte (Nachspielzeit)
-// bekommen ein führendes „−", z. B. −0:05.
+// Sekunden als m:ss darstellen (z. B. 8:00, 0:09). Negative Werte = Nachspielzeit
+// nach Ablauf der Spielzeit – die läuft wieder hoch mit „+", z. B. +0:05.
 export function formatClock(seconds: number): string {
-  const neg = seconds < 0;
+  const over = seconds < 0;
   const abs = Math.abs(seconds);
   const m = Math.floor(abs / 60);
   const s = abs % 60;
-  return `${neg ? '−' : ''}${m}:${String(s).padStart(2, '0')}`;
+  return `${over ? '+' : ''}${m}:${String(s).padStart(2, '0')}`;
 }
 
-// Live-Badge – zeigt den Countdown (m:ss), sobald eine Spieldauer gesetzt ist,
-// sonst die klassische hochzählende Live-Minute. Für Match-Karten (Startseite).
+// Live-Uhr eines Spiels: zählt von der Spieldauer (Standard 8:00) sekundengenau
+// herunter – genau wie beim Schiedsrichter. Nach 0:00 läuft die Nachspielzeit
+// als +0:01, +0:02 … weiter (`overtime` = true → andere Farbe).
+export function useMatchClock(
+  liveStartedAt?: string | null,
+  durationMinutes?: number | null,
+  pausedAt?: string | null
+): { label: string; overtime: boolean; paused: boolean } | null {
+  const remaining = useCountdown(liveStartedAt, durationMinutes || GAME_MINUTES, pausedAt, true);
+  if (remaining === null) return null;
+  return { label: formatClock(remaining), overtime: remaining < 0, paused: !!pausedAt };
+}
+
+// Live-Badge für Match-Karten (Startseite, Stream, Testspiel): Countdown m:ss,
+// Nachspielzeit in Gold.
 export function LiveBadge({
   liveStartedAt,
   durationMinutes,
@@ -674,10 +689,9 @@ export function LiveBadge({
   durationMinutes?: number | null;
   pausedAt?: string | null;
 }) {
-  const minute = useLiveMinute(liveStartedAt);
-  const remaining = useCountdown(liveStartedAt, durationMinutes, pausedAt);
-  const clock = remaining !== null ? `${pausedAt ? '⏸ ' : ''}${formatClock(remaining)}` : minute ? `${minute}'` : undefined;
-  return <MatchStatusBadge status="live" liveLabel={clock} />;
+  const clock = useMatchClock(liveStartedAt, durationMinutes, pausedAt);
+  const text = clock ? `${clock.paused ? '⏸ ' : ''}${clock.label}` : undefined;
+  return <MatchStatusBadge status="live" liveLabel={text} overtime={!!clock?.overtime} />;
 }
 
 // Status-Badge für Match-Karten
@@ -685,16 +699,18 @@ export function MatchStatusBadge({
   status,
   liveMinute,
   liveLabel,
+  overtime,
 }: {
   status: 'geplant' | 'live' | 'beendet';
   liveMinute?: number;
   liveLabel?: string;
+  overtime?: boolean;
 }) {
   if (status === 'live') {
     const text = liveLabel ?? (liveMinute ? `${liveMinute}'` : '');
     return (
-      <span className="px-2.5 py-1 rounded-md font-sans font-extrabold text-[9.5px] tracking-[1.2px] bg-[rgba(255,84,66,.15)] text-hl-red-soft">
-        ● LIVE{text ? ` ${text}` : ''}
+      <span className="px-2.5 py-1 rounded-md font-sans font-extrabold text-[9.5px] tracking-[1.2px] bg-[rgba(255,84,66,.15)] text-hl-red-soft whitespace-nowrap">
+        ● LIVE{text ? ' ' : ''}{text && <span className={`tabular-nums ${overtime ? 'text-[#FFC53D]' : ''}`}>{text}</span>}
       </span>
     );
   }

@@ -8,6 +8,7 @@ import { ticketAdminList, type TicketAdminConfig } from '../lib/register';
 import { calculateEventStandings, calculateEventAwards } from '../lib/eventStandings';
 import PlayerAvatar from './PlayerAvatar';
 import { AccordionSection, TeamCrest } from './ui';
+import { GAME_MINUTES, BREAK_MINUTES, slotTimes, isHHMM } from '../lib/matchTiming';
 
 // Teamnamen tolerant vergleichen (für den Abgleich Event-Team <-> echter Verein).
 const normTeamName = (s: string) => s.toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
@@ -524,6 +525,7 @@ export default function AdminPanel({
   const [openEventMatch, setOpenEventMatch] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState('');
+  const [retimeStart, setRetimeStart] = useState('');
   const [openRosterTeam, setOpenRosterTeam] = useState<string | null>(null);
   const [addTeamMode, setAddTeamMode] = useState<'menu' | 'copy' | 'new' | null>(null);
   const [newEventTeamName, setNewEventTeamName] = useState('');
@@ -1093,6 +1095,27 @@ export default function AdminPanel({
     if (!window.confirm('Alle eingetragenen Ergebnisse dieses Events zurücksetzen?')) return;
     patchEvent({
       matches: selectedEvent.matches.map((m) => ({ ...m, homeScore: null, awayScore: null, scorers: [], bestPlayers: [], goalkeepers: [], status: 'geplant', liveStartedAt: null })),
+    });
+  };
+
+  // Anstoßzeiten des Testspiels nach fester Taktung neu setzen: 8 Min Spiel +
+  // 3 Min Pause. Block 1 startet zur angegebenen Uhrzeit, jeder weitere Block
+  // 11 Minuten später. Ergebnisse bleiben unangetastet; gespeichert wird wie
+  // gewohnt über „Speichern".
+  const retimeEvent = () => {
+    if (!selectedEvent) return;
+    const blocks = Array.from(new Set(selectedEvent.matches.map((m) => m.block))).sort((a, b) => a - b);
+    const first = [...selectedEvent.matches].sort((a, b) => a.block - b.block)[0]?.start ?? '';
+    const start = (retimeStart || first).trim();
+    if (!isHHMM(start)) {
+      alert('Bitte eine gültige Startzeit angeben, z. B. 20:30.');
+      return;
+    }
+    const idx = new Map(blocks.map((b, i) => [b, i]));
+    const last = slotTimes(start, blocks.length - 1);
+    if (!window.confirm(`Zeiten neu setzen: ${blocks.length} Blöcke à ${GAME_MINUTES} Min + ${BREAK_MINUTES} Min Pause.\nStart ${start} · letztes Spiel ${last.start}–${last.end} Uhr.\n\nDanach unten „Speichern" drücken.`)) return;
+    patchEvent({
+      matches: selectedEvent.matches.map((m) => ({ ...m, ...slotTimes(start, idx.get(m.block) ?? 0), durationMinutes: GAME_MINUTES })),
     });
   };
 
@@ -3435,6 +3458,25 @@ export default function AdminPanel({
                     Ergebnisse leeren
                   </button>
                 </div>
+                {selectedEvent.matches.length > 0 && (
+                  <div className="mb-2 rounded-xl border border-white/10 bg-white/[.03] p-2.5 flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] font-sans text-gray-300 font-bold">Taktung {GAME_MINUTES} Min + {BREAK_MINUTES} Min Pause</span>
+                    <input
+                      type="time"
+                      value={retimeStart || ([...selectedEvent.matches].sort((a, b) => a.block - b.block)[0]?.start ?? '')}
+                      onChange={(e) => setRetimeStart(e.target.value)}
+                      aria-label="Start Block 1"
+                      className="w-[110px] shrink-0 bg-black/40 border border-white/15 rounded-lg px-2 py-1.5 text-xs text-white font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={retimeEvent}
+                      className="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border bg-[rgba(230,35,142,.2)] text-[#ff9ad4] border-[rgba(230,35,142,.5)] hover:bg-[rgba(230,35,142,.3)] transition-all cursor-pointer"
+                    >
+                      Zeiten neu berechnen
+                    </button>
+                  </div>
+                )}
                 <div className="rounded-xl border border-white/10 divide-y divide-white/[.06]">
                   {selectedEvent.matches.length === 0 && (
                     <p className="px-3 py-4 text-[11px] text-gray-500 font-sans">

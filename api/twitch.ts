@@ -694,7 +694,7 @@ function normalizeRosterPayload(body: unknown) {
   return {
     seasonId: str(b.seasonId).trim(),
     matchday: Number.isInteger(matchdayNum) ? matchdayNum : NaN,
-    minutes: Number.isFinite(minutesNum) ? Math.min(120, Math.max(1, Math.floor(minutesNum))) : 7,
+    minutes: Number.isFinite(minutesNum) ? Math.min(120, Math.max(1, Math.floor(minutesNum))) : 8,
     teams,
     numbers,
   };

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Plus, Trash2, CalendarDays, ChevronDown } from 'lucide-react';
 import { Match, Team } from '../types';
+import { GAME_MINUTES, BREAK_MINUTES, slotTimes } from '../lib/matchTiming';
 
 interface MatchManagerProps {
   teams: Team[];
@@ -14,9 +15,10 @@ interface MatchManagerProps {
     venue: string;
   }) => Promise<boolean>;
   onDeleteMatch: (matchId: string) => Promise<boolean>;
+  onRetimeMatchday?: (changes: { id: string; time: string }[]) => Promise<boolean>;
 }
 
-export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch }: MatchManagerProps) {
+export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch, onRetimeMatchday }: MatchManagerProps) {
   const maxMatchday = matches.reduce((max, m) => Math.max(max, m.matchday), 0);
 
   const [matchday, setMatchday] = useState<string>(String(maxMatchday || 1));
@@ -54,6 +56,41 @@ export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch
       });
     return grouped;
   }, [matches]);
+
+  // Anstoßzeiten eines Spieltags nach fester Taktung neu setzen: erstes
+  // Zeitfenster bleibt, jedes weitere startet 8 Min Spiel + 3 Min Pause später.
+  // Parallele Spiele (gleiches Zeitfenster/Slot auf Feld 1 + 2) bekommen dieselbe Zeit.
+  const [retiming, setRetiming] = useState<number | null>(null);
+  const retimeDay = async (day: number, dayMatches: Match[]) => {
+    if (!onRetimeMatchday) return;
+    const keyOf = (m: Match) => (m.slot != null ? `s${String(m.slot).padStart(3, '0')}` : `t${m.time}`);
+    const keys = Array.from(new Set(dayMatches.map(keyOf))).sort();
+    const first = [...dayMatches].sort((a, b) => a.time.localeCompare(b.time))[0]?.time ?? '';
+    const input = window.prompt(
+      `${day}. Spieltag: Anstoßzeiten neu setzen (${GAME_MINUTES} Min Spiel + ${BREAK_MINUTES} Min Pause).\n\nAnpfiff des ersten Spiels:`,
+      first
+    );
+    if (input === null) return;
+    const start = input.trim();
+    if (!/^\d{1,2}:\d{2}$/.test(start)) {
+      alert('Bitte eine Uhrzeit wie 19:00 eingeben.');
+      return;
+    }
+    const idx = new Map(keys.map((k, i) => [k, i]));
+    const changes = dayMatches
+      .map((m) => ({ id: m.id, time: slotTimes(start, idx.get(keyOf(m)) ?? 0).start, old: m.time }))
+      .filter((c) => c.time !== c.old)
+      .map(({ id, time }) => ({ id, time }));
+    if (changes.length === 0) {
+      alert('Die Zeiten passen bereits.');
+      return;
+    }
+    const last = slotTimes(start, keys.length - 1);
+    if (!window.confirm(`${changes.length} Spiele anpassen?\nErstes Spiel ${start} Uhr · letztes ${last.start}–${last.end} Uhr.`)) return;
+    setRetiming(day);
+    await onRetimeMatchday(changes);
+    setRetiming(null);
+  };
 
   const days = [...matchesByMatchday.keys()];
   const latestDay = days.length ? Math.max(...days) : 0;
@@ -210,6 +247,18 @@ export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch
               </button>
               {!isCollapsed(day) && (
               <div className="space-y-1.5 p-2.5">
+                {onRetimeMatchday && (
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      disabled={retiming === day}
+                      onClick={() => retimeDay(day, dayMatches)}
+                      className="text-[11px] font-sans font-bold uppercase tracking-wider text-brand-accent-light hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {retiming === day ? 'Speichere …' : `Zeiten neu berechnen (${GAME_MINUTES}+${BREAK_MINUTES} Min)`}
+                    </button>
+                  </div>
+                )}
                 {dayMatches.map((m) => (
                   <div
                     key={m.id}

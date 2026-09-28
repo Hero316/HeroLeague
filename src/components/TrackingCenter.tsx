@@ -62,6 +62,7 @@ import {
 import { emptyCounts, matchNote, normalizeCounts, playerCard, rohscore } from '../lib/rating';
 import { shortDate, readable } from './ui';
 import { useBackClose, goBackLayer } from '../lib/backStack';
+import { GAME_MINUTES } from '../lib/matchTiming';
 import VoiceTrackingPanel, { type VoicePlayer } from './VoiceTrackingPanel';
 import {
   fetchScoring,
@@ -771,7 +772,7 @@ export default function TrackingCenter({
       const keeper = selectedEvent.matches.flatMap((m) => m.goalkeepers ?? []).find((g) => normName(g.team) === normName(name))?.player;
       teamsMap[name] = { present, ...(keeper ? { goalkeeper: keeper } : {}) };
     }
-    return { [eventAttendanceRk]: { minutes: 7, teams: teamsMap } };
+    return { [eventAttendanceRk]: { minutes: GAME_MINUTES, teams: teamsMap } };
   }, [selectedEvent, eventResolveTeam]);
 
   const applyEventAttendance = useCallback(

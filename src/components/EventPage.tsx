@@ -629,7 +629,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
                               Team- und Spielernamen die volle Breite (kein Abschneiden am Handy). */}
                           <div className="flex items-center justify-between gap-2 mb-1.5 text-[10px] font-mono uppercase tracking-wider text-hl-mute leading-none">
                             <span className="shrink-0">{m.field ? `Feld ${m.field}` : m.start}</span>
-                            {isLive && <LiveBadge liveStartedAt={m.liveStartedAt} />}
+                            {isLive && <LiveBadge liveStartedAt={m.liveStartedAt} durationMinutes={m.durationMinutes} pausedAt={m.pausedAt} />}
                           </div>
                           <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 min-w-0">
                             {renderTeam(m.home, 'left')}

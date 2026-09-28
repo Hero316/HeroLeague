@@ -1,0 +1,479 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import type { EventArchive, EventConfig, Match, Player, Team } from '../types';
+import { apiFetch } from '../lib/api';
+import { TeamCrest, useMatchClock } from './ui';
+import { GAME_MINUTES } from '../lib/matchTiming';
+
+// ===========================================================================
+// OBS-Einblendung (Browser-Quelle) – /overlay?feld=1
+//
+// Eigenständige, transparente Seite (ohne Navbar/App-Logik) für den Livestream:
+// OBS legt sie als „Browser"-Quelle (1920×1080) über das Kamerabild. Zeigt
+//  • Scoreboard oben links: Wappen · Name · Spielstand · Uhr (8:00 → 0:00,
+//    danach Nachspielzeit +0:01 … in Gold) – exakt die Uhr des Schiedsrichters
+//  • „TOR!"-Einblendung, sobald der Spielstand steigt (mit Torschütze + Foto,
+//    sobald er getrackt ist)
+//  • Aufstellung als Laufband beim Anpfiff, Endstand nach dem Abpfiff
+// Datenquelle: die öffentlichen Endpunkte (Testspiel-Archiv bzw. Liga-Spiele),
+// alle paar Sekunden neu geladen. Kein neuer API-Endpunkt.
+//
+// URL-Parameter:
+//   feld=1|2        welches Feld (Standard 1)
+//   scale=1.2       alles größer/kleiner (Standard 1)
+//   pos=tl|tr       Scoreboard oben links (Standard) oder oben rechts
+//   test=1          Vorschau mit Beispielspiel (zum Positionieren in OBS)
+//   sec=470         (nur mit test=1) Uhr vorspulen, z. B. um die Nachspielzeit zu sehen
+// ===========================================================================
+
+const GOLD = '#FFC53D';
+const ACCENT = '#22DFC9';
+
+interface OverlayMatch {
+  key: string; // eindeutig über Event/Liga hinweg
+  home: string;
+  away: string;
+  homeScore: number;
+  awayScore: number;
+  status: 'geplant' | 'live' | 'beendet';
+  liveStartedAt?: string | null;
+  durationMinutes?: number | null;
+  pausedAt?: string | null;
+  scorers: { player: string; team: string }[];
+}
+
+interface Visual {
+  logoUrl?: string;
+  color: string;
+  shortName?: string;
+  players: Player[];
+}
+
+const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+
+function params() {
+  const q = new URLSearchParams(window.location.search);
+  const feld = Math.max(1, Math.min(9, Number(q.get('feld') || q.get('field') || 1) || 1));
+  const scale = Math.max(0.4, Math.min(3, Number(q.get('scale') || 1) || 1));
+  const pos = q.get('pos') === 'tr' ? 'tr' : 'tl';
+  const test = q.get('test') === '1';
+  // Nur Vorschau: so viele Sekunden sind schon gespielt (z. B. sec=470 → Nachspielzeit gleich sichtbar).
+  const sec = Math.max(0, Number(q.get('sec') || 0) || 0);
+  return { feld, scale, pos, test, sec } as const;
+}
+
+function activeEventOf(a: EventArchive | null): EventConfig | null {
+  if (!a) return null;
+  const id = a.activeId ?? a.previewId ?? null;
+  return (id && a.events.find((e) => e.id === id)) || null;
+}
+
+// Neuestes Spiel eines Feldes in einem Status (live bevorzugt vor Endstand).
+function pickEventMatch(ev: EventConfig | null, feld: number): OverlayMatch[] {
+  if (!ev) return [];
+  return ev.matches
+    .filter((m) => (m.field || 1) === feld)
+    .map((m) => ({
+      key: `e:${ev.id}:${m.id}`,
+      home: m.home,
+      away: m.away,
+      homeScore: m.homeScore ?? 0,
+      awayScore: m.awayScore ?? 0,
+      status: m.status ?? (m.homeScore !== null && m.awayScore !== null ? 'beendet' : 'geplant'),
+      liveStartedAt: m.liveStartedAt,
+      durationMinutes: m.durationMinutes,
+      pausedAt: m.pausedAt,
+      scorers: (m.scorers ?? []).map((s) => ({ player: s.player, team: s.team })),
+    }));
+}
+
+function pickLeagueMatches(matches: Match[], teams: Team[], feld: number): OverlayMatch[] {
+  const nameById = new Map(teams.map((t) => [t.id, t.name]));
+  return matches
+    .filter((m) => (m.field || 1) === feld)
+    .map((m) => ({
+      key: `l:${m.id}`,
+      home: nameById.get(m.homeTeamId) ?? '?',
+      away: nameById.get(m.awayTeamId) ?? '?',
+      homeScore: m.homeScore ?? 0,
+      awayScore: m.awayScore ?? 0,
+      status: m.status,
+      liveStartedAt: m.liveStartedAt,
+      durationMinutes: m.durationMinutes,
+      pausedAt: m.pausedAt,
+      scorers: (m.scorers ?? []).map((s) => ({ player: s.playerName, team: nameById.get(s.teamId) ?? '?' })),
+    }));
+}
+
+// ---------------------------------------------------------------------------
+// Daten laden – bewusst OHNE Sichtbarkeits-Pause (OBS meldet die Quelle je
+// nach Einstellung als „versteckt"; die Einblendung muss trotzdem aktuell sein).
+// ---------------------------------------------------------------------------
+function useOverlayData(enabled: boolean) {
+  const [archive, setArchive] = useState<EventArchive | null>(null);
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    const loadEvent = () =>
+      apiFetch<EventArchive>('/api/twitch?resource=event').then((d) => alive && setArchive(d)).catch(() => {});
+    const loadMatches = () =>
+      apiFetch<Match[]>('/api/matches').then((d) => alive && setMatches(Array.isArray(d) ? d : [])).catch(() => {});
+    const loadTeams = () =>
+      apiFetch<Team[]>('/api/teams').then((d) => alive && setTeams(Array.isArray(d) ? d : [])).catch(() => {});
+    loadEvent();
+    loadMatches();
+    loadTeams();
+    const a = setInterval(loadEvent, 3000);
+    const b = setInterval(loadMatches, 4000);
+    const c = setInterval(loadTeams, 5 * 60_000);
+    return () => {
+      alive = false;
+      clearInterval(a);
+      clearInterval(b);
+      clearInterval(c);
+    };
+  }, [enabled]);
+
+  return { archive, matches, teams };
+}
+
+// Beispielspiel für ?test=1: Uhr läuft ab Seitenaufruf, alle 25 s fällt ein Tor.
+function useTestMatch(enabled: boolean, sec: number): OverlayMatch | null {
+  const [startedAt] = useState(() => new Date(Date.now() - sec * 1000).toISOString());
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    const id = setInterval(() => setTick((t) => t + 1), 25_000);
+    return () => clearInterval(id);
+  }, [enabled]);
+  if (!enabled) return null;
+  const goals = tick;
+  const scorers = Array.from({ length: goals }, (_, i) => ({
+    player: i % 2 ? 'Max Mustermann' : 'Luca Beispiel',
+    team: i % 2 ? 'FC Gast' : 'Hero United',
+  }));
+  return {
+    key: 'test',
+    home: 'Hero United',
+    away: 'FC Gast',
+    homeScore: Math.ceil(goals / 2),
+    awayScore: Math.floor(goals / 2),
+    status: 'live',
+    liveStartedAt: startedAt,
+    durationMinutes: GAME_MINUTES,
+    pausedAt: null,
+    scorers,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Bausteine
+// ---------------------------------------------------------------------------
+function Crest({ name, v, size = 'lg' }: { name: string; v?: Visual; size?: 'lg' | 'xl' }) {
+  return <TeamCrest name={name} shortName={v?.shortName} color={v?.color ?? ACCENT} logoUrl={v?.logoUrl} size={size} />;
+}
+
+function Clock({ m }: { m: OverlayMatch }) {
+  const clock = useMatchClock(m.liveStartedAt, m.durationMinutes, m.pausedAt);
+  if (!clock) return null;
+  const color = clock.paused ? '#FBBF24' : clock.overtime ? GOLD : '#FFFFFF';
+  return (
+    <div className="flex flex-col items-center justify-center px-5 min-w-[132px]" style={{ background: clock.overtime && !clock.paused ? 'rgba(255,197,61,.14)' : 'rgba(255,255,255,.05)' }}>
+      <span className="font-display font-black tabular-nums leading-none text-[40px] tracking-tight" style={{ color }}>
+        {clock.label}
+      </span>
+      <span className="mt-1 text-[11px] font-sans font-black uppercase tracking-[2px]" style={{ color: clock.paused ? '#FBBF24' : clock.overtime ? GOLD : 'rgba(255,255,255,.55)' }}>
+        {clock.paused ? 'Pause' : clock.overtime ? 'Nachspielzeit' : 'Live'}
+      </span>
+    </div>
+  );
+}
+
+function Scorebug({ m, vis, label, final }: { m: OverlayMatch; vis: (n: string) => Visual | undefined; label: string; final?: boolean }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -24 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -24 }}
+      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      className="inline-flex flex-col"
+    >
+      <div className="inline-flex items-stretch rounded-2xl overflow-hidden border border-white/15 bg-[rgba(6,14,15,.88)] shadow-[0_18px_50px_-12px_rgba(0,0,0,.9)]">
+        <div className="flex items-center gap-3 pl-4 pr-3 py-3">
+          <Crest name={m.home} v={vis(m.home)} />
+          <span className="font-display font-black uppercase tracking-tight text-white text-[26px] leading-none truncate max-w-[300px]">{m.home}</span>
+        </div>
+        <div className="flex items-center justify-center px-4 min-w-[112px]" style={{ background: `linear-gradient(180deg, ${ACCENT}, #14A594)` }}>
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.span
+              key={`${m.homeScore}-${m.awayScore}`}
+              initial={{ scale: 0.4, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.4, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 480, damping: 22 }}
+              className="font-display font-black tabular-nums text-[#04120d] text-[40px] leading-none"
+            >
+              {m.homeScore}<span className="mx-1.5 opacity-60">:</span>{m.awayScore}
+            </motion.span>
+          </AnimatePresence>
+        </div>
+        <div className="flex items-center gap-3 pl-3 pr-4 py-3">
+          <span className="font-display font-black uppercase tracking-tight text-white text-[26px] leading-none truncate max-w-[300px]">{m.away}</span>
+          <Crest name={m.away} v={vis(m.away)} />
+        </div>
+        {final ? (
+          <div className="flex items-center px-5 bg-white/[.06]">
+            <span className="text-[14px] font-sans font-black uppercase tracking-[2px] text-white/80">Endstand</span>
+          </div>
+        ) : (
+          <Clock m={m} />
+        )}
+      </div>
+      <div className="mt-2 self-start inline-flex items-center gap-2 rounded-lg bg-[rgba(6,14,15,.8)] border border-white/10 px-3 py-1.5">
+        <img src="/assets/hero-league-logo.png" alt="" className="h-4 w-auto" />
+        <span className="text-[12px] font-sans font-black uppercase tracking-[2px] text-white/75">{label}</span>
+      </div>
+    </motion.div>
+  );
+}
+
+function initials(name: string): string {
+  const p = name.trim().split(/\s+/);
+  return ((p[0]?.[0] ?? '') + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase() || '?';
+}
+
+function Photo({ name, url, size }: { name: string; url?: string; size: number }) {
+  return url ? (
+    <img src={url} alt={name} referrerPolicy="no-referrer" className="rounded-full object-cover shrink-0 border-2 border-white/40" style={{ width: size, height: size }} />
+  ) : (
+    <span className="rounded-full grid place-items-center shrink-0 font-display font-black text-white bg-white/15 border-2 border-white/30" style={{ width: size, height: size, fontSize: size * 0.38 }}>
+      {initials(name)}
+    </span>
+  );
+}
+
+interface GoalInfo {
+  id: number;
+  team: string;
+  score: string;
+  player?: string;
+  photo?: string;
+}
+
+function GoalBanner({ g, vis }: { g: GoalInfo; vis: (n: string) => Visual | undefined }) {
+  const v = vis(g.team);
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 60, scale: 0.92 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 40, scale: 0.96 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 24 }}
+      className="flex items-center gap-5 rounded-3xl border border-white/25 px-7 py-5 shadow-[0_24px_70px_-16px_rgba(0,0,0,.95)]"
+      style={{ background: 'linear-gradient(120deg, rgba(20,165,148,.97), rgba(10,110,100,.97))' }}
+    >
+      {g.player ? <Photo name={g.player} url={g.photo} size={96} /> : <Crest name={g.team} v={v} size="xl" />}
+      <div className="min-w-0">
+        <motion.div
+          initial={{ scale: 0.5, rotate: -8 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ type: 'spring', stiffness: 380, damping: 11, delay: 0.08 }}
+          className="font-display font-black uppercase tracking-tight text-white text-[64px] leading-[.9]"
+        >
+          Tor!
+        </motion.div>
+        {g.player && (
+          <div className="font-display font-black uppercase tracking-tight text-white text-[30px] leading-tight truncate max-w-[640px]">{g.player}</div>
+        )}
+        <div className="flex items-center gap-2 mt-1">
+          {g.player && <Crest name={g.team} v={v} size="lg" />}
+          <span className="text-[20px] font-sans font-bold text-white/90 truncate max-w-[520px]">{g.team}</span>
+          <span className="ml-2 font-display font-black tabular-nums text-[26px] text-white">{g.score}</span>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function LineupBar({ m, vis }: { m: OverlayMatch; vis: (n: string) => Visual | undefined }) {
+  const groups = [
+    { team: m.home, players: vis(m.home)?.players ?? [] },
+    { team: m.away, players: vis(m.away)?.players ?? [] },
+  ].filter((g) => g.players.length);
+  if (!groups.length) return null;
+  const Row = () => (
+    <div className="inline-flex items-center gap-3 pr-3">
+      {groups.map((g, gi) => (
+        <span key={gi} className="inline-flex items-center gap-3 pr-4">
+          <span className="inline-flex items-center gap-2 rounded-lg bg-white/15 px-3 py-1.5 shrink-0">
+            <Crest name={g.team} v={vis(g.team)} size="lg" />
+            <span className="font-display font-black uppercase tracking-tight text-white text-[20px]">{g.team}</span>
+          </span>
+          {g.players.map((p, i) => (
+            <span key={i} className="inline-flex items-center gap-2 rounded-full bg-black/55 border border-white/10 pl-1 pr-4 py-1 shrink-0">
+              <Photo name={p.name} url={p.imageUrl} size={38} />
+              <span className="text-[18px] font-sans font-bold text-white whitespace-nowrap">{p.number ? `${p.number} ` : ''}{p.name}</span>
+            </span>
+          ))}
+        </span>
+      ))}
+    </div>
+  );
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 30 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 30 }}
+      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      className="absolute bottom-0 inset-x-0 pb-6 pt-10 overflow-hidden"
+      style={{ background: 'linear-gradient(0deg, rgba(0,0,0,.7), transparent)' }}
+    >
+      <div className="hl-marquee-track" style={{ animationDuration: '30s' }}>
+        <Row />
+        <Row />
+      </div>
+    </motion.div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Seite
+// ---------------------------------------------------------------------------
+export default function ObsOverlay() {
+  const { feld, scale, pos, test, sec } = useMemo(params, []);
+  const { archive, matches, teams } = useOverlayData(!test);
+  const testMatch = useTestMatch(test, sec);
+
+  // Transparenter Hintergrund für OBS.
+  useEffect(() => {
+    document.documentElement.classList.add('hl-obs');
+    document.title = `Hero League · OBS Feld ${feld}`;
+  }, [feld]);
+
+  const event = activeEventOf(archive);
+  const teamByName = useMemo(() => new Map(teams.map((t) => [norm(t.name), t])), [teams]);
+
+  const vis = useMemo(() => {
+    return (name: string): Visual | undefined => {
+      const t = teamByName.get(norm(name));
+      const own = event?.rosters?.find((r) => norm(r.team) === norm(name))?.players ?? [];
+      if (!t && !own.length) return undefined;
+      return {
+        logoUrl: t?.logoUrl,
+        color: t?.logoColor ?? ACCENT,
+        shortName: t?.shortName,
+        players: own.length ? own : t?.spielerliste ?? [],
+      };
+    };
+  }, [teamByName, event]);
+
+  // Kandidaten: Testspiel zuerst (wenn aktiv), sonst Liga.
+  const candidates = useMemo(() => {
+    if (testMatch) return [testMatch];
+    const ev = pickEventMatch(event, feld);
+    const lg = pickLeagueMatches(matches, teams, feld);
+    return [...ev, ...lg];
+  }, [testMatch, event, feld, matches, teams]);
+
+  const live = candidates.find((m) => m.status === 'live') ?? null;
+  const label = testMatch
+    ? `Vorschau · Feld ${feld}`
+    : live?.key.startsWith('e:') && event
+      ? `${event.title} · Feld ${feld}`
+      : `Feld ${feld}`;
+
+  // --- Ereignisse: Tor, Anpfiff (Aufstellung), Abpfiff (Endstand) -------------
+  const [goal, setGoal] = useState<GoalInfo | null>(null);
+  const [lineup, setLineup] = useState(false);
+  const [finalMatch, setFinalMatch] = useState<OverlayMatch | null>(null);
+  const prev = useRef<{ key: string; home: number; away: number; scorers: number } | null>(null);
+  const goalTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const lineupTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const finalTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const goalSeq = useRef(0);
+
+  useEffect(() => {
+    const p = prev.current;
+    if (!live) {
+      // Gerade abgepfiffen? → Endstand kurz stehen lassen.
+      if (p) {
+        const ended = candidates.find((m) => m.key === p.key && m.status === 'beendet');
+        if (ended) {
+          setFinalMatch(ended);
+          clearTimeout(finalTimer.current);
+          finalTimer.current = setTimeout(() => setFinalMatch(null), 25_000);
+        }
+      }
+      prev.current = null;
+      setLineup(false);
+      return;
+    }
+    if (!p || p.key !== live.key) {
+      // Neues Live-Spiel → Aufstellung einblenden, kein altes Tor feiern.
+      prev.current = { key: live.key, home: live.homeScore, away: live.awayScore, scorers: live.scorers.length };
+      setFinalMatch(null);
+      setGoal(null);
+      setLineup(true);
+      clearTimeout(lineupTimer.current);
+      lineupTimer.current = setTimeout(() => setLineup(false), 14_000);
+      return;
+    }
+    const showGoal = (g: Omit<GoalInfo, 'id'>) => {
+      setGoal({ ...g, id: ++goalSeq.current });
+      clearTimeout(goalTimer.current);
+      goalTimer.current = setTimeout(() => setGoal(null), 8000);
+    };
+    const score = `${live.homeScore}:${live.awayScore}`;
+    const newScorer = live.scorers.length > p.scorers ? live.scorers[live.scorers.length - 1] : null;
+    const photoOf = (s: { player: string; team: string }) =>
+      vis(s.team)?.players.find((pl) => norm(pl.name) === norm(s.player))?.imageUrl;
+
+    if (live.homeScore > p.home || live.awayScore > p.away) {
+      const team = live.homeScore > p.home ? live.home : live.away;
+      const s = newScorer && norm(newScorer.team) === norm(team) ? newScorer : null;
+      showGoal({ team, score, player: s?.player, photo: s ? photoOf(s) : undefined });
+    } else if (newScorer) {
+      // Torschütze kommt nach (Tracking) → Einblendung mit Namen ergänzen/zeigen.
+      setGoal((g) =>
+        g && norm(g.team) === norm(newScorer.team)
+          ? { ...g, player: newScorer.player, photo: photoOf(newScorer) }
+          : g
+      );
+    }
+    prev.current = { key: live.key, home: live.homeScore, away: live.awayScore, scorers: live.scorers.length };
+  }, [live, candidates, vis]);
+
+  useEffect(
+    () => () => {
+      clearTimeout(goalTimer.current);
+      clearTimeout(lineupTimer.current);
+      clearTimeout(finalTimer.current);
+    },
+    []
+  );
+
+  const shown = live ?? finalMatch;
+
+  return (
+    <div className="fixed inset-0 overflow-hidden pointer-events-none select-none text-white font-sans">
+      <div
+        className="absolute inset-0"
+        style={{ transform: scale !== 1 ? `scale(${scale})` : undefined, transformOrigin: pos === 'tr' ? 'top right' : 'top left' }}
+      >
+        <div className={`absolute top-10 ${pos === 'tr' ? 'right-10' : 'left-10'}`}>
+          <AnimatePresence>
+            {shown && <Scorebug key={shown.key} m={shown} vis={vis} label={label} final={!live} />}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      <div className="absolute inset-x-0 bottom-[160px] flex justify-center" style={{ transform: scale !== 1 ? `scale(${scale})` : undefined, transformOrigin: 'bottom center' }}>
+        <AnimatePresence>{goal && live && <GoalBanner key={goal.id} g={goal} vis={vis} />}</AnimatePresence>
+      </div>
+
+      <AnimatePresence>{lineup && live && !goal && <LineupBar key={`lu-${live.key}`} m={live} vis={vis} />}</AnimatePresence>
+    </div>
+  );
+}

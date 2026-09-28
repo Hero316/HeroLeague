@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Check, Twitch } from 'lucide-react';
+import { Loader2, Check, Twitch, Copy, ExternalLink } from 'lucide-react';
 import type { StreamsConfig } from '../types';
 import { fetchStreams, saveStreams, fetchLeagueStreams, saveLeagueStreams } from '../lib/streams';
 
@@ -90,6 +90,59 @@ export default function StreamAdmin({ variant = 'event' }: { variant?: 'event' |
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : null}
         {saved ? 'Gespeichert' : 'Kanäle speichern'}
       </button>
+    </div>
+  );
+}
+
+// OBS-Einblendung: fertige Links für die „Browser"-Quelle in OBS (1920×1080).
+// Zeigt Scoreboard, Countdown, Tor-Einblendung und Aufstellung automatisch –
+// für Testspiel UND Liga, je nachdem, was auf dem Feld gerade live ist.
+export function ObsLinks() {
+  const [copied, setCopied] = useState<string | null>(null);
+  const base = typeof window !== 'undefined' ? window.location.origin : '';
+  const links = [
+    { label: 'Feld 1', url: `${base}/overlay?feld=1` },
+    { label: 'Feld 2', url: `${base}/overlay?feld=2` },
+  ];
+  const copy = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(url);
+      setTimeout(() => setCopied(null), 1500);
+    } catch {
+      window.prompt('Link kopieren:', url);
+    }
+  };
+  return (
+    <div>
+      <p className="text-[13px] text-hl-mute font-sans leading-relaxed">
+        In OBS eine Quelle <b>„Browser"</b> hinzufügen, Link einfügen, Breite <b>1920</b> × Höhe <b>1080</b>, Quelle über die Kamera legen.
+        Der Hintergrund ist durchsichtig. Scoreboard, Uhr (8:00 → Nachspielzeit), TOR-Einblendung und Aufstellung erscheinen
+        automatisch, sobald der Schiedsrichter auf dem Feld anpfeift – für Testspiel und Liga.
+      </p>
+      <div className="mt-3 space-y-2">
+        {links.map((l) => (
+          <div key={l.url} className="flex items-center gap-2 min-w-0">
+            <span className="shrink-0 w-14 text-[12px] font-sans font-bold text-hl-dim">{l.label}</span>
+            <span className="flex-1 min-w-0 truncate font-mono text-[12px] text-hl-soft bg-black/30 border border-white/10 rounded-lg px-2 py-1.5">{l.url}</span>
+            <button
+              onClick={() => copy(l.url)}
+              className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1.5 text-[11px] font-sans font-bold uppercase tracking-wider text-white hover:border-white/30 cursor-pointer"
+            >
+              {copied === l.url ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              {copied === l.url ? 'Kopiert' : 'Kopieren'}
+            </button>
+          </div>
+        ))}
+      </div>
+      <a
+        href={`${base}/overlay?feld=1&test=1`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-sans font-bold text-brand-accent-light hover:text-white"
+      >
+        <ExternalLink className="w-3.5 h-3.5" /> Vorschau mit Beispielspiel (zum Ausrichten)
+      </a>
     </div>
   );
 }

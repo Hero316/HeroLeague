@@ -88,6 +88,13 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* OBS-Einblendung (/overlay): komplett durchsichtig, keine Scrollbalken. */
+html.hl-obs,
+html.hl-obs body {
+  background: transparent !important;
+  overflow: hidden;
+}
+
 /* Wiederverwendbare, starke Easing-Kurven (Design-Engineering-Standard):
    Ein-/Austritte fühlen sich mit einem kräftigen Ease-Out sofort responsiv an –
    die eingebauten CSS-Easings sind zu schwach. Nie „ease-in" für UI. */
