@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Check, Twitch, Copy, ExternalLink, MonitorPlay } from 'lucide-react';
+import { Loader2, Check, Twitch, Copy, ExternalLink } from 'lucide-react';
 import type { StreamsConfig } from '../types';
 import { fetchStreams, saveStreams, fetchLeagueStreams, saveLeagueStreams } from '../lib/streams';
 
@@ -90,8 +90,6 @@ export default function StreamAdmin({ variant = 'event' }: { variant?: 'event' |
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <Check className="w-4 h-4" /> : null}
         {saved ? 'Gespeichert' : 'Kanäle speichern'}
       </button>
-
-      <ObsLinks />
     </div>
   );
 }
@@ -99,7 +97,7 @@ export default function StreamAdmin({ variant = 'event' }: { variant?: 'event' |
 // OBS-Einblendung: fertige Links für die „Browser"-Quelle in OBS (1920×1080).
 // Zeigt Scoreboard, Countdown, Tor-Einblendung und Aufstellung automatisch –
 // für Testspiel UND Liga, je nachdem, was auf dem Feld gerade live ist.
-function ObsLinks() {
+export function ObsLinks() {
   const [copied, setCopied] = useState<string | null>(null);
   const base = typeof window !== 'undefined' ? window.location.origin : '';
   const links = [
@@ -116,12 +114,11 @@ function ObsLinks() {
     }
   };
   return (
-    <div className="mt-5 rounded-xl border border-white/10 hl-surf-soft p-4">
-      <div className="flex items-center gap-2 text-sm font-sans font-bold text-white">
-        <MonitorPlay className="w-4 h-4 text-brand-accent-light" /> OBS-Einblendung
-      </div>
-      <p className="mt-1 text-[12px] text-hl-mute font-sans leading-relaxed">
-        In OBS eine Quelle <b>„Browser"</b> hinzufügen, Link einfügen, Breite <b>1920</b> × Höhe <b>1080</b>. Der Hintergrund ist durchsichtig.
+    <div>
+      <p className="text-[13px] text-hl-mute font-sans leading-relaxed">
+        In OBS eine Quelle <b>„Browser"</b> hinzufügen, Link einfügen, Breite <b>1920</b> × Höhe <b>1080</b>, Quelle über die Kamera legen.
+        Der Hintergrund ist durchsichtig. Scoreboard, Uhr (8:00 → Nachspielzeit), TOR-Einblendung und Aufstellung erscheinen
+        automatisch, sobald der Schiedsrichter auf dem Feld anpfeift – für Testspiel und Liga.
       </p>
       <div className="mt-3 space-y-2">
         {links.map((l) => (
