@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Play, Check, RotateCcw, Plus, Minus, Pencil, Save, AlertTriangle, Users, X, Star, Hand, BarChart3 } from 'lucide-react';
 import { Absence, BestPlayer, Goalkeeper, Match, Scorer, Team } from '../types';
-import { TeamCrest, shortDate, useLiveMinute, useCountdown, formatClock } from './ui';
+import { TeamCrest, shortDate, useMatchClock } from './ui';
 import { FadeIn } from './anim';
 
 export function LiveTimer({
@@ -15,14 +15,13 @@ export function LiveTimer({
   durationMinutes?: number | null;
   pausedAt?: string | null;
 }) {
-  const minutes = useLiveMinute(liveStartedAt);
-  const remaining = useCountdown(liveStartedAt, durationMinutes, pausedAt);
-  const label = remaining !== null ? formatClock(remaining) : minutes ? `${minutes}'` : '';
+  // Countdown ab 8:00 (sekundengenau), danach Nachspielzeit +m:ss in Gold.
+  const clock = useMatchClock(liveStartedAt, durationMinutes, pausedAt);
 
   return (
     <span className="px-2.5 py-1 rounded-md font-sans font-extrabold text-[9.5px] tracking-[1.2px] bg-[rgba(255,84,66,.15)] text-hl-red-soft flex items-center gap-1.5 shrink-0">
       <span className={`w-[7px] h-[7px] bg-hl-red rounded-full inline-block ${pausedAt ? '' : 'hl-pulse'}`} />
-      <span>{pausedAt ? 'PAUSE' : 'LIVE'}{label ? ` ${label}` : ''}</span>
+      <span>{pausedAt ? 'PAUSE' : 'LIVE'}{clock && <> <span className={`tabular-nums ${clock.overtime ? 'text-[#FFC53D]' : ''}`}>{clock.label}</span></>}</span>
     </span>
   );
 }

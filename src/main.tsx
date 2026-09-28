@@ -1,17 +1,29 @@
-import { StrictMode } from 'react';
+import { StrictMode, lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
 import { InstallProvider } from './components/InstallProvider.tsx';
 import './index.css';
 
+// OBS-Einblendung (/overlay) läuft eigenständig – ohne App, Navbar, Besucherzählung
+// oder Service Worker. Transparent, damit OBS sie über das Kamerabild legen kann.
+const ObsOverlay = lazy(() => import('./components/ObsOverlay.tsx'));
+const isOverlay = /^\/(overlay|obs)(\/|$)/i.test(location.pathname);
+if (isOverlay) document.documentElement.classList.add('hl-obs');
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ErrorBoundary>
-      <InstallProvider>
-        <App />
-      </InstallProvider>
-    </ErrorBoundary>
+    {isOverlay ? (
+      <Suspense fallback={null}>
+        <ObsOverlay />
+      </Suspense>
+    ) : (
+      <ErrorBoundary>
+        <InstallProvider>
+          <App />
+        </InstallProvider>
+      </ErrorBoundary>
+    )}
   </StrictMode>,
 );
 
@@ -28,7 +40,7 @@ try {
 // Benachrichtigungen UND die Zahl am App-Icon der TEAM-APP („Hero Team") zugeordnet
 // werden – nicht der Website-App („Hero League"). Beide Apps teilten sich sonst den
 // einen Scope-'/'-Worker, wodurch Android alles der Website-App zurechnete.
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && !isOverlay) {
   window.addEventListener('load', () => {
     const scope = location.pathname.startsWith('/chat') ? '/chat' : '/';
     navigator.serviceWorker.register('/sw.js', { scope }).catch(() => undefined);

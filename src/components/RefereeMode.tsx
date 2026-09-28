@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Shield, ArrowLeft, LogOut, Plus, X, Play, Pause, Square, Users, Star, Check, RefreshCw } from 'lucide-react';
 import { EveningRoster, Match, RosterMap, SessionUser, Team } from '../types';
 import { useCountdown, formatClock } from './ui';
+import { GAME_MINUTES } from '../lib/matchTiming';
 import { useBackClose } from '../lib/backStack';
 
 interface RefereeModeProps {
@@ -34,7 +35,7 @@ interface RefereeModeProps {
   onSaveEventAttendance?: (minutes: number, teams: EveningRoster['teams']) => Promise<boolean>;
 }
 
-const DEFAULT_MINUTES = 7;
+const DEFAULT_MINUTES = GAME_MINUTES;
 
 // Auswahl-Eintrag im Spieler-Picker: Name + optionale Trikotnummer.
 type PickPlayer = { name: string; number?: number };

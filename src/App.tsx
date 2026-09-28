@@ -614,6 +614,14 @@ export default function App() {
       apiFetch(`/api/matches/${matchId}`, { method: 'PUT', body: JSON.stringify(data) })
     );
 
+  // Anstoßzeiten eines Spieltags neu setzen (8 Min Spiel + 3 Min Pause).
+  const handleRetimeMatchday = (changes: { id: string; time: string }[]) =>
+    runAdminAction(async () => {
+      for (const c of changes) {
+        await apiFetch(`/api/matches/${c.id}`, { method: 'PUT', body: JSON.stringify({ time: c.time }) });
+      }
+    });
+
   // Aufstellung (Anwesende + Torwart + Spieldauer) für einen Spieltag speichern.
   const handleSaveRoster = (
     seasonId: string,
@@ -1679,6 +1687,7 @@ export default function App() {
                           matches={currentSeasonMatches}
                           onAddMatch={handleAddMatch}
                           onDeleteMatch={handleDeleteMatch}
+                          onRetimeMatchday={handleRetimeMatchday}
                         />
                       </AccordionSection>
                     </>
