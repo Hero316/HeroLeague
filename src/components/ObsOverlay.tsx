@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import { Instagram } from 'lucide-react';
 import type { EventArchive, EventConfig, Match, Player, Team } from '../types';
 import { apiFetch } from '../lib/api';
 import { TeamCrest, useMatchClock } from './ui';
@@ -22,6 +23,8 @@ import { GAME_MINUTES } from '../lib/matchTiming';
 //   feld=1|2        welches Feld (Standard 1)
 //   scale=1.2       alles größer/kleiner (Standard 1)
 //   pos=tl|tr       Scoreboard oben links (Standard) oder oben rechts
+//   brand=0         Hero-League-Logo + Instagram ausblenden
+//   partner=0       Partner-Leiste ausblenden
 //   test=1          Vorschau mit Beispielspiel (zum Positionieren in OBS)
 //   sec=470         (nur mit test=1) Uhr vorspulen, z. B. um die Nachspielzeit zu sehen
 // ===========================================================================
@@ -59,7 +62,9 @@ function params() {
   const test = q.get('test') === '1';
   // Nur Vorschau: so viele Sekunden sind schon gespielt (z. B. sec=470 → Nachspielzeit gleich sichtbar).
   const sec = Math.max(0, Number(q.get('sec') || 0) || 0);
-  return { feld, scale, pos, test, sec } as const;
+  const brand = q.get('brand') !== '0';
+  const partner = q.get('partner') !== '0';
+  return { feld, scale, pos, test, sec, brand, partner } as const;
 }
 
 function activeEventOf(a: EventArchive | null): EventConfig | null {
@@ -339,10 +344,108 @@ function LineupBar({ m, vis }: { m: OverlayMatch; vis: (n: string) => Visual | u
 }
 
 // ---------------------------------------------------------------------------
+// Dauer-Einblendungen: Hero-League-Logo + Instagram, Partner-Leiste
+// ---------------------------------------------------------------------------
+
+// Instagram-Name aus dem im Admin gepflegten Social-Link („Social Media").
+// „instagram.com/heroleague" → „@heroleague". Nichts gepflegt → keine Pille.
+function useInstagramHandle(enabled: boolean): string {
+  const [handle, setHandle] = useState('');
+  useEffect(() => {
+    if (!enabled) return;
+    apiFetch<{ instagram?: string }>('/api/twitch?resource=social')
+      .then((d) => {
+        const raw = (d?.instagram || '').trim();
+        if (!raw) return;
+        const m = /instagram\.com\/([^/?#]+)/i.exec(raw);
+        const name = (m ? m[1] : raw).replace(/^@/, '');
+        if (name) setHandle(`@${name}`);
+      })
+      .catch(() => {});
+  }, [enabled]);
+  return handle;
+}
+
+function BrandCorner({ instagram }: { instagram: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      className="flex flex-col items-end gap-2"
+    >
+      <img src="/assets/hero-league-logo.png" alt="Hero League" className="h-[58px] w-auto drop-shadow-[0_6px_18px_rgba(0,0,0,.8)]" />
+      {instagram && (
+        <span className="inline-flex items-center gap-2 rounded-full bg-[rgba(6,14,15,.82)] border border-white/15 pl-2 pr-3.5 py-1.5 shadow-[0_10px_30px_-10px_rgba(0,0,0,.9)]">
+          <span className="grid place-items-center w-7 h-7 rounded-full" style={{ background: 'linear-gradient(45deg,#F58529,#DD2A7B 55%,#8134AF)' }}>
+            <Instagram className="w-4 h-4 text-white" />
+          </span>
+          <span className="text-[17px] font-sans font-bold text-white tracking-tight">{instagram}</span>
+        </span>
+      )}
+    </motion.div>
+  );
+}
+
+// Partner – feste Reihenfolge, Logos liegen unter public/assets/partners.
+// Der Hauptpartner steht IMMER sichtbar links, rechts wechseln die übrigen.
+const ROTATING_PARTNERS = [
+  { label: 'Bankpartner', name: 'Volksbank – Die Gestalterbank', logo: '/assets/partners/volksbank-gestalterbank.png', h: 38 },
+  { label: 'Ausrüstungspartner', name: 'Unisport', logo: '/assets/partners/unisport.png', h: 52 },
+];
+
+function PartnerBar() {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setI((n) => (n + 1) % ROTATING_PARTNERS.length), 9000);
+    return () => clearInterval(id);
+  }, []);
+  const p = ROTATING_PARTNERS[i];
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 24 }}
+      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+      className="inline-flex items-stretch rounded-2xl overflow-hidden border border-white/15 bg-[rgba(6,14,15,.86)] shadow-[0_18px_50px_-12px_rgba(0,0,0,.9)]"
+    >
+      {/* Hauptpartner – dauerhaft */}
+      <div className="flex items-center gap-3 pl-4 pr-5 py-3" style={{ background: 'linear-gradient(135deg, rgba(196,164,48,.22), rgba(196,164,48,.06))' }}>
+        <img src="/assets/partners/dvag-mark-white.png" alt="DVAG" className="h-[54px] w-auto shrink-0" />
+        <div className="leading-tight">
+          <div className="text-[11px] font-sans font-black uppercase tracking-[2.5px] text-[#E2C45A]">Hauptpartner</div>
+          <div className="font-sans font-extrabold text-white text-[20px] tracking-tight">Florian Hinterheller</div>
+          <div className="text-[12px] font-sans font-semibold text-white/65">Deutsche Vermögensberatung</div>
+        </div>
+      </div>
+      {/* Weitere Partner – wechseln */}
+      <div className="relative flex flex-col justify-center gap-1.5 px-4 py-2.5 w-[268px] border-l border-white/10">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={p.name}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            className="flex flex-col gap-1.5"
+          >
+            <span className="text-[11px] font-sans font-black uppercase tracking-[2.5px] text-white/60">{p.label}</span>
+            <span className="grid place-items-center rounded-lg bg-white h-[60px] px-3">
+              <img src={p.logo} alt={p.name} className="max-w-full w-auto object-contain" style={{ height: p.h }} />
+            </span>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </motion.div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Seite
 // ---------------------------------------------------------------------------
 export default function ObsOverlay() {
-  const { feld, scale, pos, test, sec } = useMemo(params, []);
+  const { feld, scale, pos, test, sec, brand, partner } = useMemo(params, []);
+  const instagram = useInstagramHandle(brand);
   const { archive, matches, teams } = useOverlayData(!test);
   const testMatch = useTestMatch(test, sec);
 
@@ -467,6 +570,20 @@ export default function ObsOverlay() {
             {shown && <Scorebug key={shown.key} m={shown} vis={vis} label={label} final={!live} />}
           </AnimatePresence>
         </div>
+      </div>
+
+      {brand && (
+        <div
+          className={`absolute top-10 ${pos === 'tr' ? 'left-10' : 'right-10'}`}
+          style={{ transform: scale !== 1 ? `scale(${scale})` : undefined, transformOrigin: pos === 'tr' ? 'top left' : 'top right' }}
+        >
+          <BrandCorner instagram={instagram} />
+        </div>
+      )}
+
+      {/* Partner unten rechts – macht Platz, solange die Aufstellung durchläuft. */}
+      <div className="absolute bottom-10 right-10" style={{ transform: scale !== 1 ? `scale(${scale})` : undefined, transformOrigin: 'bottom right' }}>
+        <AnimatePresence>{partner && !(lineup && live && !goal) && <PartnerBar key="partners" />}</AnimatePresence>
       </div>
 
       <div className="absolute inset-x-0 bottom-[160px] flex justify-center" style={{ transform: scale !== 1 ? `scale(${scale})` : undefined, transformOrigin: 'bottom center' }}>
