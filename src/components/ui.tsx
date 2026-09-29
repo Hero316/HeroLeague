@@ -7,6 +7,7 @@ import { apiFetch } from '../lib/api';
 import { trackSponsorClick } from '../lib/sponsors';
 import { useBackClose } from '../lib/backStack';
 import { useInstall } from './InstallProvider';
+import { useMediaQuery } from '../lib/useMediaQuery';
 import { GAME_MINUTES } from '../lib/matchTiming';
 
 // Gemeinsame Design-Bausteine des neuen Hero-League-Looks.
@@ -370,42 +371,150 @@ export function SponsorLink({
   );
 }
 
+// Sichtbarer Inhalt eines Logos (ohne durchsichtigen/weißen Rand), als Anteil
+// von Breite/Höhe (0..1). Hochgeladene Logos haben oft viel leeren Rand –
+// dadurch wirkten gleich „große" Logos unterschiedlich groß. Einmal pro URL
+// berechnet und gemerkt. Klappt das Auslesen nicht (z. B. fremde Domain ohne
+// CORS), bleibt es bei null → Logo wird wie bisher ungeschnitten gezeigt.
+type LogoBox = { x: number; y: number; w: number; h: number; ratio: number };
+const logoBoxCache = new Map<string, LogoBox | null>();
+
+function measureLogo(url: string): Promise<LogoBox | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.referrerPolicy = 'no-referrer';
+    img.onload = () => {
+      try {
+        const nw = img.naturalWidth;
+        const nh = img.naturalHeight;
+        if (!nw || !nh) return resolve(null);
+        const k = Math.min(1, 400 / Math.max(nw, nh));
+        const cw = Math.max(1, Math.round(nw * k));
+        const ch = Math.max(1, Math.round(nh * k));
+        const c = document.createElement('canvas');
+        c.width = cw;
+        c.height = ch;
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return resolve(null);
+        ctx.drawImage(img, 0, 0, cw, ch);
+        const d = ctx.getImageData(0, 0, cw, ch).data;
+        // Hat das Bild einen durchsichtigen Rand? Sonst zählt (fast) Weiß als Rand.
+        const corner = d[3] < 16 || d[(cw - 1) * 4 + 3] < 16;
+        const isBg = (i: number) =>
+          d[i + 3] < 16 || (!corner && d[i] > 244 && d[i + 1] > 244 && d[i + 2] > 244);
+        let x0 = cw, y0 = ch, x1 = -1, y1 = -1;
+        for (let y = 0; y < ch; y++) {
+          for (let x = 0; x < cw; x++) {
+            if (!isBg((y * cw + x) * 4)) {
+              if (x < x0) x0 = x;
+              if (x > x1) x1 = x;
+              if (y < y0) y0 = y;
+              if (y > y1) y1 = y;
+            }
+          }
+        }
+        if (x1 < 0) return resolve(null);
+        const box = { x: x0 / cw, y: y0 / ch, w: (x1 - x0 + 1) / cw, h: (y1 - y0 + 1) / ch };
+        resolve({ ...box, ratio: (box.w * nw) / (box.h * nh) });
+      } catch {
+        resolve(null); // Canvas „tainted" (kein CORS) → ungeschnitten anzeigen
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+function useLogoBox(url: string): LogoBox | null | undefined {
+  const [box, setBox] = React.useState<LogoBox | null | undefined>(() =>
+    logoBoxCache.has(url) ? logoBoxCache.get(url) : undefined
+  );
+  React.useEffect(() => {
+    if (!url) return;
+    if (logoBoxCache.has(url)) {
+      setBox(logoBoxCache.get(url));
+      return;
+    }
+    let alive = true;
+    measureLogo(url).then((b) => {
+      logoBoxCache.set(url, b);
+      if (alive) setBox(b);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [url]);
+  return box;
+}
+
 // Ein einzelnes Partner-Logo. Drei Varianten:
 // - Standard: farbig hochgeladen, per CSS grau dargestellt und erst beim Hovern
 //   farbig (auf Touch-Geräten dauerhaft farbig).
 // - `glow` = Hauptpartner: IMMER farbig (PC + Handy); auf dem Handy leuchtet es
 //   dauerhaft, auf dem PC beim Hovern (dann auch etwas größer).
-// - `softColor` = Bankpartner: IMMER farbig (PC + Handy), KEIN Dauer-Glow; beim
-//   Hovern nur ein dezentes Leuchten (deutlich schwächer als der Hauptpartner).
+// - `softColor` = Bank-/Ausrüstungspartner: IMMER farbig (PC + Handy), KEIN
+//   Dauer-Glow; beim Hovern nur ein dezentes Leuchten.
+// Größe: `size` = [Handy, ab sm] als { h: Höhe des SICHTBAREN Logos, w: max.
+// Breite } in px. Das Logo wird auf seinen echten Inhalt zugeschnitten, damit
+// alle Logos unabhängig vom Rand in der hochgeladenen Datei gleich wirken.
+type LogoSize = { h: number; w: number };
 function PartnerLogo({
   partner,
-  heightClass,
-  maxWClass,
+  size,
   glow = false,
   softColor = false,
 }: {
   partner: Partner;
-  heightClass: string;
-  maxWClass: string;
+  size: [LogoSize, LogoSize];
   glow?: boolean;
   softColor?: boolean;
 }) {
-  const base = `${heightClass} ${maxWClass} w-auto object-contain`;
+  const sm = useMediaQuery('(min-width: 640px)');
+  const { h: maxH, w: maxW } = sm ? size[1] : size[0];
+  const box = useLogoBox(partner.logoUrl);
   const cls = glow
-    ? `hl-partner-main-logo ${base}`
+    ? 'hl-partner-main-logo'
     : softColor
-      ? `hl-partner-color-logo ${base}`
-      : `hl-partner-logo ${base} grayscale brightness-[.45] contrast-[1.1] opacity-90 transition duration-300 ease-out hover:grayscale-0 hover:brightness-100 hover:contrast-100 hover:opacity-100 hover:scale-105`;
-  const img = (
-    <img
-      src={partner.logoUrl}
-      alt={partner.name || 'Partner'}
-      loading="lazy"
-      decoding="async"
-      referrerPolicy="no-referrer"
-      className={cls}
-    />
-  );
+      ? 'hl-partner-color-logo'
+      : 'hl-partner-logo grayscale brightness-[.45] contrast-[1.1] opacity-90 transition duration-300 ease-out hover:grayscale-0 hover:brightness-100 hover:contrast-100 hover:opacity-100 hover:scale-105';
+
+  let inner: React.ReactNode;
+  if (box) {
+    // Sichtbaren Ausschnitt auf maxH × maxW einpassen (Seitenverhältnis bleibt).
+    let h = maxH;
+    let w = h * box.ratio;
+    if (w > maxW) {
+      w = maxW;
+      h = w / box.ratio;
+    }
+    inner = (
+      <span className={`${cls} relative block overflow-hidden`} style={{ width: w, height: h }}>
+        <img
+          src={partner.logoUrl}
+          alt={partner.name || 'Partner'}
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          className="absolute max-w-none"
+          style={{ width: w / box.w, height: h / box.h, left: -(box.x * w) / box.w, top: -(box.y * h) / box.h }}
+        />
+      </span>
+    );
+  } else {
+    // Noch nicht vermessen / nicht messbar → wie bisher, ohne Zuschnitt.
+    inner = (
+      <img
+        src={partner.logoUrl}
+        alt={partner.name || 'Partner'}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        className={`${cls} w-auto object-contain`}
+        style={{ height: maxH, maxWidth: maxW, opacity: box === undefined ? 0 : undefined }}
+      />
+    );
+  }
   return (
     <SponsorLink
       sponsorId={partner.id}
@@ -415,10 +524,16 @@ function PartnerLogo({
       title={partner.name}
       className="inline-flex items-center justify-center"
     >
-      {img}
+      {inner}
     </SponsorLink>
   );
 }
+
+// Logo-Größen (sichtbarer Inhalt): Hauptpartner klar am größten; Bank- und
+// Ausrüstungspartner identisch; normale Partner etwas kleiner.
+const SIZE_MAIN: [LogoSize, LogoSize] = [{ h: 120, w: 300 }, { h: 170, w: 460 }];
+const SIZE_DUO: [LogoSize, LogoSize] = [{ h: 40, w: 220 }, { h: 50, w: 250 }];
+const SIZE_REST: [LogoSize, LogoSize] = [{ h: 36, w: 170 }, { h: 44, w: 190 }];
 
 // Hauptpartner auch aus Altdaten erkennen, die noch `main:true` statt `tier`
 // gespeichert haben.
@@ -464,17 +579,17 @@ export function PartnerSection() {
         <div className="flex flex-col items-center gap-3 sm:gap-4">
           {/* Hauptüberschrift ganz oben: „Hauptpartner" – groß, kursiv und gold
               schimmernd, im Stil des früheren „Partner"-Titels. Darunter das
-              immer farbige, leuchtende Hauptpartner-Logo (klickbar). Das Logo hat
-              oft eingebackenen Rand → negative Margin zieht Überschrift & „Partner"
-              näher heran, damit die Abstände nicht riesig wirken. */}
+              immer farbige, leuchtende Hauptpartner-Logo (klickbar). Eingebackener
+              Rand im Logo wird automatisch weggeschnitten (PartnerLogo), daher
+              feste, gleichmäßige Abstände. */}
           {mains.length > 0 && (
             <>
               <h2 className="hl-partner-hero text-center font-sans font-black italic text-4xl sm:text-5xl tracking-tight px-3 sm:px-4">
                 {mains[0].label.trim() || 'Hauptpartner'}
               </h2>
-              <div className="flex flex-wrap items-end justify-center gap-x-16 sm:gap-x-24 gap-y-6 -my-12 sm:-my-18">
+              <div className="flex flex-wrap items-center justify-center gap-x-16 sm:gap-x-24 gap-y-6 py-2 sm:py-3">
                 {mains.map((p) => (
-                  <PartnerLogo key={p.id} partner={p} heightClass="h-56 sm:h-72" maxWClass="max-w-[95%] sm:max-w-[640px]" glow />
+                  <PartnerLogo key={p.id} partner={p} size={SIZE_MAIN} glow />
                 ))}
               </div>
             </>
@@ -497,8 +612,8 @@ export function PartnerSection() {
                       {p.label}
                     </span>
                   )}
-                  <div className="h-12 sm:h-14 flex items-center justify-center">
-                    <PartnerLogo partner={p} heightClass="h-12 sm:h-14" maxWClass="max-w-[190px] sm:max-w-[210px]" softColor />
+                  <div className="h-[40px] sm:h-[50px] flex items-center justify-center">
+                    <PartnerLogo partner={p} size={SIZE_DUO} softColor />
                   </div>
                 </div>
               ))}
@@ -514,7 +629,7 @@ export function PartnerSection() {
               </h2>
               <div className="flex flex-wrap items-center justify-center gap-x-12 sm:gap-x-16 gap-y-8">
                 {rest.map((p) => (
-                  <PartnerLogo key={p.id} partner={p} heightClass="h-12 sm:h-14" maxWClass="max-w-[190px]" />
+                  <PartnerLogo key={p.id} partner={p} size={SIZE_REST} />
                 ))}
               </div>
             </>
