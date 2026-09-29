@@ -449,7 +449,8 @@ export function PartnerSection() {
   if (withLogo.length === 0) return null;
   const mains = withLogo.filter(isMainPartner);
   const banks = withLogo.filter((p) => p.tier === 'bank');
-  const rest = withLogo.filter((p) => !isMainPartner(p) && p.tier !== 'bank');
+  const gears = withLogo.filter((p) => p.tier === 'gear');
+  const rest = withLogo.filter((p) => !isMainPartner(p) && p.tier !== 'bank' && p.tier !== 'gear');
 
   return (
     <section className="bg-[linear-gradient(180deg,#e2e8fb_0%,#ccd6f2_100%)] text-[#0b0b0f]">
@@ -479,20 +480,26 @@ export function PartnerSection() {
             </>
           )}
 
-          {/* Bankpartner – direkt unter dem Hauptpartner. Eigene Überschrift jetzt
-              im Hauptpartner-Stil (dieselbe kursiv-fette Schrift), aber in Blau und
-              eine Stufe kleiner, damit der Hauptpartner der größte bleibt. Logo wie
-              gehabt (Grau→Farbe beim Hovern, auf dem Handy dauerhaft farbig). */}
-          {banks.length > 0 && (
-            <div className="flex flex-wrap items-end justify-center gap-x-14 sm:gap-x-20 gap-y-7 sm:gap-y-8">
-              {banks.map((p) => (
-                <div key={p.id} className="flex flex-col items-center gap-3 sm:gap-4">
+          {/* Bankpartner + Schuh- & Ausrüstungspartner – direkt unter dem
+              Hauptpartner, auf PC/Tablet exakt nebeneinander in zwei gleich
+              breiten Spalten (Bank links, Ausrüstung rechts). Überschrift im
+              Hauptpartner-Stil, je in der Farbe des Partners (Bank blau,
+              Ausrüstung grün); Logos in gleich hohen Kästen, damit alles auf
+              einer Linie liegt. Am Handy untereinander. */}
+          {(banks.length > 0 || gears.length > 0) && (
+            <div
+              className={`grid grid-cols-1 ${banks.length && gears.length ? 'lg:grid-cols-2' : ''} gap-y-7 lg:gap-x-20 w-full max-w-[1000px]`}
+            >
+              {[...banks.map((p) => ({ p, cls: 'hl-partner-bank' })), ...gears.map((p) => ({ p, cls: 'hl-partner-gear' }))].map(({ p, cls }) => (
+                <div key={p.id} className="flex flex-col items-center gap-3 sm:gap-4 min-w-0">
                   {p.label && (
-                    <span className="hl-partner-bank text-center font-sans font-black italic text-2xl sm:text-3xl tracking-tight px-3 sm:px-4">
+                    <span className={`${cls} text-center font-sans font-black italic text-2xl sm:text-3xl tracking-tight px-3 sm:px-4 whitespace-nowrap`}>
                       {p.label}
                     </span>
                   )}
-                  <PartnerLogo partner={p} heightClass="h-12 sm:h-14" maxWClass="max-w-[190px]" softColor />
+                  <div className="h-12 sm:h-14 flex items-center justify-center">
+                    <PartnerLogo partner={p} heightClass="h-12 sm:h-14" maxWClass="max-w-[190px] sm:max-w-[210px]" softColor />
+                  </div>
                 </div>
               ))}
             </div>

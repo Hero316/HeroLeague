@@ -14,7 +14,7 @@ const DEFAULT_SOCIAL = { instagram: '', tiktok: '', youtube: '' };
 
 // Partner / Sponsoren-Logos (Sektion unten auf jeder Seite). Leere Liste =
 // die Sektion erscheint gar nicht.
-type PartnerTier = 'main' | 'bank' | 'normal';
+type PartnerTier = 'main' | 'bank' | 'gear' | 'normal';
 type Partner = { id: string; name: string; logoUrl: string; linkUrl: string; tier: PartnerTier; label: string };
 const DEFAULT_PARTNERS = { items: [] as Partner[] };
 
@@ -186,10 +186,11 @@ const savePartners = requireSuperadmin(async (req: VercelRequest, res: VercelRes
       const id = typeof o.id === 'string' && o.id ? o.id : `partner-${Date.now()}-${i}`;
       // Stufe übernehmen; alte Datensätze mit `main:true` zu 'main' migrieren.
       const tier: PartnerTier =
-        o.tier === 'main' || o.tier === 'bank' ? o.tier : o.main ? 'main' : 'normal';
+        o.tier === 'main' || o.tier === 'bank' || o.tier === 'gear' ? o.tier : o.main ? 'main' : 'normal';
       let label = typeof o.label === 'string' ? o.label.trim().slice(0, 60) : '';
       // Bankpartner ohne eigene Überschrift bekommen eine sinnvolle Vorgabe.
       if (tier === 'bank' && !label) label = 'Offizieller Bankpartner';
+      if (tier === 'gear' && !label) label = 'Schuh- & Ausrüstungspartner';
       return {
         id,
         name: typeof o.name === 'string' ? o.name.trim().slice(0, 80) : '',

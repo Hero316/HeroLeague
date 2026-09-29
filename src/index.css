@@ -342,7 +342,8 @@ html.hl-obs body {
    eigene Glow-Farbe und leicht andere Schimmer-Geschwindigkeit. */
 .hl-partner-title,
 .hl-partner-main,
-.hl-partner-bank {
+.hl-partner-bank,
+.hl-partner-gear {
   background-size: 200% auto;
   -webkit-background-clip: text;
   background-clip: text;
@@ -364,6 +365,12 @@ html.hl-obs body {
   background-image: linear-gradient(100deg, #0D9488 0%, #14B8A6 30%, #5EEAD4 50%, #14B8A6 70%, #0D9488 100%);
   filter: drop-shadow(0 0 12px rgba(20, 184, 166, 0.5));
   animation-duration: 4s;
+}
+/* Schuh- & Ausrüstungspartner (Unisport): in dessen Grün. */
+.hl-partner-gear {
+  background-image: linear-gradient(100deg, #4D7F14 0%, #6FAE22 28%, #A6E05A 50%, #6FAE22 72%, #4D7F14 100%);
+  filter: drop-shadow(0 0 12px rgba(111, 174, 34, 0.45));
+  animation-duration: 6s;
 }
 .hl-partner-bank {
   background-image: linear-gradient(100deg, #1D4ED8 0%, #2563EB 28%, #38BDF8 50%, #2563EB 72%, #1D4ED8 100%);
