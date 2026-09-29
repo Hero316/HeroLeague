@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone, Handshake, ChevronUp, ChevronDown, Star, Landmark, BarChart3 } from 'lucide-react';
+import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone, Handshake, ChevronUp, ChevronDown, Star, Landmark, BarChart3, Footprints } from 'lucide-react';
 import { Player, Team, Match, EventConfig, EventArchive, NewsItem, Partner, TeamSponsor, TeamSponsorsMap, SponsorClicksMap, Season } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
 import { fetchSponsorClicks } from '../lib/sponsors';
@@ -2755,6 +2755,7 @@ export default function AdminPanel({
                           { key: 'normal', label: 'Normal (klein)', icon: null },
                           { key: 'main', label: 'Hauptpartner', icon: <Star className="w-3.5 h-3.5" /> },
                           { key: 'bank', label: 'Bankpartner', icon: <Landmark className="w-3.5 h-3.5" /> },
+                          { key: 'gear', label: 'Ausrüstungspartner', icon: <Footprints className="w-3.5 h-3.5" /> },
                         ] as const).map((opt) => {
                           const active = (p.tier ?? 'normal') === opt.key;
                           return (
@@ -2764,7 +2765,9 @@ export default function AdminPanel({
                               onClick={() =>
                                 opt.key === 'bank'
                                   ? updatePartner(p.id, { tier: 'bank', label: p.label || 'Offizieller Bankpartner' })
-                                  : updatePartner(p.id, { tier: opt.key })
+                                  : opt.key === 'gear'
+                                    ? updatePartner(p.id, { tier: 'gear', label: p.label || 'Schuh- & Ausrüstungspartner' })
+                                    : updatePartner(p.id, { tier: opt.key })
                               }
                               className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer border ${
                                 active
@@ -2779,7 +2782,7 @@ export default function AdminPanel({
                         })}
                       </div>
                     </div>
-                    {(p.tier === 'main' || p.tier === 'bank') && (
+                    {(p.tier === 'main' || p.tier === 'bank' || p.tier === 'gear') && (
                       <div>
                         <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
                           Überschrift (über dem Logo)
@@ -2788,7 +2791,7 @@ export default function AdminPanel({
                           type="text"
                           value={p.label}
                           onChange={(e) => updatePartner(p.id, { label: e.target.value })}
-                          placeholder={p.tier === 'bank' ? 'z.B. Offizieller Bankpartner' : 'z.B. Hauptpartner'}
+                          placeholder={p.tier === 'bank' ? 'z.B. Offizieller Bankpartner' : p.tier === 'gear' ? 'z.B. Schuh- & Ausrüstungspartner' : 'z.B. Hauptpartner'}
                           className={inputClass}
                         />
                       </div>

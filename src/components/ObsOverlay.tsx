@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Instagram } from 'lucide-react';
 import type { EventArchive, EventConfig, Match, Player, Team } from '../types';
 import { apiFetch } from '../lib/api';
-import { TeamCrest, useMatchClock } from './ui';
+import { TeamCrest, useMatchClock, readable } from './ui';
 import { GAME_MINUTES } from '../lib/matchTiming';
 
 // ===========================================================================
@@ -177,7 +177,7 @@ function useTestMatch(enabled: boolean, sec: number): OverlayMatch | null {
 // ---------------------------------------------------------------------------
 // Bausteine
 // ---------------------------------------------------------------------------
-function Crest({ name, v, size = 'lg' }: { name: string; v?: Visual; size?: 'lg' | 'xl' }) {
+function Crest({ name, v, size = 'lg' }: { name: string; v?: Visual; size?: 'lg' | 'xl' | 'hero' }) {
   return <TeamCrest name={name} shortName={v?.shortName} color={v?.color ?? ACCENT} logoUrl={v?.logoUrl} size={size} />;
 }
 
@@ -268,35 +268,134 @@ interface GoalInfo {
   photo?: string;
 }
 
+// TOR-Einblendung: breites Band in Teamfarbe, „TOOOOOR!" springt Buchstabe für
+// Buchstabe rein, die O's wippen als Welle, Wappen mit pulsierendem Ring und
+// Funken, ein Lichtblitz fährt einmal quer drüber. Nur die Mannschaft ist
+// nötig (der Schiri trägt keinen Torschützen ein) – kommt doch einer aus dem
+// Tracking, steht er klein darunter.
+const GOAL_WORD = ['T', 'O', 'O', 'O', 'O', 'O', 'R', '!'];
+
 function GoalBanner({ g, vis }: { g: GoalInfo; vis: (n: string) => Visual | undefined }) {
   const v = vis(g.team);
+  const base = v?.color || ACCENT;
+  const glow = readable(base);
+  const sparks = Array.from({ length: 14 }, (_, i) => {
+    const a = (i / 14) * Math.PI * 2;
+    const r = 120 + (i % 3) * 38;
+    return { x: Math.cos(a) * r, y: Math.sin(a) * r, d: 0.35 + (i % 4) * 0.05 };
+  });
   return (
     <motion.div
-      initial={{ opacity: 0, y: 60, scale: 0.92 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 40, scale: 0.96 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 24 }}
-      className="flex items-center gap-5 rounded-3xl border border-white/25 px-7 py-5 shadow-[0_24px_70px_-16px_rgba(0,0,0,.95)]"
-      style={{ background: 'linear-gradient(120deg, rgba(20,165,148,.97), rgba(10,110,100,.97))' }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, y: 30, transition: { duration: 0.35 } }}
+      className="relative w-[1400px] h-[200px]"
+      style={{ filter: 'drop-shadow(0 24px 40px rgba(0,0,0,.75))' }}
     >
-      {g.player ? <Photo name={g.player} url={g.photo} size={96} /> : <Crest name={g.team} v={v} size="xl" />}
-      <div className="min-w-0">
+      {/* Band – fährt von links auf, schräg angeschnitten */}
+      <motion.div
+        initial={{ scaleX: 0 }}
+        animate={{ scaleX: 1 }}
+        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        className="absolute inset-0 origin-left overflow-hidden"
+        style={{
+          background: `linear-gradient(100deg, ${base} 0%, ${base}CC 22%, rgba(6,14,15,.94) 58%, rgba(6,14,15,.96) 100%)`,
+          clipPath: 'polygon(3% 0, 100% 0, 97% 100%, 0 100%)',
+        }}
+      >
+        {/* Lichtblitz quer drüber */}
         <motion.div
-          initial={{ scale: 0.5, rotate: -8 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: 'spring', stiffness: 380, damping: 11, delay: 0.08 }}
-          className="font-display font-black uppercase tracking-tight text-white text-[64px] leading-[.9]"
-        >
-          Tor!
-        </motion.div>
-        {g.player && (
-          <div className="font-display font-black uppercase tracking-tight text-white text-[30px] leading-tight truncate max-w-[640px]">{g.player}</div>
-        )}
-        <div className="flex items-center gap-2 mt-1">
-          {g.player && <Crest name={g.team} v={v} size="lg" />}
-          <span className="text-[20px] font-sans font-bold text-white/90 truncate max-w-[520px]">{g.team}</span>
-          <span className="ml-2 font-display font-black tabular-nums text-[26px] text-white">{g.score}</span>
+          initial={{ x: '-40%' }}
+          animate={{ x: '140%' }}
+          transition={{ duration: 1.1, delay: 0.35, ease: [0.4, 0, 0.2, 1] }}
+          className="absolute inset-y-0 w-[30%]"
+          style={{ background: 'linear-gradient(100deg, transparent, rgba(255,255,255,.55), transparent)', filter: 'blur(6px)' }}
+        />
+        {/* dezente Streifen */}
+        <div
+          className="absolute inset-0 opacity-[.12]"
+          style={{ backgroundImage: 'repeating-linear-gradient(100deg, #fff 0 2px, transparent 2px 26px)' }}
+        />
+      </motion.div>
+
+      <div className="relative h-full flex items-center gap-8 pl-[70px] pr-[80px]">
+        {/* Wappen mit Ring-Puls + Funken */}
+        <div className="relative shrink-0 grid place-items-center w-[130px] h-[130px]">
+          {[0, 0.5, 1].map((d) => (
+            <motion.span
+              key={d}
+              className="absolute inset-0 rounded-full border-4"
+              style={{ borderColor: glow }}
+              initial={{ scale: 0.7, opacity: 0.8 }}
+              animate={{ scale: 1.9, opacity: 0 }}
+              transition={{ duration: 1.6, delay: 0.3 + d, repeat: Infinity, repeatDelay: 0.4, ease: 'easeOut' }}
+            />
+          ))}
+          {sparks.map((sp, i) => (
+            <motion.span
+              key={i}
+              className="absolute w-2.5 h-2.5 rounded-full"
+              style={{ background: i % 2 ? '#fff' : glow, boxShadow: `0 0 12px ${glow}` }}
+              initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+              animate={{ x: sp.x, y: sp.y, opacity: 0, scale: 0.3 }}
+              transition={{ duration: 0.9, delay: sp.d, ease: 'easeOut' }}
+            />
+          ))}
+          <motion.div
+            initial={{ scale: 0, rotate: -200 }}
+            animate={{ scale: 1.35, rotate: 0 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 14, delay: 0.2 }}
+            className="drop-shadow-[0_8px_24px_rgba(0,0,0,.7)]"
+          >
+            <Crest name={g.team} v={v} size="hero" />
+          </motion.div>
         </div>
+
+        {/* TOOOOOR! */}
+        <div className="flex items-end leading-none" aria-label="Tor!">
+          {GOAL_WORD.map((ch, i) => {
+            const isO = ch === 'O';
+            return (
+              <motion.span
+                key={i}
+                initial={{ y: 120, opacity: 0, scale: 0.3, rotate: -14 }}
+                animate={{ y: 0, opacity: 1, scale: 1, rotate: 0 }}
+                transition={{ type: 'spring', stiffness: 520, damping: 16, delay: 0.3 + i * 0.07 }}
+                className="inline-block"
+              >
+                <motion.span
+                  className="inline-block font-display font-black uppercase text-white text-[150px] tracking-[-4px]"
+                  style={{ textShadow: `0 0 28px ${glow}, 0 6px 0 rgba(0,0,0,.35)` }}
+                  animate={isO ? { y: [0, -18, 0], scaleY: [1, 1.08, 1] } : undefined}
+                  transition={isO ? { duration: 0.9, delay: 1.1 + i * 0.09, repeat: Infinity, repeatDelay: 0.5, ease: 'easeInOut' } : undefined}
+                >
+                  {ch}
+                </motion.span>
+              </motion.span>
+            );
+          })}
+        </div>
+
+        {/* Team + Spielstand */}
+        <motion.div
+          initial={{ opacity: 0, x: 40 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5, delay: 1.0, ease: [0.22, 1, 0.36, 1] }}
+          className="ml-auto min-w-0 text-right"
+        >
+          <div className="text-[15px] font-sans font-black uppercase tracking-[3px]" style={{ color: glow }}>Tor für</div>
+          <div className="font-display font-black uppercase tracking-tight text-white text-[44px] leading-none truncate max-w-[420px]">{g.team}</div>
+          {g.player && <div className="mt-1 text-[18px] font-sans font-bold text-white/80 truncate max-w-[420px]">⚽ {g.player}</div>}
+          <motion.div
+            initial={{ scale: 0.4, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 15, delay: 1.35 }}
+            className="mt-2 inline-block rounded-xl px-4 py-1 font-display font-black tabular-nums text-[40px] leading-none text-[#04120d]"
+            style={{ background: `linear-gradient(180deg, ${ACCENT}, #14A594)` }}
+          >
+            {g.score}
+          </motion.div>
+        </motion.div>
       </div>
     </motion.div>
   );

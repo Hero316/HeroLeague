@@ -150,14 +150,14 @@ export interface SocialLinks {
 // Hovern. Hauptpartner stehen in einer eigenen, größeren Reihe oben.
 // Stufe eines Partners: 'main' = Hauptpartner, 'bank' = Bankpartner (beide groß
 // oben, mit Überschrift darüber), 'normal' = kleines Raster darunter.
-export type PartnerTier = 'main' | 'bank' | 'normal';
+export type PartnerTier = 'main' | 'bank' | 'gear' | 'normal'; // gear = Schuh- & Ausrüstungspartner
 
 export interface Partner {
   id: string;
   name: string; // interne Bezeichnung / Alt-Text fürs Logo
   logoUrl: string; // farbiges Logo (Blob-URL), leer = wird nicht angezeigt
   linkUrl: string; // Ziel-Link (leer = Logo nicht klickbar)
-  tier: PartnerTier; // Hauptpartner / Bankpartner (groß, oben) oder normal (klein)
+  tier: PartnerTier; // Hauptpartner / Bankpartner / Ausrüstungspartner (groß, oben) oder normal (klein)
   label: string; // Überschrift über dem großen Logo, z. B. "Offizieller Bankpartner" (leer = keine)
 }
 
