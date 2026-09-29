@@ -47,9 +47,8 @@ export default function StreamAdmin({ variant = 'event' }: { variant?: 'event' |
     <div>
       <p className="text-[13px] text-hl-mute font-sans mb-4 leading-relaxed">
         Zwei parallele Twitch-Streams für {context} (Feld 1 &amp; Feld 2). Trage nur den <b>Kanalnamen</b> ein
-        (nicht die ganze URL), z. B. <span className="font-mono text-hl-soft">heroleague1</span>. Das Live-Scoreboard
-        (Teams, Tore, Minute) erscheint automatisch über dem Bild, sobald der Schiedsrichter das Spiel auf dem Feld live
-        schaltet.
+        (nicht die ganze URL), z. B. <span className="font-mono text-hl-soft">heroleague1</span>. Scoreboard, Uhr und
+        Tor-Einblendung kommen direkt aus OBS (siehe „OBS-Einblendung“) – auf der Website läuft nur der Stream selbst.
       </p>
 
       <div className="flex items-center justify-between gap-3 hl-surf-soft border border-white/10 rounded-xl px-4 py-3 mb-4">
@@ -120,29 +119,38 @@ export function ObsLinks() {
         Der Hintergrund ist durchsichtig. Scoreboard, Uhr (8:00 → Nachspielzeit), TOR-Einblendung und Aufstellung erscheinen
         automatisch, sobald der Schiedsrichter auf dem Feld anpfeift – für Testspiel und Liga.
       </p>
-      <div className="mt-3 space-y-2">
-        {links.map((l) => (
-          <div key={l.url} className="flex items-center gap-2 min-w-0">
-            <span className="shrink-0 w-14 text-[12px] font-sans font-bold text-hl-dim">{l.label}</span>
-            <span className="flex-1 min-w-0 truncate font-mono text-[12px] text-hl-soft bg-black/30 border border-white/10 rounded-lg px-2 py-1.5">{l.url}</span>
-            <button
-              onClick={() => copy(l.url)}
-              className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-white/15 px-2.5 py-1.5 text-[11px] font-sans font-bold uppercase tracking-wider text-white hover:border-white/30 cursor-pointer"
-            >
-              {copied === l.url ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              {copied === l.url ? 'Kopiert' : 'Kopieren'}
-            </button>
+      <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+        {links.map((l, i) => (
+          <div key={l.url} className="rounded-xl border border-white/10 bg-black/25 p-3 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-display font-black uppercase tracking-tight text-white text-base">{l.label}</span>
+              <span className="text-[11px] font-sans font-bold uppercase tracking-wider text-hl-dim">für OBS {i + 1}</span>
+            </div>
+            <div className="mt-2 truncate font-mono text-[12px] text-hl-soft bg-black/30 border border-white/10 rounded-lg px-2 py-1.5">{l.url}</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                onClick={() => copy(l.url)}
+                className="inline-flex items-center gap-1 rounded-lg bg-brand-accent-light px-3 py-1.5 text-[11px] font-sans font-black uppercase tracking-wider text-[#04120d] cursor-pointer active:scale-95 transition-transform"
+              >
+                {copied === l.url ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                {copied === l.url ? 'Kopiert' : 'Link kopieren'}
+              </button>
+              <a
+                href={`${l.url}&test=1`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-lg border border-white/15 px-3 py-1.5 text-[11px] font-sans font-bold uppercase tracking-wider text-white hover:border-white/30"
+              >
+                <ExternalLink className="w-3.5 h-3.5" /> Vorschau
+              </a>
+            </div>
           </div>
         ))}
       </div>
-      <a
-        href={`${base}/overlay?feld=1&test=1`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-sans font-bold text-brand-accent-light hover:text-white"
-      >
-        <ExternalLink className="w-3.5 h-3.5" /> Vorschau mit Beispielspiel (zum Ausrichten)
-      </a>
+      <p className="mt-3 text-[12px] text-hl-mute font-sans leading-relaxed">
+        Jeder Link zeigt <b>nur sein Feld</b>: Pfeift der Schiri ein Spiel auf Feld 2 an, erscheint es nur bei Feld 2. Welches Spiel auf
+        welchem Feld läuft, kommt aus dem Spielplan. Die Links bleiben <b>für jeden Spieltag gleich</b> – einmal in OBS einrichten, fertig.
+      </p>
     </div>
   );
 }
