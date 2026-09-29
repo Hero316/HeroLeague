@@ -391,7 +391,7 @@ function BrandCorner({ instagram }: { instagram: string }) {
 // Der Hauptpartner steht IMMER sichtbar links, rechts wechseln die übrigen.
 const ROTATING_PARTNERS = [
   { label: 'Bankpartner', name: 'Volksbank – Die Gestalterbank', logo: '/assets/partners/volksbank-gestalterbank.png', h: 38 },
-  { label: 'Ausrüstungspartner', name: 'Unisport', logo: '/assets/partners/unisport.png', h: 52 },
+  { label: 'Schuh- & Ausrüstungspartner', name: 'Unisport', logo: '/assets/partners/unisport.png', h: 52 },
 ];
 
 function PartnerBar() {
@@ -419,7 +419,7 @@ function PartnerBar() {
         </div>
       </div>
       {/* Weitere Partner – wechseln */}
-      <div className="relative flex flex-col justify-center gap-1.5 px-4 py-2.5 w-[268px] border-l border-white/10">
+      <div className="relative flex flex-col justify-center gap-1.5 px-4 py-2.5 w-[300px] border-l border-white/10">
         <AnimatePresence mode="wait">
           <motion.div
             key={p.name}
@@ -429,7 +429,7 @@ function PartnerBar() {
             transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
             className="flex flex-col gap-1.5"
           >
-            <span className="text-[11px] font-sans font-black uppercase tracking-[2.5px] text-white/60">{p.label}</span>
+            <span className="text-[11px] font-sans font-black uppercase tracking-[1.8px] text-white/60 whitespace-nowrap">{p.label}</span>
             <span className="grid place-items-center rounded-lg bg-white h-[60px] px-3">
               <img src={p.logo} alt={p.name} className="max-w-full w-auto object-contain" style={{ height: p.h }} />
             </span>
