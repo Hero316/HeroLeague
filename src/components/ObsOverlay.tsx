@@ -579,7 +579,12 @@ export default function ObsOverlay() {
     return [...ev, ...lg];
   }, [testMatch, event, feld, matches, teams]);
 
-  const live = candidates.find((m) => m.status === 'live') ?? null;
+  // Das zuletzt angepfiffene Live-Spiel DIESES Feldes (falls aus Versehen zwei
+  // gleichzeitig live sind, gewinnt das neuere – das alte wurde nur nicht abgepfiffen).
+  const live =
+    candidates
+      .filter((m) => m.status === 'live')
+      .sort((a, b) => Date.parse(b.liveStartedAt ?? '') - Date.parse(a.liveStartedAt ?? '') || 0)[0] ?? null;
   const label = testMatch
     ? `Vorschau · Feld ${feld}`
     : live?.key.startsWith('e:') && event

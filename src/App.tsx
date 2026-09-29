@@ -1016,8 +1016,8 @@ export default function App() {
               <ArrowLeft className="w-3.5 h-3.5" /> Zurück
             </button>
           </div>
-          <StreamStage streams={streams} event={activeEvent} teams={visibleTeams} mode="page" />
-          <LeagueStreamStage streams={leagueStreams} teams={leagueTeams} matches={currentSeasonMatches} mode="page" />
+          <StreamStage streams={streams} event={activeEvent} mode="page" />
+          <LeagueStreamStage streams={leagueStreams} matches={currentSeasonMatches} mode="page" />
           {!anyStreams && (
             <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 py-16 text-center">
               <p className="text-hl-mute font-sans">Aktuell läuft kein Stream. Sobald es losgeht, siehst du hier beide Felder.</p>
@@ -1414,7 +1414,7 @@ export default function App() {
                   </div>
                 </div>
               )}
-              <StreamStage streams={streams} event={previewEvent} teams={visibleTeams} mode="page" />
+              <StreamStage streams={streams} event={previewEvent} mode="page" />
               <EventPage
                 event={previewEvent}
                 teams={visibleTeams}
@@ -1727,7 +1727,7 @@ export default function App() {
                       id="obs-overlay"
                       category="kanaele"
                       title="OBS-Einblendung (Livestream)"
-                      subtitle="Link zum Kopieren für OBS – Scoreboard, Uhr & Tor-Einblendung für Feld 1 / Feld 2"
+                      subtitle="Je ein Link für Feld 1 und Feld 2 – Scoreboard, Uhr & Tor-Einblendung direkt im Stream"
                       icon={<MonitorPlay className="w-5 h-5" />}
                       accent="#9147FF"
                     >
@@ -1740,7 +1740,7 @@ export default function App() {
                       id="streams"
                       category="kanaele"
                       title="Live-Streams (Testspieltag)"
-                      subtitle="Zwei Twitch-Kanäle (Feld 1 & 2) + automatisches Live-Scoreboard"
+                      subtitle="Zwei Twitch-Kanäle (Feld 1 & 2) für die Startseite"
                       icon={<Twitch className="w-5 h-5" />}
                       accent="#9147FF"
                     >
@@ -1912,8 +1912,8 @@ export default function App() {
             onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
             onSeeAll={() => goToTab('spielplan')}
           />
-          <StreamStage streams={streams} event={activeEvent} teams={visibleTeams} mode="home" onOpenFull={() => navigateTo('/streams')} />
-          <LeagueStreamStage streams={leagueStreams} teams={leagueTeams} matches={currentSeasonMatches} mode="home" onOpenFull={() => navigateTo('/streams')} />
+          <StreamStage streams={streams} event={activeEvent} mode="home" onOpenFull={() => navigateTo('/streams')} />
+          <LeagueStreamStage streams={leagueStreams} matches={currentSeasonMatches} mode="home" onOpenFull={() => navigateTo('/streams')} />
           {countdown.active && (
             <Countdown
               target={countdown.target}
