@@ -816,6 +816,20 @@ export function LiveBadge({
   return <MatchStatusBadge status="live" liveLabel={text} overtime={!!clock?.overtime} />;
 }
 
+// Kleines „Feld 1"/„Feld 2"-Schild für Spielkarten – damit Spieler & Zuschauer
+// sehen, auf welchem Platz (und in welchem Stream) ein Spiel läuft. Ohne
+// hinterlegtes Feld wird nichts angezeigt.
+export function FieldTag({ field, className = '' }: { field?: number | null; className?: string }) {
+  if (typeof field !== 'number' || field < 1) return null;
+  return (
+    <span
+      className={`inline-flex items-center shrink-0 px-2 py-0.5 rounded-md border border-[rgba(34,223,201,.35)] bg-[rgba(34,223,201,.08)] font-sans font-extrabold text-[10px] tracking-[1px] uppercase text-brand-accent-light whitespace-nowrap ${className}`}
+    >
+      Feld {field}
+    </span>
+  );
+}
+
 // Status-Badge für Match-Karten
 export function MatchStatusBadge({
   status,

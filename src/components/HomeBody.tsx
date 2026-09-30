@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActiveTab, Match, PlayerStat, Team } from '../types';
 import Tabelle from './Tabelle';
-import { TeamCrest, MatchStatusBadge, LiveBadge, shortDate } from './ui';
+import { TeamCrest, MatchStatusBadge, LiveBadge, shortDate, FieldTag } from './ui';
 import { Reveal } from './anim';
 
 interface HomeBodyProps {
@@ -177,9 +177,10 @@ export default function HomeBody({ teams, matches, players, seasonLabel, onNavig
                         : 'bg-white/[.025] border border-white/[.07]'
                     }`}
                   >
-                    <div className="flex justify-between items-center mb-3">
-                      <span className="font-sans font-semibold text-[11px] tracking-[.8px] text-hl-dim">
-                        {shortDate(m.date)} · {m.time} Uhr
+                    <div className="flex justify-between items-center gap-2 mb-3">
+                      <span className="flex items-center gap-2 min-w-0 font-sans font-semibold text-[11px] tracking-[.8px] text-hl-dim">
+                        <span className="truncate">{shortDate(m.date)} · {m.time} Uhr</span>
+                        <FieldTag field={m.field} />
                       </span>
                       {isLive ? <LiveBadge liveStartedAt={m.liveStartedAt} durationMinutes={m.durationMinutes} pausedAt={m.pausedAt} /> : <MatchStatusBadge status={m.status} />}
                     </div>

@@ -871,7 +871,7 @@ export default function TeamDetail({
                         )}
                       </div>
                       <div className="text-[10px] font-sans font-semibold text-hl-faint mt-0.5">
-                        {shortDate(m.date)} · {m.time} Uhr
+                        {shortDate(m.date)} · {m.time} Uhr{typeof m.field === 'number' ? <span className="text-brand-accent-light"> · Feld {m.field}</span> : null}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -933,7 +933,7 @@ export default function TeamDetail({
                   {nextMatch.status === 'live' ? 'JETZT LIVE' : 'NÄCHSTES SPIEL'}
                 </div>
                 <div className="font-sans font-semibold text-[11px] tracking-wider text-hl-dim mb-3.5 uppercase">
-                  {new Date(nextMatch.date).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short' })} · {nextMatch.time} UHR
+                  {new Date(nextMatch.date).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: 'short' })} · {nextMatch.time} UHR{typeof nextMatch.field === 'number' ? <span className="text-brand-accent-light"> · FELD {nextMatch.field}</span> : null}
                 </div>
                 <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
                   <div className="flex flex-col items-center gap-2">

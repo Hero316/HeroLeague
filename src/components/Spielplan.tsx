@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Play, Check, RotateCcw, Plus, Minus, Pencil, Save, AlertTriangle, Users, X, Star, Hand, BarChart3 } from 'lucide-react';
 import { Absence, BestPlayer, Goalkeeper, Match, Scorer, Team } from '../types';
-import { TeamCrest, shortDate, useMatchClock } from './ui';
+import { TeamCrest, shortDate, useMatchClock, FieldTag } from './ui';
 import { FadeIn } from './anim';
 
 export function LiveTimer({
@@ -1038,9 +1038,10 @@ export default function Spielplan({
                   }`}
                 >
                   {/* Kopf: Datum / Status */}
-                  <div className="flex justify-between items-center mb-3.5">
-                    <span className="font-sans font-semibold text-[11.5px] tracking-[.8px] text-hl-dim">
-                      {shortDate(match.date)} · {match.time} Uhr
+                  <div className="flex justify-between items-center gap-2 mb-3.5">
+                    <span className="flex items-center gap-2 min-w-0 font-sans font-semibold text-[11.5px] tracking-[.8px] text-hl-dim">
+                      <span className="truncate">{shortDate(match.date)} · {match.time} Uhr</span>
+                      <FieldTag field={match.field} />
                     </span>
                     {isLive ? (
                       <LiveTimer liveStartedAt={match.liveStartedAt ?? undefined} durationMinutes={match.durationMinutes ?? undefined} pausedAt={match.pausedAt ?? undefined} />
