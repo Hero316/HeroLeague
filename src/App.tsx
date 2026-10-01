@@ -334,8 +334,9 @@ export default function App() {
 
   // Freie News fürs Laufband laden (unkritisch – Fallback: keine)
   useEffect(() => {
-    apiFetch<{ items: NewsItem[] }>('/api/twitch?resource=news')
-      .then((data) => setNews(Array.isArray(data?.items) ? data.items : []))
+    apiFetch<{ active?: boolean; items: NewsItem[] }>('/api/twitch?resource=news')
+      // Pausiert (Schalter im Backend aus) ⇒ keine eigenen Nachrichten im Ticker.
+      .then((data) => setNews(data?.active !== false && Array.isArray(data?.items) ? data.items : []))
       .catch(() => {
         /* noch keine News gepflegt – Ticker zeigt nur automatische Einträge */
       });

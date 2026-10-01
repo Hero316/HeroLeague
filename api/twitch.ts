@@ -39,7 +39,8 @@ const DEFAULT_COUNTDOWN = { active: false, target: '2026-10-04T19:00', title: 'T
 // News-Laufband unter der Navigation: freie Kurz-Nachrichten, die im Ticker
 // hinten an die automatischen Einträge angehängt werden. Leere Liste = normal.
 type NewsItem = { id: string; text: string };
-const DEFAULT_NEWS = { items: [] as NewsItem[] };
+// active=false ⇒ eigene Nachrichten pausiert (bleiben gespeichert, laufen aber nicht).
+const DEFAULT_NEWS = { active: true, items: [] as NewsItem[] };
 
 // Highlights: gemischte Medien-Liste (Bilder + Video-Links) + Ordner (Alben).
 type HighlightMedia = { id: string; type: 'image' | 'video'; url: string; caption?: string; ratio?: number; featured?: boolean };
@@ -296,7 +297,8 @@ function normalizeNews(body: unknown) {
     })
     .filter((n) => n.text)
     .slice(0, 30);
-  return { items };
+  // Fehlt der Schalter (Altbestand), gelten die News als aktiv.
+  return { active: b.active !== false, items };
 }
 
 const saveNews = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
