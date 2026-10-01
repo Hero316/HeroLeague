@@ -39,7 +39,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
     if (pomProp !== undefined) return; // bereits von oben geliefert
     apiFetch<PlayerOfMonth>('/api/player-of-the-month')
       .then((data) => {
-        if (data && data.name) setPomState(data);
+        if (data && data.name?.trim()) setPomState(data);
       })
       .catch(() => {
         // Noch kein Spieler des Spieltages gepflegt
@@ -314,7 +314,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
             <div className="absolute left-[-5%] right-[-5%] top-0 h-[112lvh] hl-zoom">
               <img src={heroImages.pom} alt="" className="absolute inset-0 w-full h-full object-cover" />
             </div>
-            <div className="absolute inset-0 bg-[rgba(6,14,15,.62)]" />
+            <div className="absolute inset-0 bg-[rgba(6,14,15,.72)]" />
             <div className="absolute inset-0 bg-[radial-gradient(70%_80%_at_50%_45%,transparent,rgba(6,14,15,.75))]" />
             <div className="absolute inset-0 bg-[linear-gradient(0deg,#08110f_2%,transparent_34%)]" />
           </div>

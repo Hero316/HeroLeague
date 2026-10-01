@@ -39,8 +39,43 @@ export interface DayCandidate {
   counts: ActionCounts; // Summe des Spieltags
 }
 
-// Beste Note je Rolle an einem Spieltag. Gleichstand: mehr Tore (Feld) bzw.
-// mehr Paraden (Torwart) gewinnt.
+// Alle getrackten Spieltage (Nummern) einer Saison, aufsteigend.
+export function trackedMatchdays(rows: MatchPlayerStat[], seasonId: string): number[] {
+  const set = new Set<number>();
+  for (const r of rows) {
+    const md = matchdayOf(r.dayKey, seasonId);
+    if (md !== null) set.add(md);
+  }
+  return [...set].sort((a, b) => a - b);
+}
+
+// Rangliste einer Rolle an einem Spieltag: beste Note (Schnitt seiner Spiele)
+// zuerst. Gleichstand: mehr Tore (Feld) bzw. mehr Paraden (Torwart).
+export function rankDay(
+  rows: MatchPlayerStat[],
+  seasonId: string,
+  cfg: ScoringConfig,
+  matchday: number,
+  role: StatRole
+): DayCandidate[] {
+  const key = leagueDayKey(seasonId, matchday);
+  const groups = new Map<string, MatchPlayerStat[]>();
+  for (const r of rows) {
+    if (r.dayKey !== key || r.role !== role) continue;
+    const k = `${r.teamId}|${r.playerName}`;
+    groups.set(k, [...(groups.get(k) ?? []), r]);
+  }
+  const list: DayCandidate[] = [];
+  for (const g of groups.values()) {
+    const counts = sumCounts(g.map((r) => normalizeCounts(r.counts)));
+    const note = round1(g.reduce((s, r) => s + matchNote(normalizeCounts(r.counts), cfg, role), 0) / g.length);
+    list.push({ teamId: g[0].teamId, name: g[0].playerName, note, games: g.length, counts });
+  }
+  const tie = (c: DayCandidate) => (role === 'keeper' ? c.counts.save : c.counts.goal);
+  return list.sort((a, b) => b.note - a.note || tie(b) - tie(a));
+}
+
+// Bester Spieler + bester Torwart eines Spieltages (Standard: letzter getrackter).
 export function bestOfDay(
   rows: MatchPlayerStat[],
   seasonId: string,
@@ -49,30 +84,10 @@ export function bestOfDay(
 ): { matchday: number; field: DayCandidate | null; keeper: DayCandidate | null } | null {
   const md = matchday && matchday > 0 ? matchday : latestTrackedMatchday(rows, seasonId);
   if (!md) return null;
-  const key = leagueDayKey(seasonId, md);
-  const dayRows = rows.filter((r) => r.dayKey === key);
-  if (dayRows.length === 0) return null;
-
-  const pick = (role: StatRole): DayCandidate | null => {
-    const groups = new Map<string, MatchPlayerStat[]>();
-    for (const r of dayRows) {
-      if (r.role !== role) continue;
-      const k = `${r.teamId}|${r.playerName}`;
-      groups.set(k, [...(groups.get(k) ?? []), r]);
-    }
-    let best: DayCandidate | null = null;
-    for (const list of groups.values()) {
-      const counts = sumCounts(list.map((r) => normalizeCounts(r.counts)));
-      const note = round1(list.reduce((s, r) => s + matchNote(normalizeCounts(r.counts), cfg, role), 0) / list.length);
-      const cand: DayCandidate = { teamId: list[0].teamId, name: list[0].playerName, note, games: list.length, counts };
-      const tie = role === 'keeper' ? counts.save : counts.goal;
-      const bestTie = best ? (role === 'keeper' ? best.counts.save : best.counts.goal) : -1;
-      if (!best || note > best.note || (note === best.note && tie > bestTie)) best = cand;
-    }
-    return best;
-  };
-
-  return { matchday: md, field: pick('field'), keeper: pick('keeper') };
+  const field = rankDay(rows, seasonId, cfg, md, 'field')[0] ?? null;
+  const keeper = rankDay(rows, seasonId, cfg, md, 'keeper')[0] ?? null;
+  if (!field && !keeper) return null;
+  return { matchday: md, field, keeper };
 }
 
 export interface AwardView {
