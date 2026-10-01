@@ -24,6 +24,11 @@ interface Props {
   team?: TeamLike;
   games?: number; // nicht mehr angezeigt – bleibt für bestehende Aufrufer erhalten
   className?: string;
+  // Wartekarte: gleicher Look, aber Werte als „–" (noch nichts getrackt) und
+  // optional eigenes großes Zeichen statt der Initiale (z. B. „?").
+  pending?: boolean;
+  mark?: string;
+  label?: string; // ersetzt die Stufen-Bezeichnung (z. B. „Torwart")
 }
 
 export const TIER: Record<CardTier, { label: string; accent: string; border: string; bg1: string; bg2: string; glow?: string }> = {
@@ -34,7 +39,7 @@ export const TIER: Record<CardTier, { label: string; accent: string; border: str
   tots: { label: 'TOTS', accent: '#F6E8AC', border: '#F3E4A6', bg1: '#C9AE52', bg2: '#4A390C' },
 };
 
-export default function FifaCard({ card, name, imageUrl, team, className = '' }: Props) {
+export default function FifaCard({ card, name, imageUrl, team, className = '', pending = false, mark, label }: Props) {
   const t = TIER[card.tier];
   const parts = name.trim().split(/\s+/);
   const lastName = parts.length > 1 ? parts[parts.length - 1] : name;
@@ -70,7 +75,7 @@ export default function FifaCard({ card, name, imageUrl, team, className = '' }:
         ) : (
           <div className="w-full h-full grid place-items-center">
             <span className="font-display font-black" style={{ fontSize: '46cqw', color: `${t.accent}20` }}>
-              {lastName.charAt(0)}
+              {mark ?? lastName.charAt(0)}
             </span>
           </div>
         )}
@@ -118,10 +123,10 @@ export default function FifaCard({ card, name, imageUrl, team, className = '' }:
         {/* Stufe oben, darunter die Gesamtwertung – mittig, als Kopf der Werte-Gruppe */}
         <div className="flex flex-col items-center" style={{ marginBottom: '1cqw' }}>
           <div className="font-display font-black uppercase leading-none" style={{ fontSize: '4.6cqw', letterSpacing: '0.18em', color: t.accent }}>
-            {t.label}
+            {label ?? t.label}
           </div>
           <div className="font-display font-black tabular-nums leading-none" style={{ fontSize: '26cqw', color: t.accent, textShadow: '0 3px 14px rgba(0,0,0,.9)', marginTop: '0.5cqw' }}>
-            {card.ges}
+            {pending ? '–' : card.ges}
           </div>
         </div>
         <div className="w-full" style={{ height: '1px', marginBottom: '2.5cqw', background: `${t.accent}55` }} />
@@ -129,7 +134,7 @@ export default function FifaCard({ card, name, imageUrl, team, className = '' }:
           {card.attrs.map((a) => (
             <div key={a.key} className="text-center">
               <div className="font-display font-black tabular-nums text-white leading-none" style={{ fontSize: '11cqw' }}>
-                {a.value}
+                {pending ? '–' : a.value}
               </div>
               <div className="uppercase text-white/60" style={{ fontSize: '4cqw', letterSpacing: '0.08em', marginTop: '1.5cqw' }} title={a.label}>
                 {a.key}

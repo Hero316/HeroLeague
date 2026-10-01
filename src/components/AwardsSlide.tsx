@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react';
-import type { MatchPlayerStat, Partner, PlayerOfMonth, ScoringConfig, StatRole, Team } from '../types';
+import type { ReactNode } from 'react';
+import type { MatchPlayerStat, Partner, PlayerCard, PlayerOfMonth, ScoringConfig, StatRole, Team } from '../types';
 import { awardView, fmtNote } from '../lib/awards';
 import FifaCard from './FifaCard';
 import { SponsorLink } from './ui';
@@ -38,6 +38,10 @@ interface SideData {
   image?: string;
 }
 
+function findTeam(teams: Team[], teamId?: string, club?: string): Team | undefined {
+  return (teamId ? teams.find((t) => t.id === teamId) : undefined) || (club ? teams.find((t) => t.name === club) : undefined);
+}
+
 // Klickbar nur mit Ziel – sonst ein schlichtes <div>. (Kein deaktivierter
 // <button>: Safari blendet dessen Inhalt grau/halb durchsichtig aus.)
 function Tap({ onClick, label, className, children }: { onClick?: () => void; label?: string; className?: string; children: ReactNode }) {
@@ -50,26 +54,17 @@ function Tap({ onClick, label, className, children }: { onClick?: () => void; la
   );
 }
 
-// Foto-Kachel im Karten-Format (ohne Tracking) – fällt bei kaputtem Bild auf die Initiale zurück.
-function PhotoTile({ image, name, initial, accent }: { image?: string; name: string; initial: string; accent: string }) {
-  const [broken, setBroken] = useState(false);
-  return (
-    <div
-      className="relative rounded-3xl overflow-hidden border-[1.5px] bg-[#050607]"
-      style={{ aspectRatio: '0.7', borderColor: accent, backgroundImage: `linear-gradient(165deg, ${accent}cc, ${accent}33 50%, #050607)` }}
-    >
-      {image && !broken ? (
-        <img src={image} alt={name} onError={() => setBroken(true)} className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: 'center 15%' }} />
-      ) : (
-        <span className="absolute inset-0 grid place-items-center font-display font-black text-7xl text-white/25">{initial}</span>
-      )}
-    </div>
-  );
+// Wartekarte im FIFA-Look (noch keine Tracking-Werte): Spieler grün, Torwart gold.
+const PENDING_ATTRS: Record<StatRole, string[]> = {
+  field: ['PAS', 'SCH', 'DRI', 'DEF'],
+  keeper: ['STL', 'PAR', 'PAS', 'SIC'],
+};
+function pendingCard(role: StatRole): PlayerCard {
+  return { role, ges: 0, tier: role === 'keeper' ? 'gold' : 'hero', attrs: PENDING_ATTRS[role].map((k) => ({ key: k, label: k, value: 0 })) };
 }
 
-function findTeam(teams: Team[], teamId?: string, club?: string): Team | undefined {
-  return (teamId ? teams.find((t) => t.id === teamId) : undefined) || (club ? teams.find((t) => t.name === club) : undefined);
-}
+// Name nur, wenn er echte Buchstaben/Ziffern enthält (unsichtbare Zeichen o. Ä. = leer).
+const hasName = (n?: string) => !!n && /[\p{L}\p{N}]/u.test(n);
 
 function AwardSide({
   side,
@@ -106,7 +101,7 @@ function AwardSide({
   }
 
   // Ausrichtung zur Mitte: links rechtsbündig, rechts linksbündig (nur PC).
-  const align = side === 'left' ? 'lg:items-end lg:text-right' : 'lg:items-start lg:text-left';
+  const align = side === 'left' ? 'lg:justify-items-end lg:text-right' : 'lg:justify-items-start lg:text-left';
 
   const cardEl = (
     <Tap
@@ -117,7 +112,7 @@ function AwardSide({
       {view.card ? (
         <FifaCard card={view.card} name={data.name} imageUrl={image} team={data.team} />
       ) : (
-        <PhotoTile image={image} name={data.name} initial={last.charAt(0)} accent={accent} />
+        <FifaCard card={pendingCard(data.role)} name={data.name} imageUrl={image} team={data.team} pending label={isP ? 'Spieler' : 'Torwart'} />
       )}
     </Tap>
   );
@@ -136,7 +131,9 @@ function AwardSide({
   );
 
   return (
-    <div className={`flex flex-col items-center text-center min-w-0 ${align}`}>
+    // Drei gemeinsame Zeilen (Überschrift · Name · Karte) über beide Spalten
+    // (subgrid) → Karten stehen links und rechts immer auf gleicher Höhe.
+    <div className={`row-span-3 grid grid-rows-subgrid justify-items-center text-center min-w-0 ${align}`}>
       <h2
         className="font-display font-black uppercase leading-[.9] tracking-tight text-[17px] sm:text-[28px] xl:text-[34px]"
         style={{ color: accent, textShadow: `0 0 30px ${accent}55` }}
@@ -145,7 +142,8 @@ function AwardSide({
         <br />
         Spieltages
       </h2>
-      <Tap onClick={open} className="mt-3 sm:mt-4">
+      <div className="mt-3 sm:mt-4 min-w-0 max-w-full">
+      <Tap onClick={open}>
         <div className="font-display font-extrabold uppercase leading-[.95] text-white text-base sm:text-2xl xl:text-[26px] break-words">
           {first && (
             <>
@@ -159,6 +157,7 @@ function AwardSide({
       {(data.team?.name || data.club) && (
         <div className="mt-1 font-sans font-bold uppercase tracking-[1.5px] text-[10px] sm:text-xs text-white/55 truncate max-w-full">{data.team?.name || data.club}</div>
       )}
+      </div>
       <div className="mt-4 sm:mt-5 flex flex-col lg:flex-row items-center lg:items-end gap-4 sm:gap-8">
         {side === 'left' ? (
           <>
@@ -183,10 +182,10 @@ function AwardSide({
 }
 
 // Musterkarte, solange (noch) kein Torwart gekürt ist – hält die Folie symmetrisch.
-function PlaceholderSide({ role }: { role: StatRole }) {
+function PlaceholderSide({ role, side }: { role: StatRole; side: 'left' | 'right' }) {
   const accent = role === 'field' ? TEAL : GOLD;
   return (
-    <div className="flex flex-col items-center text-center min-w-0 lg:items-start lg:text-left">
+    <div className={`row-span-3 grid grid-rows-subgrid justify-items-center text-center min-w-0 ${side === 'left' ? 'lg:justify-items-end lg:text-right' : 'lg:justify-items-start lg:text-left'}`}>
       <h2
         className="font-display font-black uppercase leading-[.9] tracking-tight text-[17px] sm:text-[28px] xl:text-[34px]"
         style={{ color: accent, textShadow: `0 0 30px ${accent}55` }}
@@ -195,23 +194,16 @@ function PlaceholderSide({ role }: { role: StatRole }) {
         <br />
         Spieltages
       </h2>
-      <div className="mt-3 sm:mt-4 font-display font-extrabold uppercase leading-[.95] text-white/80 text-base sm:text-2xl xl:text-[26px]">
-        Hier könntest
-        <br />
-        du stehen
-      </div>
-      <div className="mt-1 font-sans font-bold uppercase tracking-[1.5px] text-[10px] sm:text-xs text-white/45">Wird noch gekürt</div>
-      <div className="mt-4 sm:mt-5 shrink-0 w-[150px] sm:w-[220px] xl:w-[240px]">
-        <div
-          className="relative rounded-3xl overflow-hidden border-[1.5px] border-dashed grid place-items-center"
-          style={{ aspectRatio: '0.7', borderColor: `${accent}88`, background: `linear-gradient(165deg, ${accent}22, #050607 70%)` }}
-        >
-          <svg viewBox="0 0 100 120" className="w-[55%] opacity-25" aria-hidden="true">
-            <circle cx="50" cy="34" r="22" fill={accent} />
-            <path d="M8 120c0-26 19-44 42-44s42 18 42 44z" fill={accent} />
-          </svg>
-          <span className="absolute bottom-[12%] font-display font-black text-5xl sm:text-7xl" style={{ color: `${accent}aa` }}>?</span>
+      <div className="mt-3 sm:mt-4">
+        <div className="font-display font-extrabold uppercase leading-[.95] text-white/80 text-base sm:text-2xl xl:text-[26px]">
+          Hier könntest
+          <br />
+          du stehen
         </div>
+        <div className="mt-1 font-sans font-bold uppercase tracking-[1.5px] text-[10px] sm:text-xs text-white/45">Wird noch gekürt</div>
+      </div>
+      <div className="mt-4 sm:mt-5 shrink-0 w-[150px] sm:w-[220px] xl:w-[240px] opacity-80">
+        <FifaCard card={pendingCard(role)} name={role === 'field' ? 'Spieler gesucht' : 'Torwart gesucht'} pending mark="?" label="Wird gekürt" />
       </div>
     </div>
   );
@@ -221,7 +213,7 @@ export default function AwardsSlide(props: Props) {
   const { pom, teams, sponsor, buttons } = props;
   const pTeam = findTeam(teams, pom.teamId, pom.club);
   const player: SideData = { role: 'field', name: pom.name, teamId: pTeam?.id || pom.teamId || '', club: pom.club, team: pTeam, image: pom.image };
-  const keeper: SideData | null = pom.keeper?.name
+  const keeper: SideData | null = hasName(pom.keeper?.name)
     ? (() => {
         const kTeam = findTeam(teams, pom.keeper!.teamId, pom.keeper!.club);
         return { role: 'keeper' as const, name: pom.keeper!.name, teamId: kTeam?.id || pom.keeper!.teamId || '', club: pom.keeper!.club, team: kTeam, image: pom.keeper!.image };
@@ -252,10 +244,10 @@ export default function AwardsSlide(props: Props) {
       )}
 
       {/* Die beiden Auszeichnungen – spiegelsymmetrisch zur Mittellinie */}
-      <div className="relative mt-8 sm:mt-10 grid grid-cols-2 gap-3 sm:gap-10 lg:gap-14 items-start">
+      <div className="relative mt-8 sm:mt-10 grid grid-cols-2 grid-rows-[auto_auto_auto] gap-x-3 sm:gap-x-10 lg:gap-x-14 items-start">
         <div className="hidden lg:block absolute left-1/2 -translate-x-1/2 top-4 bottom-4 w-px bg-gradient-to-b from-transparent via-white/15 to-transparent" />
-        <AwardSide side="left" data={player} pom={pom} props={props} />
-        {keeper ? <AwardSide side="right" data={keeper} pom={pom} props={props} /> : <PlaceholderSide role="keeper" />}
+        {hasName(player.name) ? <AwardSide side="left" data={player} pom={pom} props={props} /> : <PlaceholderSide role="field" side="left" />}
+        {keeper ? <AwardSide side="right" data={keeper} pom={pom} props={props} /> : <PlaceholderSide role="keeper" side="right" />}
       </div>
 
       {buttons && <div className="mt-8 sm:mt-9 flex gap-3 justify-center flex-wrap">{buttons}</div>}
