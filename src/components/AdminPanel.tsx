@@ -501,6 +501,7 @@ export default function AdminPanel({
   const [countdownActive, setCountdownActive] = useState(false);
   const [countdownTarget, setCountdownTarget] = useState('2026-10-04T19:00');
   const [countdownTitle, setCountdownTitle] = useState('Till Season begins');
+  const [countdownKicker, setCountdownKicker] = useState(''); // kleine Zeile oben (leer = wie Text dahinter)
   // Opening Night: goldene Farbwelt + Anmelde-Taste unter dem Timer.
   const [countdownGold, setCountdownGold] = useState(false);
   const [countdownCtaLabel, setCountdownCtaLabel] = useState('');
@@ -809,11 +810,12 @@ export default function AdminPanel({
 
   // Countdown laden
   useEffect(() => {
-    apiFetch<{ active: boolean; target: string; title: string; gold?: boolean; ctaLabel?: string; ctaTicketKey?: string }>('/api/twitch?resource=countdown')
+    apiFetch<{ active: boolean; target: string; title: string; kicker?: string; gold?: boolean; ctaLabel?: string; ctaTicketKey?: string }>('/api/twitch?resource=countdown')
       .then((data) => {
         setCountdownActive(!!data.active);
         setCountdownTarget(data.target || '2026-10-04T19:00');
         setCountdownTitle(typeof data.title === 'string' ? data.title : 'Till Season begins');
+        setCountdownKicker(typeof data.kicker === 'string' ? data.kicker : '');
         setCountdownGold(!!data.gold);
         setCountdownCtaLabel(typeof data.ctaLabel === 'string' ? data.ctaLabel : '');
         setCountdownCtaKey(typeof data.ctaTicketKey === 'string' ? data.ctaTicketKey : '');
@@ -829,7 +831,7 @@ export default function AdminPanel({
       const saved = await apiFetch<{ active: boolean; target: string; title: string }>('/api/twitch?resource=countdown', {
         method: 'POST',
         body: JSON.stringify({
-          active: nextActive, target: countdownTarget.trim(), title: countdownTitle.trim(),
+          active: nextActive, target: countdownTarget.trim(), title: countdownTitle.trim(), kicker: countdownKicker.trim(),
           gold: countdownGold, ctaLabel: countdownCtaLabel.trim(), ctaTicketKey: countdownCtaKey.trim(),
         }),
       });
@@ -2331,13 +2333,25 @@ export default function AdminPanel({
               </div>
               <div>
                 <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
-                  Text dahinter (dezent)
+                  Großer Text im Hintergrund
                 </label>
                 <input
                   type="text"
                   value={countdownTitle}
                   onChange={(e) => setCountdownTitle(e.target.value)}
-                  placeholder="z.B. Till Season begins"
+                  placeholder="z.B. Opening Night"
+                  className={inputClass}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
+                  Kleine Zeile über den Zahlen
+                </label>
+                <input
+                  type="text"
+                  value={countdownKicker}
+                  onChange={(e) => setCountdownKicker(e.target.value)}
+                  placeholder={`leer = „${countdownTitle.trim() || 'Text im Hintergrund'}“ · z.B. Sonntag, 4. Oktober · 19 Uhr`}
                   className={inputClass}
                 />
               </div>

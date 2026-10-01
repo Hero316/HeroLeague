@@ -270,6 +270,8 @@ const saveCountdown = requireStaff(async (req: VercelRequest, res: VercelRespons
     active: Boolean(b.active),
     target,
     title: typeof b.title === 'string' ? b.title.trim().slice(0, 60) : DEFAULT_COUNTDOWN.title,
+    // Kleine Zeile über den Zahlen (leer = gleicher Text wie das große Wort dahinter).
+    kicker: str(b.kicker, 60),
     // Opening Night: goldene Farbwelt + Anmelde-Taste direkt unter dem Timer.
     gold: Boolean(b.gold),
     ctaLabel: str(b.ctaLabel, 40),
