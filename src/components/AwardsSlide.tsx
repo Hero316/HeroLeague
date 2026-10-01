@@ -12,7 +12,7 @@ import { SponsorLink } from './ui';
 // Am Handy stehen die beiden Karten kleiner nebeneinander, darunter die Note.
 // Karte = Saison-FIFA-Karte aus dem Tracking; Werte = dieser Spieltag.
 // Ohne Tracking-Daten fällt der Spieler auf die bisherige Foto-Karte zurück.
-// Fehlt der Torwart, steht rechts eine Musterkarte „Hier könntest du stehen".
+// Fehlt jemand, steht dort nur die Überschrift mit einer leeren Wartekarte.
 // ===========================================================================
 
 interface Props {
@@ -64,7 +64,8 @@ function pendingCard(role: StatRole): PlayerCard {
 }
 
 // Name nur, wenn er echte Buchstaben/Ziffern enthält (unsichtbare Zeichen o. Ä. = leer).
-const hasName = (n?: string) => !!n && /[\p{L}\p{N}]/u.test(n);
+const INVISIBLE = /[\u115F\u1160\u3164\uFFA0\u200B-\u200F\u2060\uFEFF\u00AD]/g;
+const hasName = (n?: string) => !!n && /[\p{L}\p{N}]/u.test(n.replace(INVISIBLE, ''));
 
 function AwardSide({
   side,
@@ -181,7 +182,7 @@ function AwardSide({
   );
 }
 
-// Musterkarte, solange (noch) kein Torwart gekürt ist – hält die Folie symmetrisch.
+// Leerer Platz (noch niemand gekürt): nur Überschrift + Wartekarte – links wie rechts gleich.
 function PlaceholderSide({ role, side }: { role: StatRole; side: 'left' | 'right' }) {
   const accent = role === 'field' ? TEAL : GOLD;
   return (
@@ -194,16 +195,10 @@ function PlaceholderSide({ role, side }: { role: StatRole; side: 'left' | 'right
         <br />
         Spieltages
       </h2>
-      <div className="mt-3 sm:mt-4">
-        <div className="font-display font-extrabold uppercase leading-[.95] text-white/80 text-base sm:text-2xl xl:text-[26px]">
-          Hier könntest
-          <br />
-          du stehen
-        </div>
-        <div className="mt-1 font-sans font-bold uppercase tracking-[1.5px] text-[10px] sm:text-xs text-white/45">Wird noch gekürt</div>
-      </div>
-      <div className="mt-4 sm:mt-5 shrink-0 w-[150px] sm:w-[220px] xl:w-[240px] opacity-80">
-        <FifaCard card={pendingCard(role)} name={role === 'field' ? 'Spieler gesucht' : 'Torwart gesucht'} pending mark="?" label="Wird gekürt" />
+      {/* leere Namenszeile – hält die Karte auf einer Höhe mit der Gegenseite */}
+      <div aria-hidden="true" />
+      <div className="mt-4 sm:mt-5 shrink-0 w-[150px] sm:w-[220px] xl:w-[240px]">
+        <FifaCard card={pendingCard(role)} name="" pending mark="" label={role === 'field' ? 'Spieler' : 'Torwart'} />
       </div>
     </div>
   );
