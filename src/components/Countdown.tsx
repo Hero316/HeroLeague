@@ -6,12 +6,15 @@ interface CountdownProps {
   gold?: boolean; // goldene Opening-Night-Farbwelt statt Türkis
   ctaLabel?: string; // Taste unter dem Timer (leer = keine Taste)
   onCta?: () => void;
+  // Ticket-Stand der verknüpften Zuschauer-Anmeldung (optional): darunter steht
+  // „52 von 75 Tickets vergeben"; ausverkauft → Taste zeigt „Ausverkauft".
+  tickets?: { capacity: number; remaining: number } | null;
 }
 
 // Fetter Countdown oben auf der Startseite bis zum Anstoß. Rechnet live gegen
 // den Zielzeitpunkt – egal wie oft an-/ausgeschaltet wird. Nach Ablauf bleibt
 // er (rot glühend) stehen, bis er im Backend deaktiviert wird.
-export default function Countdown({ target, title, gold = false, ctaLabel, onCta }: CountdownProps) {
+export default function Countdown({ target, title, gold = false, ctaLabel, onCta, tickets }: CountdownProps) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -45,6 +48,9 @@ export default function Countdown({ target, title, gold = false, ctaLabel, onCta
       ? 'text-hl-gold [text-shadow:0_0_44px_rgba(233,196,106,.5)]'
       : 'text-brand-accent-light [text-shadow:0_0_44px_rgba(34,223,201,.45)]';
   const showCta = !!(ctaLabel && onCta) && !expired;
+  const hasTickets = !!tickets && tickets.capacity > 0;
+  const sold = hasTickets ? Math.min(tickets!.capacity, Math.max(0, tickets!.capacity - tickets!.remaining)) : 0;
+  const soldOut = hasTickets && tickets!.remaining <= 0;
 
   // Überschrift: ohne eingegebenen Text bleibt es textlos (nur die Zahlen).
   const kicker = expired ? (title ? 'Anpfiff — es geht los!' : '') : title;
@@ -119,18 +125,33 @@ export default function Countdown({ target, title, gold = false, ctaLabel, onCta
 
         {/* Untere Hälfte: direkt anmelden, ohne die Seite zu verlassen. */}
         {showCta && (
-          <div className="mt-6 sm:mt-8">
-            <button
-              onClick={onCta}
-              className="inline-flex items-center gap-2 rounded-full px-7 sm:px-9 py-3 sm:py-3.5 font-display font-black uppercase tracking-wide text-[13px] sm:text-[15px] text-brand-dark transition-transform cursor-pointer hover:scale-[1.03] active:scale-[.99]"
-              style={{
-                background: 'linear-gradient(135deg,#F4D588,#E9C46A)',
-                boxShadow: '0 14px 34px -14px rgba(233,196,106,.75)',
-              }}
-            >
-              {ctaLabel}
-              <span aria-hidden="true">→</span>
-            </button>
+          <div className="mt-6 sm:mt-8 flex flex-col items-center gap-2.5">
+            {soldOut ? (
+              // Ausverkauft: keine Anmelde-Taste mehr, sondern ein klares Schild.
+              <span
+                className="inline-flex items-center gap-2 rounded-full px-7 sm:px-9 py-3 sm:py-3.5 font-display font-black uppercase tracking-wide text-[13px] sm:text-[15px] text-hl-gold border-2 border-hl-gold/60 bg-hl-gold/10"
+              >
+                Ausverkauft
+              </span>
+            ) : (
+              <button
+                onClick={onCta}
+                className="inline-flex items-center gap-2 rounded-full px-7 sm:px-9 py-3 sm:py-3.5 font-display font-black uppercase tracking-wide text-[13px] sm:text-[15px] text-brand-dark transition-transform cursor-pointer hover:scale-[1.03] active:scale-[.99]"
+                style={{
+                  background: 'linear-gradient(135deg,#F4D588,#E9C46A)',
+                  boxShadow: '0 14px 34px -14px rgba(233,196,106,.75)',
+                }}
+              >
+                {ctaLabel}
+                <span aria-hidden="true">→</span>
+              </button>
+            )}
+            {hasTickets && (
+              <span className="font-sans font-bold text-[11px] sm:text-xs tracking-[1.5px] uppercase text-hl-dim tabular-nums">
+                <span className={soldOut ? 'text-hl-gold' : 'text-white'}>{sold}</span> von {tickets!.capacity} Tickets vergeben
+                {soldOut ? ' · ausverkauft' : ` · noch ${tickets!.remaining} frei`}
+              </span>
+            )}
           </div>
         )}
       </div>

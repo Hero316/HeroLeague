@@ -125,12 +125,14 @@ export interface TicketOverviewRow {
 export interface TicketRow {
   id: string; email: string; name: string; quantity: number; status: string;
   code: string | null; checkedIn: boolean; createdAt: string; verifiedAt: string | null;
+  arrived: number; // wie viele Personen dieser Anmeldung tatsächlich da sind (0..quantity)
   consentAt: string | null; consentText: string | null;
 }
 export interface TicketAdminData {
   events: TicketAdminConfig[]; overview: TicketOverviewRow[];
   config: TicketAdminConfig | null; rows: TicketRow[]; capacity: number;
   soldSeats: number; confirmedCount: number; remaining: number;
+  arrivedSeats?: number; // tatsächlich erschienene Personen (bestätigte Tickets)
 }
 
 export const fetchTicketConfig = (eventKey?: string) =>
@@ -145,6 +147,9 @@ export const ticketAdminList = (eventKey?: string) =>
   apiFetch<TicketAdminData>(`/api/event-tickets?action=admin-list${eventKey ? `&key=${encodeURIComponent(eventKey)}` : ''}`);
 export const ticketAdminCheckin = (id: string, checkedIn: boolean) =>
   apiFetch<{ ok: boolean }>('/api/event-tickets?action=admin-checkin', { method: 'POST', body: JSON.stringify({ id, checkedIn }) });
+// Einlass mit Personenzahl (0..Anzahl Tickets der Anmeldung), jederzeit änderbar.
+export const ticketAdminArrived = (id: string, arrived: number) =>
+  apiFetch<{ ok: boolean; arrived: number }>('/api/event-tickets?action=admin-checkin', { method: 'POST', body: JSON.stringify({ id, arrived }) });
 export const ticketAdminDelete = (id: string) =>
   apiFetch<{ ok: boolean }>('/api/event-tickets?action=admin-delete', { method: 'POST', body: JSON.stringify({ id }) });
 // Speichert die GESAMTE Event-Liste (mehrere Veranstaltungen können parallel offen sein).
