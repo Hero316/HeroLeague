@@ -130,7 +130,9 @@ export default function TeamDetail({
     const gk =
       [...played]
         .filter((p) => p.gamesInGoal > 0)
-        .sort((a, b) => b.gamesInGoal - a.gamesInGoal || b.matchesPlayed - a.matchesPlayed)[0] ?? null;
+        .sort((a, b) => b.gamesInGoal - a.gamesInGoal || b.matchesPlayed - a.matchesPlayed)[0] ??
+      played.find((p) => p.goalkeeper) ??
+      null;
     const outfield = played.filter((p) => p.name !== gk?.name);
     const rank = (list: RosterEntry[]) =>
       [...list].sort(
@@ -209,8 +211,27 @@ export default function TeamDetail({
   );
   // Spieler-Detail schließen = zurück auf die reine Teamseite (ohne Spieler in der URL).
   const closePlayer = useCallback(() => onSelectTeam(team.id), [onSelectTeam, team.id]);
-  const positionLabel = (p: RosterEntry) =>
-    p.gamesInGoal > 0 && p.gamesInGoal * 2 >= p.matchesPlayed ? 'Torwart' : 'Feldspieler';
+  // Position: 1) getrackte Spiele (Mehrheit als Torwart ⇒ Torwart – genau wie
+  // Statistiken/Vergleich/Rückblick), 2) sonst der Torwart-Haken im Kader,
+  // 3) sonst die in den Ergebnissen eingetragenen Torwart-Einsätze.
+  const keeperShare = useMemo(() => {
+    const m = new Map<string, { games: number; keeper: number }>();
+    for (const r of trackingRows) {
+      if (r.teamId !== team.id) continue;
+      const e = m.get(r.playerName) ?? { games: 0, keeper: 0 };
+      e.games += 1;
+      if (r.role === 'keeper') e.keeper += 1;
+      m.set(r.playerName, e);
+    }
+    return m;
+  }, [trackingRows, team.id]);
+  const isKeeper = (p: RosterEntry) => {
+    const t = keeperShare.get(p.name);
+    if (t && t.games > 0) return t.keeper * 2 >= t.games;
+    if (p.goalkeeper) return true;
+    return p.gamesInGoal > 0 && p.gamesInGoal * 2 >= p.matchesPlayed;
+  };
+  const positionLabel = (p: RosterEntry) => (isKeeper(p) ? 'Torwart' : 'Feldspieler');
 
   // --- Statistics Center: getrackte Werte des ausgewählten Spielers ---------
   const playerRows = useMemo(
