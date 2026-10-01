@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Ticket as TicketIcon, Trash2, Settings2, Save, Loader2, RefreshCw, Download,
-  CheckCircle2, Circle, Users, Heart, ShieldCheck, ChevronRight, X, Mail, Search,
+  CheckCircle2, Circle, CircleDot, Users, Heart, ShieldCheck, ChevronRight, X, Mail, Search,
 } from 'lucide-react';
 import { ModalPortal } from './ui';
 import { useBackClose } from '../lib/backStack';
 import {
-  ticketAdminList, ticketAdminCheckin, ticketAdminDelete, ticketAdminSave,
+  ticketAdminList, ticketAdminArrived, ticketAdminDelete, ticketAdminSave,
   type TicketAdminData, type TicketAdminConfig, type TicketRow,
 } from '../lib/register';
 
@@ -29,10 +29,41 @@ const hit = (field: string, q: string) =>
 
 const inp = 'w-full bg-white/[.05] border border-white/10 rounded-xl px-3 py-2 text-[14px] text-white placeholder-hl-faint focus:border-[#E6238E] focus:outline-none';
 
+// Einlass-Stand einer Anmeldung: niemand / teilweise / alle da.
+const arrivedOf = (r: TicketRow) => Math.min(r.quantity, Math.max(0, Number(r.arrived) || 0));
+const isComplete = (r: TicketRow) => arrivedOf(r) >= r.quantity;
+
+// Auswahl „Wie viele sind da?" – eine Taste je Personenzahl (0 … Tickets).
+// Jederzeit änderbar, z. B. wenn jemand später nachkommt.
+function ArrivedPicker({ row, busy, onPick }: { row: TicketRow; busy: boolean; onPick: (n: number) => void }) {
+  const cur = arrivedOf(row);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {Array.from({ length: row.quantity + 1 }, (_, n) => (
+        <button
+          key={n}
+          type="button"
+          disabled={busy}
+          onClick={(e) => { e.stopPropagation(); onPick(n); }}
+          className={`min-w-[40px] h-10 px-3 rounded-xl text-[14px] font-bold tabular-nums cursor-pointer border transition-colors disabled:opacity-50 ${
+            n === cur
+              ? n === 0
+                ? 'bg-white/[.12] border-white/25 text-white'
+                : 'bg-brand-accent-light/15 border-brand-accent-light/50 text-brand-accent-light'
+              : 'bg-white/[.04] border-white/10 text-hl-mute hover:text-white hover:border-white/25'
+          }`}
+        >
+          {n === row.quantity && n > 1 ? `Alle ${n}` : n}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // Detail-Overlay eines Tickets: alle Daten + Einlass + Löschen MIT Bestätigung.
-function TicketDetail({ row, busy, onClose, onCheckin, onDelete }: {
+function TicketDetail({ row, busy, onClose, onSetArrived, onDelete }: {
   row: TicketRow; busy: boolean; onClose: () => void;
-  onCheckin: () => void; onDelete: () => void;
+  onSetArrived: (n: number) => void; onDelete: () => void;
 }) {
   const [confirmDel, setConfirmDel] = useState(false);
   useBackClose(true, onClose);
@@ -41,7 +72,7 @@ function TicketDetail({ row, busy, onClose, onCheckin, onDelete }: {
     ['E-Mail', row.email],
     ['Personen', String(row.quantity)],
     ['Ticket-Code', row.code || '–'],
-    ['Eingecheckt', row.checkedIn ? 'Ja' : 'Nein'],
+    ['Erschienen', `${arrivedOf(row)} von ${row.quantity}`],
     ['Angemeldet am', fmtDate(row.createdAt)],
     ['Bestätigt am', fmtDate(row.verifiedAt)],
     ['Einwilligung', row.consentAt ? fmtDate(row.consentAt) : 'nicht erfasst'],
@@ -70,12 +101,19 @@ function TicketDetail({ row, busy, onClose, onCheckin, onDelete }: {
                 </div>
               ))}
             </div>
-            <div className="flex gap-2">
-              <button onClick={onCheckin} disabled={busy} className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold cursor-pointer border ${row.checkedIn ? 'text-brand-accent-light bg-brand-accent-light/10 border-brand-accent-light/25' : 'text-white bg-white/[.06] border-white/10'}`}>
-                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : row.checkedIn ? <><CheckCircle2 className="w-4 h-4" /> Eingecheckt</> : <><Circle className="w-4 h-4" /> Einchecken</>}
-              </button>
-              <a href={`mailto:${row.email}`} className="flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold text-[#ff9ad4] bg-[#E6238E]/10 border border-[#E6238E]/25 cursor-pointer"><Mail className="w-4 h-4" /> E-Mail</a>
+            <div className="rounded-2xl border border-white/10 p-4 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[13px] font-bold text-white">Einlass – wie viele sind da?</span>
+                {busy ? <Loader2 className="w-4 h-4 animate-spin text-hl-mute" /> : (
+                  <span className={`text-[12px] font-bold tabular-nums ${isComplete(row) ? 'text-brand-accent-light' : arrivedOf(row) > 0 ? 'text-amber-300' : 'text-hl-dim'}`}>
+                    {arrivedOf(row)} / {row.quantity}
+                  </span>
+                )}
+              </div>
+              <ArrivedPicker row={row} busy={busy} onPick={onSetArrived} />
+              <p className="text-[11px] text-hl-faint">Kommt jemand später nach, einfach hier die neue Zahl antippen.</p>
             </div>
+            <a href={`mailto:${row.email}`} className="w-full flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold text-[#ff9ad4] bg-[#E6238E]/10 border border-[#E6238E]/25 cursor-pointer"><Mail className="w-4 h-4" /> E-Mail</a>
             {confirmDel ? (
               <div className="flex gap-2">
                 <button onClick={onDelete} disabled={busy} className="flex-1 rounded-xl py-2.5 text-[13px] font-bold text-white bg-rose-600 cursor-pointer">Wirklich löschen</button>
@@ -101,7 +139,8 @@ export default function TicketAdmin() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [onlyOpen, setOnlyOpen] = useState(false); // nur noch nicht Eingecheckte
+  const [onlyOpen, setOnlyOpen] = useState(false); // nur noch nicht (vollständig) Eingecheckte
+  const [pickId, setPickId] = useState<string | null>(null); // Anmeldung, deren „wie viele da?"-Auswahl offen ist
   // Es können mehrere Veranstaltungen parallel offen sein (Opening Night,
   // Testspieltag, Spieltag …) – hier wird ausgewählt, welche man gerade sieht.
   const [selKey, setSelKey] = useState<string | null>(null);
@@ -134,9 +173,19 @@ export default function TicketAdmin() {
     ticketAdminSave(next).then(() => { setSelKey(key); setShowConfig(true); load(key); }).catch(() => window.alert('Speichern fehlgeschlagen.'));
   };
 
-  const toggleCheckin = async (r: TicketRow) => {
+  // Einlass speichern – sofort lokal anzeigen (an der Tür zählt jede Sekunde),
+  // dann serverseitig sichern und neu laden.
+  const setArrived = async (r: TicketRow, n: number) => {
+    const val = Math.min(r.quantity, Math.max(0, n));
+    setData((d) => (d ? { ...d, rows: d.rows.map((x) => (x.id === r.id ? { ...x, arrived: val, checkedIn: val > 0 } : x)) } : d));
     setBusyId(r.id);
-    try { await ticketAdminCheckin(r.id, !r.checkedIn); load(); } catch { /* ignore */ } finally { setBusyId(null); }
+    try { await ticketAdminArrived(r.id, val); load(); } catch { load(); } finally { setBusyId(null); }
+  };
+  // Schneller Haken in der Liste: Einzelticket = an/aus; mehrere Tickets =
+  // Auswahl „wie viele sind da?" aufklappen.
+  const quickCheck = (r: TicketRow) => {
+    if (r.quantity <= 1) { setArrived(r, arrivedOf(r) > 0 ? 0 : 1); return; }
+    setPickId((cur) => (cur === r.id ? null : r.id));
   };
   const del = async (id: string) => {
     setBusyId(id);
@@ -155,8 +204,8 @@ export default function TicketAdmin() {
   const exportCsv = () => {
     if (!data) return;
     // Einwilligung mit exportieren – das ist der Nachweis, wem wann was zugesagt wurde.
-    const head = ['Name', 'E-Mail', 'Personen', 'Status', 'Code', 'Eingecheckt', 'Bestätigt', 'Einwilligung am', 'Einwilligungstext'];
-    const lines = data.rows.map((r) => [r.name, r.email, r.quantity, r.status, r.code || '', r.checkedIn ? 'ja' : 'nein', fmtDate(r.verifiedAt), r.consentAt ? fmtDate(r.consentAt) : '', r.consentText || '']
+    const head = ['Name', 'E-Mail', 'Personen', 'Status', 'Code', 'Erschienen', 'Bestätigt', 'Einwilligung am', 'Einwilligungstext'];
+    const lines = data.rows.map((r) => [r.name, r.email, r.quantity, r.status, r.code || '', arrivedOf(r), fmtDate(r.verifiedAt), r.consentAt ? fmtDate(r.consentAt) : '', r.consentText || '']
       .map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','));
     const blob = new Blob(['﻿' + [head.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'zuschauer-tickets.csv'; a.click(); URL.revokeObjectURL(url);
@@ -170,10 +219,12 @@ export default function TicketAdmin() {
       ),
     [data]
   );
-  const checkedInCount = confirmedRows.filter((r) => r.checkedIn).length;
+  const arrivedPersons = confirmedRows.reduce((sum, r) => sum + arrivedOf(r), 0);
+  const soldPersons = confirmedRows.reduce((sum, r) => sum + r.quantity, 0);
   // Gesucht wird in Name, E-Mail UND Code – der Gast nennt irgendeines davon.
   const visibleRows = useMemo(() => {
-    const list = onlyOpen ? confirmedRows.filter((r) => !r.checkedIn) : confirmedRows;
+    // „Nur offene" = noch nicht alle Personen dieser Anmeldung da.
+    const list = onlyOpen ? confirmedRows.filter((r) => !isComplete(r)) : confirmedRows;
     const q = search.trim();
     if (!q) return list;
     return list.filter((r) => hit(r.name, q) || hit(r.email, q) || hit(r.code || '', q));
@@ -208,9 +259,10 @@ export default function TicketAdmin() {
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         {[
           { l: 'Verkauft', v: `${data?.soldSeats ?? 0}`, sub: `/ ${data?.capacity ?? 40}` },
+          { l: 'Erschienen', v: `${data?.arrivedSeats ?? arrivedPersons}`, sub: `/ ${data?.soldSeats ?? 0}` },
           { l: 'Anmeldungen', v: `${data?.confirmedCount ?? 0}` },
           { l: 'Frei', v: `${data?.remaining ?? 0}` },
         ].map((s) => (
@@ -341,7 +393,7 @@ export default function TicketAdmin() {
               Nur offene
             </button>
             <span className="text-[12px] text-hl-mute tabular-nums ml-auto">
-              <b className="text-brand-accent-light">{checkedInCount}</b> / {confirmedRows.length} eingecheckt
+              <b className="text-brand-accent-light">{arrivedPersons}</b> / {soldPersons} Personen da
             </span>
           </div>
         </div>
@@ -358,7 +410,7 @@ export default function TicketAdmin() {
         <div className="hl-card rounded-2xl p-8 text-center">
           <Search className="w-8 h-8 mx-auto text-hl-faint mb-2" />
           <p className="text-[14px] text-hl-mute">
-            {onlyOpen && !search ? 'Alle sind eingecheckt.' : <>Niemand gefunden für „<b className="text-white">{search}</b>".</>}
+            {onlyOpen && !search ? 'Alle sind da.' : <>Niemand gefunden für „<b className="text-white">{search}</b>".</>}
           </p>
           {onlyOpen && (
             <button onClick={() => setOnlyOpen(false)} className="mt-3 text-[12px] font-bold text-[#ff7ac4] cursor-pointer">
@@ -368,25 +420,51 @@ export default function TicketAdmin() {
         </div>
       ) : (
         <div className="space-y-2">
-          {visibleRows.map((r) => (
-            <button key={r.id} onClick={() => setOpenId(r.id)} className={`w-full text-left hl-card rounded-2xl p-3.5 flex items-center gap-3 hover:border-[#E6238E]/30 transition-colors cursor-pointer active:scale-[.99] ${r.checkedIn ? 'opacity-55' : ''}`}>
-              {/* Schneller Einlass-Haken (öffnet NICHT das Detail) */}
-              <span onClick={(e) => { e.stopPropagation(); if (busyId !== r.id) toggleCheckin(r); }} className="shrink-0 cursor-pointer" title="Einlass">
-                {busyId === r.id ? <Loader2 className="w-6 h-6 animate-spin text-hl-mute" /> : r.checkedIn ? <CheckCircle2 className="w-6 h-6 text-brand-accent-light" /> : <Circle className="w-6 h-6 text-hl-faint" />}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="text-[15px] font-semibold text-white leading-snug truncate flex items-center gap-2">{r.name}
-                  <span className="inline-flex items-center gap-0.5 text-[11px] text-hl-mute font-normal"><Users className="w-3 h-3" />{r.quantity}</span>
+          {visibleRows.map((r) => {
+            const a = arrivedOf(r);
+            const done = isComplete(r);
+            const partial = a > 0 && !done;
+            return (
+              <div key={r.id} className={`hl-card rounded-2xl transition-colors hover:border-[#E6238E]/30 ${done ? 'opacity-55' : ''}`}>
+                <div className="flex items-center gap-3 p-3.5">
+                  {/* Schneller Einlass (öffnet NICHT das Detail): Einzelticket an/aus,
+                      mehrere Tickets → Auswahl „wie viele sind da?" */}
+                  <button type="button" onClick={() => { if (busyId !== r.id) quickCheck(r); }} className="shrink-0 cursor-pointer" title="Einlass" aria-label="Einlass">
+                    {busyId === r.id ? (
+                      <Loader2 className="w-6 h-6 animate-spin text-hl-mute" />
+                    ) : done ? (
+                      <CheckCircle2 className="w-6 h-6 text-brand-accent-light" />
+                    ) : partial ? (
+                      <CircleDot className="w-6 h-6 text-amber-300" />
+                    ) : (
+                      <Circle className="w-6 h-6 text-hl-faint" />
+                    )}
+                  </button>
+                  <button type="button" onClick={() => setOpenId(r.id)} className="min-w-0 flex-1 flex items-center gap-3 text-left cursor-pointer active:scale-[.99]">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[15px] font-semibold text-white leading-snug truncate flex items-center gap-2">{r.name}
+                        <span className="inline-flex items-center gap-0.5 text-[11px] text-hl-mute font-normal"><Users className="w-3 h-3" />{r.quantity}</span>
+                      </div>
+                      <div className="text-[12px] text-hl-mute truncate">{r.email}</div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-mono font-bold text-[13px] text-white tracking-wider">{r.code}</div>
+                      <div className={`text-[10px] mt-0.5 ${partial ? 'text-amber-300 font-bold' : 'text-hl-faint'}`}>
+                        {done ? (r.quantity > 1 ? `alle ${r.quantity} da` : 'eingecheckt') : partial ? `${a} von ${r.quantity} da` : fmtDate(r.verifiedAt)}
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-hl-faint shrink-0" />
+                  </button>
                 </div>
-                <div className="text-[12px] text-hl-mute truncate">{r.email}</div>
+                {pickId === r.id && (
+                  <div className="px-3.5 pb-3.5 -mt-1 space-y-2">
+                    <div className="text-[12px] font-bold text-white">Wie viele sind da?</div>
+                    <ArrivedPicker row={r} busy={busyId === r.id} onPick={(n) => { setArrived(r, n); setPickId(null); }} />
+                  </div>
+                )}
               </div>
-              <div className="text-right shrink-0">
-                <div className="font-mono font-bold text-[13px] text-white tracking-wider">{r.code}</div>
-                <div className="text-[10px] text-hl-faint mt-0.5">{r.checkedIn ? 'eingecheckt' : fmtDate(r.verifiedAt)}</div>
-              </div>
-              <ChevronRight className="w-4 h-4 text-hl-faint shrink-0" />
-            </button>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -396,7 +474,7 @@ export default function TicketAdmin() {
             row={openRow}
             busy={busyId === openRow.id}
             onClose={() => setOpenId(null)}
-            onCheckin={() => toggleCheckin(openRow)}
+            onSetArrived={(n) => setArrived(openRow, n)}
             onDelete={async () => { const id = openRow.id; await del(id); setOpenId(null); }}
           />
         )}

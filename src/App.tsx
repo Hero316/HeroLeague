@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePolling } from './lib/usePolling';
+import { fetchTicketConfig } from './lib/register';
 import { Absence, BestPlayer, Goalkeeper, Match, PlayerStat, Scorer, Season, SessionUser, Team, ActiveTab, EventArchive, HighlightsConfig, HeroImages, CountdownConfig, NewsItem, RosterMap, EveningRoster, PlayerOfMonth, MatchPlayerStat, ScoringConfig, StreamsConfig } from './types';
 import { apiFetch, setUnauthorizedHandler } from './lib/api';
 import { fetchPublicStats, fetchEventStats, fetchScoring, saveEventMatch, saveEventAttendance } from './lib/stats';
@@ -310,6 +311,26 @@ export default function App() {
         /* nicht konfiguriert – Countdown bleibt aus */
       });
   }, []);
+
+  // Ticket-Stand der mit dem Countdown verknüpften Zuschauer-Anmeldung
+  // („52 von 75 Tickets vergeben" bzw. „Ausverkauft" unter der Taste).
+  const [countdownTickets, setCountdownTickets] = useState<{ capacity: number; remaining: number } | null>(null);
+  useEffect(() => {
+    const key = countdown.active && countdown.ctaLabel ? countdown.ctaTicketKey : '';
+    if (!key) {
+      setCountdownTickets(null);
+      return;
+    }
+    let alive = true;
+    fetchTicketConfig(key)
+      .then((c) => {
+        if (alive && c && typeof c.capacity === 'number') setCountdownTickets({ capacity: c.capacity, remaining: c.remaining });
+      })
+      .catch(() => { /* kein Ticket-Stand – Taste bleibt wie gehabt */ });
+    return () => {
+      alive = false;
+    };
+  }, [countdown.active, countdown.ctaLabel, countdown.ctaTicketKey]);
 
   // Freie News fürs Laufband laden (unkritisch – Fallback: keine)
   useEffect(() => {
@@ -1920,6 +1941,7 @@ export default function App() {
               title={countdown.title}
               gold={countdown.gold}
               ctaLabel={countdown.ctaLabel}
+              tickets={countdownTickets}
               onCta={
                 countdown.ctaLabel
                   ? () => navigateTo(countdown.ctaTicketKey ? `/tickets/${encodeURIComponent(countdown.ctaTicketKey)}` : '/tickets')

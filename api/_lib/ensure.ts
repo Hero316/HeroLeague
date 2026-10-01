@@ -79,6 +79,8 @@ export async function ensureSchema(): Promise<void> {
     // WICHTIG: die neue Spalte `consent_at` (Einwilligung) mitprüfen, sonst
     // überspringt der Schnell-Check das ALTER auf bestehenden Datenbanken.
     await sql`SELECT consent_at FROM event_tickets LIMIT 1`;
+    // Einlass je Person (wie viele einer Anmeldung tatsächlich da waren).
+    await sql`SELECT arrived FROM event_tickets LIMIT 1`;
     ensured = true;
     return;
   } catch {
@@ -344,6 +346,9 @@ export async function ensureSchema(): Promise<void> {
   // Einwilligung zur Datenspeicherung: WANN und WELCHEM Wortlaut zugestimmt wurde.
   await run(sql`ALTER TABLE event_tickets ADD COLUMN IF NOT EXISTS consent_at TIMESTAMPTZ`);
   await run(sql`ALTER TABLE event_tickets ADD COLUMN IF NOT EXISTS consent_text TEXT NOT NULL DEFAULT ''`);
+  // Einlass: wie viele Personen dieser Anmeldung tatsächlich gekommen sind
+  // (0..quantity). NULL = Altbestand → zählt über checked_in (ja = alle).
+  await run(sql`ALTER TABLE event_tickets ADD COLUMN IF NOT EXISTS arrived INTEGER`);
 
   // --- Constraints ganz zuletzt (unkritisch; nur für Rollen-/Anhang-Checks) -
   await run(sql`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);

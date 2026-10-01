@@ -343,21 +343,36 @@ async function adminList(req: VercelRequest, res: VercelResponse) {
   if (!cfg) return res.json({ events, overview, config: null, rows: [], capacity: 0, soldSeats: 0, confirmedCount: 0, remaining: 0 });
 
   const rows = await sql`SELECT id, email, name, quantity, status, code, checked_in AS "checkedIn",
+      COALESCE(arrived, CASE WHEN checked_in THEN quantity ELSE 0 END)::int AS "arrived",
       created_at AS "createdAt", verified_at AS "verifiedAt",
       consent_at AS "consentAt", consent_text AS "consentText"
     FROM event_tickets WHERE event_key = ${cfg.eventKey} ORDER BY (status='confirmed') DESC, created_at DESC`;
   const confirmed = rows.filter((r) => r.status === 'confirmed');
   const soldSeats = confirmed.reduce((sum, r) => sum + Number(r.quantity || 0), 0);
+  // Tatsächlich erschienene Personen (für die Statistik „wer kam wirklich").
+  const arrivedSeats = confirmed.reduce((sum, r) => sum + Number(r.arrived || 0), 0);
   return res.json({
     events, overview, config: cfg, rows, capacity: cfg.capacity,
-    soldSeats, confirmedCount: confirmed.length, remaining: Math.max(0, cfg.capacity - soldSeats),
+    soldSeats, arrivedSeats, confirmedCount: confirmed.length, remaining: Math.max(0, cfg.capacity - soldSeats),
   });
 }
+// Einlass setzen. `arrived` = wie viele Personen dieser Anmeldung da sind
+// (wird auf 0..quantity begrenzt, auch nachträglich änderbar). Ohne `arrived`
+// gilt der alte Schalter: checkedIn = alle da / niemand da.
 async function adminCheckin(req: VercelRequest, res: VercelResponse) {
   const id = String(req.body?.id ?? '');
-  const checkedIn = req.body?.checkedIn === true;
   if (!id) return badRequest(res, 'ID fehlt.');
-  await sql`UPDATE event_tickets SET checked_in = ${checkedIn}, updated_at = now() WHERE id = ${id}`;
+  const n = clampInt(req.body?.arrived, 0, 1000);
+  if (n !== null) {
+    const rows = await sql`UPDATE event_tickets
+      SET arrived = LEAST(${n}, quantity), checked_in = (LEAST(${n}, quantity) > 0), updated_at = now()
+      WHERE id = ${id} RETURNING arrived`;
+    return res.json({ ok: true, arrived: Number(rows[0]?.arrived ?? 0) });
+  }
+  const checkedIn = req.body?.checkedIn === true;
+  await sql`UPDATE event_tickets
+    SET checked_in = ${checkedIn}, arrived = CASE WHEN ${checkedIn} THEN quantity ELSE 0 END, updated_at = now()
+    WHERE id = ${id}`;
   return res.json({ ok: true });
 }
 async function adminDelete(req: VercelRequest, res: VercelResponse) {
