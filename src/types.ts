@@ -123,6 +123,8 @@ export interface PlayerOfMonth {
   image: string;
   matchday?: number; // Spieltag-Nummer, ergibt „Spieler des Spieltages N" (0/leer = ohne Nummer)
   sponsorId?: string; // ID eines Partners (aus PartnersConfig), der die Auszeichnung sponsert (leer = keiner)
+  // Torwart des Spieltages (zweite Auszeichnung, gleicher Spieltag/Sponsor). Leer = nur Spieler.
+  keeper?: { name: string; club: string; teamId: string; image: string } | null;
 }
 
 export interface TwitchConfig {
