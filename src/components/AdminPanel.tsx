@@ -515,6 +515,7 @@ export default function AdminPanel({
 
   // News-Laufband (Ticker unter der Navigation)
   const [news, setNews] = useState<NewsItem[]>([]);
+  const [newsActive, setNewsActive] = useState(true); // Schalter: eigene Nachrichten im Ticker an/aus
   const [newsSuccess, setNewsSuccess] = useState(false);
   const [newsSaving, setNewsSaving] = useState(false);
 
@@ -844,8 +845,11 @@ export default function AdminPanel({
 
   // News-Laufband laden
   useEffect(() => {
-    apiFetch<{ items: NewsItem[] }>('/api/twitch?resource=news')
-      .then((data) => setNews(Array.isArray(data?.items) ? data.items : []))
+    apiFetch<{ active?: boolean; items: NewsItem[] }>('/api/twitch?resource=news')
+      .then((data) => {
+        setNews(Array.isArray(data?.items) ? data.items : []);
+        setNewsActive(data?.active !== false);
+      })
       .catch(() => {
         /* noch keine News gepflegt */
       });
@@ -863,14 +867,16 @@ export default function AdminPanel({
   const removeNews = (id: string) => setNews((list) => list.filter((n) => n.id !== id));
 
   // News speichern (leere Einträge werden serverseitig verworfen)
-  const saveNews = async () => {
+  // `active` optional: der Schalter oben speichert sofort mit (Nachrichten bleiben erhalten).
+  const saveNews = async (active: boolean = newsActive) => {
     setNewsSaving(true);
     try {
-      const saved = await apiFetch<{ items: NewsItem[] }>('/api/twitch?resource=news', {
+      const saved = await apiFetch<{ active?: boolean; items: NewsItem[] }>('/api/twitch?resource=news', {
         method: 'POST',
-        body: JSON.stringify({ items: news }),
+        body: JSON.stringify({ active, items: news }),
       });
       setNews(Array.isArray(saved?.items) ? saved.items : []);
+      setNewsActive(saved?.active !== false);
       setNewsSuccess(true);
       setTimeout(() => setNewsSuccess(false), 3000);
     } catch (err) {
@@ -2434,6 +2440,26 @@ export default function AdminPanel({
         accent="#F4A261"
       >
         <div>
+          {/* An/Aus-Schalter: pausiert die eigenen Nachrichten, ohne sie zu löschen.
+              Speichert sofort. */}
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[.03] px-4 py-3 mb-5">
+            <div className="min-w-0">
+              <div className="text-sm font-sans font-bold text-white">News im Laufband {newsActive ? 'aktiv' : 'pausiert'}</div>
+              <div className="text-[12px] text-gray-400 font-sans">
+                {newsActive ? 'Die Nachrichten unten laufen im Ticker mit.' : 'Die Nachrichten bleiben gespeichert, laufen aber gerade nicht.'}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => saveNews(!newsActive)}
+              disabled={newsSaving}
+              aria-pressed={newsActive}
+              aria-label={newsActive ? 'News pausieren' : 'News aktivieren'}
+              className={`shrink-0 relative w-12 h-7 rounded-full transition-colors cursor-pointer disabled:opacity-60 ${newsActive ? 'bg-brand-accent-light' : 'bg-white/15'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white transition-transform ${newsActive ? 'translate-x-5' : ''}`} />
+            </button>
+          </div>
           <p className="text-xs text-gray-400 font-sans mb-6">
             Hier pflegst du eigene Nachrichten fürs <strong className="text-white">Laufband</strong> (der Ticker direkt
             unter dem Menü). Jede Nachricht bekommt ein eigenes Feld — mit <strong className="text-white">„Nachricht
@@ -2496,7 +2522,7 @@ export default function AdminPanel({
             )}
             <button
               type="button"
-              onClick={saveNews}
+              onClick={() => saveNews()}
               disabled={newsSaving}
               className="px-6 py-3 bg-brand-accent hover:bg-brand-accent/80 disabled:opacity-40 border border-brand-accent-light/30 rounded-full text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center gap-1.5 cursor-pointer shadow-lg shadow-brand-accent-light/10"
             >
