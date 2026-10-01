@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone, Handshake, ChevronUp, ChevronDown, Star, Landmark, BarChart3, Footprints } from 'lucide-react';
-import { Player, Team, Match, EventConfig, EventArchive, NewsItem, Partner, TeamSponsor, TeamSponsorsMap, SponsorClicksMap, Season } from '../types';
+import { Player, Team, Match, MatchPlayerStat, ScoringConfig, EventConfig, EventArchive, NewsItem, Partner, TeamSponsor, TeamSponsorsMap, SponsorClicksMap, Season } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
 import { fetchSponsorClicks } from '../lib/sponsors';
 import { ticketAdminList, type TicketAdminConfig } from '../lib/register';
@@ -10,7 +10,7 @@ import PlayerAvatar from './PlayerAvatar';
 import { AccordionSection, TeamCrest } from './ui';
 import { GAME_MINUTES, BREAK_MINUTES, slotTimes, isHHMM } from '../lib/matchTiming';
 import { fetchPublicStats, fetchScoring } from '../lib/stats';
-import { bestOfDay, fmtNote } from '../lib/awards';
+import { rankDay, trackedMatchdays, fmtNote, type DayCandidate } from '../lib/awards';
 
 // Teamnamen tolerant vergleichen (für den Abgleich Event-Team <-> echter Verein).
 const normTeamName = (s: string) => s.toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
@@ -613,46 +613,78 @@ export default function AdminPanel({
     }
   };
 
-  // Spieler + Torwart des Spieltages automatisch aus den GETRACKTEN Werten
-  // vorschlagen: jeweils die beste Spieltagsnote des letzten veröffentlichten
-  // Spieltages. Danach bleibt alles von Hand änderbar (erst Speichern macht es live).
-  const handleAutoPom = async () => {
+  // Spieler + Torwart des Spieltages aus den GETRACKTEN Werten: Ranglisten je
+  // Spieltag (beste Spieltagsnote zuerst). „Automatisch übernehmen" setzt jeweils
+  // Platz 1, ein Klick auf einen Kandidaten übernimmt diesen. Erst „Speichern"
+  // bringt es auf die Startseite – dort bleibt es, bis der nächste Spieltag
+  // gespeichert wird.
+  const [awardRows, setAwardRows] = useState<MatchPlayerStat[]>([]);
+  const [awardCfg, setAwardCfg] = useState<ScoringConfig | null>(null);
+  const [awardDay, setAwardDay] = useState(0);
+
+  const loadAwardData = async () => {
     setPomAutoBusy(true);
-    setPomAutoNote('');
     try {
       const [{ rows }, cfg] = await Promise.all([fetchPublicStats(currentSeasonId), fetchScoring()]);
-      const res = bestOfDay(rows, currentSeasonId, cfg);
-      if (!res || (!res.field && !res.keeper)) {
-        alert('Noch keine veröffentlichten Tracking-Daten in dieser Saison. Zuerst einen Spieltag tracken und live schalten.');
-        return;
-      }
-      const imgOf = (teamId: string, name: string) =>
-        teams.find((t) => t.id === teamId)?.spielerliste?.find((p) => p.name === name)?.imageUrl ?? '';
-      setPomMatchday(res.matchday);
-      const parts: string[] = [];
-      if (res.field) {
-        const f = res.field;
-        setPomTeamId(f.teamId);
-        setPomClub(teams.find((t) => t.id === f.teamId)?.name ?? '');
-        setPomName(f.name);
-        setPomGoals(f.counts.goal);
-        setPomAssists(f.counts.assist);
-        setPomImage(imgOf(f.teamId, f.name));
-        parts.push(`Spieler: ${f.name} (Note ${fmtNote(f.note)})`);
-      }
-      if (res.keeper) {
-        const k = res.keeper;
-        setKeeperTeamId(k.teamId);
-        setKeeperName(k.name);
-        setKeeperImage(imgOf(k.teamId, k.name));
-        parts.push(`Torwart: ${k.name} (Note ${fmtNote(k.note)})`);
-      }
-      setPomAutoNote(`${res.matchday}. Spieltag – ${parts.join(' · ')}. Noch speichern nicht vergessen.`);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : 'Tracking-Daten konnten nicht geladen werden.');
+      setAwardRows(rows);
+      setAwardCfg(cfg);
+      const days = trackedMatchdays(rows, currentSeasonId);
+      setAwardDay((d) => (d && days.includes(d) ? d : days[days.length - 1] ?? 0));
+    } catch {
+      /* keine Tracking-Daten erreichbar */
     } finally {
       setPomAutoBusy(false);
     }
+  };
+  useEffect(() => {
+    if (canManagePom && currentSeasonId) void loadAwardData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canManagePom, currentSeasonId]);
+
+  const awardDays = useMemo(() => trackedMatchdays(awardRows, currentSeasonId), [awardRows, currentSeasonId]);
+  const awardField = useMemo(
+    () => (awardCfg && awardDay ? rankDay(awardRows, currentSeasonId, awardCfg, awardDay, 'field') : []),
+    [awardRows, awardCfg, awardDay, currentSeasonId]
+  );
+  const awardKeeper = useMemo(
+    () => (awardCfg && awardDay ? rankDay(awardRows, currentSeasonId, awardCfg, awardDay, 'keeper') : []),
+    [awardRows, awardCfg, awardDay, currentSeasonId]
+  );
+
+  const rosterImage = (teamId: string, name: string) =>
+    teams.find((t) => t.id === teamId)?.spielerliste?.find((p) => p.name === name)?.imageUrl ?? '';
+  const pickField = (c: DayCandidate) => {
+    setPomTeamId(c.teamId);
+    setPomClub(teams.find((t) => t.id === c.teamId)?.name ?? '');
+    setPomName(c.name);
+    setPomGoals(c.counts.goal);
+    setPomAssists(c.counts.assist);
+    setPomImage(rosterImage(c.teamId, c.name));
+    setPomMatchday(awardDay);
+  };
+  const pickKeeper = (c: DayCandidate) => {
+    setKeeperTeamId(c.teamId);
+    setKeeperName(c.name);
+    setKeeperImage(rosterImage(c.teamId, c.name));
+    setPomMatchday(awardDay);
+  };
+
+  const handleAutoPom = () => {
+    if (!awardDay || (!awardField[0] && !awardKeeper[0])) {
+      alert('Für diesen Spieltag gibt es noch keine live geschalteten Tracking-Daten.');
+      return;
+    }
+    const parts: string[] = [];
+    if (awardField[0]) {
+      pickField(awardField[0]);
+      parts.push(`Spieler: ${awardField[0].name} (${fmtNote(awardField[0].note)})`);
+    }
+    if (awardKeeper[0]) {
+      pickKeeper(awardKeeper[0]);
+      parts.push(`Torwart: ${awardKeeper[0].name} (${fmtNote(awardKeeper[0].note)})`);
+    }
+    setPomMatchday(awardDay);
+    setPomAutoNote(`${awardDay}. Spieltag übernommen – ${parts.join(' · ')}. Jetzt noch „Speichern" drücken.`);
   };
 
   // Twitch-Konfiguration laden
@@ -2124,25 +2156,98 @@ export default function AdminPanel({
       >
         <div>
           <p className="text-xs text-gray-400 font-sans mb-4">
-            „Automatisch berechnen" schlägt Spieler und Torwart mit der besten Spieltagsnote aus dem Tracking vor (letzter
-            veröffentlichter Spieltag). Alles bleibt von Hand änderbar — erst „Speichern" bringt es auf die Startseite. Auf
-            der Website erscheinen beide nebeneinander mit FIFA-Karte und Spieltagswerten. Torwart leer lassen = nur der
-            Spieler wird gezeigt.
+            Die Startseite zeigt immer die <strong className="text-white">zuletzt gespeicherte</strong> Auszeichnung – sie
+            bleibt stehen, bis ihr den nächsten Spieltag übernehmt und speichert. Links Spieler (Feldspieler-FIFA-Karte),
+            rechts Torwart (Torwart-FIFA-Karte) – Karte und Werte kommen automatisch aus dem Tracking, sobald der Spieltag
+            dort live geschaltet ist.
           </p>
 
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
-            <button
-              type="button"
-              onClick={handleAutoPom}
-              disabled={pomAutoBusy}
-              className="disabled:opacity-50 shrink-0 inline-flex items-center gap-1.5 px-4 py-2 bg-brand-accent-light/15 hover:bg-brand-accent-light/25 border border-brand-accent-light/40 text-brand-accent-light rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>{pomAutoBusy ? 'Berechne …' : 'Automatisch berechnen'}</span>
-            </button>
-            {pomAutoNote && (
-              <span className="text-xs text-emerald-400 font-sans">{pomAutoNote}</span>
+          {/* Aus dem Tracking: Spieltag wählen → Ranglisten → übernehmen */}
+          <div className="mb-6 rounded-xl border border-white/10 bg-white/[0.03] p-3 sm:p-4">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <span className="text-xs font-mono text-gray-400 uppercase tracking-wider">Aus dem Tracking</span>
+              <select
+                value={awardDay}
+                onChange={(e) => setAwardDay(Number(e.target.value))}
+                disabled={awardDays.length === 0}
+                className={`${inputClass} !w-auto cursor-pointer`}
+              >
+                {awardDays.length === 0 && <option value={0}>– kein Spieltag live –</option>}
+                {awardDays.map((d) => (
+                  <option key={d} value={d}>
+                    {d}. Spieltag
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleAutoPom}
+                disabled={pomAutoBusy || awardDays.length === 0}
+                className="disabled:opacity-50 shrink-0 inline-flex items-center gap-1.5 px-4 py-2 bg-brand-accent-light/15 hover:bg-brand-accent-light/25 border border-brand-accent-light/40 text-brand-accent-light rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Automatisch übernehmen</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void loadAwardData()}
+                disabled={pomAutoBusy}
+                className="disabled:opacity-50 shrink-0 px-3 py-2 rounded-lg border border-white/15 text-gray-300 hover:text-white text-xs font-bold uppercase tracking-wider cursor-pointer"
+              >
+                {pomAutoBusy ? 'Lade …' : 'Neu laden'}
+              </button>
+            </div>
+
+            {awardDays.length === 0 ? (
+              <p className="mt-3 text-xs text-gray-400 font-sans">
+                Noch kein Spieltag dieser Saison im Tracking live geschaltet. Solange könnt ihr unten von Hand auswählen –
+                auf der Startseite erscheint dann eine Foto-Kachel statt der FIFA-Karte.
+              </p>
+            ) : (
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                {(
+                  [
+                    { title: 'Top Spieler', color: '#22DFC9', list: awardField, pick: pickField, chosen: (c: DayCandidate) => c.name === pomName && c.teamId === pomTeamId },
+                    { title: 'Top Torwart', color: '#E9C46A', list: awardKeeper, pick: pickKeeper, chosen: (c: DayCandidate) => c.name === keeperName && c.teamId === keeperTeamId },
+                  ] as const
+                ).map((col) => (
+                  <div key={col.title} className="min-w-0">
+                    <div className="text-[11px] font-sans font-extrabold uppercase tracking-[2px] mb-1.5" style={{ color: col.color }}>
+                      {col.title} · {awardDay}. Spieltag
+                    </div>
+                    {col.list.length === 0 ? (
+                      <div className="text-xs text-gray-500 font-sans">Keine getrackten Werte.</div>
+                    ) : (
+                      <div className="flex flex-col gap-1.5">
+                        {col.list.slice(0, 5).map((c, i) => {
+                          const on = col.chosen(c);
+                          return (
+                            <button
+                              key={`${c.teamId}|${c.name}`}
+                              type="button"
+                              onClick={() => col.pick(c)}
+                              className="flex items-center gap-2 min-w-0 rounded-lg border px-2.5 py-1.5 text-left cursor-pointer transition-colors"
+                              style={{ borderColor: on ? col.color : 'rgba(255,255,255,.1)', background: on ? `${col.color}1f` : 'transparent' }}
+                            >
+                              <span className="shrink-0 w-5 text-xs font-mono text-gray-500">{i + 1}.</span>
+                              <span className="min-w-0 flex-1 truncate text-sm text-white font-sans font-semibold">
+                                {c.name}
+                                <span className="text-gray-500 font-normal"> · {teams.find((t) => t.id === c.teamId)?.name ?? '–'}</span>
+                              </span>
+                              <span className="shrink-0 font-display font-black text-base tabular-nums" style={{ color: col.color }}>
+                                {fmtNote(c.note)}
+                              </span>
+                              {on && <Check className="shrink-0 w-4 h-4" style={{ color: col.color }} />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
+            {pomAutoNote && <div className="mt-3 text-xs text-emerald-400 font-sans">{pomAutoNote}</div>}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">

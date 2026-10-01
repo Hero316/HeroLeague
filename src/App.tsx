@@ -275,7 +275,7 @@ export default function App() {
       setMatches(dataMatches);
       setSeasons(dataSeasons);
       setDemo(dataDemo);
-      setPom(dataPom && dataPom.name ? dataPom : null);
+      setPom(dataPom && dataPom.name?.trim() ? dataPom : null);
     } catch (err) {
       console.error('Fehler beim Laden der Liga-Daten', err);
     } finally {

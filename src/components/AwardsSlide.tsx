@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { MatchPlayerStat, Partner, PlayerOfMonth, ScoringConfig, StatRole, Team } from '../types';
 import { awardView, fmtNote } from '../lib/awards';
 import FifaCard from './FifaCard';
@@ -32,8 +32,39 @@ const GOLD = '#E9C46A';
 interface SideData {
   role: StatRole;
   name: string;
+  teamId: string; // gespeicherte Team-ID (auch wenn der Verein nicht mehr in der Saison ist)
+  club: string;
   team?: Team;
   image?: string;
+}
+
+// Klickbar nur mit Ziel – sonst ein schlichtes <div>. (Kein deaktivierter
+// <button>: Safari blendet dessen Inhalt grau/halb durchsichtig aus.)
+function Tap({ onClick, label, className, children }: { onClick?: () => void; label?: string; className?: string; children: ReactNode }) {
+  return onClick ? (
+    <button type="button" onClick={onClick} aria-label={label} className={`cursor-pointer ${className ?? ''}`}>
+      {children}
+    </button>
+  ) : (
+    <div className={className}>{children}</div>
+  );
+}
+
+// Foto-Kachel im Karten-Format (ohne Tracking) – fällt bei kaputtem Bild auf die Initiale zurück.
+function PhotoTile({ image, name, initial, accent }: { image?: string; name: string; initial: string; accent: string }) {
+  const [broken, setBroken] = useState(false);
+  return (
+    <div
+      className="relative rounded-3xl overflow-hidden border-[1.5px] bg-[#050607]"
+      style={{ aspectRatio: '0.7', borderColor: accent, backgroundImage: `linear-gradient(165deg, ${accent}cc, ${accent}33 50%, #050607)` }}
+    >
+      {image && !broken ? (
+        <img src={image} alt={name} onError={() => setBroken(true)} className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: 'center 15%' }} />
+      ) : (
+        <span className="absolute inset-0 grid place-items-center font-display font-black text-7xl text-white/25">{initial}</span>
+      )}
+    </div>
+  );
 }
 
 function findTeam(teams: Team[], teamId?: string, club?: string): Team | undefined {
@@ -55,8 +86,8 @@ function AwardSide({
   const accent = isP ? TEAL : GOLD;
   const { trackingRows, scoring, seasonId, onSelectTeam } = props;
   const view =
-    scoring && seasonId && data.team
-      ? awardView(trackingRows, seasonId, scoring, data.team.id, data.name, data.role, pom.matchday)
+    scoring && seasonId && data.teamId
+      ? awardView(trackingRows, seasonId, scoring, data.teamId, data.name, data.role, pom.matchday)
       : { card: null, note: null, stats: [] };
   // Foto: im Backend hinterlegt, sonst aus dem Kader.
   const image = data.image || data.team?.spielerliste?.find((p) => p.name === data.name)?.imageUrl;
@@ -69,7 +100,7 @@ function AwardSide({
   const stats: { value: string; label: string; accent?: boolean }[] = [];
   if (view.note !== null) stats.push({ value: fmtNote(view.note), label: 'Spieltagsnote', accent: true });
   if (view.stats.length) stats.push(...view.stats);
-  else if (isP && !view.card) {
+  else if (isP && !view.card && ((pom.goals ?? 0) > 0 || (pom.assists ?? 0) > 0)) {
     // Ohne Tracking: Tore/Vorlagen aus dem Backend.
     stats.push({ value: String(pom.goals ?? 0), label: 'Tore' }, { value: String(pom.assists ?? 0), label: 'Vorlagen' });
   }
@@ -78,26 +109,17 @@ function AwardSide({
   const align = side === 'left' ? 'lg:items-end lg:text-right' : 'lg:items-start lg:text-left';
 
   const cardEl = (
-    <button
-      type="button"
+    <Tap
       onClick={open}
-      disabled={!open}
-      aria-label={`${data.name} – Spielerseite öffnen`}
-      className={`shrink-0 w-[150px] sm:w-[220px] xl:w-[240px] ${open ? 'cursor-pointer transition-transform duration-200 hover:-translate-y-1' : 'cursor-default'}`}
+      label={`${data.name} – Spielerseite öffnen`}
+      className={`shrink-0 w-[150px] sm:w-[220px] xl:w-[240px] ${open ? 'transition-transform duration-200 hover:-translate-y-1' : ''}`}
     >
       {view.card ? (
         <FifaCard card={view.card} name={data.name} imageUrl={image} team={data.team} />
       ) : (
-        // Ohne Tracking: schlichte Foto-Kachel im Karten-Format (Teal/Gold).
-        <div className="relative rounded-3xl overflow-hidden border-[1.5px]" style={{ aspectRatio: '0.7', borderColor: accent, background: `linear-gradient(165deg, ${accent}cc, ${accent}33 50%, #050607)` }}>
-          {image ? (
-            <img src={image} alt={data.name} className="absolute inset-0 w-full h-full object-cover" style={{ objectPosition: 'center 15%' }} />
-          ) : (
-            <span className="absolute inset-0 grid place-items-center font-display font-black text-7xl text-white/20">{last.charAt(0)}</span>
-          )}
-        </div>
+        <PhotoTile image={image} name={data.name} initial={last.charAt(0)} accent={accent} />
       )}
-    </button>
+    </Tap>
   );
 
   const statsEl = stats.length > 0 && (
@@ -123,7 +145,7 @@ function AwardSide({
         <br />
         Spieltages
       </h2>
-      <button type="button" onClick={open} disabled={!open} className={`mt-3 sm:mt-4 ${open ? 'cursor-pointer' : 'cursor-default'}`}>
+      <Tap onClick={open} className="mt-3 sm:mt-4">
         <div className="font-display font-extrabold uppercase leading-[.95] text-white text-base sm:text-2xl xl:text-[26px] break-words">
           {first && (
             <>
@@ -133,8 +155,10 @@ function AwardSide({
           )}
           {last}
         </div>
-      </button>
-      {data.team && <div className="mt-1 font-sans font-bold uppercase tracking-[1.5px] text-[10px] sm:text-xs text-white/55 truncate max-w-full">{data.team.name}</div>}
+      </Tap>
+      {(data.team?.name || data.club) && (
+        <div className="mt-1 font-sans font-bold uppercase tracking-[1.5px] text-[10px] sm:text-xs text-white/55 truncate max-w-full">{data.team?.name || data.club}</div>
+      )}
       <div className="mt-4 sm:mt-5 flex flex-col lg:flex-row items-center lg:items-end gap-4 sm:gap-8">
         {side === 'left' ? (
           <>
@@ -195,9 +219,13 @@ function PlaceholderSide({ role }: { role: StatRole }) {
 
 export default function AwardsSlide(props: Props) {
   const { pom, teams, sponsor, buttons } = props;
-  const player: SideData = { role: 'field', name: pom.name, team: findTeam(teams, pom.teamId, pom.club), image: pom.image };
+  const pTeam = findTeam(teams, pom.teamId, pom.club);
+  const player: SideData = { role: 'field', name: pom.name, teamId: pTeam?.id || pom.teamId || '', club: pom.club, team: pTeam, image: pom.image };
   const keeper: SideData | null = pom.keeper?.name
-    ? { role: 'keeper', name: pom.keeper.name, team: findTeam(teams, pom.keeper.teamId, pom.keeper.club), image: pom.keeper.image }
+    ? (() => {
+        const kTeam = findTeam(teams, pom.keeper!.teamId, pom.keeper!.club);
+        return { role: 'keeper' as const, name: pom.keeper!.name, teamId: kTeam?.id || pom.keeper!.teamId || '', club: pom.keeper!.club, team: kTeam, image: pom.keeper!.image };
+      })()
     : null;
 
   return (
