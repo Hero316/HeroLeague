@@ -1047,7 +1047,6 @@ export default function App() {
             streams={leagueStreams}
             matches={currentSeasonMatches}
             teams={leagueTeams}
-            players={players}
             mode="page"
             onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
             onSelectTeam={openTeamDetail}
@@ -1952,7 +1951,6 @@ export default function App() {
             streams={leagueStreams}
             matches={currentSeasonMatches}
             teams={leagueTeams}
-            players={players}
             mode="home"
             onOpenFull={() => navigateTo('/streams')}
             onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
