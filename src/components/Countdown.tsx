@@ -7,7 +7,7 @@ interface CountdownProps {
   ctaLabel?: string; // Taste unter dem Timer (leer = keine Taste)
   onCta?: () => void;
   // Ticket-Stand der verknüpften Zuschauer-Anmeldung (optional): darunter steht
-  // „52 von 75 Tickets vergeben"; ausverkauft → Taste zeigt „Ausverkauft".
+  // schlicht „52 / 75"; ausverkauft → Taste zeigt „Ausverkauft", darunter „75 / 75".
   tickets?: { capacity: number; remaining: number } | null;
 }
 
@@ -147,9 +147,8 @@ export default function Countdown({ target, title, gold = false, ctaLabel, onCta
               </button>
             )}
             {hasTickets && (
-              <span className="font-sans font-bold text-[11px] sm:text-xs tracking-[1.5px] uppercase text-hl-dim tabular-nums">
-                <span className={soldOut ? 'text-hl-gold' : 'text-white'}>{sold}</span> von {tickets!.capacity} Tickets vergeben
-                {soldOut ? ' · ausverkauft' : ` · noch ${tickets!.remaining} frei`}
+              <span className="font-sans font-bold text-[12px] sm:text-sm tracking-[1.5px] text-hl-dim tabular-nums">
+                <span className={soldOut ? 'text-hl-gold' : 'text-white'}>{sold}</span> / {tickets!.capacity}
               </span>
             )}
           </div>
