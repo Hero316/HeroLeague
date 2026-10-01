@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActiveTab, HeroImages, Match, Partner, PlayerOfMonth, PlayerStat, Team } from '../types';
+import { ActiveTab, HeroImages, Match, MatchPlayerStat, Partner, PlayerOfMonth, PlayerStat, ScoringConfig, Team } from '../types';
 import { apiFetch } from '../lib/api';
 import { MapPin } from 'lucide-react';
 import { calculateStandings } from '../lib/standings';
 import { numberWord } from '../lib/heroAward';
 import { TeamCrest, shortDate, SponsorLink } from './ui';
-import PlayerOfMonthCard from './PlayerOfMonthCard';
+import AwardsSlide from './AwardsSlide';
 
 interface HeroProps {
   teams: Team[];
@@ -19,11 +19,14 @@ interface HeroProps {
   onSelectTeam?: (teamId: string, playerName?: string) => void;
   onOpenMatch?: (matchId: string) => void; // öffnet den Spielbericht
   reportMatchIds?: Set<string>; // Spiele mit veröffentlichten Einzelnoten
+  trackingRows?: MatchPlayerStat[]; // getrackte Einzelwerte der Saison (FIFA-Karten der Auszeichnungen)
+  scoring?: ScoringConfig;
+  seasonId?: string;
 }
 
 // Vollflächiges Hero-Carousel (Magenta-TV-Stil) mit drei Slides:
 // 1. Nächster Spieltag / Live-Spiel  2. Spieler des Monats  3. Tabellenführer
-export default function Hero({ teams, matches, players, seasonLabel, seasonNumber, heroImages, pom: pomProp, onNavigate, onSelectTeam, onOpenMatch, reportMatchIds }: HeroProps) {
+export default function Hero({ teams, matches, players, seasonLabel, seasonNumber, heroImages, pom: pomProp, onNavigate, onSelectTeam, onOpenMatch, reportMatchIds, trackingRows, scoring, seasonId }: HeroProps) {
   // pom kommt bevorzugt von oben (vorgeladen); nur ohne Prop selbst nachladen.
   const [pomState, setPomState] = useState<PlayerOfMonth | null>(null);
   const pom = pomProp !== undefined ? pomProp : pomState;
@@ -300,14 +303,6 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
   // ---------- Slide 2: Spieler des Monats ----------
   const renderPomSlide = () => {
     if (!pom) return null;
-    // Team zuverlässig über die gespeicherte ID auflösen (Fallback: Name – für Altdaten)
-    const pomTeam = (pom.teamId ? teams.find((t) => t.id === pom.teamId) : undefined) || teams.find((t) => t.name === pom.club);
-    const crest = pomTeam
-      ? { name: pomTeam.name, shortName: pomTeam.shortName, logoColor: pomTeam.logoColor, logoUrl: pomTeam.logoUrl }
-      : undefined;
-    const pomPoints = players.find(
-      (p) => p.name === pom.name && (!pomTeam || p.teamId === pomTeam.id)
-    )?.points;
     // Sponsor der Auszeichnung (aus der Partner-Liste über die gespeicherte ID).
     const sponsor = pom.sponsorId ? partners.find((p) => p.id === pom.sponsorId) : undefined;
     return (
@@ -319,87 +314,39 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
             <div className="absolute left-[-5%] right-[-5%] top-0 h-[112lvh] hl-zoom">
               <img src={heroImages.pom} alt="" className="absolute inset-0 w-full h-full object-cover" />
             </div>
-            <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_78%_30%,rgba(233,196,106,.2),transparent_55%)]" />
-            <div className="absolute inset-0 bg-[linear-gradient(90deg,#0A1415_6%,rgba(6,14,15,.78)_34%,rgba(6,14,15,.2)_64%,transparent)]" />
+            <div className="absolute inset-0 bg-[rgba(6,14,15,.62)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(70%_80%_at_50%_45%,transparent,rgba(6,14,15,.75))]" />
             <div className="absolute inset-0 bg-[linear-gradient(0deg,#08110f_2%,transparent_34%)]" />
           </div>
         ) : (
           <div className="absolute inset-0 overflow-hidden">
             <div className="absolute inset-0 bg-[linear-gradient(180deg,#0c1a19,#0a1415_58%,#08110f)]" />
-            <div className="absolute inset-0 bg-[radial-gradient(58%_70%_at_72%_36%,rgba(34,223,201,.22),transparent_60%)]" />
-            <div className="absolute inset-0 bg-[radial-gradient(48%_60%_at_18%_18%,rgba(233,196,106,.10),transparent_55%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(45%_65%_at_25%_55%,rgba(34,223,201,.16),transparent_60%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(45%_65%_at_75%_55%,rgba(233,196,106,.13),transparent_60%)]" />
             <div className="absolute -inset-[10%] opacity-70 bg-[repeating-linear-gradient(115deg,transparent_0,transparent_46px,rgba(255,255,255,.02)_46px,rgba(255,255,255,.02)_47px)]" />
             <div className="absolute inset-0 bg-[linear-gradient(0deg,#08110f_2%,transparent_34%)]" />
           </div>
         )}
-        <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 pt-8 pb-24 sm:pt-10 sm:pb-26 w-full flex items-center">
-          <div className="w-full flex flex-col lg:flex-row items-center justify-between gap-6 lg:gap-11">
-            {/* Textspalte */}
-            <div className="max-w-[520px] hl-cascade text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-[rgba(233,196,106,.12)] border border-[rgba(233,196,106,.34)]">
-                <span className="text-xs leading-none text-hl-gold">★</span>
-                <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] text-hl-gold">AUSZEICHNUNG</span>
-              </div>
-              <h1 className="mt-5 font-display font-black text-[30px] sm:text-7xl xl:text-[88px] leading-[.85] tracking-tight sm:tracking-[-0.03em] xl:tracking-[-0.04em] uppercase text-white">
-                Spieler des
-                <br />
-                <span className="text-brand-accent-light [text-shadow:0_0_46px_rgba(34,223,201,.4)]">
-                  Spieltages{pom.matchday ? ` ${pom.matchday}` : ''}
-                </span>
-              </h1>
-              {/* Sponsor der Auszeichnung – Logo/Name mit Link, aktualisiert sich
-                  automatisch mit der Partner-Auswahl im Admin. Auch auf dem Handy sichtbar. */}
-              {sponsor && (sponsor.logoUrl || sponsor.name) && (
-                <div className="mt-5 flex items-center justify-center lg:justify-start gap-2.5">
-                  <span className="font-sans font-bold text-[10.5px] tracking-[2px] uppercase text-hl-gold/90 whitespace-nowrap">
-                    Präsentiert von
-                  </span>
-                  {sponsor.logoUrl ? (
-                    <SponsorLink sponsorId={sponsor.id} sponsorName={sponsor.name} placement="spieler-des-spieltages" href={sponsor.linkUrl} title={sponsor.name} className="inline-flex items-center">
-                      <img src={sponsor.logoUrl} alt={sponsor.name || 'Sponsor'} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-8 sm:h-9 w-auto max-w-[150px] object-contain drop-shadow-[0_2px_10px_rgba(0,0,0,.5)]" />
-                    </SponsorLink>
-                  ) : (
-                    <SponsorLink
-                      sponsorId={sponsor.id}
-                      sponsorName={sponsor.name}
-                      placement="spieler-des-spieltages"
-                      href={sponsor.linkUrl}
-                      className={`font-display font-black text-lg text-white${sponsor.linkUrl ? ' hover:text-brand-accent-light transition-colors' : ''}`}
-                    >
-                      {sponsor.name}
-                    </SponsorLink>
-                  )}
-                </div>
-              )}
-              {/* Buttons auf Desktop in der Textspalte */}
-              <div className="hidden lg:flex gap-3 mt-7 flex-wrap justify-start">
+        <div className="relative w-full hl-cascade">
+          <AwardsSlide
+            pom={pom}
+            teams={teams}
+            trackingRows={trackingRows ?? []}
+            scoring={scoring}
+            seasonId={seasonId}
+            sponsor={sponsor}
+            onSelectTeam={onSelectTeam}
+            buttons={
+              <>
                 <button onClick={() => onNavigate('heroone')} className={primaryBtn}>
                   ▸ HERO {numberWord(seasonNumber ?? 1)}
                 </button>
                 <button onClick={() => onNavigate('statistiken')} className={secondaryBtn}>
                   STATISTIKEN
                 </button>
-              </div>
-            </div>
-            {/* Karte */}
-            <div className="flex-none w-full max-w-[360px] hl-pop">
-              <PlayerOfMonthCard
-                pom={pom}
-                crest={crest}
-                points={pomPoints}
-                onSelect={pomTeam && onSelectTeam ? () => onSelectTeam(pomTeam.id, pom.name) : undefined}
-              />
-            </div>
-            {/* Buttons auf dem Handy unter der Karte */}
-            <div className="flex lg:hidden gap-3 flex-wrap justify-center w-full">
-              <button onClick={() => onNavigate('heroone')} className={primaryBtn}>
-                ▸ HERO {numberWord(seasonNumber ?? 1)}
-              </button>
-              <button onClick={() => onNavigate('statistiken')} className={secondaryBtn}>
-                STATISTIKEN
-              </button>
-            </div>
-          </div>
+              </>
+            }
+          />
         </div>
       </>
     );

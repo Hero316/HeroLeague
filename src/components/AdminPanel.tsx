@@ -9,6 +9,8 @@ import { calculateEventStandings, calculateEventAwards } from '../lib/eventStand
 import PlayerAvatar from './PlayerAvatar';
 import { AccordionSection, TeamCrest } from './ui';
 import { GAME_MINUTES, BREAK_MINUTES, slotTimes, isHHMM } from '../lib/matchTiming';
+import { fetchPublicStats, fetchScoring } from '../lib/stats';
+import { bestOfDay, fmtNote } from '../lib/awards';
 
 // Teamnamen tolerant vergleichen (für den Abgleich Event-Team <-> echter Verein).
 const normTeamName = (s: string) => s.toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
@@ -320,29 +322,6 @@ function monthPlayerStats(matches: Match[]) {
   return { byName, key, monthLabel: `${MONTH_NAMES[parseInt(mm, 10) - 1]} ${y}` };
 }
 
-// Ermittelt den besten Spieler eines Monats (Tore zählen doppelt, Vorlagen einfach).
-function computeMonthPom(matches: Match[], teams: Team[]) {
-  const month = monthPlayerStats(matches);
-  if (!month) return null;
-
-  const ranked = Object.values(month.byName).sort(
-    (a, b) => b.goals * 2 + b.assists - (a.goals * 2 + a.assists) || b.goals - a.goals
-  );
-  const top = ranked[0];
-  if (!top) return null;
-
-  const team = teams.find((t) => t.id === top.teamId);
-  return {
-    name: top.name,
-    teamId: top.teamId,
-    teamName: team?.name ?? '',
-    goals: top.goals,
-    assists: top.assists,
-    imageUrl: team?.spielerliste?.find((p) => p.name === top.name)?.imageUrl ?? '',
-    monthLabel: month.monthLabel,
-  };
-}
-
 export default function AdminPanel({
   teams,
   matches,
@@ -453,10 +432,26 @@ export default function AdminPanel({
   const [pomSponsorId, setPomSponsorId] = useState(''); // Partner-ID des Sponsors
   const [pomSuccess, setPomSuccess] = useState(false);
   const [pomAutoNote, setPomAutoNote] = useState('');
+  const [pomAutoBusy, setPomAutoBusy] = useState(false);
+  // Torwart des Spieltages (optional – leer = nur der Spieler wird gezeigt)
+  const [keeperTeamId, setKeeperTeamId] = useState('');
+  const [keeperName, setKeeperName] = useState('');
+  const [keeperImage, setKeeperImage] = useState('');
 
   // Monatswerte pro Spieler (für automatische Tore/Vorlagen bei Spielerauswahl)
   const pomMonth = useMemo(() => monthPlayerStats(matches), [matches]);
   const pomTeam = useMemo(() => teams.find((t) => t.id === pomTeamId) ?? null, [teams, pomTeamId]);
+  const keeperTeam = useMemo(() => teams.find((t) => t.id === keeperTeamId) ?? null, [teams, keeperTeamId]);
+
+  const handleSelectKeeperTeam = (teamId: string) => {
+    setKeeperTeamId(teamId);
+    setKeeperName('');
+    setKeeperImage('');
+  };
+  const handleSelectKeeper = (name: string) => {
+    setKeeperName(name);
+    setKeeperImage(keeperTeam?.spielerliste?.find((p) => p.name === name)?.imageUrl ?? '');
+  };
 
   // Verein wählen: setzt Team + Vereinsname, Spieler wird zurückgesetzt
   const handleSelectPomTeam = (teamId: string) => {
@@ -541,7 +536,7 @@ export default function AdminPanel({
   const [isStartingSeason, setIsStartingSeason] = useState(false);
 
   useEffect(() => {
-    apiFetch<{ name: string; club: string; teamId?: string; goals: number; assists: number; image: string; matchday?: number; sponsorId?: string }>('/api/player-of-the-month')
+    apiFetch<{ name: string; club: string; teamId?: string; goals: number; assists: number; image: string; matchday?: number; sponsorId?: string; keeper?: { name: string; teamId: string; image: string } | null }>('/api/player-of-the-month')
       .then((data) => {
         setPomName(data.name || '');
         setPomClub(data.club || '');
@@ -551,6 +546,9 @@ export default function AdminPanel({
         setPomImage(data.image || '');
         setPomMatchday(data.matchday || 0);
         setPomSponsorId(data.sponsorId || '');
+        setKeeperTeamId(data.keeper?.teamId || '');
+        setKeeperName(data.keeper?.name || '');
+        setKeeperImage(data.keeper?.image || '');
       })
       .catch(() => {
         // Noch kein Spieler des Spieltages gepflegt
@@ -574,6 +572,14 @@ export default function AdminPanel({
           image: pomImage,
           matchday: Number(pomMatchday),
           sponsorId: pomSponsorId,
+          keeper: keeperName.trim()
+            ? {
+                name: keeperName.trim(),
+                teamId: keeperTeamId,
+                club: teams.find((t) => t.id === keeperTeamId)?.name ?? '',
+                image: keeperImage,
+              }
+            : null,
         }),
       });
       setPomSuccess(true);
@@ -596,6 +602,9 @@ export default function AdminPanel({
       setPomImage('');
       setPomMatchday(0);
       setPomSponsorId('');
+      setKeeperTeamId('');
+      setKeeperName('');
+      setKeeperImage('');
       setPomAutoNote('');
       setPomSuccess(true);
       setTimeout(() => setPomSuccess(false), 3000);
@@ -604,22 +613,46 @@ export default function AdminPanel({
     }
   };
 
-  // Spieler des Monats automatisch aus den Monatsdaten vorbefüllen (manuell weiter editierbar)
-  const handleAutoPom = () => {
-    const res = computeMonthPom(matches, teams);
-    if (!res) {
-      alert('Keine Tordaten für eine automatische Berechnung gefunden. Trage zuerst Ergebnisse mit Torschützen ein.');
-      return;
+  // Spieler + Torwart des Spieltages automatisch aus den GETRACKTEN Werten
+  // vorschlagen: jeweils die beste Spieltagsnote des letzten veröffentlichten
+  // Spieltages. Danach bleibt alles von Hand änderbar (erst Speichern macht es live).
+  const handleAutoPom = async () => {
+    setPomAutoBusy(true);
+    setPomAutoNote('');
+    try {
+      const [{ rows }, cfg] = await Promise.all([fetchPublicStats(currentSeasonId), fetchScoring()]);
+      const res = bestOfDay(rows, currentSeasonId, cfg);
+      if (!res || (!res.field && !res.keeper)) {
+        alert('Noch keine veröffentlichten Tracking-Daten in dieser Saison. Zuerst einen Spieltag tracken und live schalten.');
+        return;
+      }
+      const imgOf = (teamId: string, name: string) =>
+        teams.find((t) => t.id === teamId)?.spielerliste?.find((p) => p.name === name)?.imageUrl ?? '';
+      setPomMatchday(res.matchday);
+      const parts: string[] = [];
+      if (res.field) {
+        const f = res.field;
+        setPomTeamId(f.teamId);
+        setPomClub(teams.find((t) => t.id === f.teamId)?.name ?? '');
+        setPomName(f.name);
+        setPomGoals(f.counts.goal);
+        setPomAssists(f.counts.assist);
+        setPomImage(imgOf(f.teamId, f.name));
+        parts.push(`Spieler: ${f.name} (Note ${fmtNote(f.note)})`);
+      }
+      if (res.keeper) {
+        const k = res.keeper;
+        setKeeperTeamId(k.teamId);
+        setKeeperName(k.name);
+        setKeeperImage(imgOf(k.teamId, k.name));
+        parts.push(`Torwart: ${k.name} (Note ${fmtNote(k.note)})`);
+      }
+      setPomAutoNote(`${res.matchday}. Spieltag – ${parts.join(' · ')}. Noch speichern nicht vergessen.`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Tracking-Daten konnten nicht geladen werden.');
+    } finally {
+      setPomAutoBusy(false);
     }
-    setPomName(res.name);
-    setPomClub(res.teamName);
-    setPomTeamId(res.teamId);
-    setPomGoals(res.goals);
-    setPomAssists(res.assists);
-    if (res.imageUrl) setPomImage(res.imageUrl);
-    setPomAutoNote(
-      `Automatisch berechnet für ${res.monthLabel}: ${res.name} (${res.goals} Tore, ${res.assists} Vorlagen). Noch speichern nicht vergessen.`
-    );
   };
 
   // Twitch-Konfiguration laden
@@ -2084,26 +2117,28 @@ export default function AdminPanel({
         id="pom"
         show={canManagePom}
         category="startseite"
-        title="Spieler des Spieltages konfigurieren"
-        subtitle="Auszeichnung, Spieltag-Nr., Sponsor, Leistungsdaten & Portraitfoto"
+        title="Spieler & Torwart des Spieltages"
+        subtitle="Automatisch aus dem Tracking (beste Note), änderbar · Sponsor & Fotos"
         icon={<Award className="w-5 h-5" />}
         accent="#E9C46A"
       >
         <div>
           <p className="text-xs text-gray-400 font-sans mb-4">
-            Bestimme den ausgezeichneten Spieler, seinen Verein, die Spieltag-Nummer, den Sponsor, die Leistungsdaten
-            und lade sein Portraitfoto hoch — erscheint prominent auf der Startseite (z.&nbsp;B. „Spieler des Spieltages 1,
-            gesponsert von …").
+            „Automatisch berechnen" schlägt Spieler und Torwart mit der besten Spieltagsnote aus dem Tracking vor (letzter
+            veröffentlichter Spieltag). Alles bleibt von Hand änderbar — erst „Speichern" bringt es auf die Startseite. Auf
+            der Website erscheinen beide nebeneinander mit FIFA-Karte und Spieltagswerten. Torwart leer lassen = nur der
+            Spieler wird gezeigt.
           </p>
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
             <button
               type="button"
               onClick={handleAutoPom}
-              className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 bg-brand-accent-light/15 hover:bg-brand-accent-light/25 border border-brand-accent-light/40 text-brand-accent-light rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+              disabled={pomAutoBusy}
+              className="disabled:opacity-50 shrink-0 inline-flex items-center gap-1.5 px-4 py-2 bg-brand-accent-light/15 hover:bg-brand-accent-light/25 border border-brand-accent-light/40 text-brand-accent-light rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
             >
               <Sparkles className="w-4 h-4" />
-              <span>Automatisch berechnen</span>
+              <span>{pomAutoBusy ? 'Berechne …' : 'Automatisch berechnen'}</span>
             </button>
             {pomAutoNote && (
               <span className="text-xs text-emerald-400 font-sans">{pomAutoNote}</span>
@@ -2137,6 +2172,10 @@ export default function AdminPanel({
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="md:col-span-4 pt-2 border-t border-white/10">
+              <div className="text-xs font-sans font-extrabold uppercase tracking-[2px]" style={{ color: '#22DFC9' }}>Spieler des Spieltages</div>
             </div>
 
             <div>
@@ -2195,7 +2234,57 @@ export default function AdminPanel({
               <ImageUploader label="Spieler-Portraitfoto — am besten freigestellt (transparenter Hintergrund)" value={pomImage} onChange={setPomImage} />
             </div>
 
-            <div className="md:col-span-2 flex items-center justify-end gap-3 pb-1">
+            <div className="md:col-span-4 pt-2 border-t border-white/10">
+              <div className="text-xs font-sans font-extrabold uppercase tracking-[2px]" style={{ color: '#E9C46A' }}>Torwart des Spieltages</div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">VEREIN</label>
+              <select
+                value={keeperTeamId}
+                onChange={(e) => handleSelectKeeperTeam(e.target.value)}
+                className={`${inputClass} cursor-pointer`}
+              >
+                <option value="">-- Kein Torwart --</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.logoIcon} {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">TORWART</label>
+              {keeperTeam && (keeperTeam.spielerliste?.length ?? 0) > 0 ? (
+                <select
+                  value={keeperName}
+                  onChange={(e) => handleSelectKeeper(e.target.value)}
+                  className={`${inputClass} cursor-pointer`}
+                >
+                  <option value="">-- Torwart auswählen --</option>
+                  {(keeperTeam.spielerliste || []).map((p) => (
+                    <option key={p.name} value={p.name}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={keeperName}
+                  onChange={(e) => setKeeperName(e.target.value)}
+                  placeholder={keeperTeamId ? 'Kader leer – Name eintippen' : 'Zuerst Verein wählen'}
+                  className={inputClass}
+                />
+              )}
+            </div>
+
+            <div className="md:col-span-2">
+              <ImageUploader label="Torwart-Portraitfoto (optional – sonst Foto aus dem Kader)" value={keeperImage} onChange={setKeeperImage} />
+            </div>
+
+            <div className="md:col-span-4 flex flex-wrap items-center justify-end gap-3 pb-1">
               {pomSuccess && (
                 <motion.span
                   initial={{ opacity: 0 }}

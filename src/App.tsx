@@ -1952,7 +1952,7 @@ export default function App() {
               }
             />
           )}
-          <Hero teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} />
+          <Hero teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} trackingRows={trackingRows} scoring={scoring} seasonId={currentSeason?.id} />
           {/* Season-2-Anmeldung sitzt bewusst zwischen Hero und Highlights,
               damit sie beim Scrollen mitten im Blickfeld liegt. */}
           <SeasonSignupBanner inline onOpen={() => navigateTo('/anmeldung')} />
