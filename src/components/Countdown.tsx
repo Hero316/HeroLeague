@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 
 interface CountdownProps {
   target: string; // lokale datetime-local-Zeichenkette, z. B. "2026-10-04T19:00"
-  title: string;
+  title: string; // großes, dezentes Wort im Hintergrund
+  kicker?: string; // kleine Zeile über den Zahlen (leer = wie `title`)
   gold?: boolean; // goldene Opening-Night-Farbwelt statt Türkis
   ctaLabel?: string; // Taste unter dem Timer (leer = keine Taste)
   onCta?: () => void;
@@ -14,7 +15,7 @@ interface CountdownProps {
 // Fetter Countdown oben auf der Startseite bis zum Anstoß. Rechnet live gegen
 // den Zielzeitpunkt – egal wie oft an-/ausgeschaltet wird. Nach Ablauf bleibt
 // er (rot glühend) stehen, bis er im Backend deaktiviert wird.
-export default function Countdown({ target, title, gold = false, ctaLabel, onCta, tickets }: CountdownProps) {
+export default function Countdown({ target, title, kicker: kickerText, gold = false, ctaLabel, onCta, tickets }: CountdownProps) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -53,7 +54,9 @@ export default function Countdown({ target, title, gold = false, ctaLabel, onCta
   const soldOut = hasTickets && tickets!.remaining <= 0;
 
   // Überschrift: ohne eingegebenen Text bleibt es textlos (nur die Zahlen).
-  const kicker = expired ? (title ? 'Anpfiff — es geht los!' : '') : title;
+  // Kleine Zeile oben: eigener Text, sonst derselbe wie das Wort im Hintergrund.
+  const top = (kickerText || '').trim() || title;
+  const kicker = expired ? (top ? 'Anpfiff — es geht los!' : '') : top;
 
   return (
     <section

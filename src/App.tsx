@@ -300,6 +300,7 @@ export default function App() {
           active: !!data.active,
           target: data.target || '2026-10-04T19:00',
           title: typeof data.title === 'string' ? data.title : 'Till Season begins',
+          kicker: typeof data.kicker === 'string' ? data.kicker : '',
           // Diese drei wurden hier früher verschluckt – dadurch blieb der
           // Countdown türkis und ohne Taste, obwohl im Backend alles stand.
           gold: !!data.gold,
@@ -1940,6 +1941,7 @@ export default function App() {
             <Countdown
               target={countdown.target}
               title={countdown.title}
+              kicker={countdown.kicker}
               gold={countdown.gold}
               ctaLabel={countdown.ctaLabel}
               tickets={countdownTickets}
