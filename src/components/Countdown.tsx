@@ -148,7 +148,7 @@ export default function Countdown({ target, title, gold = false, ctaLabel, onCta
             )}
             {hasTickets && (
               <span className="font-sans font-bold text-[12px] sm:text-sm tracking-[1.5px] text-hl-dim tabular-nums">
-                <span className={soldOut ? 'text-hl-gold' : 'text-white'}>{sold}</span> / {tickets!.capacity}
+                {sold} / <span className="text-hl-gold">{tickets!.capacity}</span>
               </span>
             )}
           </div>
