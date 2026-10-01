@@ -15,11 +15,11 @@ export default function SeasonSignupBanner({ onOpen, inline = false }: { onOpen:
   useEffect(() => { fetchSignupConfig().then((c) => { setCfg(c); setClosed(!c.open); }).catch(() => {}); }, []);
   if (closed) return null;
 
-  return (
+  const banner = (
     <button
       onClick={onOpen}
       className={`group relative block w-full text-left overflow-hidden cursor-pointer border-[rgba(47,91,255,.32)] ${
-        inline ? 'rounded-2xl border my-5 sm:my-7' : 'border-b'
+        inline ? 'rounded-2xl border shadow-[0_18px_50px_-24px_rgba(47,91,255,.55)]' : 'border-b'
       }`}
       aria-label={`${cfg.seasonLabel} – Team anmelden`}
     >
@@ -28,7 +28,7 @@ export default function SeasonSignupBanner({ onOpen, inline = false }: { onOpen:
       <div className="absolute inset-0 bg-[radial-gradient(70%_120%_at_100%_100%,rgba(109,93,230,.18),transparent_55%)]" />
       <div className="absolute inset-y-0 -left-1/3 w-1/3 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,.10),transparent)] -skew-x-12 translate-x-[-120%] group-hover:translate-x-[520%] transition-transform duration-[1100ms] ease-out" />
 
-      <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 py-4 sm:py-5 flex items-center gap-4 sm:gap-6">
+      <div className={`relative flex items-center gap-4 sm:gap-6 py-4 sm:py-5 ${inline ? 'px-4 sm:px-7' : 'max-w-[1320px] mx-auto px-4 sm:px-10'}`}>
         <div className="shrink-0 grid place-items-center w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-[rgba(47,91,255,.2)] border border-[rgba(47,91,255,.5)]">
           <Trophy className="w-5 h-5 sm:w-7 sm:h-7 text-[#8FA8FF]" />
         </div>
@@ -55,5 +55,15 @@ export default function SeasonSignupBanner({ onOpen, inline = false }: { onOpen:
         </span>
       </div>
     </button>
+  );
+
+  if (!inline) return banner;
+  // Mitten auf der Seite: als Karte im normalen Inhaltsraster, auf demselben
+  // dunklen Grund wie Hero-Unterkante und Highlights (#0A1415) – so schimmert
+  // über und unter dem Banner kein anders gefärbter Seitenhintergrund durch.
+  return (
+    <div className="bg-[#0A1415]">
+      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-5 sm:py-7">{banner}</div>
+    </div>
   );
 }
