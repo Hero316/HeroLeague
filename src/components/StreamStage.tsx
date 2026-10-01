@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Radio, ExternalLink, Maximize2, Twitch, Volume2, VolumeX, MonitorPlay } from 'lucide-react';
-import type { EventConfig, Match, StreamsConfig } from '../types';
+import type { EventConfig, Match, PlayerStat, StreamsConfig, Team } from '../types';
+import { useLeagueLive, FieldPanel, LiveHub } from './StreamLiveInfo';
 import { twitchPlayerSrc, twitchChannelUrl } from '../lib/streams';
 
 // ---------------------------------------------------------------------------
@@ -94,12 +95,14 @@ function StreamCard({ field, channel, live, muted, onToggleAudio }: { field: num
 //    nebeneinander (Feld 2 wird nur bei breitem Screen wirklich geladen);
 //    dazu ein Knopf zur Stream-Seite, solange nicht beide zu sehen sind.
 //  • mode='page' → alle Felder untereinander, je eigener Ton-Schalter (nur einer an)
-function Stage({ streams, subtitle, isLive, mode = 'home', onOpenFull }: {
+function Stage({ streams, subtitle, isLive, mode = 'home', onOpenFull, fieldInfo, below }: {
   streams: StreamsConfig | null;
   subtitle: string;
   isLive: (field: number) => boolean;
   mode?: 'home' | 'page';
   onOpenFull?: () => void;
+  fieldInfo?: (field: number) => ReactNode; // Live-Infos direkt unter dem Stream eines Feldes
+  below?: ReactNode; // Tabelle & Co. unter allen Streams
 }) {
   const allFields = useMemo(() => {
     const list: { field: number; channel: string }[] = [];
@@ -140,16 +143,27 @@ function Stage({ streams, subtitle, isLive, mode = 'home', onOpenFull }: {
 
         <div className={gridClass}>
           {shownFields.map((f) => (
-            <StreamCard
-              key={f.field}
-              field={f.field}
-              channel={f.channel}
-              live={isLive(f.field)}
-              muted={mode === 'page' ? audioField !== f.field : true}
-              onToggleAudio={mode === 'page' ? () => setAudioField((cur) => (cur === f.field ? null : f.field)) : undefined}
-            />
+            <div key={f.field} className="min-w-0 flex flex-col gap-3">
+              <StreamCard
+                field={f.field}
+                channel={f.channel}
+                live={isLive(f.field)}
+                muted={mode === 'page' ? audioField !== f.field : true}
+                onToggleAudio={mode === 'page' ? () => setAudioField((cur) => (cur === f.field ? null : f.field)) : undefined}
+              />
+              {fieldInfo?.(f.field)}
+            </div>
           ))}
         </div>
+
+        {/* Felder ohne sichtbaren Stream (Handy-Startseite): Live-Infos trotzdem zeigen */}
+        {fieldInfo && allFields.length > shownFields.length && (
+          <div className="mt-3 grid grid-cols-1 max-w-3xl gap-3">
+            {allFields.filter((f) => !shownFields.includes(f)).map((f) => (
+              <div key={f.field}>{fieldInfo(f.field)}</div>
+            ))}
+          </div>
+        )}
 
         {showButton && onOpenFull && (
           <button
@@ -160,6 +174,8 @@ function Stage({ streams, subtitle, isLive, mode = 'home', onOpenFull }: {
             <MonitorPlay className="w-4 h-4" /> Beide Felder ansehen
           </button>
         )}
+
+        {below}
       </div>
     </div>
   );
@@ -173,8 +189,42 @@ export default function StreamStage({ streams, event, mode = 'home', onOpenFull 
 }
 
 // --- Adapter: echte Liga (Liga-Spiele) ------------------------------------------
-export function LeagueStreamStage({ streams, matches, mode = 'home', onOpenFull }: { streams: StreamsConfig | null; matches: Match[]; mode?: 'home' | 'page'; onOpenFull?: () => void }) {
+// Mit Live-Infos: unter jedem Stream das Spiel auf dem Feld (Spielstand, Uhr,
+// direkter Vergleich), darunter Live-Tabelle, Spieltag und Torjäger.
+export function LeagueStreamStage({
+  streams,
+  matches,
+  teams = [],
+  players = [],
+  mode = 'home',
+  onOpenFull,
+  onOpenMatch,
+  onSelectTeam,
+  onOpenTable,
+}: {
+  streams: StreamsConfig | null;
+  matches: Match[];
+  teams?: Team[];
+  players?: PlayerStat[];
+  mode?: 'home' | 'page';
+  onOpenFull?: () => void;
+  onOpenMatch?: (id: string) => void;
+  onSelectTeam?: (teamId: string) => void;
+  onOpenTable?: () => void;
+}) {
+  const ctx = useLeagueLive(teams, matches);
   const isLive = (field: number) => matches.some((x) => (x.field || 1) === field && x.status === 'live');
   const subtitle = mode === 'home' ? 'Feld 1 – beide Felder auf der Stream-Seite' : 'beide Felder gleichzeitig';
-  return <Stage streams={streams} subtitle={subtitle} isLive={isLive} mode={mode} onOpenFull={onOpenFull} />;
+  const hasData = teams.length > 0 && matches.length > 0;
+  return (
+    <Stage
+      streams={streams}
+      subtitle={subtitle}
+      isLive={isLive}
+      mode={mode}
+      onOpenFull={onOpenFull}
+      fieldInfo={hasData ? (field) => <FieldPanel ctx={ctx} field={field} onOpenMatch={onOpenMatch} onSelectTeam={onSelectTeam} /> : undefined}
+      below={hasData ? <LiveHub ctx={ctx} players={players} onOpenMatch={onOpenMatch} onSelectTeam={onSelectTeam} onOpenTable={onOpenTable} /> : undefined}
+    />
+  );
 }

@@ -362,7 +362,10 @@ export default function App() {
   // und die Torschützen ohne Neuladen mitverfolgen. Endet das Spiel, stoppt das Polling.
   // Nur im sichtbaren Tab (usePolling): Im Hintergrund pausiert das Nachladen, damit die
   // nutzungsbasiert abgerechnete Datenbank in ruhigen Phasen schlafen kann.
-  usePolling(fetchData, 15_000, { enabled: hasLiveMatch, immediate: false });
+  // Laufen die Liga-Streams (Spieltag-Abend), wird ebenfalls nachgeladen – so taucht
+  // ein frisch angepfiffenes Spiel samt Live-Infos unter dem Stream von selbst auf.
+  const leagueStreamsOn = !!(leagueStreams?.active && (leagueStreams.field1?.trim() || leagueStreams.field2?.trim()));
+  usePolling(fetchData, 15_000, { enabled: hasLiveMatch || leagueStreamsOn, immediate: false });
 
   // Beim Zurückkehren zum Tab sofort den aktuellen Stand holen
   useEffect(() => {
@@ -1040,7 +1043,16 @@ export default function App() {
             </button>
           </div>
           <StreamStage streams={streams} event={activeEvent} mode="page" />
-          <LeagueStreamStage streams={leagueStreams} matches={currentSeasonMatches} mode="page" />
+          <LeagueStreamStage
+            streams={leagueStreams}
+            matches={currentSeasonMatches}
+            teams={leagueTeams}
+            players={players}
+            mode="page"
+            onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
+            onSelectTeam={openTeamDetail}
+            onOpenTable={() => goToTab('tabelle')}
+          />
           {!anyStreams && (
             <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 py-16 text-center">
               <p className="text-hl-mute font-sans">Aktuell läuft kein Stream. Sobald es losgeht, siehst du hier beide Felder.</p>
@@ -1936,7 +1948,17 @@ export default function App() {
             onSeeAll={() => goToTab('spielplan')}
           />
           <StreamStage streams={streams} event={activeEvent} mode="home" onOpenFull={() => navigateTo('/streams')} />
-          <LeagueStreamStage streams={leagueStreams} matches={currentSeasonMatches} mode="home" onOpenFull={() => navigateTo('/streams')} />
+          <LeagueStreamStage
+            streams={leagueStreams}
+            matches={currentSeasonMatches}
+            teams={leagueTeams}
+            players={players}
+            mode="home"
+            onOpenFull={() => navigateTo('/streams')}
+            onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
+            onSelectTeam={openTeamDetail}
+            onOpenTable={() => goToTab('tabelle')}
+          />
           {countdown.active && (
             <Countdown
               target={countdown.target}
