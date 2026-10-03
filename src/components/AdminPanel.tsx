@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone, Handshake, ChevronUp, ChevronDown, Star, Landmark, BarChart3, Footprints } from 'lucide-react';
+import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone, Handshake, ChevronUp, ChevronDown, Star, Landmark, BarChart3, Footprints, Users } from 'lucide-react';
 import { Player, Team, Match, MatchPlayerStat, ScoringConfig, EventConfig, EventArchive, NewsItem, Partner, TeamSponsor, TeamSponsorsMap, SponsorClicksMap, Season } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
 import { fetchSponsorClicks } from '../lib/sponsors';
@@ -10,7 +10,7 @@ import PlayerAvatar from './PlayerAvatar';
 import { AccordionSection, TeamCrest } from './ui';
 import { GAME_MINUTES, BREAK_MINUTES, slotTimes, isHHMM } from '../lib/matchTiming';
 import { fetchPublicStats, fetchScoring } from '../lib/stats';
-import { fetchManagers, saveManagers } from '../lib/manager';
+import { fetchManagers, saveManagers, fetchManagerConfig, saveManagerConfig, type ManagerConfigView } from '../lib/manager';
 import { rankDay, trackedMatchdays, fmtNote, type DayCandidate } from '../lib/awards';
 
 // Teamnamen tolerant vergleichen (für den Abgleich Event-Team <-> echter Verein).
@@ -424,6 +424,36 @@ export default function AdminPanel({
   // Team-Manager (Captains): E-Mails, die auf /kader den Abend-Kader melden dürfen.
   const [managersMap, setManagersMap] = useState<Record<string, string[]>>({});
   const [editTeamManagers, setEditTeamManagers] = useState('');
+  // Freigabe der Kader-Meldung (/kader) + Übersicht, wer schon gemeldet hat.
+  const [mgrCfg, setMgrCfg] = useState<ManagerConfigView | null>(null);
+  const [mgrDay, setMgrDay] = useState(0);
+  const [mgrBusy, setMgrBusy] = useState(false);
+  const loadMgrCfg = () =>
+    fetchManagerConfig()
+      .then((c) => {
+        setMgrCfg(c);
+        setMgrDay(c.matchday ?? c.suggested ?? 0);
+      })
+      .catch(() => setMgrCfg(null));
+  useEffect(() => {
+    if (canManageClubs) void loadMgrCfg();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canManageClubs]);
+  const setMgrOpen = async (open: boolean) => {
+    if (open && !mgrDay) {
+      alert('Bitte zuerst den Spieltag wählen.');
+      return;
+    }
+    setMgrBusy(true);
+    try {
+      await saveManagerConfig(open, mgrDay || null);
+      await loadMgrCfg();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Speichern fehlgeschlagen.');
+    } finally {
+      setMgrBusy(false);
+    }
+  };
 
   // Spieler des Monats
   const [pomName, setPomName] = useState('');
@@ -1666,6 +1696,91 @@ export default function AdminPanel({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Kader-Meldung der Manager (/kader): Freigabe je Spieltag + Übersicht */}
+      {canManageClubs && (
+      <AccordionSection
+        id="kader-meldung"
+        category="spiele"
+        title="Kader-Meldung der Manager"
+        subtitle="hero-league.de/kader freigeben / schließen · wer hat schon gemeldet?"
+        icon={<Users className="w-5 h-5" />}
+        accent="#22DFC9"
+      >
+        <div>
+          <p className="text-xs text-gray-400 font-sans mb-4">
+            Die Captains melden auf <b className="text-brand-accent-light">hero-league.de/kader</b> ihren Kader (dabei / fehlt / Torwart) –
+            das landet direkt in der Schiedsrichter-App. Die Meldung ist nur offen, wenn du sie hier für einen Spieltag freigibst.
+            Sie <b className="text-white">schließt automatisch beim ersten Anpfiff</b> dieses Spieltags; für den nächsten Spieltag hier wieder freigeben.
+            Manager-E-Mails trägst du unter „Klubs registrieren &amp; bearbeiten" beim jeweiligen Team ein.
+          </p>
+          {!mgrCfg ? (
+            <button type="button" onClick={loadMgrCfg} className="text-xs font-bold text-brand-accent-light cursor-pointer">Laden …</button>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <span
+                  className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-sans font-black uppercase tracking-wider"
+                  style={mgrCfg.open ? { background: 'rgba(67,229,160,.15)', color: '#6EE7B7' } : { background: 'rgba(255,255,255,.06)', color: '#9CA3AF' }}
+                >
+                  <span className={`w-2 h-2 rounded-full ${mgrCfg.open ? 'bg-emerald-400 animate-pulse' : 'bg-gray-500'}`} />
+                  {mgrCfg.open ? `Offen · ${mgrCfg.matchday}. Spieltag` : mgrCfg.switchOn && mgrCfg.started ? `Geschlossen – ${mgrCfg.matchday}. Spieltag läuft` : 'Geschlossen'}
+                </span>
+                <label className="inline-flex items-center gap-2 text-xs font-mono text-gray-400 uppercase tracking-wider">
+                  Spieltag
+                  <input
+                    type="number"
+                    min={1}
+                    value={mgrDay || ''}
+                    onChange={(e) => setMgrDay(Number(e.target.value))}
+                    className={`${inputClass} !w-20 !py-2`}
+                  />
+                </label>
+                {mgrCfg.suggested && mgrCfg.suggested !== mgrDay && (
+                  <button type="button" onClick={() => setMgrDay(mgrCfg.suggested!)} className="text-[11px] font-bold text-brand-accent-light cursor-pointer">
+                    nächster: {mgrCfg.suggested}.
+                  </button>
+                )}
+                <div className="ml-auto flex gap-2">
+                  {mgrCfg.switchOn ? (
+                    <button type="button" disabled={mgrBusy} onClick={() => setMgrOpen(false)} className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border border-red-500/40 text-red-300 hover:bg-red-500/10 cursor-pointer disabled:opacity-50">
+                      Schließen
+                    </button>
+                  ) : null}
+                  <button type="button" disabled={mgrBusy || !mgrDay} onClick={() => setMgrOpen(true)} className="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider bg-brand-accent-light/15 border border-brand-accent-light/40 text-brand-accent-light hover:bg-brand-accent-light/25 cursor-pointer disabled:opacity-50">
+                    {mgrCfg.switchOn && mgrCfg.matchday === mgrDay && !mgrCfg.started ? 'Ist freigegeben' : `Für ${mgrDay || '…'}. Spieltag freigeben`}
+                  </button>
+                </div>
+              </div>
+
+              {mgrCfg.matchday !== null && (
+                <div className="mt-4">
+                  <div className="text-[11px] font-mono text-gray-400 uppercase tracking-wider mb-2">
+                    Gemeldet · {mgrCfg.matchday}. Spieltag ({mgrCfg.teams.filter((t) => t.reportedAt).length} / {mgrCfg.teams.length})
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                    {mgrCfg.teams.map((t) => (
+                      <div key={t.id} className="flex items-center gap-2 rounded-lg bg-white/[0.03] border border-white/5 px-3 py-2 min-w-0">
+                        <span className={`shrink-0 w-2 h-2 rounded-full ${t.reportedAt ? 'bg-emerald-400' : 'bg-gray-600'}`} />
+                        <span className="min-w-0 flex-1 truncate text-sm text-white font-sans">{t.name}</span>
+                        <span className="shrink-0 text-[11px] font-sans text-gray-400">
+                          {t.reportedAt
+                            ? `✓ ${new Date(t.reportedAt).toLocaleString('de-DE', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`
+                            : t.managers
+                              ? 'offen'
+                              : 'kein Manager'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <button type="button" onClick={loadMgrCfg} className="mt-2 text-[11px] font-bold text-gray-400 hover:text-white cursor-pointer">↻ Aktualisieren</button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </AccordionSection>
+      )}
 
       {/* Klubs registrieren & bearbeiten (Super-Admin + Spiel-Admin) */}
       {canManageClubs && (

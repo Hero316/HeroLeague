@@ -219,7 +219,11 @@ export default function ManagerKader({ onNavigate }: { onNavigate: (path: string
             </div>
 
             {data.matchday === null ? (
-              <div className="mt-6 hl-card rounded-2xl p-5 text-center text-sm text-hl-mute">Für dein Team steht gerade kein Spieltag an.</div>
+              <div className="mt-6 rounded-2xl border border-white/10 bg-white/[.03] p-5 text-center">
+                <Lock className="w-6 h-6 mx-auto text-hl-mute" />
+                <div className="mt-2 font-display font-black uppercase text-[20px]">Kader-Meldung geschlossen</div>
+                <p className="mt-1.5 text-[13px] text-hl-mute">Die Liga gibt die Meldung vor jedem Spieltag frei – dann kannst du hier deinen Kader eintragen. Du bleibst angemeldet.</p>
+              </div>
             ) : (
               <>
                 <div className="mt-4 rounded-2xl border border-white/10 bg-white/[.03] p-4">
@@ -246,7 +250,7 @@ export default function ManagerKader({ onNavigate }: { onNavigate: (path: string
 
                 {data.locked && (
                   <div className="mt-3 flex items-start gap-2 text-[13px] text-amber-200 bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-2.5">
-                    <Lock className="w-4 h-4 shrink-0 mt-0.5" /> Der Spieltag läuft schon – Änderungen bitte direkt beim Schiedsrichter.
+                    <Lock className="w-4 h-4 shrink-0 mt-0.5" /> Der Spieltag läuft schon – die Meldung ist geschlossen. Änderungen bitte direkt beim Schiedsrichter.
                   </div>
                 )}
 

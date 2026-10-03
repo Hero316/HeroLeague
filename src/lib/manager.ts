@@ -26,6 +26,7 @@ export interface ManagerRoster {
   team: { id: string; name: string; shortName: string; logoColor: string; logoUrl: string; players: ManagerPlayer[] };
   matchday: number | null;
   locked: boolean;
+  closedReason: 'off' | 'started' | null; // off = im Backend nicht freigegeben · started = Spieltag läuft
   matches: { id: string; date: string; time: string; field: number; status: string; opponent: string }[];
   saved: { present: string[]; goalkeeper?: string; at?: string } | null;
 }
@@ -43,3 +44,16 @@ export const managerSaveRoster = (token: string, present: string[], goalkeeper: 
 export const fetchManagers = () => apiFetch<Record<string, string[]>>('/api/twitch?resource=managers');
 export const saveManagers = (teamId: string, emails: string[]) =>
   apiFetch<{ ok: boolean; emails: string[] }>('/api/twitch?resource=managers', { method: 'POST', body: JSON.stringify({ teamId, emails }) });
+
+// Admin: Freigabe der Kader-Meldung + Übersicht, wer schon gemeldet hat
+export interface ManagerConfigView {
+  open: boolean; // wirklich offen (Schalter an, Spieltag gewählt, noch nicht begonnen)
+  switchOn: boolean;
+  matchday: number | null;
+  suggested: number | null; // nächster Spieltag mit geplanten Spielen
+  started: boolean;
+  teams: { id: string; name: string; managers: number; reportedAt: string | null }[];
+}
+export const fetchManagerConfig = () => apiFetch<ManagerConfigView>('/api/twitch?resource=manager-config');
+export const saveManagerConfig = (open: boolean, matchday: number | null) =>
+  apiFetch<{ ok: boolean }>('/api/twitch?resource=manager-config', { method: 'POST', body: JSON.stringify({ open, matchday }) });

@@ -4,7 +4,7 @@ import { createEventDemo, removeEventDemo } from './_lib/eventDemo.js';
 import { sql, getTeams } from './_lib/db.js';
 import { requireStaff, requireMatchWrite, requireSuperadmin, getSession } from './_lib/auth.js';
 import { applyRosterToMatches, type RosterTeamIn } from './_lib/roster.js';
-import { managerRequestCode, managerVerify, managerGetRoster, managerSaveRoster, adminGetManagers, adminSaveManagers } from './_lib/managers.js';
+import { managerRequestCode, managerVerify, managerGetRoster, managerSaveRoster, adminGetManagers, adminSaveManagers, adminGetManagerConfig, adminSaveManagerConfig } from './_lib/managers.js';
 import { getTips, submitTip, registerRequestCode, registerVerify, adminListTippUsers, getBonus, submitBonus, adminSetBonusSolution, acceptTerms } from './_lib/tippgame.js';
 
 const DEFAULT_TWITCH = { channel: '', isLive: false };
@@ -955,6 +955,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.json(rows[0]?.value ?? {});
       }
       if (resource === 'managers') return adminGetManagers(req, res);
+      if (resource === 'manager-config') return adminGetManagerConfig(req, res);
       if (resource === 'game') {
         const rows = await sql`SELECT value FROM settings WHERE key = 'game'`;
         return res.json({ board: toGameBoard(rows[0]?.value) });
@@ -995,6 +996,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'manager-roster-get') return managerGetRoster(req, res);
       if (resource === 'manager-roster') return managerSaveRoster(req, res);
       if (resource === 'managers') return adminSaveManagers(req, res);
+      if (resource === 'manager-config') return adminSaveManagerConfig(req, res);
       if (resource === 'game') return saveGame(req, res);
       if (resource === 'sponsor-click') return trackSponsorClick(req, res);
       if (resource === 'tip') return submitTip(req, res);
