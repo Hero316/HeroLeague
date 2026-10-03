@@ -44,6 +44,7 @@ import SeasonSignup from './components/SeasonSignup';
 import SeasonSignupBanner from './components/SeasonSignupBanner';
 import EventTickets from './components/EventTickets';
 import SelfCheckin from './components/SelfCheckin';
+import ManagerKader from './components/ManagerKader';
 import SignupAdmin from './components/SignupAdmin';
 import TicketAdmin from './components/TicketAdmin';
 import EventErgebniszettel from './components/EventErgebniszettel';
@@ -574,6 +575,22 @@ export default function App() {
   // Aufstellungen laden, sobald jemand angemeldet ist (für den Schiedsrichtermodus).
   useEffect(() => {
     if (sessionUser) fetchRoster();
+  }, [sessionUser, fetchRoster]);
+
+  // Abend-Aufstellung beim Zurückkehren in die App neu laden – Team-Manager
+  // melden ihren Kader inzwischen selbst (/kader); so überschreibt der
+  // Schiedsrichter nie mit einem veralteten Stand.
+  useEffect(() => {
+    if (!sessionUser) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchRoster();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
   }, [sessionUser, fetchRoster]);
 
   // Push-Abo lebendig halten: Sobald jemand angemeldet ist – und jedes Mal, wenn
@@ -1209,6 +1226,12 @@ export default function App() {
   // ROUTE: /tippspiel – öffentliches Tippspiel (Ergebnis-Tipps + Rangliste).
   if (currentPath.startsWith('/tippspiel')) {
     return <TippspielPage matches={currentSeasonMatches} teams={leagueTeams} seasonLabel={currentSeasonName} onNavigate={navigateTo} />;
+  }
+
+  // ROUTE: /kader (auch /manager) – Team-Manager melden ihren Abend-Kader selbst
+  // (Login per E-Mail-Code; die Adresse wird im Backend beim Team hinterlegt).
+  if (currentPath.startsWith('/kader') || currentPath.startsWith('/manager')) {
+    return <ManagerKader onNavigate={navigateTo} />;
   }
 
   // ROUTE: /einchecken (auch /checkin) – Selbst-Check-in am Eingang über den

@@ -10,6 +10,7 @@ import PlayerAvatar from './PlayerAvatar';
 import { AccordionSection, TeamCrest } from './ui';
 import { GAME_MINUTES, BREAK_MINUTES, slotTimes, isHHMM } from '../lib/matchTiming';
 import { fetchPublicStats, fetchScoring } from '../lib/stats';
+import { fetchManagers, saveManagers } from '../lib/manager';
 import { rankDay, trackedMatchdays, fmtNote, type DayCandidate } from '../lib/awards';
 
 // Teamnamen tolerant vergleichen (für den Abgleich Event-Team <-> echter Verein).
@@ -420,6 +421,9 @@ export default function AdminPanel({
   // bearbeiteten Teams.
   const [teamSponsorsMap, setTeamSponsorsMap] = useState<TeamSponsorsMap>({});
   const [editTeamSponsors, setEditTeamSponsors] = useState<TeamSponsor[]>([]);
+  // Team-Manager (Captains): E-Mails, die auf /kader den Abend-Kader melden dürfen.
+  const [managersMap, setManagersMap] = useState<Record<string, string[]>>({});
+  const [editTeamManagers, setEditTeamManagers] = useState('');
 
   // Spieler des Monats
   const [pomName, setPomName] = useState('');
@@ -1473,7 +1477,18 @@ export default function AdminPanel({
     setEditTeamSeasonIds(Array.isArray(team?.seasonIds) ? [...team!.seasonIds!] : []);
     setEditTeamRoster(team?.spielerliste ? [...team.spielerliste] : []);
     setEditTeamSponsors(teamSponsorsMap[teamId] ? teamSponsorsMap[teamId].map((s) => ({ ...s })) : []);
+    setEditTeamManagers((managersMap[teamId] ?? []).join(', '));
   };
+
+  // Manager-E-Mails einmal laden (privat – nur fürs Backend).
+  useEffect(() => {
+    if (!isSuperadmin) return;
+    fetchManagers()
+      .then((m) => setManagersMap(m && typeof m === 'object' ? m : {}))
+      .catch(() => {
+        /* noch keine hinterlegt */
+      });
+  }, [isSuperadmin]);
 
   // Team-Sponsoren einmal laden (nur Super-Admin sieht die Klub-Sektion).
   useEffect(() => {
@@ -1534,6 +1549,23 @@ export default function AdminPanel({
         setEditTeamSponsors(saved?.[selectedEditTeamId] ? saved[selectedEditTeamId].map((s) => ({ ...s })) : cleanedSponsors);
       } catch (err) {
         alert(err instanceof Error ? err.message : 'Sponsoren konnten nicht gespeichert werden.');
+      }
+      // Manager-E-Mails dieses Teams speichern (nur wenn geändert).
+      const emails = editTeamManagers.split(/[\s,;]+/).map((e) => e.trim()).filter(Boolean);
+      const before = managersMap[selectedEditTeamId] ?? [];
+      if (emails.join(',').toLowerCase() !== before.join(',')) {
+        try {
+          const r = await saveManagers(selectedEditTeamId, emails);
+          setManagersMap((m) => {
+            const next = { ...m };
+            if (r.emails.length) next[selectedEditTeamId] = r.emails;
+            else delete next[selectedEditTeamId];
+            return next;
+          });
+          setEditTeamManagers(r.emails.join(', '));
+        } catch (err) {
+          alert(err instanceof Error ? err.message : 'Manager-E-Mails konnten nicht gespeichert werden.');
+        }
       }
       setEditSuccess(true);
       setTimeout(() => setEditSuccess(false), 3000);
@@ -1999,6 +2031,26 @@ export default function AdminPanel({
                   <RosterEditor roster={editTeamRoster} teamColor={editTeamColor} onChange={setEditTeamRoster} />
                   <p className="text-[10px] text-gray-400 font-sans mt-1.5">
                     Diese Spieler stehen im Spielplan zur Torschützen- und Vorlagen-Zuweisung bereit.
+                  </p>
+                </div>
+
+                {/* Team-Manager (Captains) – melden auf /kader den Abend-Kader selbst */}
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
+                    MANAGER-E-MAIL(S) – KADER SELBST MELDEN
+                  </label>
+                  <input
+                    value={editTeamManagers}
+                    onChange={(e) => setEditTeamManagers(e.target.value)}
+                    placeholder="captain@mail.de, co-captain@mail.de"
+                    className={inputClass}
+                    autoCapitalize="none"
+                    inputMode="email"
+                  />
+                  <p className="text-[10px] text-gray-400 font-sans mt-1.5">
+                    Wer hier steht, kann auf <span className="text-brand-accent-light font-bold">hero-league.de/kader</span> mit einem
+                    E-Mail-Code den Abend-Kader dieses Teams melden (dabei / fehlt / Torwart) – landet direkt in der
+                    Schiedsrichter-App und im Tracking-Center. Mehrere mit Komma trennen. Bleibt privat (nicht öffentlich sichtbar).
                   </p>
                 </div>
 
