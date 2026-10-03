@@ -27,6 +27,14 @@ import { GAME_MINUTES } from '../lib/matchTiming';
 //   partner=0       Partner-Leiste ausblenden
 //   test=1          Vorschau mit Beispielspiel (zum Positionieren in OBS)
 //   sec=470         (nur mit test=1) Uhr vorspulen, z. B. um die Nachspielzeit zu sehen
+//   idle=1          (nur mit test=1) Vorschau ohne Live-Spiel → „Als Nächstes"-Tafel
+//   next=0          „Als Nächstes" komplett ausblenden
+//   every=45        während eines Spiels: alle X Sekunden kurz „Als Nächstes" (Standard 45)
+//
+// „Als Nächstes": Ohne Live-Spiel steht oben links groß das nächste Spiel
+// DIESES Feldes (Wappen, Namen, Anstoß), darunter klein das des anderen Feldes.
+// Während eines Spiels kommt alle `every` Sekunden für 10 s neben der
+// Toranzeige eine kleine Einblendung mit dem nächsten Spiel beider Felder.
 // ===========================================================================
 
 const GOLD = '#FFC53D';
@@ -43,6 +51,9 @@ interface OverlayMatch {
   durationMinutes?: number | null;
   pausedAt?: string | null;
   scorers: { player: string; team: string }[];
+  field: number; // Feld/Platz (1, 2 …)
+  time: string; // Anstoß 'HH:MM'
+  date: string; // 'YYYY-MM-DD' (leer = heute/unbekannt)
 }
 
 interface Visual {
@@ -64,7 +75,10 @@ function params() {
   const sec = Math.max(0, Number(q.get('sec') || 0) || 0);
   const brand = q.get('brand') !== '0';
   const partner = q.get('partner') !== '0';
-  return { feld, scale, pos, test, sec, brand, partner } as const;
+  const idle = q.get('idle') === '1';
+  const next = q.get('next') !== '0';
+  const every = Math.max(15, Math.min(600, Number(q.get('every') || 45) || 45));
+  return { feld, scale, pos, test, sec, brand, partner, idle, next, every } as const;
 }
 
 function activeEventOf(a: EventArchive | null): EventConfig | null {
@@ -74,10 +88,9 @@ function activeEventOf(a: EventArchive | null): EventConfig | null {
 }
 
 // Neuestes Spiel eines Feldes in einem Status (live bevorzugt vor Endstand).
-function pickEventMatch(ev: EventConfig | null, feld: number): OverlayMatch[] {
+function pickEventMatch(ev: EventConfig | null): OverlayMatch[] {
   if (!ev) return [];
   return ev.matches
-    .filter((m) => (m.field || 1) === feld)
     .map((m) => ({
       key: `e:${ev.id}:${m.id}`,
       home: m.home,
@@ -89,13 +102,15 @@ function pickEventMatch(ev: EventConfig | null, feld: number): OverlayMatch[] {
       durationMinutes: m.durationMinutes,
       pausedAt: m.pausedAt,
       scorers: (m.scorers ?? []).map((s) => ({ player: s.player, team: s.team })),
+      field: m.field || 1,
+      time: m.start || '',
+      date: ev.date || '',
     }));
 }
 
-function pickLeagueMatches(matches: Match[], teams: Team[], feld: number): OverlayMatch[] {
+function pickLeagueMatches(matches: Match[], teams: Team[]): OverlayMatch[] {
   const nameById = new Map(teams.map((t) => [t.id, t.name]));
   return matches
-    .filter((m) => (m.field || 1) === feld)
     .map((m) => ({
       key: `l:${m.id}`,
       home: nameById.get(m.homeTeamId) ?? '?',
@@ -107,7 +122,34 @@ function pickLeagueMatches(matches: Match[], teams: Team[], feld: number): Overl
       durationMinutes: m.durationMinutes,
       pausedAt: m.pausedAt,
       scorers: (m.scorers ?? []).map((s) => ({ player: s.playerName, team: nameById.get(s.teamId) ?? '?' })),
+      field: m.field || 1,
+      time: m.time || '',
+      date: m.date || '',
     }));
+}
+
+// Heutiges Datum 'YYYY-MM-DD' (lokale Zeit).
+function todayKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// Nächstes geplantes Spiel eines Feldes (frühester Anstoß, nichts aus der Vergangenheit).
+function nextOnField(list: OverlayMatch[], field: number): OverlayMatch | null {
+  const today = todayKey();
+  return (
+    list
+      .filter((m) => m.status === 'geplant' && m.field === field && (!m.date || m.date >= today))
+      .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))[0] ?? null
+  );
+}
+
+// Anstoß als Text: heute nur „19:11", an einem anderen Tag mit Datum.
+function kickoffLabel(m: OverlayMatch): string {
+  if (!m.date || m.date === todayKey()) return m.time;
+  const d = new Date(`${m.date}T12:00:00`);
+  const day = Number.isNaN(d.getTime()) ? m.date : d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  return m.time ? `${day} · ${m.time}` : day;
 }
 
 // ---------------------------------------------------------------------------
@@ -171,8 +213,17 @@ function useTestMatch(enabled: boolean, sec: number): OverlayMatch | null {
     durationMinutes: GAME_MINUTES,
     pausedAt: null,
     scorers,
+    field: 1,
+    time: '19:00',
+    date: '',
   };
 }
+
+// Beispiel-Paarungen für die Vorschau (?test=1) der „Als Nächstes"-Anzeige.
+const TEST_NEXT: OverlayMatch[] = [
+  { key: 'tn1', home: 'Phönix Leverkusen', away: 'Royale Five', homeScore: 0, awayScore: 0, status: 'geplant', scorers: [], field: 1, time: '19:11', date: '' },
+  { key: 'tn2', home: 'Westside United', away: 'FC Kickers Halle', homeScore: 0, awayScore: 0, status: 'geplant', scorers: [], field: 2, time: '19:11', date: '' },
+];
 
 // ---------------------------------------------------------------------------
 // Bausteine
@@ -200,10 +251,10 @@ function Clock({ m }: { m: OverlayMatch }) {
 function Scorebug({ m, vis, label, final }: { m: OverlayMatch; vis: (n: string) => Visual | undefined; label: string; final?: boolean }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: -24 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -24 }}
-      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      initial={{ opacity: 0, y: -24, filter: 'blur(6px)' }}
+      animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+      exit={{ opacity: 0, y: -30, scale: 0.96, filter: 'blur(8px)' }}
+      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
       className="inline-flex flex-col"
     >
       <div className="inline-flex items-stretch rounded-2xl overflow-hidden border border-white/15 bg-[rgba(6,14,15,.88)] shadow-[0_18px_50px_-12px_rgba(0,0,0,.9)]">
@@ -240,6 +291,126 @@ function Scorebug({ m, vis, label, final }: { m: OverlayMatch; vis: (n: string) 
       <div className="mt-2 self-start inline-flex items-center gap-2 rounded-lg bg-[rgba(6,14,15,.8)] border border-white/10 px-3 py-1.5">
         <img src="/assets/hero-league-logo.png" alt="" className="h-4 w-auto" />
         <span className="text-[12px] font-sans font-black uppercase tracking-[2px] text-white/75">{label}</span>
+      </div>
+    </motion.div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// „Als Nächstes"
+// ---------------------------------------------------------------------------
+const EASE = [0.22, 1, 0.36, 1] as const;
+const NEXT_GOLD = '#E9C46A';
+
+// Große Tafel, solange auf diesem Feld kein Spiel läuft: eigenes Feld groß,
+// das andere Feld klein darunter. Kommt mit einem Wisch von links herein.
+function NextUpPanel({ main, others, vis }: { main: OverlayMatch | null; others: OverlayMatch[]; vis: (n: string) => Visual | undefined }) {
+  const big = main ?? others[0] ?? null;
+  const small = main ? others : others.slice(1);
+  if (!big) return null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -60, filter: 'blur(8px)' }}
+      animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+      exit={{ opacity: 0, x: -60, filter: 'blur(8px)' }}
+      transition={{ duration: 0.7, ease: EASE }}
+      className="inline-flex flex-col items-start gap-2.5"
+    >
+      <motion.div
+        initial={{ clipPath: 'inset(0 100% 0 0 round 18px)' }}
+        animate={{ clipPath: 'inset(0 0% 0 0 round 18px)' }}
+        transition={{ duration: 0.9, ease: EASE, delay: 0.1 }}
+        className="relative rounded-[18px] overflow-hidden border border-white/15 bg-[rgba(6,14,15,.9)] shadow-[0_18px_50px_-12px_rgba(0,0,0,.9)]"
+      >
+        {/* Glanz-Streifen, der einmal drüberläuft */}
+        <motion.div
+          initial={{ x: '-120%' }}
+          animate={{ x: '420%' }}
+          transition={{ duration: 1.4, ease: 'easeInOut', delay: 0.7 }}
+          className="absolute inset-y-0 w-1/3 pointer-events-none"
+          style={{ background: 'linear-gradient(100deg, transparent, rgba(255,255,255,.12), transparent)' }}
+        />
+        <div className="flex items-center gap-3 px-5 pt-3">
+          <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[12px] font-sans font-black uppercase tracking-[2.5px] text-[#04120d]" style={{ background: `linear-gradient(90deg, ${NEXT_GOLD}, #C9A24B)` }}>
+            Als Nächstes
+          </span>
+          <span className="text-[13px] font-sans font-black uppercase tracking-[2.5px] text-white/70">Feld {big.field}</span>
+        </div>
+        <div className="flex items-stretch">
+          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, ease: EASE, delay: 0.45 }} className="flex items-center gap-3 pl-5 pr-4 py-4">
+            <Crest name={big.home} v={vis(big.home)} size="xl" />
+            <span className="font-display font-black uppercase tracking-tight text-white text-[30px] leading-none max-w-[340px]">{big.home}</span>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.6 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 20, delay: 0.6 }}
+            className="flex flex-col items-center justify-center px-5 my-3 rounded-xl"
+            style={{ background: 'rgba(233,196,106,.12)', border: '1px solid rgba(233,196,106,.35)' }}
+          >
+            <span className="font-display font-black tabular-nums leading-none text-[36px]" style={{ color: NEXT_GOLD }}>{kickoffLabel(big) || 'vs'}</span>
+            <span className="mt-1 text-[11px] font-sans font-black uppercase tracking-[2px] text-white/60">Anstoß</span>
+          </motion.div>
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, ease: EASE, delay: 0.55 }} className="flex items-center gap-3 pl-4 pr-5 py-4">
+            <span className="font-display font-black uppercase tracking-tight text-white text-[30px] leading-none max-w-[340px] text-right">{big.away}</span>
+            <Crest name={big.away} v={vis(big.away)} size="xl" />
+          </motion.div>
+        </div>
+      </motion.div>
+
+      {small.map((m, i) => (
+        <motion.div
+          key={m.key}
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: EASE, delay: 0.9 + i * 0.12 }}
+          className="inline-flex items-center gap-3 rounded-xl border border-white/12 bg-[rgba(6,14,15,.85)] px-4 py-2.5 shadow-[0_12px_30px_-12px_rgba(0,0,0,.9)]"
+        >
+          <span className="text-[11px] font-sans font-black uppercase tracking-[2px] text-white/55">Feld {m.field}</span>
+          <Crest name={m.home} v={vis(m.home)} />
+          <span className="font-display font-black uppercase text-white text-[19px] leading-none">{m.home}</span>
+          <span className="text-[13px] font-sans font-black text-white/40">vs</span>
+          <span className="font-display font-black uppercase text-white text-[19px] leading-none">{m.away}</span>
+          <Crest name={m.away} v={vis(m.away)} />
+          <span className="ml-1 font-display font-black tabular-nums text-[19px]" style={{ color: NEXT_GOLD }}>{kickoffLabel(m)}</span>
+        </motion.div>
+      ))}
+    </motion.div>
+  );
+}
+
+// Kleine Einblendung NEBEN der Toranzeige (während eines Spiels): nächstes Spiel
+// beider Felder, gleich groß. Fährt seitlich aus der Toranzeige heraus.
+function NextTicker({ items, vis, side }: { items: OverlayMatch[]; vis: (n: string) => Visual | undefined; side: 'tl' | 'tr' }) {
+  if (!items.length) return null;
+  const dir = side === 'tr' ? 1 : -1;
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 40 * -dir, clipPath: side === 'tr' ? 'inset(0 0 0 100% round 14px)' : 'inset(0 100% 0 0 round 14px)' }}
+      animate={{ opacity: 1, x: 0, clipPath: 'inset(0 0% 0 0% round 14px)' }}
+      exit={{ opacity: 0, x: 40 * -dir, clipPath: side === 'tr' ? 'inset(0 0 0 100% round 14px)' : 'inset(0 100% 0 0 round 14px)' }}
+      transition={{ duration: 0.65, ease: EASE }}
+      className="rounded-[14px] border border-white/15 bg-[rgba(6,14,15,.88)] shadow-[0_18px_50px_-12px_rgba(0,0,0,.9)] px-4 py-2.5"
+    >
+      <div className="text-[11px] font-sans font-black uppercase tracking-[2.5px]" style={{ color: NEXT_GOLD }}>Als Nächstes</div>
+      <div className="mt-1.5 flex flex-col gap-1.5">
+        {items.map((m, i) => (
+          <motion.div
+            key={m.key}
+            initial={{ opacity: 0, x: 16 * -dir }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.45, ease: EASE, delay: 0.25 + i * 0.12 }}
+            className="flex items-center gap-2.5"
+          >
+            <span className="w-[54px] shrink-0 text-[11px] font-sans font-black uppercase tracking-[1.5px] text-white/55">Feld {m.field}</span>
+            <Crest name={m.home} v={vis(m.home)} size="lg" />
+            <span className="font-display font-black uppercase text-white text-[17px] leading-none max-w-[210px] truncate">{m.home}</span>
+            <span className="text-[12px] font-sans font-black text-white/40">vs</span>
+            <span className="font-display font-black uppercase text-white text-[17px] leading-none max-w-[210px] truncate">{m.away}</span>
+            <Crest name={m.away} v={vis(m.away)} size="lg" />
+            <span className="ml-1 font-display font-black tabular-nums text-[17px]" style={{ color: NEXT_GOLD }}>{kickoffLabel(m)}</span>
+          </motion.div>
+        ))}
       </div>
     </motion.div>
   );
@@ -543,10 +714,10 @@ function PartnerBar() {
 // Seite
 // ---------------------------------------------------------------------------
 export default function ObsOverlay() {
-  const { feld, scale, pos, test, sec, brand, partner } = useMemo(params, []);
+  const { feld, scale, pos, test, sec, brand, partner, idle, next: showNext, every } = useMemo(params, []);
   const instagram = useInstagramHandle(brand);
   const { archive, matches, teams } = useOverlayData(!test);
-  const testMatch = useTestMatch(test, sec);
+  const testMatch = useTestMatch(test && !idle, sec);
 
   // Transparenter Hintergrund für OBS.
   useEffect(() => {
@@ -572,12 +743,29 @@ export default function ObsOverlay() {
   }, [teamByName, event]);
 
   // Kandidaten: Testspiel zuerst (wenn aktiv), sonst Liga.
+  // Alle Spiele (alle Felder) – Testspiel-Event und Liga getrennt, damit
+  // „Als Nächstes" das Event bevorzugen kann.
+  const evAll = useMemo(() => (test ? [] : pickEventMatch(event)), [test, event]);
+  const lgAll = useMemo(() => (test ? [] : pickLeagueMatches(matches, teams)), [test, matches, teams]);
   const candidates = useMemo(() => {
     if (testMatch) return [testMatch];
-    const ev = pickEventMatch(event, feld);
-    const lg = pickLeagueMatches(matches, teams, feld);
-    return [...ev, ...lg];
-  }, [testMatch, event, feld, matches, teams]);
+    if (test) return [];
+    return [...evAll, ...lgAll].filter((m) => m.field === feld);
+  }, [testMatch, test, evAll, lgAll, feld]);
+
+  // Nächstes Spiel je Feld (Testspiel-Event zuerst, sonst Liga).
+  const nextByField = useMemo(() => {
+    const fields = [1, 2].includes(feld) ? [1, 2] : [feld];
+    const res = new Map<number, OverlayMatch>();
+    for (const f of fields) {
+      const m = test ? TEST_NEXT.find((x) => x.field === f) ?? null : nextOnField(evAll, f) ?? nextOnField(lgAll, f);
+      if (m) res.set(f, m);
+    }
+    return res;
+  }, [test, evAll, lgAll, feld]);
+  const nextOwn = nextByField.get(feld) ?? null;
+  const nextOthers = [...nextByField.entries()].filter(([f]) => f !== feld).map(([, m]) => m);
+  const nextAll = [...nextByField.entries()].sort(([a], [b]) => a - b).map(([, m]) => m);
 
   // Das zuletzt angepfiffene Live-Spiel DIESES Feldes (falls aus Versehen zwei
   // gleichzeitig live sind, gewinnt das neuere – das alte wurde nur nicht abgepfiffen).
@@ -610,7 +798,7 @@ export default function ObsOverlay() {
         if (ended) {
           setFinalMatch(ended);
           clearTimeout(finalTimer.current);
-          finalTimer.current = setTimeout(() => setFinalMatch(null), 25_000);
+          finalTimer.current = setTimeout(() => setFinalMatch(null), 15_000);
         }
       }
       prev.current = null;
@@ -663,15 +851,48 @@ export default function ObsOverlay() {
 
   const shown = live ?? finalMatch;
 
+  // Während eines Spiels alle `every` Sekunden für 10 s „Als Nächstes" neben der
+  // Toranzeige (erstmals 20 s nach dem Anpfiff, nicht während eines Tores).
+  const [tickerOn, setTickerOn] = useState(false);
+  const liveKey = live?.key ?? null;
+  useEffect(() => {
+    setTickerOn(false);
+    if (!liveKey || !showNext) return;
+    let hide: ReturnType<typeof setTimeout> | undefined;
+    const show = () => {
+      setTickerOn(true);
+      clearTimeout(hide);
+      hide = setTimeout(() => setTickerOn(false), 10_000);
+    };
+    const first = setTimeout(() => {
+      show();
+      iv = setInterval(show, every * 1000);
+    }, 20_000);
+    let iv: ReturnType<typeof setInterval> | undefined;
+    return () => {
+      clearTimeout(first);
+      clearTimeout(hide);
+      clearInterval(iv);
+    };
+  }, [liveKey, showNext, every]);
+
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none select-none text-white font-sans">
       <div
         className="absolute inset-0"
         style={{ transform: scale !== 1 ? `scale(${scale})` : undefined, transformOrigin: pos === 'tr' ? 'top right' : 'top left' }}
       >
-        <div className={`absolute top-10 ${pos === 'tr' ? 'right-10' : 'left-10'}`}>
+        <div className={`absolute top-10 ${pos === 'tr' ? 'right-10 flex-row-reverse' : 'left-10'} flex items-start gap-3`}>
+          {/* Toranzeige ODER (ohne Spiel) die „Als Nächstes"-Tafel – weich nacheinander */}
+          <AnimatePresence mode="wait">
+            {shown ? (
+              <Scorebug key={shown.key} m={shown} vis={vis} label={label} final={!live} />
+            ) : showNext && (nextOwn || nextOthers.length) ? (
+              <NextUpPanel key="next-up" main={nextOwn} others={nextOthers} vis={vis} />
+            ) : null}
+          </AnimatePresence>
           <AnimatePresence>
-            {shown && <Scorebug key={shown.key} m={shown} vis={vis} label={label} final={!live} />}
+            {live && showNext && tickerOn && !goal && nextAll.length > 0 && <NextTicker key="next-ticker" items={nextAll} vis={vis} side={pos} />}
           </AnimatePresence>
         </div>
       </div>
