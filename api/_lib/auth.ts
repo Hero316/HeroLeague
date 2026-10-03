@@ -40,6 +40,30 @@ function isSecureContext(): boolean {
   return !!process.env.VERCEL_ENV && process.env.VERCEL_ENV !== 'development';
 }
 
+// --- Team-Manager (Captains) -------------------------------------------------
+// Eigener, schmaler Token für die Kader-Seite (/kader): kein Admin-Login, nur
+// „diese E-Mail darf den Abend-Kader DIESES Teams melden". Gleiches Geheimnis,
+// aber eigene Audience → als Admin-Session ungültig.
+export async function createManagerToken(email: string, teamId: string): Promise<string> {
+  return new SignJWT({ email, teamId })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setAudience('hl-manager')
+    .setIssuedAt()
+    .setExpirationTime('120d')
+    .sign(getSecret());
+}
+export async function verifyManagerToken(token: unknown): Promise<{ email: string; teamId: string } | null> {
+  if (typeof token !== 'string' || !token) return null;
+  try {
+    const { payload } = await jwtVerify(token, getSecret(), { audience: 'hl-manager' });
+    const email = typeof payload.email === 'string' ? payload.email : '';
+    const teamId = typeof payload.teamId === 'string' ? payload.teamId : '';
+    return email && teamId ? { email, teamId } : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function createSessionToken(user: SessionPayload): Promise<string> {
   return new SignJWT({
     userId: user.userId,

@@ -3,6 +3,8 @@ import type { EventArchive, EventMatch } from '../src/types';
 import { createEventDemo, removeEventDemo } from './_lib/eventDemo.js';
 import { sql, getTeams } from './_lib/db.js';
 import { requireStaff, requireMatchWrite, requireSuperadmin, getSession } from './_lib/auth.js';
+import { applyRosterToMatches, type RosterTeamIn } from './_lib/roster.js';
+import { managerRequestCode, managerVerify, managerGetRoster, managerSaveRoster, adminGetManagers, adminSaveManagers } from './_lib/managers.js';
 import { getTips, submitTip, registerRequestCode, registerVerify, adminListTippUsers, getBonus, submitBonus, adminSetBonusSolution, acceptTerms } from './_lib/tippgame.js';
 
 const DEFAULT_TWITCH = { channel: '', isLive: false };
@@ -664,8 +666,6 @@ const saveHighlights = requireStaff(async (req: VercelRequest, res: VercelRespon
 // (key 'roster'), Schlüssel `${seasonId}:${matchday}`. Beim Speichern wird die
 // Aufstellung zusätzlich auf die Einzelspiele übertragen (Abwesende = Kader
 // minus anwesend, Torwart je Team), damit Tabelle/Statistik/Punkte stimmen.
-type RosterEntry = { playerName: string; teamId: string };
-type RosterTeamIn = { present: string[]; goalkeeper?: string };
 
 function normalizeRosterPayload(body: unknown) {
   const b = (body ?? {}) as Record<string, unknown>;
@@ -715,7 +715,10 @@ const saveRoster = requireMatchWrite(async (req: VercelRequest, res: VercelRespo
   const rows = await sql`SELECT value FROM settings WHERE key = 'roster'`;
   const stored = rows[0]?.value;
   const map = (stored && typeof stored === 'object' ? stored : {}) as Record<string, unknown>;
-  map[`${seasonId}:${matchday}`] = { minutes, teams };
+  // Teams, die NICHT mitgeschickt werden (z. B. vom Manager auf /kader gemeldet),
+  // bleiben erhalten.
+  const prevEntry = map[`${seasonId}:${matchday}`] as { teams?: Record<string, unknown> } | undefined;
+  map[`${seasonId}:${matchday}`] = { minutes, teams: { ...(prevEntry?.teams ?? {}), ...teams } };
   await sql`
     INSERT INTO settings (key, value) VALUES ('roster', ${JSON.stringify(map)}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
@@ -723,38 +726,8 @@ const saveRoster = requireMatchWrite(async (req: VercelRequest, res: VercelRespo
 
   // 2) Auf die Einzelspiele übertragen (nur die Teams aus der Aufstellung; der
   //    Gegner und bereits erfasste Torschützen/beste Spieler bleiben unberührt).
+  await applyRosterToMatches(seasonId, matchday, teams, minutes);
   const allTeams = await getTeams();
-  const kaderOf = (teamId: string) =>
-    (allTeams.find((t) => t.id === teamId)?.spielerliste ?? []).map((p) => p.name);
-  const matchRows = (await sql`
-    SELECT id, home_team_id AS "homeTeamId", away_team_id AS "awayTeamId", absentees, goalkeepers
-    FROM matches WHERE season_id = ${seasonId} AND matchday = ${matchday}
-  `) as { id: string; homeTeamId: string; awayTeamId: string; absentees: RosterEntry[]; goalkeepers: RosterEntry[] }[];
-
-  for (const m of matchRows) {
-    let absentees: RosterEntry[] = Array.isArray(m.absentees) ? m.absentees : [];
-    let goalkeepers: RosterEntry[] = Array.isArray(m.goalkeepers) ? m.goalkeepers : [];
-    for (const teamId of [m.homeTeamId, m.awayTeamId]) {
-      const roster = teams[teamId];
-      if (!roster) continue;
-      const present = new Set(roster.present);
-      const teamAbsent = kaderOf(teamId)
-        .filter((n) => !present.has(n))
-        .map((n) => ({ playerName: n, teamId }));
-      absentees = absentees.filter((a) => a.teamId !== teamId).concat(teamAbsent);
-      goalkeepers = goalkeepers.filter((g) => g.teamId !== teamId);
-      if (roster.goalkeeper && present.has(roster.goalkeeper)) {
-        goalkeepers.push({ playerName: roster.goalkeeper, teamId });
-      }
-    }
-    await sql`
-      UPDATE matches
-      SET absentees = ${JSON.stringify(absentees)}::jsonb,
-          goalkeepers = ${JSON.stringify(goalkeepers)}::jsonb,
-          duration_minutes = ${minutes}
-      WHERE id = ${m.id}
-    `;
-  }
 
   // 3) Optional: Trikotnummern anpassen (nur übergebene Teams/Spieler). Nummer|null
   //    ⇒ setzen bzw. entfernen. Übrige Kaderdaten (Name, Foto) bleiben unberührt.
@@ -981,6 +954,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const rows = await sql`SELECT value FROM settings WHERE key = 'roster'`;
         return res.json(rows[0]?.value ?? {});
       }
+      if (resource === 'managers') return adminGetManagers(req, res);
       if (resource === 'game') {
         const rows = await sql`SELECT value FROM settings WHERE key = 'game'`;
         return res.json({ board: toGameBoard(rows[0]?.value) });
@@ -1016,6 +990,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'countdown') return saveCountdown(req, res);
       if (resource === 'news') return saveNews(req, res);
       if (resource === 'roster') return saveRoster(req, res);
+      if (resource === 'manager-code') return managerRequestCode(req, res);
+      if (resource === 'manager-verify') return managerVerify(req, res);
+      if (resource === 'manager-roster-get') return managerGetRoster(req, res);
+      if (resource === 'manager-roster') return managerSaveRoster(req, res);
+      if (resource === 'managers') return adminSaveManagers(req, res);
       if (resource === 'game') return saveGame(req, res);
       if (resource === 'sponsor-click') return trackSponsorClick(req, res);
       if (resource === 'tip') return submitTip(req, res);
