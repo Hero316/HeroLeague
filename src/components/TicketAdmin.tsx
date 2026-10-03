@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { ModalPortal } from './ui';
 import { useBackClose } from '../lib/backStack';
+import { usePolling } from '../lib/usePolling';
 import {
   ticketAdminList, ticketAdminArrived, ticketAdminDelete, ticketAdminSave,
   type TicketAdminData, type TicketAdminConfig, type TicketRow,
@@ -154,6 +155,21 @@ export default function TicketAdmin() {
   };
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Läuft der Selbst-Check-in am Eingang, lädt die Liste alle 15 s still nach –
+  // so sieht man live, wer sich per QR-Code eingecheckt hat. Nur Liste & Zahlen,
+  // die Einstellungen (evtl. gerade in Bearbeitung) bleiben unangetastet.
+  const selfCheckinOn = !!data?.config?.selfCheckin;
+  usePolling(
+    () => {
+      const key = selKey ?? undefined;
+      ticketAdminList(key)
+        .then((d) => { if (!key || d.config?.eventKey === key) setData(d); })
+        .catch(() => {});
+    },
+    15_000,
+    { enabled: selfCheckinOn, immediate: false }
+  );
+
   // Veranstaltung wechseln
   const selectEvent = (key: string) => { setSelKey(key); setShowConfig(false); load(key); };
 
@@ -275,6 +291,11 @@ export default function TicketAdmin() {
 
       <div className="flex items-center gap-2">
         <button onClick={() => load()} className="flex items-center gap-1.5 text-[12px] font-bold text-hl-mute hover:text-white cursor-pointer px-3 py-2 rounded-xl bg-white/[.04]"><RefreshCw className="w-3.5 h-3.5" /> Aktualisieren</button>
+        {selfCheckinOn && (
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-300">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live – Selbst-Check-in aktiv
+          </span>
+        )}
         {confirmedRows.length > 0 && <button onClick={exportCsv} className="flex items-center gap-1.5 text-[12px] font-bold text-hl-mute hover:text-white cursor-pointer px-3 py-2 rounded-xl bg-white/[.04]"><Download className="w-3.5 h-3.5" /> CSV</button>}
         <button onClick={() => setShowConfig((v) => !v)} className={`ml-auto flex items-center gap-1.5 text-[12px] font-bold cursor-pointer px-3 py-2 rounded-xl ${showConfig ? 'text-[#ff7ac4] bg-[#E6238E]/10' : 'text-hl-mute bg-white/[.04] hover:text-white'}`}><Settings2 className="w-3.5 h-3.5" /> Einstellungen</button>
       </div>
