@@ -289,6 +289,25 @@ export default function TicketAdmin() {
                   <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${cfg.open ? 'left-6' : 'left-1'}`} />
                 </button>
               </label>
+              <div className="rounded-xl border border-white/10 bg-white/[.03] p-3">
+                <label className="flex items-center justify-between gap-3">
+                  <span className="min-w-0">
+                    <span className="block text-[14px] font-semibold text-white">Selbst-Check-in am Eingang</span>
+                    <span className="block text-[11px] text-hl-faint leading-snug mt-0.5">
+                      Gäste scannen den QR-Code auf dem Plakat (hero-league.de/einchecken), geben E-Mail oder Ticket-Code ein
+                      und melden, wie viele da sind – zählt direkt bei „Erschienen". Nur am Event-Tag einschalten.
+                    </span>
+                  </span>
+                  <button onClick={() => setCfg({ ...cfg, selfCheckin: !cfg.selfCheckin })} className={`shrink-0 relative w-12 h-7 rounded-full transition-colors cursor-pointer ${cfg.selfCheckin ? 'bg-emerald-500' : 'bg-white/15'}`}>
+                    <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${cfg.selfCheckin ? 'left-6' : 'left-1'}`} />
+                  </button>
+                </label>
+                {cfg.selfCheckin && (
+                  <a href={`/einchecken?e=${encodeURIComponent(cfg.eventKey)}`} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-[12px] font-bold text-emerald-300 hover:text-emerald-200">
+                    Check-in-Seite öffnen ↗
+                  </a>
+                )}
+              </div>
               <label className="block"><span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Titel</span><input value={cfg.title} onChange={(e) => setCfg({ ...cfg, title: e.target.value })} className={inp} /></label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block"><span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Datum (Text)</span><input value={cfg.dateLabel} onChange={(e) => setCfg({ ...cfg, dateLabel: e.target.value })} className={inp} /></label>

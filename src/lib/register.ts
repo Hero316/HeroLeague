@@ -117,6 +117,7 @@ export interface TicketAdminConfig {
   open: boolean; eventKey: string; title: string; dateLabel: string; locationLabel: string;
   capacity: number; maxPerEmail: number; note: string; donationUrl: string;
   accent: string; accentDark: string; consentText: string; startsAt: string;
+  selfCheckin?: boolean; // Selbst-Check-in am Eingang (QR-Plakat → /einchecken)
 }
 export interface TicketOverviewRow {
   id: string; eventKey: string; title: string; dateLabel: string;
@@ -155,6 +156,19 @@ export const ticketAdminDelete = (id: string) =>
 // Speichert die GESAMTE Event-Liste (mehrere Veranstaltungen können parallel offen sein).
 export const ticketAdminSave = (events: TicketAdminConfig[]) =>
   apiFetch<{ ok: boolean; events: TicketAdminConfig[] }>('/api/event-tickets?action=admin-config', { method: 'POST', body: JSON.stringify({ events }) });
+
+// --- Selbst-Check-in am Eingang (/einchecken) --------------------------------
+export interface SelfCheckinEvent {
+  eventKey: string; title: string; dateLabel: string; locationLabel: string; accent: string; accentDark: string;
+}
+export interface SelfTicket { firstName: string; code: string | null; quantity: number; arrived: number }
+export const fetchSelfCheckinEvents = () =>
+  apiFetch<{ events: SelfCheckinEvent[] }>('/api/event-tickets?action=self-config');
+export const selfLookup = (eventKey: string, query: string) =>
+  apiFetch<SelfTicket>('/api/event-tickets?action=self-lookup', { method: 'POST', body: JSON.stringify({ eventKey, query }) });
+export const selfCheckin = (eventKey: string, query: string, arrived: number) =>
+  apiFetch<{ ok: boolean; arrived: number; quantity: number; code: string | null }>(
+    '/api/event-tickets?action=self-checkin', { method: 'POST', body: JSON.stringify({ eventKey, query, arrived }) });
 
 // --- Cloudflare Turnstile (optional) ----------------------------------------
 // Lädt das Widget nur, wenn ein Site-Key da ist. Ohne Key: kein Widget, Token

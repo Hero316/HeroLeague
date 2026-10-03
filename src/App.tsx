@@ -43,6 +43,7 @@ import EventBanner from './components/EventBanner';
 import SeasonSignup from './components/SeasonSignup';
 import SeasonSignupBanner from './components/SeasonSignupBanner';
 import EventTickets from './components/EventTickets';
+import SelfCheckin from './components/SelfCheckin';
 import SignupAdmin from './components/SignupAdmin';
 import TicketAdmin from './components/TicketAdmin';
 import EventErgebniszettel from './components/EventErgebniszettel';
@@ -1208,6 +1209,14 @@ export default function App() {
   // ROUTE: /tippspiel – öffentliches Tippspiel (Ergebnis-Tipps + Rangliste).
   if (currentPath.startsWith('/tippspiel')) {
     return <TippspielPage matches={currentSeasonMatches} teams={leagueTeams} seasonLabel={currentSeasonName} onNavigate={navigateTo} />;
+  }
+
+  // ROUTE: /einchecken (auch /checkin) – Selbst-Check-in am Eingang über den
+  // QR-Code auf dem Plakat. Optional ?e=<eventKey>; sonst die eine Veranstaltung,
+  // bei der der Selbst-Check-in im Backend eingeschaltet ist.
+  if (currentPath.startsWith('/einchecken') || currentPath.startsWith('/checkin')) {
+    const key = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('e') || undefined : undefined;
+    return <SelfCheckin onNavigate={navigateTo} eventKey={key} />;
   }
 
   // ROUTE: /tickets/<eventKey> – Zuschauer-Anmeldung einer bestimmten

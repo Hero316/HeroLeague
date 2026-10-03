@@ -37,6 +37,9 @@ interface TicketConfig {
   // Beginn der Veranstaltung ('YYYY-MM-DDTHH:mm'). Ab diesem Zeitpunkt werden
   // KEINE Tickets mehr ausgegeben – auch wenn `open` noch auf true steht.
   startsAt: string;
+  // Selbst-Check-in am Eingang (QR-Plakat → /einchecken). Nur wenn an, können
+  // Gäste sich mit E-Mail oder Ticket-Code selbst als „da" melden.
+  selfCheckin: boolean;
 }
 interface TicketArchive {
   events: TicketConfig[];
@@ -65,6 +68,7 @@ const baseEvent = (): TicketConfig => ({
   accentDark: DEFAULT_ACCENT_DARK,
   consentText: DEFAULT_CONSENT,
   startsAt: '',
+  selfCheckin: false,
 });
 
 const DEFAULT_ARCHIVE: TicketArchive = {
@@ -320,6 +324,68 @@ async function confirm(req: VercelRequest, res: VercelResponse) {
   return res.json({ ok: true, code, quantity: row.quantity, donationUrl: cfg.donationUrl || '' });
 }
 
+// --- Selbst-Check-in am Eingang ---------------------------------------------
+// Gäste scannen den QR-Code auf dem Plakat, geben ihre E-Mail ODER ihren
+// Ticket-Code ein und melden, wie viele von ihrer Anmeldung da sind. Öffentlich
+// (kein Login), aber nur wenn der Schalter im Backend an ist, nur für BESTÄTIGTE
+// Tickets und mit Rate-Limit (großzügig: viele Gäste teilen sich am Eingang das
+// gleiche WLAN/Netz). Es wird nur Vorname, Code und Personenzahl zurückgegeben.
+async function selfConfig(_req: VercelRequest, res: VercelResponse) {
+  const { events } = await getArchive();
+  const list = events
+    .filter((e) => e.selfCheckin)
+    .map((e) => ({ eventKey: e.eventKey, title: e.title, dateLabel: e.dateLabel, locationLabel: e.locationLabel, accent: e.accent, accentDark: e.accentDark }));
+  return res.json({ events: list });
+}
+
+type SelfRow = { id: string; name: string; quantity: number; code: string | null; arrived: number };
+async function findOwnTicket(req: VercelRequest, res: VercelResponse): Promise<{ cfg: TicketConfig; row: SelfRow } | null> {
+  const b = req.body ?? {};
+  const cfg = await getEvent(clamp(b.eventKey, 60));
+  if (!cfg) { res.status(404).json({ error: 'Unbekannte Veranstaltung.' }); return null; }
+  if (!cfg.selfCheckin) { res.status(403).json({ error: 'Der Check-in ist gerade nicht geöffnet.' }); return null; }
+  if (await tooManyAttempts('self-checkin', clientIp(req), 60, 10)) {
+    res.status(429).json({ error: 'Zu viele Versuche. Bitte kurz warten.' });
+    return null;
+  }
+  const q = clamp(b.query, 120);
+  const codeMatch = /^(?:HL)?[\s-]*([A-Z0-9]{6})$/i.exec(q.replace(/\s+/g, ''));
+  let rows: SelfRow[] = [];
+  const select = (where: 'email' | 'code', v: string) =>
+    where === 'email'
+      ? sql`SELECT id, name, quantity, code, COALESCE(arrived, CASE WHEN checked_in THEN quantity ELSE 0 END)::int AS arrived
+            FROM event_tickets WHERE event_key = ${cfg.eventKey} AND status = 'confirmed' AND email = ${v} LIMIT 1`
+      : sql`SELECT id, name, quantity, code, COALESCE(arrived, CASE WHEN checked_in THEN quantity ELSE 0 END)::int AS arrived
+            FROM event_tickets WHERE event_key = ${cfg.eventKey} AND status = 'confirmed' AND upper(code) = ${v} LIMIT 1`;
+  if (isEmail(q)) rows = (await select('email', normEmail(q))) as SelfRow[];
+  else if (codeMatch) rows = (await select('code', `HL-${codeMatch[1].toUpperCase()}`)) as SelfRow[];
+  else { badRequest(res, 'Bitte deine E-Mail-Adresse oder deinen Ticket-Code eingeben.'); return null; }
+  const row = rows[0];
+  if (!row) {
+    res.status(404).json({ error: 'Kein Ticket gefunden. Prüfe die Schreibweise – oder nutze die E-Mail, mit der du dich angemeldet hast.' });
+    return null;
+  }
+  return { cfg, row: { ...row, quantity: Number(row.quantity), arrived: Number(row.arrived) } };
+}
+
+async function selfLookup(req: VercelRequest, res: VercelResponse) {
+  const found = await findOwnTicket(req, res);
+  if (!found) return;
+  const { row } = found;
+  return res.json({ firstName: (row.name || '').trim().split(/\s+/)[0] || '', code: row.code, quantity: row.quantity, arrived: row.arrived });
+}
+
+async function selfCheckin(req: VercelRequest, res: VercelResponse) {
+  const found = await findOwnTicket(req, res);
+  if (!found) return;
+  const { row } = found;
+  // Wer eincheckt, ist selbst da → mindestens 1, höchstens die Ticket-Anzahl.
+  const n = clampInt(req.body?.arrived, 1, row.quantity) ?? row.quantity;
+  const upd = await sql`UPDATE event_tickets SET arrived = ${n}, checked_in = true, updated_at = now()
+    WHERE id = ${row.id} RETURNING arrived`;
+  return res.json({ ok: true, arrived: Number(upd[0]?.arrived ?? n), quantity: row.quantity, code: row.code });
+}
+
 // --- Admin ------------------------------------------------------------------
 async function requireSuper(req: VercelRequest, res: VercelResponse): Promise<boolean> {
   const session = await getSession(req);
@@ -414,6 +480,7 @@ async function adminSaveConfig(req: VercelRequest, res: VercelResponse) {
       accentDark: clamp(raw.accentDark, 20) || DEFAULT_ACCENT_DARK,
       consentText: clamp(raw.consentText, 2000) || DEFAULT_CONSENT,
       startsAt: clamp(raw.startsAt, 40),
+      selfCheckin: raw.selfCheckin === true,
     });
   }
   const archive: TicketArchive = { events };
@@ -428,6 +495,9 @@ export async function eventTickets(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET' && action === 'config') return publicConfig(req, res);
   if (req.method === 'POST' && action === 'request-code') return requestCode(req, res);
   if (req.method === 'POST' && action === 'confirm') return confirm(req, res);
+  if (req.method === 'GET' && action === 'self-config') return selfConfig(req, res);
+  if (req.method === 'POST' && action === 'self-lookup') return selfLookup(req, res);
+  if (req.method === 'POST' && action === 'self-checkin') return selfCheckin(req, res);
 
   if (action.startsWith('admin')) {
     if (!(await requireSuper(req, res))) return;
