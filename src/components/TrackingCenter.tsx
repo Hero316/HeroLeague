@@ -71,6 +71,7 @@ import {
   fetchTrackedMatchIds,
   saveTally,
   tallyOp,
+  resetTracking,
   publishDay,
   publishMatch,
   leagueDayKey,
@@ -165,10 +166,13 @@ export default function TrackingCenter({
   // Lokale Kopie des Event-Archivs, damit Anwesenheits-Änderungen sofort wirken
   // (der Elternteil pollt erst mit Verzögerung nach).
   // Welche Spiele sind schon getrackt? Für den Fortschrittsbalken der Übersicht.
+  // Schlüssel „<Spieltag-Schlüssel>|<Spiel-ID>": ein Spiel zählt nur für den Tag,
+  // unter dem seine Daten wirklich liegen (keine Fremd-Treffer mehr durch
+  // verschobene Spiele oder gleiche Testspiel-IDs anderer Events).
   const [trackedIds, setTrackedIds] = useState<Set<string>>(new Set());
   const reloadTracked = useCallback(() => {
     fetchTrackedMatchIds()
-      .then((d) => setTrackedIds(new Set(d.matchIds ?? [])))
+      .then((d) => setTrackedIds(new Set((d.tracked ?? []).map((t) => `${t.dayKey}|${t.matchId}`))))
       .catch(() => { /* Übersicht funktioniert auch ohne Balken */ });
   }, []);
   useEffect(() => { reloadTracked(); }, [reloadTracked]);
@@ -524,7 +528,10 @@ export default function TrackingCenter({
     [flushRow]
   );
 
-  const undoStack = useRef<{ k: string; action: keyof ActionCounts; delta: number }[]>([]);
+  // „Rückgängig"-Verlauf – jeder Eintrag merkt sich SEIN Spiel. Früher wurde die
+  // letzte Aktion (evtl. aus einem anderen Spiel) auf das gerade offene Spiel
+  // gebucht und legte dort Geister-Daten an.
+  const undoStack = useRef<{ k: string; matchId: string; action: keyof ActionCounts; delta: number }[]>([]);
   const [undoCount, setUndoCount] = useState(0);
 
   const applyDelta = useCallback(
@@ -548,7 +555,7 @@ export default function TrackingCenter({
         return { ...prev, [k]: updated };
       });
       if (track) {
-        undoStack.current.push({ k, action, delta });
+        undoStack.current.push({ k, matchId, action, delta });
         setUndoCount(undoStack.current.length);
       }
     },
@@ -557,10 +564,18 @@ export default function TrackingCenter({
 
   const undo = useCallback(
     (matchId: string) => {
-      const last = undoStack.current.pop();
+      // Nur die letzte Aktion DIESES Spiels zurücknehmen – gebucht auf ihr Spiel.
+      let idx = -1;
+      for (let i = undoStack.current.length - 1; i >= 0; i--) {
+        if (undoStack.current[i].matchId === matchId) {
+          idx = i;
+          break;
+        }
+      }
+      if (idx < 0) return;
+      const [last] = undoStack.current.splice(idx, 1);
       setUndoCount(undoStack.current.length);
-      if (!last) return;
-      applyDelta(last.k, matchId, last.action, -last.delta, false);
+      applyDelta(last.k, last.matchId, last.action, -last.delta, false);
     },
     [applyDelta]
   );
@@ -606,6 +621,29 @@ export default function TrackingCenter({
       await buildRows(leagueDayKey(seasonId, selectedMatchday), games, `${seasonId}:${selectedMatchday}`);
     }
   }, [selectedEvent, selectedMatchday, seasonId, matches, buildRows, eventGamesAsMatches]);
+
+  // Getrackte Daten komplett zurücksetzen (ein Spiel bzw. der ganze Tag).
+  const [resetBusy, setResetBusy] = useState(false);
+  const resetData = useCallback(
+    async (ids: string[], wholeDay: boolean) => {
+      if (!dayKey) return;
+      setResetBusy(true);
+      try {
+        await resetTracking(dayKey, ids, wholeDay);
+        // Rückgängig-Verlauf dieser Spiele verwerfen (Werte sind ja weg).
+        const drop = new Set(wholeDay ? dayMatches.map((m) => m.id).concat(ids) : ids);
+        undoStack.current = undoStack.current.filter((e) => !drop.has(e.matchId));
+        setUndoCount(undoStack.current.length);
+        await reloadDay();
+        reloadTracked();
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : 'Zurücksetzen fehlgeschlagen.');
+      } finally {
+        setResetBusy(false);
+      }
+    },
+    [dayKey, dayMatches, reloadDay, reloadTracked]
+  );
 
   // Getrackte Daten umbuchen: zusammenführen (from→to), tauschen (from⇄to) oder
   // löschen (from). `wholeDay` wendet es auf alle Spiele des Tages an, sonst nur
@@ -882,7 +920,7 @@ export default function TrackingCenter({
               onDelta={applyDelta}
               onRole={setRole}
               onUndo={undo}
-              undoCount={undoCount}
+              undoCount={undoCount >= 0 ? undoStack.current.filter((e) => e.matchId === selectedMatchId).length : 0}
               onBack={goBackLayer}
               onAddPlayer={addPlayerRow}
               onReassign={reassignPlayers}
@@ -905,6 +943,8 @@ export default function TrackingCenter({
               onExport={selectedEvent || demoActive ? undefined : runExport}
               exporting={exporting}
               onAttendance={() => setAttendanceOpen(true)}
+              onReset={resetData}
+              resetBusy={resetBusy}
             />
           ) : (
             <DayList
@@ -1029,7 +1069,7 @@ function DayList({
                   {d.date && <span className="text-hl-faint">{shortDate(d.date)}</span>}
                 </div>
                 <TrackProgress
-                  done={d.games.filter((g) => trackedIds.has(g.id)).length}
+                  done={d.games.filter((g) => trackedIds.has(`${leagueDayKey(seasonId, d.matchday)}|${g.id}`)).length}
                   total={d.games.length}
                   color="var(--color-brand-accent)"
                 />
@@ -1061,7 +1101,7 @@ function DayList({
                   <span className="text-hl-faint">{ev.matches?.length ?? 0} Spiele</span>
                 </div>
                 <TrackProgress
-                  done={(ev.matches ?? []).filter((m) => trackedIds.has(m.id)).length}
+                  done={(ev.matches ?? []).filter((m) => trackedIds.has(`${eventDayKey(ev.id)}|${m.id}`)).length}
                   total={ev.matches?.length ?? 0}
                   color="var(--color-hl-magenta)"
                 />
@@ -1092,6 +1132,8 @@ function DayView({
   onExport,
   exporting,
   onAttendance,
+  onReset,
+  resetBusy,
 }: {
   title: string;
   isEvent: boolean;
@@ -1107,9 +1149,26 @@ function DayView({
   onExport?: () => void;
   exporting?: boolean;
   onAttendance?: () => void;
+  onReset?: (matchIds: string[], wholeDay: boolean) => void;
+  resetBusy?: boolean;
 }) {
   const trackedCount = (matchId: string) =>
     Object.entries(rows).filter(([k, r]) => k.startsWith(`${matchId}::`) && anyCount(r.counts)).length;
+  const anyRows = Object.values(rows).some((r) => anyCount(r.counts));
+  const nameOf = (m: Match) => `${resolveTeam(m.homeTeamId)?.name ?? m.homeTeamId} – ${resolveTeam(m.awayTeamId)?.name ?? m.awayTeamId}`;
+  const resetMatch = (m: Match) => {
+    if (!onReset) return;
+    if (!window.confirm(`Alle getrackten Werte von „${nameOf(m)}" löschen und auf Null setzen?\n\nDas Spiel wird auch aus „live" genommen. Nicht rückgängig zu machen.`)) return;
+    onReset([m.id], false);
+  };
+  const resetDay = () => {
+    if (!onReset) return;
+    const typed = window.prompt(
+      `ACHTUNG: ALLE getrackten Werte von „${title}" (alle ${dayMatches.length} Spiele) werden gelöscht und der Tag aus „live" genommen.\n\nZum Bestätigen ZURÜCKSETZEN eintippen:`
+    );
+    if ((typed ?? '').trim().toUpperCase() !== 'ZURÜCKSETZEN') return;
+    onReset(dayMatches.map((m) => m.id), true);
+  };
 
   return (
     <div className="hl-fade">
@@ -1138,6 +1197,17 @@ function DayView({
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               {exporting ? 'Kopiere…' : 'In Excel kopieren'}
+            </button>
+          )}
+          {onReset && anyRows && (
+            <button
+              onClick={resetDay}
+              disabled={resetBusy}
+              title="Alle getrackten Werte dieses Tages löschen"
+              className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-colors cursor-pointer border border-red-500/30 bg-red-500/5 text-red-300 hover:bg-red-500/15 disabled:opacity-50"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              {resetBusy ? 'Setze zurück…' : isEvent ? 'Testspiel zurücksetzen' : 'Spieltag zurücksetzen'}
             </button>
           )}
           <button
@@ -1211,6 +1281,16 @@ function DayView({
                     }`}
                   >
                     <Radio className="w-3 h-3" /> {matchLive ? 'Live' : 'Live schalten'}
+                  </button>
+                )}
+                {onReset && tracked > 0 && (
+                  <button
+                    onClick={() => resetMatch(m)}
+                    disabled={resetBusy}
+                    title="Getrackte Werte dieses Spiels komplett löschen"
+                    className="shrink-0 p-1.5 rounded-lg border border-red-500/25 text-red-300/80 hover:text-red-200 hover:bg-red-500/10 cursor-pointer disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 )}
                 <ChevronRight className="w-4 h-4 text-hl-faint shrink-0" />
