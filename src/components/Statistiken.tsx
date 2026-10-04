@@ -3,12 +3,11 @@ import { motion } from 'motion/react';
 import { PlayerStat, Match, Team, MatchPlayerStat, ScoringConfig } from '../types';
 import { scorerRanking as trackScorers, assistRanking as trackAssists, goldenGloveRanking } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
-import { Swords, Sparkles, Hand, IdCard } from 'lucide-react';
+import { Swords, Hand, IdCard } from 'lucide-react';
 import PlayerCrest from './PlayerCrest';
 import { TeamCrest } from './ui';
 import { CountUp, Reveal, useSettledList } from './anim';
 import CompareOverlay from './CompareOverlay';
-import SeasonWrapped from './SeasonWrapped';
 import KeeperStats from './KeeperStats';
 import PlayerSteckbrief from './PlayerSteckbrief';
 
@@ -47,7 +46,6 @@ const VALUE_COLOR: Record<Accent, string> = {
 // Statistik-Seite: Liga-Kennzahlen als Kachelzeile + Leader-Cards für Spieler und Teams.
 export default function Statistiken({ players, matches, teams, trackingRows = [], scoringConfig, seasonNumber = 1, seasonLabel = '', onSelectTeam }: StatistikenProps) {
   const [compareOpen, setCompareOpen] = React.useState(false);
-  const [wrappedOpen, setWrappedOpen] = React.useState(false);
   const [keeperOpen, setKeeperOpen] = React.useState(false);
   const [steckbriefOpen, setSteckbriefOpen] = React.useState(false);
   const finished = matches.filter((m) => m.status === 'beendet' && m.homeScore !== null && m.awayScore !== null);
@@ -329,26 +327,9 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
         ))}
       </div>
 
-      {/* Aktionen: Season-Rückblick + Spieler-Vergleich */}
-      {(finished.length > 0 || players.length > 0 || gloveRows.length > 0) && (
+      {/* Aktionen: Steckbrief + Spieler-Vergleich */}
+      {(players.length > 0 || gloveRows.length > 0) && (
         <div className="mt-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-          {finished.length > 0 ? (
-            <button
-              onClick={() => setWrappedOpen(true)}
-              className="group relative overflow-hidden inline-flex items-center gap-3 rounded-2xl px-5 py-3 text-left cursor-pointer transition-transform active:scale-[0.98] border border-brand-accent-light/30"
-              style={{ background: 'linear-gradient(100deg, rgba(34,223,201,.16), rgba(230,35,142,.12))' }}
-            >
-              <span className="w-9 h-9 rounded-xl grid place-items-center bg-brand-accent-light/20 text-brand-accent-light shrink-0">
-                <Sparkles className="w-5 h-5 transition-transform duration-300 group-hover:rotate-12" />
-              </span>
-              <span className="min-w-0">
-                <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">Season-Rückblick</span>
-                <span className="block text-[11px] font-sans font-semibold text-hl-mute mt-0.5">Deine Saison in Zahlen · zum Teilen</span>
-              </span>
-            </button>
-          ) : (
-            <span />
-          )}
           {players.length > 0 && (
             <button
               onClick={() => setSteckbriefOpen(true)}
@@ -414,16 +395,6 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
         players={players}
         scoringConfig={scoringConfig}
         onSelectTeam={onSelectTeam}
-      />
-      <SeasonWrapped
-        open={wrappedOpen}
-        onClose={() => setWrappedOpen(false)}
-        seasonNumber={seasonNumber}
-        seasonLabel={seasonLabel}
-        players={players}
-        matches={matches}
-        teams={teams}
-        scoringConfig={scoringConfig}
       />
 
       {/* Leader-Cards */}
