@@ -26,7 +26,13 @@ import { applyRosterToMatches, type RosterTeamIn } from './roster.js';
 const PURPOSE = 'team-manager';
 const FROM = 'Hero League – Manager <manager@hero-league.de>';
 type ManagersMap = Record<string, string[]>;
-type ManagerConfig = { open: boolean; seasonId: string; matchday: number | null };
+type ManagerConfig = { open: boolean; seasonId: string; matchday: number | null; deadline: string };
+// Warum die Meldung zu ist: Schalter aus / kein Spieltag · Meldeschluss vorbei · Spieltag läuft.
+type ClosedReason = 'off' | 'deadline' | 'started' | null;
+
+// Meldeschluss am Spieltag, Ortszeit Europe/Berlin. Standard 19:00 Uhr.
+const DEFAULT_DEADLINE = '19:00';
+const isTime = (v: unknown): v is string => typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
 
 async function getConfig(): Promise<ManagerConfig> {
   const rows = await sql`SELECT value FROM settings WHERE key = 'manager-config'`;
@@ -36,6 +42,7 @@ async function getConfig(): Promise<ManagerConfig> {
     open: v.open === true,
     seasonId: typeof v.seasonId === 'string' ? v.seasonId : '',
     matchday: Number.isInteger(md) && md > 0 ? md : null,
+    deadline: isTime(v.deadline) ? v.deadline : DEFAULT_DEADLINE,
   };
 }
 
@@ -49,6 +56,25 @@ async function matchdayStarted(seasonId: string, matchday: number): Promise<bool
   const rows = await sql`SELECT 1 FROM matches WHERE season_id = ${seasonId} AND matchday = ${matchday}
     AND status IN ('live', 'beendet') LIMIT 1`;
   return rows.length > 0;
+}
+
+// Meldeschluss = <deadline> Uhr am Tag des ersten Spiels dieses Spieltags.
+// Der Vergleich läuft bewusst in Postgres und in Europe/Berlin: die Serverless-
+// Funktion selbst läuft in UTC, in JS gerechnet läge das Fenster im Sommer zwei
+// Stunden daneben. Ohne angesetzte Spiele gibt es keinen Stichtag (passed=false).
+async function deadlineInfo(
+  seasonId: string,
+  matchday: number,
+  deadline: string
+): Promise<{ at: string | null; passed: boolean }> {
+  const rows = await sql`
+    SELECT to_char(MIN(date)::date + ${deadline}::time, 'YYYY-MM-DD"T"HH24:MI') AS "at",
+           ((now() AT TIME ZONE 'Europe/Berlin') >= (MIN(date)::date + ${deadline}::time)) AS "passed"
+    FROM matches
+    WHERE season_id = ${seasonId} AND matchday = ${matchday}
+      AND date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`;
+  const row = rows[0] as { at: string | null; passed: boolean | null } | undefined;
+  return { at: row?.at ?? null, passed: row?.passed === true };
 }
 
 async function getManagers(): Promise<ManagersMap> {
@@ -109,17 +135,22 @@ export const adminGetManagerConfig = requireStaff(async (_req: VercelRequest, re
   const suggested = nextRows[0] ? Number(nextRows[0].matchday) : null;
   const matchday = cfg.seasonId === seasonId ? cfg.matchday : null;
   const started = matchday !== null && seasonId ? await matchdayStarted(seasonId, matchday) : false;
+  const dl =
+    matchday !== null && seasonId ? await deadlineInfo(seasonId, matchday, cfg.deadline) : { at: null, passed: false };
   const managers = await getManagers();
   const rosterRows = await sql`SELECT value FROM settings WHERE key = 'roster'`;
   const rmap = (rosterRows[0]?.value ?? {}) as Record<string, { teams?: Record<string, { at?: string; by?: string }> }>;
   const dayTeams = matchday !== null ? rmap[`${seasonId}:${matchday}`]?.teams ?? {} : {};
   const teams = (await getTeams()).filter((t) => !t.seasonIds?.length || t.seasonIds.includes(seasonId));
   return res.json({
-    open: cfg.open && matchday !== null && !started,
+    open: cfg.open && matchday !== null && !started && !dl.passed,
     switchOn: cfg.open,
     matchday,
     suggested,
     started,
+    deadline: cfg.deadline,
+    deadlineAt: dl.at,
+    deadlinePassed: dl.passed,
     teams: teams.map((t) => ({
       id: t.id,
       name: t.name,
@@ -136,7 +167,11 @@ export const adminSaveManagerConfig = requireStaff(async (req: VercelRequest, re
   const matchday = Number.isInteger(md) && md > 0 && md < 100 ? md : null;
   const open = b.open === true;
   if (open && matchday === null) return badRequest(res, 'Bitte einen Spieltag wählen.');
-  const cfg: ManagerConfig = { open, seasonId, matchday };
+  if (b.deadline !== undefined && !isTime(b.deadline)) {
+    return badRequest(res, 'Meldeschluss bitte als Uhrzeit angeben, z.B. 19:00.');
+  }
+  const deadline = isTime(b.deadline) ? b.deadline : (await getConfig()).deadline;
+  const cfg: ManagerConfig = { open, seasonId, matchday, deadline };
   await sql`INSERT INTO settings (key, value) VALUES ('manager-config', ${JSON.stringify(cfg)}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`;
   return res.json({ ok: true, ...cfg });
@@ -213,10 +248,17 @@ async function managerContext(req: VercelRequest, res: VercelResponse) {
           ORDER BY date, time`) as MatchRow[])
       : [];
   const started = matchday !== null && seasonId ? await matchdayStarted(seasonId, matchday) : false;
-  // Geschlossen: Schalter aus, kein Spieltag gewählt oder Spieltag läuft schon.
-  const closedReason: 'off' | 'started' | null = !cfg.open || matchday === null ? 'off' : started ? 'started' : null;
+  const dl =
+    matchday !== null && seasonId ? await deadlineInfo(seasonId, matchday, cfg.deadline) : { at: null, passed: false };
+  // Geschlossen: Schalter aus / kein Spieltag, Spieltag läuft schon, oder der
+  // Meldeschluss ist vorbei.
+  const closedReason: ClosedReason =
+    !cfg.open || matchday === null ? 'off' : started ? 'started' : dl.passed ? 'deadline' : null;
   const locked = closedReason !== null;
-  return { auth, team, teams, seasonId, matchday, dayMatches, locked, closedReason };
+  return {
+    auth, team, teams, seasonId, matchday, dayMatches, locked, closedReason,
+    deadline: cfg.deadline, deadlineAt: dl.at,
+  };
 }
 
 async function rosterMap(): Promise<Record<string, unknown>> {
@@ -228,7 +270,7 @@ async function rosterMap(): Promise<Record<string, unknown>> {
 export async function managerGetRoster(req: VercelRequest, res: VercelResponse) {
   const ctx = await managerContext(req, res);
   if (!ctx) return;
-  const { team, teams, seasonId, matchday, dayMatches, locked, closedReason } = ctx;
+  const { team, teams, seasonId, matchday, dayMatches, locked, closedReason, deadline, deadlineAt } = ctx;
   let saved: { present: string[]; goalkeeper?: string; at?: string } | null = null;
   if (matchday !== null) {
     const entry = (await rosterMap())[`${seasonId}:${matchday}`] as { teams?: Record<string, unknown> } | undefined;
@@ -248,6 +290,8 @@ export async function managerGetRoster(req: VercelRequest, res: VercelResponse) 
     matchday: closedReason === 'off' ? null : matchday,
     locked,
     closedReason,
+    deadline,
+    deadlineAt: closedReason === 'off' ? null : deadlineAt,
     matches: dayMatches.map((m) => ({
       id: m.id, date: m.date, time: m.time, field: m.field ?? 1, status: m.status,
       opponent: nameOf(m.homeTeamId === team.id ? m.awayTeamId : m.homeTeamId),
@@ -262,6 +306,11 @@ export async function managerSaveRoster(req: VercelRequest, res: VercelResponse)
   const { team, seasonId, matchday, locked } = ctx;
   if (ctx.closedReason === 'off' || !seasonId || matchday === null) {
     return res.status(409).json({ error: 'Die Kader-Meldung ist gerade geschlossen.' });
+  }
+  if (ctx.closedReason === 'deadline') {
+    return res.status(409).json({
+      error: `Meldeschluss war um ${ctx.deadline} Uhr – Änderungen bitte direkt beim Schiedsrichter.`,
+    });
   }
   if (locked) return res.status(409).json({ error: 'Der Spieltag läuft schon – Änderungen bitte direkt beim Schiedsrichter.' });
   const b = (req.body ?? {}) as Record<string, unknown>;

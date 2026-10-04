@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeft, ArrowRight, Check, X, Loader2, AlertCircle, Mail, KeyRound, Shield, Hand, LogOut, Lock, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, X, Loader2, AlertCircle, Mail, KeyRound, Shield, Hand, LogOut, Lock, Clock, CheckCircle2 } from 'lucide-react';
 import { TeamCrest } from './ui';
 import {
   getManagerToken, setManagerToken, managerRequestCode, managerVerify, managerGetRoster, managerSaveRoster,
@@ -239,6 +239,12 @@ export default function ManagerKader({ onNavigate }: { onNavigate: (path: string
                       </div>
                     ))}
                   </div>
+                  {!data.locked && (
+                    <div className="mt-2 flex items-center gap-1.5 text-[11px] font-sans font-bold text-hl-mute">
+                      <Clock className="w-3.5 h-3.5 shrink-0" />
+                      Meldeschluss {data.deadline} Uhr
+                    </div>
+                  )}
                   <div className="mt-3 text-[11px] font-sans font-bold">
                     {savedAt ? (
                       <span className="text-emerald-300">✓ Gemeldet am {new Date(savedAt).toLocaleString('de-DE', { weekday: 'short', hour: '2-digit', minute: '2-digit' })} Uhr</span>
@@ -250,7 +256,10 @@ export default function ManagerKader({ onNavigate }: { onNavigate: (path: string
 
                 {data.locked && (
                   <div className="mt-3 flex items-start gap-2 text-[13px] text-amber-200 bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-2.5">
-                    <Lock className="w-4 h-4 shrink-0 mt-0.5" /> Der Spieltag läuft schon – die Meldung ist geschlossen. Änderungen bitte direkt beim Schiedsrichter.
+                    <Lock className="w-4 h-4 shrink-0 mt-0.5" />
+                    {data.closedReason === 'deadline'
+                      ? `Meldeschluss war um ${data.deadline} Uhr – die Meldung ist geschlossen. Änderungen bitte direkt beim Schiedsrichter.`
+                      : 'Der Spieltag läuft schon – die Meldung ist geschlossen. Änderungen bitte direkt beim Schiedsrichter.'}
                   </div>
                 )}
 

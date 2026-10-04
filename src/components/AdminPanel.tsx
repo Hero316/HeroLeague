@@ -427,12 +427,14 @@ export default function AdminPanel({
   // Freigabe der Kader-Meldung (/kader) + Übersicht, wer schon gemeldet hat.
   const [mgrCfg, setMgrCfg] = useState<ManagerConfigView | null>(null);
   const [mgrDay, setMgrDay] = useState(0);
+  const [mgrDeadline, setMgrDeadline] = useState('19:00');
   const [mgrBusy, setMgrBusy] = useState(false);
   const loadMgrCfg = () =>
     fetchManagerConfig()
       .then((c) => {
         setMgrCfg(c);
         setMgrDay(c.matchday ?? c.suggested ?? 0);
+        setMgrDeadline(c.deadline || '19:00');
       })
       .catch(() => setMgrCfg(null));
   useEffect(() => {
@@ -446,7 +448,7 @@ export default function AdminPanel({
     }
     setMgrBusy(true);
     try {
-      await saveManagerConfig(open, mgrDay || null);
+      await saveManagerConfig(open, mgrDay || null, mgrDeadline);
       await loadMgrCfg();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Speichern fehlgeschlagen.');
@@ -1724,7 +1726,13 @@ export default function AdminPanel({
                   style={mgrCfg.open ? { background: 'rgba(67,229,160,.15)', color: '#6EE7B7' } : { background: 'rgba(255,255,255,.06)', color: '#9CA3AF' }}
                 >
                   <span className={`w-2 h-2 rounded-full ${mgrCfg.open ? 'bg-emerald-400 animate-pulse' : 'bg-gray-500'}`} />
-                  {mgrCfg.open ? `Offen · ${mgrCfg.matchday}. Spieltag` : mgrCfg.switchOn && mgrCfg.started ? `Geschlossen – ${mgrCfg.matchday}. Spieltag läuft` : 'Geschlossen'}
+                  {mgrCfg.open
+                    ? `Offen · ${mgrCfg.matchday}. Spieltag · bis ${mgrCfg.deadline} Uhr`
+                    : mgrCfg.switchOn && mgrCfg.started
+                      ? `Geschlossen – ${mgrCfg.matchday}. Spieltag läuft`
+                      : mgrCfg.switchOn && mgrCfg.deadlinePassed
+                        ? `Geschlossen – Meldeschluss ${mgrCfg.deadline} Uhr vorbei`
+                        : 'Geschlossen'}
                 </span>
                 <label className="inline-flex items-center gap-2 text-xs font-mono text-gray-400 uppercase tracking-wider">
                   Spieltag
@@ -1734,6 +1742,15 @@ export default function AdminPanel({
                     value={mgrDay || ''}
                     onChange={(e) => setMgrDay(Number(e.target.value))}
                     className={`${inputClass} !w-20 !py-2`}
+                  />
+                </label>
+                <label className="inline-flex items-center gap-2 text-xs font-mono text-gray-400 uppercase tracking-wider">
+                  Meldeschluss
+                  <input
+                    type="time"
+                    value={mgrDeadline}
+                    onChange={(e) => setMgrDeadline(e.target.value || '19:00')}
+                    className={`${inputClass} !w-28 !py-2`}
                   />
                 </label>
                 {mgrCfg.suggested && mgrCfg.suggested !== mgrDay && (
