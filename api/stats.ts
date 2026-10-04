@@ -287,6 +287,45 @@ const savePublish = requireStaff(async (req: VercelRequest, res: VercelResponse)
   return res.json({ days });
 });
 
+// Getrackte Daten KOMPLETT zurücksetzen – ein oder mehrere Spiele, oder den
+// ganzen Spieltag/das ganze Testspiel (`wholeDay`). Löscht die Zeilen in
+// match_player_stats und nimmt die betroffenen Spiele/den Tag aus „live".
+//  • Liga: Spiel-IDs sind eindeutig → alle Zeilen dieser Spiele, egal unter
+//    welchem Spieltag-Schlüssel sie liegen (räumt auch Reste verschobener Spiele auf).
+//  • Testspiel: Spiel-IDs wiederholen sich zwischen Events → nur unter DIESEM Schlüssel.
+const resetTally = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+  const b = (req.body ?? {}) as { dayKey?: unknown; matchIds?: unknown; wholeDay?: unknown };
+  const dayKey = isNonEmptyString(b.dayKey) ? b.dayKey : '';
+  const matchIds = Array.isArray(b.matchIds) ? b.matchIds.filter(isNonEmptyString) : [];
+  const wholeDay = b.wholeDay === true;
+  if (!dayKey) return badRequest(res, 'dayKey fehlt.');
+  if (!wholeDay && matchIds.length === 0) return badRequest(res, 'Mindestens ein Spiel angeben.');
+  const isEvent = dayKey.startsWith('event:');
+
+  let deleted = 0;
+  if (wholeDay) {
+    const r1 = await sql`DELETE FROM match_player_stats WHERE day_key = ${dayKey} RETURNING 1`;
+    deleted += r1.length;
+  }
+  if (matchIds.length) {
+    const r2 = isEvent
+      ? await sql`DELETE FROM match_player_stats WHERE day_key = ${dayKey} AND match_id = ANY(${matchIds}::text[]) RETURNING 1`
+      : await sql`DELETE FROM match_player_stats WHERE match_id = ANY(${matchIds}::text[]) RETURNING 1`;
+    deleted += r2.length;
+  }
+
+  // Aus „live" nehmen: die Spiele (match:<id>) und bei wholeDay den ganzen Tag.
+  const current = new Set(await readLiveDays());
+  for (const id of matchIds) current.delete(`match:${id}`);
+  if (wholeDay) current.delete(dayKey);
+  const days = [...current];
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('tracking-live', ${JSON.stringify({ days })}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+  return res.json({ ok: true, deleted, days });
+});
+
 // --- Tracking-Regeln (saisonweit) & Voice-Tracking -------------------------
 
 const saveTrackingRules = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
@@ -477,15 +516,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Spielers oder beim Korrigieren der Torwart-Rolle wird bereits eine Zeile
         // mit lauter Nullen angelegt – solche Spiele galten fälschlich als
         // getrackt. Gezählt wird nur, wo mindestens EINE Aktion erfasst ist.
+        // Mit Spieltag-Schlüssel: Ein Spiel zählt nur für den Tag, unter dem seine
+        // Daten liegen (sonst färbten Reste verschobener Spiele oder gleiche
+        // Testspiel-IDs eines anderen Events fremde Tage ein).
         const rows = (await sql`
-          SELECT DISTINCT match_id AS "matchId"
+          SELECT DISTINCT match_id AS "matchId", day_key AS "dayKey"
           FROM match_player_stats t
           WHERE jsonb_typeof(t.counts) = 'object'
             AND EXISTS (
               SELECT 1 FROM jsonb_each_text(t.counts) AS kv(k, v)
               WHERE v ~ '^[0-9]+$' AND v::int > 0
-            )`) as { matchId: string }[];
-        return res.json({ matchIds: rows.map((r) => r.matchId) });
+            )`) as { matchId: string; dayKey: string }[];
+        return res.json({ matchIds: [...new Set(rows.map((r) => r.matchId))], tracked: rows });
       }
       if (resource === 'tracking-rules') {
         const rows = await sql`SELECT value FROM settings WHERE key = 'tracking_rules'`;
@@ -499,6 +541,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'scoring') return saveScoring(req, res);
       if (resource === 'tally') return saveTally(req, res);
       if (resource === 'tally-op') return tallyOp(req, res);
+      if (resource === 'tally-reset') return resetTally(req, res);
       if (resource === 'publish') return savePublish(req, res);
       if (resource === 'sheet-test') return testSheet(req, res);
       if (resource === 'export') return exportDay(req, res);

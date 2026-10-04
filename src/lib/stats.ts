@@ -45,8 +45,14 @@ export function fetchDayStats(dayKey: string): Promise<{ rows: MatchPlayerStat[]
 
 // IDs aller Spiele, zu denen schon getrackte Daten vorliegen. Damit zeigt die
 // Übersicht je Spieltag/Testspiel, wie viele Spiele bereits erledigt sind.
-export function fetchTrackedMatchIds(): Promise<{ matchIds: string[] }> {
+export function fetchTrackedMatchIds(): Promise<{ matchIds: string[]; tracked?: { matchId: string; dayKey: string }[] }> {
   return apiFetch('/api/stats?resource=tracked-matches');
+}
+
+// Getrackte Daten komplett zurücksetzen: einzelne Spiele (matchIds) oder den
+// ganzen Spieltag/das Testspiel (wholeDay). Nimmt sie auch aus „live".
+export function resetTracking(dayKey: string, matchIds: string[], wholeDay = false): Promise<{ ok: boolean; deleted: number }> {
+  return apiFetch('/api/stats?resource=tally-reset', { method: 'POST', body: JSON.stringify({ dayKey, matchIds, wholeDay }) });
 }
 
 // Alle Zeilen eines einzelnen Spiels.
