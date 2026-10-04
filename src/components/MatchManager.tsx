@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Plus, Trash2, CalendarDays, ChevronDown } from 'lucide-react';
 import { Match, Team } from '../types';
 import { GAME_MINUTES, BREAK_MINUTES, slotTimes } from '../lib/matchTiming';
+import ScheduleImport, { type ScheduleChange } from './ScheduleImport';
 
 interface MatchManagerProps {
   teams: Team[];
@@ -16,9 +17,10 @@ interface MatchManagerProps {
   }) => Promise<boolean>;
   onDeleteMatch: (matchId: string) => Promise<boolean>;
   onRetimeMatchday?: (changes: { id: string; time: string }[]) => Promise<boolean>;
+  onApplySchedule?: (changes: ScheduleChange[]) => Promise<boolean>;
 }
 
-export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch, onRetimeMatchday }: MatchManagerProps) {
+export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch, onRetimeMatchday, onApplySchedule }: MatchManagerProps) {
   const maxMatchday = matches.reduce((max, m) => Math.max(max, m.matchday), 0);
 
   const [matchday, setMatchday] = useState<string>(String(maxMatchday || 1));
@@ -145,6 +147,9 @@ export default function MatchManager({ teams, matches, onAddMatch, onDeleteMatch
 
   return (
     <div className="space-y-8">
+      {/* Spontane Umstellung: neue Reihenfolge als Tabelle einfügen */}
+      {onApplySchedule && <ScheduleImport teams={teams} matches={matches} onApply={onApplySchedule} />}
+
       {/* Neues Spiel ansetzen */}
       <form
         onSubmit={handleSubmit}

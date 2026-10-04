@@ -666,6 +666,18 @@ export default function App() {
       }
     });
 
+  // Spontane Spielplan-Umstellung (Backend → Spielplan aus Tabelle): Anstoß,
+  // Feld, Heim/Gast und Zeitfenster der bestehenden Spiele setzen.
+  const handleApplySchedule = (changes: { id: string; time: string; field: number; homeTeamId: string; awayTeamId: string; slot: number }[]) =>
+    runAdminAction(async () => {
+      for (const c of changes) {
+        await apiFetch(`/api/matches/${c.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ time: c.time, field: c.field, homeTeamId: c.homeTeamId, awayTeamId: c.awayTeamId, slot: c.slot }),
+        });
+      }
+    });
+
   // Aufstellung (Anwesende + Torwart + Spieldauer) für einen Spieltag speichern.
   const handleSaveRoster = (
     seasonId: string,
@@ -1754,6 +1766,7 @@ export default function App() {
                           onAddMatch={handleAddMatch}
                           onDeleteMatch={handleDeleteMatch}
                           onRetimeMatchday={handleRetimeMatchday}
+                          onApplySchedule={handleApplySchedule}
                         />
                       </AccordionSection>
                     </>
