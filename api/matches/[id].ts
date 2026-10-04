@@ -16,7 +16,7 @@ import {
 
 const updateMatch = requireMatchWrite(async (req: VercelRequest, res: VercelResponse) => {
   const id = String(req.query.id);
-  const { homeScore, awayScore, status, scorers, absentees, bestPlayers, goalkeepers, matchday, date, time, homeTeamId, awayTeamId, venue, durationMinutes, pausedAt } =
+  const { homeScore, awayScore, status, scorers, absentees, bestPlayers, goalkeepers, matchday, date, time, homeTeamId, awayTeamId, venue, durationMinutes, pausedAt, field, slot } =
     req.body ?? {};
 
   if (homeScore !== undefined && !isOptionalScore(homeScore)) return badRequest(res, 'Ungültiges Heim-Ergebnis.');
@@ -34,6 +34,8 @@ const updateMatch = requireMatchWrite(async (req: VercelRequest, res: VercelResp
   if (homeTeamId !== undefined && !isNonEmptyString(homeTeamId)) return badRequest(res, 'Ungültiges Heimteam.');
   if (awayTeamId !== undefined && !isNonEmptyString(awayTeamId)) return badRequest(res, 'Ungültiges Auswärtsteam.');
   if (venue !== undefined && venue !== null && typeof venue !== 'string') return badRequest(res, 'Ungültiger Spielort.');
+  if (field !== undefined && field !== null && (!Number.isInteger(field) || field < 1 || field > 9)) return badRequest(res, 'Ungültiges Feld (1–9).');
+  if (slot !== undefined && slot !== null && (!Number.isInteger(slot) || slot < 0 || slot > 999)) return badRequest(res, 'Ungültiges Zeitfenster.');
   if (
     durationMinutes !== undefined &&
     durationMinutes !== null &&
@@ -50,7 +52,7 @@ const updateMatch = requireMatchWrite(async (req: VercelRequest, res: VercelResp
            away_team_id AS "awayTeamId", home_score AS "homeScore", away_score AS "awayScore",
            status, date, time, venue, scorers, absentees, best_players AS "bestPlayers",
            goalkeepers, live_started_at AS "liveStartedAt", duration_minutes AS "durationMinutes",
-           paused_at AS "pausedAt"
+           paused_at AS "pausedAt", field, slot
     FROM matches WHERE id = ${id}
   `;
   if (rows.length === 0) return res.status(404).json({ error: 'Spiel nicht gefunden.' });
@@ -61,6 +63,11 @@ const updateMatch = requireMatchWrite(async (req: VercelRequest, res: VercelResp
   const nextHome = homeTeamId !== undefined ? homeTeamId : match.homeTeamId;
   const nextAway = awayTeamId !== undefined ? awayTeamId : match.awayTeamId;
   const teamsChanged = nextHome !== match.homeTeamId || nextAway !== match.awayTeamId;
+  // Nur Heim/Gast getauscht (gleiche zwei Teams)? Dann bleiben Abwesende/Torwart
+  // gültig – sie hängen an der Team-ID, nicht an der Seite.
+  const sameTeamSet =
+    (nextHome === match.homeTeamId && nextAway === match.awayTeamId) ||
+    (nextHome === match.awayTeamId && nextAway === match.homeTeamId);
   if (nextHome === nextAway) return badRequest(res, 'Ein Team kann nicht gegen sich selbst spielen.');
   if (teamsChanged) {
     const teamRows = await sql`SELECT id FROM teams WHERE id IN (${nextHome}, ${nextAway})`;
@@ -135,11 +142,13 @@ const updateMatch = requireMatchWrite(async (req: VercelRequest, res: VercelResp
   if (date !== undefined) match.date = date;
   if (time !== undefined) match.time = time;
   if (venue !== undefined) match.venue = typeof venue === 'string' && venue.trim() ? venue.trim() : null;
+  if (field !== undefined) match.field = field;
+  if (slot !== undefined) match.slot = slot;
   match.homeTeamId = nextHome;
   match.awayTeamId = nextAway;
 
   // Bei Team-Wechsel sind alte Torschützen/Abwesenheiten/beste Spieler/Torhüter nicht mehr gültig (falscher Team-Bezug)
-  if (teamsChanged) {
+  if (teamsChanged && !sameTeamSet) {
     if (scorers === undefined) match.scorers = [];
     if (absentees === undefined) match.absentees = [];
     if (bestPlayers === undefined) match.bestPlayers = [];
@@ -156,7 +165,8 @@ const updateMatch = requireMatchWrite(async (req: VercelRequest, res: VercelResp
         live_started_at = ${match.liveStartedAt}, duration_minutes = ${match.durationMinutes ?? null},
         paused_at = ${match.pausedAt ?? null},
         matchday = ${match.matchday}, date = ${match.date}, time = ${match.time}, venue = ${match.venue ?? null},
-        home_team_id = ${match.homeTeamId}, away_team_id = ${match.awayTeamId}
+        home_team_id = ${match.homeTeamId}, away_team_id = ${match.awayTeamId},
+        field = ${match.field ?? null}, slot = ${match.slot ?? null}
     WHERE id = ${id}
   `;
 
