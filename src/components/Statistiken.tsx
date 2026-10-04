@@ -327,46 +327,65 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
         ))}
       </div>
 
-      {/* Aktionen: Steckbrief + Spieler-Vergleich */}
+      {/* Aktionen: Steckbrief · 1 gegen 1 · Torhüter – gleich große Karten */}
       {(players.length > 0 || gloveRows.length > 0) && (
-        <div className="mt-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {players.length > 0 && (
             <button
               onClick={() => setSteckbriefOpen(true)}
-              className="group relative overflow-hidden inline-flex items-center gap-3 rounded-2xl px-5 py-3 text-left cursor-pointer transition-transform active:scale-[0.98] border border-hl-gold/30"
+              className="group relative overflow-hidden flex items-center gap-3 rounded-2xl px-5 py-3.5 text-left cursor-pointer transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] border border-hl-gold/30"
               style={{ background: 'linear-gradient(100deg, rgba(233,196,106,.16), rgba(34,223,201,.10))' }}
             >
-              <span className="w-9 h-9 rounded-xl grid place-items-center bg-hl-gold/20 text-hl-gold shrink-0">
+              <span className="w-10 h-10 rounded-xl grid place-items-center bg-hl-gold/20 text-hl-gold shrink-0">
                 <IdCard className="w-5 h-5 transition-transform duration-300 group-hover:-rotate-6" />
               </span>
               <span className="min-w-0">
                 <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">Mein Steckbrief</span>
-                <span className="block text-[11px] font-sans font-semibold text-hl-mute mt-0.5">Deine Werte & Platzierungen · zum Teilen</span>
+                <span className="block text-[11px] font-sans font-semibold text-hl-mute mt-0.5 truncate">Deine Werte & Platzierungen · zum Teilen</span>
               </span>
             </button>
           )}
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-            {/* Eigene Rubrik für die Keeper – statt einer fünften Taste unten in
-                der Leiste, die am Handy nur eng würde. */}
-            {gloveRows.length > 0 && (
-              <button
-                onClick={() => setKeeperOpen(true)}
-                className="group inline-flex items-center justify-center gap-2 rounded-full bg-hl-gold/12 border border-hl-gold/35 px-5 py-2.5 text-sm font-sans font-bold uppercase tracking-wider text-hl-gold cursor-pointer transition-all duration-200 hover:bg-hl-gold/20 active:scale-95"
-              >
-                <Hand className="w-4 h-4 transition-transform duration-200 group-hover:-rotate-12" />
-                Torhüter-Statistiken
-              </button>
-            )}
-            {players.length >= 2 && (
-              <button
-                onClick={() => setCompareOpen(true)}
-                className="group inline-flex items-center justify-center gap-2 rounded-full bg-brand-accent-light/12 border border-brand-accent-light/35 px-5 py-2.5 text-sm font-sans font-bold uppercase tracking-wider text-brand-accent-light cursor-pointer transition-all duration-200 hover:bg-brand-accent-light/20 active:scale-95"
-              >
-                <Swords className="w-4 h-4 transition-transform duration-200 group-hover:-rotate-12" />
-                Spieler vergleichen
-              </button>
-            )}
-          </div>
+          {/* 1 gegen 1: Duell-Karte mit VS-Abzeichen */}
+          {players.length >= 2 && (
+            <button
+              onClick={() => setCompareOpen(true)}
+              className="group relative overflow-hidden flex items-center gap-3 rounded-2xl px-5 py-3.5 text-left cursor-pointer transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] border border-brand-accent-light/35"
+              style={{ background: 'linear-gradient(100deg, rgba(34,223,201,.18), rgba(230,35,142,.14))' }}
+            >
+              {/* Diagonaler Schnitt im Hintergrund – Duell-Look */}
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 right-0 w-1/2 opacity-60"
+                style={{ background: 'linear-gradient(115deg, transparent 49.5%, rgba(255,255,255,.07) 50%, transparent 50.5%)' }}
+              />
+              <span className="relative w-10 h-10 rounded-xl grid place-items-center bg-brand-accent-light/20 text-brand-accent-light shrink-0">
+                <Swords className="w-5 h-5 transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110" />
+              </span>
+              <span className="relative min-w-0 flex-1">
+                <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">1 gegen 1</span>
+                <span className="block text-[11px] font-sans font-semibold text-hl-mute mt-0.5 truncate">Zwei Spieler direkt vergleichen</span>
+              </span>
+              <span className="relative shrink-0 font-display font-black italic text-[22px] leading-none tracking-tight bg-gradient-to-r from-brand-accent-light to-[#E6238E] bg-clip-text text-transparent transition-transform duration-300 group-hover:scale-110">
+                VS
+              </span>
+            </button>
+          )}
+          {/* Eigene Rubrik für die Keeper */}
+          {gloveRows.length > 0 && (
+            <button
+              onClick={() => setKeeperOpen(true)}
+              className="group relative overflow-hidden flex items-center gap-3 rounded-2xl px-5 py-3.5 text-left cursor-pointer transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] border border-hl-gold/25"
+              style={{ background: 'linear-gradient(100deg, rgba(233,196,106,.12), rgba(255,255,255,.03))' }}
+            >
+              <span className="w-10 h-10 rounded-xl grid place-items-center bg-hl-gold/15 text-hl-gold shrink-0">
+                <Hand className="w-5 h-5 transition-transform duration-300 group-hover:-rotate-12" />
+              </span>
+              <span className="min-w-0">
+                <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">Torhüter</span>
+                <span className="block text-[11px] font-sans font-semibold text-hl-mute mt-0.5 truncate">Paraden, Zu-null-Spiele & Bestenliste</span>
+              </span>
+            </button>
+          )}
         </div>
       )}
 
