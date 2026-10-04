@@ -219,6 +219,13 @@ function useTestMatch(enabled: boolean, sec: number): OverlayMatch | null {
   };
 }
 
+// Beispiel: auf dem ANDEREN Feld läuft gerade ein Spiel (Vorschau ?test=1).
+const TEST_OTHER_LIVE = (field: number): OverlayMatch => ({
+  key: 'tol', home: 'Ninetys F.C.', away: 'Phalanx United', homeScore: 2, awayScore: 1, status: 'live',
+  liveStartedAt: new Date(Date.now() - 3 * 60_000).toISOString(), durationMinutes: GAME_MINUTES, pausedAt: null,
+  scorers: [], field, time: '19:00', date: '',
+});
+
 // Beispiel-Paarungen für die Vorschau (?test=1) der „Als Nächstes"-Anzeige.
 const TEST_NEXT: OverlayMatch[] = [
   { key: 'tn1', home: 'Phönix Leverkusen', away: 'Royale Five', homeScore: 0, awayScore: 0, status: 'geplant', scorers: [], field: 1, time: '19:11', date: '' },
@@ -381,6 +388,46 @@ function NextUpPanel({ main, others, vis }: { main: OverlayMatch | null; others:
 
 // Kleine Einblendung NEBEN der Toranzeige (während eines Spiels): nächstes Spiel
 // beider Felder, gleich groß. Fährt seitlich aus der Toranzeige heraus.
+// Live-Stand des ANDEREN Feldes – klein, ohne Animation bei Toren: Spielstand,
+// Uhr (Pause / Nachspielzeit) und „Feld X · Live". Steht unter der Toranzeige
+// bzw. unter „Als Nächstes", solange dort ein Spiel läuft.
+function OtherFieldLive({ m, vis }: { m: OverlayMatch; vis: (n: string) => Visual | undefined }) {
+  const clock = useMatchClock(m.liveStartedAt, m.durationMinutes, m.pausedAt);
+  const state = !clock ? 'Live' : clock.paused ? 'Pause' : clock.overtime ? 'Nachspielzeit' : 'Live';
+  const color = clock?.paused ? '#FBBF24' : clock?.overtime ? GOLD : '#FF8A7D';
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      transition={{ duration: 0.5, ease: EASE }}
+      className="inline-flex items-center gap-3 rounded-xl border border-white/12 bg-[rgba(6,14,15,.88)] px-4 py-2.5 shadow-[0_12px_30px_-12px_rgba(0,0,0,.9)]"
+    >
+      <span className="flex flex-col leading-none">
+        <span className="text-[11px] font-sans font-black uppercase tracking-[2px] text-white/55">Feld {m.field}</span>
+        <span className="mt-1 inline-flex items-center gap-1.5 text-[10px] font-sans font-black uppercase tracking-[1.5px]" style={{ color }}>
+          {state === 'Live' && <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#FF5442' }} />}
+          {state}
+        </span>
+      </span>
+      <Crest name={m.home} v={vis(m.home)} />
+      <span className="font-display font-black uppercase text-white text-[19px] leading-none">{m.home}</span>
+      <span className="font-display font-black tabular-nums text-[22px] leading-none px-2.5 py-1 rounded-lg text-[#04120d]" style={{ background: `linear-gradient(180deg, ${ACCENT}, #14A594)` }}>
+        {m.homeScore}
+        <span className="mx-1 opacity-60">:</span>
+        {m.awayScore}
+      </span>
+      <span className="font-display font-black uppercase text-white text-[19px] leading-none">{m.away}</span>
+      <Crest name={m.away} v={vis(m.away)} />
+      {clock && (
+        <span className="ml-1 font-display font-black tabular-nums text-[19px]" style={{ color: clock.paused ? '#FBBF24' : clock.overtime ? GOLD : '#fff' }}>
+          {clock.label}
+        </span>
+      )}
+    </motion.div>
+  );
+}
+
 function NextTicker({ items, vis, side }: { items: OverlayMatch[]; vis: (n: string) => Visual | undefined; side: 'tl' | 'tr' }) {
   if (!items.length) return null;
   const dir = side === 'tr' ? 1 : -1;
@@ -763,8 +810,27 @@ export default function ObsOverlay() {
     }
     return res;
   }, [test, evAll, lgAll, feld]);
+  // Laufende Spiele der ANDEREN Felder (für die kleine Live-Zeile).
+  const otherLive = useMemo(() => {
+    const fields = ([1, 2].includes(feld) ? [1, 2] : []).filter((f) => f !== feld);
+    const res: OverlayMatch[] = [];
+    for (const f of fields) {
+      if (test) {
+        res.push(TEST_OTHER_LIVE(f));
+        continue;
+      }
+      const m = [...evAll, ...lgAll]
+        .filter((x) => x.field === f && x.status === 'live')
+        .sort((a, b) => Date.parse(b.liveStartedAt ?? '') - Date.parse(a.liveStartedAt ?? '') || 0)[0];
+      if (m) res.push(m);
+    }
+    return res;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [test, evAll, lgAll, feld]);
+  const otherLiveFields = new Set(otherLive.map((m) => m.field));
   const nextOwn = nextByField.get(feld) ?? null;
-  const nextOthers = [...nextByField.entries()].filter(([f]) => f !== feld).map(([, m]) => m);
+  // Läuft auf dem anderen Feld gerade ein Spiel, zeigt die Live-Zeile das statt „Als Nächstes".
+  const nextOthers = [...nextByField.entries()].filter(([f]) => f !== feld && !otherLiveFields.has(f)).map(([, m]) => m);
   const nextAll = [...nextByField.entries()].sort(([a], [b]) => a - b).map(([, m]) => m);
 
   // Das zuletzt angepfiffene Live-Spiel DIESES Feldes (falls aus Versehen zwei
@@ -883,14 +949,22 @@ export default function ObsOverlay() {
         style={{ transform: scale !== 1 ? `scale(${scale})` : undefined, transformOrigin: pos === 'tr' ? 'top right' : 'top left' }}
       >
         <div className={`absolute top-10 ${pos === 'tr' ? 'right-10 flex-row-reverse' : 'left-10'} flex items-start gap-3`}>
-          {/* Toranzeige ODER (ohne Spiel) die „Als Nächstes"-Tafel – weich nacheinander */}
-          <AnimatePresence mode="wait">
-            {shown ? (
-              <Scorebug key={shown.key} m={shown} vis={vis} label={label} final={!live} />
-            ) : showNext && (nextOwn || nextOthers.length) ? (
-              <NextUpPanel key="next-up" main={nextOwn} others={nextOthers} vis={vis} />
-            ) : null}
-          </AnimatePresence>
+          <div className={`flex flex-col ${pos === 'tr' ? 'items-end' : 'items-start'} gap-2.5`}>
+            {/* Toranzeige ODER (ohne Spiel) die „Als Nächstes"-Tafel – weich nacheinander */}
+            <AnimatePresence mode="wait">
+              {shown ? (
+                <Scorebug key={shown.key} m={shown} vis={vis} label={label} final={!live} />
+              ) : showNext && (nextOwn || nextOthers.length) ? (
+                <NextUpPanel key="next-up" main={nextOwn} others={nextOthers} vis={vis} />
+              ) : null}
+            </AnimatePresence>
+            {/* Live-Stand des anderen Feldes (klein, ohne Tor-Animation) */}
+            <AnimatePresence>
+              {otherLive.map((m) => (
+                <OtherFieldLive key={`ol-${m.key}`} m={m} vis={vis} />
+              ))}
+            </AnimatePresence>
+          </div>
           <AnimatePresence>
             {live && showNext && tickerOn && !goal && nextAll.length > 0 && <NextTicker key="next-ticker" items={nextAll} vis={vis} side={pos} />}
           </AnimatePresence>
