@@ -742,6 +742,16 @@ function RosterEditor({
       const kader = kaderOf(id);
       const present = stored?.present && stored.present.length ? stored.present : kader;
       const presentSet = new Set(present);
+      // Wer erst nach dem Speichern in den Kader kam (in keinem Spiel als
+      // abwesend eingetragen), gilt als „da" – wie im Tracking Center.
+      if (stored?.present && stored.present.length) {
+        const absent = new Set(
+          matches.flatMap((m) => (m.absentees || []).filter((a) => a.teamId === id).map((a) => a.playerName))
+        );
+        kader.forEach((n) => {
+          if (!presentSet.has(n) && !absent.has(n)) presentSet.add(n);
+        });
+      }
       // Fester Torwart aus dem Kader als Vorauswahl, solange für diesen Abend noch
       // keiner gesetzt wurde. Bleibt änderbar (kann jederzeit überschrieben werden).
       const fixedGk = (teamById.get(id)?.spielerliste ?? []).find((p) => p.goalkeeper)?.name;

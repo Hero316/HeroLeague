@@ -358,7 +358,9 @@ export default function TrackingCenter({
       const present = rt?.present;
       const keeper = rt?.goalkeeper;
       return (team.spielerliste || [])
-        .filter((p) => (present && present.length ? present.includes(p.name) : true))
+        // Gespeicherte Anwesenheit gilt – aber wer erst NACH dem Speichern in den
+        // Kader kam (weder „da" noch als abwesend eingetragen), wird gezeigt.
+        .filter((p) => (present && present.length ? present.includes(p.name) || !absent?.has(p.name) : true))
         .filter((p) => !absent || !absent.has(p.name))
         .map((p) => ({
           name: p.name,
@@ -756,6 +758,14 @@ export default function TrackingCenter({
     return [...s];
   }, [dayMatches]);
 
+  // Als abwesend eingetragene Spieler je Team (Union über die Spiele des Tages) –
+  // damit das Anwesenheits-Panel neu hinzugefügte Kaderspieler als „da" vorbelegt.
+  const dayAbsentByTeam = useMemo(() => {
+    const out: Record<string, Set<string>> = {};
+    dayMatches.forEach((m) => (m.absentees || []).forEach((a) => (out[a.teamId] ??= new Set<string>()).add(a.playerName)));
+    return out;
+  }, [dayMatches]);
+
   // Anwesenheit/Torwart für den Spieltag speichern und Raster neu aufbauen.
   const applyAttendance = useCallback(
     async (teams: EveningRoster['teams'], minutes: number) => {
@@ -970,6 +980,7 @@ export default function TrackingCenter({
           resolveTeam={resolveTeam}
           roster={rosterState}
           rk={`${seasonId}:${selectedMatchday}`}
+          absentByTeam={dayAbsentByTeam}
           onClose={() => setAttendanceOpen(false)}
           onSave={applyAttendance}
         />
@@ -2330,6 +2341,7 @@ function AttendancePanel({
   resolveTeam,
   roster,
   rk,
+  absentByTeam,
   onClose,
   onSave,
 }: {
@@ -2337,6 +2349,7 @@ function AttendancePanel({
   resolveTeam: (key: string) => Team | undefined;
   roster: RosterMap;
   rk: string;
+  absentByTeam?: Record<string, Set<string>>; // ausdrücklich abwesend (aus den Spielen)
   onClose: () => void;
   onSave: (teams: EveningRoster['teams'], minutes: number) => void;
 }) {
@@ -2348,6 +2361,13 @@ function AttendancePanel({
       const squad = resolveTeam(tid)?.spielerliste ?? [];
       const rt = roster[rk]?.teams?.[tid];
       const present = rt?.present && rt.present.length ? new Set(rt.present) : new Set(squad.map((p) => p.name));
+      // Erst nach dem Speichern in den Kader gekommen (nicht als abwesend
+      // eingetragen) ⇒ als „da" vorbelegen, genau wie im Tracker angezeigt.
+      if (rt?.present && rt.present.length && absentByTeam) {
+        squad.forEach((p) => {
+          if (!present.has(p.name) && !absentByTeam[tid]?.has(p.name)) present.add(p.name);
+        });
+      }
       const keeper = rt?.goalkeeper ?? squad.find((p) => p.goalkeeper)?.name;
       init[tid] = { present, keeper: keeper && present.has(keeper) ? keeper : undefined };
     });
