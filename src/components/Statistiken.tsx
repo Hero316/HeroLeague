@@ -395,6 +395,7 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
         players={players}
         teams={teams}
         trackingRows={trackingRows}
+        matches={matches}
         scoringConfig={scoringConfig}
       />
       <PlayerSteckbrief
@@ -403,6 +404,7 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
         players={players}
         teams={teams}
         trackingRows={trackingRows}
+        matches={matches}
         scoringConfig={scoringConfig}
         seasonLabel={seasonLabel}
       />

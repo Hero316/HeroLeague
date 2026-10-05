@@ -1,12 +1,15 @@
 import React from 'react';
 import { Star } from 'lucide-react';
-import { PlayerStat, Team } from '../types';
+import type { Match, MatchPlayerStat, ScoringConfig, Team } from '../types';
 import PlayerCrest from './PlayerCrest';
 import { Reveal } from './anim';
 import { numberWord } from '../lib/heroAward';
+import { HERO_DRAW_BONUS, HERO_WIN_BONUS, heroRanking, type HeroRanked } from '../lib/trackingAwards';
 
 interface HeroOneProps {
-  players: PlayerStat[];
+  rows: MatchPlayerStat[]; // veröffentlichte getrackte Werte der gewählten Saison
+  cfg: ScoringConfig;
+  matches: Match[]; // für den Sieg-Bonus (Ergebnisse der Saison)
   teams: Team[];
   seasonNumber?: number;
   seasonLabel?: string;
@@ -14,37 +17,56 @@ interface HeroOneProps {
   onOpenWertungen?: () => void; // öffnet die getrackten Wertungen (Statistics Center)
 }
 
+interface HeroEntry extends HeroRanked {
+  id: string;
+  name: string;
+  imageUrl?: string;
+  teamName: string;
+  teamLogoColor: string;
+}
+
 // HERO ONE – die höchste Auszeichnung der Liga (früher „Ballon d'Or").
-// Eigene Sektion mit Gold-Akzent. Wertung aus Toren, Vorlagen, „bester Spieler",
-// Team-Ergebnis und Torwart-zu-null – berechnet in api/_lib/league.ts.
-export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onSelectTeam, onOpenWertungen }: HeroOneProps) {
-  const ranking = React.useMemo(
-    () =>
-      [...players]
-        .filter((p) => p.points > 0)
-        .sort(
-          (a, b) =>
-            b.points - a.points ||
-            b.goals - a.goals ||
-            b.assists - a.assists ||
-            a.name.localeCompare(b.name)
-        ),
-    [players]
-  );
+// Wertung aus dem Tracking: Summe der Spiel-Scores aller live geschalteten
+// Liga-Spiele (Pässe, Zweikämpfe, Dribblings, Schüsse, Tore, Vorlagen, Paraden …,
+// gewichtet nach den Punkten im Statistics Center) + kleiner Sieg-Bonus.
+// Gleiche Rangliste wie „HERO ONE" unter Wertungen (heroRanking).
+export default function HeroOne({ rows, cfg, matches, teams, seasonNumber, seasonLabel, onSelectTeam, onOpenWertungen }: HeroOneProps) {
+  const ranking = React.useMemo<HeroEntry[]>(() => {
+    const leagueRows = rows.filter((r) => r.dayKey.startsWith('s:'));
+    return heroRanking(leagueRows, cfg, matches)
+      .filter((p) => p.score > 0)
+      .map((p) => {
+        const team = teams.find((t) => t.id === p.teamId);
+        return {
+          ...p,
+          id: `${p.teamId}::${p.playerName}`,
+          name: p.playerName,
+          imageUrl: team?.spielerliste?.find((s) => s.name === p.playerName)?.imageUrl,
+          teamName: team?.name ?? '',
+          teamLogoColor: team?.logoColor || '#3B82F6',
+        };
+      });
+  }, [rows, cfg, matches, teams]);
 
   const word = numberWord(seasonNumber ?? 1);
-  const teamOf = (p: PlayerStat) => teams.find((t) => t.id === p.teamId);
+  const de = (n: number) => n.toFixed(1).replace('.', ',');
+  const teamOf = (p: HeroEntry) => teams.find((t) => t.id === p.teamId);
 
-  const breakdown = (p: PlayerStat) =>
-    [
-      p.goals > 0 ? `${p.goals} ⚽` : null,
-      p.assists > 0 ? `${p.assists} 🅰️` : null,
-      p.motmCount > 0 ? `${p.motmCount}× ⭐` : null,
+  const breakdown = (p: HeroEntry) => {
+    const goals = p.total.goal + p.total.penalty_goal;
+    return [
+      `${p.games} ${p.games === 1 ? 'Spiel' : 'Spiele'}`,
+      `Ø Note ${de(p.avgNote)}`,
+      goals > 0 ? `${goals} ⚽` : null,
+      p.total.assist > 0 ? `${p.total.assist} 🅰️` : null,
+      p.role === 'keeper' && p.total.save > 0 ? `${p.total.save} Paraden` : null,
       p.cleanSheets > 0 ? `${p.cleanSheets}× 🧤` : null,
+      p.wins > 0 ? `${p.wins} ${p.wins === 1 ? 'Sieg' : 'Siege'}` : null,
     ].filter(Boolean);
+  };
 
   // Klick auf den Spielernamen öffnet direkt das Spieler-Detail.
-  const goPlayer = (p: PlayerStat) => {
+  const goPlayer = (p: HeroEntry) => {
     const t = teamOf(p);
     if (t && onSelectTeam) onSelectTeam(t.id, p.name);
   };
@@ -79,15 +101,17 @@ export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onS
             <span className="hl-gold-text text-6xl sm:text-8xl">{word}</span>
           </h1>
           <p className="mt-4 max-w-[620px] mx-auto font-sans text-sm sm:text-[15px] text-hl-mute leading-relaxed">
-            Der wertvollste Spieler {seasonLabel ? `der ${seasonLabel}` : 'der Saison'} — ermittelt aus Toren, Vorlagen,
-            Auszeichnungen als bester Spieler, Team-Erfolg und Spielen zu null.
+            Der wertvollste Spieler {seasonLabel ? `der ${seasonLabel}` : 'der Saison'} — ermittelt aus allem, was wir
+            in jedem Spiel tracken: Tore, Vorlagen, Pässe, Zweikämpfe, Dribblings, Schüsse, Paraden und mehr.
+            Dazu gibt es pro Sieg +{de(HERO_WIN_BONUS)} und pro Unentschieden +
+            {de(HERO_DRAW_BONUS)} Punkte.
           </p>
         </div>
       </div>
 
       {ranking.length === 0 ? (
         <div className="hl-card text-center py-14 text-hl-mute font-sans text-sm">
-          Noch keine Wertung verfügbar. Sobald Ergebnisse erfasst sind, erscheint hier der HERO-{word}-Anwärter.
+          Noch keine Wertung verfügbar. Sobald getrackte Spiele live geschaltet sind, erscheint hier der HERO-{word}-Anwärter.
         </div>
       ) : (
         <>
@@ -123,7 +147,7 @@ export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onS
                   </div>
                   <div className="shrink-0 text-center">
                     <div className="font-display font-black text-6xl sm:text-7xl lg:text-8xl leading-none text-hl-gold drop-shadow-[0_0_18px_rgba(233,196,106,.4)] tabular-nums">
-                      {leader.points.toFixed(1)}
+                      {de(leader.score)}
                     </div>
                     <div className="font-sans font-bold text-[11px] tracking-[2px] text-hl-dim mt-1">PUNKTE</div>
                   </div>
@@ -164,7 +188,7 @@ export default function HeroOne({ players, teams, seasonNumber, seasonLabel, onS
                     </div>
                     <div className="flex items-baseline gap-1 shrink-0 pl-2">
                       <span className="font-display font-black text-2xl sm:text-3xl lg:text-4xl leading-none text-hl-gold tabular-nums">
-                        {p.points.toFixed(1)}
+                        {de(p.score)}
                       </span>
                       <span className="font-sans font-bold text-[10px] tracking-wider text-hl-dim">PKT</span>
                     </div>

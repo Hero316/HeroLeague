@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, ArrowLeft, ChevronRight, IdCard, Share2 } from 'lucide-react';
-import type { MatchPlayerStat, PlayerStat, ScoringConfig, Team } from '../types';
+import type { Match, MatchPlayerStat, PlayerStat, ScoringConfig, Team } from '../types';
 import { cardForPlayer } from '../lib/playerCards';
 import { playerPlacements } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
@@ -23,11 +23,12 @@ interface Props {
   players: PlayerStat[];
   teams: Team[];
   trackingRows: MatchPlayerStat[];
+  matches?: Match[]; // für den Sieg-Bonus im HERO-Score
   scoringConfig?: ScoringConfig;
   seasonLabel?: string;
 }
 
-export default function PlayerSteckbrief({ open, onClose, players, teams, trackingRows, scoringConfig, seasonLabel }: Props) {
+export default function PlayerSteckbrief({ open, onClose, players, teams, trackingRows, matches, scoringConfig, seasonLabel }: Props) {
   useBackClose(open, onClose);
   const backdrop = useBackdropDismiss(onClose);
   const cfg = scoringConfig ?? DEFAULT_SCORING;
@@ -50,8 +51,8 @@ export default function PlayerSteckbrief({ open, onClose, players, teams, tracki
     [player, trackingRows, cfg]
   );
   const placements = useMemo(
-    () => (player ? playerPlacements(trackingRows, cfg, player.teamId, player.name) : []),
-    [player, trackingRows, cfg]
+    () => (player ? playerPlacements(trackingRows, cfg, player.teamId, player.name, matches) : []),
+    [player, trackingRows, cfg, matches]
   );
 
   const accent = team?.logoColor ?? '#22DFC9';

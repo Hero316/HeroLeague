@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { X, ArrowLeftRight, Swords } from 'lucide-react';
-import type { MatchPlayerStat, PlayerStat, ScoringConfig, Team } from '../types';
+import type { Match, MatchPlayerStat, PlayerStat, ScoringConfig, Team } from '../types';
 import { cardForPlayer } from '../lib/playerCards';
+import { heroRanking } from '../lib/trackingAwards';
 import { useBackClose } from '../lib/backStack';
 import FifaCard from './FifaCard';
 import StatRadar, { type RadarSeries } from './StatRadar';
@@ -23,6 +24,7 @@ interface Props {
   players: PlayerStat[];
   teams: Team[];
   trackingRows: MatchPlayerStat[];
+  matches?: Match[]; // für die HERO-ONE-Punkte (Sieg-Bonus)
   scoringConfig?: ScoringConfig;
 }
 
@@ -81,11 +83,24 @@ function PlayerSelect({
   );
 }
 
-export default function CompareOverlay({ open, onClose, players, teams, trackingRows, scoringConfig }: Props) {
+export default function CompareOverlay({ open, onClose, players, teams, trackingRows, matches, scoringConfig }: Props) {
   useBackClose(open, onClose);
 
-  // Standardauswahl: die zwei punktbesten Spieler.
-  const ranked = useMemo(() => [...players].sort((a, b) => b.points - a.points), [players]);
+  // HERO-ONE-Punkte (wie auf der HERO-ONE-Seite: Tracking-Score + Sieg-Bonus).
+  const heroPts = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!scoringConfig) return m;
+    const league = trackingRows.filter((r) => r.dayKey.startsWith('s:'));
+    for (const p of heroRanking(league, scoringConfig, matches ?? [])) m.set(`${p.teamId}::${p.playerName}`, p.score);
+    return m;
+  }, [trackingRows, scoringConfig, matches]);
+  const heroOf = (p: PlayerStat) => heroPts.get(`${p.teamId}::${p.name}`) ?? 0;
+
+  // Standardauswahl: die zwei Spieler mit den meisten HERO-ONE-Punkten.
+  const ranked = useMemo(
+    () => [...players].sort((a, b) => (heroPts.get(`${b.teamId}::${b.name}`) ?? 0) - (heroPts.get(`${a.teamId}::${a.name}`) ?? 0)),
+    [players, heroPts]
+  );
   const [idA, setIdA] = useState<string>('');
   const [idB, setIdB] = useState<string>('');
 
@@ -126,9 +141,9 @@ export default function CompareOverlay({ open, onClose, players, teams, tracking
     out.push({ label: 'Spiele', a: pA.matchesPlayed, b: pB.matchesPlayed });
     out.push({ label: 'Siegquote', a: winRate(pA), b: winRate(pB), decimals: 0, suffix: '%' });
     out.push({ label: 'Bester Spieler', a: pA.motmCount, b: pB.motmCount });
-    out.push({ label: 'Ballon-Punkte', a: pA.points, b: pB.points });
+    if (heroPts.size > 0) out.push({ label: 'HERO-ONE-Punkte', a: heroOf(pA), b: heroOf(pB), decimals: 1 });
     return out;
-  }, [pA, pB, cardA, cardB]);
+  }, [pA, pB, cardA, cardB, heroPts]);
 
   // Radar nur überlagern, wenn beide dieselbe Rolle haben (gleiche Achsen).
   const sameRole = cardA && cardB && cardA.role === cardB.role;
