@@ -53,8 +53,6 @@ import {
   DEFAULT_SCORING,
   FIELD_GROUPS,
   KEEPER_GROUPS,
-  KEEPER_PASS_KEYS,
-  KEEPER_EXTRA_KEYS,
   type ActionGroup,
   type ActionMeta,
   type ActionTone,
@@ -1992,17 +1990,8 @@ function PlayerCard({
   const note = matchNote(row.counts, cfg, row.role);
   const score = rohscore(row.counts, cfg, row.role);
   const groups = isKeeper ? KEEPER_GROUPS : FIELD_GROUPS;
-  const actionsOf = (g: ActionGroup) => {
-    if (!isKeeper) return ACTION_META.filter((a) => a.group === g);
-    // Torwart: nur ausgewählte Pässe; in der Torwart-Gruppe zusätzlich z.B. Interception.
-    if (g === 'Pass') return ACTION_META.filter((a) => a.group === 'Pass' && KEEPER_PASS_KEYS.includes(a.key));
-    if (g === 'Torwart')
-      return [
-        ...ACTION_META.filter((a) => a.group === 'Torwart'),
-        ...ACTION_META.filter((a) => KEEPER_EXTRA_KEYS.includes(a.key)),
-      ];
-    return ACTION_META.filter((a) => a.group === g);
-  };
+  // Torwart bekommt Torwart-Tasten + alle Feldspieler-Tasten (siehe KEEPER_GROUPS).
+  const actionsOf = (g: ActionGroup) => ACTION_META.filter((a) => a.group === g);
 
   // Pro-Modus: Der Tracker spricht nur noch ein und muss dabei Gesicht, Nummer
   // und Name schnell erfassen – Aktions-Tasten wären hier nur im Weg.
