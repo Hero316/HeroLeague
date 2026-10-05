@@ -164,3 +164,14 @@ export function leagueDayKey(seasonId: string, matchday: number): string {
 export function eventDayKey(eventId: string): string {
   return `event:${eventId}`;
 }
+
+// Tracking-Status je Spiel („wird getrackt" / „fertig") – geräteübergreifend,
+// damit nicht zwei Leute dasselbe Spiel tracken. Schlüssel „<dayKey>|<matchId>".
+export type TrackStatus = 'tracking' | 'done';
+export type TrackStatusMap = Record<string, { status: TrackStatus; by: string; at: string }>;
+export function fetchTrackStatus(): Promise<TrackStatusMap> {
+  return apiFetch('/api/stats?resource=track-status');
+}
+export function setTrackStatus(dayKey: string, matchId: string, status: TrackStatus | null): Promise<{ ok: boolean }> {
+  return apiFetch('/api/stats?resource=track-status', { method: 'POST', body: JSON.stringify({ dayKey, matchId, status }) });
+}

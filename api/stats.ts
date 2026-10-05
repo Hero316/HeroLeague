@@ -323,7 +323,34 @@ const resetTally = requireStaff(async (req: VercelRequest, res: VercelResponse) 
     INSERT INTO settings (key, value) VALUES ('tracking-live', ${JSON.stringify({ days })}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
   `;
+  // Zurückgesetzte Spiele sind auch nicht mehr „fertig getrackt".
+  const statusKeys = matchIds.map((id) => `${dayKey}|${id}`);
+  if (statusKeys.length) {
+    await sql`UPDATE settings SET value = value - ${statusKeys}::text[] WHERE key = 'tracking-status'`;
+  }
   return res.json({ ok: true, deleted, days });
+});
+
+// --- Tracking-Status je Spiel („wird getrackt" / „fertig") ------------------
+// Damit zwei Leute nicht dasselbe Spiel tracken: settings-Key 'tracking-status'
+// = { "<dayKey>|<matchId>": { status, by, at } }. Atomar per jsonb-Merge.
+type TrackStatus = 'tracking' | 'done';
+const saveTrackStatus = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+  const b = (req.body ?? {}) as { dayKey?: unknown; matchId?: unknown; status?: unknown };
+  if (!isNonEmptyString(b.dayKey) || !isNonEmptyString(b.matchId)) return badRequest(res, 'dayKey/matchId fehlt.');
+  const key = `${b.dayKey}|${b.matchId}`;
+  const status: TrackStatus | null = b.status === 'tracking' || b.status === 'done' ? b.status : null;
+  if (status) {
+    const session = await getSession(req);
+    const entry = { [key]: { status, by: session?.name || session?.email || '', at: new Date().toISOString() } };
+    await sql`
+      INSERT INTO settings (key, value) VALUES ('tracking-status', ${JSON.stringify(entry)}::jsonb)
+      ON CONFLICT (key) DO UPDATE SET value = settings.value || EXCLUDED.value
+    `;
+  } else {
+    await sql`UPDATE settings SET value = value - ${key}::text WHERE key = 'tracking-status'`;
+  }
+  return res.json({ ok: true });
 });
 
 // --- Tracking-Regeln (saisonweit) & Voice-Tracking -------------------------
@@ -529,6 +556,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             )`) as { matchId: string; dayKey: string }[];
         return res.json({ matchIds: [...new Set(rows.map((r) => r.matchId))], tracked: rows });
       }
+      if (resource === 'track-status') {
+        if (!(await getSession(req))) return res.status(401).json({ error: 'Nicht angemeldet' });
+        const rows = await sql`SELECT value FROM settings WHERE key = 'tracking-status'`;
+        const v = rows[0]?.value;
+        return res.json(v && typeof v === 'object' ? v : {});
+      }
       if (resource === 'tracking-rules') {
         const rows = await sql`SELECT value FROM settings WHERE key = 'tracking_rules'`;
         const text = (rows[0]?.value as { text?: unknown })?.text;
@@ -542,6 +575,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'tally') return saveTally(req, res);
       if (resource === 'tally-op') return tallyOp(req, res);
       if (resource === 'tally-reset') return resetTally(req, res);
+      if (resource === 'track-status') return saveTrackStatus(req, res);
       if (resource === 'publish') return savePublish(req, res);
       if (resource === 'sheet-test') return testSheet(req, res);
       if (resource === 'export') return exportDay(req, res);
