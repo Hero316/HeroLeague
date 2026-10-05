@@ -199,10 +199,9 @@ export const ACTION_KEYS: ActionKey[] = ACTION_META.map((a) => a.key);
 
 // Sichtbare Gruppen je Rolle (wie im HERO Match Tracker).
 export const FIELD_GROUPS: ActionGroup[] = ['Pass', 'Schuss', 'Dribbling', 'Defensive', 'Sonstiges'];
-export const KEEPER_GROUPS: ActionGroup[] = ['Pass', 'Torwart'];
-export const KEEPER_PASS_KEYS: ActionKey[] = ['pass_ok', 'pass_fail', 'key_pass'];
-// Zusätzliche Feld-Aktionen, die auch beim Torwart auftauchen (in der Torwart-Gruppe).
-export const KEEPER_EXTRA_KEYS: ActionKey[] = ['interception'];
+// Torwart: zuerst die Torwart-Tasten, danach ALLE Feldspieler-Tasten – unsere
+// Keeper spielen mit (Pässe, Vorlagen, Dribblings, Tore, Elfmeter schießen …).
+export const KEEPER_GROUPS: ActionGroup[] = ['Torwart', ...FIELD_GROUPS];
 
 // Gekoppelte Aktionen: Wird die linke Aktion getrackt, zählt automatisch auch die
 // rechte mit (Assist/Schlüsselpass sind angekommene Pässe). Das Tor ⇒ Torschuss
