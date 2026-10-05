@@ -3,10 +3,10 @@ import { motion } from 'motion/react';
 import { Team } from '../types';
 import { shade, readable } from './ui';
 
-// Beste Aufstellung als team-farbiges Mini-Fußballfeld – NICHT die historische
-// Anwesenheits-Kombination, sondern die individuell besten Spieler nach Siegquote:
-// fester Torwart unten, die 4 besten Feldspieler auf dem Platz (2-2, beste oben),
-// der 5. und 6. beste als Auswechselbank rechts daneben.
+// Beste Aufstellung als team-farbiges Mini-Fußballfeld: Torwart unten, 2 vorne,
+// 2 hinten, 2 auf der Bank. Mit Tracking-Daten aus src/lib/bestLineup.ts
+// (Sturm = Offensiv-Wert, Abwehr = Defensiv-Wert, Bank = Ø-Note); ohne Tracking
+// die individuell besten Spieler nach Siegquote.
 
 export interface XIEntry {
   name: string;
@@ -14,6 +14,7 @@ export interface XIEntry {
   imageUrl?: string;
   winRate: number | null; // Siegquote in % (null = noch kein Einsatz)
   matchesPlayed: number;
+  value?: string; // statt Siegquote anzeigen (z. B. Ø-Note aus dem Tracking)
 }
 
 interface BestLineupProps {
@@ -22,6 +23,7 @@ interface BestLineupProps {
   bench: XIEntry[]; // bis zu 2 (5./6. bester)
   team: Team;
   onSelectPlayer?: (name: string) => void;
+  tracked?: boolean; // true = aus dem Tracking berechnet (anderer Erklärtext)
 }
 
 function initials(name: string): string {
@@ -40,6 +42,7 @@ const Chip = React.memo(function Chip({
   firstName,
   imageUrl,
   winRate,
+  value,
   color,
   accent,
   index,
@@ -51,6 +54,7 @@ const Chip = React.memo(function Chip({
   firstName: string;
   imageUrl?: string;
   winRate: number | null;
+  value?: string;
   color: string;
   accent: string;
   index: number;
@@ -108,13 +112,13 @@ const Chip = React.memo(function Chip({
         }`}
         style={{ color: accent }}
       >
-        {winRate === null ? '–' : `${winRate}%`}
+        {value ?? (winRate === null ? '–' : `${winRate}%`)}
       </span>
     </motion.button>
   );
 });
 
-export default function BestLineup({ goalkeeper, field, bench, team, onSelectPlayer }: BestLineupProps) {
+export default function BestLineup({ goalkeeper, field, bench, team, onSelectPlayer, tracked = false }: BestLineupProps) {
   const color = team.logoColor || '#22DFC9';
   const accent = readable(color);
 
@@ -129,7 +133,9 @@ export default function BestLineup({ goalkeeper, field, bench, team, onSelectPla
         BESTE AUFSTELLUNG
       </div>
       <p className="font-sans text-[11px] lg:text-[12px] text-hl-dim mb-4">
-        Beste Spieler nach Siegquote · fester Torwart – automatisch aus den Ergebnissen.
+        {tracked
+          ? 'Vorne die Torgefährlichsten, hinten die stärksten Verteidiger, Bank nach Ø-Note · Zahl = Ø-Note – automatisch aus dem Tracking.'
+          : 'Beste Spieler nach Siegquote · fester Torwart – automatisch aus den Ergebnissen.'}
       </p>
 
       <div className="flex gap-2 items-stretch">
@@ -150,14 +156,14 @@ export default function BestLineup({ goalkeeper, field, bench, team, onSelectPla
             {topRow.length > 0 && (
               <div className="flex justify-around gap-2">
                 {topRow.map((p) => (
-                  <Chip key={p.name} name={p.name} firstName={p.firstName} imageUrl={p.imageUrl} winRate={p.winRate} color={color} accent={accent} index={idx++} onSelect={onSelectPlayer} />
+                  <Chip key={p.name} name={p.name} firstName={p.firstName} imageUrl={p.imageUrl} winRate={p.winRate} value={p.value} color={color} accent={accent} index={idx++} onSelect={onSelectPlayer} />
                 ))}
               </div>
             )}
             {bottomRow.length > 0 && (
               <div className="flex justify-around gap-2">
                 {bottomRow.map((p) => (
-                  <Chip key={p.name} name={p.name} firstName={p.firstName} imageUrl={p.imageUrl} winRate={p.winRate} color={color} accent={accent} index={idx++} onSelect={onSelectPlayer} />
+                  <Chip key={p.name} name={p.name} firstName={p.firstName} imageUrl={p.imageUrl} winRate={p.winRate} value={p.value} color={color} accent={accent} index={idx++} onSelect={onSelectPlayer} />
                 ))}
               </div>
             )}
@@ -168,6 +174,7 @@ export default function BestLineup({ goalkeeper, field, bench, team, onSelectPla
                   firstName={goalkeeper.firstName}
                   imageUrl={goalkeeper.imageUrl}
                   winRate={goalkeeper.winRate}
+                  value={goalkeeper.value}
                   color={color}
                   accent={accent}
                   index={idx++}
@@ -190,6 +197,7 @@ export default function BestLineup({ goalkeeper, field, bench, team, onSelectPla
                 firstName={p.firstName}
                 imageUrl={p.imageUrl}
                 winRate={p.winRate}
+                value={p.value}
                 color={color}
                 accent={accent}
                 index={idx++}
