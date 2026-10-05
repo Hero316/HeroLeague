@@ -24,6 +24,8 @@ import {
   IdCard,
   Camera,
   Sparkles,
+  CircleDashed,
+  CircleCheck,
 } from 'lucide-react';
 import FifaCard from './FifaCard';
 import {
@@ -79,7 +81,12 @@ import {
   exportScoringToSheet,
   saveAttendance,
   saveEventAttendance,
+  fetchTrackStatus,
+  setTrackStatus,
+  type TrackStatus,
+  type TrackStatusMap,
 } from '../lib/stats';
+import { usePolling } from '../lib/usePolling';
 
 // ===========================================================================
 // Statistics Center — Erfassungs-Editor (Etappe 2 + 3)
@@ -251,6 +258,33 @@ export default function TrackingCenter({
     : selectedMatchday !== null && seasonId
       ? leagueDayKey(seasonId, selectedMatchday)
       : '';
+
+  // Tracking-Status je Spiel (wird getrackt / fertig) – für alle Geräte sichtbar.
+  // Solange ein Tag offen ist, alle 15 s nachladen (nur im sichtbaren Tab).
+  const [trackStatus, setTrackStatusMap] = useState<TrackStatusMap>({});
+  usePolling(
+    () => {
+      fetchTrackStatus().then(setTrackStatusMap).catch(() => {});
+    },
+    15_000,
+    { enabled: !!dayKey }
+  );
+  const changeTrackStatus = useCallback(
+    (matchId: string, status: TrackStatus | null) => {
+      if (!dayKey) return;
+      const k = `${dayKey}|${matchId}`;
+      setTrackStatusMap((prev) => {
+        const next = { ...prev };
+        if (status) next[k] = { status, by: prev[k]?.by ?? '', at: new Date().toISOString() };
+        else delete next[k];
+        return next;
+      });
+      setTrackStatus(dayKey, matchId, status)
+        .then(() => fetchTrackStatus().then(setTrackStatusMap))
+        .catch((e) => window.alert(e instanceof Error ? e.message : 'Status konnte nicht gespeichert werden.'));
+    },
+    [dayKey]
+  );
 
   const teamById = useMemo(() => {
     const m: Record<string, Team> = {};
@@ -970,6 +1004,8 @@ export default function TrackingCenter({
               onAttendance={() => setAttendanceOpen(true)}
               onReset={resetData}
               resetBusy={resetBusy}
+              statusOf={(id) => trackStatus[`${dayKey}|${id}`]}
+              onStatus={changeTrackStatus}
             />
           ) : (
             <DayList
@@ -1160,6 +1196,8 @@ function DayView({
   onAttendance,
   onReset,
   resetBusy,
+  statusOf,
+  onStatus,
 }: {
   title: string;
   isEvent: boolean;
@@ -1177,6 +1215,8 @@ function DayView({
   onAttendance?: () => void;
   onReset?: (matchIds: string[], wholeDay: boolean) => void;
   resetBusy?: boolean;
+  statusOf?: (matchId: string) => TrackStatusMap[string] | undefined;
+  onStatus?: (matchId: string, status: TrackStatus | null) => void;
 }) {
   const trackedCount = (matchId: string) =>
     Object.entries(rows).filter(([k, r]) => k.startsWith(`${matchId}::`) && anyCount(r.counts)).length;
@@ -1308,6 +1348,9 @@ function DayView({
                   >
                     <Radio className="w-3 h-3" /> {matchLive ? 'Live' : 'Live schalten'}
                   </button>
+                )}
+                {onStatus && (
+                  <TrackStatusButton entry={statusOf?.(m.id)} onChange={(st) => onStatus(m.id, st)} />
                 )}
                 {onReset && tracked > 0 && (
                   <button
@@ -2266,6 +2309,53 @@ function PlayerCard({
         })}
       </div>
     </div>
+  );
+}
+
+// Status-Taste je Spiel: offen → „Wird getrackt" (gelb, leuchtet) → „Fertig"
+// (grün) → wieder offen. Für alle Geräte sichtbar, damit niemand doppelt trackt.
+function TrackStatusButton({
+  entry,
+  onChange,
+}: {
+  entry?: { status: TrackStatus; by: string; at: string };
+  onChange: (status: TrackStatus | null) => void;
+}) {
+  const st = entry?.status ?? null;
+  const next: TrackStatus | null = st === null ? 'tracking' : st === 'tracking' ? 'done' : null;
+  const by = entry?.by ? ` · ${entry.by.split(/\s+/)[0]}` : '';
+  const title =
+    st === 'tracking'
+      ? `Wird gerade getrackt${entry?.by ? ` von ${entry.by}` : ''} – tippen = fertig`
+      : st === 'done'
+        ? `Fertig getrackt${entry?.by ? ` (${entry.by})` : ''} – tippen = wieder offen`
+        : 'Tippen = „Wird getrackt" markieren (sehen alle)';
+  const cls =
+    st === 'tracking'
+      ? 'bg-yellow-400/20 border-yellow-400/80 text-yellow-300 shadow-[0_0_16px_rgba(250,204,21,.55)]'
+      : st === 'done'
+        ? 'bg-hl-green/15 border-hl-green/50 text-hl-green'
+        : 'bg-white/5 border-white/10 text-hl-mute hover:text-hl-text';
+  return (
+    <button
+      onClick={() => onChange(next)}
+      title={title}
+      className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 border cursor-pointer transition-colors ${cls}`}
+    >
+      {st === 'done' ? (
+        <CircleCheck className="w-3.5 h-3.5" />
+      ) : st === 'tracking' ? (
+        <span className="relative grid place-items-center w-3.5 h-3.5">
+          <span className="absolute inset-0 rounded-full bg-yellow-300/60 animate-ping" />
+          <span className="relative w-2 h-2 rounded-full bg-yellow-300" />
+        </span>
+      ) : (
+        <CircleDashed className="w-3.5 h-3.5" />
+      )}
+      <span className={st === null ? 'hidden sm:inline' : 'hidden sm:inline max-w-[140px] truncate'}>
+        {st === 'tracking' ? `Wird getrackt${by}` : st === 'done' ? 'Fertig' : 'Offen'}
+      </span>
+    </button>
   );
 }
 
