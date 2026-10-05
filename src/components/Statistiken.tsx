@@ -1,9 +1,22 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { PlayerStat, Match, Team, MatchPlayerStat, ScoringConfig } from '../types';
-import { scorerRanking as trackScorers, assistRanking as trackAssists, goldenGloveRanking } from '../lib/trackingAwards';
+import {
+  scorerRanking as trackScorers,
+  assistRanking as trackAssists,
+  goldenGloveRanking,
+  passLeaders,
+  dribbleLeaders,
+  duelLeaders,
+  shotLeaders,
+  ballWinnerLeaders,
+  keyPassLeaders,
+  headerGoalLeaders,
+  type StatLeader,
+} from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
-import { Swords, Hand, IdCard } from 'lucide-react';
+import { Swords, Hand, IdCard, BarChart3, Send, Zap, Target, Shield, Sparkles, Goal, Crown, Handshake } from 'lucide-react';
+import StatAccordion from './StatAccordion';
 import PlayerCrest from './PlayerCrest';
 import { TeamCrest } from './ui';
 import { CountUp, Reveal, useSettledList } from './anim';
@@ -81,10 +94,23 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
       if (m.homeScore === 0) away.cleanSheets += 1;
     });
     const played = Object.values(stats).filter((s) => s.played > 0);
+    type Row = (typeof played)[number];
+    // Bester + alle, die beim Hauptwert gleichauf liegen (z. B. drei Teams mit
+    // je 2 weißen Westen) – die werden auf der Karte mit genannt.
+    const top = (sorted: Row[], val: (r: Row) => number) => {
+      const first = sorted[0] ?? null;
+      return { first, tied: first ? sorted.slice(1).filter((r) => val(r) === val(first)) : [] };
+    };
+    const attack = top([...played].sort((a, b) => b.goalsFor - a.goalsFor || a.played - b.played), (r) => r.goalsFor);
+    const defense = top([...played].sort((a, b) => a.goalsAgainst - b.goalsAgainst || b.played - a.played), (r) => r.goalsAgainst);
+    const clean = top([...played].sort((a, b) => b.cleanSheets - a.cleanSheets || a.goalsAgainst - b.goalsAgainst), (r) => r.cleanSheets);
     return {
-      bestAttack: played.length ? [...played].sort((a, b) => b.goalsFor - a.goalsFor)[0] : null,
-      bestDefense: played.length ? [...played].sort((a, b) => a.goalsAgainst - b.goalsAgainst)[0] : null,
-      mostCleanSheets: played.length ? [...played].sort((a, b) => b.cleanSheets - a.cleanSheets)[0] : null,
+      bestAttack: attack.first,
+      bestAttackTied: attack.tied.map((r) => r.team),
+      bestDefense: defense.first,
+      bestDefenseTied: defense.tied.map((r) => r.team),
+      mostCleanSheets: clean.first,
+      mostCleanSheetsTied: clean.tied.map((r) => r.team),
     };
   }, [teams, finished]);
 
@@ -164,6 +190,35 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
     [trackingRows, cfg, resolvePlayer]
   );
 
+  // Bestenlisten der Saison (Top 10) – dieselben Listen wie beim Testspiel,
+  // nur über alle live geschalteten Liga-Spiele.
+  const boards = React.useMemo(() => {
+    const scorePts = new Map<string, StatLeader>();
+    for (const e of trackScorers(trackingRows, cfg)) scorePts.set(`${e.teamId}::${e.playerName}`, { teamId: e.teamId, playerName: e.playerName, value: e.goals, quote: null, games: e.games });
+    for (const e of trackAssists(trackingRows, cfg)) {
+      const k = `${e.teamId}::${e.playerName}`;
+      const cur = scorePts.get(k);
+      if (cur) cur.value = e.goals + e.assists;
+      else scorePts.set(k, { teamId: e.teamId, playerName: e.playerName, value: e.assists, quote: null, games: e.games });
+    }
+    const toLeader = (e: { teamId: string; playerName: string; games: number }, value: number): StatLeader => ({ teamId: e.teamId, playerName: e.playerName, value, quote: null, games: e.games });
+    return [
+      { id: 'goals', title: 'Torschützen', accent: '#E9C46A', icon: <Crown className="w-4 h-4" />, mode: 'count' as const,
+        rows: trackScorers(trackingRows, cfg).slice(0, 10).map((e) => toLeader(e, e.goals)) },
+      { id: 'assists', title: 'Vorlagen', accent: '#22DFC9', icon: <Handshake className="w-4 h-4" />, mode: 'count' as const,
+        rows: trackAssists(trackingRows, cfg).slice(0, 10).map((e) => toLeader(e, e.assists)) },
+      { id: 'scorer', title: 'Scorerpunkte (Tore + Vorlagen)', accent: '#43E5A0', icon: <Target className="w-4 h-4" />, mode: 'count' as const,
+        rows: [...scorePts.values()].sort((a, b) => b.value - a.value || a.playerName.localeCompare(b.playerName)).slice(0, 10) },
+      { id: 'pass', title: 'Beste Passquote', accent: '#22DFC9', icon: <Send className="w-4 h-4" />, mode: 'quote' as const, rows: passLeaders(trackingRows, cfg) },
+      { id: 'duel', title: 'Beste Zweikampfquote', accent: '#43E5A0', icon: <Swords className="w-4 h-4" />, mode: 'quote' as const, rows: duelLeaders(trackingRows, cfg) },
+      { id: 'drib', title: 'Beste Dribbling-Quote', accent: '#E9C46A', icon: <Zap className="w-4 h-4" />, mode: 'quote' as const, rows: dribbleLeaders(trackingRows, cfg) },
+      { id: 'shots', title: 'Meiste Torschüsse', accent: '#F0559E', icon: <Target className="w-4 h-4" />, mode: 'count' as const, rows: shotLeaders(trackingRows, cfg) },
+      { id: 'win', title: 'Balleroberer', accent: '#58F0CD', icon: <Shield className="w-4 h-4" />, mode: 'count' as const, rows: ballWinnerLeaders(trackingRows, cfg) },
+      { id: 'key', title: 'Schlüsselpässe', accent: '#c99bff', icon: <Sparkles className="w-4 h-4" />, mode: 'count' as const, rows: keyPassLeaders(trackingRows, cfg) },
+      { id: 'head', title: 'Kopfballtore', accent: '#F0559E', icon: <Goal className="w-4 h-4" />, mode: 'count' as const, rows: headerGoalLeaders(trackingRows, cfg) },
+    ].filter((b) => b.rows.length > 0);
+  }, [trackingRows, cfg]);
+
   const topScorer = scorerRows[0] ?? null;
   const topAssist = assistRows[0] ?? null;
   const bestRatio =
@@ -196,6 +251,7 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
     sub: string;
     avatar: React.ReactNode;
     onClick?: () => void; // Namensklick: Spieler → Spielerdetail, Team → Teamseite
+    tied?: Team[]; // weitere Teams mit genau demselben Wert
   }
 
   const cards: LeaderCard[] = [];
@@ -251,6 +307,7 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
       unit: 'Tore',
       name: t.name,
       sub: `${clubStats.bestAttack.goalsFor} erzielte Tore`,
+      tied: clubStats.bestAttackTied,
       avatar: (
         <TeamCrest
           name={t.name}
@@ -274,6 +331,7 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
       unit: clubStats.bestDefense.goalsAgainst === 1 ? 'Gegentor' : 'Gegentore',
       name: t.name,
       sub: `Nur ${clubStats.bestDefense.goalsAgainst} Gegentore`,
+      tied: clubStats.bestDefenseTied,
       avatar: (
         <TeamCrest
           name={t.name}
@@ -297,6 +355,7 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
       unit: clubStats.mostCleanSheets.cleanSheets === 1 ? 'Spiel' : 'Spiele',
       name: t.name,
       sub: `Zu null in ${clubStats.mostCleanSheets.cleanSheets} ${clubStats.mostCleanSheets.cleanSheets === 1 ? 'Spiel' : 'Spielen'}`,
+      tied: clubStats.mostCleanSheetsTied,
       avatar: (
         <TeamCrest
           name={t.name}
@@ -460,6 +519,24 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
                   </span>
                   <span className="font-sans font-bold text-[13px] tracking-wider text-hl-dim">{c.unit}</span>
                 </div>
+                {c.tied && c.tied.length > 0 && (
+                  <div className="mt-4 pt-3 border-t border-white/[.07]">
+                    <div className="font-sans font-bold text-[10px] tracking-[1.5px] uppercase text-hl-dim mb-2">Gleichauf</div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-2">
+                      {c.tied.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={onSelectTeam ? () => onSelectTeam(t.id) : undefined}
+                          className={`flex items-center gap-1.5 min-w-0 max-w-full ${onSelectTeam ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+                        >
+                          <TeamCrest name={t.name} shortName={t.shortName} color={t.logoColor} logoUrl={t.logoUrl} size="xs" />
+                          <span className="font-sans font-semibold text-[12.5px] text-white truncate">{t.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -592,6 +669,80 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
           )}
         </Reveal>
       )}
+
+      {/* Bestenlisten der Saison – aufklappbar, je Liste Platz 1 bis 10 */}
+      {boards.length > 0 && (
+        <Reveal className="mt-10">
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart3 className="w-5 h-5 text-brand-accent-light" />
+            <h2 className="font-display font-black text-xl sm:text-2xl uppercase tracking-tight text-white">Bestenlisten der Saison</h2>
+          </div>
+          <StatAccordion
+            items={boards.map((b) => {
+              const top = b.rows[0];
+              const pct = top?.quote != null ? `${Math.round(top.quote * 100)}%` : null;
+              return {
+                id: b.id,
+                title: b.title,
+                accent: b.accent,
+                icon: b.icon,
+                preview: top ? `1. ${top.playerName} · ${b.mode === 'quote' ? pct ?? top.value : top.value}` : undefined,
+                content: <LeaderList rows={b.rows} mode={b.mode} accent={b.accent} teams={teams} onSelect={onSelectTeam} />,
+              };
+            })}
+          />
+        </Reveal>
+      )}
     </div>
+  );
+}
+
+// Top-10-Liste einer Bestenliste (Rang, Wappen, Name, Hauptwert, ggf. Quote).
+function LeaderList({
+  rows,
+  mode,
+  accent,
+  teams,
+  onSelect,
+}: {
+  rows: StatLeader[];
+  mode: 'count' | 'quote';
+  accent: string;
+  teams: Team[];
+  onSelect?: (teamId: string, playerName?: string) => void;
+}) {
+  return (
+    <ol className="space-y-0.5 pt-1 min-w-0">
+      {rows.map((p, i) => {
+        const t = teams.find((x) => x.id === p.teamId);
+        const pct = p.quote != null ? `${Math.round(p.quote * 100)}%` : null;
+        return (
+          <li key={`${p.teamId}::${p.playerName}`}>
+            <button
+              type="button"
+              onClick={onSelect ? () => onSelect(p.teamId, p.playerName) : undefined}
+              className="w-full flex items-center gap-2 rounded-lg px-1.5 py-1.5 hover:bg-white/[.05] transition-colors cursor-pointer text-left min-w-0"
+            >
+              <span className="w-5 shrink-0 text-center font-display font-black tabular-nums text-xs" style={{ color: i === 0 ? accent : undefined }}>
+                {i + 1}
+              </span>
+              {t && <TeamCrest name={t.name} shortName={t.shortName} color={t.logoColor} logoUrl={t.logoUrl} size="xs" />}
+              <span className="flex-1 min-w-0 truncate font-sans font-semibold text-sm text-white">{p.playerName}</span>
+              {mode === 'quote' ? (
+                <>
+                  <span className="shrink-0 font-mono text-[11px] text-hl-dim tabular-nums">{p.value}×</span>
+                  <span className="shrink-0 w-10 text-right font-display font-black tabular-nums text-white text-sm">{pct ?? '–'}</span>
+                </>
+              ) : (
+                <>
+                  {pct && <span className="shrink-0 font-mono text-[11px] text-hl-dim tabular-nums">{pct}</span>}
+                  <span className="shrink-0 min-w-7 text-right font-display font-black tabular-nums text-white text-sm">{p.value}</span>
+                </>
+              )}
+            </button>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
