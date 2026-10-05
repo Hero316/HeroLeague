@@ -21,7 +21,7 @@ export default function StoryPills({
             key={album.id}
             type="button"
             onClick={() => onOpen(i)}
-            className="group flex flex-col items-center gap-2 shrink-0 w-[76px] cursor-pointer"
+            className="group flex flex-col items-center gap-2 shrink-0 w-[84px] cursor-pointer"
           >
             <span className="p-[3px] rounded-full bg-[conic-gradient(from_180deg,#22DFC9,#43E5A0,#E9C46A,#22DFC9)] transition-transform duration-200 group-hover:scale-105">
               <span className="block p-[2.5px] rounded-full bg-brand-dark">
@@ -43,7 +43,7 @@ export default function StoryPills({
                 </span>
               </span>
             </span>
-            <span className="w-full text-center text-[11px] font-sans font-semibold text-hl-soft leading-tight line-clamp-1">
+            <span className="w-full text-center text-[11px] font-sans font-semibold text-hl-soft leading-tight line-clamp-2 break-words">
               {album.title}
             </span>
           </button>
