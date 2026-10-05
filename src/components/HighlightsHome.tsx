@@ -27,6 +27,9 @@ export default function HighlightsHome({
 }) {
   const items = highlights.items;
   const albums = highlights.albums;
+  // Story-Bubbles: neuester Ordner links, nach rechts immer älter (neue Ordner
+  // werden im Admin hinten angehängt → umgedreht anzeigen).
+  const storyAlbums = useMemo(() => [...albums].reverse(), [albums]);
   const [lightbox, setLightbox] = useState<{ index: number | null; dir: number }>({ index: null, dir: 0 });
   const [storyAlbum, setStoryAlbum] = useState<number | null>(null);
   // Karussell zeigt nur die mit Stern markierten Medien (aus allen Ordnern + losen
@@ -118,7 +121,7 @@ export default function HighlightsHome({
             {display.length > 0 && <HighlightsCarousel items={display} onOpen={open} />}
             {albums.length > 0 && (
               <Reveal className="mt-9">
-                <StoryPills albums={albums} onOpen={setStoryAlbum} />
+                <StoryPills albums={storyAlbums} onOpen={setStoryAlbum} />
               </Reveal>
             )}
           </>
@@ -135,7 +138,7 @@ export default function HighlightsHome({
 
       {storyAlbum !== null && (
         <StoriesViewer
-          albums={albums}
+          albums={storyAlbums}
           initialAlbum={storyAlbum}
           onClose={() => setStoryAlbum(null)}
           onOpenAlbum={onOpenAlbum}
