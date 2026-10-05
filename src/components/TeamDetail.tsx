@@ -6,7 +6,9 @@ import { calculateStandings } from '../lib/standings';
 import { matchNote, normalizeCounts, playerCard, cardExplain, quotas, sumCounts, countCleanSheets } from '../lib/rating';
 import { apiFetch } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
-import BestLineup from './BestLineup';
+import BestLineup, { type XIEntry } from './BestLineup';
+import { trackedLineup, type LineupPlayer } from '../lib/bestLineup';
+import { DEFAULT_SCORING } from '../lib/scoring';
 import FifaCard from './FifaCard';
 import CardExplainSheet from './CardExplainSheet';
 import { ShareSheet } from './ShareCard';
@@ -122,6 +124,26 @@ export default function TeamDetail({
   // Fester Torwart (häufigster Keeper) unten, 4 beste Feldspieler aufs Feld,
   // 5./6. bester auf die Bank. Mindest-Einsätze verhindern, dass jemand mit
   // 1 Spiel/100 % oben landet.
+  // Mit Tracking-Daten: 2 vorne (Offensiv-Wert), 2 hinten (Defensiv-Wert),
+  // Bank nach Ø-Note, ausgewählter Torwart – siehe src/lib/bestLineup.ts.
+  const trackedXI = useMemo(() => {
+    const lu = trackedLineup(trackingRows, scoringConfig ?? DEFAULT_SCORING, team.id, roster);
+    if (!lu || lu.attack.length + lu.defense.length === 0) return null;
+    const toXI = (p: LineupPlayer): XIEntry => ({
+      name: p.name,
+      firstName: p.name.split(/\s+/)[0],
+      imageUrl: roster.find((r) => r.name === p.name)?.imageUrl,
+      winRate: null,
+      matchesPlayed: p.games,
+      value: p.avgNote > 0 ? p.avgNote.toFixed(1).replace('.', ',') : '–',
+    });
+    return {
+      goalkeeper: lu.goalkeeper ? toXI(lu.goalkeeper) : null,
+      field: [...lu.attack, ...lu.defense].map(toXI),
+      bench: lu.bench.map(toXI),
+    };
+  }, [trackingRows, scoringConfig, team.id, roster]);
+
   const bestXI = useMemo(() => {
     const played = roster.filter((p) => p.matchesPlayed > 0);
     if (played.length === 0) return null;
@@ -973,14 +995,15 @@ export default function TeamDetail({
             );
           })()}
 
-          {/* Beste Aufstellung – beste Spieler nach Siegquote (Torwart + 4 Feld + 2 Bank) */}
-          {bestXI && (
+          {/* Beste Aufstellung – mit Tracking: 2 vorne / 2 hinten / Bank nach Ø-Note; sonst nach Siegquote */}
+          {(trackedXI ?? bestXI) && (
             <BestLineup
-              goalkeeper={bestXI.goalkeeper}
-              field={bestXI.field}
-              bench={bestXI.bench}
+              goalkeeper={(trackedXI ?? bestXI)!.goalkeeper}
+              field={(trackedXI ?? bestXI)!.field}
+              bench={(trackedXI ?? bestXI)!.bench}
               team={team}
               onSelectPlayer={selectPlayer}
+              tracked={Boolean(trackedXI)}
             />
           )}
 
