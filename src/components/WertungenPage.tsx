@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowLeft, ChevronRight, Crown, Hand, Trophy, Star } from 'lucide-react';
 import type { Match, MatchPlayerStat, ScoringConfig, Team } from '../types';
-import { keeperRanking, matchdayRanking, seasonRanking, RankedPlayer } from '../lib/trackingAwards';
+import { heroRanking, keeperRanking, matchdayRanking, RankedPlayer } from '../lib/trackingAwards';
 import FifaCard from './FifaCard';
 
 // ===========================================================================
@@ -28,7 +28,8 @@ export default function WertungenPage({ rows, cfg, teams, matches, seasonLabel, 
   const photoOf = (teamId: string, name: string) =>
     teams.find((t) => t.id === teamId)?.spielerliste?.find((p) => p.name === name)?.imageUrl;
 
-  const season = useMemo(() => seasonRanking(leagueRows, cfg), [leagueRows, cfg]);
+  // Gleiche Wertung wie die HERO-ONE-Seite: Tracking-Score + Sieg-Bonus.
+  const season = useMemo(() => heroRanking(leagueRows, cfg, matches), [leagueRows, cfg, matches]);
   const keepers = useMemo(() => keeperRanking(leagueRows, cfg), [leagueRows, cfg]);
 
   // Spieltage mit getrackten Daten.

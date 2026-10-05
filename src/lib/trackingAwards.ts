@@ -1,4 +1,4 @@
-import type { ActionCounts, MatchPlayerStat, PlayerCard, ScoringConfig, StatRole } from '../types';
+import type { ActionCounts, Match, MatchPlayerStat, PlayerCard, ScoringConfig, StatRole } from '../types';
 import { isKeeperActive, matchNote, normalizeCounts, playerCard, rohscore, sumCounts } from './rating';
 
 // ===========================================================================
@@ -163,6 +163,51 @@ export function seasonRanking(rows: MatchPlayerStat[], cfg: ScoringConfig): Rank
   return aggregate(rows, cfg).sort(
     (a, b) => b.score - a.score || b.avgNote - a.avgNote || a.playerName.localeCompare(b.playerName)
   );
+}
+
+// --- HERO ONE (Hauptseite) ------------------------------------------------
+// Getrackter Score (Summe der Spiel-Scores) + kleiner Sieg-Bonus: Wer in einem
+// beendeten Spiel getrackt wurde (= hat gespielt), bekommt bei Sieg +0,5, bei
+// Remis +0,2 – das Tracking selbst misst Team-Erfolg nicht. Zum Vergleich:
+// ein Tor = +1,0 (Standard-Score-Einstellung).
+export const HERO_WIN_BONUS = 0.5;
+export const HERO_DRAW_BONUS = 0.2;
+
+export interface HeroRanked extends RankedPlayer {
+  trackScore: number; // nur aus dem Tracking
+  winBonus: number; // Sieg-/Remis-Bonus
+  wins: number;
+  draws: number;
+}
+
+export function heroRanking(rows: MatchPlayerStat[], cfg: ScoringConfig, matches: Match[]): HeroRanked[] {
+  const byId = new Map(matches.map((m) => [m.id, m]));
+  const bonus = new Map<string, { pts: number; wins: number; draws: number }>();
+  for (const r of rows) {
+    const m = byId.get(r.matchId);
+    if (!m || m.status !== 'beendet' || m.homeScore == null || m.awayScore == null) continue;
+    const side = r.teamId === m.homeTeamId ? 'home' : r.teamId === m.awayTeamId ? 'away' : null;
+    if (!side) continue;
+    const own = side === 'home' ? m.homeScore : m.awayScore;
+    const opp = side === 'home' ? m.awayScore : m.homeScore;
+    const k = `${r.teamId}::${r.playerName}`;
+    const b = bonus.get(k) ?? { pts: 0, wins: 0, draws: 0 };
+    if (own > opp) {
+      b.pts += HERO_WIN_BONUS;
+      b.wins += 1;
+    } else if (own === opp) {
+      b.pts += HERO_DRAW_BONUS;
+      b.draws += 1;
+    }
+    bonus.set(k, b);
+  }
+  return aggregate(rows, cfg)
+    .map((p) => {
+      const b = bonus.get(`${p.teamId}::${p.playerName}`) ?? { pts: 0, wins: 0, draws: 0 };
+      const winBonus = Math.round(b.pts * 10) / 10;
+      return { ...p, trackScore: p.score, winBonus, wins: b.wins, draws: b.draws, score: Math.round((p.score + winBonus) * 10) / 10 };
+    })
+    .sort((a, b) => b.score - a.score || b.avgNote - a.avgNote || a.playerName.localeCompare(b.playerName));
 }
 
 // Goldener Handschuh / bester Torwart: Torhüter nach Karten-Gesamtwert.
@@ -411,7 +456,13 @@ export interface Placement {
   value: string;
 }
 
-export function playerPlacements(rows: MatchPlayerStat[], cfg: ScoringConfig, teamId: string, playerName: string): Placement[] {
+export function playerPlacements(
+  rows: MatchPlayerStat[],
+  cfg: ScoringConfig,
+  teamId: string,
+  playerName: string,
+  matches?: Match[]
+): Placement[] {
   const me = (r: { teamId: string; playerName: string }) => r.teamId === teamId && r.playerName === playerName;
   const out: Placement[] = [];
   const add = <T extends { teamId: string; playerName: string }>(label: string, list: T[], value: (r: T) => string) => {
@@ -424,7 +475,7 @@ export function playerPlacements(rows: MatchPlayerStat[], cfg: ScoringConfig, te
   const self = agg.find(me);
   if (!self) return [];
 
-  add('HERO-Score', seasonRanking(rows, cfg), (r) => r.score.toFixed(1));
+  add('HERO-Score', matches ? heroRanking(rows, cfg, matches) : seasonRanking(rows, cfg), (r) => r.score.toFixed(1));
   if (self.role === 'keeper') {
     for (const b of keeperBoards(rows, cfg)) {
       add(b.label, b.rows, (r) => (b.percent ? `${Math.round(r.value * 100)} %` : b.decimals > 0 ? r.value.toFixed(b.decimals) : String(r.value)));

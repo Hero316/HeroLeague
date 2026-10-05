@@ -554,6 +554,22 @@ export default function App() {
       });
   }, [currentSeason?.id, demo.active]);
 
+  // HERO ONE: getrackte Werte der AUSGEWÄHLTEN Saison (aktuelle = trackingRows,
+  // ältere Saisons werden bei Bedarf nachgeladen).
+  const [pastSeasonRows, setPastSeasonRows] = useState<{ sid: string; rows: MatchPlayerStat[] } | null>(null);
+  useEffect(() => {
+    const sid = selectedSeason?.id;
+    if (!sid || isCurrentSeasonSelected || activeTab !== 'heroone' || pastSeasonRows?.sid === sid) return;
+    fetchPublicStats(sid)
+      .then((r) => setPastSeasonRows({ sid, rows: r.rows }))
+      .catch(() => setPastSeasonRows({ sid, rows: [] }));
+  }, [selectedSeason?.id, isCurrentSeasonSelected, activeTab, pastSeasonRows?.sid]);
+  const heroRows = isCurrentSeasonSelected
+    ? trackingRows
+    : pastSeasonRows?.sid === selectedSeason?.id
+      ? pastSeasonRows.rows
+      : [];
+
   // Spiele, für die es getrackte Werte gibt (→ Spielbericht anklickbar).
   const reportMatchIds = useMemo(() => new Set(trackingRows.map((r) => r.matchId)), [trackingRows]);
 
@@ -2123,7 +2139,9 @@ export default function App() {
         <>
           {seasonSwitcher}
           <HeroOne
-            players={players}
+            rows={heroRows}
+            cfg={scoring}
+            matches={seasonMatches}
             teams={leagueTeams}
             seasonNumber={selectedSeasonNumber}
             seasonLabel={selectedSeasonName}
