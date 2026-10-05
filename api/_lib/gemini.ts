@@ -49,10 +49,10 @@ export const ACTION_CATALOG: ActionDef[] = [
   { key: 'turnover', label: 'Ballverlust', hint: 'der Ballführende verliert den Ball (auch „Ballverlust gegen Y", „verliert den Ball an Y", „wird der Ball abgenommen"), sofern es KEIN misslungenes Dribbling (dribble_lost) und KEIN Fehlpass (pass_fail) ist. Der Ballverlierer bekommt turnover – NIEMALS duel_lost.' },
   { key: 'own_goal', label: 'Eigentor', hint: '"Eigentor", "fälscht ins eigene Tor ab".' },
   { key: 'penalty_goal', label: 'Strafstoßtor', hint: 'verwandelter Elfmeter. Gib zusätzlich goal aus, da es ein Tor ist.' },
-  { key: 'save', label: 'Parade', hint: 'Torwart hält, "pariert", "hält stark", "lenkt über die Latte". Nur Torwart.' },
-  { key: 'save_top', label: 'Glanzparade', hint: 'HERAUSRAGENDE Parade: "Weltklasse", "Glanzparade", "unglaublich gehalten", "fischt den Ball aus dem Winkel", "phänomenal", "krasse Parade". Nur save_top ausgeben – die App zählt es automatisch als normale Parade (save) mit. Nur Torwart.' },
+  { key: 'save', label: 'Parade', hint: 'NORMALE Parade – der Torwart muss aktiv eingreifen: "pariert", "hält", "hält stark", "streckt sich", "springt hin", "lenkt über die Latte / um den Pfosten", "wehrt ab", "faustet weg", "gute Parade". Ohne Superlativ/Begeisterung ist es save. Nur Torwart.' },
+  { key: 'save_top', label: 'Glanzparade', hint: 'HERAUSRAGENDE Parade (Super-/Glanzparade) – sobald die Parade begeistert, übertrieben oder mit Superlativ beschrieben wird: "Glanzparade", "Superparade", "Monsterparade", "Wahnsinnsparade", "Weltklasse", "phänomenal", "unglaublich gehalten", "wow, was für eine Parade", "was für eine Reaktion", "krasse Reaktion", "Hammer-Reflex", "Reflex des Abends", "fischt den Ball aus dem Winkel", "krasse Parade", "alter, wie hält er den". Im Zweifel zwischen save und save_top: bei hörbarer Begeisterung save_top. Nur save_top ausgeben – die App zählt es automatisch als normale Parade (save) mit. Nur Torwart.' },
   { key: 'gk_goal_against', label: 'Gegentor (Torwart)', hint: 'Torwart kassiert ein Tor. Nur Torwart.' },
-  { key: 'gk_position_save', label: 'Standparade', hint: 'einfache/sichere Parade ohne Gefahr, "sichere Beute", "nimmt den Ball auf". Nur Torwart.' },
+  { key: 'gk_position_save', label: 'Standparade', hint: 'Standparade – einfache/neutrale Parade OHNE großes Eingreifen: Torwart steht richtig und wird angeschossen, "schießt ihn an", "direkt auf den Torwart", "Torwart steht gut", "sichere Beute", "nimmt den Ball auf", "fängt den Ball", "kein Problem für den Torwart". Nur Torwart.' },
   { key: 'penalty_save', label: 'Gehaltener Elfmeter', hint: 'Torwart hält einen Strafstoß. Nur Torwart.' },
 ];
 
