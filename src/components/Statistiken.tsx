@@ -57,16 +57,49 @@ const VALUE_COLOR: Record<Accent, string> = {
 };
 
 // Statistik-Seite: Liga-Kennzahlen als Kachelzeile + Leader-Cards für Spieler und Teams.
-export default function Statistiken({ players, matches, teams, trackingRows = [], scoringConfig, seasonNumber = 1, seasonLabel = '', onSelectTeam }: StatistikenProps) {
+export default function Statistiken({
+  players,
+  matches: allMatches,
+  teams,
+  trackingRows: allRows = [],
+  scoringConfig,
+  seasonNumber = 1,
+  seasonLabel = '',
+  onSelectTeam,
+}: StatistikenProps) {
   const [compareOpen, setCompareOpen] = React.useState(false);
   const [keeperOpen, setKeeperOpen] = React.useState(false);
   const [steckbriefOpen, setSteckbriefOpen] = React.useState(false);
+  // Spieltag-Filter: „Gesamt" (null) oder ein einzelner Spieltag. Alle Werte
+  // der Seite (Kacheln, Team-Karten, Torschützen, Bestenlisten, Torhüter)
+  // rechnen dann nur mit diesem Spieltag. Steckbrief & 1 gegen 1 bleiben
+  // bewusst auf der ganzen Saison.
+  const [matchday, setMatchday] = React.useState<number | null>(null);
+  const matchdays = React.useMemo(() => {
+    const tracked = new Set(allRows.map((r) => r.matchId));
+    const set = new Set<number>();
+    for (const m of allMatches) {
+      if ((m.status === 'beendet' && m.homeScore !== null) || tracked.has(m.id)) set.add(m.matchday);
+    }
+    return [...set].sort((a, b) => a - b);
+  }, [allMatches, allRows]);
+  const activeMd = matchday !== null && matchdays.includes(matchday) ? matchday : null;
+  const matches = React.useMemo(
+    () => (activeMd === null ? allMatches : allMatches.filter((m) => m.matchday === activeMd)),
+    [allMatches, activeMd]
+  );
+  const trackingRows = React.useMemo(() => {
+    if (activeMd === null) return allRows;
+    const ids = new Set(matches.map((m) => m.id));
+    return allRows.filter((r) => ids.has(r.matchId));
+  }, [allRows, matches, activeMd]);
+
   const finished = matches.filter((m) => m.status === 'beendet' && m.homeScore !== null && m.awayScore !== null);
   const totalGoals = finished.reduce((acc, m) => acc + (m.homeScore || 0) + (m.awayScore || 0), 0);
   const avgGoals = finished.length ? totalGoals / finished.length : 0;
 
   const leagueTiles = [
-    { value: totalGoals, decimals: 0, label: 'TORE GESAMT' },
+    { value: totalGoals, decimals: 0, label: activeMd === null ? 'TORE GESAMT' : `TORE · ${activeMd}. SPIELTAG` },
     { value: avgGoals, decimals: 1, label: 'Ø TORE / SPIEL' },
     { value: finished.length, decimals: 0, label: 'GESPIELTE PARTIEN' },
     { value: teams.length, decimals: 0, label: 'CLUBS' },
@@ -371,6 +404,31 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
 
   return (
     <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-10">
+      {/* Spieltag-Filter */}
+      {matchdays.length > 0 && (
+        <div className="flex flex-wrap gap-2 pt-1 pb-4" role="tablist" aria-label="Spieltag wählen">
+          {[null, ...matchdays].map((md) => {
+            const on = md === activeMd;
+            return (
+              <button
+                key={md ?? 'all'}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                onClick={() => setMatchday(md)}
+                className={`px-4 py-2 rounded-full text-xs font-sans font-bold uppercase tracking-wider border transition-colors cursor-pointer ${
+                  on
+                    ? 'bg-brand-accent-light text-[#04201c] border-brand-accent-light'
+                    : 'border-white/15 text-hl-mute hover:text-white hover:border-white/30'
+                }`}
+              >
+                {md === null ? 'Gesamt' : `${md}. Spieltag`}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Liga-Kennzahlen */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 pt-2 hl-cascade">
         {leagueTiles.map((tile) => (
@@ -453,8 +511,8 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
         onClose={() => setCompareOpen(false)}
         players={players}
         teams={teams}
-        trackingRows={trackingRows}
-        matches={matches}
+        trackingRows={allRows}
+        matches={allMatches}
         scoringConfig={scoringConfig}
       />
       <PlayerSteckbrief
@@ -462,8 +520,8 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
         onClose={() => setSteckbriefOpen(false)}
         players={players}
         teams={teams}
-        trackingRows={trackingRows}
-        matches={matches}
+        trackingRows={allRows}
+        matches={allMatches}
         scoringConfig={scoringConfig}
         seasonLabel={seasonLabel}
       />
@@ -675,7 +733,9 @@ export default function Statistiken({ players, matches, teams, trackingRows = []
         <Reveal className="mt-10">
           <div className="flex items-center gap-2 mb-4">
             <BarChart3 className="w-5 h-5 text-brand-accent-light" />
-            <h2 className="font-display font-black text-xl sm:text-2xl uppercase tracking-tight text-white">Bestenlisten der Saison</h2>
+            <h2 className="font-display font-black text-xl sm:text-2xl uppercase tracking-tight text-white">
+              {activeMd === null ? 'Bestenlisten der Saison' : `Bestenlisten · ${activeMd}. Spieltag`}
+            </h2>
           </div>
           <StatAccordion
             items={boards.map((b) => {
