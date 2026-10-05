@@ -239,6 +239,11 @@ export default function TrackingCenter({
   // Tracker sofort aktualisiert; folgt sonst dem Prop.
   const [rosterState, setRosterState] = useState<RosterMap>(roster);
   useEffect(() => setRosterState(roster), [roster]);
+  // Hier im Tracker gespeicherte Abwesenheiten (je Spieltag „saison:spieltag" →
+  // Team → Namen). Die Spiele (matches) kommen erst beim nächsten Laden mit den
+  // neuen Abwesenden vom Server – bis dahin gilt diese lokale Liste, sonst
+  // tauchen gerade abgemeldete Spieler wieder auf.
+  const localAbsentRef = useRef<Record<string, Record<string, Set<string>>>>({});
   const [attendanceOpen, setAttendanceOpen] = useState(false);
 
   const dayKey = selectedEventId
@@ -389,6 +394,8 @@ export default function TrackingCenter({
             (absentByTeam[a.teamId] ??= new Set<string>()).add(a.playerName);
           });
         });
+        const localAbsent = rk ? localAbsentRef.current[rk] : undefined;
+        if (localAbsent) for (const [tid, set] of Object.entries(localAbsent)) absentByTeam[tid] = new Set(set);
 
         const next: RowMap = {};
         games.forEach((m) => {
@@ -758,11 +765,13 @@ export default function TrackingCenter({
 
   // Als abwesend eingetragene Spieler je Team (Union über die Spiele des Tages) –
   // damit das Anwesenheits-Panel neu hinzugefügte Kaderspieler als „da" vorbelegt.
-  const dayAbsentByTeam = useMemo(() => {
+  const dayAbsentByTeam = (rk: string) => {
     const out: Record<string, Set<string>> = {};
     dayMatches.forEach((m) => (m.absentees || []).forEach((a) => (out[a.teamId] ??= new Set<string>()).add(a.playerName)));
+    const local = localAbsentRef.current[rk];
+    if (local) for (const [tid, set] of Object.entries(local)) out[tid] = new Set(set);
     return out;
-  }, [dayMatches]);
+  };
 
   // Anwesenheit/Torwart für den Spieltag speichern und Raster neu aufbauen.
   const applyAttendance = useCallback(
@@ -772,6 +781,13 @@ export default function TrackingCenter({
       const nextRoster: RosterMap = { ...rosterState, [rk]: { minutes, teams } };
       setRosterState(nextRoster);
       setAttendanceOpen(false);
+      // Abwesende = Kader minus „da" (wie der Server es in die Spiele schreibt).
+      const local: Record<string, Set<string>> = { ...localAbsentRef.current[rk] };
+      Object.entries(teams).forEach(([tid, t]) => {
+        const present = new Set(t.present);
+        local[tid] = new Set((resolveTeam(tid)?.spielerliste ?? []).map((p) => p.name).filter((n) => !present.has(n)));
+      });
+      localAbsentRef.current[rk] = local;
       try {
         await saveAttendance(seasonId, selectedMatchday, minutes, teams);
       } catch {
@@ -780,7 +796,7 @@ export default function TrackingCenter({
       const games = matches.filter((m) => m.seasonId === seasonId && m.matchday === selectedMatchday).sort(cmpMatches);
       buildRows(leagueDayKey(seasonId, selectedMatchday), games, rk, nextRoster);
     },
-    [selectedMatchday, seasonId, rosterState, matches, buildRows]
+    [selectedMatchday, seasonId, rosterState, matches, buildRows, resolveTeam]
   );
 
   // --- Anwesenheit für Testspiele (wie „Wer ist heute da?" bei der Liga) ------
@@ -979,7 +995,7 @@ export default function TrackingCenter({
           resolveTeam={resolveTeam}
           roster={rosterState}
           rk={`${seasonId}:${selectedMatchday}`}
-          absentByTeam={dayAbsentByTeam}
+          absentByTeam={dayAbsentByTeam(`${seasonId}:${selectedMatchday}`)}
           onClose={() => setAttendanceOpen(false)}
           onSave={applyAttendance}
         />
