@@ -1,8 +1,10 @@
 // ===========================================================================
-// Spiel-Fotos fürs Tracking: Screenshot statt Kaderbild — aber NUR für ein
-// einzelnes Spiel. Kader und Backend werden dabei NIE angefasst.
+// Spiel-Fotos fürs Tracking: Screenshot statt Kaderbild — gilt für den ganzen
+// SPIELTAG (alle Spiele des Abends), damit man ihn nur einmal machen muss.
+// Kader und Backend werden dabei NIE angefasst.
 //
-// Gespeichert wird nur lokal im Browser (localStorage), je Spiel ein Eintrag.
+// Gespeichert wird nur lokal im Browser (localStorage), je Spieltag ein Eintrag
+// (Schlüssel „Team::Spieler"). Ältere Einträge je Spiel werden weiter gelesen.
 // Deshalb werden die Bilder vorher stark verkleinert: ein roher Screenshot hat
 // schnell mehrere MB, der localStorage fasst aber nur ~5 MB insgesamt.
 // ===========================================================================
@@ -64,9 +66,11 @@ export async function imageFromClipboard(): Promise<Blob | null> {
   return null;
 }
 
-export function loadMatchPhotos(matchId: string): PhotoMap {
+const dayKeyFor = (dayKey: string) => `${KEY_PREFIX}day:${dayKey}`;
+
+function readMap(storageKey: string): PhotoMap {
   try {
-    const raw = localStorage.getItem(keyFor(matchId));
+    const raw = localStorage.getItem(storageKey);
     const parsed = raw ? (JSON.parse(raw) as unknown) : null;
     const out: PhotoMap = {};
     if (parsed && typeof parsed === 'object') {
@@ -80,19 +84,46 @@ export function loadMatchPhotos(matchId: string): PhotoMap {
   }
 }
 
-// Speichern. Ist der Speicher voll, werden zuerst die Fotos ANDERER Spiele
-// weggeräumt (die braucht man nach dem Spiel ohnehin nicht mehr) und es wird
-// einmal erneut versucht. Klappt auch das nicht, gilt das Foto nur bis zum
-// Neuladen — gemeldet über den Rückgabewert.
-export function saveMatchPhotos(matchId: string, map: PhotoMap): boolean {
-  const write = () => localStorage.setItem(keyFor(matchId), JSON.stringify(map));
+// Fotos eines Spiels laden: Spieltags-Fotos („Team::Spieler") auf die Zeilen-
+// Schlüssel dieses Spiels („Spiel::Team::Spieler") abbilden. Alte Einzelspiel-
+// Fotos (frühere Version) gelten weiter, die Spieltags-Fotos haben Vorrang.
+export function loadMatchPhotos(matchId: string, dayKey?: string): PhotoMap {
+  const out: PhotoMap = {};
+  if (dayKey) {
+    for (const [k, v] of Object.entries(readMap(dayKeyFor(dayKey)))) out[`${matchId}::${k}`] = v;
+  }
+  return { ...readMap(keyFor(matchId)), ...out };
+}
+
+// Ein Foto für den ganzen Spieltag setzen (dataUrl) oder entfernen (null).
+// Ist der Speicher voll, werden zuerst die Fotos ANDERER Spieltage/Spiele
+// weggeräumt und es wird einmal erneut versucht. Klappt auch das nicht, gilt
+// das Foto nur bis zum Neuladen — gemeldet über den Rückgabewert.
+export function saveDayPhoto(dayKey: string, matchId: string, teamPlayer: string, dataUrl: string | null): boolean {
+  const own = dayKeyFor(dayKey);
+  const map = readMap(own);
+  if (dataUrl === null) delete map[teamPlayer];
+  else map[teamPlayer] = dataUrl;
+  // Beim Entfernen auch ein altes Einzelspiel-Foto dieses Spielers löschen.
+  if (dataUrl === null) {
+    const legacy = readMap(keyFor(matchId));
+    if (legacy[`${matchId}::${teamPlayer}`]) {
+      delete legacy[`${matchId}::${teamPlayer}`];
+      try {
+        localStorage.setItem(keyFor(matchId), JSON.stringify(legacy));
+      } catch {
+        /* egal */
+      }
+    }
+  }
+  const write = () => localStorage.setItem(own, JSON.stringify(map));
   try {
     write();
     return true;
   } catch {
     try {
       for (const k of Object.keys(localStorage)) {
-        if (k.startsWith(KEY_PREFIX) && k !== keyFor(matchId)) localStorage.removeItem(k);
+        if (k.startsWith(KEY_PREFIX) && k !== own) localStorage.removeItem(k);
       }
       write();
       return true;

@@ -31,7 +31,7 @@ import {
   imageFromClipboard,
   imageFromDataTransfer,
   loadMatchPhotos,
-  saveMatchPhotos,
+  saveDayPhoto,
   type PhotoMap,
 } from '../lib/trackPhotos';
 import type {
@@ -934,6 +934,7 @@ export default function TrackingCenter({
               onReassign={reassignPlayers}
               reassignBusy={reassignBusy}
               dayGameCount={dayMatches.length}
+              dayKey={dayKey}
             />
           ) : dayActive ? (
             <DayView
@@ -1337,6 +1338,7 @@ function MatchEditor({
   onReassign,
   reassignBusy,
   dayGameCount,
+  dayKey,
 }: {
   match: Match;
   resolveTeam: (key: string) => Team | undefined;
@@ -1351,6 +1353,7 @@ function MatchEditor({
   onReassign: (teamId: string, from: string, to: string | undefined, op: 'merge' | 'swap' | 'delete', wholeDay: boolean) => void;
   reassignBusy: boolean;
   dayGameCount: number;
+  dayKey: string; // Spieltag – Tracking-Fotos gelten für alle Spiele des Abends
 }) {
   const home = resolveTeam(match.homeTeamId);
   const away = resolveTeam(match.awayTeamId);
@@ -1399,21 +1402,25 @@ function MatchEditor({
   const effNumber = (k: string, r: EditRow) =>
     typeof numOverrides[k] === 'number' ? numOverrides[k] : r.number;
 
-  // Spiel-Fotos: genau wie die Nummern nur für DIESES Spiel und nur lokal.
-  // Screenshots werden beim Speichern verkleinert (siehe lib/trackPhotos).
+  // Tracking-Fotos (Screenshots): gelten für den GANZEN Spieltag – einmal
+  // gesetzt, sind sie in jedem Spiel des Abends da. Nur lokal auf diesem Gerät,
+  // Kader/Backend bleiben unberührt (siehe lib/trackPhotos).
   const [photoOverrides, setPhotoOverrides] = useState<PhotoMap>({});
-  useEffect(() => setPhotoOverrides(loadMatchPhotos(match.id)), [match.id]);
+  const photoDay = dayKey || `match:${match.id}`;
+  useEffect(() => setPhotoOverrides(loadMatchPhotos(match.id, photoDay)), [match.id, photoDay]);
 
   const setRowPhoto = (k: string, dataUrl: string | null) => {
     setPhotoOverrides((prev) => {
       const next = { ...prev };
       if (dataUrl === null) delete next[k];
       else next[k] = dataUrl;
-      if (!saveMatchPhotos(match.id, next)) {
-        window.alert('Der Browser-Speicher ist voll – das Foto gilt nur bis zum Neuladen.');
-      }
       return next;
     });
+    // rowKey = „Spiel::Team::Spieler" → für den Spieltag „Team::Spieler" merken.
+    const teamPlayer = k.slice(match.id.length + 2);
+    if (!saveDayPhoto(photoDay, match.id, teamPlayer, dataUrl)) {
+      window.alert('Der Browser-Speicher ist voll – das Foto gilt nur bis zum Neuladen.');
+    }
   };
 
   // Live-Spielstand aus den getrackten Toren: eigene Tore + Eigentore des Gegners.
