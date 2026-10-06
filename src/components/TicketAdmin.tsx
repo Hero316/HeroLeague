@@ -9,7 +9,7 @@ import { ModalPortal } from './ui';
 import { useBackClose } from '../lib/backStack';
 import { usePolling } from '../lib/usePolling';
 import {
-  ticketAdminList, ticketAdminArrived, ticketAdminDelete, ticketAdminSave, ticketAdminMatchdays,
+  ticketAdminList, ticketAdminArrived, ticketAdminDelete, ticketAdminSave, ticketAdminMatchdays, ticketAdminDeleteEvent,
   type TicketAdminData, type TicketAdminConfig, type TicketRow, type TicketMatchdayOption,
 } from '../lib/register';
 
@@ -274,6 +274,34 @@ export default function TicketAdmin() {
       await ticketAdminSave(next.some((e) => e.id === cfg.id) ? next : [...next, cfg]);
       setSaved(true); setTimeout(() => setSaved(false), 2000); load(cfg.eventKey);
     } catch { /* ignore */ } finally { setSaving(false); }
+  };
+  // Ganze Veranstaltung löschen – mit Sicherheitsabfrage. Sind schon Tickets
+  // vergeben, muss LÖSCHEN eingetippt werden (die Anmeldungen gehen mit weg).
+  const [deleting, setDeleting] = useState(false);
+  const deleteEvent = async () => {
+    if (!cfg || !data) return;
+    const people = data.confirmedCount ?? 0;
+    if (people > 0) {
+      const typed = window.prompt(
+        `ACHTUNG: „${cfg.title}" hat schon ${people} bestätigte Anmeldung${people === 1 ? '' : 'en'}.\n` +
+          'Die Veranstaltung UND alle ihre Tickets werden endgültig gelöscht – nicht rückgängig zu machen.\n\n' +
+          'Zum Bestätigen LÖSCHEN eintippen:'
+      );
+      if ((typed ?? '').trim().toUpperCase() !== 'LÖSCHEN') return;
+    } else if (!window.confirm(`Veranstaltung „${cfg.title}" wirklich löschen?\n\nSie verschwindet aus der Liste und von der Ticket-Seite.`)) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      await ticketAdminDeleteEvent(cfg.eventKey);
+      setShowConfig(false);
+      setSelKey(null);
+      load();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Löschen fehlgeschlagen.');
+    } finally {
+      setDeleting(false);
+    }
   };
   const exportCsv = () => {
     if (!data) return;
@@ -545,6 +573,13 @@ export default function TicketAdmin() {
 
               <button onClick={saveConfig} disabled={saving} className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-[14px] font-display font-black uppercase tracking-wide text-white cursor-pointer disabled:opacity-50" style={{ background: 'linear-gradient(135deg,#7a0f49,#E6238E)' }}>
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <>Gespeichert ✓</> : <><Save className="w-4 h-4" /> Speichern</>}
+              </button>
+              <button
+                onClick={deleteEvent}
+                disabled={deleting}
+                className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-[13px] font-bold text-rose-300 border border-rose-500/30 bg-rose-500/5 hover:bg-rose-500/15 cursor-pointer disabled:opacity-50"
+              >
+                {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Veranstaltung löschen
               </button>
             </div>
           </motion.div>
