@@ -70,15 +70,32 @@ const DEFAULT_CONSENT =
   'Die Einwilligung kann jederzeit formlos per E-Mail widerrufen werden. Weitere Informationen ' +
   'in unserer Datenschutzerklärung.';
 
-const DEFAULT_DONATION_TITLE = 'Kurze, ehrliche Bitte 💚';
+const DEFAULT_DONATION_TITLE = 'Kurze Bitte 💚';
 const DEFAULT_DONATION_TEXT =
   'Schön, dass du dabei bist! 🙌\n\n' +
-  'Ganz ehrlich: Alles, was du vor Ort siehst – Kameras, Livestream, Technik, Website und Statistiken – ' +
-  'stemmen Ehrenamtliche in ihrer Freizeit. Vieles davon ist privates Equipment, einiges hat die Hero League ' +
-  'inzwischen selbst angeschafft – und dafür sind wir quasi privat in Vorleistung gegangen.\n\n' +
-  'Nach jedem Spieltag geht das ganze Team als kleines Dankeschön zusammen essen.\n\n' +
-  'Wenn dir die Hero League gefällt, freuen wir uns riesig über eine kleine Spende – egal wie viel. ' +
-  'Dein Ticket bleibt natürlich kostenlos. 💚';
+  'Kameras, Livestream, Technik, Website – das alles stemmen Ehrenamtliche, oft mit privatem ' +
+  'Equipment oder aus eigener Tasche vorgestreckt.\n\n' +
+  'Mit einer kleinen Spende hilfst du uns enorm – und das Team geht nach dem Spieltag zusammen essen. 💚';
+// Frühere (zu lange) Standardtexte: wurden sie unverändert gespeichert, gilt
+// automatisch der neue Standard. Eigene Texte bleiben unangetastet.
+const OLD_DONATION_TITLES = ['Kurze, ehrliche Bitte 💚'];
+const OLD_DONATION_TEXTS = [
+  'Schön, dass du dabei bist! 🙌\n\n' +
+    'Ganz ehrlich: Alles, was du vor Ort siehst – Kameras, Livestream, Technik, Website und Statistiken – ' +
+    'stemmen Ehrenamtliche in ihrer Freizeit. Vieles davon ist privates Equipment, einiges hat die Hero League ' +
+    'inzwischen selbst angeschafft – und dafür sind wir quasi privat in Vorleistung gegangen.\n\n' +
+    'Nach jedem Spieltag geht das ganze Team als kleines Dankeschön zusammen essen.\n\n' +
+    'Wenn dir die Hero League gefällt, freuen wir uns riesig über eine kleine Spende – egal wie viel. ' +
+    'Dein Ticket bleibt natürlich kostenlos. 💚',
+];
+const norm = (t: unknown) => (typeof t === 'string' ? t.replace(/\r\n/g, '\n').trim() : '');
+function upgradeDonation(e: TicketConfig): TicketConfig {
+  return {
+    ...e,
+    donationTitle: OLD_DONATION_TITLES.includes(norm(e.donationTitle)) ? DEFAULT_DONATION_TITLE : e.donationTitle,
+    donationText: OLD_DONATION_TEXTS.map(norm).includes(norm(e.donationText)) ? DEFAULT_DONATION_TEXT : e.donationText,
+  };
+}
 
 const baseEvent = (): TicketConfig => ({
   id: randomUUID(),
@@ -130,7 +147,7 @@ async function getArchive(): Promise<TicketArchive> {
     if (Array.isArray(v.events)) {
       const events = (v.events as Partial<TicketConfig>[])
         .filter((e) => e && typeof e.eventKey === 'string' && e.eventKey)
-        .map((e) => ({ ...baseEvent(), ...e }) as TicketConfig);
+        .map((e) => upgradeDonation({ ...baseEvent(), ...e } as TicketConfig));
       return events.length ? { events } : DEFAULT_ARCHIVE;
     }
     // Alt-Format: eine einzelne Konfiguration -> in die Liste heben.
@@ -643,6 +660,21 @@ async function adminDelete(req: VercelRequest, res: VercelResponse) {
   return res.json({ ok: true });
 }
 
+// Eine ganze Veranstaltung löschen: aus der Liste nehmen UND ihre Anmeldungen
+// entfernen (sonst tauchten sie bei einem neuen Event mit gleichem Schlüssel
+// wieder auf). Die Sicherheitsabfrage macht das Backend-UI.
+async function adminDeleteEvent(req: VercelRequest, res: VercelResponse) {
+  const key = clamp(req.body?.eventKey, 60);
+  if (!key) return badRequest(res, 'Veranstaltung fehlt.');
+  const prev = await getArchive();
+  if (!prev.events.some((e) => e.eventKey === key)) return res.status(404).json({ error: 'Unbekannte Veranstaltung.' });
+  const events = prev.events.filter((e) => e.eventKey !== key);
+  await sql`INSERT INTO settings (key, value) VALUES ('event_tickets', ${JSON.stringify({ events })}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`;
+  const del = await sql`DELETE FROM event_tickets WHERE event_key = ${key} RETURNING 1`;
+  return res.json({ ok: true, deletedTickets: del.length, events });
+}
+
 // Speichert die GESAMTE Event-Liste. Der Event-Schlüssel darf nur gesetzt
 // werden, solange es keinen gibt – sonst würden bestehende Anmeldungen
 // unauffindbar, weil die Tickets in der Datenbank daran hängen.
@@ -741,6 +773,7 @@ export async function eventTickets(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'POST' && action === 'admin-delete') return adminDelete(req, res);
     if (req.method === 'POST' && action === 'admin-config') return adminSaveConfig(req, res);
     if (req.method === 'GET' && action === 'admin-matchdays') return adminMatchdays(req, res);
+    if (req.method === 'POST' && action === 'admin-delete-event') return adminDeleteEvent(req, res);
   }
   return res.status(400).json({ error: 'Unbekannte Aktion' });
 }

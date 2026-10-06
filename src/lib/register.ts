@@ -179,6 +179,11 @@ export const ticketAdminArrived = (id: string, arrived: number) =>
 export const ticketAdminDelete = (id: string) =>
   apiFetch<{ ok: boolean }>('/api/event-tickets?action=admin-delete', { method: 'POST', body: JSON.stringify({ id }) });
 // Speichert die GESAMTE Event-Liste (mehrere Veranstaltungen können parallel offen sein).
+// Ganze Veranstaltung löschen (inkl. ihrer Anmeldungen).
+export const ticketAdminDeleteEvent = (eventKey: string) =>
+  apiFetch<{ ok: boolean; deletedTickets: number }>('/api/event-tickets?action=admin-delete-event', {
+    method: 'POST', body: JSON.stringify({ eventKey }),
+  });
 export const ticketAdminSave = (events: TicketAdminConfig[]) =>
   apiFetch<{ ok: boolean; events: TicketAdminConfig[] }>('/api/event-tickets?action=admin-config', { method: 'POST', body: JSON.stringify({ events }) });
 
