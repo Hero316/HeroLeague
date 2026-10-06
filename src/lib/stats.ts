@@ -168,6 +168,9 @@ export function eventDayKey(eventId: string): string {
 // Tracking-Status je Spiel („wird getrackt" / „fertig") – geräteübergreifend,
 // damit nicht zwei Leute dasselbe Spiel tracken. Schlüssel „<dayKey>|<matchId>".
 export type TrackStatus = 'tracking' | 'done';
+// „Fertig" geht erst, wenn in dem Spiel mindestens so viele Aktionen erfasst sind
+// (Schutz gegen versehentliches/absichtliches Durchklicken). Gleicher Wert im Server.
+export const MIN_DONE_ACTIONS = 10;
 export type TrackStatusMap = Record<string, { status: TrackStatus; by: string; at: string }>;
 export function fetchTrackStatus(): Promise<TrackStatusMap> {
   return apiFetch('/api/stats?resource=track-status');

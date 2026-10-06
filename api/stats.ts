@@ -335,11 +335,24 @@ const resetTally = requireStaff(async (req: VercelRequest, res: VercelResponse) 
 // Damit zwei Leute nicht dasselbe Spiel tracken: settings-Key 'tracking-status'
 // = { "<dayKey>|<matchId>": { status, by, at } }. Atomar per jsonb-Merge.
 type TrackStatus = 'tracking' | 'done';
+const MIN_DONE_ACTIONS = 10; // gleich wie src/lib/stats.ts
 const saveTrackStatus = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
   const b = (req.body ?? {}) as { dayKey?: unknown; matchId?: unknown; status?: unknown };
   if (!isNonEmptyString(b.dayKey) || !isNonEmptyString(b.matchId)) return badRequest(res, 'dayKey/matchId fehlt.');
   const key = `${b.dayKey}|${b.matchId}`;
   const status: TrackStatus | null = b.status === 'tracking' || b.status === 'done' ? b.status : null;
+  if (status === 'done') {
+    // Nur wirklich getrackte Spiele dürfen auf „fertig".
+    const r = (await sql`
+      SELECT COALESCE(SUM(kv.v::int), 0)::int AS n
+      FROM match_player_stats t, jsonb_each_text(t.counts) AS kv(k, v)
+      WHERE t.day_key = ${b.dayKey} AND t.match_id = ${b.matchId} AND kv.v ~ '^[0-9]+$'
+    `) as { n: number }[];
+    const n = Number(r[0]?.n ?? 0);
+    if (n < MIN_DONE_ACTIONS) {
+      return badRequest(res, `Noch nicht genug getrackt (${n} von mindestens ${MIN_DONE_ACTIONS} Aktionen) – „Fertig" geht erst danach.`);
+    }
+  }
   if (status) {
     const session = await getSession(req);
     const entry = { [key]: { status, by: session?.name || session?.email || '', at: new Date().toISOString() } };
