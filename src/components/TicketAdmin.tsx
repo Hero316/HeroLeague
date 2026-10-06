@@ -181,7 +181,8 @@ export default function TicketAdmin() {
     if (data?.events.some((e) => e.eventKey === key)) { window.alert('Dieser Schlüssel wird schon verwendet.'); return; }
     const fresh: TicketAdminConfig = {
       id: key, open: false, eventKey: key, title: 'Neue Veranstaltung', dateLabel: '', locationLabel: '',
-      capacity: 50, maxPerEmail: 4, note: '', donationUrl: '', startsAt: '',
+      capacity: 50, maxPerEmail: 4, note: '', donationUrl: data?.events.at(-1)?.donationUrl || '', startsAt: '',
+      donationPopup: true, donationTitle: data?.events.at(-1)?.donationTitle || '', donationText: data?.events.at(-1)?.donationText || '',
       accent: '#E9C46A', accentDark: '#6b4d12',
       consentText: data?.events[0]?.consentText || '',
     };
@@ -249,14 +250,22 @@ export default function TicketAdmin() {
 
   return (
     <div className="space-y-4">
-      {/* Mehrere Veranstaltungen können gleichzeitig laufen – hier wird gewechselt. */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {(data?.overview ?? []).map((e) => (
+      {/* Mehrere Veranstaltungen können gleichzeitig laufen – hier wird gewechselt.
+          Neueste ganz links (neue werden hinten angehängt → umgedreht anzeigen),
+          „+ Veranstaltung" vorne; bei vielen Einträgen seitlich scrollen. */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mb-1 [scrollbar-width:thin]">
+        <button
+          onClick={addEvent}
+          className="shrink-0 px-3 py-2 rounded-xl text-[12px] font-bold cursor-pointer border border-dashed border-white/20 text-hl-mute hover:text-white whitespace-nowrap"
+        >
+          + Veranstaltung
+        </button>
+        {[...(data?.overview ?? [])].reverse().map((e) => (
           <button
             key={e.eventKey}
             onClick={() => selectEvent(e.eventKey)}
             title={e.dateLabel || e.eventKey}
-            className={`px-3 py-2 rounded-xl text-[12px] font-bold cursor-pointer border transition-colors min-w-0 ${
+            className={`shrink-0 whitespace-nowrap px-3 py-2 rounded-xl text-[12px] font-bold cursor-pointer border transition-colors ${
               selKey === e.eventKey
                 ? 'bg-white/10 border-white/25 text-white'
                 : 'bg-white/[.03] border-white/10 text-hl-mute hover:text-hl-text'
@@ -267,12 +276,6 @@ export default function TicketAdmin() {
             <span className="text-hl-faint font-normal ml-1.5 tabular-nums">{e.soldSeats}/{e.capacity}</span>
           </button>
         ))}
-        <button
-          onClick={addEvent}
-          className="px-3 py-2 rounded-xl text-[12px] font-bold cursor-pointer border border-dashed border-white/20 text-hl-mute hover:text-white"
-        >
-          + Veranstaltung
-        </button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -381,6 +384,36 @@ export default function TicketAdmin() {
                 <input value={cfg.donationUrl} onChange={(e) => setCfg({ ...cfg, donationUrl: e.target.value })} placeholder="https://… (Stripe Payment Link oder PayPal.Me)" className={inp} />
                 <span className="block text-[11px] text-hl-faint mt-1">Erscheint bei Tickets UND bei der Season-2-Anmeldung (Mail + Erfolgsseite) als „Hero League unterstützen".</span>
               </label>
+              <div className="rounded-xl bg-white/[.03] border border-white/[.08] p-3 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="min-w-0">
+                    <span className="block text-[14px] font-semibold text-white">Spenden-Pop-up nach dem Ticket</span>
+                    <span className="block text-[11px] text-hl-faint leading-snug mt-0.5">
+                      Poppt direkt nach der Ticket-Bestätigung auf – mit deinem Text und dem Spenden-Link.
+                      {!cfg.donationUrl && <b className="text-hl-gold"> Erscheint nur, wenn oben ein Spenden-Link eingetragen ist.</b>}
+                    </span>
+                  </span>
+                  <button
+                    onClick={() => setCfg({ ...cfg, donationPopup: cfg.donationPopup === false })}
+                    className={`shrink-0 relative w-12 h-7 rounded-full transition-colors cursor-pointer ${cfg.donationPopup !== false ? 'bg-emerald-500' : 'bg-white/15'}`}
+                  >
+                    <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${cfg.donationPopup !== false ? 'left-6' : 'left-1'}`} />
+                  </button>
+                </div>
+                {cfg.donationPopup !== false && (
+                  <>
+                    <label className="block">
+                      <span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Pop-up-Überschrift</span>
+                      <input value={cfg.donationTitle ?? ''} onChange={(e) => setCfg({ ...cfg, donationTitle: e.target.value })} placeholder="Kurze, ehrliche Bitte 💚" className={inp} />
+                    </label>
+                    <label className="block">
+                      <span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Pop-up-Text</span>
+                      <textarea value={cfg.donationText ?? ''} onChange={(e) => setCfg({ ...cfg, donationText: e.target.value })} rows={9} className={`${inp} resize-y leading-relaxed`} />
+                      <span className="block text-[11px] text-hl-faint mt-1">Leere Zeile = neuer Absatz. Leer lassen = Standardtext.</span>
+                    </label>
+                  </>
+                )}
+              </div>
               <label className="block"><span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Event-Schlüssel (intern)</span><input value={cfg.eventKey} readOnly disabled className={`${inp} opacity-60 cursor-not-allowed`} />
                 <span className="block text-[11px] text-hl-faint mt-1">Nur ändern für ein NEUES Event – die alten Anmeldungen bleiben unter dem alten Schlüssel.</span></label>
 

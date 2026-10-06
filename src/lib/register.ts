@@ -116,6 +116,7 @@ export interface TicketAdminConfig {
   id: string;
   open: boolean; eventKey: string; title: string; dateLabel: string; locationLabel: string;
   capacity: number; maxPerEmail: number; note: string; donationUrl: string;
+  donationPopup?: boolean; donationTitle?: string; donationText?: string; // Spenden-Pop-up nach der Bestätigung
   accent: string; accentDark: string; consentText: string; startsAt: string;
   selfCheckin?: boolean; // Selbst-Check-in am Eingang (QR-Plakat → /einchecken)
 }
@@ -141,7 +142,10 @@ export const fetchTicketConfig = (eventKey?: string) =>
 export const requestTicketCode = (body: TicketPayload) =>
   apiFetch<{ ok: boolean; devCode?: string }>('/api/event-tickets?action=request-code', { method: 'POST', body: JSON.stringify(body) });
 export const confirmTicket = (email: string, code: string, eventKey?: string) =>
-  apiFetch<{ ok: boolean; code: string; quantity: number; donationUrl?: string; alreadyConfirmed?: boolean }>(
+  apiFetch<{
+    ok: boolean; code: string; quantity: number; donationUrl?: string; alreadyConfirmed?: boolean;
+    donationPopup?: boolean; donationTitle?: string; donationText?: string;
+  }>(
     '/api/event-tickets?action=confirm', { method: 'POST', body: JSON.stringify({ email, code, eventKey }) });
 
 export const ticketAdminList = (eventKey?: string) =>
