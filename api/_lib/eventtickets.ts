@@ -75,12 +75,17 @@ const DEFAULT_DONATION_TEXT =
   'Schön, dass du dabei bist! 🙌\n\n' +
   'Alles, was du hier siehst – Kameras, Livestream, Technik, Website – wird komplett ehrenamtlich ' +
   'getragen und finanziert.\n\n' +
-  'Wenn du das Projekt feierst, freuen wir uns mega über eine kleine Spende – damit wir weitermachen ' +
-  'und die Hero League immer besser machen können. 💚';
+  'Wenn du das Projekt feierst, freuen wir uns mega über eine kleine Spende – sie hilft uns, ' +
+  'die Hero League Stück für Stück noch besser zu machen. 💚';
 // Frühere (zu lange) Standardtexte: wurden sie unverändert gespeichert, gilt
 // automatisch der neue Standard. Eigene Texte bleiben unangetastet.
 const OLD_DONATION_TITLES = ['Kurze, ehrliche Bitte 💚'];
 const OLD_DONATION_TEXTS = [
+  'Schön, dass du dabei bist! 🙌\n\n' +
+    'Alles, was du hier siehst – Kameras, Livestream, Technik, Website – wird komplett ehrenamtlich ' +
+    'getragen und finanziert.\n\n' +
+    'Wenn du das Projekt feierst, freuen wir uns mega über eine kleine Spende – damit wir weitermachen ' +
+    'und die Hero League immer besser machen können. 💚',
   'Schön, dass du dabei bist! 🙌\n\n' +
     'Kameras, Livestream, Technik, Website – das alles stemmen Ehrenamtliche, oft mit privatem ' +
     'Equipment oder aus eigener Tasche vorgestreckt.\n\n' +
