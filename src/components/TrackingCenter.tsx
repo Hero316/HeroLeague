@@ -85,6 +85,7 @@ import {
   setTrackStatus,
   type TrackStatus,
   type TrackStatusMap,
+  MIN_DONE_ACTIONS,
 } from '../lib/stats';
 import { usePolling } from '../lib/usePolling';
 
@@ -266,8 +267,7 @@ export default function TrackingCenter({
     () => {
       fetchTrackStatus().then(setTrackStatusMap).catch(() => {});
     },
-    15_000,
-    { enabled: !!dayKey }
+    15_000
   );
   const changeTrackStatus = useCallback(
     (matchId: string, status: TrackStatus | null) => {
@@ -281,7 +281,10 @@ export default function TrackingCenter({
       });
       setTrackStatus(dayKey, matchId, status)
         .then(() => fetchTrackStatus().then(setTrackStatusMap))
-        .catch((e) => window.alert(e instanceof Error ? e.message : 'Status konnte nicht gespeichert werden.'));
+        .catch((e) => {
+          window.alert(e instanceof Error ? e.message : 'Status konnte nicht gespeichert werden.');
+          fetchTrackStatus().then(setTrackStatusMap).catch(() => {});
+        });
     },
     [dayKey]
   );
@@ -1018,6 +1021,7 @@ export default function TrackingCenter({
               onOpen={openMatchday}
               onOpenEvent={openEvent}
               trackedIds={trackedIds}
+              statusMap={trackStatus}
             />
           )}
         </main>
@@ -1052,22 +1056,34 @@ export default function TrackingCenter({
 
 // ---------------------------------------------------------------------------
 // Fortschrittsbalken „X von Y Spielen getrackt" für einen Spieltag/Abend.
-function TrackProgress({ done, total, color }: { done: number; total: number; color: string }) {
+// Grün = auf „Fertig" gesetzt, gelb = „Wird getrackt". 100 % erst, wenn ALLE
+// Spiele fertig sind. „mit Daten" zeigt zusätzlich, wo schon etwas erfasst ist.
+function TrackProgress({ done, tracking, withData, total }: { done: number; tracking: number; withData: number; total: number }) {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const trackPct = total > 0 ? Math.min(100 - pct, (tracking / total) * 100) : 0;
   const complete = total > 0 && done >= total;
   return (
     <div className="mt-3">
-      <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+      <div className="h-1.5 rounded-full bg-white/10 overflow-hidden flex">
+        <div className="h-full transition-[width] duration-500" style={{ width: `${pct}%`, background: 'var(--color-hl-green)' }} />
         <div
-          className="h-full rounded-full transition-[width] duration-500"
-          style={{ width: `${pct}%`, background: complete ? 'var(--color-hl-green)' : color }}
+          className="h-full transition-[width] duration-500 shadow-[0_0_8px_rgba(250,204,21,.7)]"
+          style={{ width: `${trackPct}%`, background: '#facc15' }}
         />
       </div>
-      <div className="mt-1.5 flex items-center justify-between text-[11px]">
-        <span className={complete ? 'text-hl-green font-bold' : 'text-hl-mute'}>
-          {complete ? 'Komplett getrackt' : `${done} von ${total} Spielen getrackt`}
+      <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px]">
+        <span className={`min-w-0 ${complete ? 'text-hl-green font-bold' : 'text-hl-mute'}`}>
+          {complete ? (
+            'Komplett fertig getrackt'
+          ) : (
+            <>
+              {done} von {total} fertig
+              {tracking > 0 && <span className="text-yellow-300"> · {tracking} {tracking === 1 ? 'läuft' : 'laufen'}</span>}
+              {withData > done && <span className="text-hl-faint"> · {withData} mit Daten</span>}
+            </>
+          )}
         </span>
-        <span className="text-hl-faint tabular-nums">{pct}%</span>
+        <span className="text-hl-faint tabular-nums shrink-0">{pct}%</span>
       </div>
     </div>
   );
@@ -1085,6 +1101,7 @@ function DayList({
   onOpen,
   onOpenEvent,
   trackedIds,
+  statusMap,
 }: {
   seasons: Season[];
   seasonId: string;
@@ -1095,7 +1112,15 @@ function DayList({
   onOpen: (md: number) => void;
   onOpenEvent: (ev: EventConfig) => void;
   trackedIds: Set<string>;
+  statusMap: TrackStatusMap;
 }) {
+  // Fortschritt eines Tages aus Status (fertig/läuft) + vorhandenen Daten.
+  const progress = (dayKey: string, ids: string[]) => ({
+    done: ids.filter((id) => statusMap[`${dayKey}|${id}`]?.status === 'done').length,
+    tracking: ids.filter((id) => statusMap[`${dayKey}|${id}`]?.status === 'tracking').length,
+    withData: ids.filter((id) => trackedIds.has(`${dayKey}|${id}`)).length,
+    total: ids.length,
+  });
   return (
     <div className="hl-fade space-y-8">
       <div>
@@ -1130,11 +1155,7 @@ function DayList({
                   <span>{d.games.length} Spiele</span>
                   {d.date && <span className="text-hl-faint">{shortDate(d.date)}</span>}
                 </div>
-                <TrackProgress
-                  done={d.games.filter((g) => trackedIds.has(`${leagueDayKey(seasonId, d.matchday)}|${g.id}`)).length}
-                  total={d.games.length}
-                  color="var(--color-brand-accent)"
-                />
+                <TrackProgress {...progress(leagueDayKey(seasonId, d.matchday), d.games.map((g) => g.id))} />
               </button>
             ))}
           </div>
@@ -1162,11 +1183,7 @@ function DayList({
                   <span>{ev.teams?.length ?? 0} Teams</span>
                   <span className="text-hl-faint">{ev.matches?.length ?? 0} Spiele</span>
                 </div>
-                <TrackProgress
-                  done={(ev.matches ?? []).filter((m) => trackedIds.has(`${eventDayKey(ev.id)}|${m.id}`)).length}
-                  total={ev.matches?.length ?? 0}
-                  color="var(--color-hl-magenta)"
-                />
+                <TrackProgress {...progress(eventDayKey(ev.id), (ev.matches ?? []).map((m) => m.id))} />
               </button>
             ))}
           </div>
@@ -1221,6 +1238,11 @@ function DayView({
   const trackedCount = (matchId: string) =>
     Object.entries(rows).filter(([k, r]) => k.startsWith(`${matchId}::`) && anyCount(r.counts)).length;
   const anyRows = Object.values(rows).some((r) => anyCount(r.counts));
+  // Summe aller erfassten Aktionen eines Spiels (für die „Fertig"-Sperre).
+  const actionCount = (matchId: string) =>
+    Object.entries(rows)
+      .filter(([k]) => k.startsWith(`${matchId}::`))
+      .reduce((s, [, r]) => s + Object.values(r.counts).reduce((a, v) => a + (Number(v) || 0), 0), 0);
   const nameOf = (m: Match) => `${resolveTeam(m.homeTeamId)?.name ?? m.homeTeamId} – ${resolveTeam(m.awayTeamId)?.name ?? m.awayTeamId}`;
   const resetMatch = (m: Match) => {
     if (!onReset) return;
@@ -1350,7 +1372,7 @@ function DayView({
                   </button>
                 )}
                 {onStatus && (
-                  <TrackStatusButton entry={statusOf?.(m.id)} onChange={(st) => onStatus(m.id, st)} />
+                  <TrackStatusButton entry={statusOf?.(m.id)} actions={actionCount(m.id)} onChange={(st) => onStatus(m.id, st)} />
                 )}
                 {onReset && tracked > 0 && (
                   <button
@@ -2316,17 +2338,28 @@ function PlayerCard({
 // (grün) → wieder offen. Für alle Geräte sichtbar, damit niemand doppelt trackt.
 function TrackStatusButton({
   entry,
+  actions,
   onChange,
 }: {
   entry?: { status: TrackStatus; by: string; at: string };
+  actions: number; // erfasste Aktionen in diesem Spiel
   onChange: (status: TrackStatus | null) => void;
 }) {
   const st = entry?.status ?? null;
   const next: TrackStatus | null = st === null ? 'tracking' : st === 'tracking' ? 'done' : null;
+  const click = () => {
+    if (next === 'done' && actions < MIN_DONE_ACTIONS) {
+      window.alert(
+        `„Fertig" geht erst, wenn das Spiel wirklich getrackt ist: mindestens ${MIN_DONE_ACTIONS} Aktionen (bisher ${actions}).`
+      );
+      return;
+    }
+    onChange(next);
+  };
   const by = entry?.by ? ` · ${entry.by.split(/\s+/)[0]}` : '';
   const title =
     st === 'tracking'
-      ? `Wird gerade getrackt${entry?.by ? ` von ${entry.by}` : ''} – tippen = fertig`
+      ? `Wird gerade getrackt${entry?.by ? ` von ${entry.by}` : ''} – tippen = fertig (ab ${MIN_DONE_ACTIONS} Aktionen, bisher ${actions})`
       : st === 'done'
         ? `Fertig getrackt${entry?.by ? ` (${entry.by})` : ''} – tippen = wieder offen`
         : 'Tippen = „Wird getrackt" markieren (sehen alle)';
@@ -2338,7 +2371,7 @@ function TrackStatusButton({
         : 'bg-white/5 border-white/10 text-hl-mute hover:text-hl-text';
   return (
     <button
-      onClick={() => onChange(next)}
+      onClick={click}
       title={title}
       className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 border cursor-pointer transition-colors ${cls}`}
     >
