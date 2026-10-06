@@ -95,6 +95,12 @@ export const signupAdminSave = (body: { config?: Partial<SignupConfig>; captains
   apiFetch<{ ok: boolean }>('/api/signup?action=admin-config', { method: 'POST', body: JSON.stringify(body) });
 
 // --- Zuschauer-Tickets ------------------------------------------------------
+// Block-Tickets: Zeitfenster eines Spieltags mit eigener Kapazität (+ Teams live aus dem Spielplan).
+export interface TicketBlockTeam { id: string; name: string; shortName: string; logoUrl: string; color: string }
+export interface TicketBlockPublic {
+  id: string; label: string; from: string; to: string; capacity: number; remaining: number; teams: TicketBlockTeam[];
+}
+export interface TicketBlockConfig { id: string; label: string; from: string; to: string; capacity: number }
 export interface TicketConfig {
   eventKey: string;
   open: boolean; title: string; dateLabel: string; locationLabel: string;
@@ -105,12 +111,15 @@ export interface TicketConfig {
   startsAt: string; // Beginn – ab dann keine Tickets mehr
   started: boolean; // true = Veranstaltung hat begonnen
   events?: TicketConfig[]; // alle offenen Veranstaltungen (ohne ?key=)
+  blocks?: TicketBlockPublic[]; // nur bei Block-Tickets (ab 2 Blöcken)
+  allowFull?: boolean; // „Ganzer Abend" wählbar
 }
 export interface TicketPayload {
   eventKey?: string;
   name: string; email: string; quantity: number;
   consent: boolean; // Einwilligung zur Datenspeicherung (Pflicht)
   website?: string; turnstileToken?: string;
+  block?: string; // Block-Tickets: 'b1', 'b2' … oder 'all' (ganzer Abend)
 }
 export interface TicketAdminConfig {
   id: string;
@@ -119,6 +128,9 @@ export interface TicketAdminConfig {
   donationPopup?: boolean; donationTitle?: string; donationText?: string; // Spenden-Pop-up nach der Bestätigung
   accent: string; accentDark: string; consentText: string; startsAt: string;
   selfCheckin?: boolean; // Selbst-Check-in am Eingang (QR-Plakat → /einchecken)
+  link?: { seasonId: string; matchday: number } | null; // verknüpfter Liga-Spieltag
+  blocks?: TicketBlockConfig[]; // ab 2 Blöcken: blockweise Tickets
+  allowFull?: boolean;
 }
 export interface TicketOverviewRow {
   id: string; eventKey: string; title: string; dateLabel: string;
@@ -129,13 +141,22 @@ export interface TicketRow {
   code: string | null; checkedIn: boolean; createdAt: string; verifiedAt: string | null;
   arrived: number; // wie viele Personen dieser Anmeldung tatsächlich da sind (0..quantity)
   consentAt: string | null; consentText: string | null;
+  block?: string; // '' | 'b1' … | 'all'
 }
 export interface TicketAdminData {
   events: TicketAdminConfig[]; overview: TicketOverviewRow[];
   config: TicketAdminConfig | null; rows: TicketRow[]; capacity: number;
   soldSeats: number; confirmedCount: number; remaining: number;
   arrivedSeats?: number; // tatsächlich erschienene Personen (bestätigte Tickets)
+  blocks?: { id: string; label: string; from: string; to: string; capacity: number; sold: number; arrived: number }[];
 }
+// Spieltage der aktuellen Saison zum Verknüpfen (mit Block-Vorschlag aus dem Spielplan).
+export interface TicketMatchdayOption {
+  matchday: number; date: string; firstTime: string; games: number; blocks: { from: string; to: string }[];
+}
+export const ticketAdminMatchdays = () =>
+  apiFetch<{ season: { id: string; label: string } | null; matchdays: TicketMatchdayOption[] }>(
+    '/api/event-tickets?action=admin-matchdays');
 
 export const fetchTicketConfig = (eventKey?: string) =>
   apiFetch<TicketConfig>(`/api/event-tickets?action=config${eventKey ? `&key=${encodeURIComponent(eventKey)}` : ''}`);
@@ -144,7 +165,7 @@ export const requestTicketCode = (body: TicketPayload) =>
 export const confirmTicket = (email: string, code: string, eventKey?: string) =>
   apiFetch<{
     ok: boolean; code: string; quantity: number; donationUrl?: string; alreadyConfirmed?: boolean;
-    donationPopup?: boolean; donationTitle?: string; donationText?: string;
+    donationPopup?: boolean; donationTitle?: string; donationText?: string; blockLabel?: string;
   }>(
     '/api/event-tickets?action=confirm', { method: 'POST', body: JSON.stringify({ email, code, eventKey }) });
 

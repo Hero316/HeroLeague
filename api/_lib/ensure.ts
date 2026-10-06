@@ -81,6 +81,7 @@ export async function ensureSchema(): Promise<void> {
     await sql`SELECT consent_at FROM event_tickets LIMIT 1`;
     // Einlass je Person (wie viele einer Anmeldung tatsächlich da waren).
     await sql`SELECT arrived FROM event_tickets LIMIT 1`;
+    await sql`SELECT block FROM event_tickets LIMIT 1`;
     ensured = true;
     return;
   } catch {
@@ -349,6 +350,8 @@ export async function ensureSchema(): Promise<void> {
   // Einlass: wie viele Personen dieser Anmeldung tatsächlich gekommen sind
   // (0..quantity). NULL = Altbestand → zählt über checked_in (ja = alle).
   await run(sql`ALTER TABLE event_tickets ADD COLUMN IF NOT EXISTS arrived INTEGER`);
+  // Block-Tickets: '' = ohne Blöcke, sonst Block-ID (z. B. 'b1') oder 'all' (ganzer Abend).
+  await run(sql`ALTER TABLE event_tickets ADD COLUMN IF NOT EXISTS block TEXT NOT NULL DEFAULT ''`);
 
   // --- Constraints ganz zuletzt (unkritisch; nur für Rollen-/Anhang-Checks) -
   await run(sql`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check`);
