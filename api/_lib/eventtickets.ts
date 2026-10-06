@@ -31,6 +31,10 @@ interface TicketConfig {
   maxPerEmail: number;
   note: string;
   donationUrl: string; // Stripe Payment Link oder PayPal.Me (optional)
+  // Spenden-Pop-up direkt nach der Ticket-Bestätigung (nur mit donationUrl).
+  donationPopup: boolean;
+  donationTitle: string;
+  donationText: string;
   accent: string; // Farbwelt für Seite und Mails (z.B. Gold für Opening Night)
   accentDark: string;
   consentText: string; // Einwilligungstext, im Backend editierbar
@@ -53,6 +57,16 @@ const DEFAULT_CONSENT =
   'Die Einwilligung kann jederzeit formlos per E-Mail widerrufen werden. Weitere Informationen ' +
   'in unserer Datenschutzerklärung.';
 
+const DEFAULT_DONATION_TITLE = 'Kurze, ehrliche Bitte 💚';
+const DEFAULT_DONATION_TEXT =
+  'Schön, dass du dabei bist! 🙌\n\n' +
+  'Ganz ehrlich: Alles, was du vor Ort siehst – Kameras, Livestream, Technik, Website und Statistiken – ' +
+  'stemmen Ehrenamtliche in ihrer Freizeit. Vieles davon ist privates Equipment, einiges hat die Hero League ' +
+  'inzwischen selbst angeschafft – und dafür sind wir quasi privat in Vorleistung gegangen.\n\n' +
+  'Nach jedem Spieltag geht das ganze Team als kleines Dankeschön zusammen essen.\n\n' +
+  'Wenn dir die Hero League gefällt, freuen wir uns riesig über eine kleine Spende – egal wie viel. ' +
+  'Dein Ticket bleibt natürlich kostenlos. 💚';
+
 const baseEvent = (): TicketConfig => ({
   id: randomUUID(),
   open: false,
@@ -64,6 +78,9 @@ const baseEvent = (): TicketConfig => ({
   maxPerEmail: 4,
   note: '',
   donationUrl: '',
+  donationPopup: true,
+  donationTitle: DEFAULT_DONATION_TITLE,
+  donationText: DEFAULT_DONATION_TEXT,
   accent: DEFAULT_ACCENT,
   accentDark: DEFAULT_ACCENT_DARK,
   consentText: DEFAULT_CONSENT,
@@ -161,6 +178,16 @@ const shortCode = (): string => {
   for (let i = 0; i < 6; i++) s += alphabet[randomInt(0, alphabet.length)];
   return `HL-${s}`;
 };
+
+// Spenden-Angaben für die Erfolgsseite (Link + optionales Pop-up).
+function donationInfo(cfg: TicketConfig) {
+  return {
+    donationUrl: cfg.donationUrl || '',
+    donationPopup: !!cfg.donationUrl && cfg.donationPopup !== false,
+    donationTitle: cfg.donationTitle || DEFAULT_DONATION_TITLE,
+    donationText: cfg.donationText || DEFAULT_DONATION_TEXT,
+  };
+}
 
 // --- Öffentliche Aktionen ---------------------------------------------------
 async function publicConfig(req: VercelRequest, res: VercelResponse) {
@@ -273,7 +300,7 @@ async function confirm(req: VercelRequest, res: VercelResponse) {
   const row = rows[0] as { id: string; status: string; quantity: number; code: string | null } | undefined;
   if (!row) return badRequest(res, 'Keine Reservierung gefunden. Bitte starte die Anmeldung neu.');
   if (row.status === 'confirmed') {
-    return res.json({ ok: true, code: row.code, quantity: row.quantity, alreadyConfirmed: true });
+    return res.json({ ok: true, code: row.code, quantity: row.quantity, alreadyConfirmed: true, ...donationInfo(cfg) });
   }
 
   const check = await checkCode(purposeFor(cfg), email, b.code);
@@ -321,7 +348,7 @@ async function confirm(req: VercelRequest, res: VercelResponse) {
     });
   } catch { /* Mail optional */ }
 
-  return res.json({ ok: true, code, quantity: row.quantity, donationUrl: cfg.donationUrl || '' });
+  return res.json({ ok: true, code, quantity: row.quantity, ...donationInfo(cfg) });
 }
 
 // --- Selbst-Check-in am Eingang ---------------------------------------------
@@ -395,7 +422,9 @@ async function requireSuper(req: VercelRequest, res: VercelResponse): Promise<bo
 }
 async function adminList(req: VercelRequest, res: VercelResponse) {
   const { events } = await getArchive();
-  const key = String(req.query.key ?? '') || events.find((e) => e.open)?.eventKey || events[0]?.eventKey || '';
+  // Standard: die neueste offene Veranstaltung, sonst die neueste (Liste ist alt → neu).
+  const newestFirst = [...events].reverse();
+  const key = String(req.query.key ?? '') || newestFirst.find((e) => e.open)?.eventKey || newestFirst[0]?.eventKey || '';
   const cfg = events.find((e) => e.eventKey === key) ?? null;
 
   // Übersicht aller Events (für die Auswahl im Backend) inkl. verkaufter Plätze.
@@ -476,6 +505,9 @@ async function adminSaveConfig(req: VercelRequest, res: VercelResponse) {
       maxPerEmail: clampInt(raw.maxPerEmail, 1, 20) ?? 4,
       note: clamp(raw.note, 400),
       donationUrl: normUrl(clamp(raw.donationUrl, 400)),
+      donationPopup: raw.donationPopup !== false,
+      donationTitle: clamp(raw.donationTitle, 120) || DEFAULT_DONATION_TITLE,
+      donationText: clamp(raw.donationText, 3000) || DEFAULT_DONATION_TEXT,
       accent: clamp(raw.accent, 20) || DEFAULT_ACCENT,
       accentDark: clamp(raw.accentDark, 20) || DEFAULT_ACCENT_DARK,
       consentText: clamp(raw.consentText, 2000) || DEFAULT_CONSENT,

@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft, ArrowRight, Ticket as TicketIcon, Mail, KeyRound, CheckCircle2, AlertCircle,
-  Loader2, RefreshCw, Minus, Plus, CalendarDays, MapPin, Heart, PartyPopper, Camera,
+  Loader2, RefreshCw, Minus, Plus, CalendarDays, MapPin, Heart, PartyPopper, Camera, X,
 } from 'lucide-react';
+import { useBackClose } from '../lib/backStack';
 import {
   fetchTicketConfig, requestTicketCode, confirmTicket, useTurnstile, type TicketConfig,
 } from '../lib/register';
@@ -61,6 +62,9 @@ export default function EventTickets({
   const [consentOpen, setConsentOpen] = useState(false);
   const [devCode, setDevCode] = useState('');
   const [result, setResult] = useState<{ code: string; quantity: number; donationUrl: string } | null>(null);
+  // Spenden-Pop-up direkt nach der Bestätigung (Text im Backend einstellbar).
+  const [donation, setDonation] = useState<{ url: string; title: string; text: string } | null>(null);
+  useBackClose(donation !== null, () => setDonation(null));
   const honeypot = useRef('');
 
   const turnstile = useTurnstile(cfg?.turnstileSiteKey);
@@ -135,6 +139,10 @@ export default function EventTickets({
       const r = await confirmTicket(email.trim(), code.trim(), cfg?.eventKey);
       setResult({ code: r.code, quantity: r.quantity, donationUrl: r.donationUrl || '' });
       setStep('done'); window.scrollTo(0, 0);
+      if (r.donationPopup && r.donationUrl) {
+        const d = { url: r.donationUrl, title: r.donationTitle || 'Kurze, ehrliche Bitte', text: r.donationText || '' };
+        setTimeout(() => setDonation(d), 900); // erst kurz das bestätigte Ticket zeigen
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Bestätigung fehlgeschlagen.');
     } finally { setBusy(false); }
@@ -353,6 +361,59 @@ export default function EventTickets({
           </motion.div>
         </AnimatePresence>
       </main>
+
+      <AnimatePresence>
+        {donation && (
+          <motion.div
+            key="donation"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-6"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setDonation(null)} />
+            <motion.div
+              initial={{ y: 40, scale: .97, opacity: 0 }}
+              animate={{ y: 0, scale: 1, opacity: 1 }}
+              exit={{ y: 30, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+              className="hl-modal-card relative w-full sm:max-w-md max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border border-white/10 px-6 pt-7 text-left"
+              style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.5rem)' }}
+            >
+              <button
+                onClick={() => setDonation(null)}
+                aria-label="Schließen"
+                className="absolute top-3 right-3 w-9 h-9 grid place-items-center rounded-xl text-hl-mute hover:text-white hover:bg-white/10 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <div className="w-14 h-14 rounded-2xl grid place-items-center mb-4" style={{ background: grad, boxShadow: `0 16px 40px -16px ${accent}d9` }}>
+                <Heart className="w-7 h-7 text-white" />
+              </div>
+              <h2 className="font-display font-black text-2xl uppercase tracking-tight text-white pr-8">{donation.title}</h2>
+              <p className="text-[14.5px] text-hl-soft leading-relaxed mt-3 whitespace-pre-line">{donation.text}</p>
+              <a
+                href={donation.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setDonation(null)}
+                className="mt-6 w-full inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-[15px] font-display font-black uppercase tracking-wide text-white cursor-pointer"
+                style={{ background: grad }}
+              >
+                <Heart className="w-4 h-4" /> Jetzt spenden
+              </a>
+              <button
+                onClick={() => setDonation(null)}
+                className="mt-2 w-full rounded-2xl px-5 py-3 text-[13px] font-bold text-hl-mute hover:text-white cursor-pointer"
+              >
+                Vielleicht später
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <footer className="relative border-t border-white/[.06] py-5 text-center">
         <div className="flex items-center justify-center gap-4 text-[12px] text-hl-faint">
