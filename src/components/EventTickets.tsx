@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft, ArrowRight, Ticket as TicketIcon, Mail, KeyRound, CheckCircle2, AlertCircle,
-  Loader2, RefreshCw, Minus, Plus, CalendarDays, MapPin, Heart, PartyPopper, Camera, X,
+  Loader2, RefreshCw, Minus, Plus, CalendarDays, MapPin, Heart, PartyPopper, Camera, X, Check,
 } from 'lucide-react';
 import { useBackClose } from '../lib/backStack';
 import {
-  fetchTicketConfig, requestTicketCode, confirmTicket, useTurnstile, type TicketConfig, type TicketBlockPublic, type TicketBlockTeam,
+  fetchTicketConfig, requestTicketCode, confirmTicket, useTurnstile, type TicketConfig, type TicketBlockPublic,
 } from '../lib/register';
 
 // Öffentliche Zuschauer-Ticket-Anmeldung für EINE Veranstaltung (Opening Night,
@@ -63,7 +63,8 @@ export default function EventTickets({
   const [devCode, setDevCode] = useState('');
   const [result, setResult] = useState<{ code: string; quantity: number; donationUrl: string; blockLabel?: string } | null>(null);
   // Block-Tickets: gewählter Block ('b1', 'b2' … oder 'all' = ganzer Abend).
-  const [block, setBlock] = useState('');
+  // Block-Tickets: angehakte Blöcke (einer oder mehrere).
+  const [picked, setPicked] = useState<string[]>([]);
   // Spenden-Pop-up direkt nach der Bestätigung (Text im Backend einstellbar).
   const [donation, setDonation] = useState<{ url: string; title: string; text: string } | null>(null);
   useBackClose(donation !== null, () => setDonation(null));
@@ -107,17 +108,21 @@ export default function EventTickets({
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const maxPer = cfg?.maxPerEmail ?? 4;
   const blocks = cfg?.blocks && cfg.blocks.length >= 2 ? cfg.blocks : null;
-  const fullFree = blocks ? Math.min(...blocks.map((b) => b.remaining)) : 0;
-  const blockFree = (id: string) => (id === 'all' ? fullFree : blocks?.find((b) => b.id === id)?.remaining ?? 0);
-  // Freie Plätze für die Personenzahl: im Block-Modus die des gewählten Blocks.
-  const remaining = blocks ? (block ? blockFree(block) : Math.max(0, ...blocks.map((b) => b.remaining))) : cfg?.remaining ?? 0;
+  const blockFree = (id: string) => blocks?.find((b) => b.id === id)?.remaining ?? 0;
+  // Freie Plätze für die Personenzahl: im Block-Modus das Minimum der angehakten
+  // Blöcke (jeder angehakte Block braucht Platz für alle Personen).
+  const pickedFree = picked.length ? Math.min(...picked.map(blockFree)) : 0;
+  const remaining = blocks
+    ? picked.length ? pickedFree : Math.max(0, ...blocks.map((b) => b.remaining))
+    : cfg?.remaining ?? 0;
+  const block = blocks ? blocks.filter((b) => picked.includes(b.id)).map((b) => b.id).join(',') : '';
 
   const requestCode = async () => {
     if (!name.trim()) { setErr('Bitte deinen Namen angeben.'); return; }
     if (!emailValid) { setErr('Bitte eine gültige E-Mail-Adresse eingeben.'); return; }
     if (!consent) { setErr('Bitte die Einwilligung zur Datenspeicherung bestätigen.'); return; }
-    if (blocks && !block) { setErr('Bitte wähle, wann du kommst (Block).'); return; }
-    if (blocks && qty > blockFree(block)) { setErr(`In diesem Block sind nur noch ${blockFree(block)} Plätze frei.`); return; }
+    if (blocks && !block) { setErr('Bitte wähle, wann du kommst (mindestens einen Block).'); return; }
+    if (blocks && qty > pickedFree) { setErr(`In ${picked.length > 1 ? 'einem der gewählten Blöcke' : 'diesem Block'} sind nur noch ${pickedFree} Plätze frei.`); return; }
     if (!turnstile.ready) { setErr('Bitte kurz die Bot-Prüfung abschließen.'); return; }
     setBusy(true); setErr('');
     try {
@@ -240,11 +245,14 @@ export default function EventTickets({
                     {blocks ? (
                       <BlockPicker
                         blocks={blocks}
-                        allowFull={cfg.allowFull !== false}
-                        fullFree={fullFree}
-                        value={block}
+                        value={picked}
                         accent={accent}
-                        onChange={(id) => { setBlock(id); setQty((q) => Math.max(1, Math.min(q, blockFree(id) || 1))); }}
+                        onToggle={(id) => {
+                          const next = picked.includes(id) ? picked.filter((x) => x !== id) : [...picked, id];
+                          setPicked(next);
+                          const free = next.length ? Math.min(...next.map(blockFree)) : 0;
+                          if (free > 0) setQty((q) => Math.max(1, Math.min(q, free)));
+                        }}
                       />
                     ) : (
                       <div className="flex items-center justify-between hl-card rounded-2xl px-4 py-3">
@@ -450,44 +458,36 @@ export default function EventTickets({
 }
 
 // Block-Auswahl (Block-Tickets): je Block Uhrzeit, freie Plätze und die Teams,
-// die in diesem Block spielen (live aus dem Spielplan) + optional „Ganzer Abend".
+// die in diesem Block spielen (live aus dem Spielplan). Mehrere Blöcke
+// anhakbar – jeder angehakte Block belegt einen Platz pro Person.
 function BlockPicker({
   blocks,
-  allowFull,
-  fullFree,
   value,
   accent,
-  onChange,
+  onToggle,
 }: {
   blocks: TicketBlockPublic[];
-  allowFull: boolean;
-  fullFree: number;
-  value: string;
+  value: string[];
   accent: string;
-  onChange: (id: string) => void;
+  onToggle: (id: string) => void;
 }) {
-  const options = [
-    ...blocks.map((b) => ({ id: b.id, title: b.label, time: `${b.from}–${b.to} Uhr`, free: b.remaining, teams: b.teams, hint: '' })),
-    ...(allowFull
-      ? [{
-          id: 'all', title: 'Ganzer Abend', time: `${blocks[0].from}–${blocks[blocks.length - 1].to} Uhr`, free: fullFree,
-          teams: [] as TicketBlockTeam[], hint: 'Alle Spiele – du bleibst den ganzen Abend (belegt in jedem Block einen Platz).',
-        }]
-      : []),
-  ];
+  const options = blocks.map((b) => ({ id: b.id, title: b.label, time: `${b.from}–${b.to} Uhr`, free: b.remaining, teams: b.teams }));
   return (
     <div>
-      <span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1.5">Wann kommst du?</span>
+      <span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Wann kommst du?</span>
+      <span className="block text-[12px] text-hl-mute mb-2">Hak an, welche Blöcke du dabei bist – auch mehrere möglich.</span>
       <div className="grid grid-cols-1 gap-2.5">
         {options.map((o) => {
-          const on = value === o.id;
-          const full = o.free <= 0;
+          const on = value.includes(o.id);
+          const full = o.free <= 0 && !on;
           return (
             <button
               key={o.id}
               type="button"
               disabled={full}
-              onClick={() => onChange(o.id)}
+              onClick={() => onToggle(o.id)}
+              role="checkbox"
+              aria-checked={on}
               className={`w-full text-left rounded-2xl border px-4 py-3 transition-colors min-w-0 ${
                 full ? 'opacity-50 cursor-not-allowed border-white/10 bg-white/[.02]' : 'cursor-pointer hover:bg-white/[.05]'
               }`}
@@ -495,10 +495,10 @@ function BlockPicker({
             >
               <div className="flex items-center gap-3 min-w-0">
                 <span
-                  className="w-5 h-5 rounded-full border-2 grid place-items-center shrink-0"
-                  style={{ borderColor: on ? accent : 'rgba(255,255,255,.3)' }}
+                  className="w-5 h-5 rounded-md border-2 grid place-items-center shrink-0"
+                  style={{ borderColor: on ? accent : 'rgba(255,255,255,.3)', background: on ? accent : 'transparent' }}
                 >
-                  {on && <span className="w-2.5 h-2.5 rounded-full" style={{ background: accent }} />}
+                  {on && <Check className="w-3.5 h-3.5 text-[#0b0f10]" strokeWidth={3.5} />}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block font-display font-black uppercase tracking-tight text-white text-[17px] leading-tight">{o.title}</span>
@@ -508,7 +508,6 @@ function BlockPicker({
                   {full ? 'Ausgebucht' : `${o.free} frei`}
                 </span>
               </div>
-              {o.hint && <p className="text-[12px] text-hl-dim mt-2 leading-snug">{o.hint}</p>}
               {o.teams.length > 0 && (
                 <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-2.5">
                   {o.teams.map((t) => (
