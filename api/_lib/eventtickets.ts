@@ -205,14 +205,15 @@ const toMin = (t: string) => {
   return m ? Number(m[1]) * 60 + Number(m[2]) : NaN;
 };
 const fmtMin = (n: number) => `${String(Math.floor(n / 60) % 24).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
-// Welche Blöcke belegt eine Wahl? 'all' = alle, sonst genau der eine.
+// Welche Blöcke belegt eine Wahl? Gespeichert als Liste „b1" / „b1,b2" (Gast
+// hakt einen oder mehrere Blöcke an). 'all' = Altbestand „ganzer Abend".
+const blockIds = (choice: string): string[] => (choice || '').split(',').map((x) => x.trim()).filter(Boolean);
 const blocksFor = (cfg: TicketConfig, choice: string): TicketBlock[] =>
-  choice === 'all' ? cfg.blocks : cfg.blocks.filter((b) => b.id === choice);
+  choice === 'all' ? cfg.blocks : cfg.blocks.filter((b) => blockIds(choice).includes(b.id));
 const blockLabel = (cfg: TicketConfig, choice: string): string => {
   if (!blockMode(cfg) || !choice) return '';
-  if (choice === 'all') return `Ganzer Abend (${cfg.blocks[0].from}–${cfg.blocks[cfg.blocks.length - 1].to} Uhr)`;
-  const b = cfg.blocks.find((x) => x.id === choice);
-  return b ? `${b.label} (${b.from}–${b.to} Uhr)` : '';
+  const list = blocksFor(cfg, choice);
+  return list.map((b) => `${b.label} (${b.from}–${b.to} Uhr)`).join(' + ');
 };
 // Belegte Plätze je Block: eigene Block-Tickets + „Ganzer Abend"-Tickets.
 async function blockUsage(cfg: TicketConfig, exceptEmail?: string): Promise<Record<string, number>> {
@@ -221,10 +222,11 @@ async function blockUsage(cfg: TicketConfig, exceptEmail?: string): Promise<Reco
         WHERE event_key = ${cfg.eventKey} AND status = 'confirmed' AND email <> ${exceptEmail} GROUP BY block`
     : await sql`SELECT block, COALESCE(SUM(quantity),0)::int AS n FROM event_tickets
         WHERE event_key = ${cfg.eventKey} AND status = 'confirmed' GROUP BY block`) as { block: string; n: number }[];
-  const by = new Map(rows.map((r) => [r.block, Number(r.n)]));
-  const all = by.get('all') ?? 0;
   const out: Record<string, number> = {};
-  for (const b of cfg.blocks) out[b.id] = (by.get(b.id) ?? 0) + all;
+  for (const b of cfg.blocks) out[b.id] = 0;
+  for (const r of rows) {
+    for (const b of blocksFor(cfg, r.block)) out[b.id] += Number(r.n);
+  }
   return out;
 }
 // Spiele des verknüpften Spieltags (Zeit + Teams), live aus dem Spielplan.
@@ -327,14 +329,15 @@ async function publicConfig(req: VercelRequest, res: VercelResponse) {
         remaining: Math.max(0, b.capacity - (usage[b.id] ?? 0)), teams: teams[b.id] ?? [],
       }));
     }
+    const bl = blocks as { capacity: number; remaining: number }[] | undefined;
     return {
-      blocks, allowFull: cfg.allowFull !== false,
+      // Gäste haken Blöcke einzeln an – „Ganzer Abend" gibt es nicht mehr.
+      blocks, allowFull: false,
       eventKey: cfg.eventKey, open: saleOpen(cfg), title: cfg.title, dateLabel: cfg.dateLabel,
-      locationLabel: cfg.locationLabel, capacity: cfg.capacity,
-      // Block-Modus: „frei" = der Block mit den meisten freien Plätzen.
-      remaining: blocks
-        ? Math.max(0, ...(blocks as { remaining: number }[]).map((x) => x.remaining))
-        : Math.max(0, cfg.capacity - used),
+      locationLabel: cfg.locationLabel,
+      // Block-Modus: Plätze = Summe aller Blöcke (wer 2 Blöcke bucht, belegt 2).
+      capacity: bl ? bl.reduce((s, b) => s + b.capacity, 0) : cfg.capacity,
+      remaining: bl ? bl.reduce((s, b) => s + b.remaining, 0) : Math.max(0, cfg.capacity - used),
       maxPerEmail: cfg.maxPerEmail,
       note: cfg.note, hasDonation: !!cfg.donationUrl,
       accent: cfg.accent, accentDark: cfg.accentDark, consentText: cfg.consentText,
@@ -393,9 +396,11 @@ async function requestCode(req: VercelRequest, res: VercelResponse) {
   // aussichtslosen Flow startet. Hart abgesichert wird erst beim Bestätigen.
   let block = '';
   if (blockMode(cfg)) {
-    block = clamp(b.block, 20);
-    const valid = block === 'all' ? cfg.allowFull !== false : cfg.blocks.some((x) => x.id === block);
-    if (!valid) return badRequest(res, 'Bitte einen Block wählen.');
+    // Ein oder mehrere Blöcke, in fester Reihenfolge gespeichert („b1,b2").
+    const wanted = blockIds(clamp(b.block, 60));
+    const chosen = cfg.blocks.filter((x) => wanted.includes(x.id));
+    if (chosen.length === 0 || chosen.length !== new Set(wanted).size) return badRequest(res, 'Bitte mindestens einen Block wählen.');
+    block = chosen.map((x) => x.id).join(',');
     const usage = await blockUsage(cfg, email);
     for (const bl of blocksFor(cfg, block)) {
       const left = Math.max(0, bl.capacity - (usage[bl.id] ?? 0));
@@ -482,7 +487,7 @@ async function confirm(req: VercelRequest, res: VercelResponse) {
                 SELECT 1 FROM unnest(${neededIds}::text[], ${neededCaps}::int[]) AS x(b, cap)
                 WHERE (SELECT COALESCE(SUM(quantity), 0) FROM event_tickets
                        WHERE event_key = ${cfg.eventKey} AND status = 'confirmed' AND id <> ${row.id}
-                         AND (block = x.b OR block = 'all')) + ${row.quantity} > x.cap)
+                         AND (block = 'all' OR (',' || block || ',') LIKE ('%,' || x.b || ',%'))) + ${row.quantity} > x.cap)
             RETURNING id`,
       ])
     : await sql.transaction((txn) => [
@@ -641,7 +646,7 @@ async function adminList(req: VercelRequest, res: VercelResponse) {
   // Block-Modus: Zahlen je Block (verkauft inkl. „ganzer Abend", erschienen).
   const blocks = blockMode(cfg)
     ? cfg.blocks.map((b) => {
-        const mine = confirmed.filter((r) => r.block === b.id || r.block === 'all');
+        const mine = confirmed.filter((r) => blocksFor(cfg, String(r.block || '')).some((x) => x.id === b.id));
         return {
           id: b.id, label: b.label, from: b.from, to: b.to, capacity: b.capacity,
           sold: mine.reduce((sum, r) => sum + Number(r.quantity || 0), 0),

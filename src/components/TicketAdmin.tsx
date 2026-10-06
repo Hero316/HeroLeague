@@ -24,8 +24,9 @@ function matchdayDateLabel(date: string, time: string): string {
 // Block-Kürzel einer Anmeldung für Liste/Detail.
 function blockShort(cfg: TicketAdminConfig | null, id?: string): string {
   if (!id || !cfg?.blocks || cfg.blocks.length < 2) return '';
-  if (id === 'all') return 'Ganzer Abend';
-  return cfg.blocks.find((b) => b.id === id)?.label ?? id;
+  if (id === 'all') return 'Alle Blöcke';
+  const ids = id.split(',');
+  return cfg.blocks.filter((b) => ids.includes(b.id)).map((b) => b.label).join(' + ') || id;
 }
 
 const fmtDate = (iso: string | null) => { if (!iso) return '–'; try { return new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return iso; } };
@@ -218,7 +219,7 @@ export default function TicketAdmin() {
       consentText: newest?.consentText || '',
       link: { seasonId: season.id, matchday: md.matchday },
       blocks: md.blocks.length >= 2 ? md.blocks.map((b, i) => ({ id: `b${i + 1}`, label: `Block ${i + 1}`, from: b.from, to: b.to, capacity: 60 })) : [],
-      allowFull: true,
+      allowFull: false,
     };
     setAddOpen(false);
     ticketAdminSave([...(data?.events ?? []), fresh])
@@ -399,7 +400,7 @@ export default function TicketAdmin() {
               </div>
             )}
             <p className="text-[11px] text-hl-faint mt-2 leading-snug">
-              Titel, Datum, Beginn und die Blöcke (60 Plätze je Block + „Ganzer Abend") werden aus dem Spielplan übernommen –
+              Titel, Datum, Beginn und die Blöcke (60 Plätze je Block) werden aus dem Spielplan übernommen –
               danach unter „Einstellungen" anpassbar. Die Teams je Block zeigt die Ticket-Seite immer live aus dem Spielplan.
             </p>
           </div>
@@ -767,7 +768,7 @@ function BlockEditor({
       <div className="flex items-center justify-between gap-3">
         <span className="min-w-0">
           <span className="block text-[14px] font-semibold text-white">Blockweise Tickets</span>
-          <span className="block text-[11px] text-hl-faint leading-snug mt-0.5">Gäste wählen Block 1, Block 2 … oder „Ganzer Abend". Jeder Block hat eigene Plätze („Max. Plätze" oben gilt dann nicht).</span>
+          <span className="block text-[11px] text-hl-faint leading-snug mt-0.5">Gäste haken an, in welchen Blöcken sie da sind (auch mehrere – dann belegen sie in jedem einen Platz). Jeder Block hat eigene Plätze („Max. Plätze" oben gilt dann nicht).</span>
         </span>
         <button
           onClick={() => setCfg({ ...cfg, blocks: on ? [] : fromSchedule(linkedMd) })}
@@ -816,18 +817,6 @@ function BlockEditor({
                 <Wand2 className="w-3.5 h-3.5" /> Zeiten aus Spielplan
               </button>
             )}
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="min-w-0">
-              <span className="block text-[13px] font-semibold text-white">„Ganzer Abend" anbieten</span>
-              <span className="block text-[11px] text-hl-faint leading-snug mt-0.5">Belegt in jedem Block einen Platz – geht nur, solange überall noch Platz ist.</span>
-            </span>
-            <button
-              onClick={() => setCfg({ ...cfg, allowFull: cfg.allowFull === false })}
-              className={`shrink-0 relative w-12 h-7 rounded-full transition-colors cursor-pointer ${cfg.allowFull !== false ? 'bg-emerald-500' : 'bg-white/15'}`}
-            >
-              <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${cfg.allowFull !== false ? 'left-6' : 'left-1'}`} />
-            </button>
           </div>
         </>
       )}
