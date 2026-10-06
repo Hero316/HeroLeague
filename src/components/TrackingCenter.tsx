@@ -2334,8 +2334,10 @@ function PlayerCard({
   );
 }
 
-// Status-Taste je Spiel: offen → „Wird getrackt" (gelb, leuchtet) → „Fertig"
-// (grün) → wieder offen. Für alle Geräte sichtbar, damit niemand doppelt trackt.
+// Status-Taste je Spiel: Antippen öffnet ein kleines Menü mit Offen /
+// Wird getrackt (gelb, leuchtet) / Fertig (grün) – jeder Zustand ist direkt
+// wählbar, also auch ein versehentliches „Wird getrackt" wieder rückgängig.
+// „Fertig" erst ab MIN_DONE_ACTIONS erfassten Aktionen. Für alle Geräte sichtbar.
 function TrackStatusButton({
   entry,
   actions,
@@ -2346,49 +2348,89 @@ function TrackStatusButton({
   onChange: (status: TrackStatus | null) => void;
 }) {
   const st = entry?.status ?? null;
-  const next: TrackStatus | null = st === null ? 'tracking' : st === 'tracking' ? 'done' : null;
-  const click = () => {
-    if (next === 'done' && actions < MIN_DONE_ACTIONS) {
-      window.alert(
-        `„Fertig" geht erst, wenn das Spiel wirklich getrackt ist: mindestens ${MIN_DONE_ACTIONS} Aktionen (bisher ${actions}).`
-      );
-      return;
-    }
-    onChange(next);
+  const [menu, setMenu] = useState<{ top: number; right: number } | null>(null);
+  useBackClose(menu !== null, () => setMenu(null));
+  const canFinish = actions >= MIN_DONE_ACTIONS;
+  const open = (e: React.MouseEvent<HTMLButtonElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    setMenu({ top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) });
+  };
+  const pick = (next: TrackStatus | null) => {
+    setMenu(null);
+    if (next !== st) onChange(next);
   };
   const by = entry?.by ? ` · ${entry.by.split(/\s+/)[0]}` : '';
   const title =
     st === 'tracking'
-      ? `Wird gerade getrackt${entry?.by ? ` von ${entry.by}` : ''} – tippen = fertig (ab ${MIN_DONE_ACTIONS} Aktionen, bisher ${actions})`
+      ? `Wird gerade getrackt${entry?.by ? ` von ${entry.by}` : ''} – tippen zum Ändern`
       : st === 'done'
-        ? `Fertig getrackt${entry?.by ? ` (${entry.by})` : ''} – tippen = wieder offen`
-        : 'Tippen = „Wird getrackt" markieren (sehen alle)';
+        ? `Fertig getrackt${entry?.by ? ` (${entry.by})` : ''} – tippen zum Ändern`
+        : 'Tracking-Status setzen (sehen alle)';
   const cls =
     st === 'tracking'
       ? 'bg-yellow-400/20 border-yellow-400/80 text-yellow-300 shadow-[0_0_16px_rgba(250,204,21,.55)]'
       : st === 'done'
         ? 'bg-hl-green/15 border-hl-green/50 text-hl-green'
         : 'bg-white/5 border-white/10 text-hl-mute hover:text-hl-text';
-  return (
+  const dot = (
+    <span className="relative grid place-items-center w-3.5 h-3.5">
+      <span className="absolute inset-0 rounded-full bg-yellow-300/60 animate-ping" />
+      <span className="relative w-2 h-2 rounded-full bg-yellow-300" />
+    </span>
+  );
+  const option = (value: TrackStatus | null, icon: React.ReactNode, label: string, hint: string, color: string, disabled = false) => (
     <button
-      onClick={click}
-      title={title}
-      className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 border cursor-pointer transition-colors ${cls}`}
+      type="button"
+      onClick={() => !disabled && pick(value)}
+      disabled={disabled}
+      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors ${
+        disabled ? 'opacity-45 cursor-not-allowed' : 'hover:bg-white/[.07] cursor-pointer'
+      } ${st === value ? 'bg-white/[.06]' : ''}`}
     >
-      {st === 'done' ? (
-        <CircleCheck className="w-3.5 h-3.5" />
-      ) : st === 'tracking' ? (
-        <span className="relative grid place-items-center w-3.5 h-3.5">
-          <span className="absolute inset-0 rounded-full bg-yellow-300/60 animate-ping" />
-          <span className="relative w-2 h-2 rounded-full bg-yellow-300" />
-        </span>
-      ) : (
-        <CircleDashed className="w-3.5 h-3.5" />
-      )}
-      <span className={st === null ? 'hidden sm:inline' : 'hidden sm:inline max-w-[140px] truncate'}>
-        {st === 'tracking' ? `Wird getrackt${by}` : st === 'done' ? 'Fertig' : 'Offen'}
+      <span className={`shrink-0 ${color}`}>{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className={`block text-xs font-bold uppercase tracking-wider ${color}`}>{label}</span>
+        <span className="block text-[10px] text-hl-dim leading-snug">{hint}</span>
       </span>
+      {st === value && <Check className="w-3.5 h-3.5 text-hl-text shrink-0" />}
     </button>
+  );
+  return (
+    <>
+      <button
+        onClick={open}
+        title={title}
+        className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 border cursor-pointer transition-colors ${cls}`}
+      >
+        {st === 'done' ? <CircleCheck className="w-3.5 h-3.5" /> : st === 'tracking' ? dot : <CircleDashed className="w-3.5 h-3.5" />}
+        <span className={st === null ? 'hidden sm:inline' : 'hidden sm:inline max-w-[140px] truncate'}>
+          {st === 'tracking' ? `Wird getrackt${by}` : st === 'done' ? 'Fertig' : 'Offen'}
+        </span>
+        <ChevronDown className="w-3 h-3 opacity-70" />
+      </button>
+      {menu &&
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-[90]" onClick={() => setMenu(null)} />
+            <div
+              className="hl-modal-card z-[91] w-60 max-w-[calc(100vw-16px)] rounded-xl border border-white/15 p-1.5 pt-2.5 shadow-2xl overflow-hidden"
+              style={{ position: 'fixed', top: menu.top, right: menu.right }}
+            >
+              {option(null, <CircleDashed className="w-4 h-4" />, 'Offen', 'Niemand trackt dieses Spiel', 'text-hl-mute')}
+              {option('tracking', dot, 'Wird getrackt', 'Ich bin gerade an diesem Spiel dran', 'text-yellow-300')}
+              {option(
+                'done',
+                <CircleCheck className="w-4 h-4" />,
+                'Fertig',
+                canFinish ? 'Komplett getrackt' : `Erst ab ${MIN_DONE_ACTIONS} erfassten Aktionen (bisher ${actions})`,
+                'text-hl-green',
+                !canFinish && st !== 'done'
+              )}
+            </div>
+          </>,
+          document.body
+        )}
+    </>
   );
 }
 
