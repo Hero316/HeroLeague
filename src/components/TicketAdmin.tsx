@@ -3,14 +3,30 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Ticket as TicketIcon, Trash2, Settings2, Save, Loader2, RefreshCw, Download,
   CheckCircle2, Circle, CircleDot, Users, Heart, ShieldCheck, ChevronRight, X, Mail, Search,
+  CalendarDays, Plus, Wand2,
 } from 'lucide-react';
 import { ModalPortal } from './ui';
 import { useBackClose } from '../lib/backStack';
 import { usePolling } from '../lib/usePolling';
 import {
-  ticketAdminList, ticketAdminArrived, ticketAdminDelete, ticketAdminSave,
-  type TicketAdminData, type TicketAdminConfig, type TicketRow,
+  ticketAdminList, ticketAdminArrived, ticketAdminDelete, ticketAdminSave, ticketAdminMatchdays,
+  type TicketAdminData, type TicketAdminConfig, type TicketRow, type TicketMatchdayOption,
 } from '../lib/register';
+
+const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+// „2026-11-01" + „19:00" → „Sa, 01. November · 19:00 Uhr"
+function matchdayDateLabel(date: string, time: string): string {
+  const d = new Date(`${date}T12:00:00`);
+  if (!date || Number.isNaN(d.getTime())) return time ? `${time} Uhr` : '';
+  return `${WEEKDAYS[d.getDay()]}, ${String(d.getDate()).padStart(2, '0')}. ${MONTHS[d.getMonth()]}${time ? ` · ${time} Uhr` : ''}`;
+}
+// Block-Kürzel einer Anmeldung für Liste/Detail.
+function blockShort(cfg: TicketAdminConfig | null, id?: string): string {
+  if (!id || !cfg?.blocks || cfg.blocks.length < 2) return '';
+  if (id === 'all') return 'Ganzer Abend';
+  return cfg.blocks.find((b) => b.id === id)?.label ?? id;
+}
 
 const fmtDate = (iso: string | null) => { if (!iso) return '–'; try { return new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return iso; } };
 // Für die Suche an der Tür: Groß/Klein, Umlaute, Punkte und Leerzeichen egal.
@@ -170,12 +186,53 @@ export default function TicketAdmin() {
     { enabled: selfCheckinOn, immediate: false }
   );
 
+  // Neue Veranstaltung: Auswahl „Liga-Spieltag verknüpfen" oder „individuell".
+  const [addOpen, setAddOpen] = useState(false);
+  useBackClose(addOpen, () => setAddOpen(false));
+  const [mdOptions, setMdOptions] = useState<{ season: { id: string; label: string } | null; matchdays: TicketMatchdayOption[] } | null>(null);
+  const loadMatchdays = () => {
+    if (mdOptions) return;
+    ticketAdminMatchdays().then(setMdOptions).catch(() => setMdOptions({ season: null, matchdays: [] }));
+  };
+  useEffect(() => {
+    if (showConfig) loadMatchdays();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showConfig]);
+
+  // Neue Veranstaltung direkt aus einem Liga-Spieltag: Titel, Datum, Beginn und
+  // die Blöcke (inkl. Teams je Block) kommen aus dem Spielplan.
+  const addFromMatchday = (md: TicketMatchdayOption) => {
+    const season = mdOptions?.season;
+    if (!season) return;
+    const base = `spieltag-${md.matchday}-${(md.date || '').slice(0, 4) || 'liga'}`;
+    let key = base;
+    for (let i = 2; data?.events.some((e) => e.eventKey === key); i++) key = `${base}-${i}`;
+    const newest = data?.events.at(-1);
+    const fresh: TicketAdminConfig = {
+      id: key, open: false, eventKey: key, title: `${md.matchday}. SPIELTAG`,
+      dateLabel: matchdayDateLabel(md.date, md.firstTime), locationLabel: newest?.locationLabel || '',
+      capacity: 120, maxPerEmail: newest?.maxPerEmail || 4, note: '',
+      donationUrl: newest?.donationUrl || '', startsAt: md.date && md.firstTime ? `${md.date}T${md.firstTime}` : '',
+      donationPopup: true, donationTitle: newest?.donationTitle || '', donationText: newest?.donationText || '',
+      accent: newest?.accent || '#E9C46A', accentDark: newest?.accentDark || '#6b4d12',
+      consentText: newest?.consentText || '',
+      link: { seasonId: season.id, matchday: md.matchday },
+      blocks: md.blocks.length >= 2 ? md.blocks.map((b, i) => ({ id: `b${i + 1}`, label: `Block ${i + 1}`, from: b.from, to: b.to, capacity: 60 })) : [],
+      allowFull: true,
+    };
+    setAddOpen(false);
+    ticketAdminSave([...(data?.events ?? []), fresh])
+      .then(() => { setSelKey(key); setShowConfig(true); load(key); })
+      .catch(() => window.alert('Speichern fehlgeschlagen.'));
+  };
+
   // Veranstaltung wechseln
   const selectEvent = (key: string) => { setSelKey(key); setShowConfig(false); load(key); };
 
   // Neue Veranstaltung anlegen (Schlüssel muss eindeutig sein und bleibt danach fest,
   // weil die Anmeldungen in der Datenbank daran hängen).
   const addEvent = () => {
+    setAddOpen(false);
     const key = (window.prompt('Interner Schlüssel der neuen Veranstaltung (z. B. opening-night-2026).\nEr kann später NICHT mehr geändert werden:') || '').trim();
     if (!key) return;
     if (data?.events.some((e) => e.eventKey === key)) { window.alert('Dieser Schlüssel wird schon verwendet.'); return; }
@@ -221,8 +278,8 @@ export default function TicketAdmin() {
   const exportCsv = () => {
     if (!data) return;
     // Einwilligung mit exportieren – das ist der Nachweis, wem wann was zugesagt wurde.
-    const head = ['Name', 'E-Mail', 'Personen', 'Status', 'Code', 'Erschienen', 'Bestätigt', 'Einwilligung am', 'Einwilligungstext'];
-    const lines = data.rows.map((r) => [r.name, r.email, r.quantity, r.status, r.code || '', arrivedOf(r), fmtDate(r.verifiedAt), r.consentAt ? fmtDate(r.consentAt) : '', r.consentText || '']
+    const head = ['Name', 'E-Mail', 'Personen', 'Block', 'Status', 'Code', 'Erschienen', 'Bestätigt', 'Einwilligung am', 'Einwilligungstext'];
+    const lines = data.rows.map((r) => [r.name, r.email, r.quantity, blockShort(data.config, r.block), r.status, r.code || '', arrivedOf(r), fmtDate(r.verifiedAt), r.consentAt ? fmtDate(r.consentAt) : '', r.consentText || '']
       .map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','));
     const blob = new Blob(['﻿' + [head.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'zuschauer-tickets.csv'; a.click(); URL.revokeObjectURL(url);
@@ -255,8 +312,10 @@ export default function TicketAdmin() {
           „+ Veranstaltung" vorne; bei vielen Einträgen seitlich scrollen. */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mb-1 [scrollbar-width:thin]">
         <button
-          onClick={addEvent}
-          className="shrink-0 px-3 py-2 rounded-xl text-[12px] font-bold cursor-pointer border border-dashed border-white/20 text-hl-mute hover:text-white whitespace-nowrap"
+          onClick={() => { setAddOpen((v) => !v); loadMatchdays(); }}
+          className={`shrink-0 px-3 py-2 rounded-xl text-[12px] font-bold cursor-pointer border border-dashed whitespace-nowrap ${
+            addOpen ? 'border-[#E6238E]/60 text-white bg-[#E6238E]/10' : 'border-white/20 text-hl-mute hover:text-white'
+          }`}
         >
           + Veranstaltung
         </button>
@@ -277,6 +336,67 @@ export default function TicketAdmin() {
           </button>
         ))}
       </div>
+
+      {addOpen && (
+        <div className="hl-card rounded-2xl p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-display font-black uppercase tracking-tight text-white">Neue Veranstaltung</span>
+            <button onClick={() => setAddOpen(false)} className="p-1.5 rounded-lg text-hl-mute hover:text-white cursor-pointer"><X className="w-4 h-4" /></button>
+          </div>
+          <div>
+            <div className="text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1.5">Mit Liga-Spieltag verknüpfen{mdOptions?.season ? ` · ${mdOptions.season.label}` : ''}</div>
+            {!mdOptions ? (
+              <div className="text-[13px] text-hl-mute flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Lade Spielplan…</div>
+            ) : mdOptions.matchdays.length === 0 ? (
+              <div className="text-[13px] text-hl-mute">Keine Spieltage in der aktuellen Saison gefunden.</div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {mdOptions.matchdays.map((md) => (
+                  <button
+                    key={md.matchday}
+                    onClick={() => addFromMatchday(md)}
+                    className="text-left rounded-xl border border-white/10 bg-white/[.03] hover:bg-white/[.07] hover:border-[#E6238E]/40 px-3 py-2.5 cursor-pointer min-w-0"
+                  >
+                    <div className="flex items-center gap-2 text-white font-bold text-[14px]"><CalendarDays className="w-4 h-4 text-[#ff7ac4] shrink-0" /> {md.matchday}. Spieltag</div>
+                    <div className="text-[11.5px] text-hl-mute mt-0.5 truncate">
+                      {matchdayDateLabel(md.date, md.firstTime) || 'ohne Datum'} · {md.games} Spiele
+                    </div>
+                    {md.blocks.length >= 2 && (
+                      <div className="text-[11px] text-hl-faint mt-0.5 truncate">
+                        {md.blocks.map((b, i) => `Block ${i + 1}: ${b.from}–${b.to}`).join(' · ')}
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="text-[11px] text-hl-faint mt-2 leading-snug">
+              Titel, Datum, Beginn und die Blöcke (60 Plätze je Block + „Ganzer Abend") werden aus dem Spielplan übernommen –
+              danach unter „Einstellungen" anpassbar. Die Teams je Block zeigt die Ticket-Seite immer live aus dem Spielplan.
+            </p>
+          </div>
+          <button onClick={addEvent} className="w-full rounded-xl border border-dashed border-white/20 py-2.5 text-[13px] font-bold text-hl-mute hover:text-white cursor-pointer">
+            Individuelle Veranstaltung (ohne Spieltag) …
+          </button>
+        </div>
+      )}
+
+      {data?.blocks && data.blocks.length >= 2 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+          {data.blocks.map((b) => (
+            <div key={b.id} className="hl-card rounded-2xl px-4 py-3 flex items-center justify-between gap-3 min-w-0">
+              <span className="min-w-0">
+                <span className="block text-[13px] font-bold text-white truncate">{b.label}</span>
+                <span className="block text-[11px] text-hl-mute">{b.from}–{b.to} Uhr</span>
+              </span>
+              <span className="text-right shrink-0">
+                <span className="block font-display font-black text-xl text-white tabular-nums leading-none">{b.sold}<span className="text-hl-faint text-sm"> / {b.capacity}</span></span>
+                <span className="block text-[10px] text-hl-dim mt-0.5">{b.arrived} erschienen</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         {[
@@ -339,6 +459,7 @@ export default function TicketAdmin() {
                 <label className="block"><span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Max. Plätze</span><input type="number" value={cfg.capacity} onChange={(e) => setCfg({ ...cfg, capacity: Number(e.target.value) })} className={inp} /></label>
                 <label className="block"><span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Max. pro E-Mail</span><input type="number" value={cfg.maxPerEmail} onChange={(e) => setCfg({ ...cfg, maxPerEmail: Number(e.target.value) })} className={inp} /></label>
               </div>
+              <BlockEditor cfg={cfg} setCfg={setCfg} options={mdOptions} />
               <label className="block">
                 <span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Beginn (schließt den Verkauf automatisch)</span>
                 <input type="datetime-local" value={cfg.startsAt} onChange={(e) => setCfg({ ...cfg, startsAt: e.target.value })} className={inp} />
@@ -517,6 +638,11 @@ export default function TicketAdmin() {
                     <div className="min-w-0 flex-1">
                       <div className="text-[15px] font-semibold text-white leading-snug truncate flex items-center gap-2">{r.name}
                         <span className="inline-flex items-center gap-0.5 text-[11px] text-hl-mute font-normal"><Users className="w-3 h-3" />{r.quantity}</span>
+                        {blockShort(data?.config ?? null, r.block) && (
+                          <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-[#ff7ac4] bg-[#E6238E]/10 border border-[#E6238E]/25 rounded px-1.5 py-0.5">
+                            {blockShort(data?.config ?? null, r.block)}
+                          </span>
+                        )}
                       </div>
                       <div className="text-[12px] text-hl-mute truncate">{r.email}</div>
                     </div>
@@ -552,6 +678,124 @@ export default function TicketAdmin() {
           />
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// Blockweise Tickets bearbeiten: Liga-Spieltag verknüpfen, Blöcke (Name,
+// Zeitfenster, Plätze), Vorschlag aus dem Spielplan, „Ganzer Abend" an/aus.
+function BlockEditor({
+  cfg,
+  setCfg,
+  options,
+}: {
+  cfg: TicketAdminConfig;
+  setCfg: (c: TicketAdminConfig) => void;
+  options: { season: { id: string; label: string } | null; matchdays: TicketMatchdayOption[] } | null;
+}) {
+  const blocks = cfg.blocks ?? [];
+  const on = blocks.length >= 2;
+  const linkedMd = cfg.link ? options?.matchdays.find((m) => m.matchday === cfg.link?.matchday && options.season?.id === cfg.link?.seasonId) : undefined;
+  const fromSchedule = (md?: TicketMatchdayOption) =>
+    md && md.blocks.length >= 2
+      ? md.blocks.map((b, i) => ({ id: `b${i + 1}`, label: blocks[i]?.label || `Block ${i + 1}`, from: b.from, to: b.to, capacity: blocks[i]?.capacity || 60 }))
+      : [
+          { id: 'b1', label: 'Block 1', from: '19:00', to: '20:30', capacity: 60 },
+          { id: 'b2', label: 'Block 2', from: '20:30', to: '22:00', capacity: 60 },
+        ];
+  const setBlock = (i: number, patch: Partial<(typeof blocks)[number]>) =>
+    setCfg({ ...cfg, blocks: blocks.map((b, j) => (j === i ? { ...b, ...patch } : b)) });
+  const small = 'w-full bg-white/[.05] border border-white/10 rounded-lg px-2.5 py-1.5 text-[13px] text-white focus:border-[#E6238E] focus:outline-none min-w-0';
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[.03] p-3 space-y-3">
+      <label className="block">
+        <span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1">Verknüpfter Liga-Spieltag</span>
+        <select
+          value={cfg.link ? String(cfg.link.matchday) : ''}
+          onChange={(e) => {
+            const md = Number(e.target.value);
+            setCfg({ ...cfg, link: md && options?.season ? { seasonId: options.season.id, matchday: md } : null });
+          }}
+          className="w-full bg-white/[.05] border border-white/10 rounded-xl px-3 py-2 text-[14px] text-white focus:outline-none"
+        >
+          <option value="">– keiner (individuelle Veranstaltung) –</option>
+          {(options?.matchdays ?? []).map((m) => (
+            <option key={m.matchday} value={m.matchday}>
+              {m.matchday}. Spieltag{m.date ? ` · ${matchdayDateLabel(m.date, m.firstTime)}` : ''}
+            </option>
+          ))}
+          {cfg.link && !linkedMd && <option value={cfg.link.matchday}>{cfg.link.matchday}. Spieltag</option>}
+        </select>
+        <span className="block text-[11px] text-hl-faint mt-1">Die Teams je Block kommen live aus dem Spielplan dieses Spieltags.</span>
+      </label>
+
+      <div className="flex items-center justify-between gap-3">
+        <span className="min-w-0">
+          <span className="block text-[14px] font-semibold text-white">Blockweise Tickets</span>
+          <span className="block text-[11px] text-hl-faint leading-snug mt-0.5">Gäste wählen Block 1, Block 2 … oder „Ganzer Abend". Jeder Block hat eigene Plätze („Max. Plätze" oben gilt dann nicht).</span>
+        </span>
+        <button
+          onClick={() => setCfg({ ...cfg, blocks: on ? [] : fromSchedule(linkedMd) })}
+          className={`shrink-0 relative w-12 h-7 rounded-full transition-colors cursor-pointer ${on ? 'bg-emerald-500' : 'bg-white/15'}`}
+        >
+          <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${on ? 'left-6' : 'left-1'}`} />
+        </button>
+      </div>
+
+      {on && (
+        <>
+          <div className="space-y-2">
+            {blocks.map((b, i) => (
+              <div key={i} className="grid grid-cols-2 sm:grid-cols-[1.4fr_1fr_1fr_1fr_auto] gap-2 items-end">
+                <label className="block col-span-2 sm:col-span-1"><span className="block text-[10px] text-hl-dim mb-0.5">Name</span><input value={b.label} onChange={(e) => setBlock(i, { label: e.target.value })} className={small} /></label>
+                <label className="block"><span className="block text-[10px] text-hl-dim mb-0.5">Von</span><input type="time" value={b.from} onChange={(e) => setBlock(i, { from: e.target.value })} className={small} /></label>
+                <label className="block"><span className="block text-[10px] text-hl-dim mb-0.5">Bis</span><input type="time" value={b.to} onChange={(e) => setBlock(i, { to: e.target.value })} className={small} /></label>
+                <label className="block"><span className="block text-[10px] text-hl-dim mb-0.5">Plätze</span><input type="number" min={1} value={b.capacity} onChange={(e) => setBlock(i, { capacity: Number(e.target.value) })} className={small} /></label>
+                <button
+                  onClick={() => setCfg({ ...cfg, blocks: blocks.filter((_, j) => j !== i) })}
+                  disabled={blocks.length <= 2}
+                  title={blocks.length <= 2 ? 'Mindestens 2 Blöcke (sonst Blöcke ausschalten)' : 'Block entfernen'}
+                  className="h-[34px] px-2 rounded-lg border border-white/10 text-hl-mute hover:text-rose-300 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => {
+                const last = blocks[blocks.length - 1];
+                setCfg({ ...cfg, blocks: [...blocks, { id: `b${blocks.length + 1}`, label: `Block ${blocks.length + 1}`, from: last?.to || '21:00', to: last?.to || '22:00', capacity: 60 }] });
+              }}
+              disabled={blocks.length >= 6}
+              className="px-3 py-1.5 rounded-lg text-[12px] font-bold border border-white/10 bg-white/[.04] text-hl-mute hover:text-white cursor-pointer flex items-center gap-1.5 disabled:opacity-40"
+            >
+              <Plus className="w-3.5 h-3.5" /> Block
+            </button>
+            {linkedMd && (
+              <button
+                onClick={() => setCfg({ ...cfg, blocks: fromSchedule(linkedMd) })}
+                className="px-3 py-1.5 rounded-lg text-[12px] font-bold border border-white/10 bg-white/[.04] text-hl-mute hover:text-white cursor-pointer flex items-center gap-1.5"
+              >
+                <Wand2 className="w-3.5 h-3.5" /> Zeiten aus Spielplan
+              </button>
+            )}
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="min-w-0">
+              <span className="block text-[13px] font-semibold text-white">„Ganzer Abend" anbieten</span>
+              <span className="block text-[11px] text-hl-faint leading-snug mt-0.5">Belegt in jedem Block einen Platz – geht nur, solange überall noch Platz ist.</span>
+            </span>
+            <button
+              onClick={() => setCfg({ ...cfg, allowFull: cfg.allowFull === false })}
+              className={`shrink-0 relative w-12 h-7 rounded-full transition-colors cursor-pointer ${cfg.allowFull !== false ? 'bg-emerald-500' : 'bg-white/15'}`}
+            >
+              <span className={`absolute top-1 w-5 h-5 rounded-full bg-white transition-all ${cfg.allowFull !== false ? 'left-6' : 'left-1'}`} />
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useBackClose } from '../lib/backStack';
 import {
-  fetchTicketConfig, requestTicketCode, confirmTicket, useTurnstile, type TicketConfig,
+  fetchTicketConfig, requestTicketCode, confirmTicket, useTurnstile, type TicketConfig, type TicketBlockPublic, type TicketBlockTeam,
 } from '../lib/register';
 
 // Öffentliche Zuschauer-Ticket-Anmeldung für EINE Veranstaltung (Opening Night,
@@ -61,7 +61,9 @@ export default function EventTickets({
   const [consent, setConsent] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
   const [devCode, setDevCode] = useState('');
-  const [result, setResult] = useState<{ code: string; quantity: number; donationUrl: string } | null>(null);
+  const [result, setResult] = useState<{ code: string; quantity: number; donationUrl: string; blockLabel?: string } | null>(null);
+  // Block-Tickets: gewählter Block ('b1', 'b2' … oder 'all' = ganzer Abend).
+  const [block, setBlock] = useState('');
   // Spenden-Pop-up direkt nach der Bestätigung (Text im Backend einstellbar).
   const [donation, setDonation] = useState<{ url: string; title: string; text: string } | null>(null);
   useBackClose(donation !== null, () => setDonation(null));
@@ -104,16 +106,22 @@ export default function EventTickets({
 
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const maxPer = cfg?.maxPerEmail ?? 4;
-  const remaining = cfg?.remaining ?? 0;
+  const blocks = cfg?.blocks && cfg.blocks.length >= 2 ? cfg.blocks : null;
+  const fullFree = blocks ? Math.min(...blocks.map((b) => b.remaining)) : 0;
+  const blockFree = (id: string) => (id === 'all' ? fullFree : blocks?.find((b) => b.id === id)?.remaining ?? 0);
+  // Freie Plätze für die Personenzahl: im Block-Modus die des gewählten Blocks.
+  const remaining = blocks ? (block ? blockFree(block) : Math.max(0, ...blocks.map((b) => b.remaining))) : cfg?.remaining ?? 0;
 
   const requestCode = async () => {
     if (!name.trim()) { setErr('Bitte deinen Namen angeben.'); return; }
     if (!emailValid) { setErr('Bitte eine gültige E-Mail-Adresse eingeben.'); return; }
     if (!consent) { setErr('Bitte die Einwilligung zur Datenspeicherung bestätigen.'); return; }
+    if (blocks && !block) { setErr('Bitte wähle, wann du kommst (Block).'); return; }
+    if (blocks && qty > blockFree(block)) { setErr(`In diesem Block sind nur noch ${blockFree(block)} Plätze frei.`); return; }
     if (!turnstile.ready) { setErr('Bitte kurz die Bot-Prüfung abschließen.'); return; }
     setBusy(true); setErr('');
     try {
-      const r = await requestTicketCode({ eventKey: cfg?.eventKey, name: name.trim(), email: email.trim(), quantity: qty, consent, website: honeypot.current, turnstileToken: turnstile.token });
+      const r = await requestTicketCode({ eventKey: cfg?.eventKey, name: name.trim(), email: email.trim(), quantity: qty, consent, website: honeypot.current, turnstileToken: turnstile.token, block: blocks ? block : undefined });
       if (r.devCode) setDevCode(r.devCode);
       turnstile.reset();
       goStep('verify'); setErr(''); window.scrollTo(0, 0);
@@ -125,7 +133,7 @@ export default function EventTickets({
   const resend = async () => {
     setBusy(true); setErr('');
     try {
-      const r = await requestTicketCode({ eventKey: cfg?.eventKey, name: name.trim(), email: email.trim(), quantity: qty, consent, website: honeypot.current, turnstileToken: turnstile.token });
+      const r = await requestTicketCode({ eventKey: cfg?.eventKey, name: name.trim(), email: email.trim(), quantity: qty, consent, website: honeypot.current, turnstileToken: turnstile.token, block: blocks ? block : undefined });
       if (r.devCode) setDevCode(r.devCode);
       turnstile.reset();
     } catch (e) { setErr(e instanceof Error ? e.message : 'Erneutes Senden fehlgeschlagen.'); }
@@ -137,7 +145,7 @@ export default function EventTickets({
     setBusy(true); setErr('');
     try {
       const r = await confirmTicket(email.trim(), code.trim(), cfg?.eventKey);
-      setResult({ code: r.code, quantity: r.quantity, donationUrl: r.donationUrl || '' });
+      setResult({ code: r.code, quantity: r.quantity, donationUrl: r.donationUrl || '', blockLabel: r.blockLabel || '' });
       setStep('done'); window.scrollTo(0, 0);
       if (r.donationPopup && r.donationUrl) {
         const d = { url: r.donationUrl, title: r.donationTitle || 'Kurze, ehrliche Bitte', text: r.donationText || '' };
@@ -229,10 +237,21 @@ export default function EventTickets({
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center justify-between hl-card rounded-2xl px-4 py-3">
-                      <span className="text-[13px] text-hl-mute">Noch verfügbar</span>
-                      <span className="font-display font-black text-lg text-white tabular-nums">{remaining} / <span style={{ color: `${accent}` }}>{cfg.capacity}</span></span>
-                    </div>
+                    {blocks ? (
+                      <BlockPicker
+                        blocks={blocks}
+                        allowFull={cfg.allowFull !== false}
+                        fullFree={fullFree}
+                        value={block}
+                        accent={accent}
+                        onChange={(id) => { setBlock(id); setQty((q) => Math.max(1, Math.min(q, blockFree(id) || 1))); }}
+                      />
+                    ) : (
+                      <div className="flex items-center justify-between hl-card rounded-2xl px-4 py-3">
+                        <span className="text-[13px] text-hl-mute">Noch verfügbar</span>
+                        <span className="font-display font-black text-lg text-white tabular-nums">{remaining} / <span style={{ color: `${accent}` }}>{cfg.capacity}</span></span>
+                      </div>
+                    )}
                     {err && <ErrorMsg>{err}</ErrorMsg>}
                     <label className="block">
                       <span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1.5">Dein Name</span>
@@ -336,6 +355,9 @@ export default function EventTickets({
                 </div>
                 <h2 className="font-display font-black text-3xl uppercase tracking-tight text-white">Ticket bestätigt!</h2>
                 <p className="text-hl-soft text-[15px]">Für <span className="text-white font-semibold">{result.quantity} Person{result.quantity === 1 ? '' : 'en'}</span> · wir haben dir alles per E-Mail geschickt.</p>
+                {result.blockLabel && (
+                  <p className="text-[14px] text-white font-semibold">Einlass: <span style={{ color: accent }}>{result.blockLabel}</span></p>
+                )}
 
                 <div className="hl-card rounded-2xl p-5">
                   <div className="text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1.5">Dein Ticket-Code</div>
@@ -421,6 +443,90 @@ export default function EventTickets({
           <button onClick={() => onNavigate('/datenschutz')} className="hover:text-hl-mute transition-colors cursor-pointer">Datenschutz</button>
         </div>
       </footer>
+    </div>
+  );
+}
+
+// Block-Auswahl (Block-Tickets): je Block Uhrzeit, freie Plätze und die Teams,
+// die in diesem Block spielen (live aus dem Spielplan) + optional „Ganzer Abend".
+function BlockPicker({
+  blocks,
+  allowFull,
+  fullFree,
+  value,
+  accent,
+  onChange,
+}: {
+  blocks: TicketBlockPublic[];
+  allowFull: boolean;
+  fullFree: number;
+  value: string;
+  accent: string;
+  onChange: (id: string) => void;
+}) {
+  const options = [
+    ...blocks.map((b) => ({ id: b.id, title: b.label, time: `${b.from}–${b.to} Uhr`, free: b.remaining, teams: b.teams, hint: '' })),
+    ...(allowFull
+      ? [{
+          id: 'all', title: 'Ganzer Abend', time: `${blocks[0].from}–${blocks[blocks.length - 1].to} Uhr`, free: fullFree,
+          teams: [] as TicketBlockTeam[], hint: 'Alle Spiele – du bleibst den ganzen Abend (belegt in jedem Block einen Platz).',
+        }]
+      : []),
+  ];
+  return (
+    <div>
+      <span className="block text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1.5">Wann kommst du?</span>
+      <div className="grid grid-cols-1 gap-2.5">
+        {options.map((o) => {
+          const on = value === o.id;
+          const full = o.free <= 0;
+          return (
+            <button
+              key={o.id}
+              type="button"
+              disabled={full}
+              onClick={() => onChange(o.id)}
+              className={`w-full text-left rounded-2xl border px-4 py-3 transition-colors min-w-0 ${
+                full ? 'opacity-50 cursor-not-allowed border-white/10 bg-white/[.02]' : 'cursor-pointer hover:bg-white/[.05]'
+              }`}
+              style={on ? { borderColor: accent, background: `${accent}1f`, boxShadow: `0 0 0 1px ${accent}` } : { borderColor: 'rgba(255,255,255,.1)' }}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <span
+                  className="w-5 h-5 rounded-full border-2 grid place-items-center shrink-0"
+                  style={{ borderColor: on ? accent : 'rgba(255,255,255,.3)' }}
+                >
+                  {on && <span className="w-2.5 h-2.5 rounded-full" style={{ background: accent }} />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-display font-black uppercase tracking-tight text-white text-[17px] leading-tight">{o.title}</span>
+                  <span className="block text-[12px] text-hl-mute">{o.time}</span>
+                </span>
+                <span className={`shrink-0 text-[12px] font-bold tabular-nums ${full ? 'text-rose-300' : 'text-hl-soft'}`}>
+                  {full ? 'Ausgebucht' : `${o.free} frei`}
+                </span>
+              </div>
+              {o.hint && <p className="text-[12px] text-hl-dim mt-2 leading-snug">{o.hint}</p>}
+              {o.teams.length > 0 && (
+                <div className="flex flex-wrap gap-x-3 gap-y-1.5 mt-2.5">
+                  {o.teams.map((t) => (
+                    <span key={t.id} className="inline-flex items-center gap-1.5 min-w-0 max-w-full">
+                      {t.logoUrl ? (
+                        <img src={t.logoUrl} alt="" loading="lazy" className="w-5 h-5 object-contain shrink-0" />
+                      ) : (
+                        <span className="w-5 h-5 rounded-full grid place-items-center text-[8px] font-black text-white shrink-0" style={{ background: t.color }}>
+                          {(t.shortName || t.name).slice(0, 2).toUpperCase()}
+                        </span>
+                      )}
+                      <span className="text-[12.5px] text-hl-soft truncate">{t.name}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

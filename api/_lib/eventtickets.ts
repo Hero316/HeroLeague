@@ -5,7 +5,7 @@
 // optionaler Spendenlink in der Bestätigungs-Mail (kostenlos bleibt kostenlos).
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { randomUUID, randomInt } from 'node:crypto';
-import { sql } from './db.js';
+import { sql, getTeams } from './db.js';
 import { getSession } from './auth.js';
 import { badRequest } from './validate.js';
 import {
@@ -44,6 +44,19 @@ interface TicketConfig {
   // Selbst-Check-in am Eingang (QR-Plakat → /einchecken). Nur wenn an, können
   // Gäste sich mit E-Mail oder Ticket-Code selbst als „da" melden.
   selfCheckin: boolean;
+  // Verknüpfung mit einem Liga-Spieltag (Datum/Zeit/Teams kommen aus dem Spielplan).
+  link: { seasonId: string; matchday: number } | null;
+  // Blockweise Tickets: ab 2 Blöcken wählt der Gast Block 1, Block 2 … oder
+  // (wenn allowFull) „Ganzer Abend" – das belegt in JEDEM Block einen Platz.
+  blocks: TicketBlock[];
+  allowFull: boolean;
+}
+interface TicketBlock {
+  id: string; // 'b1', 'b2', …
+  label: string;
+  from: string; // 'HH:MM'
+  to: string; // 'HH:MM'
+  capacity: number;
 }
 interface TicketArchive {
   events: TicketConfig[];
@@ -86,6 +99,9 @@ const baseEvent = (): TicketConfig => ({
   consentText: DEFAULT_CONSENT,
   startsAt: '',
   selfCheckin: false,
+  link: null,
+  blocks: [],
+  allowFull: true,
 });
 
 const DEFAULT_ARCHIVE: TicketArchive = {
@@ -148,6 +164,82 @@ async function getEvent(key: string): Promise<TicketConfig | null> {
 const purposeFor = (cfg: TicketConfig) => PURPOSE_PREFIX + cfg.eventKey;
 
 const clamp = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+
+// --- Blöcke -----------------------------------------------------------------
+const blockMode = (cfg: TicketConfig) => Array.isArray(cfg.blocks) && cfg.blocks.length >= 2;
+const toMin = (t: string) => {
+  const m = /^(\d{1,2}):(\d{2})/.exec(t || '');
+  return m ? Number(m[1]) * 60 + Number(m[2]) : NaN;
+};
+const fmtMin = (n: number) => `${String(Math.floor(n / 60) % 24).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
+// Welche Blöcke belegt eine Wahl? 'all' = alle, sonst genau der eine.
+const blocksFor = (cfg: TicketConfig, choice: string): TicketBlock[] =>
+  choice === 'all' ? cfg.blocks : cfg.blocks.filter((b) => b.id === choice);
+const blockLabel = (cfg: TicketConfig, choice: string): string => {
+  if (!blockMode(cfg) || !choice) return '';
+  if (choice === 'all') return `Ganzer Abend (${cfg.blocks[0].from}–${cfg.blocks[cfg.blocks.length - 1].to} Uhr)`;
+  const b = cfg.blocks.find((x) => x.id === choice);
+  return b ? `${b.label} (${b.from}–${b.to} Uhr)` : '';
+};
+// Belegte Plätze je Block: eigene Block-Tickets + „Ganzer Abend"-Tickets.
+async function blockUsage(cfg: TicketConfig, exceptEmail?: string): Promise<Record<string, number>> {
+  const rows = (exceptEmail
+    ? await sql`SELECT block, COALESCE(SUM(quantity),0)::int AS n FROM event_tickets
+        WHERE event_key = ${cfg.eventKey} AND status = 'confirmed' AND email <> ${exceptEmail} GROUP BY block`
+    : await sql`SELECT block, COALESCE(SUM(quantity),0)::int AS n FROM event_tickets
+        WHERE event_key = ${cfg.eventKey} AND status = 'confirmed' GROUP BY block`) as { block: string; n: number }[];
+  const by = new Map(rows.map((r) => [r.block, Number(r.n)]));
+  const all = by.get('all') ?? 0;
+  const out: Record<string, number> = {};
+  for (const b of cfg.blocks) out[b.id] = (by.get(b.id) ?? 0) + all;
+  return out;
+}
+// Spiele des verknüpften Spieltags (Zeit + Teams), live aus dem Spielplan.
+async function linkedMatches(cfg: TicketConfig): Promise<{ time: string; date: string; home: string; away: string }[]> {
+  if (!cfg.link) return [];
+  return (await sql`SELECT time, date, home_team_id AS home, away_team_id AS away FROM matches
+    WHERE season_id = ${cfg.link.seasonId} AND matchday = ${cfg.link.matchday} ORDER BY date, time`) as {
+    time: string; date: string; home: string; away: string;
+  }[];
+}
+// Teams je Block (Anstoß im Zeitfenster [from, to)).
+async function blockTeams(cfg: TicketConfig): Promise<Record<string, { id: string; name: string; shortName: string; logoUrl: string; color: string }[]>> {
+  const out: Record<string, { id: string; name: string; shortName: string; logoUrl: string; color: string }[]> = {};
+  if (!blockMode(cfg) || !cfg.link) return out;
+  const [games, teams] = await Promise.all([linkedMatches(cfg), getTeams()]);
+  for (const b of cfg.blocks) {
+    const lo = toMin(b.from);
+    const hi = toMin(b.to);
+    const ids: string[] = [];
+    for (const g of games) {
+      const t = toMin(g.time);
+      if (!Number.isFinite(t) || t < lo || t >= hi) continue;
+      for (const id of [g.home, g.away]) if (!ids.includes(id)) ids.push(id);
+    }
+    out[b.id] = ids
+      .map((id) => teams.find((t) => t.id === id))
+      .filter((t): t is NonNullable<typeof t> => !!t)
+      .map((t) => ({ id: t.id, name: t.name, shortName: t.shortName || '', logoUrl: t.logoUrl || '', color: t.logoColor || '#22DFC9' }));
+  }
+  return out;
+}
+// Blöcke aus dem Spielplan vorschlagen: an der größten Lücke teilen, sonst in
+// der Mitte. Ende = letzter Anstoß + 8 min Spiel + 3 min Pause.
+function suggestBlocks(times: string[]): { from: string; to: string }[] {
+  const mins = [...new Set(times.map(toMin).filter(Number.isFinite))].sort((a, b) => a - b);
+  if (mins.length === 0) return [];
+  const end = mins[mins.length - 1] + 11;
+  if (mins.length < 2) return [{ from: fmtMin(mins[0]), to: fmtMin(end) }];
+  const gaps = mins.slice(1).map((m, i) => m - mins[i]);
+  const sorted = [...gaps].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  const maxGap = Math.max(...gaps);
+  const splitIdx = maxGap >= median * 1.8 ? gaps.indexOf(maxGap) + 1 : Math.ceil(mins.length / 2);
+  return [
+    { from: fmtMin(mins[0]), to: fmtMin(mins[splitIdx]) },
+    { from: fmtMin(mins[splitIdx]), to: fmtMin(end) },
+  ];
+}
 // URL tolerant normalisieren: leer bleibt leer; fehlt das Schema, wird https://
 // ergänzt (damit „paypal.me/…" oder „www…." nicht stillschweigend verworfen wird).
 const normUrl = (s: string): string => {
@@ -194,10 +286,23 @@ async function publicConfig(req: VercelRequest, res: VercelResponse) {
   const turnstileSiteKey = process.env.TURNSTILE_SITE_KEY || '';
   const pub = async (cfg: TicketConfig) => {
     const used = await confirmedSeats(cfg.eventKey);
+    let blocks: unknown[] | undefined;
+    if (blockMode(cfg)) {
+      const [usage, teams] = await Promise.all([blockUsage(cfg), blockTeams(cfg)]);
+      blocks = cfg.blocks.map((b) => ({
+        id: b.id, label: b.label, from: b.from, to: b.to, capacity: b.capacity,
+        remaining: Math.max(0, b.capacity - (usage[b.id] ?? 0)), teams: teams[b.id] ?? [],
+      }));
+    }
     return {
+      blocks, allowFull: cfg.allowFull !== false,
       eventKey: cfg.eventKey, open: saleOpen(cfg), title: cfg.title, dateLabel: cfg.dateLabel,
       locationLabel: cfg.locationLabel, capacity: cfg.capacity,
-      remaining: Math.max(0, cfg.capacity - used), maxPerEmail: cfg.maxPerEmail,
+      // Block-Modus: „frei" = der Block mit den meisten freien Plätzen.
+      remaining: blocks
+        ? Math.max(0, ...(blocks as { remaining: number }[]).map((x) => x.remaining))
+        : Math.max(0, cfg.capacity - used),
+      maxPerEmail: cfg.maxPerEmail,
       note: cfg.note, hasDonation: !!cfg.donationUrl,
       accent: cfg.accent, accentDark: cfg.accentDark, consentText: cfg.consentText,
       startsAt: cfg.startsAt,
@@ -253,10 +358,26 @@ async function requestCode(req: VercelRequest, res: VercelResponse) {
   }
   // Kapazität (weich) prüfen – gegen bestätigte Plätze, damit man keinen
   // aussichtslosen Flow startet. Hart abgesichert wird erst beim Bestätigen.
-  const used = await confirmedSeats(cfg.eventKey, email);
-  if (used + quantity > cfg.capacity) {
-    const left = Math.max(0, cfg.capacity - used);
-    return res.status(409).json({ error: left > 0 ? `Nur noch ${left} Platz${left === 1 ? '' : 'e'} frei.` : 'Leider ausverkauft.' });
+  let block = '';
+  if (blockMode(cfg)) {
+    block = clamp(b.block, 20);
+    const valid = block === 'all' ? cfg.allowFull !== false : cfg.blocks.some((x) => x.id === block);
+    if (!valid) return badRequest(res, 'Bitte einen Block wählen.');
+    const usage = await blockUsage(cfg, email);
+    for (const bl of blocksFor(cfg, block)) {
+      const left = Math.max(0, bl.capacity - (usage[bl.id] ?? 0));
+      if (quantity > left) {
+        return res.status(409).json({
+          error: left > 0 ? `${bl.label}: nur noch ${left} Platz${left === 1 ? '' : 'e'} frei.` : `${bl.label} ist leider ausgebucht.`,
+        });
+      }
+    }
+  } else {
+    const used = await confirmedSeats(cfg.eventKey, email);
+    if (used + quantity > cfg.capacity) {
+      const left = Math.max(0, cfg.capacity - used);
+      return res.status(409).json({ error: left > 0 ? `Nur noch ${left} Platz${left === 1 ? '' : 'e'} frei.` : 'Leider ausverkauft.' });
+    }
   }
 
   // Reservierung anlegen/aktualisieren (gilt RESERVE_MIN Minuten).
@@ -268,7 +389,7 @@ async function requestCode(req: VercelRequest, res: VercelResponse) {
     ON CONFLICT (event_key, email) DO UPDATE SET
       status = 'reserved', name = EXCLUDED.name, quantity = EXCLUDED.quantity,
       reserved_until = now() + ${`${RESERVE_MIN} minutes`}::interval, updated_at = now()`;
-  await sql`UPDATE event_tickets SET consent_at = now(), consent_text = ${cfg.consentText}
+  await sql`UPDATE event_tickets SET consent_at = now(), consent_text = ${cfg.consentText}, block = ${block}
     WHERE event_key = ${cfg.eventKey} AND email = ${email}`;
 
   const result = await issueCode(purposeFor(cfg), email, async (code) => {
@@ -278,7 +399,7 @@ async function requestCode(req: VercelRequest, res: VercelResponse) {
       layout: {
         preheader: 'Bestätige deine E-Mail, um deine Tickets zu sichern.',
         heading: 'E-Mail bestätigen', accent: cfg.accent, accentDark: cfg.accentDark,
-        intro: `Fast fertig! Gib diesen Code ein, um ${quantity} Ticket${quantity === 1 ? '' : 's'} für „${cfg.title}" (${cfg.dateLabel}) zu sichern:`,
+        intro: `Fast fertig! Gib diesen Code ein, um ${quantity} Ticket${quantity === 1 ? '' : 's'} für „${cfg.title}" (${cfg.dateLabel}${block ? ` · ${blockLabel(cfg, block)}` : ''}) zu sichern:`,
         bodyHtml: codeBlock(code, cfg.accent),
         footnote: `Der Code ist 15 Minuten gültig. Deine Reservierung läuft nach ${RESERVE_MIN} Minuten ab.`,
       },
@@ -296,12 +417,15 @@ async function confirm(req: VercelRequest, res: VercelResponse) {
   if (!saleOpen(cfg)) return res.status(403).json({ error: 'Die Veranstaltung hat begonnen – es gibt keine Tickets mehr.' });
   if (!isEmail(b.email)) return badRequest(res, 'Bitte eine gültige E-Mail-Adresse eingeben.');
   const email = normEmail(b.email);
-  const rows = await sql`SELECT id, status, quantity, code FROM event_tickets WHERE event_key = ${cfg.eventKey} AND email = ${email} LIMIT 1`;
-  const row = rows[0] as { id: string; status: string; quantity: number; code: string | null } | undefined;
+  const rows = await sql`SELECT id, status, quantity, code, block FROM event_tickets WHERE event_key = ${cfg.eventKey} AND email = ${email} LIMIT 1`;
+  const row = rows[0] as { id: string; status: string; quantity: number; code: string | null; block: string } | undefined;
   if (!row) return badRequest(res, 'Keine Reservierung gefunden. Bitte starte die Anmeldung neu.');
   if (row.status === 'confirmed') {
-    return res.json({ ok: true, code: row.code, quantity: row.quantity, alreadyConfirmed: true, ...donationInfo(cfg) });
+    return res.json({ ok: true, code: row.code, quantity: row.quantity, alreadyConfirmed: true, blockLabel: blockLabel(cfg, row.block), ...donationInfo(cfg) });
   }
+  // Block-Modus: die gewählten Blöcke + ihre Kapazitäten (für die harte Prüfung).
+  const needed = blockMode(cfg) ? blocksFor(cfg, row.block) : [];
+  if (blockMode(cfg) && needed.length === 0) return badRequest(res, 'Bitte die Anmeldung neu starten und einen Block wählen.');
 
   const check = await checkCode(purposeFor(cfg), email, b.code);
   if (!check.ok) return badRequest(res, check.error || "Code ungültig.");
@@ -310,15 +434,31 @@ async function confirm(req: VercelRequest, res: VercelResponse) {
   // Bestätigung nur schreiben, wenn (bestätigte Plätze ohne uns) + unsere Menge
   // ≤ Kapazität. So können auch gleichzeitige Bestätigungen NIE überbuchen.
   const code = shortCode();
-  const tx = await sql.transaction((txn) => [
-    txn`SELECT pg_advisory_xact_lock(hashtext(${cfg.eventKey}))`,
-    txn`UPDATE event_tickets
-        SET status = 'confirmed', email_verified = true, code = ${code}, verified_at = now(), updated_at = now()
-        WHERE id = ${row.id} AND status <> 'confirmed'
-          AND (SELECT COALESCE(SUM(quantity), 0) FROM event_tickets
-               WHERE event_key = ${cfg.eventKey} AND status = 'confirmed' AND id <> ${row.id}) + ${row.quantity} <= ${cfg.capacity}
-        RETURNING id`,
-  ]);
+  const neededIds = needed.map((b) => b.id);
+  const neededCaps = needed.map((b) => b.capacity);
+  const tx = needed.length
+    ? await sql.transaction((txn) => [
+        txn`SELECT pg_advisory_xact_lock(hashtext(${cfg.eventKey}))`,
+        // Jeder belegte Block muss Platz haben: (eigene + „ganzer Abend") + unsere Menge ≤ Kapazität.
+        txn`UPDATE event_tickets
+            SET status = 'confirmed', email_verified = true, code = ${code}, verified_at = now(), updated_at = now()
+            WHERE id = ${row.id} AND status <> 'confirmed'
+              AND NOT EXISTS (
+                SELECT 1 FROM unnest(${neededIds}::text[], ${neededCaps}::int[]) AS x(b, cap)
+                WHERE (SELECT COALESCE(SUM(quantity), 0) FROM event_tickets
+                       WHERE event_key = ${cfg.eventKey} AND status = 'confirmed' AND id <> ${row.id}
+                         AND (block = x.b OR block = 'all')) + ${row.quantity} > x.cap)
+            RETURNING id`,
+      ])
+    : await sql.transaction((txn) => [
+        txn`SELECT pg_advisory_xact_lock(hashtext(${cfg.eventKey}))`,
+        txn`UPDATE event_tickets
+            SET status = 'confirmed', email_verified = true, code = ${code}, verified_at = now(), updated_at = now()
+            WHERE id = ${row.id} AND status <> 'confirmed'
+              AND (SELECT COALESCE(SUM(quantity), 0) FROM event_tickets
+                   WHERE event_key = ${cfg.eventKey} AND status = 'confirmed' AND id <> ${row.id}) + ${row.quantity} <= ${cfg.capacity}
+            RETURNING id`,
+      ]);
   const updated = Array.isArray(tx?.[1]) ? tx[1] : [];
   if (updated.length === 0) {
     return res.status(409).json({ error: 'Leider sind die Plätze inzwischen vergeben.' });
@@ -341,14 +481,16 @@ async function confirm(req: VercelRequest, res: VercelResponse) {
         intro: `Wir sehen uns beim „${cfg.title}" am ${cfg.dateLabel}${cfg.locationLabel ? ` · ${cfg.locationLabel}` : ''}. Zeig diesen Code am Einlass:`,
         bodyHtml: `${codeBlock(code, cfg.accent)}
           <p style="font-family:Arial,Helvetica,sans-serif;color:#3a4441;font-size:14px;line-height:1.6;margin:16px 0 0;text-align:center;">
-            Gültig für <strong>${row.quantity} Person${row.quantity === 1 ? '' : 'en'}</strong></p>`,
+            Gültig für <strong>${row.quantity} Person${row.quantity === 1 ? '' : 'en'}</strong>${
+              row.block ? `<br/>Einlass: <strong>${blockLabel(cfg, row.block)}</strong>` : ''
+            }</p>`,
         footnote: 'Bitte diese E-Mail am Einlass bereithalten.',
       },
-      text: `Ticket bestätigt für „${cfg.title}" (${cfg.dateLabel}).\nCode: ${code}\nGültig für ${row.quantity} Person(en).${cfg.donationUrl ? `\n\nFreiwillig unterstützen: ${cfg.donationUrl}` : ''}`,
+      text: `Ticket bestätigt für „${cfg.title}" (${cfg.dateLabel}).\nCode: ${code}\nGültig für ${row.quantity} Person(en).${row.block ? `\nEinlass: ${blockLabel(cfg, row.block)}` : ''}${cfg.donationUrl ? `\n\nFreiwillig unterstützen: ${cfg.donationUrl}` : ''}`,
     });
   } catch { /* Mail optional */ }
 
-  return res.json({ ok: true, code, quantity: row.quantity, ...donationInfo(cfg) });
+  return res.json({ ok: true, code, quantity: row.quantity, blockLabel: blockLabel(cfg, row.block), ...donationInfo(cfg) });
 }
 
 // --- Selbst-Check-in am Eingang ---------------------------------------------
@@ -429,15 +571,26 @@ async function adminList(req: VercelRequest, res: VercelResponse) {
 
   // Übersicht aller Events (für die Auswahl im Backend) inkl. verkaufter Plätze.
   const overview = await Promise.all(
-    events.map(async (e) => ({
-      id: e.id, eventKey: e.eventKey, title: e.title, dateLabel: e.dateLabel,
-      open: e.open, capacity: e.capacity, soldSeats: await confirmedSeats(e.eventKey),
-    }))
+    events.map(async (e) => {
+      if (blockMode(e)) {
+        // Block-Modus: Plätze über alle Blöcke („ganzer Abend" belegt je Block einen).
+        const u = await blockUsage(e);
+        return {
+          id: e.id, eventKey: e.eventKey, title: e.title, dateLabel: e.dateLabel, open: e.open,
+          capacity: e.blocks.reduce((s, b) => s + b.capacity, 0),
+          soldSeats: e.blocks.reduce((s, b) => s + (u[b.id] ?? 0), 0),
+        };
+      }
+      return {
+        id: e.id, eventKey: e.eventKey, title: e.title, dateLabel: e.dateLabel,
+        open: e.open, capacity: e.capacity, soldSeats: await confirmedSeats(e.eventKey),
+      };
+    })
   );
 
   if (!cfg) return res.json({ events, overview, config: null, rows: [], capacity: 0, soldSeats: 0, confirmedCount: 0, remaining: 0 });
 
-  const rows = await sql`SELECT id, email, name, quantity, status, code, checked_in AS "checkedIn",
+  const rows = await sql`SELECT id, email, name, quantity, status, code, block, checked_in AS "checkedIn",
       COALESCE(arrived, CASE WHEN checked_in THEN quantity ELSE 0 END)::int AS "arrived",
       created_at AS "createdAt", verified_at AS "verifiedAt",
       consent_at AS "consentAt", consent_text AS "consentText"
@@ -446,9 +599,22 @@ async function adminList(req: VercelRequest, res: VercelResponse) {
   const soldSeats = confirmed.reduce((sum, r) => sum + Number(r.quantity || 0), 0);
   // Tatsächlich erschienene Personen (für die Statistik „wer kam wirklich").
   const arrivedSeats = confirmed.reduce((sum, r) => sum + Number(r.arrived || 0), 0);
+  // Block-Modus: Zahlen je Block (verkauft inkl. „ganzer Abend", erschienen).
+  const blocks = blockMode(cfg)
+    ? cfg.blocks.map((b) => {
+        const mine = confirmed.filter((r) => r.block === b.id || r.block === 'all');
+        return {
+          id: b.id, label: b.label, from: b.from, to: b.to, capacity: b.capacity,
+          sold: mine.reduce((sum, r) => sum + Number(r.quantity || 0), 0),
+          arrived: mine.reduce((sum, r) => sum + Number(r.arrived || 0), 0),
+        };
+      })
+    : undefined;
+  const capacity = blocks ? blocks.reduce((s, b) => s + b.capacity, 0) : cfg.capacity;
+  const blockSeats = blocks ? blocks.reduce((s, b) => s + b.sold, 0) : soldSeats;
   return res.json({
-    events, overview, config: cfg, rows, capacity: cfg.capacity,
-    soldSeats, arrivedSeats, confirmedCount: confirmed.length, remaining: Math.max(0, cfg.capacity - soldSeats),
+    events, overview, config: cfg, rows, capacity, blocks,
+    soldSeats, arrivedSeats, confirmedCount: confirmed.length, remaining: Math.max(0, capacity - blockSeats),
   });
 }
 // Einlass setzen. `arrived` = wie viele Personen dieser Anmeldung da sind
@@ -513,12 +679,49 @@ async function adminSaveConfig(req: VercelRequest, res: VercelResponse) {
       consentText: clamp(raw.consentText, 2000) || DEFAULT_CONSENT,
       startsAt: clamp(raw.startsAt, 40),
       selfCheckin: raw.selfCheckin === true,
+      link:
+        raw.link && typeof raw.link === 'object' && clamp(raw.link.seasonId, 80) && clampInt(raw.link.matchday, 1, 999)
+          ? { seasonId: clamp(raw.link.seasonId, 80), matchday: clampInt(raw.link.matchday, 1, 999) as number }
+          : null,
+      blocks: (Array.isArray(raw.blocks) ? raw.blocks : [])
+        .slice(0, 6)
+        .map((bl, i) => ({
+          id: `b${i + 1}`,
+          label: clamp(bl?.label, 40) || `Block ${i + 1}`,
+          from: /^\d{1,2}:\d{2}$/.test(clamp(bl?.from, 5)) ? clamp(bl?.from, 5) : '19:00',
+          to: /^\d{1,2}:\d{2}$/.test(clamp(bl?.to, 5)) ? clamp(bl?.to, 5) : '22:00',
+          capacity: clampInt(bl?.capacity, 1, 100000) ?? 60,
+        })),
+      allowFull: raw.allowFull !== false,
     });
   }
   const archive: TicketArchive = { events };
   await sql`INSERT INTO settings (key, value) VALUES ('event_tickets', ${JSON.stringify(archive)}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`;
   return res.json({ ok: true, events });
+}
+
+// Spieltage der aktuellen Saison zum Verknüpfen: Datum, erster Anstoß und
+// Block-Vorschlag direkt aus dem Spielplan.
+async function adminMatchdays(_req: VercelRequest, res: VercelResponse) {
+  const season = (await sql`SELECT id, label FROM seasons WHERE is_current = true LIMIT 1`)[0] as
+    | { id: string; label: string }
+    | undefined;
+  if (!season) return res.json({ season: null, matchdays: [] });
+  const games = (await sql`SELECT matchday, date, time FROM matches WHERE season_id = ${season.id}
+    ORDER BY matchday, date, time`) as { matchday: number; date: string; time: string }[];
+  const by = new Map<number, { date: string; times: string[] }>();
+  for (const g of games) {
+    const e = by.get(g.matchday) ?? { date: g.date || '', times: [] };
+    if (!e.date && g.date) e.date = g.date;
+    if (g.time) e.times.push(g.time);
+    by.set(g.matchday, e);
+  }
+  const matchdays = [...by.entries()].map(([matchday, e]) => {
+    const sorted = [...e.times].sort((a, b) => toMin(a) - toMin(b));
+    return { matchday, date: e.date, firstTime: sorted[0] || '', games: e.times.length, blocks: suggestBlocks(e.times) };
+  });
+  return res.json({ season, matchdays });
 }
 
 export async function eventTickets(req: VercelRequest, res: VercelResponse) {
@@ -537,6 +740,7 @@ export async function eventTickets(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'POST' && action === 'admin-checkin') return adminCheckin(req, res);
     if (req.method === 'POST' && action === 'admin-delete') return adminDelete(req, res);
     if (req.method === 'POST' && action === 'admin-config') return adminSaveConfig(req, res);
+    if (req.method === 'GET' && action === 'admin-matchdays') return adminMatchdays(req, res);
   }
   return res.status(400).json({ error: 'Unbekannte Aktion' });
 }
