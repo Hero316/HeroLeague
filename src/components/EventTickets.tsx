@@ -282,7 +282,8 @@ export default function EventTickets({
                           style={{ accentColor: accent }}
                         />
                         <span className="text-[13px] text-hl-soft leading-snug">
-                          Ich stimme der Speicherung meiner Daten zu.{' '}
+                          Ich stimme der Speicherung meiner Daten zu und bin mit <b className="text-white">Foto-, Video- und
+                          Livestream-Aufnahmen</b> bei der Veranstaltung einverstanden (siehe Hinweis unten).{' '}
                           <button
                             type="button"
                             onClick={(e) => { e.preventDefault(); setConsentOpen((o) => !o); }}
@@ -306,7 +307,8 @@ export default function EventTickets({
                           </button>
                         </div>
                       )}
-                      {/* Fester Hinweis auf Foto-/Videoaufnahmen – immer sichtbar, unabhängig vom Einwilligungstext im Admin. */}
+                      {/* Fester Hinweis auf Foto-/Videoaufnahmen – immer sichtbar und Teil des
+                          Pflicht-Hakens; wird mit dem Einwilligungstext gespeichert und in der Mail genannt. */}
                       <div className="mt-3 pt-3 border-t border-white/10 flex items-start gap-2.5 text-[12px] text-hl-soft leading-relaxed">
                         <Camera className="w-4 h-4 shrink-0 mt-0.5" style={{ color: accent }} />
                         <p>

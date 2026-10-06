@@ -70,6 +70,12 @@ const DEFAULT_CONSENT =
   'Die Einwilligung kann jederzeit formlos per E-Mail widerrufen werden. Weitere Informationen ' +
   'in unserer Datenschutzerklärung.';
 
+// Fester Hinweis auf Aufnahmen – Teil des Pflicht-Hakens im Ticket-Formular,
+// wird mit dem Einwilligungstext gespeichert (Nachweis) und steht in der Mail.
+const MEDIA_NOTICE =
+  'Bei der Veranstaltung werden Fotos und Videos gemacht, die auf unserer Website und unseren ' +
+  'Social-Media-Kanälen veröffentlicht werden. Zuschauer können außerdem im Livestream zu sehen sein.';
+
 const DEFAULT_DONATION_TITLE = 'Kurze Bitte 💚';
 const DEFAULT_DONATION_TEXT =
   'Schön, dass du dabei bist! 🙌\n\n' +
@@ -416,7 +422,9 @@ async function requestCode(req: VercelRequest, res: VercelResponse) {
     ON CONFLICT (event_key, email) DO UPDATE SET
       status = 'reserved', name = EXCLUDED.name, quantity = EXCLUDED.quantity,
       reserved_until = now() + ${`${RESERVE_MIN} minutes`}::interval, updated_at = now()`;
-  await sql`UPDATE event_tickets SET consent_at = now(), consent_text = ${cfg.consentText}, block = ${block}
+  // Nachweis: Einwilligungstext + der mitbestätigte Aufnahme-Hinweis.
+  const consentProof = `${cfg.consentText}\n\nEinverstanden mit Aufnahmen: ${MEDIA_NOTICE}`;
+  await sql`UPDATE event_tickets SET consent_at = now(), consent_text = ${consentProof}, block = ${block}
     WHERE event_key = ${cfg.eventKey} AND email = ${email}`;
 
   const result = await issueCode(purposeFor(cfg), email, async (code) => {
@@ -510,10 +518,14 @@ async function confirm(req: VercelRequest, res: VercelResponse) {
           <p style="font-family:Arial,Helvetica,sans-serif;color:#3a4441;font-size:14px;line-height:1.6;margin:16px 0 0;text-align:center;">
             Gültig für <strong>${row.quantity} Person${row.quantity === 1 ? '' : 'en'}</strong>${
               row.block ? `<br/>Einlass: <strong>${blockLabel(cfg, row.block)}</strong>` : ''
-            }</p>`,
+            }</p>
+          <div style="margin-top:20px;padding:12px 14px;border-radius:10px;background:#f4f7f6;border:1px solid #e3ebe8;">
+            <p style="font-family:Arial,Helvetica,sans-serif;color:#3a4441;font-size:13px;line-height:1.55;margin:0;">
+              📸 <strong>Hinweis zu Aufnahmen:</strong> ${MEDIA_NOTICE} Mit deiner Anmeldung hast du dem zugestimmt.</p>
+          </div>`,
         footnote: 'Bitte diese E-Mail am Einlass bereithalten.',
       },
-      text: `Ticket bestätigt für „${cfg.title}" (${cfg.dateLabel}).\nCode: ${code}\nGültig für ${row.quantity} Person(en).${row.block ? `\nEinlass: ${blockLabel(cfg, row.block)}` : ''}${cfg.donationUrl ? `\n\nFreiwillig unterstützen: ${cfg.donationUrl}` : ''}`,
+      text: `Ticket bestätigt für „${cfg.title}" (${cfg.dateLabel}).\nCode: ${code}\nGültig für ${row.quantity} Person(en).${row.block ? `\nEinlass: ${blockLabel(cfg, row.block)}` : ''}\n\nHinweis: ${MEDIA_NOTICE}${cfg.donationUrl ? `\n\nFreiwillig unterstützen: ${cfg.donationUrl}` : ''}`,
     });
   } catch { /* Mail optional */ }
 
