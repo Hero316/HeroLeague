@@ -569,6 +569,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             )`) as { matchId: string; dayKey: string }[];
         return res.json({ matchIds: [...new Set(rows.map((r) => r.matchId))], tracked: rows });
       }
+      // ÖFFENTLICH: Fortschritt eines gerade laufenden Trackings („Das Team ist am
+      // Tracken · 40 %") – je Liga-Spieltag der aktuellen Saison, der Status-
+      // Einträge hat, aber noch nicht komplett live geschaltet ist. Ohne Namen.
+      if (resource === 'tracking-progress') {
+        const [statusRows, live, season] = await Promise.all([
+          sql`SELECT value FROM settings WHERE key = 'tracking-status'`,
+          readLiveDays(),
+          sql`SELECT id FROM seasons WHERE is_current = true LIMIT 1`,
+        ]);
+        const sid = (season[0] as { id?: string } | undefined)?.id;
+        const map = (statusRows[0]?.value ?? {}) as Record<string, { status?: string }>;
+        const byDay = new Map<string, Map<string, string>>();
+        for (const [k, v] of Object.entries(map)) {
+          const i = k.lastIndexOf('|');
+          if (i < 0) continue;
+          const dayKey = k.slice(0, i);
+          if (!sid || !dayKey.startsWith(`s:${sid}:`)) continue;
+          const m = byDay.get(dayKey) ?? new Map<string, string>();
+          m.set(k.slice(i + 1), String(v?.status ?? ''));
+          byDay.set(dayKey, m);
+        }
+        const days: { dayKey: string; matchday: number; done: number; tracking: number; total: number; pct: number }[] = [];
+        for (const [dayKey, st] of byDay) {
+          if (live.includes(dayKey)) continue; // schon komplett veröffentlicht
+          const matchday = Number(dayKey.split(':')[2]);
+          if (!Number.isFinite(matchday)) continue;
+          const ids = (await sql`SELECT id FROM matches WHERE season_id = ${sid} AND matchday = ${matchday}`) as { id: string }[];
+          const total = ids.length;
+          if (!total) continue;
+          const done = ids.filter((m) => st.get(m.id) === 'done').length;
+          const tracking = ids.filter((m) => st.get(m.id) === 'tracking').length;
+          days.push({ dayKey, matchday, done, tracking, total, pct: Math.round((done / total) * 100) });
+        }
+        days.sort((x, y) => y.matchday - x.matchday);
+        return res.json({ days });
+      }
       if (resource === 'track-status') {
         if (!(await getSession(req))) return res.status(401).json({ error: 'Nicht angemeldet' });
         const rows = await sql`SELECT value FROM settings WHERE key = 'tracking-status'`;
