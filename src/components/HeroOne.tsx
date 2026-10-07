@@ -117,7 +117,6 @@ export default function HeroOne({ rows, cfg, matches, teams, seasonNumber, seaso
           key={d.dayKey}
           day={d}
           className="mb-5 max-w-[760px] mx-auto"
-          note={`Die Wertung zeigt den Stand bis zum letzten Spieltag – der ${d.matchday}. Spieltag kommt automatisch dazu, sobald er fertig getrackt ist.`}
         />
       ))}
 
