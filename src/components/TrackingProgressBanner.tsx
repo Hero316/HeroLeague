@@ -5,12 +5,10 @@ import type { TrackingDayProgress } from '../lib/trackingProgress';
 // getrackt wird (Prozent = Spiele auf „Fertig" im Tracking Center).
 export default function TrackingProgressBanner({
   day,
-  note,
   compact = false,
   className = '',
 }: {
   day: TrackingDayProgress;
-  note?: string; // Zusatzzeile, z. B. was danach aktualisiert wird
   compact?: boolean;
   className?: string;
 }) {
@@ -63,7 +61,6 @@ export default function TrackingProgressBanner({
           style={{ width: `${Math.max(3, day.pct)}%`, background: 'linear-gradient(90deg,#22DFC9,#E9C46A)' }}
         />
       </div>
-      {note && !compact && <p className="text-[11.5px] text-hl-dim mt-2 leading-snug">{note}</p>}
     </div>
   );
 }

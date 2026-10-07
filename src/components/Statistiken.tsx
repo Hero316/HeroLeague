@@ -442,7 +442,6 @@ export default function Statistiken({
             key={d.dayKey}
             day={d}
             className="mb-4"
-            note={`Die Spieler-Statistiken vom ${d.matchday}. Spieltag (Torschützen, Bestenlisten, Noten) erscheinen hier, sobald fertig getrackt und freigeschaltet ist.`}
           />
         ))}
 
