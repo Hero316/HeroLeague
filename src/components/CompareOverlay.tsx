@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { X, ArrowLeftRight, Swords } from 'lucide-react';
+import { X, ArrowLeftRight, Swords, Search, ChevronDown } from 'lucide-react';
 import type { Match, MatchPlayerStat, PlayerStat, ScoringConfig, Team } from '../types';
 import { cardForPlayer } from '../lib/playerCards';
 import { heroRanking } from '../lib/trackingAwards';
 import { useBackClose } from '../lib/backStack';
 import FifaCard from './FifaCard';
 import StatRadar, { type RadarSeries } from './StatRadar';
-import { ModalPortal, monogram } from './ui';
+import { ModalPortal, monogram, TeamCrest } from './ui';
 
 // ---------------------------------------------------------------------------
 // Head-to-Head: zwei Spieler direkt gegenüberstellen – FC-Karten, ein
@@ -37,49 +37,176 @@ interface StatRow {
   higherWins?: boolean; // default true
 }
 
+// Spieler-Auswahl: Knopf mit aktuellem Spieler → Auswahl-Fenster mit Suche,
+// Team-Wappen-Leiste und den Spielern des gewählten Teams (wie im Steckbrief).
 function PlayerSelect({
   value,
   onChange,
   players,
   teams,
   accent,
+  open,
+  setOpen,
 }: {
   value: string;
   onChange: (id: string) => void;
   players: PlayerStat[];
   teams: Team[];
   accent: string;
+  open: boolean;
+  setOpen: (v: boolean) => void;
 }) {
-  // Nach Team gruppiert, damit man Spieler schnell findet.
-  const byTeam = useMemo(() => {
-    const map = new Map<string, PlayerStat[]>();
-    players.forEach((p) => {
-      const arr = map.get(p.teamId) ?? [];
-      arr.push(p);
-      map.set(p.teamId, arr);
-    });
-    return teams
-      .map((t) => ({ team: t, list: (map.get(t.id) ?? []).sort((a, b) => a.name.localeCompare(b.name)) }))
-      .filter((g) => g.list.length > 0);
-  }, [players, teams]);
+  const current = players.find((p) => p.id === value) ?? null;
+  const currentTeam = teams.find((t) => t.id === current?.teamId);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-full min-w-0 flex items-center gap-2 bg-brand-dark border rounded-xl px-2.5 py-2 text-left cursor-pointer hover:bg-white/[.04] transition-colors"
+        style={{ borderColor: `${accent}66` }}
+      >
+        {currentTeam && (
+          <span className="shrink-0">
+            <TeamCrest name={currentTeam.name} shortName={currentTeam.shortName} color={currentTeam.logoColor} logoUrl={currentTeam.logoUrl} size="sm" />
+          </span>
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13px] sm:text-sm font-sans font-bold text-white truncate">{current?.name ?? 'Spieler wählen'}</span>
+          {currentTeam && <span className="block text-[10.5px] text-hl-mute truncate">{currentTeam.name}</span>}
+        </span>
+        <ChevronDown className="w-4 h-4 shrink-0" style={{ color: accent }} />
+      </button>
+      {open && (
+        <PlayerPicker
+          players={players}
+          teams={teams}
+          accent={accent}
+          initialTeam={current?.teamId ?? null}
+          selected={value}
+          onPick={(id) => {
+            onChange(id);
+            setOpen(false);
+          }}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
+function PlayerPicker({
+  players,
+  teams,
+  accent,
+  initialTeam,
+  selected,
+  onPick,
+  onClose,
+}: {
+  players: PlayerStat[];
+  teams: Team[];
+  accent: string;
+  initialTeam: string | null;
+  selected: string;
+  onPick: (id: string) => void;
+  onClose: () => void;
+}) {
+  useBackClose(true, onClose);
+  const [query, setQuery] = useState('');
+  const teamsWithPlayers = useMemo(() => teams.filter((t) => players.some((p) => p.teamId === t.id)), [teams, players]);
+  const [teamId, setTeamId] = useState<string | null>(initialTeam ?? teamsWithPlayers[0]?.id ?? null);
+  const q = query.trim().toLowerCase();
+  // Mit Suchbegriff: alle Teams durchsuchen (Name oder Verein), sonst nur das gewählte Team.
+  const list = useMemo(() => {
+    const base = q
+      ? players.filter((p) => p.name.toLowerCase().includes(q) || (p.teamName || '').toLowerCase().includes(q))
+      : players.filter((p) => p.teamId === teamId);
+    return [...base].sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  }, [players, q, teamId]);
+  const teamOf = (id: string) => teams.find((t) => t.id === id);
 
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full bg-brand-dark border rounded-xl px-3 py-2.5 text-sm text-white font-sans font-semibold focus:outline-none cursor-pointer truncate"
-      style={{ borderColor: `${accent}66` }}
-    >
-      {byTeam.map((g) => (
-        <optgroup key={g.team.id} label={g.team.name}>
-          {g.list.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </optgroup>
-      ))}
-    </select>
+    <div className="fixed inset-0 z-[130] flex items-end sm:items-center justify-center sm:p-6" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="hl-modal-card relative w-full sm:max-w-lg max-h-[85vh] flex flex-col rounded-t-3xl sm:rounded-3xl border border-white/10 overflow-hidden"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <div className="px-4 pt-5 pb-3 border-b border-white/10 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-display font-black uppercase tracking-tight text-white text-lg">Spieler wählen</span>
+            <button onClick={onClose} aria-label="Schließen" className="w-9 h-9 grid place-items-center rounded-xl text-hl-mute hover:text-white hover:bg-white/10 cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="relative">
+            <Search className="w-4 h-4 text-hl-faint absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Spieler oder Verein suchen…"
+              className="w-full bg-white/[.05] border border-white/10 rounded-xl pl-9 pr-3 py-2.5 text-[14px] text-white placeholder-hl-faint focus:outline-none"
+              style={{ borderColor: query ? `${accent}88` : undefined }}
+            />
+          </div>
+          {!q && (
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {teamsWithPlayers.map((t) => {
+                const on = t.id === teamId;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setTeamId(t.id)}
+                    title={t.name}
+                    className="shrink-0 flex flex-col items-center gap-1 w-[64px] rounded-xl py-1.5 cursor-pointer transition-colors"
+                    style={on ? { background: `${accent}22`, boxShadow: `inset 0 0 0 1.5px ${accent}` } : undefined}
+                  >
+                    <TeamCrest name={t.name} shortName={t.shortName} color={t.logoColor} logoUrl={t.logoUrl} size="lg" />
+                    <span className={`text-[9.5px] font-bold uppercase tracking-wide truncate max-w-full px-0.5 ${on ? 'text-white' : 'text-hl-mute'}`}>
+                      {t.shortName || t.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <div className="overflow-y-auto p-2">
+          {list.length === 0 ? (
+            <div className="text-center text-hl-mute text-sm py-8">Kein Spieler gefunden.</div>
+          ) : (
+            list.map((p) => {
+              const t = teamOf(p.teamId);
+              const on = p.id === selected;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => onPick(p.id)}
+                  className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left cursor-pointer hover:bg-white/[.06] transition-colors min-w-0"
+                  style={on ? { background: `${accent}1f` } : undefined}
+                >
+                  {p.imageUrl ? (
+                    <img src={p.imageUrl} alt="" loading="lazy" className="w-9 h-9 rounded-full object-cover shrink-0" />
+                  ) : (
+                    <span className="w-9 h-9 rounded-full grid place-items-center shrink-0 text-[12px] font-display font-black text-white" style={{ background: t?.logoColor || '#22DFC9' }}>
+                      {monogram(p.name)}
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[14px] font-semibold text-white truncate">{p.name}</span>
+                    {q && <span className="block text-[11px] text-hl-mute truncate">{t?.name ?? p.teamName}</span>}
+                  </span>
+                  {on && <span className="text-[10px] font-bold uppercase tracking-wider shrink-0" style={{ color: accent }}>Gewählt</span>}
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -103,6 +230,8 @@ export default function CompareOverlay({ open, onClose, players, teams, tracking
   );
   const [idA, setIdA] = useState<string>('');
   const [idB, setIdB] = useState<string>('');
+  // Welche Seite gerade ihr Auswahl-Fenster offen hat (links A / rechts B).
+  const [pickSide, setPickSide] = useState<'a' | 'b' | null>(null);
 
   // Beim Öffnen sinnvolle Startwerte setzen (nur wenn noch leer).
   React.useEffect(() => {
@@ -187,7 +316,7 @@ export default function CompareOverlay({ open, onClose, players, teams, tracking
 
             {/* Auswahl */}
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-3 mb-6">
-              <PlayerSelect value={idA} onChange={setIdA} players={players} teams={teams} accent={COLOR_A} />
+              <PlayerSelect value={idA} onChange={setIdA} players={players} teams={teams} accent={COLOR_A} open={pickSide === 'a'} setOpen={(v) => setPickSide(v ? 'a' : null)} />
               <button
                 onClick={swap}
                 aria-label="Tauschen"
@@ -196,7 +325,7 @@ export default function CompareOverlay({ open, onClose, players, teams, tracking
               >
                 <ArrowLeftRight className="w-4 h-4" />
               </button>
-              <PlayerSelect value={idB} onChange={setIdB} players={players} teams={teams} accent={COLOR_B} />
+              <PlayerSelect value={idB} onChange={setIdB} players={players} teams={teams} accent={COLOR_B} open={pickSide === 'b'} setOpen={(v) => setPickSide(v ? 'b' : null)} />
             </div>
 
             {/* FC-Karten */}
@@ -204,7 +333,12 @@ export default function CompareOverlay({ open, onClose, players, teams, tracking
               {[{ p: pA, team: teamA, card: cardA, color: COLOR_A }, { p: pB, team: teamB, card: cardB, color: COLOR_B }].map(
                 (side, i) => (
                   <div key={i} className="flex flex-col items-center gap-2">
-                    <div className="w-full max-w-[190px]">
+                    <button
+                      type="button"
+                      onClick={() => setPickSide(i === 0 ? 'a' : 'b')}
+                      title="Anderen Spieler wählen"
+                      className="w-full max-w-[190px] cursor-pointer active:scale-[.98] transition-transform"
+                    >
                       {side.card ? (
                         <FifaCard card={side.card.card} name={side.p!.name} imageUrl={side.p!.imageUrl} team={side.team} />
                       ) : (
@@ -218,7 +352,7 @@ export default function CompareOverlay({ open, onClose, players, teams, tracking
                           <p className="text-[11px] font-sans text-hl-mute leading-snug">Noch keine getrackten Werte für diese Saison.</p>
                         </div>
                       )}
-                    </div>
+                    </button>
                     <p className="text-xs font-sans font-bold uppercase tracking-wider text-center" style={{ color: side.color }}>
                       {side.p?.teamName ?? ''}
                     </p>
