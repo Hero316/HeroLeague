@@ -17,6 +17,8 @@ import {
 import { DEFAULT_SCORING } from '../lib/scoring';
 import { Swords, Hand, IdCard, BarChart3, Send, Zap, Target, Shield, Sparkles, Goal, Crown, Handshake } from 'lucide-react';
 import StatAccordion from './StatAccordion';
+import TrackingProgressBanner from './TrackingProgressBanner';
+import { useTrackingProgress } from '../lib/trackingProgress';
 import PlayerCrest from './PlayerCrest';
 import { TeamCrest } from './ui';
 import { CountUp, Reveal, useSettledList } from './anim';
@@ -75,6 +77,9 @@ export default function Statistiken({
   // rechnen dann nur mit diesem Spieltag. Steckbrief & 1 gegen 1 bleiben
   // bewusst auf der ganzen Saison.
   const [matchday, setMatchday] = React.useState<number | null>(null);
+  // Läuft gerade ein Tracking? Bei „Gesamt" alle laufenden Spieltage, sonst nur
+  // der gefilterte.
+  const progress = useTrackingProgress();
   const matchdays = React.useMemo(() => {
     const tracked = new Set(allRows.map((r) => r.matchId));
     const set = new Set<number>();
@@ -428,6 +433,18 @@ export default function Statistiken({
           })}
         </div>
       )}
+
+      {/* Live-Tracking-Fortschritt („Das Team ist am Tracken · 40 %") */}
+      {progress
+        .filter((d) => activeMd === null || d.matchday === activeMd)
+        .map((d) => (
+          <TrackingProgressBanner
+            key={d.dayKey}
+            day={d}
+            className="mb-4"
+            note={`Die Spieler-Statistiken vom ${d.matchday}. Spieltag (Torschützen, Bestenlisten, Noten) erscheinen hier, sobald fertig getrackt und freigeschaltet ist.`}
+          />
+        ))}
 
       {/* Liga-Kennzahlen */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 pt-2 hl-cascade">

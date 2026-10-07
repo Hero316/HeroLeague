@@ -6,6 +6,8 @@ import { calculateStandings } from '../lib/standings';
 import { numberWord } from '../lib/heroAward';
 import { TeamCrest, shortDate, SponsorLink } from './ui';
 import AwardsSlide from './AwardsSlide';
+import TrackingProgressBanner from './TrackingProgressBanner';
+import { useTrackingProgress } from '../lib/trackingProgress';
 
 interface HeroProps {
   teams: Team[];
@@ -29,6 +31,8 @@ interface HeroProps {
 export default function Hero({ teams, matches, players, seasonLabel, seasonNumber, heroImages, pom: pomProp, onNavigate, onSelectTeam, onOpenMatch, reportMatchIds, trackingRows, scoring, seasonId }: HeroProps) {
   // pom kommt bevorzugt von oben (vorgeladen); nur ohne Prop selbst nachladen.
   const [pomState, setPomState] = useState<PlayerOfMonth | null>(null);
+  // Läuft gerade ein Tracking? → kleiner Hinweis über den Auszeichnungen.
+  const trackingProgress = useTrackingProgress();
   const pom = pomProp !== undefined ? pomProp : pomState;
   // Partner-Liste für den Sponsor der „Spieler des Spieltages"-Auszeichnung.
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -328,6 +332,9 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
           </div>
         )}
         <div className="relative w-full hl-cascade">
+          {trackingProgress[0] && (
+            <TrackingProgressBanner day={trackingProgress[0]} compact className="mt-3 mb-3 sm:mb-4" />
+          )}
           <AwardsSlide
             pom={pom}
             teams={teams}

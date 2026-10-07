@@ -4,6 +4,8 @@ import type { Match, MatchPlayerStat, ScoringConfig, Team } from '../types';
 import PlayerCrest from './PlayerCrest';
 import { Reveal } from './anim';
 import { numberWord } from '../lib/heroAward';
+import TrackingProgressBanner from './TrackingProgressBanner';
+import { useTrackingProgress } from '../lib/trackingProgress';
 import { HERO_DRAW_BONUS, HERO_WIN_BONUS, heroRanking, type HeroRanked } from '../lib/trackingAwards';
 
 interface HeroOneProps {
@@ -49,6 +51,7 @@ export default function HeroOne({ rows, cfg, matches, teams, seasonNumber, seaso
   }, [rows, cfg, matches, teams]);
 
   const word = numberWord(seasonNumber ?? 1);
+  const progress = useTrackingProgress();
   const de = (n: number) => n.toFixed(1).replace('.', ',');
   const teamOf = (p: HeroEntry) => teams.find((t) => t.id === p.teamId);
 
@@ -108,6 +111,15 @@ export default function HeroOne({ rows, cfg, matches, teams, seasonNumber, seaso
           </p>
         </div>
       </div>
+
+      {progress.map((d) => (
+        <TrackingProgressBanner
+          key={d.dayKey}
+          day={d}
+          className="mb-5 max-w-[760px] mx-auto"
+          note={`Die Wertung zeigt den Stand bis zum letzten Spieltag – der ${d.matchday}. Spieltag kommt automatisch dazu, sobald er fertig getrackt ist.`}
+        />
+      ))}
 
       {ranking.length === 0 ? (
         <div className="hl-card text-center py-14 text-hl-mute font-sans text-sm">
