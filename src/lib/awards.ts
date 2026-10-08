@@ -127,11 +127,19 @@ export function awardView(
 
   const stats =
     role === 'keeper'
-      ? [
-          { value: String(total.save), label: 'Paraden' },
-          { value: String(total.save_top), label: 'Glanzparaden' },
-          { value: `${countCleanSheets(dayRows)}×`, label: 'Zu null' },
-        ]
+      ? (() => {
+          // Nur Positives zeigen: Paradenquote statt „0× zu null"; „Zu null"
+          // nur, wenn er wirklich ohne Gegentor geblieben ist.
+          const shots = total.save + total.gk_goal_against;
+          const clean = countCleanSheets(dayRows);
+          return [
+            { value: String(total.save), label: 'Paraden' },
+            { value: shots > 0 ? `${Math.round((total.save / shots) * 100)} %` : '–', label: 'Paradenquote' },
+            clean > 0
+              ? { value: `${clean}×`, label: 'Zu null' }
+              : { value: String(total.save_top), label: 'Glanzparaden' },
+          ];
+        })()
       : (() => {
           const tries = passversuche(total);
           return [
