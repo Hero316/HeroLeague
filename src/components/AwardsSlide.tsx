@@ -144,7 +144,9 @@ function AwardSide({
         Spieltages
       </h2>
       <div className="mt-3 sm:mt-4 min-w-0 max-w-full">
-      <Tap onClick={open}>
+      {/* Name wie die Überschrift ausrichten (links: zur Mitte hin rechtsbündig,
+          rechts: linksbündig) – ein <button> zentriert Text sonst von selbst. */}
+      <Tap onClick={open} className={`text-center ${side === 'left' ? 'lg:text-right' : 'lg:text-left'}`}>
         <div className="font-display font-extrabold uppercase leading-[.95] text-white text-base sm:text-2xl xl:text-[26px] break-words">
           {first && (
             <>
