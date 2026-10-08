@@ -7,7 +7,8 @@ import { leagueDayKey } from './stats';
 //  • bestOfDay: wer hatte am Spieltag die beste Note (Schnitt seiner Spiele)?
 //    → Vorschlag für „Automatisch berechnen" im Backend.
 //  • awardView: alles, was die Startseite zu einem Ausgezeichneten zeigt –
-//    Saison-FIFA-Karte + Werte dieses Spieltags.
+//    Karte + Werte NUR aus diesem Spieltag (die Saison-Karte ändert sich mit
+//    jedem weiteren Spieltag – die Auszeichnung soll aber fix bleiben).
 // Liga-Spieltage haben den Schlüssel "s:<saison>:<spieltag>".
 // ===========================================================================
 
@@ -91,7 +92,7 @@ export function bestOfDay(
 }
 
 export interface AwardView {
-  card: PlayerCard | null; // Saison-FIFA-Karte (null = noch nichts getrackt)
+  card: PlayerCard | null; // Spieltags-Karte (nur dieser Spieltag; null = noch nichts getrackt)
   note: number | null; // Spieltagsnote (Schnitt)
   stats: { value: string; label: string }[]; // Werte des Spieltags (ohne Note)
 }
@@ -109,19 +110,19 @@ export function awardView(
   const mine = rows.filter((r) => r.teamId === teamId && r.playerName === name && r.dayKey.startsWith(`s:${seasonId}:`));
   if (mine.length === 0) return { card: null, note: null, stats: [] };
 
-  const all = mine.map((r) => ({ role: r.role, counts: normalizeCounts(r.counts) }));
-  const card = playerCard(sumCounts(all.map((r) => r.counts)), mine.length, role, cfg, false, countCleanSheets(all));
-
   // Spieltag: der gewählte, sonst der letzte, an dem der Spieler getrackt wurde.
   const md =
     matchday && matchday > 0
       ? matchday
       : Math.max(...mine.map((r) => matchdayOf(r.dayKey, seasonId) ?? 0));
   const day = mine.filter((r) => r.dayKey === leagueDayKey(seasonId, md));
-  if (day.length === 0) return { card, note: null, stats: [] };
+  if (day.length === 0) return { card: null, note: null, stats: [] };
 
   const dayRows = day.map((r) => ({ role: r.role, counts: normalizeCounts(r.counts) }));
   const total = sumCounts(dayRows.map((r) => r.counts));
+  // Karte NUR aus diesem Spieltag – ohne „wenige Spiele"-Deckel (ein Abend hat
+  // naturgemäß nur ein paar Spiele), wie beim Testspieltag.
+  const card = playerCard(total, dayRows.length, role, cfg, true, countCleanSheets(dayRows));
   const note = round1(dayRows.reduce((s, r) => s + matchNote(r.counts, cfg, r.role), 0) / dayRows.length);
 
   const stats =

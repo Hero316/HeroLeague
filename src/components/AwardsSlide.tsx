@@ -10,7 +10,7 @@ import { SponsorLink } from './ui';
 // innen an der Mittellinie, die Spieltagswerte außen, Überschrift und Name sind
 // zur Mitte ausgerichtet. Oben groß „präsentiert von" mit dem Sponsor-Logo.
 // Am Handy stehen die beiden Karten kleiner nebeneinander, darunter die Note.
-// Karte = Saison-FIFA-Karte aus dem Tracking; Werte = dieser Spieltag.
+// Karte UND Werte = nur dieser Spieltag (bleibt fix, auch wenn später weitere Spieltage dazukommen).
 // Ohne Tracking-Daten fällt der Spieler auf die bisherige Foto-Karte zurück.
 // Fehlt jemand, steht dort nur die Überschrift mit einer leeren Wartekarte.
 // ===========================================================================
