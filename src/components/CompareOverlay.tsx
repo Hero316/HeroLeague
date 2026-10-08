@@ -255,8 +255,11 @@ export default function CompareOverlay({ open, onClose, players, teams, tracking
     const winRate = (p: PlayerStat) => (p.matchesPlayed > 0 ? (p.wins / p.matchesPlayed) * 100 : 0);
     const out: StatRow[] = [];
     if (cardA && cardB) out.push({ label: 'Gesamtwertung', a: cardA.card.ges, b: cardB.card.ges });
-    out.push({ label: 'Tore', a: pA.goals, b: pB.goals });
-    out.push({ label: 'Vorlagen', a: pA.assists, b: pB.assists });
+    // Tore/Vorlagen: getrackt oder aus den Ergebnissen – der höhere Wert.
+    const g = (p: PlayerStat, c: typeof cardA) => Math.max(p.goals, c ? c.total.goal + c.total.penalty_goal : 0);
+    const as = (p: PlayerStat, c: typeof cardA) => Math.max(p.assists, c ? c.total.assist : 0);
+    out.push({ label: 'Tore', a: g(pA, cardA), b: g(pB, cardB) });
+    out.push({ label: 'Vorlagen', a: as(pA, cardA), b: as(pB, cardB) });
     out.push({ label: 'Spiele', a: pA.matchesPlayed, b: pB.matchesPlayed });
     out.push({ label: 'Siegquote', a: winRate(pA), b: winRate(pB), decimals: 0, suffix: '%' });
     out.push({ label: 'Bester Spieler', a: pA.motmCount, b: pB.motmCount });

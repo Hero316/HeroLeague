@@ -809,7 +809,7 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
               items={[
                 { id: 'pass', title: 'Beste Passquote', accent: '#22DFC9', icon: <Send className="w-4 h-4" />, rows: passers, mode: 'quote' as const },
                 { id: 'duel', title: 'Beste Zweikampfquote', accent: '#43E5A0', icon: <Swords className="w-4 h-4" />, rows: duellists, mode: 'quote' as const },
-                { id: 'drib', title: 'Beste Dribbling-Quote', accent: '#E9C46A', icon: <Zap className="w-4 h-4" />, rows: dribblers, mode: 'quote' as const },
+                { id: 'drib', title: 'Beste Dribbler', accent: '#E9C46A', icon: <Zap className="w-4 h-4" />, rows: dribblers, mode: 'quote' as const },
                 { id: 'shots', title: 'Meiste Torschüsse', accent: '#ff7ac4', icon: <Target className="w-4 h-4" />, rows: shooters, mode: 'count' as const },
                 { id: 'win', title: 'Balleroberer', accent: '#58F0CD', icon: <Shield className="w-4 h-4" />, rows: ballWinners, mode: 'count' as const },
                 { id: 'key', title: 'Schlüsselpässe', accent: '#c99bff', icon: <Sparkles className="w-4 h-4" />, rows: keyPassers, mode: 'count' as const },

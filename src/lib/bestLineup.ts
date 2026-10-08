@@ -6,7 +6,7 @@ import { matchNote, normalizeCounts } from './rating';
 //  • Torwart: der im Kader ausgewählte Torwart (sonst wer am häufigsten im Tor stand)
 //  • 2 vorne: bester Offensiv-Wert pro Spiel (Tore, Vorlagen, Schüsse, Schlüsselpässe, Dribblings)
 //  • 2 hinten: bester Defensiv-Wert pro Spiel (Zweikämpfe, Ballgewinne, Blocks, Ballverluste)
-//  • Bank: die nächsten 2 nach Ø-Note
+//  • Bank: die nächsten 4 nach Ø-Note
 // Gewichte = die Punkte aus den Score-Einstellungen (Statistics Center), damit
 // alles zur übrigen Bewertung passt. Wer vorne UND hinten top ist, kommt dahin,
 // wo er im Teamvergleich am stärksten ist.
@@ -27,7 +27,7 @@ export interface TrackedLineup {
   goalkeeper: LineupPlayer | null;
   attack: LineupPlayer[]; // bis zu 2
   defense: LineupPlayer[]; // bis zu 2
-  bench: LineupPlayer[]; // bis zu 2
+  bench: LineupPlayer[]; // bis zu 4
 }
 
 const weighted = (c: ActionCounts, cfg: ScoringConfig, keys: ActionKey[]) =>
@@ -114,7 +114,7 @@ export function trackedLineup(
   const byNote = (a: LineupPlayer, b: LineupPlayer) => b.avgNote - a.avgNote || b.games - a.games || a.name.localeCompare(b.name);
   attack.sort((a, b) => b.off - a.off);
   defense.sort((a, b) => b.def - a.def);
-  const bench = [...leftRegular.sort(byNote), ...leftRest.sort(byNote)].slice(0, 2);
+  const bench = [...leftRegular.sort(byNote), ...leftRest.sort(byNote)].slice(0, 4);
   return { goalkeeper, attack, defense, bench };
 }
 

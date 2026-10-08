@@ -1,4 +1,4 @@
-import type { MatchPlayerStat, PlayerCard, ScoringConfig, StatRole } from '../types';
+import type { ActionCounts, MatchPlayerStat, PlayerCard, ScoringConfig, StatRole } from '../types';
 import { countCleanSheets, normalizeCounts, playerCard, sumCounts } from './rating';
 
 // ---------------------------------------------------------------------------
@@ -13,6 +13,7 @@ export interface PlayerCardResult {
   card: PlayerCard;
   role: StatRole;
   games: number; // Anzahl getrackter Spiele (Basis der Karte)
+  total: ActionCounts; // Summe aller getrackten Aktionen
 }
 
 export function cardForPlayer(
@@ -27,5 +28,5 @@ export function cardForPlayer(
   const total = sumCounts(norm.map((r) => r.counts));
   const keeperRows = rows.filter((r) => r.role === 'keeper').length;
   const role: StatRole = keeperRows > rows.length / 2 ? 'keeper' : 'field';
-  return { card: playerCard(total, rows.length, role, cfg, false, countCleanSheets(norm)), role, games: rows.length };
+  return { card: playerCard(total, rows.length, role, cfg, false, countCleanSheets(norm)), role, games: rows.length, total };
 }
