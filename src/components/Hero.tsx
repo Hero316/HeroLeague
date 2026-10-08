@@ -6,6 +6,7 @@ import { calculateStandings } from '../lib/standings';
 import { numberWord } from '../lib/heroAward';
 import { TeamCrest, shortDate, SponsorLink } from './ui';
 import AwardsSlide from './AwardsSlide';
+import { normalizeHeroOrder } from '../lib/heroSlides';
 import TrackingProgressBanner from './TrackingProgressBanner';
 import { useTrackingProgress } from '../lib/trackingProgress';
 
@@ -87,14 +88,13 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
   const hasTable = standings.length > 0 && standings.some((s) => s.played > 0);
 
   // Slides dynamisch zusammenstellen – nur, was Daten hat
+  // – in der im Backoffice eingestellten Reihenfolge (erster Slide = beim Öffnen zuerst).
   const slides = useMemo(() => {
-    const list: ('match' | 'pom' | 'table')[] = [];
-    if (featuredDay) list.push('match');
-    if (pom) list.push('pom');
-    if (hasTable) list.push('table');
+    const has = { match: !!featuredDay, pom: !!pom, table: hasTable };
+    const list = normalizeHeroOrder(heroImages?.order).filter((k) => has[k]);
     if (list.length === 0) list.push('match'); // leerer Zustand
     return list;
-  }, [featuredDay, pom, hasTable]);
+  }, [featuredDay, pom, hasTable, heroImages?.order]);
 
   const count = slides.length;
   const current = active % count;

@@ -84,10 +84,12 @@ export interface Season {
 
 // Optionale eigene Hintergrundbilder der drei Hero-Slides (Startseite).
 // Leerer String = eingebautes Standard-Design.
+export type HeroSlideKind = 'match' | 'pom' | 'table';
 export interface HeroImages {
   match: string;
   pom: string;
   table: string;
+  order?: HeroSlideKind[]; // Reihenfolge der Startseiten-Slides (erster = beim Öffnen zuerst)
 }
 
 // Countdown auf der Startseite bis zum Anstoß. active=false ⇒ normal.

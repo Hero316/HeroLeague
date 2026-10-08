@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone, Handshake, ChevronUp, ChevronDown, Star, Landmark, BarChart3, Footprints, Users, Crown } from 'lucide-react';
-import { Player, Team, Match, MatchPlayerStat, ScoringConfig, EventConfig, EventArchive, NewsItem, Partner, TeamSponsor, TeamSponsorsMap, SponsorClicksMap, Season } from '../types';
+import { ArrowLeft, ArrowRight, Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone, Handshake, ChevronUp, ChevronDown, Star, Landmark, BarChart3, Footprints, Users, Crown } from 'lucide-react';
+import { HeroImages, Player, Team, Match, MatchPlayerStat, ScoringConfig, EventConfig, EventArchive, NewsItem, Partner, TeamSponsor, TeamSponsorsMap, SponsorClicksMap, Season } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
 import { fetchSponsorClicks } from '../lib/sponsors';
 import { ticketAdminList, type TicketAdminConfig } from '../lib/register';
@@ -10,6 +10,7 @@ import PlayerAvatar from './PlayerAvatar';
 import { CutoutBatch, CutoutButton } from './CutoutTools';
 import { makeCutout } from '../lib/cutout';
 import { validCutout } from '../lib/playerPhoto';
+import { HERO_SLIDE_LABELS, normalizeHeroOrder } from '../lib/heroSlides';
 import { AccordionSection, TeamCrest } from './ui';
 import { GAME_MINUTES, BREAK_MINUTES, slotTimes, isHHMM } from '../lib/matchTiming';
 import { fetchPublicStats, fetchScoring } from '../lib/stats';
@@ -551,7 +552,7 @@ export default function AdminPanel({
   const [partnersSaving, setPartnersSaving] = useState(false);
 
   // Eigene Hero-Hintergrundbilder (Startseite)
-  const [heroImages, setHeroImages] = useState({ match: '', pom: '', table: '' });
+  const [heroImages, setHeroImages] = useState<HeroImages>({ match: '', pom: '', table: '' });
   const [heroSuccess, setHeroSuccess] = useState(false);
 
   // Countdown (Startseite)
@@ -931,8 +932,8 @@ export default function AdminPanel({
 
   // Hero-Hintergrundbilder laden
   useEffect(() => {
-    apiFetch<{ match: string; pom: string; table: string }>('/api/twitch?resource=hero')
-      .then((data) => setHeroImages({ match: data.match || '', pom: data.pom || '', table: data.table || '' }))
+    apiFetch<HeroImages>('/api/twitch?resource=hero')
+      .then((data) => setHeroImages({ match: data.match || '', pom: data.pom || '', table: data.table || '', order: normalizeHeroOrder(data.order) }))
       .catch(() => {
         /* noch nicht konfiguriert */
       });
@@ -940,11 +941,11 @@ export default function AdminPanel({
 
   const handleSaveHero = async () => {
     try {
-      const saved = await apiFetch<{ match: string; pom: string; table: string }>('/api/twitch?resource=hero', {
+      const saved = await apiFetch<HeroImages>('/api/twitch?resource=hero', {
         method: 'POST',
-        body: JSON.stringify(heroImages),
+        body: JSON.stringify({ ...heroImages, order: normalizeHeroOrder(heroImages.order) }),
       });
-      setHeroImages({ match: saved.match || '', pom: saved.pom || '', table: saved.table || '' });
+      setHeroImages({ match: saved.match || '', pom: saved.pom || '', table: saved.table || '', order: normalizeHeroOrder(saved.order) });
       setHeroSuccess(true);
       setTimeout(() => setHeroSuccess(false), 3000);
     } catch (err) {
@@ -2686,36 +2687,64 @@ export default function AdminPanel({
         show={canEditHomepage}
         category="startseite"
         title="Startseite · Hero-Bilder & Countdown"
-        subtitle="Hintergrundbilder der drei Slides + Countdown bis zum Anstoß"
+        subtitle="Hintergrundbilder + Reihenfolge der drei Slides · Countdown bis zum Anstoß"
         icon={<ImageIcon className="w-5 h-5" />}
         accent="#22DFC9"
       >
         <div>
           <p className="text-xs text-gray-400 font-sans mb-6">
-            Lade für jeden der drei Hero-Slides ein eigenes Hintergrundbild hoch. Wird ein Bild entfernt, greift wieder
+            Lade für jeden der drei Hero-Slides ein eigenes Hintergrundbild hoch und lege mit den Pfeilen die
+            Reihenfolge fest (Slide 1 erscheint beim Öffnen der Website zuerst). Wird ein Bild entfernt, greift wieder
             das eingebaute Standard-Design. Tipp: Querformat, mindestens ~1600px breit — die Motive werden links
             abgedunkelt, damit Titel &amp; Karte gut lesbar bleiben.
           </p>
 
+          {/* Reihenfolge per Pfeil ändern – Slide 1 erscheint beim Öffnen der Website zuerst. */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <ImageUploader
-              label="Slide 1 · Spieltag"
-              value={heroImages.match}
-              onChange={(url) => setHeroImages((h) => ({ ...h, match: url }))}
-              maxDimension={1920}
-            />
-            <ImageUploader
-              label="Slide 2 · Spieler des Spieltages"
-              value={heroImages.pom}
-              onChange={(url) => setHeroImages((h) => ({ ...h, pom: url }))}
-              maxDimension={1920}
-            />
-            <ImageUploader
-              label="Slide 3 · Tabellenführer"
-              value={heroImages.table}
-              onChange={(url) => setHeroImages((h) => ({ ...h, table: url }))}
-              maxDimension={1920}
-            />
+            {normalizeHeroOrder(heroImages.order).map((kind, i, order) => {
+              const move = (dir: -1 | 1) => {
+                const next = [...order];
+                const j = i + dir;
+                [next[i], next[j]] = [next[j], next[i]];
+                setHeroImages((h) => ({ ...h, order: next }));
+              };
+              return (
+                <motion.div key={kind} layout transition={{ type: 'spring', stiffness: 420, damping: 34 }} className="min-w-0">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <span className="w-6 h-6 rounded-full grid place-items-center bg-brand-accent-light text-[#062018] text-xs font-display font-black shrink-0">
+                      {i + 1}
+                    </span>
+                    <span className="text-[11px] font-sans font-bold text-gray-300 truncate flex-1 min-w-0">
+                      {i === 0 ? 'Erscheint zuerst' : `Danach (${i + 1}.)`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => move(-1)}
+                      disabled={i === 0}
+                      title="Weiter nach vorne"
+                      className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-brand-accent-light hover:bg-white/5 disabled:opacity-25 disabled:cursor-default cursor-pointer"
+                    >
+                      <ArrowLeft className="w-4 h-4 rotate-90 md:rotate-0" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => move(1)}
+                      disabled={i === order.length - 1}
+                      title="Weiter nach hinten"
+                      className="shrink-0 p-1.5 rounded-md text-gray-400 hover:text-brand-accent-light hover:bg-white/5 disabled:opacity-25 disabled:cursor-default cursor-pointer"
+                    >
+                      <ArrowRight className="w-4 h-4 rotate-90 md:rotate-0" />
+                    </button>
+                  </div>
+                  <ImageUploader
+                    label={`Slide ${i + 1} · ${HERO_SLIDE_LABELS[kind]}`}
+                    value={heroImages[kind]}
+                    onChange={(url) => setHeroImages((h) => ({ ...h, [kind]: url }))}
+                    maxDimension={1920}
+                  />
+                </motion.div>
+              );
+            })}
           </div>
 
           <div className="flex items-center justify-end gap-3 mt-5">
@@ -2734,7 +2763,7 @@ export default function AdminPanel({
               className="px-6 py-3 bg-brand-accent hover:bg-brand-accent/80 border border-brand-accent-light/30 rounded-full text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center gap-1.5 cursor-pointer shadow-lg shadow-brand-accent-light/10"
             >
               <Check className="w-4 h-4" />
-              <span>Hero-Bilder speichern</span>
+              <span>Hero-Slides speichern</span>
             </button>
           </div>
 
