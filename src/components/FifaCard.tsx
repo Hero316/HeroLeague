@@ -84,6 +84,7 @@ export default function FifaCard({ card, name, imageUrl, team, className = '', p
       {/* Vignette links (für den Namen) + oben (fürs Wappen) */}
       <div className="absolute inset-y-0 left-0 w-1/3 z-10" style={{ background: 'linear-gradient(90deg, rgba(0,0,0,.55), transparent)' }} />
       <div className="absolute inset-x-0 top-0 h-1/5 z-10" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,.5), transparent)' }} />
+      <div className="absolute inset-y-0 right-0 w-1/5 z-10" style={{ background: 'linear-gradient(270deg, rgba(0,0,0,.4), transparent)' }} />
 
       {/* Name senkrecht am linken Rand, von unten (knapp über der Linie) nach oben
           lesbar – z-30, damit ihn der dunkle Streifen unten NICHT verdeckt. */}
@@ -100,6 +101,24 @@ export default function FifaCard({ card, name, imageUrl, team, className = '', p
           }}
         >
           {name}
+        </span>
+      </div>
+
+      {/* Stufe (Silber/Gold/…) senkrecht am RECHTEN Rand – gleiche Höhe/Mitte wie
+          der Name links, damit nichts mehr übers Kinn läuft. */}
+      <div className="absolute right-0 z-30 flex items-center" style={{ top: '16cqw', bottom: '30cqw', paddingRight: '3.5cqw' }}>
+        <span
+          className="font-display font-black uppercase leading-none whitespace-nowrap"
+          style={{
+            writingMode: 'vertical-rl',
+            transform: 'rotate(180deg)',
+            fontSize: '4.6cqw',
+            letterSpacing: '0.18em',
+            color: t.accent,
+            textShadow: '0 2px 10px rgba(0,0,0,.95)',
+          }}
+        >
+          {label ?? t.label}
         </span>
       </div>
 
@@ -120,11 +139,8 @@ export default function FifaCard({ card, name, imageUrl, team, className = '', p
         className="absolute bottom-0 inset-x-0 z-20"
         style={{ padding: '18cqw 5cqw 4cqw', background: 'linear-gradient(180deg, transparent 0%, transparent 14%, rgba(5,6,7,0.5) 28%, rgba(5,6,7,0.9) 40%, #050607 47%, #050607 100%)' }}
       >
-        {/* Stufe oben, darunter die Gesamtwertung – mittig, als Kopf der Werte-Gruppe */}
+        {/* Gesamtwertung mittig, als Kopf der Werte-Gruppe (Stufe steht rechts am Rand) */}
         <div className="flex flex-col items-center" style={{ marginBottom: '1cqw' }}>
-          <div className="font-display font-black uppercase leading-none" style={{ fontSize: '4.6cqw', letterSpacing: '0.18em', color: t.accent }}>
-            {label ?? t.label}
-          </div>
           <div className="font-display font-black tabular-nums leading-none" style={{ fontSize: '26cqw', color: t.accent, textShadow: '0 3px 14px rgba(0,0,0,.9)', marginTop: '0.5cqw' }}>
             {pending ? '–' : card.ges}
           </div>
