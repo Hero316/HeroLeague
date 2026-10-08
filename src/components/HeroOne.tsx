@@ -167,7 +167,8 @@ function NomineeCard({
         { label: 'Paraden', value: String(t.save) },
         { label: 'Paradenquote', value: pct(t.save, t.save + t.gk_goal_against) },
         { label: 'Glanzparaden', value: String(t.save_top) },
-        { label: 'Zu null', value: String(p.cleanSheets) },
+        // „Zu null" nur zeigen, wenn es wirklich vorkam – 0× ist nichts zum Herzeigen.
+        ...(p.cleanSheets > 0 ? [{ label: 'Zu null', value: String(p.cleanSheets) }] : []),
         { label: 'Gegentore', value: String(t.gk_goal_against) },
         { label: 'Gehaltene Elfm.', value: String(t.penalty_save) },
         { label: 'Passquote', value: pct(t.pass_ok, t.pass_ok + t.pass_fail) },
@@ -187,7 +188,7 @@ function NomineeCard({
         { label: 'Ballgewinne', value: String(t.interception + t.duel_won) },
       ];
   const short = keeper
-    ? `${p.games} ${p.games === 1 ? 'Spiel' : 'Spiele'} · ${t.save} Paraden · ${p.cleanSheets}× zu null`
+    ? `${p.games} ${p.games === 1 ? 'Spiel' : 'Spiele'} · ${t.save} Paraden${p.cleanSheets > 0 ? ` · ${p.cleanSheets}× zu null` : ''}`
     : `${p.games} ${p.games === 1 ? 'Spiel' : 'Spiele'} · ${goals} ${goals === 1 ? 'Tor' : 'Tore'} · ${t.assist} ${t.assist === 1 ? 'Vorlage' : 'Vorlagen'}`;
 
   return (
