@@ -125,6 +125,7 @@ export interface PlayerOfMonth {
   sponsorId?: string; // ID eines Partners (aus PartnersConfig), der die Auszeichnung sponsert (leer = keiner)
   // Torwart des Spieltages (zweite Auszeichnung, gleicher Spieltag/Sponsor). Leer = nur Spieler.
   keeper?: { name: string; club: string; teamId: string; image: string } | null;
+  preview?: boolean; // true = „Nur Super-Admins"-Vorschau (öffentlich noch nicht sichtbar)
 }
 
 export interface TwitchConfig {

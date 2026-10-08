@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql } from './_lib/db.js';
-import { requirePermission } from './_lib/auth.js';
+import { requirePermission, getSession, hasPermission } from './_lib/auth.js';
 import { badRequest, isNonEmptyString } from './_lib/validate.js';
 import { DEFAULT_PLAYER_OF_MONTH } from './_lib/seed.js';
 
@@ -36,12 +36,38 @@ const savePom = requirePermission('awards')(async (req: VercelRequest, res: Verc
     keeper: cleanKeeper(keeper),
   };
 
+  // mode 'preview' = nur Super-Admins sehen die Auszeichnung (zum Testen, z. B.
+  // solange die Stats nur als Vorschau live sind). Die öffentliche bleibt dabei
+  // unverändert. Ohne mode (bzw. 'public') = für alle, eine Vorschau entfällt.
+  const preview = req.body?.mode === 'preview';
+  const key = preview ? 'playerOfMonthPreview' : 'playerOfMonth';
+  await sql`
+    INSERT INTO settings (key, value) VALUES (${key}, ${JSON.stringify(pom)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+  if (!preview) await sql`DELETE FROM settings WHERE key = 'playerOfMonthPreview'`;
+
+  return res.json({ ...pom, preview });
+});
+
+// Vorschau für alle veröffentlichen (Vorschau → öffentlich).
+const publishPreview = requirePermission('awards')(async (_req: VercelRequest, res: VercelResponse) => {
+  const rows = await sql`SELECT value FROM settings WHERE key = 'playerOfMonthPreview'`;
+  const pom = rows[0]?.value;
+  if (!pom) return badRequest(res, 'Es gibt keine Vorschau zum Veröffentlichen.');
   await sql`
     INSERT INTO settings (key, value) VALUES ('playerOfMonth', ${JSON.stringify(pom)}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
   `;
+  await sql`DELETE FROM settings WHERE key = 'playerOfMonthPreview'`;
+  return res.json({ ...(pom as object), preview: false });
+});
 
-  return res.json(pom);
+// Nur die Vorschau verwerfen (öffentliche Auszeichnung bleibt).
+const discardPreview = requirePermission('awards')(async (_req: VercelRequest, res: VercelResponse) => {
+  await sql`DELETE FROM settings WHERE key = 'playerOfMonthPreview'`;
+  const rows = await sql`SELECT value FROM settings WHERE key = 'playerOfMonth'`;
+  return res.json({ ...((rows[0]?.value as object) ?? EMPTY_PLAYER_OF_MONTH), preview: false });
 });
 
 // Auszeichnung entfernen: leeren Datensatz speichern -> Karte verschwindet von der Startseite.
@@ -50,6 +76,7 @@ const clearPom = requirePermission('awards')(async (_req: VercelRequest, res: Ve
     INSERT INTO settings (key, value) VALUES ('playerOfMonth', ${JSON.stringify(EMPTY_PLAYER_OF_MONTH)}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
   `;
+  await sql`DELETE FROM settings WHERE key = 'playerOfMonthPreview'`;
   return res.json(EMPTY_PLAYER_OF_MONTH);
 });
 
@@ -58,11 +85,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'GET') {
       res.setHeader('Cache-Control', 'no-store');
       const rows = await sql`SELECT value FROM settings WHERE key = 'playerOfMonth'`;
-      return res.json(rows[0]?.value ?? DEFAULT_PLAYER_OF_MONTH);
+      const pub = rows[0]?.value ?? DEFAULT_PLAYER_OF_MONTH;
+      // Vorschau: auf der Website nur für Super-Admins, im Backend (admin=1) für
+      // alle mit dem Recht „Auszeichnungen".
+      const session = await getSession(req);
+      const mayPreview = req.query.admin === '1' ? hasPermission(session, 'awards') : session?.role === 'superadmin';
+      if (mayPreview) {
+        const pre = await sql`SELECT value FROM settings WHERE key = 'playerOfMonthPreview'`;
+        if (pre[0]?.value) return res.json({ ...(pre[0].value as object), preview: true });
+      }
+      return res.json({ ...(pub as object), preview: false });
     }
+    if (req.method === 'POST' && req.query.op === 'publish') return publishPreview(req, res);
     if (req.method === 'POST') {
       return savePom(req, res);
     }
+    if (req.method === 'DELETE' && req.query.preview === '1') return discardPreview(req, res);
     if (req.method === 'DELETE') {
       return clearPom(req, res);
     }
