@@ -848,7 +848,7 @@ export interface Quotas {
 // Kartenwerte eines Spielers (Saison, über alle Spiele).
 export interface PlayerCard {
   role: StatRole;
-  ges: number; // Gesamtwert (gerundeter Schnitt der Teilwerte)
+  ges: number; // Gesamtwert (abgerundeter Schnitt der Teilwerte)
   tier: CardTier;
   attrs: { key: string; label: string; value: number }[]; // PAS/SCH/DRI/DEF bzw. STL/PAR/PAS/SIC
 }

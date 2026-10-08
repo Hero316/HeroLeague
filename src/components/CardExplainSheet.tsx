@@ -99,7 +99,7 @@ export default function CardExplainSheet({ open, onClose, explain, name, cfg }: 
                   <div className="mt-2.5 font-sans text-[12px] text-hl-mute leading-snug">
                     <span className="text-hl-soft font-semibold">Index</span> = wie nah du am Elite-Ziel bist (1,00 = Ziel erreicht, mehr geht).{' '}
                     <span className="text-hl-soft font-semibold">Verlässlichkeit</span> = wie viele Aktionen dahinterstehen – bei wenigen zieht es Richtung {explain.basis}.
-                    Gesamtwert = Schnitt der vier.
+                    Gesamtwert = Schnitt der vier, abgerundet (85,5 → 85).
                   </div>
                 </div>
 
