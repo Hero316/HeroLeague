@@ -7,6 +7,9 @@ import { fetchSponsorClicks } from '../lib/sponsors';
 import { ticketAdminList, type TicketAdminConfig } from '../lib/register';
 import { calculateEventStandings, calculateEventAwards } from '../lib/eventStandings';
 import PlayerAvatar from './PlayerAvatar';
+import { CutoutBatch, CutoutButton } from './CutoutTools';
+import { makeCutout } from '../lib/cutout';
+import { validCutout } from '../lib/playerPhoto';
 import { AccordionSection, TeamCrest } from './ui';
 import { GAME_MINUTES, BREAK_MINUTES, slotTimes, isHHMM } from '../lib/matchTiming';
 import { fetchPublicStats, fetchScoring } from '../lib/stats';
@@ -114,15 +117,21 @@ function RosterEditor({
   roster,
   teamColor,
   onChange,
+  cutouts = false,
 }: {
   roster: Player[];
   teamColor: string;
   onChange: (roster: Player[]) => void;
+  cutouts?: boolean; // Freisteller (Schere) anzeigen – nur Liga-Kader
 }) {
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
+  // Immer den NEUESTEN Kader ändern – Uploads/Freistellen dauern ein paar
+  // Sekunden, in denen sich der Kader schon geändert haben kann.
+  const rosterRef = React.useRef(roster);
+  rosterRef.current = roster;
 
   const updatePlayer = (index: number, patch: Partial<Player>) => {
-    onChange(roster.map((p, i) => (i === index ? { ...p, ...patch } : p)));
+    onChange(rosterRef.current.map((p, i) => (i === index ? { ...p, ...patch } : p)));
   };
 
   // Kapitän setzen/entfernen – höchstens einer pro Team.
@@ -145,7 +154,16 @@ function RosterEditor({
       if (!file) return;
       setUploadingIndex(index);
       try {
-        updatePlayer(index, { imageUrl: await uploadImage(file) });
+        const imageUrl = await uploadImage(file);
+        updatePlayer(index, { imageUrl, cutoutUrl: undefined, cutoutSrc: undefined });
+        // Gleich freistellen (aus der Originaldatei – schärfer als das verkleinerte Foto).
+        if (cutouts) {
+          try {
+            updatePlayer(index, { cutoutUrl: await makeCutout(file), cutoutSrc: imageUrl });
+          } catch (cutErr) {
+            console.warn('Freistellen fehlgeschlagen:', cutErr);
+          }
+        }
       } catch (err) {
         alert(err instanceof Error ? err.message : 'Fehler beim Bild-Upload.');
       } finally {
@@ -159,7 +177,14 @@ function RosterEditor({
     <div className="space-y-2">
       {roster.map((player, index) => (
         <div key={index} className="flex items-center gap-2 bg-[#060E0F]/60 border border-white/5 rounded-lg px-2.5 py-2">
-          <PlayerAvatar name={player.name || '?'} imageUrl={player.imageUrl} color={teamColor} size="sm" />
+          {validCutout(player) ? (
+            // Vorschau der Freistellung
+            <span className="shrink-0 w-8 h-8 grid place-items-end overflow-hidden rounded-md bg-[repeating-conic-gradient(#ffffff14_0_25%,transparent_0_50%)] bg-[length:8px_8px]" title="Freigestellt">
+              <img src={validCutout(player)} alt="" className="max-w-full max-h-full object-contain object-bottom" />
+            </span>
+          ) : (
+            <PlayerAvatar name={player.name || '?'} imageUrl={player.imageUrl} color={teamColor} size="sm" />
+          )}
           <input
             type="number"
             min={0}
@@ -219,10 +244,11 @@ function RosterEditor({
               <Camera className="w-4 h-4" />
             )}
           </button>
+          {cutouts && <CutoutButton player={player} onDone={(patch) => updatePlayer(index, patch)} />}
           {player.imageUrl && (
             <button
               type="button"
-              onClick={() => updatePlayer(index, { imageUrl: undefined })}
+              onClick={() => updatePlayer(index, { imageUrl: undefined, cutoutUrl: undefined, cutoutSrc: undefined })}
               title="Foto entfernen"
               className="shrink-0 p-1.5 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-md transition-colors cursor-pointer"
             >
@@ -2170,10 +2196,20 @@ export default function AdminPanel({
                   <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
                     SPIELER-KADER (MIT OPTIONALEM FOTO)
                   </label>
-                  <RosterEditor roster={editTeamRoster} teamColor={editTeamColor} onChange={setEditTeamRoster} />
+                  <RosterEditor roster={editTeamRoster} teamColor={editTeamColor} onChange={setEditTeamRoster} cutouts />
                   <p className="text-[10px] text-gray-400 font-sans mt-1.5">
-                    Diese Spieler stehen im Spielplan zur Torschützen- und Vorlagen-Zuweisung bereit.
+                    Diese Spieler stehen im Spielplan zur Torschützen- und Vorlagen-Zuweisung bereit. Neue Fotos werden
+                    automatisch freigestellt (Schere ✂ = freistellen bzw. Freistellung entfernen) – nach dem Hochladen speichern.
                   </p>
+                  <div className="mt-2.5">
+                    <CutoutBatch
+                      teams={teams}
+                      onEditTeam={onEditTeam}
+                      onTeamSaved={(teamId, roster) => {
+                        if (teamId === selectedEditTeamId) setEditTeamRoster(roster);
+                      }}
+                    />
+                  </div>
                 </div>
 
                 {/* Team-Manager (Captains) – melden auf /kader den Abend-Kader selbst */}

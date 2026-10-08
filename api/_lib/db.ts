@@ -43,6 +43,10 @@ export function normalizeRoster(roster: unknown): Player[] {
         return {
           name: p.name,
           ...(p.imageUrl ? { imageUrl: p.imageUrl } : {}),
+          // Freistellung nur behalten, wenn sie zum aktuellen Foto gehört.
+          ...(p.imageUrl && typeof p.cutoutUrl === 'string' && p.cutoutUrl && p.cutoutSrc === p.imageUrl
+            ? { cutoutUrl: p.cutoutUrl, cutoutSrc: p.cutoutSrc }
+            : {}),
           ...(num !== undefined && num >= 0 ? { number: num } : {}),
           ...(p.captain === true ? { captain: true } : {}),
           ...(p.goalkeeper === true ? { goalkeeper: true } : {}),

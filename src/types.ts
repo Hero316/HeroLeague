@@ -1,6 +1,8 @@
 export interface Player {
   name: string;
   imageUrl?: string;
+  cutoutUrl?: string; // freigestelltes Foto (ohne Hintergrund), automatisch erzeugt
+  cutoutSrc?: string; // aus welchem Foto (imageUrl) die Freistellung entstand
   number?: number; // feste Trikotnummer (ab Saisonstart), optional
   captain?: boolean; // Mannschaftskapitän (max. einer pro Team, vom Superadmin gesetzt)
   goalkeeper?: boolean; // fester Torwart (max. einer pro Team) – nur Vorauswahl für die Abend-Aufstellung, dort weiter änderbar
@@ -394,6 +396,7 @@ export interface PlayerStat {
   id: string;
   name: string;
   imageUrl?: string;
+  cutoutUrl?: string; // freigestelltes Foto (nur wenn zum aktuellen Foto passend)
   teamId: string; // Verein-Zuordnung – eindeutig, auch bei gleichen Spielernamen in mehreren Teams
   teamName: string;
   teamLogoColor: string;
