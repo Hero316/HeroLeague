@@ -2084,9 +2084,20 @@ export default function AdminPanel({
             <Shield className="w-5 h-5 text-brand-accent-light" />
             Club & Kader bearbeiten
           </h3>
-          <p className="text-xs text-gray-400 font-sans mb-6">
+          <p className="text-xs text-gray-400 font-sans mb-4">
             Wähle einen Club, um Name, Kürzel, Farbe, Wappen, Logo und den Kader (inkl. Spielerfotos) anzupassen.
           </p>
+          {/* Freisteller für ALLE Vereine – ohne vorher einen Club wählen zu müssen. */}
+          <div className="mb-6 rounded-xl border border-white/10 bg-white/[.03] px-3.5 py-3">
+            <div className="text-[11px] font-mono text-gray-400 uppercase tracking-wider mb-2">Spielerfotos freistellen (Hintergrund entfernen)</div>
+            <CutoutBatch
+              teams={teams}
+              onEditTeam={onEditTeam}
+              onTeamSaved={(teamId, roster) => {
+                if (teamId === selectedEditTeamId) setEditTeamRoster(roster);
+              }}
+            />
+          </div>
 
           <div className="space-y-5">
             <div>
@@ -2201,15 +2212,7 @@ export default function AdminPanel({
                     Diese Spieler stehen im Spielplan zur Torschützen- und Vorlagen-Zuweisung bereit. Neue Fotos werden
                     automatisch freigestellt (Schere ✂ = freistellen bzw. Freistellung entfernen) – nach dem Hochladen speichern.
                   </p>
-                  <div className="mt-2.5">
-                    <CutoutBatch
-                      teams={teams}
-                      onEditTeam={onEditTeam}
-                      onTeamSaved={(teamId, roster) => {
-                        if (teamId === selectedEditTeamId) setEditTeamRoster(roster);
-                      }}
-                    />
-                  </div>
+
                 </div>
 
                 {/* Team-Manager (Captains) – melden auf /kader den Abend-Kader selbst */}
