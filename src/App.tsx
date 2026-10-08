@@ -226,6 +226,13 @@ export default function App() {
   // tauchen Entwurf-/Season-2-Teams (z.B. Black Eagle) NICHT in Season 1 auf.
   // Rückwärtskompatibel: leere seasonIds = Altbestand → gehört zu allen Saisons.
   // Der Demo-Modus bleibt unberührt (eigene Kopien).
+  // Vereine der AKTUELLEN Saison – z. B. für die Suche. Teams einer kommenden
+  // Saison (Entwurf) oder nur vom Testspieltag tauchen dort nicht auf.
+  const currentSeasonTeams = useMemo(() => {
+    if (demo.active || !currentSeason) return visibleTeams;
+    return visibleTeams.filter((t) => !t.seasonIds || t.seasonIds.length === 0 || t.seasonIds.includes(currentSeason.id));
+  }, [visibleTeams, currentSeason, demo.active]);
+
   const leagueTeams = useMemo(() => {
     if (demo.active || !selectedSeason) return visibleTeams;
     return visibleTeams.filter((t) => !t.seasonIds || t.seasonIds.length === 0 || t.seasonIds.includes(selectedSeason.id));
@@ -1010,7 +1017,7 @@ export default function App() {
           hasHighlights={hasHighlights}
           mobileMode={mobileMode}
           onToggleMobileMode={toggleMobileMode}
-          teams={visibleTeams}
+          teams={currentSeasonTeams}
           matches={currentSeasonMatches}
           onSelectTeam={openTeamDetail}
           onGoToMatchday={goToMatchday}
@@ -1050,7 +1057,7 @@ export default function App() {
           hasHighlights={hasHighlights}
           mobileMode={mobileMode}
           onToggleMobileMode={toggleMobileMode}
-          teams={visibleTeams}
+          teams={currentSeasonTeams}
           matches={currentSeasonMatches}
           onSelectTeam={openTeamDetail}
           onGoToMatchday={goToMatchday}
@@ -1102,7 +1109,7 @@ export default function App() {
           hasHighlights={hasHighlights}
           mobileMode={mobileMode}
           onToggleMobileMode={toggleMobileMode}
-          teams={visibleTeams}
+          teams={currentSeasonTeams}
           matches={currentSeasonMatches}
           onSelectTeam={openTeamDetail}
           onGoToMatchday={goToMatchday}
@@ -1163,7 +1170,7 @@ export default function App() {
           hasHighlights={hasHighlights}
           mobileMode={mobileMode}
           onToggleMobileMode={toggleMobileMode}
-          teams={visibleTeams}
+          teams={currentSeasonTeams}
           matches={currentSeasonMatches}
           onSelectTeam={openTeamDetail}
           onGoToMatchday={goToMatchday}
@@ -1232,7 +1239,7 @@ export default function App() {
           hasHighlights={hasHighlights}
           mobileMode={mobileMode}
           onToggleMobileMode={toggleMobileMode}
-          teams={visibleTeams}
+          teams={currentSeasonTeams}
           matches={currentSeasonMatches}
           onSelectTeam={openTeamDetail}
           onGoToMatchday={goToMatchday}
@@ -1359,7 +1366,7 @@ export default function App() {
           hasHighlights={hasHighlights}
           mobileMode={mobileMode}
           onToggleMobileMode={toggleMobileMode}
-          teams={visibleTeams}
+          teams={currentSeasonTeams}
           matches={currentSeasonMatches}
           onSelectTeam={openTeamDetail}
           onGoToMatchday={goToMatchday}
@@ -1430,7 +1437,7 @@ export default function App() {
           hasHighlights={hasHighlights}
           mobileMode={mobileMode}
           onToggleMobileMode={toggleMobileMode}
-          teams={visibleTeams}
+          teams={currentSeasonTeams}
           matches={currentSeasonMatches}
           onSelectTeam={openTeamDetail}
           onGoToMatchday={goToMatchday}
@@ -1517,7 +1524,7 @@ export default function App() {
           hasHighlights={hasHighlights}
           mobileMode={mobileMode}
           onToggleMobileMode={toggleMobileMode}
-          teams={visibleTeams}
+          teams={currentSeasonTeams}
           matches={currentSeasonMatches}
           onSelectTeam={openTeamDetail}
           onGoToMatchday={goToMatchday}
@@ -2041,7 +2048,7 @@ export default function App() {
         hasHighlights={hasHighlights}
         mobileMode={mobileMode}
         onToggleMobileMode={toggleMobileMode}
-        teams={visibleTeams}
+        teams={currentSeasonTeams}
         matches={currentSeasonMatches}
         onSelectTeam={openTeamDetail}
         onGoToMatchday={goToMatchday}
