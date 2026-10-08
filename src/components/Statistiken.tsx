@@ -13,12 +13,11 @@ import {
   SHOT_MIN,
   GOLDEN_GLOVE_EXPLAIN,
   ballWinnerLeaders,
-  keyPassLeaders,
   headerGoalLeaders,
   type StatLeader,
 } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
-import { Swords, Hand, IdCard, BarChart3, Send, Zap, Target, Shield, Sparkles, Goal, Crown, Handshake, Info } from 'lucide-react';
+import { Swords, Hand, IdCard, BarChart3, Send, Zap, Target, Shield, Goal, Crown, Handshake, Info } from 'lucide-react';
 import StatTable, { pctFmt, sortStatRows, type StatTableCol, type StatTableRow } from './StatTable';
 import StatAccordion from './StatAccordion';
 import TrackingProgressBanner from './TrackingProgressBanner';
@@ -387,7 +386,7 @@ export default function Statistiken({
     });
     const passRows = table((t) => {
       const all = t.pass_ok + t.pass_fail;
-      return all > 0 ? { all, ok: t.pass_ok, quote: q(t.pass_ok, all, PASS_MIN), value: wert(t.pass_ok, all, PASS_MIN) } : null;
+      return all > 0 ? { all, ok: t.pass_ok, quote: q(t.pass_ok, all, PASS_MIN), key: t.key_pass, value: wert(t.pass_ok, all, PASS_MIN) } : null;
     });
     const duelRows = table((t) => {
       const all = t.duel_won + t.duel_lost;
@@ -416,8 +415,14 @@ export default function Statistiken({
       },
       {
         id: 'pass', title: 'Pässe', accent: '#22DFC9', icon: <Send className="w-4 h-4" />, rows: passRows, defaultSort: 'value',
-        cols: [{ key: 'all', label: 'Gesamt' }, { key: 'ok', label: 'Ange\u00ADkommen' }, { key: 'quote', label: 'Quote', fmt: pctFmt }, { key: 'value', label: 'Wert', fmt: (v) => v.toFixed(1) }],
-        note: `Quote = angekommene ÷ alle Pässe · Wert = angekommene × Quote · ab ${PASS_MIN} Pässen`,
+        cols: [
+          { key: 'all', label: 'Gesamt' },
+          { key: 'ok', label: 'Ange\u00ADkommen' },
+          { key: 'quote', label: 'Quote', fmt: pctFmt },
+          { key: 'key', label: 'Schlüs\u00ADsel\u00ADpässe' },
+          { key: 'value', label: 'Wert', fmt: (v) => v.toFixed(1) },
+        ],
+        note: `Quote = angekommene ÷ alle Pässe · Wert = angekommene × Quote · ab ${PASS_MIN} Pässen · Schlüsselpass = Pass, der direkt zur Torchance führt`,
       },
       {
         id: 'duel', title: 'Zweikämpfe', accent: '#43E5A0', icon: <Swords className="w-4 h-4" />, rows: duelRows, defaultSort: 'value',
@@ -443,7 +448,6 @@ export default function Statistiken({
       { id: 'scorer', title: 'Scorerpunkte (Tore + Vorlagen)', accent: '#43E5A0', icon: <Target className="w-4 h-4" />, mode: 'count' as const,
         rows: [...scorePts.values()].sort((a, b) => b.value - a.value || a.playerName.localeCompare(b.playerName)).slice(0, 10) },
       { id: 'win', title: 'Balleroberer', accent: '#58F0CD', icon: <Shield className="w-4 h-4" />, mode: 'count' as const, rows: ballWinnerLeaders(trackingRows, cfg) },
-      { id: 'key', title: 'Schlüsselpässe', accent: '#c99bff', icon: <Sparkles className="w-4 h-4" />, mode: 'count' as const, rows: keyPassLeaders(trackingRows, cfg) },
       { id: 'head', title: 'Kopfballtore', accent: '#F0559E', icon: <Goal className="w-4 h-4" />, mode: 'count' as const, rows: headerGoalLeaders(trackingRows, cfg) },
     ].filter((b) => b.rows.length > 0);
     return {
