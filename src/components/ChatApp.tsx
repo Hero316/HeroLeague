@@ -590,6 +590,8 @@ export default function ChatApp({
           onLeave={huddle.leave}
           onToggleMute={huddle.toggleMute}
           onToggleScreen={huddle.toggleScreen}
+          onToggleCamera={huddle.toggleCamera}
+          onSwitchCamera={huddle.switchCamera}
         />
       )}
 

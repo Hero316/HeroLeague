@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePolling } from '../lib/usePolling';
 import { motion } from 'motion/react';
-import { Headphones, Mic, MicOff, PhoneOff, StickyNote, X, Radio, MonitorUp, Maximize2, Loader2 } from 'lucide-react';
+import { Headphones, Mic, MicOff, PhoneOff, StickyNote, X, Radio, MonitorUp, Maximize2, Loader2, Video, VideoOff, SwitchCamera, Music, Music2 } from 'lucide-react';
 import type { HuddleState, HuddleParticipant, TeamMember, ChatMessage } from '../types';
-import { HuddleSession, huddleStart, huddleJoin, huddleLeave, huddlePoll, huddleSaveNotes, canShareScreen, primeAudio } from '../lib/huddle';
+import { HuddleSession, huddleStart, huddleJoin, huddleLeave, huddlePoll, huddleSaveNotes, canShareScreen, primeAudio, huddleAudioContext, IS_IOS } from '../lib/huddle';
+import { startHoldMusic } from '../lib/holdMusic';
 import Avatar from './Avatar';
 import { ModalPortal } from './ui';
 import { useBackClose } from '../lib/backStack';
@@ -18,6 +19,8 @@ export interface ActiveHuddle {
   muted: boolean;
   sharing: boolean; // teile ICH gerade meinen Bildschirm?
   screen: { from: string; stream: MediaStream } | null; // aktuell gezeigter Bildschirm (me/Peer)
+  camOn: boolean; // ist MEINE Kamera an?
+  cams: Record<string, MediaStream>; // Kamerabilder: 'me' bzw. Peer-ID → Stream
 }
 
 function sameSet(a: Set<string>, b: Set<string>): boolean {
@@ -43,7 +46,15 @@ export function useHuddleController(currentUserId: string) {
       if (!stream) return cur.screen && cur.screen.from === from ? { ...cur, screen: null } : cur;
       return { ...cur, screen: { from, stream } };
     });
-    setActive({ session, state, participants, muted: false, sharing: false, screen: null });
+    session.onCamera = (from, stream) => setActive((cur) => {
+      if (!cur || cur.session !== session) return cur;
+      const cams = { ...cur.cams };
+      if (stream) cams[from] = stream;
+      else if (cams[from]) delete cams[from];
+      else return cur;
+      return { ...cur, cams };
+    });
+    setActive({ session, state, participants, muted: false, sharing: false, screen: null, camOn: false, cams: {} });
     session.start().catch((err) => {
       alert(err instanceof Error && err.name === 'NotAllowedError' ? 'Kein Mikrofon-Zugriff – bitte in den Einstellungen erlauben.' : 'Mikrofon nicht verfügbar.');
       session.stop();
@@ -114,12 +125,32 @@ export function useHuddleController(currentUserId: string) {
     }
   }, []);
 
+  const toggleCamera = useCallback(async () => {
+    const s = ref.current;
+    if (!s) return;
+    if (s.camOn) {
+      s.stopCamera();
+      setActive((cur) => (cur ? { ...cur, camOn: false } : cur));
+      return;
+    }
+    try {
+      await s.startCamera();
+      setActive((cur) => (cur ? { ...cur, camOn: true } : cur));
+    } catch (err) {
+      alert(err instanceof Error && err.name === 'NotAllowedError' ? 'Kein Kamera-Zugriff – bitte in den Einstellungen erlauben.' : 'Kamera nicht verfügbar.');
+    }
+  }, []);
+
+  const switchCamera = useCallback(() => {
+    ref.current?.switchCamera().catch(() => alert('Kamera-Wechsel nicht möglich.'));
+  }, []);
+
   // Beim Verlassen der Seite höflich abmelden.
   useEffect(() => {
     return () => { if (ref.current) { ref.current.stop(); huddleLeave(ref.current.huddleId).catch(() => {}); } };
   }, []);
 
-  return { active, speaking, busy, startInConversation, joinHuddle, leave, toggleMute, toggleScreen };
+  return { active, speaking, busy, startInConversation, joinHuddle, leave, toggleMute, toggleScreen, toggleCamera, switchCamera };
 }
 
 export type HuddleController = ReturnType<typeof useHuddleController>;
@@ -178,45 +209,48 @@ export function HuddlePrejoin({
 }
 
 // ===========================================================================
-// „Du bist allein"-Musik: sanfte, leise WebAudio-Melodie (kein Datei-Download).
+// Warte-Musik: läuft, solange man allein im Huddle ist – beim Anrufen/Starten
+// bis jemand rangeht und wenn alle anderen schon aufgelegt haben.
 // ===========================================================================
-function useAloneMusic(play: boolean) {
-  const ctxRef = useRef<AudioContext | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+function useHoldMusic(play: boolean, delayMs: number) {
   useEffect(() => {
     if (!play) return;
-    // Erst nach ein paar Sekunden Alleinsein starten (nicht sofort).
-    const startDelay = setTimeout(() => {
-      const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!AC) return;
-      const ctx = new AC();
-      ctxRef.current = ctx;
-      const notes = [523.25, 659.25, 783.99, 659.25]; // C5 E5 G5 E5 – sanft
-      let i = 0;
-      const ping = () => {
-        const t = ctx.currentTime;
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = notes[i % notes.length];
-        gain.gain.setValueAtTime(0, t);
-        gain.gain.linearRampToValueAtTime(0.022, t + 0.2); // sehr, sehr leise
-        gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.8);
-        osc.connect(gain).connect(ctx.destination);
-        osc.start(t);
-        osc.stop(t + 1.9);
-        i++;
-      };
-      ping();
-      timerRef.current = setInterval(ping, 2600);
-    }, 8000);
+    let stop: (() => void) | null = null;
+    const t = setTimeout(() => {
+      stop = startHoldMusic(huddleAudioContext);
+    }, delayMs);
     return () => {
-      clearTimeout(startDelay);
-      if (timerRef.current) clearInterval(timerRef.current);
-      timerRef.current = null;
-      if (ctxRef.current) { ctxRef.current.close().catch(() => {}); ctxRef.current = null; }
+      clearTimeout(t);
+      stop?.();
     };
-  }, [play]);
+  }, [play, delayMs]);
+}
+
+// Ein Kamerabild (oder geteilter Bildschirm). Immer stumm – der Ton läuft
+// getrennt; stummes Video darf überall automatisch abspielen (sonst bleibt es
+// z. B. in Safari schwarz stehen).
+export function VideoView({ stream, mirror = false, fit = 'cover', className = '' }: { stream: MediaStream; mirror?: boolean; fit?: 'cover' | 'contain'; className?: string }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    if (v.srcObject !== stream) v.srcObject = stream;
+    v.play().catch(() => {});
+    // Neue Spur im selben Stream (z. B. Kamera gewechselt) → neu anstoßen.
+    const kick = () => v.play().catch(() => {});
+    stream.addEventListener('addtrack', kick);
+    return () => stream.removeEventListener('addtrack', kick);
+  }, [stream]);
+  return (
+    <video
+      ref={ref}
+      autoPlay
+      playsInline
+      muted
+      className={`${fit === 'cover' ? 'object-cover' : 'object-contain'} bg-black ${className}`}
+      style={mirror ? { transform: 'scaleX(-1)' } : undefined}
+    />
+  );
 }
 
 // ===========================================================================
@@ -230,6 +264,8 @@ export function HuddleBar({
   onLeave,
   onToggleMute,
   onToggleScreen,
+  onToggleCamera,
+  onSwitchCamera,
 }: {
   active: ActiveHuddle;
   speaking: Set<string>;
@@ -238,17 +274,20 @@ export function HuddleBar({
   onLeave: () => void;
   onToggleMute: () => void;
   onToggleScreen: () => void;
+  onToggleCamera: () => void;
+  onSwitchCamera: () => void;
 }) {
   const [stageOpen, setStageOpen] = useState(false);
   useBackClose(stageOpen, () => setStageOpen(false));
   const [notesOpen, setNotesOpen] = useState(false);
   const [notes, setNotes] = useState(active.state.notes ?? '');
-  // „Du bist allein"-Musik NUR, wenn vorher jemand da war (klassisches „vergessen
-  // rauszugehen") – nicht beim Solo-Starten/Warten. Und nie, wenn man stumm ist.
+  // Warte-Musik, solange man allein ist: beim Starten/Anrufen bis jemand
+  // rangeht – und wenn alle anderen aufgelegt haben. Per Noten-Knopf abschaltbar.
   const [everOthers, setEverOthers] = useState(false);
   useEffect(() => { if (active.participants.length > 1) setEverOthers(true); }, [active.participants.length]);
   const alone = active.participants.length <= 1;
-  useAloneMusic(alone && everOthers && !active.muted);
+  const [musicOff, setMusicOff] = useState(false);
+  useHoldMusic(alone && !musicOff, everOthers ? 2500 : 1200);
   useBackClose(notesOpen, () => setNotesOpen(false));
   const screenRef = useRef<HTMLVideoElement>(null);
   const screen = active.screen;
@@ -282,7 +321,7 @@ export function HuddleBar({
         {/* Geteilter Bildschirm (eigener oder von jemandem) */}
         {screen && (
           <div className="mb-2 relative rounded-xl overflow-hidden border border-white/20 bg-black">
-            <video ref={screenRef} autoPlay playsInline muted={screen.from === 'me'} className="w-full max-h-[38vh] object-contain bg-black" />
+            <video ref={screenRef} autoPlay playsInline muted className="w-full max-h-[38vh] object-contain bg-black" />
             <div className="absolute top-1.5 left-2 text-[11px] font-sans font-semibold text-white/90 bg-black/50 px-2 py-0.5 rounded-full">
               {screen.from === 'me' ? 'Dein Bildschirm' : `Bildschirm von ${nameOf(screen.from, 'Teilnehmer')}`}
             </div>
@@ -295,8 +334,28 @@ export function HuddleBar({
             </button>
           </div>
         )}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 shrink-0">
+        {/* Kamerabilder (Videoanruf) – antippen = groß */}
+        {Object.keys(active.cams).length > 0 && (
+          <div className="mb-2 flex gap-2 overflow-x-auto [scrollbar-width:none]">
+            {Object.entries(active.cams).map(([from, stream]) => (
+              <button
+                key={from}
+                type="button"
+                onClick={() => setStageOpen(true)}
+                className={`relative shrink-0 w-28 h-20 sm:w-36 sm:h-24 rounded-xl overflow-hidden border-2 cursor-pointer ${
+                  speaking.has(from === 'me' ? currentUserId : from) ? 'border-[#22DFC9]' : 'border-white/20'
+                }`}
+              >
+                <VideoView stream={stream} mirror={from === 'me' && active.session.facingMode === 'user'} className="w-full h-full" />
+                <span className="absolute left-1.5 bottom-1 text-[10px] font-sans font-semibold text-white bg-black/55 px-1.5 py-0.5 rounded-full max-w-[90%] truncate">
+                  {from === 'me' ? 'Du' : nameOf(from, 'Teilnehmer')}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="hidden min-[420px]:flex items-center gap-1.5 shrink-0">
             <Radio className="w-4 h-4 text-white animate-pulse" />
             <span className="text-[11px] font-bold uppercase tracking-wider text-white">Huddle</span>
           </div>
@@ -314,8 +373,17 @@ export function HuddleBar({
                 </span>
               );
             })}
-            {alone && <span className="ml-3 self-center text-[12px] text-white/80 font-sans truncate">Wartet auf andere…</span>}
+            {alone && <span className="ml-3 self-center text-[12px] text-white/80 font-sans truncate">{everOthers ? 'Alle anderen sind raus' : 'Wartet auf andere…'}</span>}
           </button>
+          {alone && (
+            <button
+              onClick={() => setMusicOff((v) => !v)}
+              title={musicOff ? 'Warte-Musik an' : 'Warte-Musik aus'}
+              className={`p-2.5 rounded-full cursor-pointer shrink-0 ${musicOff ? 'bg-white/15 text-white/60' : 'bg-white/15 text-white hover:bg-white/25'}`}
+            >
+              {musicOff ? <Music2 className="w-5 h-5 opacity-60" /> : <Music className="w-5 h-5" />}
+            </button>
+          )}
           {/* Aktionen */}
           <button onClick={() => setStageOpen(true)} title="Vollbild" className="p-2.5 rounded-full bg-white/15 text-white hover:bg-white/25 cursor-pointer shrink-0">
             <Maximize2 className="w-5 h-5" />
@@ -329,7 +397,14 @@ export function HuddleBar({
               <MonitorUp className="w-5 h-5" />
             </button>
           )}
-          <button onClick={() => setNotesOpen(true)} title="Notizen" className="p-2.5 rounded-full bg-white/15 text-white hover:bg-white/25 cursor-pointer shrink-0">
+          <button
+            onClick={onToggleCamera}
+            title={active.camOn ? 'Kamera aus' : 'Kamera an'}
+            className={`p-2.5 rounded-full cursor-pointer shrink-0 ${active.camOn ? 'bg-white text-[#0C7A70]' : 'bg-white/15 text-white hover:bg-white/25'}`}
+          >
+            {active.camOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
+          </button>
+          <button onClick={() => setNotesOpen(true)} title="Notizen" className="hidden min-[400px]:inline-flex p-2.5 rounded-full bg-white/15 text-white hover:bg-white/25 cursor-pointer shrink-0">
             <StickyNote className="w-5 h-5" />
           </button>
           <button
@@ -347,7 +422,7 @@ export function HuddleBar({
 
       {notesOpen && (
         <ModalPortal>
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[75] bg-black/70 flex items-center justify-center p-4" onClick={() => setNotesOpen(false)}>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[95] bg-black/70 flex items-center justify-center p-4" onClick={() => setNotesOpen(false)}>
             <div className="hl-card hl-modal-card w-full max-w-md p-4" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-2">
                 <h4 className="font-display font-bold text-white uppercase tracking-tight flex items-center gap-1.5"><StickyNote className="w-4 h-4" /> Huddle-Notizen</h4>
@@ -376,6 +451,9 @@ export function HuddleBar({
           onLeave={() => { setStageOpen(false); onLeave(); }}
           onToggleMute={onToggleMute}
           onToggleScreen={onToggleScreen}
+          onToggleCamera={onToggleCamera}
+          onSwitchCamera={onSwitchCamera}
+          onOpenNotes={() => setNotesOpen(true)}
           onClose={() => setStageOpen(false)}
         />
       )}
@@ -394,6 +472,9 @@ function HuddleStage({
   onLeave,
   onToggleMute,
   onToggleScreen,
+  onToggleCamera,
+  onSwitchCamera,
+  onOpenNotes,
   onClose,
 }: {
   active: ActiveHuddle;
@@ -403,6 +484,9 @@ function HuddleStage({
   onLeave: () => void;
   onToggleMute: () => void;
   onToggleScreen: () => void;
+  onToggleCamera: () => void;
+  onSwitchCamera: () => void;
+  onOpenNotes: () => void;
   onClose: () => void;
 }) {
   const screenRef = useRef<HTMLVideoElement>(null);
@@ -413,7 +497,10 @@ function HuddleStage({
   const canShare = canShareScreen();
   const nameOf = (id: string, fb: string) => team.find((t) => t.id === id)?.name ?? fb;
   const n = active.participants.length;
+  const anyCam = Object.keys(active.cams).length > 0;
   const cols = n <= 1 ? 'grid-cols-1' : n <= 4 ? 'grid-cols-2' : 'grid-cols-3';
+  // Kamera-Wechsel (vorne/hinten) nur an Handys/Tablets sinnvoll.
+  const canFlip = active.camOn && (IS_IOS || /Android/i.test(navigator.userAgent));
 
   return (
     <ModalPortal>
@@ -434,7 +521,7 @@ function HuddleStage({
         <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
           {screen && (
             <div className="mb-4 rounded-2xl overflow-hidden border border-white/15 bg-black relative">
-              <video ref={screenRef} autoPlay playsInline muted={screen.from === 'me'} className="w-full max-h-[45vh] object-contain bg-black" />
+              <video ref={screenRef} autoPlay playsInline muted className="w-full max-h-[45vh] object-contain bg-black" />
               <div className="absolute top-2 left-2 text-[12px] font-sans font-semibold text-white/90 bg-black/50 px-2 py-0.5 rounded-full">
                 {screen.from === 'me' ? 'Dein Bildschirm' : `Bildschirm von ${nameOf(screen.from, 'Teilnehmer')}`}
               </div>
@@ -444,16 +531,27 @@ function HuddleStage({
             {active.participants.map((p) => {
               const talking = speaking.has(p.userId);
               const nm = nameOf(p.userId, p.userName);
+              const me = p.userId === currentUserId;
+              const cam = active.cams[me ? 'me' : p.userId];
               return (
                 <div
                   key={p.userId}
-                  className={`aspect-square rounded-3xl flex flex-col items-center justify-center gap-2 bg-white/[.04] border-2 transition-all ${talking ? 'border-[#22DFC9]' : 'border-white/10'}`}
+                  className={`relative overflow-hidden ${anyCam ? 'aspect-[3/4] sm:aspect-video' : 'aspect-square'} rounded-3xl flex flex-col items-center justify-center gap-2 bg-white/[.04] border-2 transition-all ${talking ? 'border-[#22DFC9]' : 'border-white/10'}`}
                   style={talking ? { boxShadow: '0 0 26px rgba(34,223,201,.55)' } : undefined}
                 >
-                  <Avatar name={nm} url={team.find((t) => t.id === p.userId)?.avatarUrl} size={72} />
-                  <span className="text-[13px] font-sans font-semibold text-white truncate max-w-[90%]">
-                    {p.userId === currentUserId ? 'Du' : nm}
-                  </span>
+                  {cam ? (
+                    <>
+                      <VideoView stream={cam} mirror={me && active.session.facingMode === 'user'} className="absolute inset-0 w-full h-full" />
+                      <span className="absolute left-2 bottom-2 text-[12px] font-sans font-semibold text-white bg-black/55 px-2 py-0.5 rounded-full max-w-[90%] truncate">
+                        {me ? 'Du' : nm}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <Avatar name={nm} url={team.find((t) => t.id === p.userId)?.avatarUrl} size={72} />
+                      <span className="text-[13px] font-sans font-semibold text-white truncate max-w-[90%]">{me ? 'Du' : nm}</span>
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -469,6 +567,18 @@ function HuddleStage({
           >
             {active.muted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
           </button>
+          <button
+            onClick={onToggleCamera}
+            title={active.camOn ? 'Kamera aus' : 'Kamera an'}
+            className={`p-4 rounded-full cursor-pointer ${active.camOn ? 'bg-white text-[#0C7A70]' : 'bg-white/15 text-white hover:bg-white/25'}`}
+          >
+            {active.camOn ? <Video className="w-6 h-6" /> : <VideoOff className="w-6 h-6" />}
+          </button>
+          {canFlip && (
+            <button onClick={onSwitchCamera} title="Kamera wechseln" className="p-4 rounded-full bg-white/15 text-white hover:bg-white/25 cursor-pointer">
+              <SwitchCamera className="w-6 h-6" />
+            </button>
+          )}
           {canShare && (
             <button
               onClick={onToggleScreen}
@@ -478,6 +588,9 @@ function HuddleStage({
               <MonitorUp className="w-6 h-6" />
             </button>
           )}
+          <button onClick={onOpenNotes} title="Notizen" className="p-4 rounded-full bg-white/15 text-white hover:bg-white/25 cursor-pointer">
+            <StickyNote className="w-6 h-6" />
+          </button>
           <button onClick={onLeave} title="Verlassen" className="p-4 rounded-full bg-rose-500 text-white hover:bg-rose-600 cursor-pointer">
             <PhoneOff className="w-6 h-6" />
           </button>
