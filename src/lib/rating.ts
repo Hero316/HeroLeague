@@ -257,7 +257,7 @@ function cardFromExplain(e: CardExplain, labels: Record<string, string>): Player
 
 const pct = (a: number, b: number) => (b > 0 ? a / b : 0);
 
-// Feldspieler-Karte: PAS · SCH · DRI · DEF → GES (gerundeter Schnitt).
+// Feldspieler-Karte: PAS · SCH · DRI · DEF → GES (abgerundeter Schnitt).
 // ignoreGamesCap=true → kein „wenig-Spiele-Deckel" (z.B. Testspieltag): rein aus
 // den echten Stats, voller Wertebereich bis zur Elite-Kappe.
 export function fieldCardExplain(total: ActionCounts, games: number, cfg: ScoringConfig, ignoreGamesCap = false): CardExplain {
@@ -336,7 +336,9 @@ export function fieldCardExplain(total: ActionCounts, games: number, cfg: Scorin
   );
 
   const attrs = [PAS, SCH, DRI, DEF];
-  const ges = Math.round(attrs.reduce((sum, a) => sum + a.value, 0) / 4);
+  // Gesamtwert wird ABGERUNDET: erst ab vollem Schnitt gibt es die Zahl
+  // (85,5 → 85, nicht 86), damit sich die Spitze nicht auf einer Zahl staut.
+  const ges = Math.floor(attrs.reduce((sum, a) => sum + a.value, 0) / 4);
   return { role: 'field', games, basis: c.basis, spanne: c.spanne, cap, capNote: capNoteFor(games, cfg, ignoreGamesCap), attrs, ges, tier: cardTier(ges, cfg) };
 }
 
@@ -428,7 +430,9 @@ export function keeperCardExplain(
   );
 
   const attrs = [STL, PAR, PAS, SIC];
-  const ges = Math.round(attrs.reduce((sum, a) => sum + a.value, 0) / 4);
+  // Gesamtwert wird ABGERUNDET: erst ab vollem Schnitt gibt es die Zahl
+  // (85,5 → 85, nicht 86), damit sich die Spitze nicht auf einer Zahl staut.
+  const ges = Math.floor(attrs.reduce((sum, a) => sum + a.value, 0) / 4);
   return { role: 'keeper', games, basis: c.basis, spanne: c.spanne, cap, capNote: capNoteFor(games, cfg, ignoreGamesCap), attrs, ges, tier: cardTier(ges, cfg) };
 }
 
