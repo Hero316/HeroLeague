@@ -51,6 +51,21 @@ export function parseVoice(payload: {
   });
 }
 
+// Aufnahme ↔ Spiel verknüpfen (für späteres Nachprüfen, z. B. der Vorlagen).
+export function linkTrackingAudio(matchId: string, url: string): Promise<{ ok: boolean }> {
+  return apiFetch('/api/stats?resource=voice-audio', { method: 'POST', body: JSON.stringify({ matchId, url }) });
+}
+
+export interface TrackingAudio {
+  url: string;
+  at: string; // ISO-Zeitpunkt des Uploads
+  size?: number; // Bytes (WAV 16 kHz mono ≈ 32 000 Bytes/Sekunde)
+}
+// Aufnahmen dieses Spiels (linked) + alle Tracking-Aufnahmen (recent, neueste zuerst).
+export function fetchTrackingAudio(matchId: string): Promise<{ linked: TrackingAudio[]; recent: TrackingAudio[] }> {
+  return apiFetch(`/api/stats?resource=voice-audio&matchId=${encodeURIComponent(matchId)}`);
+}
+
 // Saisonweite Tracking-Regeln (frei formulierter Text) laden/speichern.
 export function fetchTrackingRules(): Promise<{ text: string }> {
   return apiFetch<{ text: string }>('/api/stats?resource=tracking-rules');

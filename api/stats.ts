@@ -7,6 +7,7 @@ import { sheetInfo } from './_lib/gsheets.js';
 import { exportLeagueDay, exportScoringConfig } from './_lib/sheetExport.js';
 import { readDemo } from './_lib/demo.js';
 import { isGeminiConfigured, uploadAudio, parseTracking, type VoiceContext, type RosterPlayer } from './_lib/gemini.js';
+import { list as listBlobs } from '@vercel/blob';
 
 // ===========================================================================
 // Statistics Center — Roh-Zähler je Spieler & Spiel + Score-Einstellungen.
@@ -424,6 +425,61 @@ function sanitizeContext(raw: unknown): VoiceContext {
   return { homeTeam, awayTeam, players, rules };
 }
 
+// --- Audio-Aufnahmen ↔ Spiel ----------------------------------------------
+// Beim Audio-Tracking wird jede Aufnahme mit ihrem Spiel verknüpft (settings
+// „tracking-audio" = { [matchId]: [{ url, at }] }). So kann man ein Spiel später
+// noch einmal auswerten lassen (z. B. „Vorlagen nachprüfen"). Ältere Aufnahmen
+// ohne Verknüpfung findet die Liste über den Blob-Speicher (…-tracking.wav).
+type AudioLink = { url: string; at: string };
+const isBlobUrl = (u: string) => {
+  try {
+    return /\.blob\.vercel-storage\.com$/.test(new URL(u).host);
+  } catch {
+    return false;
+  }
+};
+async function readAudioLinks(): Promise<Record<string, AudioLink[]>> {
+  const rows = await sql`SELECT value FROM settings WHERE key = 'tracking-audio'`;
+  const v = rows[0]?.value;
+  return v && typeof v === 'object' ? (v as Record<string, AudioLink[]>) : {};
+}
+
+const linkTrackingAudio = requirePermission('tracking')(async (req: VercelRequest, res: VercelResponse) => {
+  const { matchId, url } = (req.body ?? {}) as { matchId?: unknown; url?: unknown };
+  if (!isNonEmptyString(matchId) || typeof url !== 'string' || !isBlobUrl(url)) return badRequest(res, 'Ungültige Aufnahme.');
+  const all = await readAudioLinks();
+  const list = (all[matchId] ?? []).filter((a) => a.url !== url);
+  list.push({ url, at: new Date().toISOString() });
+  all[matchId] = list.slice(-20);
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('tracking-audio', ${JSON.stringify(all)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+  return res.json({ ok: true });
+});
+
+const trackingAudioList = requirePermission('tracking')(async (req: VercelRequest, res: VercelResponse) => {
+  const matchId = typeof req.query.matchId === 'string' ? req.query.matchId : '';
+  const linked = matchId ? (await readAudioLinks())[matchId] ?? [] : [];
+  // Alle Tracking-Aufnahmen aus dem Blob-Speicher (neueste zuerst).
+  const recent: { url: string; at: string; size: number }[] = [];
+  try {
+    let cursor: string | undefined;
+    for (let page = 0; page < 10; page++) {
+      const r = await listBlobs({ prefix: 'uploads/', limit: 1000, cursor });
+      for (const b of r.blobs) {
+        if (/-tracking\.wav$/i.test(b.pathname)) recent.push({ url: b.url, at: new Date(b.uploadedAt).toISOString(), size: b.size });
+      }
+      if (!r.hasMore || !r.cursor) break;
+      cursor = r.cursor;
+    }
+  } catch (err) {
+    console.error('trackingAudioList:', err);
+  }
+  recent.sort((a, b) => b.at.localeCompare(a.at));
+  return res.json({ linked, recent: recent.slice(0, 200) });
+});
+
 const MAX_AUDIO_BYTES = 40 * 1024 * 1024; // Sicherheitsgrenze für das Server-seitige Nachladen
 
 const voiceTracking = requirePermission('tracking')(async (req: VercelRequest, res: VercelResponse) => {
@@ -491,6 +547,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'live') {
         return res.json(await readLiveDays());
       }
+      // Aufnahmen eines Spiels (+ alle Tracking-Aufnahmen) – nur fürs Tracking-Team.
+      if (resource === 'voice-audio') return trackingAudioList(req, res);
 
       // ÖFFENTLICH: nur veröffentlichte (live geschaltete) Spieltage. Für die
       // Website (Spieler-Karten, Spielbericht). Optional auf eine Saison gefiltert.
@@ -660,6 +718,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'export-scoring') return exportScoring(req, res);
       if (resource === 'tracking-rules') return saveTrackingRules(req, res);
       if (resource === 'voice') return voiceTracking(req, res);
+      if (resource === 'voice-audio') return linkTrackingAudio(req, res);
       return badRequest(res, 'Unbekannte Ressource.');
     }
 
