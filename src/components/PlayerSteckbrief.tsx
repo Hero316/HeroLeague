@@ -5,6 +5,7 @@ import type { Match, MatchPlayerStat, PlayerStat, ScoringConfig, Team } from '..
 import { cardForPlayer } from '../lib/playerCards';
 import { playerPlacements } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
+import { quotas } from '../lib/rating';
 import { useBackClose } from '../lib/backStack';
 import { useBackdropDismiss, ModalPortal, TeamCrest, monogram, readable } from './ui';
 import { ShareSheet } from './ShareCard';
@@ -145,7 +146,7 @@ export default function PlayerSteckbrief({ open, onClose, players, teams, tracki
                 <motion.div key="card" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }} transition={{ duration: 0.2 }}>
                   <div className="mt-4 mx-auto w-full max-w-[340px]">
                     <div className="rounded-3xl overflow-hidden" style={{ boxShadow: '0 30px 70px -25px rgba(0,0,0,.9)' }}>
-                      <Steckbrief player={player} team={team} card={card} placements={placements} seasonLabel={seasonLabel} />
+                      <Steckbrief player={player} team={team} card={card} placements={placements} seasonLabel={seasonLabel} cfg={cfg} />
                     </div>
                     <button
                       onClick={() => setShareOpen(true)}
@@ -165,7 +166,7 @@ export default function PlayerSteckbrief({ open, onClose, players, teams, tracki
                     filename={`hero-league-steckbrief-${player.name.replace(/\s+/g, '-').toLowerCase()}.png`}
                     shareText={`${player.name} · ${player.teamName} – mein Hero League Steckbrief ⚽ hero-league.de`}
                   >
-                    <Steckbrief player={player} team={team} card={card} placements={placements} seasonLabel={seasonLabel} inFrame />
+                    <Steckbrief player={player} team={team} card={card} placements={placements} seasonLabel={seasonLabel} cfg={cfg} inFrame />
                   </ShareSheet>
                 </motion.div>
               )}
@@ -200,6 +201,7 @@ function Steckbrief({
   card,
   placements,
   seasonLabel,
+  cfg,
   inFrame = false,
 }: {
   player: PlayerStat;
@@ -207,6 +209,7 @@ function Steckbrief({
   card: ReturnType<typeof cardForPlayer>;
   placements: ReturnType<typeof playerPlacements>;
   seasonLabel?: string;
+  cfg: ScoringConfig;
   inFrame?: boolean;
 }) {
   const accent = team?.logoColor ?? '#22DFC9';
@@ -214,25 +217,43 @@ function Steckbrief({
   const ink = readable(accent);
   const tier = card ? TIER[card.card.tier] : null;
   const keeper = card?.role === 'keeper';
-  const games = keeper ? player.gamesInGoal || player.matchesPlayed : player.matchesPlayed;
+  const games = Math.max(keeper ? player.gamesInGoal || player.matchesPlayed : player.matchesPlayed, card?.games ?? 0);
   const winRate = player.matchesPlayed > 0 ? Math.round((player.wins / player.matchesPlayed) * 100) : null;
   // Tore/Vorlagen: getrackt ODER aus den Ergebnissen – der höhere Wert (viele
   // Ergebnisse sind ohne Torschützen eingetragen).
   const t = card?.total;
   const goals = Math.max(player.goals, t ? t.goal + t.penalty_goal : 0);
   const assists = Math.max(player.assists, t ? t.assist : 0);
+  // Zeile 1: absolute Zahlen.
   const stats: { v: string; l: string }[] = keeper
     ? [
-        { v: String(games), l: 'IM TOR' },
+        { v: String(games), l: 'SPIELE' },
         { v: String(t?.save ?? 0), l: 'PARADEN' },
         { v: String(player.cleanSheets), l: 'ZU NULL' },
         { v: String(goals), l: 'TORE' },
       ]
     : [
-        { v: String(player.matchesPlayed), l: 'SPIELE' },
+        { v: String(games), l: 'SPIELE' },
         { v: String(goals), l: 'TORE' },
         { v: String(assists), l: 'VORLAGEN' },
         { v: winRate == null ? '–' : `${winRate}%`, l: 'SIEGE' },
+      ];
+  // Zeile 2: Quoten aus dem Tracking (gleiche Regeln wie im Spielerprofil).
+  const pct = (v: number | null | undefined) => (v == null ? '–' : `${Math.round(v * 100)}%`);
+  const qu = t ? quotas(t, cfg) : null;
+  const ga = t?.gk_goal_against ?? 0;
+  const quoteTiles: { v: string; l1: string; l2: string }[] = keeper
+    ? [
+        { v: pct(qu?.torwartquote), l1: 'PARADEN', l2: 'QUOTE' },
+        { v: pct(qu?.passquote), l1: 'PASS', l2: 'QUOTE' },
+        { v: games > 0 && t ? (ga / games).toFixed(1).replace('.', ',') : '–', l1: 'GEGENTORE', l2: 'PRO SPIEL' },
+        { v: games > 0 ? pct(player.cleanSheets / games) : '–', l1: 'ZU-NULL', l2: 'QUOTE' },
+      ]
+    : [
+        { v: pct(qu?.passquote), l1: 'PASS', l2: 'QUOTE' },
+        { v: pct(qu?.schussquote), l1: 'SCHUSS', l2: 'QUOTE' },
+        { v: pct(qu?.zweikampfquote), l1: 'ZWEIKAMPF', l2: 'QUOTE' },
+        { v: pct(qu?.dribblingquote), l1: 'DRIBBLING', l2: 'QUOTE' },
       ];
   const top = placements.slice(0, 5);
   const font = '"Saira", ui-sans-serif, system-ui, sans-serif';
@@ -266,27 +287,31 @@ function Steckbrief({
         )}
       </div>
 
-      {/* Kartenwerte */}
+      {/* Zeile 1: absolute Zahlen */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginTop: 14 }}>
+        {stats.map((st) => (
+          <div key={st.l} style={{ textAlign: 'center', border: '1px solid rgba(255,255,255,.1)', borderRadius: 10, padding: '7px 0 6px' }}>
+            <div style={{ fontFamily: display, fontWeight: 900, fontSize: 20, lineHeight: 1, color: ink }}>{st.v}</div>
+            <div style={{ fontSize: 8.5, letterSpacing: '0.12em', color: 'rgba(255,255,255,.55)', marginTop: 3 }}>{st.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Zeile 2: Quoten */}
       {card && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginTop: 14 }}>
-          {card.card.attrs.map((a) => (
-            <div key={a.key} style={{ textAlign: 'center', background: 'rgba(255,255,255,.06)', borderRadius: 10, padding: '7px 0 6px' }}>
-              <div style={{ fontFamily: display, fontWeight: 900, fontSize: 20, lineHeight: 1 }}>{a.value}</div>
-              <div style={{ fontSize: 9, letterSpacing: '0.14em', color: 'rgba(255,255,255,.55)', marginTop: 3 }}>{a.key}</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginTop: 8 }}>
+          {quoteTiles.map((q) => (
+            <div key={q.l1} style={{ textAlign: 'center', background: 'rgba(255,255,255,.06)', borderRadius: 10, padding: '7px 2px 6px' }}>
+              <div style={{ fontFamily: display, fontWeight: 900, fontSize: 18, lineHeight: 1 }}>{q.v}</div>
+              <div style={{ fontSize: 7.5, letterSpacing: '0.1em', lineHeight: 1.25, color: 'rgba(255,255,255,.55)', marginTop: 4 }}>
+                {q.l1}
+                <br />
+                {q.l2}
+              </div>
             </div>
           ))}
         </div>
       )}
-
-      {/* Kennzahlen */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginTop: 8 }}>
-        {stats.map((s) => (
-          <div key={s.l} style={{ textAlign: 'center', border: '1px solid rgba(255,255,255,.1)', borderRadius: 10, padding: '7px 0 6px' }}>
-            <div style={{ fontFamily: display, fontWeight: 900, fontSize: 18, lineHeight: 1, color: ink }}>{s.v}</div>
-            <div style={{ fontSize: 8.5, letterSpacing: '0.12em', color: 'rgba(255,255,255,.55)', marginTop: 3 }}>{s.l}</div>
-          </div>
-        ))}
-      </div>
 
       {/* Platzierungen */}
       <div style={{ marginTop: 14 }}>
