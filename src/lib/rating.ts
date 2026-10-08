@@ -310,12 +310,26 @@ export function fieldCardExplain(total: ActionCounts, games: number, cfg: Scorin
 
   const defVol = total.duel_won + total.duel_lost + total.interception + total.shot_blocked_def;
   const defActions = (total.duel_won + total.interception + total.shot_blocked_def) / g;
+  // Die DEF-Verlässlichkeit zählt auch Interceptions/Blocks – die Zweikampfquote
+  // selbst braucht aber eigene Zweikämpfe. Unter `vollAktionen.def` Zweikämpfen
+  // wird sie anteilig Richtung 50 % gezogen (jeder Zweikampf hat einen Gewinner
+  // und einen Verlierer → Liga-Schnitt 50 %). So macht „1 von 1" keine 92.
+  const duels = total.duel_won + total.duel_lost;
+  const duelShare = voll.def > 0 ? Math.min(1, duels / voll.def) : 1;
+  const duelQ = duelShare * duelRate(total) + (1 - duelShare) * 0.5;
   const DEF = attrExplain(
     'DEF',
     'Defensive',
     'Zweikampfquote und wie viel du defensiv wegholst: Zweikämpfe, Interceptions, Blocks.',
     [
-      { label: 'Zweikampfquote', value: duelRate(total), ziel: c.def.zielQuote, kind: 'percent', weight: c.def.gewQuote, ratio: safeDiv(duelRate(total), c.def.zielQuote) },
+      {
+        label: duelShare < 1 ? `Zweikampfquote (erst ${duels} von ${voll.def} Zweikämpfen – Richtung 50 % gezogen)` : 'Zweikampfquote',
+        value: duelQ,
+        ziel: c.def.zielQuote,
+        kind: 'percent',
+        weight: c.def.gewQuote,
+        ratio: safeDiv(duelQ, c.def.zielQuote),
+      },
       { label: 'Defensivaktionen pro Spiel', value: defActions, ziel: c.def.zielMenge, kind: 'perGame', weight: c.def.gewMenge, ratio: mengeRatio(defActions, c.def.zielMenge, mm) },
     ],
     defVol, voll.def, 'Defensivaktionen', cap, cfg
