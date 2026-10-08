@@ -56,12 +56,16 @@ export default function StatTable({
   const [all, setAll] = useState(false);
   const sorted = useMemo(() => sortStatRows(rows, sortKey), [rows, sortKey]);
   const shown = all ? sorted : sorted.slice(0, limit);
+  // Viele Spalten (≥ 5): am Handy steht der Name in einer eigenen Zeile über
+  // den Zahlen – sonst bliebe für den Namen kein Platz.
+  const wide = cols.length >= 5;
+  const colW = wide ? 'w-[46px] sm:w-[92px] lg:w-[110px]' : 'w-[44px] sm:w-[92px] lg:w-[110px]';
 
   return (
     <div className="pt-1 min-w-0">
       <div className="flex items-end gap-1.5 sm:gap-2 px-1.5 pb-1.5 border-b border-white/[.08]">
         <span className="w-5 shrink-0" />
-        <span className="flex-1 min-w-0 text-[10px] lg:text-xs font-bold uppercase tracking-wider text-hl-faint">Spieler</span>
+        <span className={`flex-1 min-w-0 text-[10px] lg:text-xs font-bold uppercase tracking-wider text-hl-faint ${wide ? 'invisible sm:visible' : ''}`}>Spieler</span>
         {cols.map((c) => {
           const on = c.key === sortKey;
           return (
@@ -71,7 +75,7 @@ export default function StatTable({
               onClick={() => setSortKey(c.key)}
               aria-pressed={on}
               title={`Nach „${c.label}" sortieren`}
-              className={`shrink-0 w-[44px] sm:w-[92px] lg:w-[110px] flex items-end justify-end gap-0.5 text-[9px] sm:text-[11px] lg:text-xs font-bold uppercase sm:tracking-wider cursor-pointer transition-colors ${
+              className={`shrink-0 ${colW} flex items-end justify-end gap-0.5 text-[9px] sm:text-[11px] lg:text-xs font-bold uppercase sm:tracking-wider cursor-pointer transition-colors ${
                 on ? '' : 'text-hl-dim hover:text-white'
               }`}
               style={on ? { color: accent } : undefined}
@@ -91,12 +95,12 @@ export default function StatTable({
               <button
                 type="button"
                 onClick={onSelect ? () => onSelect(r.teamId, r.playerName) : undefined}
-                className="w-full flex items-center gap-1.5 sm:gap-3 rounded-lg px-1.5 sm:px-2.5 py-1.5 sm:py-2 lg:py-2.5 hover:bg-white/[.05] transition-colors cursor-pointer text-left min-w-0"
+                className={`w-full flex items-center ${wide ? 'flex-wrap sm:flex-nowrap gap-y-1' : ''} gap-1.5 sm:gap-3 rounded-lg px-1.5 sm:px-2.5 py-1.5 sm:py-2 lg:py-2.5 hover:bg-white/[.05] transition-colors cursor-pointer text-left min-w-0`}
               >
                 <span className="w-5 sm:w-7 shrink-0 text-center font-display font-black tabular-nums text-xs sm:text-sm lg:text-base text-hl-soft" style={{ color: i === 0 ? accent : undefined }}>
                   {i + 1}
                 </span>
-                <span className="flex-1 min-w-0 flex items-center gap-1.5">
+                <span className={`${wide ? 'basis-[calc(100%-2rem)] sm:basis-0' : ''} flex-1 min-w-0 flex items-center gap-1.5`}>
                   {/* Wappen erst ab sm – am Handy braucht der Name den Platz. */}
                   {t && (
                     <span className="hidden sm:inline-flex shrink-0">
@@ -105,13 +109,14 @@ export default function StatTable({
                   )}
                   <span className="min-w-0 truncate font-sans font-semibold text-sm sm:text-base lg:text-[17px] text-white">{r.playerName}</span>
                 </span>
+                {wide && <span className="sm:hidden flex-1" />}
                 {cols.map((c) => {
                   const v = r.values[c.key];
                   const on = c.key === sortKey;
                   return (
                     <span
                       key={c.key}
-                      className={`shrink-0 w-[44px] sm:w-[92px] lg:w-[110px] text-right tabular-nums ${on ? 'font-display font-black text-sm sm:text-lg lg:text-xl text-white' : 'font-mono text-[12px] sm:text-sm lg:text-[15px] text-hl-soft'}`}
+                      className={`shrink-0 ${colW} text-right tabular-nums ${on ? 'font-display font-black text-sm sm:text-lg lg:text-xl text-white' : 'font-mono text-[12px] sm:text-sm lg:text-[15px] text-hl-soft'}`}
                     >
                       {v == null ? '–' : c.fmt ? c.fmt(v) : v}
                     </span>
