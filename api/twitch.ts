@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { EventArchive, EventMatch } from '../src/types';
 import { createEventDemo, removeEventDemo } from './_lib/eventDemo.js';
 import { sql, getTeams } from './_lib/db.js';
-import { requireStaff, requireMatchWrite, requireSuperadmin, getSession } from './_lib/auth.js';
+import { requirePermission, requireMatchWrite, requireSuperadmin, getSession, hasPermission } from './_lib/auth.js';
 import { applyRosterToMatches, type RosterTeamIn } from './_lib/roster.js';
 import { managerRequestCode, managerVerify, managerGetRoster, managerSaveRoster, adminGetManagers, adminSaveManagers, adminGetManagerConfig, adminSaveManagerConfig } from './_lib/managers.js';
 import { getTips, submitTip, registerRequestCode, registerVerify, adminListTippUsers, getBonus, submitBonus, adminSetBonusSolution, acceptTerms } from './_lib/tippgame.js';
@@ -113,7 +113,7 @@ function normalizeUrl(input: unknown): string {
   return `https://${t}`;
 }
 
-const saveTwitch = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const saveTwitch = requirePermission('channels')(async (req: VercelRequest, res: VercelResponse) => {
   const { channel, isLive } = req.body ?? {};
   const cfg = {
     channel: normalizeChannel(channel),
@@ -129,7 +129,7 @@ const saveTwitch = requireStaff(async (req: VercelRequest, res: VercelResponse) 
 });
 
 // Zwei-Feld-Streams (Testspieltag). Kanalnamen normalisiert, aktiv-Schalter.
-const saveStreams = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const saveStreams = requirePermission('channels')(async (req: VercelRequest, res: VercelResponse) => {
   const b = req.body ?? {};
   const cfg = {
     active: Boolean(b.active),
@@ -143,7 +143,7 @@ const saveStreams = requireStaff(async (req: VercelRequest, res: VercelResponse)
   return res.json(cfg);
 });
 
-const saveLeagueStreams = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const saveLeagueStreams = requirePermission('channels')(async (req: VercelRequest, res: VercelResponse) => {
   const b = req.body ?? {};
   const cfg = {
     active: Boolean(b.active),
@@ -157,7 +157,7 @@ const saveLeagueStreams = requireStaff(async (req: VercelRequest, res: VercelRes
   return res.json(cfg);
 });
 
-const saveSocial = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const saveSocial = requirePermission('channels')(async (req: VercelRequest, res: VercelResponse) => {
   const { instagram, tiktok, youtube } = req.body ?? {};
   const cfg = {
     instagram: normalizeUrl(instagram),
@@ -181,7 +181,7 @@ function safeImageUrl(input: unknown): string {
 }
 
 // Partner-Logos speichern. NUR Super-Admin (nicht der Spiel-Admin).
-const savePartners = requireSuperadmin(async (req: VercelRequest, res: VercelResponse) => {
+const savePartners = requirePermission('homepage')(async (req: VercelRequest, res: VercelResponse) => {
   const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];
   const items: Partner[] = rawItems
     .map((p: unknown, i: number) => {
@@ -218,7 +218,7 @@ const savePartners = requireSuperadmin(async (req: VercelRequest, res: VercelRes
 // Team-/Trikot-Sponsoren speichern. NUR Super-Admin (wie die Klub-/Kaderpflege).
 // Body: { [teamId]: TeamSponsor[] }. Sponsoren ohne Logo werden verworfen,
 // leere Team-Listen fallen weg.
-const saveTeamSponsors = requireSuperadmin(async (req: VercelRequest, res: VercelResponse) => {
+const saveTeamSponsors = requirePermission('clubs')(async (req: VercelRequest, res: VercelResponse) => {
   const raw = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? (req.body as Record<string, unknown>) : {};
   const out: Record<string, TeamSponsor[]> = {};
   for (const [teamId, list] of Object.entries(raw)) {
@@ -247,7 +247,7 @@ const saveTeamSponsors = requireSuperadmin(async (req: VercelRequest, res: Verce
 });
 
 // Hero-Hintergrundbilder speichern (nur http(s)-URLs; leere Felder = Standard).
-const saveHero = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const saveHero = requirePermission('homepage')(async (req: VercelRequest, res: VercelResponse) => {
   const { match, pom, table } = req.body ?? {};
   const pick = (v: unknown) => {
     const url = normalizeUrl(v);
@@ -264,7 +264,7 @@ const saveHero = requireStaff(async (req: VercelRequest, res: VercelResponse) =>
 });
 
 // Countdown-Konfiguration speichern.
-const saveCountdown = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const saveCountdown = requirePermission('homepage')(async (req: VercelRequest, res: VercelResponse) => {
   const b = req.body ?? {};
   const target = typeof b.target === 'string' && b.target.trim() ? b.target.trim().slice(0, 40) : DEFAULT_COUNTDOWN.target;
   const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -305,7 +305,7 @@ function normalizeNews(body: unknown) {
   return { active: b.active !== false, items };
 }
 
-const saveNews = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const saveNews = requirePermission('homepage')(async (req: VercelRequest, res: VercelResponse) => {
   const cfg = normalizeNews(req.body);
   await sql`
     INSERT INTO settings (key, value) VALUES ('news', ${JSON.stringify(cfg)}::jsonb)
@@ -432,7 +432,7 @@ function toArchive(stored: unknown) {
   return { activeId: s.active ? single.id : null, previewId: null, events: [single] };
 }
 
-const saveEvent = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const saveEvent = requirePermission('channels', 'tracking')(async (req: VercelRequest, res: VercelResponse) => {
   const archive = normalizeArchive(req.body);
   await sql`
     INSERT INTO settings (key, value) VALUES ('event', ${JSON.stringify(archive)}::jsonb)
@@ -651,7 +651,7 @@ function normalizeHighlights(body: unknown) {
   return { items, albums: [] as HighlightAlbum[] };
 }
 
-const saveHighlights = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const saveHighlights = requirePermission('highlights')(async (req: VercelRequest, res: VercelResponse) => {
   const cfg = normalizeHighlights(req.body);
   await sql`
     INSERT INTO settings (key, value) VALUES ('highlights', ${JSON.stringify(cfg)}::jsonb)
@@ -967,7 +967,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Auswertung nur für Super-Admin und Spiel-Admin (interne Analytics).
         const session = await getSession(req);
         if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
-        if (session.role !== 'superadmin' && session.role !== 'match_admin') {
+        if (!hasPermission(session, 'homepage')) {
           return res.status(403).json({ error: 'Keine Berechtigung für diese Auswertung.' });
         }
         const rows = await sql`SELECT value FROM settings WHERE key = 'sponsor-clicks'`;

@@ -5,7 +5,7 @@
 import { createHash } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql, getMatches, getCurrentSeason } from './db.js';
-import { getSession } from './auth.js';
+import { getSession, hasPermission } from './auth.js';
 import {
   checkCode, clientIp, codeBlock, isDisposableEmail, isEmail, issueCode,
   normEmail, sendBrandedMail, tooManyAttempts, verifyTurnstile,
@@ -420,7 +420,7 @@ export async function submitBonus(req: VercelRequest, res: VercelResponse) {
 export async function adminSetBonusSolution(req: VercelRequest, res: VercelResponse) {
   const session = await getSession(req);
   if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
-  if (session.role !== 'superadmin') return res.status(403).json({ error: 'Keine Berechtigung.' });
+  if (!hasPermission(session, 'signups')) return res.status(403).json({ error: 'Keine Berechtigung.' });
   const b = (req.body ?? {}) as Record<string, unknown>;
   const raw = (b.answers && typeof b.answers === 'object' ? b.answers : {}) as Record<string, unknown>;
   const answers: Record<string, string> = {};
@@ -438,7 +438,7 @@ export async function adminSetBonusSolution(req: VercelRequest, res: VercelRespo
 export async function adminListTippUsers(req: VercelRequest, res: VercelResponse) {
   const session = await getSession(req);
   if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
-  if (session.role !== 'superadmin') return res.status(403).json({ error: 'Keine Berechtigung.' });
+  if (!hasPermission(session, 'signups')) return res.status(403).json({ error: 'Keine Berechtigung.' });
   await ensureTippUsers();
   const rows = await sql`
     SELECT email, voter_id AS "voterId", first_name AS "firstName", last_name AS "lastName",

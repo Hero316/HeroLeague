@@ -782,15 +782,14 @@ export default function AdminPanel({
     }
   };
 
-  // Sponsoren-Klick-Statistik – sichtbar für Super-Admin UND Spiel-Admin
-  // (canManagePom = isSuperadmin || isMatchAdmin).
+  // Sponsoren-Klick-Statistik – gehört zum Bereich „Startseite" (Partner).
   const [sponsorClicks, setSponsorClicks] = useState<SponsorClicksMap>({});
   const loadSponsorClicks = React.useCallback(() => {
-    if (!canManagePom) return;
+    if (!canEditHomepage) return;
     fetchSponsorClicks()
       .then((data) => setSponsorClicks(data && typeof data === 'object' ? data : {}))
       .catch(() => { /* noch keine Klicks / kein Zugriff */ });
-  }, [canManagePom]);
+  }, [canEditHomepage]);
   useEffect(() => { loadSponsorClicks(); }, [loadSponsorClicks]);
 
   // Klick-Zeilen für die Übersicht: bekannte Partner (auch mit 0 Klicks) +
@@ -826,7 +825,7 @@ export default function AdminPanel({
   // Partner werden für die Partner-Sektion (Super-Admin) UND für die
   // Sponsor-Auswahl beim „Spieler des Spieltages" (auch Spiel-Admins) gebraucht.
   useEffect(() => {
-    if (!isSuperadmin && !canManagePom) return;
+    if (!canEditHomepage && !canManagePom) return;
     apiFetch<{ items: Partner[] }>('/api/twitch?resource=partners')
       .then((data) => {
         const items = (Array.isArray(data.items) ? data.items : []).map((p) => ({
@@ -839,7 +838,7 @@ export default function AdminPanel({
       .catch(() => {
         /* noch nicht konfiguriert */
       });
-  }, [isSuperadmin, canManagePom]);
+  }, [canEditHomepage, canManagePom]);
 
   const addPartner = () => {
     setPartners((prev) => [
@@ -1512,23 +1511,29 @@ export default function AdminPanel({
 
   // Manager-E-Mails einmal laden (privat – nur fürs Backend).
   useEffect(() => {
-    if (!isSuperadmin) return;
+    if (!canManageClubs) return;
     fetchManagers()
       .then((m) => setManagersMap(m && typeof m === 'object' ? m : {}))
       .catch(() => {
         /* noch keine hinterlegt */
       });
-  }, [isSuperadmin]);
+  }, [canManageClubs]);
 
-  // Team-Sponsoren einmal laden (nur Super-Admin sieht die Klub-Sektion).
+  // Team-Sponsoren einmal laden (wer „Klubs & Kader" darf). Erst NACH dem Laden
+  // wird beim Speichern die ganze Map zurückgeschrieben – sonst könnte ein
+  // fehlgeschlagener Abruf die Sponsoren der anderen Teams löschen.
+  const teamSponsorsLoaded = React.useRef(false);
   useEffect(() => {
-    if (!isSuperadmin) return;
+    if (!canManageClubs) return;
     apiFetch<TeamSponsorsMap>('/api/twitch?resource=team-sponsors')
-      .then((data) => setTeamSponsorsMap(data && typeof data === 'object' ? data : {}))
+      .then((data) => {
+        setTeamSponsorsMap(data && typeof data === 'object' ? data : {});
+        teamSponsorsLoaded.current = true;
+      })
       .catch(() => {
         /* noch nicht konfiguriert */
       });
-  }, [isSuperadmin]);
+  }, [canManageClubs]);
 
   const addTeamSponsor = () => {
     setEditTeamSponsors((prev) => [...prev, { id: `s-${Date.now()}`, name: '', logoUrl: '', linkUrl: '', bg: '#ffffff' }]);
@@ -1570,7 +1575,7 @@ export default function AdminPanel({
       const nextMap: TeamSponsorsMap = { ...teamSponsorsMap };
       if (cleanedSponsors.length) nextMap[selectedEditTeamId] = cleanedSponsors;
       else delete nextMap[selectedEditTeamId];
-      try {
+      if (teamSponsorsLoaded.current) try {
         const saved = await apiFetch<TeamSponsorsMap>('/api/twitch?resource=team-sponsors', {
           method: 'POST',
           body: JSON.stringify(nextMap),
@@ -1701,6 +1706,7 @@ export default function AdminPanel({
       {canManageClubs && (
       <AccordionSection
         id="kader-meldung"
+        show={canManageClubs}
         category="spiele"
         title="Kader-Meldung der Manager"
         subtitle="hero-league.de/kader freigeben / schließen · wer hat schon gemeldet?"
@@ -1786,6 +1792,7 @@ export default function AdminPanel({
       {canManageClubs && (
       <AccordionSection
         id="clubs"
+        show={canManageClubs}
         category="spiele"
         title="Klubs registrieren & bearbeiten"
         subtitle="Neue Vereine anlegen · Kader, Logos, Farben & Wappen pflegen"
@@ -2273,6 +2280,7 @@ export default function AdminPanel({
                 </div>
 
                 <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-3 mt-2">
+                  {isSuperadmin ? (
                   <button
                     type="button"
                     onClick={handleDeleteTeam}
@@ -2281,6 +2289,9 @@ export default function AdminPanel({
                     <Trash2 className="w-4 h-4" />
                     <span>Verein löschen</span>
                   </button>
+                  ) : (
+                    <span />
+                  )}
 
                   <div className="flex items-center gap-3">
                     {editSuccess && (
@@ -2315,7 +2326,7 @@ export default function AdminPanel({
       <AccordionSection
         id="pom"
         show={canManagePom}
-        category="startseite"
+        category="auszeichnungen"
         title="Spieler & Torwart des Spieltages"
         subtitle="Automatisch aus dem Tracking (beste Note), änderbar · Sponsor & Fotos"
         icon={<Award className="w-5 h-5" />}
@@ -3236,7 +3247,7 @@ export default function AdminPanel({
       )}
 
       {/* Sponsoren-Klicks – Auswertung (Super-Admin + Spiel-Admin) */}
-      {canManagePom && (
+      {canEditHomepage && (
         <AccordionSection
           id="sponsor-clicks"
           category="startseite"

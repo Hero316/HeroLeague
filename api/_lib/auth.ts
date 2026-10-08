@@ -22,10 +22,93 @@ export function normalizeStatus(value: unknown): UserStatus {
   return KNOWN_STATUS.includes(value as UserStatus) ? (value as UserStatus) : 'online';
 }
 
-// Aktuell gibt es keine frei kombinierbaren Zusatzrechte mehr (Tickets verwalten
-// hängt allein an der Super-Admin-Rolle). Immer leer normalisieren.
-export function normalizePermissions(_value: unknown): AdminPermission[] {
-  return [];
+// --- Backoffice-Bereiche (individuelle Rechte) ------------------------------
+// Ein Super-Admin kann pro Benutzer einzeln anhaken, welche Bereiche er sieht
+// und bearbeiten darf. MUSS mit ADMIN_AREAS in src/types.ts übereinstimmen.
+// Benutzerverwaltung + Saisons bleiben bewusst IMMER beim Super-Admin.
+export const AREA_IDS: AdminPermission[] = [
+  'tracking',
+  'results',
+  'clubs',
+  'awards',
+  'highlights',
+  'homepage',
+  'channels',
+  'signups',
+  'tickets',
+];
+
+// Standard-Rechte je Rolle, solange NICHT individuell eingestellt wurde.
+const ROLE_DEFAULTS: Record<UserRole, AdminPermission[]> = {
+  superadmin: AREA_IDS,
+  match_admin: ['tracking', 'results', 'clubs', 'awards', 'highlights'],
+  referee: [],
+  team_member: [],
+};
+
+// Nur bekannte Bereiche, ohne Doppelte.
+export function normalizePermissions(value: unknown): AdminPermission[] {
+  if (!Array.isArray(value)) return [];
+  return AREA_IDS.filter((id) => value.includes(id));
+}
+
+// Was darf diese Person WIRKLICH? Super-Admin: alles. Schiedsrichter: nur der
+// Schiedsrichtermodus (über seine Rolle). Sonst: individuell angehakte Bereiche,
+// und wenn nichts angehakt ist, die Standard-Rechte der Rolle.
+export function effectivePermissions(role: UserRole, permissions: unknown): AdminPermission[] {
+  if (role === 'superadmin') return AREA_IDS;
+  if (role === 'referee') return [];
+  const own = normalizePermissions(permissions);
+  return own.length > 0 ? own : ROLE_DEFAULTS[role];
+}
+
+export function hasPermission(session: SessionPayload | null, ...perms: AdminPermission[]): boolean {
+  if (!session) return false;
+  const eff = effectivePermissions(session.role, session.permissions);
+  return perms.some((p) => eff.includes(p));
+}
+
+// Rolle normalisieren. WICHTIG: Jede NICHT ausdrücklich bekannte Rolle fällt
+// bewusst auf 'superadmin' zurück (Alt-Sessions mit role 'admin'). Neue,
+// eingeschränkte Rollen MÜSSEN hier explizit stehen – sonst würde ein solches
+// Token fälschlich zu Super-Admin-Rechten eskalieren.
+function normalizeRole(raw: unknown): UserRole {
+  return raw === 'match_admin'
+    ? 'match_admin'
+    : raw === 'referee'
+      ? 'referee'
+      : // Alt-Rolle „ticket_manager" gibt es nicht mehr → wie Team-Mitglied behandeln.
+        raw === 'team_member' || raw === 'ticket_manager'
+        ? 'team_member'
+        : 'superadmin';
+}
+
+// Rolle/Rechte/aktiv FRISCH aus der DB (kurzer Cache je Instanz), damit eine
+// Änderung in der Benutzerverwaltung sofort greift – ohne neu einloggen.
+// Gelöschte oder deaktivierte Zugänge verlieren damit auch sofort den Zugriff.
+const USER_TTL_MS = 20_000;
+type FreshUser = { role: UserRole; permissions: AdminPermission[]; active: boolean } | null;
+const userCache = new Map<string, { at: number; user: FreshUser }>();
+
+async function freshUser(userId: string): Promise<FreshUser | undefined> {
+  const hit = userCache.get(userId);
+  if (hit && Date.now() - hit.at < USER_TTL_MS) return hit.user;
+  try {
+    const rows = await sql`SELECT to_jsonb(u) AS j FROM users u WHERE id = ${userId} LIMIT 1`;
+    const j = rows[0]?.j as Record<string, unknown> | undefined;
+    const user: FreshUser = j
+      ? { role: normalizeRole(j.role), permissions: normalizePermissions(j.permissions), active: j.is_active !== false }
+      : null;
+    userCache.set(userId, { at: Date.now(), user });
+    return user;
+  } catch {
+    return undefined; // DB nicht erreichbar → Token-Werte behalten
+  }
+}
+
+// Nach einer Änderung in der Benutzerverwaltung: Cache dieser Instanz leeren.
+export function forgetUser(userId: string): void {
+  userCache.delete(userId);
 }
 
 function getSecret(): Uint8Array {
@@ -149,25 +232,23 @@ export async function getSession(req: VercelRequest): Promise<SessionPayload | n
     const validFrom = await getSessionsValidFrom();
     const iat = typeof payload.iat === 'number' ? payload.iat : 0;
     if (validFrom > 0 && iat < validFrom) return null;
-    // Rolle explizit normalisieren. WICHTIG: Jede NICHT ausdrücklich bekannte
-    // Rolle fällt bewusst auf 'superadmin' zurück (Alt-Sessions mit role 'admin').
-    // Neue, eingeschränkte Rollen MÜSSEN hier explizit stehen – sonst würde ein
-    // solches Token fälschlich zu Super-Admin-Rechten eskalieren.
-    const role: UserRole =
-      payload.role === 'match_admin'
-        ? 'match_admin'
-        : payload.role === 'referee'
-          ? 'referee'
-          : // Alt-Rolle „ticket_manager" gibt es nicht mehr → wie Team-Mitglied behandeln.
-            payload.role === 'team_member' || payload.role === 'ticket_manager'
-            ? 'team_member'
-            : 'superadmin';
+    let role = normalizeRole(payload.role);
+    let permissions = normalizePermissions(payload.permissions);
+    const userId = typeof payload.userId === 'string' ? payload.userId : 'bootstrap';
+    if (userId !== 'bootstrap') {
+      const fresh = await freshUser(userId);
+      if (fresh === null || (fresh && !fresh.active)) return null; // gelöscht / deaktiviert
+      if (fresh) {
+        role = fresh.role;
+        permissions = fresh.permissions;
+      }
+    }
     return {
-      userId: typeof payload.userId === 'string' ? payload.userId : 'bootstrap',
+      userId,
       email: typeof payload.email === 'string' ? payload.email : '',
       name: typeof payload.name === 'string' ? payload.name : '',
       role,
-      permissions: normalizePermissions(payload.permissions),
+      permissions,
       avatarUrl: typeof payload.avatarUrl === 'string' ? payload.avatarUrl : '',
       status: normalizeStatus(payload.status),
     };
@@ -205,13 +286,28 @@ export function requireRoles(roles: UserRole[]): (handler: Handler) => Handler {
 // Wrapper: nur Super-Admins (Vereine, Saisons, Benutzerverwaltung)
 export const requireSuperadmin = requireRoles(['superadmin']);
 
-// Wrapper: Redaktionelle Pflege (Ticker, Highlights, Hero, Event, Uploads …).
-// Super-Admin und Spiel-Admin – aber NICHT der Schiedsrichter.
-export const requireStaff = requireRoles(['superadmin', 'match_admin']);
+// Wrapper: nur wer (mind.) einen der Bereiche freigegeben hat. Super-Admin immer.
+export function requirePermission(...perms: AdminPermission[]): (handler: Handler) => Handler {
+  return (handler) => async (req, res) => {
+    const session = await getSession(req);
+    if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+    if (!hasPermission(session, ...perms)) return res.status(403).json({ error: 'Keine Berechtigung für diese Aktion.' });
+    return handler(req, res);
+  };
+}
 
-// Wrapper: Spiele + Abend-Aufstellung schreiben. Zusätzlich zum Staff darf hier
-// auch der Schiedsrichter (referee) ran – das ist sein einziger Schreibzugriff.
-export const requireMatchWrite = requireRoles(['superadmin', 'match_admin', 'referee']);
+// Wrapper: Spiele + Abend-Aufstellung schreiben. Wer Ergebnisse oder das
+// Tracking pflegt – und der Schiedsrichter (sein einziger Schreibzugriff).
+export function requireMatchWrite(handler: Handler): Handler {
+  return async (req, res) => {
+    const session = await getSession(req);
+    if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+    if (session.role !== 'referee' && !hasPermission(session, 'results', 'tracking')) {
+      return res.status(403).json({ error: 'Keine Berechtigung für diese Aktion.' });
+    }
+    return handler(req, res);
+  };
+}
 
 // Wrapper: Tickets verwalten (Status setzen, zuweisen, Priorität ändern,
 // löschen). Der Super-Admin darf immer, der Ticket-Manager ist die spezialisierte

@@ -295,11 +295,31 @@ export interface EventArchive {
 // Tickets VERWALTEN dürfen ausschließlich Super-Admins (keine eigene Rolle mehr).
 export type UserRole = 'superadmin' | 'match_admin' | 'referee' | 'team_member';
 
-// Zusätzliche, frei kombinierbare Rechte (unabhängig von der Basis-Rolle).
-// Aktuell keine – bewusst leer gelassen (erweiterbar). Tickets verwalten hängt
-// allein an der Super-Admin-Rolle, daher kein „Tickets bearbeiten"-Recht mehr.
-export type AdminPermission = never;
-export const ALL_ADMIN_PERMISSIONS: { id: AdminPermission; label: string }[] = [];
+// Backoffice-Bereiche, die ein Super-Admin pro Benutzer einzeln freigeben kann
+// („Rechte individuell einstellen"). Ist nichts angehakt, gelten die Standard-
+// Rechte der Rolle. Benutzerverwaltung + Saisons bleiben IMMER Super-Admin.
+// MUSS mit AREA_IDS in api/_lib/auth.ts übereinstimmen (Server prüft dasselbe).
+export type AdminPermission =
+  | 'tracking'
+  | 'results'
+  | 'clubs'
+  | 'awards'
+  | 'highlights'
+  | 'homepage'
+  | 'channels'
+  | 'signups'
+  | 'tickets';
+export const ALL_ADMIN_PERMISSIONS: { id: AdminPermission; label: string; hint: string }[] = [
+  { id: 'tracking', label: 'Statistics Center (Tracking)', hint: 'Spiele tracken, Status setzen, Spieler zum Kader hinzufügen' },
+  { id: 'results', label: 'Ergebnisse & Spielplan', hint: 'Ergebnisse eintragen, Spiele LIVE stellen, Schiedsrichtermodus' },
+  { id: 'clubs', label: 'Klubs & Kader', hint: 'Kader, Kapitän, Torwart, Logos · Kader-Meldung der Manager' },
+  { id: 'awards', label: 'Auszeichnungen', hint: 'Spieler/Torwart des Spieltages · interne HERO-ONE-Rangliste' },
+  { id: 'highlights', label: 'Highlights', hint: 'Fotos & Clips auf der Website bearbeiten' },
+  { id: 'homepage', label: 'Startseite', hint: 'Hero-Bilder, Countdown, News-Laufband, Partner & Sponsoren-Klicks' },
+  { id: 'channels', label: 'Kanäle & Event', hint: 'Twitch, Social Media, OBS, Live-Streams, Testspiel/Event' },
+  { id: 'signups', label: 'Anmeldungen & Tippspiel', hint: 'Team-/Spieler-Anmeldungen, Tippspiel-Teilnehmer & Lösungen' },
+  { id: 'tickets', label: 'Zuschauer-Tickets', hint: 'Veranstaltungen, Plätze, Einlass & Spenden-Popup' },
+];
 
 // Präsenz-Status (Slack-artig) mit Emoji + Farbe. Erweiterbar.
 export type UserStatus = 'online' | 'away' | 'busy' | 'vacation' | 'out';

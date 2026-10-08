@@ -1,7 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown, X, Smartphone, Search, LayoutDashboard, Star, Trophy, Home, Radio, KeyRound } from 'lucide-react';
+import { ChevronDown, X, Smartphone, Search, LayoutDashboard, Star, Trophy, Home, Radio, KeyRound, Award, ClipboardList, Ticket } from 'lucide-react';
 import { ActiveTab, Partner, PartnersConfig, Team } from '../types';
 import { apiFetch } from '../lib/api';
 import { trackSponsorClick } from '../lib/sponsors';
@@ -1026,12 +1026,15 @@ const CAT_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   [DASH_ID]: LayoutDashboard,
   team: Star,
   spiele: Trophy,
+  auszeichnungen: Award,
   startseite: Home,
+  anmeldungen: ClipboardList,
+  tickets: Ticket,
   kanaele: Radio,
   zugaenge: KeyRound,
 };
 // Kurzlabel fürs Dock: „★ Intern“→„Intern“, „Spiele & Liga“→„Spiele“.
-const shortCatLabel = (label: string) => label.replace(/^★\s*/, '').split(' & ')[0];
+const shortCatLabel = (label: string) => label.replace(/^★\s*/, '').replace(/^Zuschauer-/, '').split(' & ')[0];
 
 export function AccordionGroup({
   children,

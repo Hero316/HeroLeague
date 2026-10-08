@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql } from '../_lib/db.js';
-import { requireMatchWrite, requireStaff } from '../_lib/auth.js';
+import { requireMatchWrite, requirePermission } from '../_lib/auth.js';
 import {
   badRequest,
   isAbsenteesArray,
@@ -182,7 +182,7 @@ const updateMatch = requireMatchWrite(async (req: VercelRequest, res: VercelResp
   return res.json(match);
 });
 
-const deleteMatch = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const deleteMatch = requirePermission('results')(async (req: VercelRequest, res: VercelResponse) => {
   const id = String(req.query.id);
   const rows = await sql`DELETE FROM matches WHERE id = ${id} RETURNING id`;
   if (rows.length === 0) return res.status(404).json({ error: 'Spiel nicht gefunden.' });

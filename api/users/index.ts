@@ -27,7 +27,7 @@ const createUser = requireSuperadmin(async (req: VercelRequest, res: VercelRespo
   const existing = await sql`SELECT id FROM users WHERE email = ${normalized}`;
   if (existing.length > 0) return badRequest(res, 'Diese E-Mail-Adresse ist bereits vergeben.');
 
-  const permissions = normalizePermissions(req.body?.permissions);
+  const permissions = role === 'match_admin' || role === 'team_member' ? normalizePermissions(req.body?.permissions) : [];
   const id = `u-${Date.now()}`;
   await sql`
     INSERT INTO users (id, email, name, role, permissions, is_active)

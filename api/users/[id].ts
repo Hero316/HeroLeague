@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getSession, requireSuperadmin, normalizePermissions } from '../_lib/auth.js';
+import { getSession, requireSuperadmin, normalizePermissions, forgetUser } from '../_lib/auth.js';
 import { sql } from '../_lib/db.js';
 import { badRequest } from '../_lib/validate.js';
 import { ensureSchema } from '../_lib/ensure.js';
@@ -44,14 +44,21 @@ const updateUser = requireSuperadmin(async (req: VercelRequest, res: VercelRespo
   const nextName = name !== undefined ? name.trim() : user.name;
   const nextRole = role !== undefined ? role : user.role;
   const nextActive = isActive !== undefined ? isActive : user.isActive;
+  // Individuelle Bereiche nur für Spiel-Admin/Team-Mitglied (Super-Admin darf eh
+  // alles, Schiedsrichter nur den Schiedsrichtermodus).
   const nextPermissions =
-    permissions !== undefined ? normalizePermissions(permissions) : normalizePermissions(user.permissions);
+    nextRole === 'match_admin' || nextRole === 'team_member'
+      ? permissions !== undefined
+        ? normalizePermissions(permissions)
+        : normalizePermissions(user.permissions)
+      : [];
 
   await sql`
     UPDATE users SET name = ${nextName}, role = ${nextRole},
       permissions = ${JSON.stringify(nextPermissions)}::jsonb, is_active = ${nextActive}
     WHERE id = ${id}
   `;
+  forgetUser(id);
   return res.json({ id, email: user.email, name: nextName, role: nextRole, permissions: nextPermissions, isActive: nextActive });
 });
 
@@ -69,6 +76,7 @@ const deleteUser = requireSuperadmin(async (req: VercelRequest, res: VercelRespo
   }
 
   await sql`DELETE FROM users WHERE id = ${id}`;
+  forgetUser(id);
   return res.json({ ok: true });
 });
 

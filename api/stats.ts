@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql } from './_lib/db.js';
-import { requireStaff, getSession } from './_lib/auth.js';
+import { requirePermission, getSession } from './_lib/auth.js';
 import { badRequest, isNonEmptyString } from './_lib/validate.js';
 import { sheetInfo } from './_lib/gsheets.js';
 import { exportLeagueDay, exportScoringConfig } from './_lib/sheetExport.js';
@@ -89,7 +89,7 @@ async function readLiveDays(): Promise<string[]> {
 
 // --- Schreib-Handler (Staff) -----------------------------------------------
 
-const saveScoring = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const saveScoring = requirePermission('tracking')(async (req: VercelRequest, res: VercelResponse) => {
   const body = req.body;
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return badRequest(res, 'Ungültige Einstellungen.');
@@ -101,7 +101,7 @@ const saveScoring = requireStaff(async (req: VercelRequest, res: VercelResponse)
   return res.json({ ok: true });
 });
 
-const saveTally = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const saveTally = requirePermission('tracking')(async (req: VercelRequest, res: VercelResponse) => {
   const b = (req.body ?? {}) as Partial<StatRow>;
   if (!isNonEmptyString(b.dayKey) || !isNonEmptyString(b.matchId)) {
     return badRequest(res, 'dayKey und matchId sind Pflicht.');
@@ -168,7 +168,7 @@ function addCounts(a: Record<string, number>, b: Record<string, number>): Record
 //  • op='swap'   → Zähler von `from` und `to` vertauschen (2 Spieler verwechselt)
 //  • op='delete' → `from` komplett entfernen (versehentlich angelegter Spieler)
 // Jede Zeile bleibt an ihre (matchId, teamId, Name); Rollen bleiben am Namen.
-const tallyOp = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const tallyOp = requirePermission('tracking')(async (req: VercelRequest, res: VercelResponse) => {
   const b = (req.body ?? {}) as {
     dayKey?: unknown;
     matchIds?: unknown;
@@ -220,7 +220,7 @@ const tallyOp = requireStaff(async (req: VercelRequest, res: VercelResponse) => 
 });
 
 // Verbindungstest zum Google Sheet (schreibt nichts – liest nur Titel/Blätter).
-const testSheet = requireStaff(async (_req: VercelRequest, res: VercelResponse) => {
+const testSheet = requirePermission('tracking')(async (_req: VercelRequest, res: VercelResponse) => {
   try {
     const info = await sheetInfo();
     return res.json({ ok: true, ...info });
@@ -230,7 +230,7 @@ const testSheet = requireStaff(async (_req: VercelRequest, res: VercelResponse) 
 });
 
 // Einen Liga-Spieltag aus der DB in das Google Sheet kopieren (manuell, per Knopf).
-const exportDay = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const exportDay = requirePermission('tracking')(async (req: VercelRequest, res: VercelResponse) => {
   const dayKey = (req.body ?? {}).dayKey;
   if (!isNonEmptyString(dayKey)) return badRequest(res, 'dayKey fehlt.');
   if (!dayKey.startsWith('s:')) return res.status(400).json({ error: 'Excel-Kopie aktuell nur für Liga-Spieltage.' });
@@ -258,7 +258,7 @@ const exportDay = requireStaff(async (req: VercelRequest, res: VercelResponse) =
 
 // Score-Einstellungen (Punkte/Regler/Minimums) aus dem Backend ins Google Sheet
 // kopieren (manuell, per Knopf). Nutzt die im Body übergebene Konfiguration.
-const exportScoring = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const exportScoring = requirePermission('tracking')(async (req: VercelRequest, res: VercelResponse) => {
   const cfg = req.body;
   if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) {
     return badRequest(res, 'Ungültige Einstellungen.');
@@ -271,7 +271,7 @@ const exportScoring = requireStaff(async (req: VercelRequest, res: VercelRespons
   }
 });
 
-const savePublish = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const savePublish = requirePermission('tracking')(async (req: VercelRequest, res: VercelResponse) => {
   const b = (req.body ?? {}) as { dayKey?: unknown; matchId?: unknown; live?: unknown };
   // Einzelnes Spiel live schalten (key `match:<id>`) ODER den ganzen Tag/das Event (dayKey).
   const key = isNonEmptyString(b.matchId) ? `match:${b.matchId}` : isNonEmptyString(b.dayKey) ? b.dayKey : '';
@@ -293,7 +293,7 @@ const savePublish = requireStaff(async (req: VercelRequest, res: VercelResponse)
 //  • Liga: Spiel-IDs sind eindeutig → alle Zeilen dieser Spiele, egal unter
 //    welchem Spieltag-Schlüssel sie liegen (räumt auch Reste verschobener Spiele auf).
 //  • Testspiel: Spiel-IDs wiederholen sich zwischen Events → nur unter DIESEM Schlüssel.
-const resetTally = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const resetTally = requirePermission('tracking')(async (req: VercelRequest, res: VercelResponse) => {
   const b = (req.body ?? {}) as { dayKey?: unknown; matchIds?: unknown; wholeDay?: unknown };
   const dayKey = isNonEmptyString(b.dayKey) ? b.dayKey : '';
   const matchIds = Array.isArray(b.matchIds) ? b.matchIds.filter(isNonEmptyString) : [];
@@ -336,7 +336,7 @@ const resetTally = requireStaff(async (req: VercelRequest, res: VercelResponse) 
 // = { "<dayKey>|<matchId>": { status, by, at } }. Atomar per jsonb-Merge.
 type TrackStatus = 'tracking' | 'done';
 const MIN_DONE_ACTIONS = 10; // gleich wie src/lib/stats.ts
-const saveTrackStatus = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const saveTrackStatus = requirePermission('tracking')(async (req: VercelRequest, res: VercelResponse) => {
   const b = (req.body ?? {}) as { dayKey?: unknown; matchId?: unknown; status?: unknown };
   if (!isNonEmptyString(b.dayKey) || !isNonEmptyString(b.matchId)) return badRequest(res, 'dayKey/matchId fehlt.');
   const key = `${b.dayKey}|${b.matchId}`;
@@ -368,7 +368,7 @@ const saveTrackStatus = requireStaff(async (req: VercelRequest, res: VercelRespo
 
 // --- Tracking-Regeln (saisonweit) & Voice-Tracking -------------------------
 
-const saveTrackingRules = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const saveTrackingRules = requirePermission('tracking')(async (req: VercelRequest, res: VercelResponse) => {
   const b = (req.body ?? {}) as { text?: unknown };
   const text = typeof b.text === 'string' ? b.text.slice(0, 4000) : '';
   await sql`
@@ -404,7 +404,7 @@ function sanitizeContext(raw: unknown): VoiceContext {
 
 const MAX_AUDIO_BYTES = 40 * 1024 * 1024; // Sicherheitsgrenze für das Server-seitige Nachladen
 
-const voiceTracking = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+const voiceTracking = requirePermission('tracking')(async (req: VercelRequest, res: VercelResponse) => {
   if (!isGeminiConfigured()) {
     return res.status(400).json({ error: 'Gemini ist nicht eingerichtet. Bitte GEMINI_API_KEY in Vercel hinterlegen.' });
   }

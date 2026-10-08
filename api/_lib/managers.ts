@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql, getTeams } from './db.js';
-import { requireStaff, createManagerToken, verifyManagerToken } from './auth.js';
+import { requirePermission, createManagerToken, verifyManagerToken } from './auth.js';
 import { badRequest } from './validate.js';
 import { checkCode, clientIp, codeBlock, isEmail, issueCode, normEmail, sendBrandedMail, tooManyAttempts } from './publicforms.js';
 import { applyRosterToMatches, type RosterTeamIn } from './roster.js';
@@ -70,11 +70,11 @@ async function teamOfEmail(email: string): Promise<string | null> {
 }
 
 // --- Admin: Manager-E-Mails je Team ------------------------------------------
-export const adminGetManagers = requireStaff(async (_req: VercelRequest, res: VercelResponse) => {
+export const adminGetManagers = requirePermission('clubs')(async (_req: VercelRequest, res: VercelResponse) => {
   return res.json(await getManagers());
 });
 
-export const adminSaveManagers = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+export const adminSaveManagers = requirePermission('clubs')(async (req: VercelRequest, res: VercelResponse) => {
   const b = (req.body ?? {}) as Record<string, unknown>;
   const teamId = typeof b.teamId === 'string' ? b.teamId.trim() : '';
   if (!teamId) return badRequest(res, 'Team fehlt.');
@@ -98,7 +98,7 @@ export const adminSaveManagers = requireStaff(async (req: VercelRequest, res: Ve
 });
 
 // --- Admin: Freigabe + Übersicht (wer hat gemeldet?) ---------------------------
-export const adminGetManagerConfig = requireStaff(async (_req: VercelRequest, res: VercelResponse) => {
+export const adminGetManagerConfig = requirePermission('clubs')(async (_req: VercelRequest, res: VercelResponse) => {
   const cfg = await getConfig();
   const seasonId = await currentSeasonId();
   // Vorschlag: nächster Spieltag mit noch geplanten Spielen.
@@ -129,7 +129,7 @@ export const adminGetManagerConfig = requireStaff(async (_req: VercelRequest, re
   });
 });
 
-export const adminSaveManagerConfig = requireStaff(async (req: VercelRequest, res: VercelResponse) => {
+export const adminSaveManagerConfig = requirePermission('clubs')(async (req: VercelRequest, res: VercelResponse) => {
   const b = (req.body ?? {}) as Record<string, unknown>;
   const seasonId = await currentSeasonId();
   const md = Number(b.matchday);
