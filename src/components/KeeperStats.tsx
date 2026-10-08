@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { motion } from 'motion/react';
 import { X, Hand } from 'lucide-react';
 import type { MatchPlayerStat, PlayerStat, ScoringConfig, Team } from '../types';
-import { keeperBoards, playerTotals, GOLDEN_GLOVE_EXPLAIN, type KeeperBoard } from '../lib/trackingAwards';
+import { keeperBoards, playerTotals, type KeeperBoard } from '../lib/trackingAwards';
 import StatTable, { sortStatRows, type StatTableRow } from './StatTable';
 import { DEFAULT_SCORING } from '../lib/scoring';
 import { useBackClose } from '../lib/backStack';
@@ -31,7 +31,7 @@ interface Props {
 }
 
 const RANK_COLOR = (i: number) =>
-  i === 0 ? 'text-hl-gold' : i === 1 ? 'text-[#C7D0DA]' : i === 2 ? 'text-[#E0A46B]' : 'text-hl-dim';
+  i === 0 ? 'text-hl-gold' : i === 1 ? 'text-[#C7D0DA]' : i === 2 ? 'text-[#E0A46B]' : 'text-hl-soft';
 
 export default function KeeperStats({ open, onClose, rows, teams, players, scoringConfig, onSelectTeam }: Props) {
   useBackClose(open, onClose);
@@ -117,13 +117,6 @@ export default function KeeperStats({ open, onClose, rows, teams, players, scori
                       preview: b.rows[0] ? `1. ${b.rows[0].playerName} · ${fmtBoard(b, b.rows[0].value)}${b.unit ? ` ${b.unit}` : ''}` : undefined,
                       content: (
                         <>
-                          {b.id === 'glove' && (
-                            <ul className="mb-2 px-2 sm:px-3 text-[11.5px] text-hl-mute font-sans space-y-0.5">
-                              {GOLDEN_GLOVE_EXPLAIN.map((l) => (
-                                <li key={l}>• {l}</li>
-                              ))}
-                            </ul>
-                          )}
                           <BoardRows board={b} crestFor={crestFor} teams={teams} onSelectTeam={onSelectTeam} />
                         </>
                       ),

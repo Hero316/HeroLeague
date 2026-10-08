@@ -93,7 +93,7 @@ export default function StatTable({
                 onClick={onSelect ? () => onSelect(r.teamId, r.playerName) : undefined}
                 className="w-full flex items-center gap-1.5 sm:gap-2 rounded-lg px-1.5 py-1.5 hover:bg-white/[.05] transition-colors cursor-pointer text-left min-w-0"
               >
-                <span className="w-5 shrink-0 text-center font-display font-black tabular-nums text-xs" style={{ color: i === 0 ? accent : undefined }}>
+                <span className="w-5 shrink-0 text-center font-display font-black tabular-nums text-xs text-hl-soft" style={{ color: i === 0 ? accent : undefined }}>
                   {i + 1}
                 </span>
                 <span className="flex-1 min-w-0 flex items-center gap-1.5">
@@ -111,7 +111,7 @@ export default function StatTable({
                   return (
                     <span
                       key={c.key}
-                      className={`shrink-0 w-[44px] sm:w-[84px] text-right tabular-nums ${on ? 'font-display font-black text-sm text-white' : 'font-mono text-[12px] text-hl-mute'}`}
+                      className={`shrink-0 w-[44px] sm:w-[84px] text-right tabular-nums ${on ? 'font-display font-black text-sm text-white' : 'font-mono text-[12px] text-hl-soft'}`}
                     >
                       {v == null ? '–' : c.fmt ? c.fmt(v) : v}
                     </span>

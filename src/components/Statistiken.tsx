@@ -254,18 +254,20 @@ export default function Statistiken({
         .map((p) => ({ teamId: p.teamId, playerName: p.playerName, values: make(p.total) }))
         .filter((r): r is StatTableRow => r.values !== null);
     const q = (a: number, b: number, min: number) => (b >= min && b > 0 ? a / b : null);
+    // „Wert" = erfolgreiche × Quote – Menge UND Erfolg zählen (ab Mindestanzahl).
+    const wert = (ok: number, all: number, min: number) => (all >= min && all > 0 ? Math.round(((ok * ok) / all) * 10) / 10 : null);
     const shotRows = table((t) => {
       const all = t.goal + t.shot_on + t.shot_miss + t.shot_blocked_off;
       const on = t.goal + t.shot_on;
-      return all > 0 ? { all, on, quote: q(on, all, SHOT_MIN) } : null;
+      return all > 0 ? { all, on, quote: q(on, all, SHOT_MIN), value: wert(on, all, SHOT_MIN) } : null;
     });
     const passRows = table((t) => {
       const all = t.pass_ok + t.pass_fail;
-      return all > 0 ? { all, ok: t.pass_ok, quote: q(t.pass_ok, all, PASS_MIN) } : null;
+      return all > 0 ? { all, ok: t.pass_ok, quote: q(t.pass_ok, all, PASS_MIN), value: wert(t.pass_ok, all, PASS_MIN) } : null;
     });
     const duelRows = table((t) => {
       const all = t.duel_won + t.duel_lost;
-      return all > 0 ? { all, won: t.duel_won, quote: q(t.duel_won, all, DUEL_MIN) } : null;
+      return all > 0 ? { all, won: t.duel_won, quote: q(t.duel_won, all, DUEL_MIN), value: wert(t.duel_won, all, DUEL_MIN) } : null;
     });
     const dribRows = table((t) => {
       const all = t.dribble_won + t.dribble_lost;
@@ -284,19 +286,19 @@ export default function Statistiken({
       note: string;
     }[] = [
       {
-        id: 'shots', title: 'Torschüsse', accent: '#F0559E', icon: <Target className="w-4 h-4" />, rows: shotRows, defaultSort: 'on',
-        cols: [{ key: 'all', label: 'Gesamt' }, { key: 'on', label: 'Aufs Tor' }, { key: 'quote', label: 'Quote', fmt: pctFmt }],
-        note: `Quote = Schüsse aufs Tor (inkl. Tore) ÷ alle Schüsse · ab ${SHOT_MIN} Schüssen`,
+        id: 'shots', title: 'Torschüsse', accent: '#F0559E', icon: <Target className="w-4 h-4" />, rows: shotRows, defaultSort: 'value',
+        cols: [{ key: 'all', label: 'Gesamt' }, { key: 'on', label: 'Aufs Tor' }, { key: 'quote', label: 'Quote', fmt: pctFmt }, { key: 'value', label: 'Wert', fmt: (v) => v.toFixed(1) }],
+        note: `Quote = Schüsse aufs Tor (inkl. Tore) ÷ alle Schüsse · Wert = aufs Tor × Quote · ab ${SHOT_MIN} Schüssen`,
       },
       {
-        id: 'pass', title: 'Pässe', accent: '#22DFC9', icon: <Send className="w-4 h-4" />, rows: passRows, defaultSort: 'quote',
-        cols: [{ key: 'all', label: 'Gesamt' }, { key: 'ok', label: 'Ange\u00ADkommen' }, { key: 'quote', label: 'Quote', fmt: pctFmt }],
-        note: `Quote = angekommene Pässe ÷ alle Pässe · ab ${PASS_MIN} Pässen`,
+        id: 'pass', title: 'Pässe', accent: '#22DFC9', icon: <Send className="w-4 h-4" />, rows: passRows, defaultSort: 'value',
+        cols: [{ key: 'all', label: 'Gesamt' }, { key: 'ok', label: 'Ange\u00ADkommen' }, { key: 'quote', label: 'Quote', fmt: pctFmt }, { key: 'value', label: 'Wert', fmt: (v) => v.toFixed(1) }],
+        note: `Quote = angekommene ÷ alle Pässe · Wert = angekommene × Quote · ab ${PASS_MIN} Pässen`,
       },
       {
-        id: 'duel', title: 'Zweikämpfe', accent: '#43E5A0', icon: <Swords className="w-4 h-4" />, rows: duelRows, defaultSort: 'quote',
-        cols: [{ key: 'all', label: 'Gesamt' }, { key: 'won', label: 'Gewonnen' }, { key: 'quote', label: 'Quote', fmt: pctFmt }],
-        note: `Quote = gewonnene ÷ alle Zweikämpfe · ab ${DUEL_MIN} Zweikämpfen`,
+        id: 'duel', title: 'Zweikämpfe', accent: '#43E5A0', icon: <Swords className="w-4 h-4" />, rows: duelRows, defaultSort: 'value',
+        cols: [{ key: 'all', label: 'Gesamt' }, { key: 'won', label: 'Gewonnen' }, { key: 'quote', label: 'Quote', fmt: pctFmt }, { key: 'value', label: 'Wert', fmt: (v) => v.toFixed(1) }],
+        note: `Quote = gewonnene ÷ alle Zweikämpfe · Wert = gewonnene × Quote · ab ${DUEL_MIN} Zweikämpfen`,
       },
       {
         id: 'drib', title: 'Beste Dribbler', accent: '#E9C46A', icon: <Zap className="w-4 h-4" />, rows: dribRows, defaultSort: 'value',
