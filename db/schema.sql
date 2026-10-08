@@ -465,6 +465,9 @@ CREATE INDEX IF NOT EXISTS idx_idea_comment_reactions_c ON idea_comment_reaction
 ALTER TABLE tasks   ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]';
 ALTER TABLE tickets ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]';
 ALTER TABLE ideas   ADD COLUMN IF NOT EXISTS links JSONB NOT NULL DEFAULT '[]';
+-- Termine/Aufgaben: Stichpunkt-Aufgaben (Checkliste mit Zuständigen) + Zu-/Absagen.
+ALTER TABLE tasks   ADD COLUMN IF NOT EXISTS checklist JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE tasks   ADD COLUMN IF NOT EXISTS rsvp JSONB NOT NULL DEFAULT '{}';
 
 -- ===========================================================================
 -- Statistics Center: Roh-Zähler je Spieler & Spiel (getracktes Rating-Fundament)

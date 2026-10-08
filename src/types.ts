@@ -504,6 +504,23 @@ export interface TaskComment {
 // Termin (Kalender-Eintrag) · Aufgabe (To-do mit Frist) · beides.
 export type TaskKind = 'termin' | 'aufgabe' | 'beides';
 
+// Stichpunkt-Aufgabe in einem Termin (Notizen-Checkliste): Text, erledigt und
+// zuständige Personen (mehrere möglich). Jede Zuteilung = eigene Push.
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+  assignees: string[]; // userIds
+}
+
+// Antwort eines Beteiligten auf einen Termin: zugesagt, abgesagt, kommt später.
+export type RsvpStatus = 'yes' | 'no' | 'late';
+export interface RsvpEntry {
+  status: RsvpStatus;
+  time?: string | null; // "HH:MM" bei „komme später"
+  at: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -517,6 +534,8 @@ export interface Task {
   status: TaskStatus;
   priority: TicketPriority; // gleiche Stufen wie Tickets (niedrig…dringend)
   links: LinkItem[]; // benannte Link-Tasten (z.B. Google-Drive-Ordner)
+  checklist?: ChecklistItem[]; // Stichpunkt-Aufgaben in den Notizen
+  rsvp?: Record<string, RsvpEntry>; // userId -> Zu-/Absage
   createdBy: string;
   createdByName: string;
   createdAt: string;

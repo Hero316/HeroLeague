@@ -1087,6 +1087,8 @@ async function fetchTasks(viewerId: string, where: string, params: unknown[]) {
            t.start_time AS "startTime", t.end_time AS "endTime",
            t.iso_week AS "isoWeek", t.status, t.priority,
            COALESCE(t.links, '[]'::jsonb) AS links,
+           COALESCE(t.checklist, '[]'::jsonb) AS checklist,
+           COALESCE(t.rsvp, '{}'::jsonb) AS rsvp,
            t.created_by AS "createdBy", t.created_by_name AS "createdByName",
            t.created_at AS "createdAt", t.updated_at AS "updatedAt",
            COALESCE(
@@ -1149,6 +1151,65 @@ function normalizeTime(v: unknown): string | null {
   return h >= 0 && h <= 23 && min >= 0 && min <= 59 ? `${m[1]}:${m[2]}` : null;
 }
 
+// --- Stichpunkt-Aufgaben (Checkliste im Termin) ---------------------------
+interface ChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+  assignees: string[];
+}
+
+function sanitizeChecklist(v: unknown, members: Map<string, AppUser>): ChecklistItem[] {
+  if (!Array.isArray(v)) return [];
+  const seen = new Set<string>();
+  const out: ChecklistItem[] = [];
+  for (const raw of v.slice(0, 60)) {
+    if (!raw || typeof raw !== 'object') continue;
+    const o = raw as Record<string, unknown>;
+    const id = typeof o.id === 'string' && /^[\w-]{1,40}$/.test(o.id) ? o.id : genId('ci');
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const assignees = Array.isArray(o.assignees)
+      ? [...new Set(o.assignees.filter((x): x is string => typeof x === 'string' && members.has(x)))].slice(0, 20)
+      : [];
+    out.push({ id, text: typeof o.text === 'string' ? o.text.slice(0, 300) : '', done: o.done === true, assignees });
+  }
+  return out;
+}
+
+// Neu zugeteilte Stichpunkt-Aufgaben melden (je Person & Punkt eine eigene
+// Push) und die Person automatisch zum Termin hinzufügen, damit sie ihn sieht
+// und den Verlauf mitbekommt.
+async function applyChecklistAssignments(
+  taskId: string,
+  actorId: string,
+  taskTitle: string,
+  type: string,
+  dueDate: string | null,
+  prev: ChecklistItem[],
+  next: ChecklistItem[],
+  members: Map<string, AppUser>
+): Promise<void> {
+  const before = new Map(prev.map((i) => [i.id, new Set(i.assignees)]));
+  const everyone = new Set(next.flatMap((i) => i.assignees));
+  for (const uid of everyone) {
+    await sql`INSERT INTO task_assignees (task_id, user_id, user_name) VALUES (${taskId}, ${uid}, ${memberName(members, uid)})
+              ON CONFLICT (task_id, user_id) DO NOTHING`;
+  }
+  const actor = memberName(members, actorId);
+  for (const item of next) {
+    const had = before.get(item.id) ?? new Set<string>();
+    for (const uid of item.assignees) {
+      if (had.has(uid)) continue;
+      const what = item.text.trim() || 'Aufgabe';
+      await notify(uid, actorId, 'task_assigned', 'task', taskId, `${actor} hat dir eine Aufgabe zugeteilt: „${what}“ (${taskTitle})`, {
+        pushTitle: '✅ Neue Aufgabe für dich',
+        url: taskDeepLink(type, dueDate, taskId),
+      });
+    }
+  }
+}
+
 export async function tasks(req: VercelRequest, res: VercelResponse) {
   const session = await getSession(req);
   if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
@@ -1190,16 +1251,18 @@ export async function tasks(req: VercelRequest, res: VercelResponse) {
     const links = sanitizeLinks(b.links);
     const id = genId('task');
     const name = sessionName(session);
+    const members = await loadMembers();
+    const checklist = sanitizeChecklist(b.checklist, members);
 
     await sql`
-      INSERT INTO tasks (id, title, notes, type, due_date, end_date, start_time, end_time, iso_week, status, priority, links, created_by, created_by_name)
-      VALUES (${id}, ${b.title.trim().slice(0, 200)}, ${notes}, ${type}, ${dueDate}, ${endDate}, ${startTime}, ${endTime}, ${isoWeek}, ${status}, ${priority}, ${JSON.stringify(links)}::jsonb, ${session.userId}, ${name})
+      INSERT INTO tasks (id, title, notes, type, due_date, end_date, start_time, end_time, iso_week, status, priority, links, checklist, created_by, created_by_name)
+      VALUES (${id}, ${b.title.trim().slice(0, 200)}, ${notes}, ${type}, ${dueDate}, ${endDate}, ${startTime}, ${endTime}, ${isoWeek}, ${status}, ${priority}, ${JSON.stringify(links)}::jsonb, ${JSON.stringify(checklist)}::jsonb, ${session.userId}, ${name})
     `;
-    const members = await loadMembers();
     const added = await replaceAssignees(id, assigneeIds, members);
     for (const uid of added) {
-      notifyTaskAssigned(uid, session.userId, id, b.title.trim(), type, dueDate);
+      await notifyTaskAssigned(uid, session.userId, id, b.title.trim(), type, dueDate);
     }
+    await applyChecklistAssignments(id, session.userId, b.title.trim(), type, dueDate, [], checklist, members);
     return res.json(await fetchTaskById(id, session.userId));
   }
 
@@ -1260,9 +1323,33 @@ export async function task(req: VercelRequest, res: VercelResponse) {
   const id = typeof b.id === 'string' ? b.id : '';
   if (!id) return badRequest(res, 'Aufgaben-ID fehlt.');
 
-  const rows = await sql`SELECT id, created_by AS "createdBy", title, COALESCE(type,'termin') AS "type", COALESCE(status,'') AS "prevStatus", to_char(due_date, 'YYYY-MM-DD') AS "dueDate" FROM tasks WHERE id = ${id}`;
+  const rows = await sql`SELECT id, created_by AS "createdBy", title, COALESCE(type,'termin') AS "type", COALESCE(status,'') AS "prevStatus", to_char(due_date, 'YYYY-MM-DD') AS "dueDate",
+                                COALESCE(checklist, '[]'::jsonb) AS checklist FROM tasks WHERE id = ${id}`;
   if (rows.length === 0) return res.status(404).json({ error: 'Aufgabe nicht gefunden.' });
-  const cur = rows[0] as { createdBy: string; title: string; type: string; prevStatus: string; dueDate: string | null };
+  const cur = rows[0] as { createdBy: string; title: string; type: string; prevStatus: string; dueDate: string | null; checklist: ChecklistItem[] };
+
+  // --- Zusage / Absage / „komme später" (jeder Beteiligte für sich selbst) ---
+  if (b.op === 'rsvp') {
+    const st = b.status === 'yes' || b.status === 'no' || b.status === 'late' ? b.status : null;
+    const time = st === 'late' ? normalizeTime(b.time) : null;
+    if (st) {
+      const entry = { [session.userId]: { status: st, time, at: new Date().toISOString() } };
+      await sql`UPDATE tasks SET rsvp = COALESCE(rsvp, '{}'::jsonb) || ${JSON.stringify(entry)}::jsonb, updated_at = now() WHERE id = ${id}`;
+      // Wer antwortet, gehört dazu (sieht Termin + Verlauf).
+      await sql`INSERT INTO task_assignees (task_id, user_id, user_name) VALUES (${id}, ${session.userId}, ${sessionName(session)})
+                ON CONFLICT (task_id, user_id) DO NOTHING`;
+      const who = sessionName(session);
+      const text =
+        st === 'yes' ? `${who} hat zugesagt` : st === 'no' ? `${who} hat abgesagt` : `${who} kommt später${time ? ` (ca. ${time} Uhr)` : ''}`;
+      await notify(cur.createdBy, session.userId, 'task_rsvp', 'task', id, `${text}: „${cur.title}“`, {
+        pushTitle: st === 'yes' ? '✅ Zusage' : st === 'no' ? '❌ Absage' : '⏰ Kommt später',
+        url: taskDeepLink(cur.type, cur.dueDate, id),
+      });
+    } else {
+      await sql`UPDATE tasks SET rsvp = COALESCE(rsvp, '{}'::jsonb) - ${session.userId}::text, updated_at = now() WHERE id = ${id}`;
+    }
+    return res.json(await fetchTaskById(id, session.userId));
+  }
 
   if (b.op === 'delete') {
     if (session.role !== 'superadmin' && session.userId !== cur.createdBy) {
@@ -1290,6 +1377,8 @@ export async function task(req: VercelRequest, res: VercelResponse) {
   if (startTime === null) endTime = null;
   const setEndTime = b.endTime !== undefined || startTime === null;
   const links = b.links !== undefined ? sanitizeLinks(b.links) : undefined;
+  const members = b.checklist !== undefined || Array.isArray(b.assignees) ? await loadMembers() : null;
+  const checklist = b.checklist !== undefined && members ? sanitizeChecklist(b.checklist, members) : undefined;
 
   await sql`
     UPDATE tasks SET
@@ -1304,6 +1393,7 @@ export async function task(req: VercelRequest, res: VercelResponse) {
       status = COALESCE(${b.status ?? null}, status),
       priority = COALESCE(${b.priority ?? null}, priority),
       links = CASE WHEN ${links !== undefined} THEN ${JSON.stringify(links ?? [])}::jsonb ELSE links END,
+      checklist = CASE WHEN ${checklist !== undefined} THEN ${JSON.stringify(checklist ?? [])}::jsonb ELSE checklist END,
       updated_at = now()
     WHERE id = ${id}
   `;
@@ -1316,17 +1406,20 @@ export async function task(req: VercelRequest, res: VercelResponse) {
     await awardHeroes(done.map((d) => d.userId), reason, 'task', id, session.userId);
   }
 
-  if (Array.isArray(b.assignees)) {
-    const members = await loadMembers();
+  // Art/Datum können in DIESEM Update mitgeändert worden sein – neuere Werte
+  // für den Deep-Link bevorzugen, sonst den Bestand.
+  const newType = type ?? cur.type;
+  const newDue = b.dueDate !== undefined ? dueDate ?? null : cur.dueDate;
+  if (Array.isArray(b.assignees) && members) {
     const ids = b.assignees.filter((x: unknown): x is string => typeof x === 'string');
     const added = await replaceAssignees(id, ids, members);
-    // Art/Datum können in DIESEM Update mitgeändert worden sein – neuere Werte
-    // für den Deep-Link bevorzugen, sonst den Bestand.
-    const newType = type ?? cur.type;
-    const newDue = b.dueDate !== undefined ? dueDate ?? null : cur.dueDate;
     for (const uid of added) {
-      await notifyTaskAssigned(uid, session.userId, id, cur.title, newType, newDue);
+      await notifyTaskAssigned(uid, session.userId, id, title ?? cur.title, newType, newDue);
     }
+  }
+  if (checklist !== undefined && members) {
+    const prev = Array.isArray(cur.checklist) ? cur.checklist : [];
+    await applyChecklistAssignments(id, session.userId, title ?? cur.title, newType, newDue, prev, checklist, members);
   }
   return res.json(await fetchTaskById(id, session.userId));
 }
