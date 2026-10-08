@@ -5,7 +5,7 @@ import type { Match, MatchPlayerStat, PlayerStat, ScoringConfig, Team } from '..
 import { cardForPlayer } from '../lib/playerCards';
 import { playerPlacements } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
-import { quotas } from '../lib/rating';
+import { fieldQuotas, keeperQuotas } from '../lib/displayQuotas';
 import { useBackClose } from '../lib/backStack';
 import { useBackdropDismiss, ModalPortal, TeamCrest, monogram, readable } from './ui';
 import { ShareSheet } from './ShareCard';
@@ -238,23 +238,8 @@ function Steckbrief({
         { v: String(assists), l: 'VORLAGEN' },
         { v: winRate == null ? '–' : `${winRate}%`, l: 'SIEGE' },
       ];
-  // Zeile 2: Quoten aus dem Tracking (gleiche Regeln wie im Spielerprofil).
-  const pct = (v: number | null | undefined) => (v == null ? '–' : `${Math.round(v * 100)}%`);
-  const qu = t ? quotas(t, cfg) : null;
-  const ga = t?.gk_goal_against ?? 0;
-  const quoteTiles: { v: string; l1: string; l2: string }[] = keeper
-    ? [
-        { v: pct(qu?.torwartquote), l1: 'PARADEN', l2: 'QUOTE' },
-        { v: pct(qu?.passquote), l1: 'PASS', l2: 'QUOTE' },
-        { v: games > 0 && t ? (ga / games).toFixed(1).replace('.', ',') : '–', l1: 'GEGENTORE', l2: 'PRO SPIEL' },
-        { v: games > 0 ? pct(player.cleanSheets / games) : '–', l1: 'ZU-NULL', l2: 'QUOTE' },
-      ]
-    : [
-        { v: pct(qu?.passquote), l1: 'PASS', l2: 'QUOTE' },
-        { v: pct(qu?.schussquote), l1: 'SCHUSS', l2: 'QUOTE' },
-        { v: pct(qu?.zweikampfquote), l1: 'ZWEIKAMPF', l2: 'QUOTE' },
-        { v: pct(qu?.dribblingquote), l1: 'DRIBBLING', l2: 'QUOTE' },
-      ];
+  // Zeile 2: Quoten – mit „X von Y" darüber, damit klar ist, woraus sie entstehen.
+  const quoteTiles = t ? (keeper ? keeperQuotas(t, games, player.cleanSheets) : fieldQuotas(t)) : [];
   const top = placements.slice(0, 5);
   const font = '"Saira", ui-sans-serif, system-ui, sans-serif';
   const display = '"Saira Condensed", "Saira", sans-serif';
@@ -297,17 +282,14 @@ function Steckbrief({
         ))}
       </div>
 
-      {/* Zeile 2: Quoten */}
-      {card && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginTop: 8 }}>
-          {quoteTiles.map((q) => (
-            <div key={q.l1} style={{ textAlign: 'center', background: 'rgba(255,255,255,.06)', borderRadius: 10, padding: '7px 2px 6px' }}>
-              <div style={{ fontFamily: display, fontWeight: 900, fontSize: 18, lineHeight: 1 }}>{q.v}</div>
-              <div style={{ fontSize: 7.5, letterSpacing: '0.1em', lineHeight: 1.25, color: 'rgba(255,255,255,.55)', marginTop: 4 }}>
-                {q.l1}
-                <br />
-                {q.l2}
-              </div>
+      {/* Zeile 2: Quoten (2 × 2, mit „X von Y" darüber) */}
+      {card && quoteTiles.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6, marginTop: 8 }}>
+          {quoteTiles.map((qt) => (
+            <div key={qt.key} style={{ textAlign: 'center', background: 'rgba(255,255,255,.06)', borderRadius: 12, padding: '8px 6px 8px' }}>
+              <div style={{ fontSize: 10, lineHeight: 1.25, color: 'rgba(255,255,255,.62)' }}>{qt.detail}</div>
+              <div style={{ fontFamily: display, fontWeight: 900, fontSize: 24, lineHeight: 1, marginTop: 4 }}>{qt.value}</div>
+              <div style={{ fontSize: 8.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,.55)', marginTop: 4 }}>{qt.label}</div>
             </div>
           ))}
         </div>

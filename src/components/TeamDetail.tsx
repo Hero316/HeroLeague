@@ -8,6 +8,7 @@ import { apiFetch } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
 import BestLineup, { type XIEntry } from './BestLineup';
 import { trackedLineup, type LineupPlayer } from '../lib/bestLineup';
+import { fieldQuotas } from '../lib/displayQuotas';
 import { DEFAULT_SCORING } from '../lib/scoring';
 import FifaCard from './FifaCard';
 import CardExplainSheet from './CardExplainSheet';
@@ -573,38 +574,17 @@ export default function TeamDetail({
                     {trackedQuotas && (
                       <div className="flex gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar">
                         {/* Oben klein: aus wie vielen Versuchen die Quote entsteht. */}
-                        {trackedQuotas.passquote !== null && (
-                          <StatTile
-                            top={`${trackedTotal.pass_ok} von ${trackedTotal.pass_ok + trackedTotal.pass_fail}`}
-                            value={`${Math.round(trackedQuotas.passquote * 100)}%`}
-                            label={'PASS\u00ADQUOTE'}
-                            accent
-                          />
-                        )}
-                        {trackedQuotas.schussquote !== null && (
-                          <StatTile
-                            top={`${trackedTotal.goal + trackedTotal.shot_on} von ${trackedQuotas.gesamtschuesse}`}
-                            value={`${Math.round(trackedQuotas.schussquote * 100)}%`}
-                            label={'SCHUSS\u00ADQUOTE'}
-                            accent
-                          />
-                        )}
-                        {trackedQuotas.zweikampfquote !== null && (
-                          <StatTile
-                            top={`${trackedTotal.duel_won} von ${trackedTotal.duel_won + trackedTotal.duel_lost}`}
-                            value={`${Math.round(trackedQuotas.zweikampfquote * 100)}%`}
-                            label={'ZWEIKAMPF\u00ADQUOTE'}
-                            accent
-                          />
-                        )}
-                        {trackedQuotas.dribblingquote !== null && (
-                          <StatTile
-                            top={`${trackedTotal.dribble_won} von ${trackedTotal.dribble_won + trackedTotal.dribble_lost}`}
-                            value={`${Math.round(trackedQuotas.dribblingquote * 100)}%`}
-                            label={'DRIBBLING\u00ADQUOTE'}
-                            accent
-                          />
-                        )}
+                        {fieldQuotas(trackedTotal)
+                          .filter((qt) => qt.total > 0)
+                          .map((qt) => (
+                            <StatTile
+                              key={qt.key}
+                              top={`${qt.made} von ${qt.total}`}
+                              value={qt.value}
+                              label={qt.label.toUpperCase().replace('QUOTE', '\u00ADQUOTE')}
+                              accent
+                            />
+                          ))}
                       </div>
                     )}
                     {trackedQuotas && (
@@ -621,9 +601,7 @@ export default function TeamDetail({
                               <b className="text-hl-soft">Passquote:</b> angekommene Pässe ÷ alle Passversuche.
                             </li>
                             <li>
-                              <b className="text-hl-soft">Schussquote:</b> Anteil der Schüsse, die aufs Tor gehen (Tore + gehaltene
-                              Schüsse; geblockte zählen {Math.round(scoringConfig.shotBlockFactor * 100)} %) ÷ alle Schüsse
-                              {scoringConfig.minimums.shots > 0 ? ` – ab ${scoringConfig.minimums.shots} Schüssen` : ''}.
+                              <b className="text-hl-soft">Schussquote:</b> Schüsse aufs Tor (inkl. Tore) ÷ alle Schüsse.
                             </li>
                             <li>
                               <b className="text-hl-soft">Zweikampf:</b> gewonnene ÷ alle Zweikämpfe.
