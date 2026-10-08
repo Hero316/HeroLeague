@@ -78,7 +78,7 @@ export default function Countdown({ target, title, kicker: kickerText, gold = fa
       {title && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
           <span
-            className={`font-display font-black uppercase tracking-tight leading-none whitespace-nowrap text-[15vw] ${
+            className={`font-display font-black uppercase tracking-tight leading-none whitespace-nowrap text-[15vw] lg:text-[10vw] ${
               expired ? 'text-hl-red/[.05]' : gold ? 'text-hl-gold/[.055]' : 'text-white/[.035]'
             }`}
           >
@@ -89,12 +89,12 @@ export default function Countdown({ target, title, kicker: kickerText, gold = fa
 
       <div
         className={`relative max-w-[1320px] mx-auto px-4 sm:px-10 text-center hl-fade ${
-          showCta ? 'py-7 sm:py-10' : 'py-5 sm:py-6'
+          showCta ? 'py-7 sm:py-6 lg:py-7' : 'py-5'
         }`}
       >
         {kicker && (
           <div
-            className={`font-sans font-extrabold text-[11px] sm:text-xs tracking-[3.5px] uppercase mb-5 ${
+            className={`font-sans font-extrabold text-[11px] sm:text-xs tracking-[3.5px] uppercase mb-5 sm:mb-3.5 ${
               expired ? 'text-hl-red-soft' : gold ? 'text-hl-gold' : 'text-brand-accent-light'
             }`}
           >
@@ -102,23 +102,23 @@ export default function Countdown({ target, title, kicker: kickerText, gold = fa
           </div>
         )}
 
-        <div className={`flex items-start justify-center gap-1.5 sm:gap-4 mx-auto ${showCta ? 'max-w-[720px]' : 'max-w-[560px]'}`}>
+        <div className={`flex items-start justify-center gap-1.5 sm:gap-4 mx-auto ${showCta ? 'max-w-[560px]' : 'max-w-[460px]'}`}>
           {cells.map((c, i) => (
             <React.Fragment key={c.l}>
               {i > 0 && (
                 <span
-                  className={`font-display font-black text-3xl sm:text-6xl leading-[.8] ${
+                  className={`font-display font-black text-3xl sm:text-4xl lg:text-[44px] leading-[.8] ${
                     expired ? 'text-hl-red/30' : 'text-white/15'
                   }`}
                 >
                   :
                 </span>
               )}
-              <div className={`flex flex-col items-center ${showCta ? 'min-w-[52px] sm:min-w-[108px]' : 'min-w-[46px] sm:min-w-[92px]'}`}>
-                <span className={`font-display font-black tabular-nums text-4xl sm:text-7xl xl:text-8xl leading-[.85] ${numberGlow}`}>
+              <div className={`flex flex-col items-center ${showCta ? 'min-w-[52px] sm:min-w-[76px]' : 'min-w-[46px] sm:min-w-[68px]'}`}>
+                <span className={`font-display font-black tabular-nums text-4xl sm:text-5xl lg:text-[56px] leading-[.85] ${numberGlow}`}>
                   {pad(c.v)}
                 </span>
-                <span className="font-sans font-bold text-[9px] sm:text-[11px] tracking-[2px] uppercase text-hl-dim mt-2.5">
+                <span className="font-sans font-bold text-[9px] sm:text-[10px] tracking-[2px] uppercase text-hl-dim mt-2.5 sm:mt-2">
                   {c.l}
                 </span>
               </div>
@@ -128,18 +128,18 @@ export default function Countdown({ target, title, kicker: kickerText, gold = fa
 
         {/* Untere Hälfte: direkt anmelden, ohne die Seite zu verlassen. */}
         {showCta && (
-          <div className="mt-6 sm:mt-8 flex flex-col items-center gap-2.5">
+          <div className="mt-6 sm:mt-5 flex flex-col items-center gap-2">
             {soldOut ? (
               // Ausverkauft: keine Anmelde-Taste mehr, sondern ein klares Schild.
               <span
-                className="inline-flex items-center gap-2 rounded-full px-7 sm:px-9 py-3 sm:py-3.5 font-display font-black uppercase tracking-wide text-[13px] sm:text-[15px] text-hl-gold border-2 border-hl-gold/60 bg-hl-gold/10"
+                className="inline-flex items-center gap-2 rounded-full px-7 py-3 sm:py-2.5 font-display font-black uppercase tracking-wide text-[13px] sm:text-sm text-hl-gold border-2 border-hl-gold/60 bg-hl-gold/10"
               >
                 Ausverkauft
               </span>
             ) : (
               <button
                 onClick={onCta}
-                className="inline-flex items-center gap-2 rounded-full px-7 sm:px-9 py-3 sm:py-3.5 font-display font-black uppercase tracking-wide text-[13px] sm:text-[15px] text-brand-dark transition-transform cursor-pointer hover:scale-[1.03] active:scale-[.99]"
+                className="inline-flex items-center gap-2 rounded-full px-7 py-3 sm:py-2.5 font-display font-black uppercase tracking-wide text-[13px] sm:text-sm text-brand-dark transition-transform cursor-pointer hover:scale-[1.03] active:scale-[.99]"
                 style={{
                   background: 'linear-gradient(135deg,#F4D588,#E9C46A)',
                   boxShadow: '0 14px 34px -14px rgba(233,196,106,.75)',
@@ -150,7 +150,7 @@ export default function Countdown({ target, title, kicker: kickerText, gold = fa
               </button>
             )}
             {hasTickets && (
-              <span className="font-sans font-bold text-[12px] sm:text-sm tracking-[1.5px] text-hl-dim tabular-nums">
+              <span className="font-sans font-bold text-[12px] tracking-[1.5px] text-hl-dim tabular-nums">
                 {sold} / <span className="text-hl-gold">{tickets!.capacity}</span>
               </span>
             )}
