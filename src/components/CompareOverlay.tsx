@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { X, ArrowLeftRight, Swords, Search, ChevronDown } from 'lucide-react';
+import { X, ArrowLeftRight, Swords, Search, ChevronDown, Plus } from 'lucide-react';
 import type { Match, MatchPlayerStat, PlayerStat, ScoringConfig, Team } from '../types';
 import { cardForPlayer } from '../lib/playerCards';
 import { useBackClose } from '../lib/backStack';
@@ -150,7 +150,7 @@ function PlayerPicker({
             />
           </div>
           {!q && (
-            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="grid grid-cols-6 gap-1 sm:gap-2 pb-1">
               {teamsWithPlayers.map((t) => {
                 const on = t.id === teamId;
                 return (
@@ -159,7 +159,7 @@ function PlayerPicker({
                     type="button"
                     onClick={() => setTeamId(t.id)}
                     title={t.name}
-                    className="shrink-0 flex flex-col items-center gap-1 w-[64px] rounded-xl py-1.5 cursor-pointer transition-colors"
+                    className="min-w-0 flex flex-col items-center gap-1 rounded-xl py-1.5 cursor-pointer transition-colors"
                     style={on ? { background: `${accent}22`, boxShadow: `inset 0 0 0 1.5px ${accent}` } : undefined}
                   >
                     <TeamCrest name={t.name} shortName={t.shortName} color={t.logoColor} logoUrl={t.logoUrl} size="lg" />
@@ -212,23 +212,19 @@ function PlayerPicker({
 export default function CompareOverlay({ open, onClose, players, teams, trackingRows, matches, scoringConfig }: Props) {
   useBackClose(open, onClose);
 
-  // Standardauswahl: die zwei torgefährlichsten Spieler. (Bewusst NICHT nach
-  // HERO-ONE-Wertung – die bleibt geheim, nur die Nominierten sind öffentlich.)
-  const ranked = useMemo(
-    () => [...players].sort((a, b) => b.goals - a.goals || b.assists - a.assists || a.name.localeCompare(b.name)),
-    [players]
-  );
+  // Beim Öffnen ist bewusst NIEMAND vorausgewählt – man wählt beide selbst.
   const [idA, setIdA] = useState<string>('');
   const [idB, setIdB] = useState<string>('');
   // Welche Seite gerade ihr Auswahl-Fenster offen hat (links A / rechts B).
   const [pickSide, setPickSide] = useState<'a' | 'b' | null>(null);
 
-  // Beim Öffnen sinnvolle Startwerte setzen (nur wenn noch leer).
+  // Jedes Öffnen startet leer.
   React.useEffect(() => {
     if (!open) return;
-    if (!idA && ranked[0]) setIdA(ranked[0].id);
-    if (!idB && ranked[1]) setIdB(ranked[1].id);
-  }, [open, ranked, idA, idB]);
+    setIdA('');
+    setIdB('');
+    setPickSide(null);
+  }, [open]);
 
   const pA = players.find((p) => p.id === idA) ?? null;
   const pB = players.find((p) => p.id === idB) ?? null;
@@ -331,8 +327,20 @@ export default function CompareOverlay({ open, onClose, players, teams, tracking
                       title="Anderen Spieler wählen"
                       className="w-full max-w-[190px] cursor-pointer active:scale-[.98] transition-transform"
                     >
-                      {side.card ? (
-                        <FifaCard card={side.card.card} name={side.p!.name} imageUrl={side.p!.imageUrl} team={side.team} />
+                      {!side.p ? (
+                        // Noch leer: großer Platzhalter – antippen öffnet die Spieler-Auswahl.
+                        <div
+                          className="w-full rounded-3xl border-2 border-dashed flex flex-col items-center justify-center text-center px-3 transition-colors hover:bg-white/[.03]"
+                          style={{ aspectRatio: '0.7', borderColor: `${side.color}55` }}
+                        >
+                          <div className="w-14 h-14 rounded-full grid place-items-center mb-2.5" style={{ background: `${side.color}1f`, color: side.color }}>
+                            <Plus className="w-7 h-7" strokeWidth={2.5} />
+                          </div>
+                          <p className="text-sm font-sans font-bold text-white">Spieler wählen</p>
+                          <p className="text-[11px] font-sans text-hl-mute mt-0.5">{i === 0 ? 'Links' : 'Rechts'}</p>
+                        </div>
+                      ) : side.card ? (
+                        <FifaCard card={side.card.card} name={side.p.name} imageUrl={side.p.imageUrl} team={side.team} />
                       ) : (
                         <div
                           className="w-full rounded-3xl border border-white/10 hl-surf-soft flex flex-col items-center justify-center text-center px-3"
@@ -375,7 +383,14 @@ export default function CompareOverlay({ open, onClose, players, teams, tracking
               </div>
             )}
 
+            {(!pA || !pB) && (
+              <p className="text-center text-sm font-sans text-hl-mute mb-6">
+                {!pA && !pB ? 'Wähle oben zwei Spieler aus – dann erscheint der Vergleich.' : 'Noch einen zweiten Spieler wählen – dann erscheint der Vergleich.'}
+              </p>
+            )}
+
             {/* Kennzahlen */}
+            {rows.length > 0 && (
             <div className="hl-card rounded-3xl border border-white/10 overflow-hidden">
               {rows.map((r, i) => {
                 const higher = r.higherWins !== false;
@@ -400,6 +415,7 @@ export default function CompareOverlay({ open, onClose, players, teams, tracking
                 );
               })}
             </div>
+            )}
 
             <div className="h-6" />
           </div>
