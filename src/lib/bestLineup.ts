@@ -11,7 +11,7 @@ import { matchNote, normalizeCounts } from './rating';
 // z. B. viele Pässe nicht die Zweikämpfe „überstimmen". Menge × Quote sorgt
 // dafür, dass 1 von 1 kaum zählt, 11 von 16 dagegen viel.
 //  • Torwart: der im Kader ausgewählte Torwart (sonst wer am häufigsten im Tor stand)
-//  • Plätze nacheinander an den höchsten Wert – jeder dahin, wo er am stärksten ist
+//  • Erst die 2 besten Offensiven nach vorne, dann aus dem Rest die 2 besten Defensiven
 //  • Bank: die nächsten 4 nach Ø-Note
 // ===========================================================================
 
@@ -107,30 +107,21 @@ export function trackedLineup(
   const regular = field.filter((p) => p.games >= minGames);
   const rest = field.filter((p) => p.games < minGames);
 
+  // Feste Reihenfolge, damit es nachvollziehbar bleibt: ERST die 2 besten
+  // Offensiven nach vorne (wer Tore schießt, steht vorne), DANN aus den
+  // übrigen die 2 besten Defensiven nach hinten. Gleichstand → Ø-Note.
   const attack: LineupPlayer[] = [];
   const defense: LineupPlayer[] = [];
-  // Platz für Platz: der insgesamt höchste noch offene Wert gewinnt.
-  const pick = (pool: LineupPlayer[]) => {
-    const left = [...pool];
-    while (left.length > 0 && (attack.length < 2 || defense.length < 2)) {
-      let best: { i: number; slot: 'a' | 'd'; v: number; tie: number } | null = null;
-      left.forEach((p, i) => {
-        const opts: { slot: 'a' | 'd'; v: number }[] = [];
-        if (attack.length < 2) opts.push({ slot: 'a', v: p.off });
-        if (defense.length < 2) opts.push({ slot: 'd', v: p.def });
-        for (const o of opts) {
-          if (!best || o.v > best.v || (o.v === best.v && p.avgNote > best.tie)) best = { i, slot: o.slot, v: o.v, tie: p.avgNote };
-        }
-      });
-      if (!best) break;
-      const b = best as { i: number; slot: 'a' | 'd' };
-      const [p] = left.splice(b.i, 1);
-      (b.slot === 'a' ? attack : defense).push(p);
-    }
-    return left;
+  const take = (pool: LineupPlayer[], into: LineupPlayer[], key: 'off' | 'def') => {
+    const sorted = [...pool].sort((a, b) => b[key] - a[key] || b.avgNote - a.avgNote);
+    while (into.length < 2 && sorted.length > 0) into.push(sorted.shift()!);
+    return sorted;
   };
-  const leftRegular = pick(regular);
-  const leftRest = attack.length + defense.length < 4 ? pick(rest) : rest;
+  let leftRegular = take(regular, attack, 'off');
+  leftRegular = take(leftRegular, defense, 'def');
+  // Zu wenige Stammspieler? Dann mit den übrigen auffüllen.
+  let leftRest = take(rest, attack, 'off');
+  leftRest = take(leftRest, defense, 'def');
 
   const byNote = (a: LineupPlayer, b: LineupPlayer) => b.avgNote - a.avgNote || b.games - a.games || a.name.localeCompare(b.name);
   attack.sort((a, b) => b.off - a.off);
