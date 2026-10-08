@@ -290,19 +290,19 @@ export default function Statistiken({
       },
       {
         id: 'pass', title: 'Pässe', accent: '#22DFC9', icon: <Send className="w-4 h-4" />, rows: passRows, defaultSort: 'quote',
-        cols: [{ key: 'all', label: 'Gesamt' }, { key: 'ok', label: 'Angek.' }, { key: 'quote', label: 'Quote', fmt: pctFmt }],
+        cols: [{ key: 'all', label: 'Gesamt' }, { key: 'ok', label: 'Ange\u00ADkommen' }, { key: 'quote', label: 'Quote', fmt: pctFmt }],
         note: `Quote = angekommene Pässe ÷ alle Pässe · ab ${PASS_MIN} Pässen`,
       },
       {
         id: 'duel', title: 'Zweikämpfe', accent: '#43E5A0', icon: <Swords className="w-4 h-4" />, rows: duelRows, defaultSort: 'quote',
-        cols: [{ key: 'all', label: 'Gesamt' }, { key: 'won', label: 'Gew.' }, { key: 'quote', label: 'Quote', fmt: pctFmt }],
+        cols: [{ key: 'all', label: 'Gesamt' }, { key: 'won', label: 'Gewonnen' }, { key: 'quote', label: 'Quote', fmt: pctFmt }],
         note: `Quote = gewonnene ÷ alle Zweikämpfe · ab ${DUEL_MIN} Zweikämpfen`,
       },
       {
         id: 'drib', title: 'Beste Dribbler', accent: '#E9C46A', icon: <Zap className="w-4 h-4" />, rows: dribRows, defaultSort: 'value',
         cols: [
           { key: 'all', label: 'Gesamt' },
-          { key: 'won', label: 'Erfolgr.' },
+          { key: 'won', label: 'Erfolg\u00ADreich' },
           { key: 'quote', label: 'Quote', fmt: pctFmt },
           { key: 'value', label: 'Wert', fmt: (v) => v.toFixed(1) },
         ],
@@ -839,7 +839,7 @@ export default function Statistiken({
                           <span className="font-display font-black text-2xl sm:text-3xl lg:text-[40px] leading-none text-brand-accent-light tabular-nums">
                             <CountUp value={p.score} decimals={1} />
                           </span>
-                          <span className="font-sans font-bold text-[10px] tracking-wider text-hl-dim">PKT</span>
+                          <span className="font-sans font-bold text-[10px] tracking-wider text-hl-dim">PUNKTE</span>
                         </div>
                       </motion.div>
                     );
