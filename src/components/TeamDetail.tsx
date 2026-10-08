@@ -8,7 +8,7 @@ import { apiFetch } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
 import BestLineup, { type XIEntry } from './BestLineup';
 import { trackedLineup, type LineupPlayer } from '../lib/bestLineup';
-import { fieldQuotas } from '../lib/displayQuotas';
+import { fewDataHint, fewDataHintShort, fieldQuotas } from '../lib/displayQuotas';
 import { DEFAULT_SCORING } from '../lib/scoring';
 import FifaCard from './FifaCard';
 import CardExplainSheet from './CardExplainSheet';
@@ -390,8 +390,26 @@ export default function TeamDetail({
   // Mobil teilen sich die Kacheln die Breite (eine Reihe, kein Umbruch), ab sm
   // wieder natürliche Breite.
   // `top` = kleine Zeile über dem Wert (z. B. „11 von 16" bei Quoten).
-  const StatTile = ({ value, label, accent, top }: { value: React.ReactNode; label: string; accent?: boolean; top?: string }) => (
-    <div className="flex-1 min-w-0 sm:flex-none sm:min-w-[70px] lg:min-w-[92px] bg-white/[.04] border border-white/[.08] rounded-xl px-1.5 sm:px-3 lg:px-4 py-2.5 lg:py-3.5 text-center">
+  const StatTile = ({
+    value,
+    label,
+    accent,
+    top,
+    hint,
+    hintShort,
+  }: {
+    value: React.ReactNode;
+    label: string;
+    accent?: boolean;
+    top?: string;
+    hint?: string | null;
+    hintShort?: string | null;
+  }) => (
+    <div
+      className={`flex-1 min-w-0 sm:flex-none sm:min-w-[70px] lg:min-w-[92px] bg-white/[.04] border border-white/[.08] rounded-xl px-1.5 sm:px-3 lg:px-4 py-2.5 lg:py-3.5 text-center ${
+        hint ? 'sm:max-w-[150px] lg:max-w-[170px]' : ''
+      }`}
+    >
       {top && (
         <div className="font-sans font-semibold text-[9px] sm:text-[10px] lg:text-[11px] text-hl-dim tabular-nums leading-none mb-1.5 lg:mb-2 truncate">{top}</div>
       )}
@@ -399,6 +417,13 @@ export default function TeamDetail({
         {value}
       </div>
       <div className="font-sans font-bold text-[8px] sm:text-[9px] lg:text-[11px] tracking-[1px] sm:tracking-[1.5px] text-hl-dim mt-1.5 lg:mt-2 hyphens-manual break-words leading-tight">{label}</div>
+      {/* Zu wenig Versuche: Quote stimmt, zählt aber noch nicht voll in die Karte. */}
+      {hint && (
+        <div className="font-sans font-semibold text-[8.5px] sm:text-[9.5px] lg:text-[10.5px] text-amber-300/80 mt-1.5 leading-tight">
+          <span className="sm:hidden">{hintShort ?? hint}</span>
+          <span className="hidden sm:inline">{hint}</span>
+        </div>
+      )}
     </div>
   );
 
@@ -574,7 +599,7 @@ export default function TeamDetail({
                     {trackedQuotas && (
                       <div className="flex gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar">
                         {/* Oben klein: aus wie vielen Versuchen die Quote entsteht. */}
-                        {fieldQuotas(trackedTotal)
+                        {fieldQuotas(trackedTotal, scoringConfig.card.vollAktionen)
                           .filter((qt) => qt.total > 0)
                           .map((qt) => (
                             <StatTile
@@ -582,6 +607,8 @@ export default function TeamDetail({
                               top={`${qt.made} von ${qt.total}`}
                               value={qt.value}
                               label={qt.label.toUpperCase().replace('QUOTE', '\u00ADQUOTE')}
+                              hint={fewDataHint(qt)}
+                              hintShort={fewDataHintShort(qt)}
                               accent
                             />
                           ))}
@@ -608,6 +635,12 @@ export default function TeamDetail({
                             </li>
                             <li>
                               <b className="text-hl-soft">Dribbling:</b> erfolgreiche ÷ alle Dribblings.
+                            </li>
+                            <li>
+                              <b className="text-hl-soft">„Noch wenig Daten":</b> Die Quote stimmt, beruht aber auf wenigen Versuchen
+                              (z. B. 1 von 1). Sie zählt deshalb erst ab {scoringConfig.card.vollAktionen.pas} Pässen,{' '}
+                              {scoringConfig.card.vollAktionen.sch} Schüssen, {scoringConfig.card.vollAktionen.dri} Dribblings bzw.{' '}
+                              {scoringConfig.card.vollAktionen.def} Zweikämpfen voll in die FIFA-Karte.
                             </li>
                           </ul>
                         )}

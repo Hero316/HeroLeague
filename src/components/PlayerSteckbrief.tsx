@@ -5,7 +5,7 @@ import type { Match, MatchPlayerStat, PlayerStat, ScoringConfig, Team } from '..
 import { cardForPlayer } from '../lib/playerCards';
 import { playerPlacements } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
-import { fieldQuotas, keeperQuotas } from '../lib/displayQuotas';
+import { fewDataHint, fieldQuotas, keeperQuotas } from '../lib/displayQuotas';
 import { useBackClose } from '../lib/backStack';
 import { useBackdropDismiss, ModalPortal, TeamCrest, monogram, readable } from './ui';
 import { ShareSheet } from './ShareCard';
@@ -239,7 +239,7 @@ function Steckbrief({
         { v: winRate == null ? '–' : `${winRate}%`, l: 'SIEGE' },
       ];
   // Zeile 2: Quoten – mit „X von Y" darüber, damit klar ist, woraus sie entstehen.
-  const quoteTiles = t ? (keeper ? keeperQuotas(t, games, player.cleanSheets) : fieldQuotas(t)) : [];
+  const quoteTiles = t ? (keeper ? keeperQuotas(t, games, player.cleanSheets) : fieldQuotas(t, cfg.card.vollAktionen)) : [];
   const top = placements.slice(0, 5);
   const font = '"Saira", ui-sans-serif, system-ui, sans-serif';
   const display = '"Saira Condensed", "Saira", sans-serif';
@@ -290,6 +290,7 @@ function Steckbrief({
               <div style={{ fontSize: 10, lineHeight: 1.25, color: 'rgba(255,255,255,.62)' }}>{qt.detail}</div>
               <div style={{ fontFamily: display, fontWeight: 900, fontSize: 24, lineHeight: 1, marginTop: 4 }}>{qt.value}</div>
               <div style={{ fontSize: 8.5, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,.55)', marginTop: 4 }}>{qt.label}</div>
+              {qt.fullAt && <div style={{ fontSize: 8.5, lineHeight: 1.2, color: 'rgba(252,211,77,.8)', marginTop: 3 }}>{fewDataHint(qt)}</div>}
             </div>
           ))}
         </div>

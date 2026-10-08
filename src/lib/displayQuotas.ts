@@ -19,7 +19,22 @@ export interface ShownQuota {
   made: number;
   total: number;
   detail: string; // z. B. „11 von 16 Schüssen aufs Tor"
+  // Ab so vielen Versuchen zählt die Quote voll in die FIFA-Karte; darunter
+  // gesetzt, solange es Versuche gibt (→ Hinweis „noch wenig Daten").
+  fullAt?: number;
 }
+
+// Ab wie vielen Versuchen eine Quote voll in die Karte zählt (= vollAktionen
+// aus den Score-Einstellungen: Pässe · Schüsse · Dribblings · Zweikämpfe).
+export interface QuotaMins {
+  pas: number;
+  sch: number;
+  dri: number;
+  def: number;
+}
+
+const withMin = (qt: ShownQuota, min: number | undefined): ShownQuota =>
+  min && qt.total > 0 && qt.total < min ? { ...qt, fullAt: min } : qt;
 
 const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)}%` : '–');
 const q = (key: string, label: string, made: number, total: number, unit: string, verb: string, none: string): ShownQuota => ({
@@ -31,15 +46,20 @@ const q = (key: string, label: string, made: number, total: number, unit: string
   detail: total > 0 ? `${made} von ${total} ${unit} ${verb}` : none,
 });
 
-export function fieldQuotas(t: ActionCounts): ShownQuota[] {
+export function fieldQuotas(t: ActionCounts, mins?: QuotaMins): ShownQuota[] {
   const shots = t.goal + t.shot_on + t.shot_miss + t.shot_blocked_off;
   return [
-    q('pass', 'Passquote', t.pass_ok, t.pass_ok + t.pass_fail, 'Pässen', 'angekommen', 'noch keine Pässe'),
-    q('shot', 'Schussquote', t.goal + t.shot_on, shots, 'Schüssen', 'aufs Tor', 'noch keine Schüsse'),
-    q('duel', 'Zweikampfquote', t.duel_won, t.duel_won + t.duel_lost, 'Zweikämpfen', 'gewonnen', 'noch keine Zweikämpfe'),
-    q('drib', 'Dribblingquote', t.dribble_won, t.dribble_won + t.dribble_lost, 'Dribblings', 'erfolgreich', 'noch keine Dribblings'),
+    withMin(q('pass', 'Passquote', t.pass_ok, t.pass_ok + t.pass_fail, 'Pässen', 'angekommen', 'noch keine Pässe'), mins?.pas),
+    withMin(q('shot', 'Schussquote', t.goal + t.shot_on, shots, 'Schüssen', 'aufs Tor', 'noch keine Schüsse'), mins?.sch),
+    withMin(q('duel', 'Zweikampfquote', t.duel_won, t.duel_won + t.duel_lost, 'Zweikämpfen', 'gewonnen', 'noch keine Zweikämpfe'), mins?.def),
+    withMin(q('drib', 'Dribblingquote', t.dribble_won, t.dribble_won + t.dribble_lost, 'Dribblings', 'erfolgreich', 'noch keine Dribblings'), mins?.dri),
   ];
 }
+
+// Kurzer Hinweis unter einer Quote mit zu wenig Versuchen.
+export const fewDataHint = (qt: ShownQuota) => (qt.fullAt ? `Noch wenig Daten – zählt erst ab ${qt.fullAt} voll in die Karte` : null);
+// Kurzform für schmale Kacheln (Handy).
+export const fewDataHintShort = (qt: ShownQuota) => (qt.fullAt ? `Wenig Daten · Karte ab ${qt.fullAt}` : null);
 
 export function keeperQuotas(t: ActionCounts, games: number, cleanSheets: number): ShownQuota[] {
   const ga = t.gk_goal_against;
