@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Loader2, Search, X } from 'lucide-react';
 import { useBackClose } from '../lib/backStack';
 import { fetchTrackingAudio, fetchTrackingRules, linkTrackingAudio, parseGoals, type GoalCheck, type TrackingAudio, type VoiceRosterPlayer } from '../lib/voice';
@@ -43,8 +43,14 @@ export default function AssistCheck({ matchId, matchDate, homeName, awayName, pl
   const [err, setErr] = useState('');
   // Ergebnis je Aufnahme: gefundene Tore + ob Namen vorkommen, die nicht in
   // diesem Spiel stehen (dann gehört sie wohl zu einem anderen Spiel).
-  const [results, setResults] = useState<{ url: string; at: string; goals: GoalCheck[]; foreign: string[]; include: boolean }[] | null>(null);
+  const [results, setResults] = useState<{ url: string; at: string; goals: GoalCheck[]; foreign: string[]; include: boolean; failed?: boolean }[] | null>(null);
   const [done, setDone] = useState<Set<string>>(new Set());
+  const [checked, setChecked] = useState<{ total: number; noGoal: number } | null>(null);
+  // Nach dem Prüfen weich zum Ergebnis scrollen (bei vielen Aufnahmen weit unten).
+  const resultRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (results) resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [results]);
 
   useEffect(() => {
     fetchTrackingAudio(matchId)
@@ -60,16 +66,17 @@ export default function AssistCheck({ matchId, matchDate, homeName, awayName, pl
     if (!audio) return [];
     const linked = new Set(audio.linked.map((a) => a.url));
     const others = audio.recent.filter((a) => !linked.has(a.url));
+    // „Rund um den Spieltag": vom Vortag bis 5 Tage danach (getrackt wird oft später).
     const near = (a: TrackingAudio) => {
-      if (!matchDate) return 1;
-      const d = Math.abs(new Date(a.at).getTime() - new Date(`${matchDate}T12:00:00`).getTime());
-      return d <= 3 * 86400000 ? 0 : 1;
+      if (!matchDate) return false;
+      const d = new Date(a.at).getTime() - new Date(`${matchDate}T12:00:00`).getTime();
+      return d >= -1.5 * 86400000 && d <= 5.5 * 86400000;
     };
-    others.sort((a, b) => near(a) - near(b) || b.at.localeCompare(a.at));
+    others.sort((a, b) => Number(near(b)) - Number(near(a)) || b.at.localeCompare(a.at));
     const sizeOf = new Map(audio.recent.map((a) => [a.url, a.size]));
     return [
-      ...audio.linked.map((a) => ({ ...a, size: a.size ?? sizeOf.get(a.url), linked: true })),
-      ...others.map((a) => ({ ...a, linked: false })),
+      ...audio.linked.map((a) => ({ ...a, size: a.size ?? sizeOf.get(a.url), linked: true, near: true })),
+      ...others.map((a) => ({ ...a, linked: false, near: near(a) })),
     ];
   }, [audio, matchDate]);
   const visible = showAll ? list : list.slice(0, 8);
@@ -104,20 +111,37 @@ export default function AssistCheck({ matchId, matchDate, homeName, awayName, pl
         role: p.role,
         ...(typeof p.number === 'number' ? { number: p.number } : {}),
       }));
-      const out: { url: string; at: string; goals: GoalCheck[]; foreign: string[]; include: boolean }[] = [];
-      for (let i = 0; i < chosen.length; i++) {
-        setBusy(`Gemini sucht die Tore in Aufnahme ${i + 1} von ${chosen.length} …`);
-        const res = await parseGoals({
-          audioUrl: chosen[i].url,
-          mimeType: 'audio/wav',
-          context: { homeTeam: homeName, awayTeam: awayName, players: ctxPlayers, rules },
-        });
-        const foreign = [...new Set(res.goals.flatMap((g) => [g.scorer, g.assist]).filter((n) => n && !inMatch(n)))];
-        out.push({ url: chosen[i].url, at: chosen[i].at, goals: res.goals, foreign, include: foreign.length === 0 });
-        // Passende Aufnahme fürs nächste Mal mit dem Spiel verknüpfen.
-        if (foreign.length === 0) void linkTrackingAudio(matchId, chosen[i].url).catch(() => {});
-      }
-      setResults(out);
+      // Vier Aufnahmen gleichzeitig prüfen – bei vielen kurzen Schnipseln deutlich schneller.
+      const out: ({ url: string; at: string; goals: GoalCheck[]; foreign: string[]; include: boolean; failed?: boolean } | null)[] = chosen.map(() => null);
+      let next = 0;
+      let finished = 0;
+      setBusy(`Gemini sucht die Tore … 0 von ${chosen.length} Aufnahmen`);
+      const worker = async () => {
+        while (next < chosen.length) {
+          const i = next++;
+          const a = chosen[i];
+          try {
+            const res = await parseGoals({
+              audioUrl: a.url,
+              mimeType: 'audio/wav',
+              context: { homeTeam: homeName, awayTeam: awayName, players: ctxPlayers, rules },
+            });
+            const foreign = [...new Set(res.goals.flatMap((g) => [g.scorer, g.assist]).filter((n) => n && !inMatch(n)))];
+            out[i] = { url: a.url, at: a.at, goals: res.goals, foreign, include: foreign.length === 0 };
+            // Passende Aufnahme (mit Tor) fürs nächste Mal mit dem Spiel verknüpfen.
+            if (foreign.length === 0 && res.goals.length > 0) void linkTrackingAudio(matchId, a.url).catch(() => {});
+          } catch {
+            out[i] = { url: a.url, at: a.at, goals: [], foreign: [], include: false, failed: true };
+          }
+          finished++;
+          setBusy(`Gemini sucht die Tore … ${finished} von ${chosen.length} Aufnahmen`);
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(4, chosen.length) }, worker));
+      // Aufnahmen ohne Tor nicht auflisten – sie ändern an den Vorlagen nichts.
+      const all = out.filter((r): r is NonNullable<typeof r> => r !== null);
+      setResults(all.filter((r) => r.goals.length > 0 || r.failed));
+      setChecked({ total: all.length, noGoal: all.filter((r) => r.goals.length === 0 && !r.failed).length });
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Auswertung fehlgeschlagen.');
     } finally {
@@ -204,6 +228,23 @@ export default function AssistCheck({ matchId, matchDate, homeName, awayName, pl
                   anderen Spielen werden nach dem Prüfen markiert und nicht mitgezählt. Danach merkt sich die Seite die Zuordnung.
                 </p>
               )}
+              {list.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  <button type="button" onClick={() => { setPicked(new Set(list.map((a) => a.url))); setShowAll(true); }} className="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-white/15 text-hl-soft hover:text-white hover:border-white/30 cursor-pointer">
+                    Alle auswählen ({list.length})
+                  </button>
+                  {matchDate && list.some((a) => a.near) && (
+                    <button type="button" onClick={() => { setPicked(new Set(list.filter((a) => a.near).map((a) => a.url))); setShowAll(true); }} className="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-brand-accent-light/40 text-brand-accent-light hover:bg-brand-accent/10 cursor-pointer">
+                      Rund um den Spieltag ({list.filter((a) => a.near).length})
+                    </button>
+                  )}
+                  {picked.size > 0 && (
+                    <button type="button" onClick={() => setPicked(new Set())} className="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-white/10 text-hl-mute hover:text-white cursor-pointer">
+                      Keine
+                    </button>
+                  )}
+                </div>
+              )}
               <div className="space-y-1.5">
                 {visible.map((a) => {
                   const on = picked.has(a.url);
@@ -250,8 +291,15 @@ export default function AssistCheck({ matchId, matchDate, homeName, awayName, pl
 
             {/* 2. Gefundene Tore je Aufnahme */}
             {results && (
-              <div>
+              <div ref={resultRef} className="scroll-mt-2">
                 <div className="text-[11px] font-bold uppercase tracking-wider text-hl-dim mb-2">2 · Gefundene Tore</div>
+                {checked && (
+                  <p className="text-[11px] text-hl-dim mb-2">
+                    {checked.total} {checked.total === 1 ? 'Aufnahme' : 'Aufnahmen'} geprüft
+                    {checked.noGoal > 0 ? ` · ${checked.noGoal} ohne Tor (ausgeblendet)` : ''}.
+                  </p>
+                )}
+                {results.length === 0 && <p className="text-sm text-hl-mute">In den gewählten Aufnahmen wurde kein Tor gefunden.</p>}
                 <div className="space-y-2">
                   {results.map((r) => (
                     <div key={r.url} className={`rounded-xl border px-3 py-2.5 ${r.include ? 'border-white/10 bg-white/[.03]' : 'border-amber-400/30 bg-amber-400/[.04] opacity-80'}`}>
@@ -261,14 +309,13 @@ export default function AssistCheck({ matchId, matchDate, homeName, awayName, pl
                           <input type="checkbox" checked={r.include} onChange={() => toggleInclude(r.url)} className="accent-[#22DFC9]" /> mitzählen
                         </label>
                       </div>
+                      {r.failed && <p className="text-[11px] text-rose-300 mt-1">Konnte nicht ausgewertet werden – bitte diese Aufnahme einzeln noch einmal prüfen.</p>}
                       {r.foreign.length > 0 && (
                         <p className="text-[11px] text-amber-300 mt-1">
                           Gehört wahrscheinlich zu einem anderen Spiel – {r.foreign.join(', ')} {r.foreign.length === 1 ? 'steht' : 'stehen'} nicht in diesem Spiel.
                         </p>
                       )}
-                      {r.goals.length === 0 ? (
-                        <p className="text-[11px] text-hl-dim mt-1">Kein Tor in dieser Aufnahme.</p>
-                      ) : (
+                      {r.goals.length === 0 ? null : (
                         <div className="mt-1.5 space-y-1.5">
                           {r.goals.map((g, i) => (
                             <div key={i} className="text-[12.5px] leading-snug">
