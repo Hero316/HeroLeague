@@ -761,7 +761,7 @@ export default function AdminPanel({
     }
     if (awardKeeper[0]) {
       pickKeeper(awardKeeper[0]);
-      parts.push(`Torwart: ${awardKeeper[0].name} (${fmtNote(awardKeeper[0].note)})`);
+      parts.push(`Torwart: ${awardKeeper[0].name} (${fmtNote(awardKeeper[0].glove ?? 0)} Handschuh-Pkt.)`);
     }
     setPomMatchday(awardDay);
     setPomAutoNote(`${awardDay}. Spieltag übernommen – ${parts.join(' · ')}. Jetzt noch „Speichern" drücken.`);
@@ -2469,7 +2469,7 @@ export default function AdminPanel({
                                 <span className="text-gray-500 font-normal"> · {teams.find((t) => t.id === c.teamId)?.name ?? '–'}</span>
                               </span>
                               <span className="shrink-0 font-display font-black text-base tabular-nums" style={{ color: col.color }}>
-                                {fmtNote(c.note)}
+                                {c.glove !== undefined ? `${fmtNote(c.glove)} Pkt.` : fmtNote(c.note)}
                               </span>
                               {on && <Check className="shrink-0 w-4 h-4" style={{ color: col.color }} />}
                             </button>

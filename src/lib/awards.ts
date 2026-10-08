@@ -1,6 +1,7 @@
 import type { ActionCounts, MatchPlayerStat, PlayerCard, ScoringConfig, StatRole } from '../types';
 import { countCleanSheets, matchNote, normalizeCounts, passversuche, playerCard, sumCounts } from './rating';
 import { leagueDayKey } from './stats';
+import { gloveScore } from './trackingAwards';
 
 // ===========================================================================
 // Auszeichnungen des Spieltages (Spieler + Torwart) aus den GETRACKTEN Daten.
@@ -38,6 +39,8 @@ export interface DayCandidate {
   note: number; // Schnitt der Spielnoten an diesem Spieltag
   games: number;
   counts: ActionCounts; // Summe des Spieltags
+  glove?: number; // Torwart: Goldener-Handschuh-Punkte NUR dieses Spieltages
+  cleanSheets?: number; // Torwart: Spiele zu null an diesem Spieltag
 }
 
 // Alle getrackten Spieltage (Nummern) einer Saison, aufsteigend.
@@ -50,8 +53,11 @@ export function trackedMatchdays(rows: MatchPlayerStat[], seasonId: string): num
   return [...set].sort((a, b) => a - b);
 }
 
-// Rangliste einer Rolle an einem Spieltag: beste Note (Schnitt seiner Spiele)
-// zuerst. Gleichstand: mehr Tore (Feld) bzw. mehr Paraden (Torwart).
+// Rangliste einer Rolle an einem Spieltag.
+//  • Feldspieler: beste Note (Schnitt seiner Spiele) zuerst, Gleichstand → Tore.
+//  • Torwart: dieselbe Wertung wie der Goldene Handschuh – nur mit den Spielen
+//    dieses Spieltages (Gegentore unter dem Schnitt des Abends, zu null,
+//    Paraden, Standparaden, gehaltene Elfmeter). Passspiel zählt hier nicht.
 export function rankDay(
   rows: MatchPlayerStat[],
   seasonId: string,
@@ -68,12 +74,25 @@ export function rankDay(
   }
   const list: DayCandidate[] = [];
   for (const g of groups.values()) {
-    const counts = sumCounts(g.map((r) => normalizeCounts(r.counts)));
-    const note = round1(g.reduce((s, r) => s + matchNote(normalizeCounts(r.counts), cfg, role), 0) / g.length);
-    list.push({ teamId: g[0].teamId, name: g[0].playerName, note, games: g.length, counts });
+    const norm = g.map((r) => ({ role: r.role, counts: normalizeCounts(r.counts) }));
+    const counts = sumCounts(norm.map((r) => r.counts));
+    const note = round1(norm.reduce((s, r) => s + matchNote(r.counts, cfg, role), 0) / g.length);
+    list.push({ teamId: g[0].teamId, name: g[0].playerName, note, games: g.length, counts, cleanSheets: countCleanSheets(norm) });
   }
-  const tie = (c: DayCandidate) => (role === 'keeper' ? c.counts.save : c.counts.goal);
-  return list.sort((a, b) => b.note - a.note || tie(b) - tie(a));
+  if (role === 'keeper') {
+    // Schnitt der Gegentore pro Torwart-Spiel an DIESEM Spieltag.
+    const games = list.reduce((s, c) => s + c.games, 0);
+    const avg = games > 0 ? list.reduce((s, c) => s + c.counts.gk_goal_against, 0) / games : 0;
+    for (const c of list) c.glove = gloveScore(c.counts, c.games, c.cleanSheets ?? 0, avg);
+    return list.sort(
+      (a, b) =>
+        (b.glove ?? 0) - (a.glove ?? 0) ||
+        (b.cleanSheets ?? 0) - (a.cleanSheets ?? 0) ||
+        a.counts.gk_goal_against - b.counts.gk_goal_against ||
+        b.counts.save - a.counts.save
+    );
+  }
+  return list.sort((a, b) => b.note - a.note || b.counts.goal - a.counts.goal);
 }
 
 // Bester Spieler + bester Torwart eines Spieltages (Standard: letzter getrackter).
