@@ -294,6 +294,15 @@ export default function App() {
     }
   }, []);
 
+  // Spieler des Spieltages nach Login/Logout neu laden – Super-Admins sehen
+  // ggf. die „Nur Super-Admins"-Vorschau der Auszeichnung.
+  useEffect(() => {
+    if (!sessionUser) return;
+    apiFetch<PlayerOfMonth>('/api/player-of-the-month')
+      .then((p) => setPom(p && p.name?.trim() ? p : null))
+      .catch(() => {});
+  }, [sessionUser?.role]);
+
   // Eigene Hero-Hintergrundbilder laden (unkritisch – Fallback bleibt Standard)
   useEffect(() => {
     apiFetch<HeroImages>('/api/twitch?resource=hero')
@@ -2207,17 +2216,19 @@ export default function App() {
       )}
       </div>
 
-      {isSuperadmin && statsPreview.length > 0 && (
+      {isSuperadmin && (statsPreview.length > 0 || pom?.preview) && (
         <div
           className="fixed left-3 z-40 pointer-events-none bottom-[calc(env(safe-area-inset-bottom)+5.75rem)] lg:bottom-4"
           role="status"
         >
           <div className="inline-flex items-center gap-1.5 rounded-full border border-[#E9C46A]/50 bg-[#1a1406]/90 backdrop-blur px-3 py-1.5 text-[11px] font-bold text-[#E9C46A] shadow-lg">
-            👑 Stats-Vorschau:{' '}
-            {statsPreview
-              .map((k) => (k.startsWith('s:') ? `${k.split(':')[2]}. Spieltag` : 'Spiel'))
-              .filter((v, i, a) => a.indexOf(v) === i)
-              .join(', ')}{' '}
+            👑 Vorschau:{' '}
+            {[
+              ...statsPreview
+                .map((k) => (k.startsWith('s:') ? `Stats ${k.split(':')[2]}. Spieltag` : 'Stats'))
+                .filter((v, i, a) => a.indexOf(v) === i),
+              ...(pom?.preview ? ['Spieler des Spieltages'] : []),
+            ].join(', ')}{' '}
             · nur Super-Admins sehen das
           </div>
         </div>

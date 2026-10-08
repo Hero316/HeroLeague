@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone, Handshake, ChevronUp, ChevronDown, Star, Landmark, BarChart3, Footprints, Users } from 'lucide-react';
+import { Shield, Plus, Check, Upload, Award, Trash2, CalendarPlus, Camera, X, Radio, Sparkles, Share2, Zap, Image as ImageIcon, Timer, Megaphone, Handshake, ChevronUp, ChevronDown, Star, Landmark, BarChart3, Footprints, Users, Crown } from 'lucide-react';
 import { Player, Team, Match, MatchPlayerStat, ScoringConfig, EventConfig, EventArchive, NewsItem, Partner, TeamSponsor, TeamSponsorsMap, SponsorClicksMap, Season } from '../types';
 import { apiFetch, uploadImage } from '../lib/api';
 import { fetchSponsorClicks } from '../lib/sponsors';
@@ -465,6 +465,8 @@ export default function AdminPanel({
   const [pomMatchday, setPomMatchday] = useState(0); // Spieltag-Nummer für „Spieler des Spieltages N"
   const [pomSponsorId, setPomSponsorId] = useState(''); // Partner-ID des Sponsors
   const [pomSuccess, setPomSuccess] = useState(false);
+  // Ist gerade eine „Nur Super-Admins"-Vorschau der Auszeichnung aktiv?
+  const [pomPreview, setPomPreview] = useState(false);
   const [pomAutoNote, setPomAutoNote] = useState('');
   const [pomAutoBusy, setPomAutoBusy] = useState(false);
   // Torwart des Spieltages (optional – leer = nur der Spieler wird gezeigt)
@@ -570,8 +572,9 @@ export default function AdminPanel({
   const [isStartingSeason, setIsStartingSeason] = useState(false);
 
   useEffect(() => {
-    apiFetch<{ name: string; club: string; teamId?: string; goals: number; assists: number; image: string; matchday?: number; sponsorId?: string; keeper?: { name: string; teamId: string; image: string } | null }>('/api/player-of-the-month')
+    apiFetch<{ name: string; club: string; teamId?: string; goals: number; assists: number; image: string; matchday?: number; sponsorId?: string; keeper?: { name: string; teamId: string; image: string } | null; preview?: boolean }>('/api/player-of-the-month?admin=1')
       .then((data) => {
+        setPomPreview(!!data.preview);
         setPomName(data.name || '');
         setPomClub(data.club || '');
         setPomTeamId(data.teamId || '');
@@ -589,15 +592,18 @@ export default function AdminPanel({
       });
   }, []);
 
-  const handleSavePom = async () => {
+  // mode 'preview' = nur Super-Admins sehen es auf der Website; 'public' = alle.
+  const handleSavePom = async (mode: 'public' | 'preview' = 'public') => {
     if (!pomName.trim()) {
       alert('Bitte einen Spieler-Namen eingeben.');
       return;
     }
+    if (mode === 'public' && !window.confirm('Auszeichnung jetzt für ALLE auf der Website zeigen?')) return;
     try {
       await apiFetch('/api/player-of-the-month', {
         method: 'POST',
         body: JSON.stringify({
+          mode,
           name: pomName.trim(),
           club: pomClub.trim(),
           teamId: pomTeamId,
@@ -616,10 +622,24 @@ export default function AdminPanel({
             : null,
         }),
       });
+      setPomPreview(mode === 'preview');
       setPomSuccess(true);
       setTimeout(() => setPomSuccess(false), 3000);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Fehler beim Speichern.');
+    }
+  };
+
+  // Vorschau verwerfen: die öffentliche Auszeichnung (falls vorhanden) bleibt.
+  const handleDiscardPomPreview = async () => {
+    if (!window.confirm('Vorschau verwerfen? Die öffentliche Auszeichnung bleibt unverändert.')) return;
+    try {
+      await apiFetch('/api/player-of-the-month?preview=1', { method: 'DELETE' });
+      setPomPreview(false);
+      setPomSuccess(true);
+      setTimeout(() => setPomSuccess(false), 3000);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Fehler beim Verwerfen.');
     }
   };
 
@@ -2567,6 +2587,20 @@ export default function AdminPanel({
               <ImageUploader label="Torwart-Portraitfoto (optional – sonst Foto aus dem Kader)" value={keeperImage} onChange={setKeeperImage} />
             </div>
 
+            {pomPreview && (
+              <div className="md:col-span-4 flex flex-wrap items-center gap-3 rounded-xl border border-[#E9C46A]/40 bg-[#E9C46A]/10 px-4 py-3">
+                <span className="text-[13px] text-[#E9C46A] font-bold flex-1 min-w-0">
+                  👑 Vorschau aktiv – diese Auszeichnung sehen gerade nur Super-Admins auf der Website.
+                </span>
+                <button
+                  type="button"
+                  onClick={handleDiscardPomPreview}
+                  className="px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider border border-white/15 text-hl-soft hover:text-white cursor-pointer"
+                >
+                  Vorschau verwerfen
+                </button>
+              </div>
+            )}
             <div className="md:col-span-4 flex flex-wrap items-center justify-end gap-3 pb-1">
               {pomSuccess && (
                 <motion.span
@@ -2587,11 +2621,20 @@ export default function AdminPanel({
               </button>
               <button
                 type="button"
-                onClick={handleSavePom}
+                onClick={() => handleSavePom('preview')}
+                className="px-5 py-3 rounded-full text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer border border-[#E9C46A]/45 bg-[#E9C46A]/12 text-[#E9C46A] hover:bg-[#E9C46A]/20"
+                title="Nur Super-Admins sehen die Auszeichnung auf der Website – zum Testen"
+              >
+                <Crown className="w-4 h-4" />
+                <span>Nur Super-Admins</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSavePom('public')}
                 className="px-6 py-3 bg-brand-accent hover:bg-brand-accent/80 border border-brand-accent-light/30 rounded-full text-xs font-bold uppercase tracking-wider transition-all text-white flex items-center gap-1.5 cursor-pointer shadow-lg shadow-brand-accent-light/10"
               >
                 <Check className="w-4 h-4" />
-                <span>Spieler auszeichnen</span>
+                <span>Für alle auszeichnen</span>
               </button>
             </div>
           </div>
