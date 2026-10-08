@@ -1,19 +1,60 @@
-// Warte-/„Du bist allein"-Musik im Huddle (wie bei Slack): ein entspannter
-// Lo-Fi-Loop, komplett live per WebAudio erzeugt – keine Datei, kein Download,
-// keine Lizenzfragen. Liegt unter /assets/huddle-music.mp3 eine eigene Musik
-// (mit Nutzungsrechten!), wird stattdessen diese in Schleife gespielt.
+// Warte-/„Du bist allein"-Musik im Huddle (wie bei Slack): /assets/huddle-music.mp3
+// in Schleife. Fehlt die Datei (oder lädt nicht), springt ein live per WebAudio
+// erzeugter Lo-Fi-Loop ein.
 // Die Musik läuft NUR lokal aus dem Lautsprecher – sie wird nie ins Gespräch
 // übertragen.
 
 const FILE_URL = '/assets/huddle-music.mp3';
-let fileCheck: Promise<boolean> | null = null;
-function hasMusicFile(): Promise<boolean> {
-  if (!fileCheck) {
-    fileCheck = fetch(FILE_URL, { method: 'HEAD' })
-      .then((r) => r.ok && (r.headers.get('content-type') ?? '').startsWith('audio/'))
-      .catch(() => false);
+
+// Die Musik-Datei einmal laden + dekodieren (danach im Speicher). Abgespielt
+// wird sie über den schon freigeschalteten AudioContext des Huddles – so klappt
+// es auch am iPhone, wo ein <audio>-Element ohne frische Tipp-Geste stumm bliebe.
+let decoded: Promise<AudioBuffer | null> | null = null;
+function loadMusic(ctx: AudioContext): Promise<AudioBuffer | null> {
+  if (!decoded) {
+    decoded = fetch(FILE_URL)
+      .then((r) => (r.ok && (r.headers.get('content-type') ?? '').startsWith('audio/') ? r.arrayBuffer() : null))
+      .then((buf) =>
+        buf
+          ? new Promise<AudioBuffer | null>((resolve) => {
+              // Safari kennt nur die Callback-Variante zuverlässig.
+              ctx.decodeAudioData(buf, (b) => resolve(b), () => resolve(null));
+            })
+          : null
+      )
+      .catch(() => null);
+    // Fehlschlag nicht dauerhaft merken – nächster Versuch lädt neu.
+    decoded.then((b) => {
+      if (!b) decoded = null;
+    });
   }
-  return fileCheck;
+  return decoded;
+}
+
+function playBuffer(ctx: AudioContext, buffer: AudioBuffer): () => void {
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  src.loop = true;
+  const g = ctx.createGain();
+  g.gain.value = 0;
+  g.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 2); // sanft einblenden
+  src.connect(g).connect(ctx.destination);
+  src.start();
+  return () => {
+    const now = ctx.currentTime;
+    g.gain.cancelScheduledValues(now);
+    g.gain.setValueAtTime(g.gain.value, now);
+    g.gain.linearRampToValueAtTime(0, now + 0.6);
+    window.setTimeout(() => {
+      try {
+        src.stop();
+        src.disconnect();
+        g.disconnect();
+      } catch {
+        /* schon gestoppt */
+      }
+    }, 700);
+  };
 }
 
 // Frequenz einer MIDI-Note.
@@ -176,37 +217,18 @@ function synthLoop(ctx: AudioContext): () => void {
   };
 }
 
-// Startet die Musik; gibt eine Stopp-Funktion zurück.
+// Startet die Musik; gibt eine Stopp-Funktion zurück. Erst die Musik-Datei,
+// sonst (kein Netz/keine Datei) der erzeugte Lo-Fi-Loop.
 export function startHoldMusic(getCtx: () => AudioContext | null): () => void {
   let stopped = false;
   let stopFn: (() => void) | null = null;
-  void (async () => {
-    if (await hasMusicFile()) {
-      if (stopped) return;
-      const a = new Audio(FILE_URL);
-      a.loop = true;
-      a.volume = 0.35;
-      try {
-        await a.play();
-        if (stopped) {
-          a.pause();
-          return;
-        }
-        stopFn = () => {
-          a.pause();
-          a.src = '';
-        };
-        return;
-      } catch {
-        /* z. B. iOS ohne Tipp-Geste → unten die erzeugte Musik */
-      }
-    }
+  const ctx = getCtx();
+  if (!ctx) return () => {};
+  if (ctx.state !== 'running') ctx.resume().catch(() => {});
+  void loadMusic(ctx).then((buffer) => {
     if (stopped) return;
-    const ctx = getCtx();
-    if (!ctx) return;
-    if (ctx.state !== 'running') ctx.resume().catch(() => {});
-    stopFn = synthLoop(ctx);
-  })();
+    stopFn = buffer ? playBuffer(ctx, buffer) : synthLoop(ctx);
+  });
   return () => {
     stopped = true;
     stopFn?.();
