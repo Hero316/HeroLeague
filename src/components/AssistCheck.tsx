@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Check, Loader2, Search, X } from 'lucide-react';
 import { useBackClose } from '../lib/backStack';
-import { fetchTrackingAudio, fetchTrackingRules, linkTrackingAudio, parseVoice, type TrackingAudio, type VoiceRosterPlayer } from '../lib/voice';
+import { fetchTrackingAudio, fetchTrackingRules, linkTrackingAudio, parseGoals, type GoalCheck, type TrackingAudio, type VoiceRosterPlayer } from '../lib/voice';
 import { resolveSelection, type VoicePlayer } from './VoiceTrackingPanel';
 import { ModalPortal } from './ui';
 
 // ===========================================================================
-// „Vorlagen nachprüfen": die Aufnahme(n) eines Spiels noch einmal von Gemini
-// auswerten lassen und NUR die Vorlagen mit dem Gespeicherten vergleichen.
+// „Vorlagen nachprüfen": Gemini hört die Aufnahme(n) eines Spiels im
+// TOR-PRÜFMODUS ab – es sucht nur die Tore und entscheidet bei jedem, ob direkt
+// davor eine Vorlage war. Danach Vergleich mit den gespeicherten Vorlagen.
 // Abweichungen werden einzeln per Klick übernommen. Beim Nachtragen wird ein
 // schon gezählter Pass zur Vorlage (Pässe bleiben gleich) – nichts doppelt.
 // ===========================================================================
@@ -40,8 +41,9 @@ export default function AssistCheck({ matchId, matchDate, homeName, awayName, pl
   const [showAll, setShowAll] = useState(false);
   const [busy, setBusy] = useState('');
   const [err, setErr] = useState('');
-  // Ergebnis: Vorlagen laut Aufnahme je Spieler + die auslösenden Stellen.
-  const [found, setFound] = useState<Record<string, { n: number; quotes: string[] }> | null>(null);
+  // Ergebnis je Aufnahme: gefundene Tore + ob Namen vorkommen, die nicht in
+  // diesem Spiel stehen (dann gehört sie wohl zu einem anderen Spiel).
+  const [results, setResults] = useState<{ url: string; at: string; goals: GoalCheck[]; foreign: string[]; include: boolean }[] | null>(null);
   const [done, setDone] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -80,11 +82,18 @@ export default function AssistCheck({ matchId, matchDate, homeName, awayName, pl
       return n;
     });
 
+  const norm = (x: string) => (x || '').toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
+  const inMatch = (name: string) => {
+    const t = norm(name);
+    const num = t.match(/^(?:nummer\s*|nr\.?\s*|#)?(\d{1,2})$/);
+    return players.some((p) => norm(p.name) === t || (num && p.number === Number(num[1])));
+  };
+
   const run = async () => {
-    const urls = list.filter((a) => picked.has(a.url)).map((a) => a.url);
-    if (urls.length === 0) return;
+    const chosen = list.filter((a) => picked.has(a.url));
+    if (chosen.length === 0) return;
     setErr('');
-    setFound(null);
+    setResults(null);
     setDone(new Set());
     try {
       const rules = (await fetchTrackingRules().catch(() => ({ text: '' }))).text;
@@ -95,32 +104,46 @@ export default function AssistCheck({ matchId, matchDate, homeName, awayName, pl
         role: p.role,
         ...(typeof p.number === 'number' ? { number: p.number } : {}),
       }));
-      const acc: Record<string, { n: number; quotes: string[] }> = {};
-      for (let i = 0; i < urls.length; i++) {
-        setBusy(`Gemini hört Aufnahme ${i + 1} von ${urls.length} noch einmal ab …`);
-        const res = await parseVoice({
-          audioUrl: urls[i],
+      const out: { url: string; at: string; goals: GoalCheck[]; foreign: string[]; include: boolean }[] = [];
+      for (let i = 0; i < chosen.length; i++) {
+        setBusy(`Gemini sucht die Tore in Aufnahme ${i + 1} von ${chosen.length} …`);
+        const res = await parseGoals({
+          audioUrl: chosen[i].url,
           mimeType: 'audio/wav',
           context: { homeTeam: homeName, awayTeam: awayName, players: ctxPlayers, rules },
         });
-        for (const ev of res.events) {
-          if (ev.action !== 'assist') continue;
-          const k = resolveSelection(ev, players);
-          if (!k) continue;
-          const cur = (acc[k] ??= { n: 0, quotes: [] });
-          cur.n += Math.max(1, ev.delta || 1);
-          if (ev.quote) cur.quotes.push(ev.quote);
-        }
-        // Gewählte Aufnahme fürs nächste Mal mit dem Spiel verknüpfen.
-        void linkTrackingAudio(matchId, urls[i]).catch(() => {});
+        const foreign = [...new Set(res.goals.flatMap((g) => [g.scorer, g.assist]).filter((n) => n && !inMatch(n)))];
+        out.push({ url: chosen[i].url, at: chosen[i].at, goals: res.goals, foreign, include: foreign.length === 0 });
+        // Passende Aufnahme fürs nächste Mal mit dem Spiel verknüpfen.
+        if (foreign.length === 0) void linkTrackingAudio(matchId, chosen[i].url).catch(() => {});
       }
-      setFound(acc);
+      setResults(out);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Auswertung fehlgeschlagen.');
     } finally {
       setBusy('');
     }
   };
+
+  // Vorlagen laut Aufnahme(n) je Spieler – nur aus den mitgezählten Aufnahmen.
+  const found = useMemo(() => {
+    if (!results) return null;
+    const acc: Record<string, { n: number; quotes: string[] }> = {};
+    for (const r of results) {
+      if (!r.include) continue;
+      for (const g of r.goals) {
+        if (!g.assist) continue;
+        const k = resolveSelection({ team: g.team, player: g.assist, action: 'assist', delta: 1 }, players);
+        if (!k) continue;
+        const cur = (acc[k] ??= { n: 0, quotes: [] });
+        cur.n += 1;
+        if (g.quote) cur.quotes.push(g.quote);
+      }
+    }
+    return acc;
+  }, [results, players]);
+  const toggleInclude = (url: string) =>
+    setResults((cur) => (cur ? cur.map((r) => (r.url === url ? { ...r, include: !r.include } : r)) : cur));
 
   // Vergleich: alle Spieler mit gespeicherten ODER gefundenen Vorlagen.
   const diffs = useMemo(() => {
@@ -155,7 +178,7 @@ export default function AssistCheck({ matchId, matchDate, homeName, awayName, pl
             <div className="min-w-0 flex-1">
               <div className="font-display font-black uppercase tracking-tight text-white text-lg">Vorlagen nachprüfen</div>
               <p className="text-xs text-hl-mute mt-0.5">
-                {homeName} – {awayName} · Gemini hört die Aufnahme noch einmal ab und vergleicht nur die Vorlagen.
+                {homeName} – {awayName} · Gemini sucht in den Aufnahmen nur die Tore und prüft bei jedem, ob davor eine Vorlage war.
               </p>
             </div>
             <button onClick={onClose} aria-label="Schließen" className="w-9 h-9 shrink-0 grid place-items-center rounded-xl text-hl-mute hover:text-white hover:bg-white/10 cursor-pointer">
@@ -176,8 +199,9 @@ export default function AssistCheck({ matchId, matchDate, homeName, awayName, pl
               {audio && list.length === 0 && <p className="text-sm text-hl-mute">Keine Audio-Aufnahmen gefunden.</p>}
               {audio && audio.linked.length === 0 && list.length > 0 && (
                 <p className="text-xs text-amber-300/90 mb-2">
-                  Diesem Spiel ist noch keine Aufnahme fest zugeordnet (ältere Spiele). Wähle anhand von Datum, Uhrzeit und Anhören die
-                  passende(n) aus – danach merkt sich die Seite die Zuordnung.
+                  Diesem Spiel ist noch keine Aufnahme fest zugeordnet (ältere Spiele). Ein Spiel besteht meist aus mehreren kurzen
+                  Aufnahmen – hake nur die an, die zu DIESEM Spiel gehören (Datum, Uhrzeit, kurz reinhören). Aufnahmen mit Spielern aus
+                  anderen Spielen werden nach dem Prüfen markiert und nicht mitgezählt. Danach merkt sich die Seite die Zuordnung.
                 </p>
               )}
               <div className="space-y-1.5">
@@ -218,16 +242,58 @@ export default function AssistCheck({ matchId, matchDate, homeName, awayName, pl
                 style={{ background: 'linear-gradient(135deg,#E6238E,#b81570)' }}
               >
                 {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                {busy ? 'Prüfe …' : `Vorlagen prüfen (${picked.size} ${picked.size === 1 ? 'Aufnahme' : 'Aufnahmen'})`}
+                {busy ? 'Prüfe …' : `Tore & Vorlagen prüfen (${picked.size} ${picked.size === 1 ? 'Aufnahme' : 'Aufnahmen'})`}
               </button>
               {busy && <p className="text-xs text-hl-mute mt-2">{busy}</p>}
               {err && <p className="text-sm text-rose-300 mt-2">{err}</p>}
             </div>
 
-            {/* 2. Ergebnis */}
+            {/* 2. Gefundene Tore je Aufnahme */}
+            {results && (
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-hl-dim mb-2">2 · Gefundene Tore</div>
+                <div className="space-y-2">
+                  {results.map((r) => (
+                    <div key={r.url} className={`rounded-xl border px-3 py-2.5 ${r.include ? 'border-white/10 bg-white/[.03]' : 'border-amber-400/30 bg-amber-400/[.04] opacity-80'}`}>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="text-xs font-bold text-white flex-1 min-w-0">Aufnahme {fmtAt(r.at)}</span>
+                        <label className="flex items-center gap-1.5 text-[11px] font-bold text-hl-soft cursor-pointer shrink-0">
+                          <input type="checkbox" checked={r.include} onChange={() => toggleInclude(r.url)} className="accent-[#22DFC9]" /> mitzählen
+                        </label>
+                      </div>
+                      {r.foreign.length > 0 && (
+                        <p className="text-[11px] text-amber-300 mt-1">
+                          Gehört wahrscheinlich zu einem anderen Spiel – {r.foreign.join(', ')} {r.foreign.length === 1 ? 'steht' : 'stehen'} nicht in diesem Spiel.
+                        </p>
+                      )}
+                      {r.goals.length === 0 ? (
+                        <p className="text-[11px] text-hl-dim mt-1">Kein Tor in dieser Aufnahme.</p>
+                      ) : (
+                        <div className="mt-1.5 space-y-1.5">
+                          {r.goals.map((g, i) => (
+                            <div key={i} className="text-[12.5px] leading-snug">
+                              <span className="text-white font-semibold">⚽ {g.scorer}</span>
+                              {g.assist ? (
+                                <span className="text-emerald-300"> · Vorlage: {g.assist}</span>
+                              ) : (
+                                <span className="text-hl-mute"> · keine Vorlage</span>
+                              )}
+                              {g.reason && <span className="text-hl-dim"> – {g.reason}</span>}
+                              {g.quote && <div className="text-[11px] text-hl-mute italic truncate">„{g.quote}"</div>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 3. Vergleich */}
             {found && (
               <div>
-                <div className="text-[11px] font-bold uppercase tracking-wider text-hl-dim mb-2">2 · Ergebnis</div>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-hl-dim mb-2">3 · Vergleich mit dem Gespeicherten</div>
                 {diffs.length === 0 ? (
                   <p className="text-sm text-hl-mute">Weder gespeichert noch in der Aufnahme gibt es Vorlagen.</p>
                 ) : (

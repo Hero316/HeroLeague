@@ -252,6 +252,139 @@ const RESPONSE_SCHEMA = {
   required: ['transcript', 'events'],
 } as const;
 
+// Ein Gemini-Aufruf mit Anweisung, Inhalt (Audio/Text) und JSON-Schema → Antworttext.
+async function callGemini(apiKey: string, instruction: string, parts: Record<string, unknown>[], schema: unknown): Promise<string> {
+  const res = await fetch(`${BASE}/v1beta/models/${model()}:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: instruction }] },
+      contents: [{ role: 'user', parts }],
+      generationConfig: {
+        temperature: 0.1,
+        responseMimeType: 'application/json',
+        responseSchema: schema,
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error(`Gemini-Auswertung fehlgeschlagen: ${res.status} ${t.slice(0, 300)}`);
+  }
+
+  const data = (await res.json()) as {
+    candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
+    promptFeedback?: { blockReason?: string };
+  };
+  if (data.promptFeedback?.blockReason) {
+    throw new Error('Gemini hat die Anfrage blockiert: ' + data.promptFeedback.blockReason);
+  }
+  const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') ?? '';
+  if (!text) throw new Error('Gemini lieferte keine Antwort.');
+  return text;
+}
+
+// --- Tor-Prüfmodus („Vorlagen nachprüfen") ---------------------------------
+// Gemini sucht NUR die Tore und entscheidet bei jedem, ob direkt davor eine
+// Vorlage war – alles andere wird ignoriert.
+export interface GoalCheck {
+  team: string;
+  scorer: string;
+  assist: string; // '' = keine Vorlage
+  reason: string; // kurz, warum (keine) Vorlage
+  quote: string;
+}
+
+const GOALS_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    transcript: { type: 'STRING' },
+    goals: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          team: { type: 'STRING' },
+          scorer: { type: 'STRING' },
+          assist: { type: 'STRING' },
+          reason: { type: 'STRING' },
+          quote: { type: 'STRING' },
+        },
+        required: ['team', 'scorer', 'assist', 'reason'],
+      },
+    },
+  },
+  required: ['transcript', 'goals'],
+} as const;
+
+function buildGoalInstruction(ctx: VoiceContext): string {
+  const list = (side: string) =>
+    ctx.players
+      .filter((p) => p.team === side)
+      .map((p) => `- ${typeof p.number === 'number' ? `#${p.number} ` : ''}${p.name}${p.role === 'keeper' ? ' (Torwart)' : ''}`)
+      .join('\n') || '- (kein Kader hinterlegt)';
+  return `Du prüfst für die "Hero League" (Kleinfeld-Fußball) eine Sprachaufnahme, in der jemand ein Spiel kommentiert. Deine EINZIGE Aufgabe: jedes TOR finden und entscheiden, ob es eine VORLAGE gab. Alle anderen Aktionen ignorierst du.
+
+## Spiel
+Heim: ${ctx.homeTeam}
+Auswärts: ${ctx.awayTeam}
+
+## Kader ${ctx.homeTeam}
+${list('home')}
+
+## Kader ${ctx.awayTeam}
+${list('away')}
+
+## So entscheidest du die Vorlage (sehr wichtig)
+Schau dir bei JEDEM Tor genau an, was DIREKT davor passiert ist:
+- VORLAGE: X spielt einen Pass (auch Flanke, Ecke, Querpass, Steckpass, Rückpass) zu einem Mitspieler Y, und Y erzielt DIREKT danach das Tor – ohne eigene Aktion dazwischen. Dann ist X der Vorlagengeber.
+  Beispiel: „Adrian Süß passt auf Matteo Süß, Matteo schießt – Tor!" → scorer Matteo Süß, assist Adrian Süß.
+  Beispiel: „Flanke von Adrian, Matteo köpft rein" → scorer Matteo, assist Adrian.
+  Ballannahme oder Mitnahme OHNE Gegnerkontakt („nimmt an", „legt ihn sich vor", „zieht direkt ab") ist KEINE eigene Aktion – die Vorlage bleibt.
+- KEINE VORLAGE, sobald Y zwischen Pass und Tor eine eigene Aktion macht: ein Dribbling/Gegner ausspielen („dribbelt aus", „geht vorbei", „tunnelt"), ein gewonnener Zweikampf, ein weiterer Pass, oder ein erster Schuss, der gehalten/geblockt wird und erst der Nachschuss/Abpraller ist drin. Dann assist = "".
+  Beispiel: „Adrian passt auf Matteo, Matteo dribbelt den Verteidiger aus, rennt an ihm vorbei und schießt – Tor" → scorer Matteo, assist "" (reason: Dribbling vor dem Tor).
+- Keine Vorlage bei Eigentor, Elfmeter oder wenn der Ball vom Gegner kam. Wird „Vorlage von X" ausdrücklich gesagt, gilt das immer.
+- Pro Tor höchstens EINE Vorlage. Wird ein Tor zurückgenommen („doch kein Tor", „streich das"), lass es weg.
+
+## Ausgabe
+- "transcript": wörtliche Transkription.
+- "goals": jedes Tor in zeitlicher Reihenfolge mit team (Mannschaftsname des Torschützen), scorer und assist mit dem EXAKTEN Namen aus dem Kader (Rückennummern über den Kader auflösen). Steht ein genannter Spieler NICHT im Kader, gib den gehörten Namen wörtlich aus. "reason" = ein kurzer Satz, warum Vorlage bzw. keine Vorlage. "quote" = die Stelle aus der Aufnahme kurz vor und bis zum Tor.
+- Keine Tore in der Aufnahme → "goals": [].
+${ctx.rules ? `\n## Zusätzliche, dauerhafte Liga-Regeln\n${ctx.rules}\n` : ''}`;
+}
+
+export async function parseGoals(opts: {
+  audio?: { uri: string; mimeType: string };
+  audioInline?: { base64: string; mimeType: string };
+  transcript?: string;
+  context: VoiceContext;
+}): Promise<{ transcript: string; goals: GoalCheck[] }> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('Gemini ist nicht konfiguriert (GEMINI_API_KEY fehlt).');
+  const parts: Record<string, unknown>[] = [];
+  const ask = { text: 'Finde alle Tore in dieser Aufnahme und entscheide jeweils, ob es eine Vorlage gab.' };
+  if (opts.audioInline) parts.push({ inlineData: { mimeType: opts.audioInline.mimeType, data: opts.audioInline.base64 } }, ask);
+  else if (opts.audio) parts.push({ fileData: { fileUri: opts.audio.uri, mimeType: opts.audio.mimeType } }, ask);
+  else if (opts.transcript) parts.push({ text: `Transkript:\n\n${opts.transcript}` });
+  else throw new Error('Weder Audio noch Transkript übergeben.');
+
+  const text = await callGemini(apiKey, buildGoalInstruction(opts.context), parts, GOALS_SCHEMA);
+  let parsed: { transcript?: unknown; goals?: unknown };
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error('Gemini-Antwort war kein gültiges JSON.');
+  }
+  const str = (v: unknown, n = 240) => (typeof v === 'string' ? v.slice(0, n) : '');
+  const goals = Array.isArray(parsed.goals)
+    ? (parsed.goals as Record<string, unknown>[])
+        .filter((g) => g && typeof g.scorer === 'string' && g.scorer.trim())
+        .map((g) => ({ team: str(g.team, 80), scorer: str(g.scorer, 80), assist: str(g.assist, 80).trim(), reason: str(g.reason), quote: str(g.quote) }))
+    : [];
+  return { transcript: typeof parsed.transcript === 'string' ? parsed.transcript : '', goals };
+}
+
 // --- Hauptaufruf ------------------------------------------------------------
 
 export async function parseTracking(opts: {
@@ -276,35 +409,7 @@ export async function parseTracking(opts: {
     throw new Error('Weder Audio noch Transkript übergeben.');
   }
 
-  const res = await fetch(`${BASE}/v1beta/models/${model()}:generateContent?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: buildInstruction(opts.context) }] },
-      contents: [{ role: 'user', parts }],
-      generationConfig: {
-        temperature: 0.1,
-        responseMimeType: 'application/json',
-        responseSchema: RESPONSE_SCHEMA,
-      },
-    }),
-  });
-
-  if (!res.ok) {
-    const t = await res.text().catch(() => '');
-    throw new Error(`Gemini-Auswertung fehlgeschlagen: ${res.status} ${t.slice(0, 300)}`);
-  }
-
-  const data = (await res.json()) as {
-    candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
-    promptFeedback?: { blockReason?: string };
-  };
-  if (data.promptFeedback?.blockReason) {
-    throw new Error('Gemini hat die Anfrage blockiert: ' + data.promptFeedback.blockReason);
-  }
-  const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') ?? '';
-  if (!text) throw new Error('Gemini lieferte keine Antwort.');
-
+  const text = await callGemini(apiKey, buildInstruction(opts.context), parts, RESPONSE_SCHEMA);
   let parsed: VoiceResult;
   try {
     parsed = JSON.parse(text) as VoiceResult;
