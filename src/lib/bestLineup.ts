@@ -1,25 +1,23 @@
-import type { ActionCounts, ActionKey, MatchPlayerStat, ScoringConfig } from '../types';
-import { matchNote, normalizeCounts } from './rating';
+import type { MatchPlayerStat, ScoringConfig } from '../types';
+import { matchNote, normalizeCounts, playerCard, sumCounts } from './rating';
 
 // ===========================================================================
 // Beste Aufstellung aus dem Tracking (Teamseite, Mini-Feld 2-2 + Torwart + Bank).
+// Grundlage sind die FIFA-Kartenwerte, die auch auf den Spielerkarten stehen –
+// so passt die Aufstellung zu dem, was man sieht:
+//  • Offensiv-Wert = 40 % SCH + 40 % DRI + 20 % PAS
+//  • Defensiv-Wert = DEF
 //  • Torwart: der im Kader ausgewählte Torwart (sonst wer am häufigsten im Tor stand)
-//  • 2 vorne: bester Offensiv-Wert pro Spiel (Tore, Vorlagen, Schüsse, Schlüsselpässe, Dribblings)
-//  • 2 hinten: bester Defensiv-Wert pro Spiel (Zweikämpfe, Ballgewinne, Blocks, Ballverluste)
+//  • Plätze werden nacheinander an den jeweils höchsten Wert vergeben – jeder
+//    kommt dahin (vorne/hinten), wo er am stärksten ist.
 //  • Bank: die nächsten 4 nach Ø-Note
-// Gewichte = die Punkte aus den Score-Einstellungen (Statistics Center), damit
-// alles zur übrigen Bewertung passt. Wer vorne UND hinten top ist, kommt dahin,
-// wo er im Teamvergleich am stärksten ist.
 // ===========================================================================
-
-const OFF_KEYS: ActionKey[] = ['goal', 'penalty_goal', 'assist', 'shot_on', 'shot_miss', 'key_pass', 'dribble_won', 'dribble_lost'];
-const DEF_KEYS: ActionKey[] = ['duel_won', 'duel_lost', 'interception', 'shot_blocked_def', 'turnover'];
 
 export interface LineupPlayer {
   name: string;
   games: number; // getrackte Spiele als Feldspieler (bzw. im Tor beim Torwart)
-  off: number; // Offensiv-Wert pro Spiel
-  def: number; // Defensiv-Wert pro Spiel
+  off: number; // Offensiv-Wert (aus der Karte: SCH/DRI/PAS)
+  def: number; // Defensiv-Wert (Karte: DEF)
   avgNote: number;
 }
 
@@ -30,8 +28,7 @@ export interface TrackedLineup {
   bench: LineupPlayer[]; // bis zu 4
 }
 
-const weighted = (c: ActionCounts, cfg: ScoringConfig, keys: ActionKey[]) =>
-  keys.reduce((s, k) => s + (c[k] || 0) * (cfg.points[k] || 0), 0);
+const attr = (card: ReturnType<typeof playerCard>, key: string) => card.attrs.find((a) => a.key === key)?.value ?? 0;
 
 export function trackedLineup(
   rows: MatchPlayerStat[],
@@ -40,18 +37,14 @@ export function trackedLineup(
   kader: { name: string; goalkeeper?: boolean }[]
 ): TrackedLineup | null {
   const inKader = new Set(kader.map((p) => p.name));
-  const acc = new Map<string, { games: number; keeperGames: number; off: number; def: number; note: number }>();
+  const acc = new Map<string, { field: MatchPlayerStat[]; keeperGames: number; note: number }>();
   for (const r of rows) {
     if (r.teamId !== teamId || !inKader.has(r.playerName)) continue;
-    const c = normalizeCounts(r.counts);
-    const a = acc.get(r.playerName) ?? { games: 0, keeperGames: 0, off: 0, def: 0, note: 0 };
-    if (r.role === 'keeper') {
-      a.keeperGames += 1;
-    } else {
-      a.games += 1;
-      a.off += weighted(c, cfg, OFF_KEYS);
-      a.def += weighted(c, cfg, DEF_KEYS);
-      a.note += matchNote(c, cfg, 'field');
+    const a = acc.get(r.playerName) ?? { field: [], keeperGames: 0, note: 0 };
+    if (r.role === 'keeper') a.keeperGames += 1;
+    else {
+      a.field.push(r);
+      a.note += matchNote(normalizeCounts(r.counts), cfg, 'field');
     }
     acc.set(r.playerName, a);
   }
@@ -68,9 +61,20 @@ export function trackedLineup(
     ? { name: keeperName, games: keeperAcc?.keeperGames ?? 0, off: 0, def: 0, avgNote: keeperNote(rows, cfg, teamId, keeperName) }
     : null;
 
+  // Feldspieler mit ihren Kartenwerten (gleiche Karte wie auf der Spielerseite).
   const field: LineupPlayer[] = [...acc.entries()]
-    .filter(([name, a]) => name !== keeperName && a.games > 0)
-    .map(([name, a]) => ({ name, games: a.games, off: a.off / a.games, def: a.def / a.games, avgNote: a.note / a.games }));
+    .filter(([name, a]) => name !== keeperName && a.field.length > 0)
+    .map(([name, a]) => {
+      const games = a.field.length;
+      const card = playerCard(sumCounts(a.field.map((r) => normalizeCounts(r.counts))), games, 'field', cfg);
+      return {
+        name,
+        games,
+        off: 0.4 * attr(card, 'SCH') + 0.4 * attr(card, 'DRI') + 0.2 * attr(card, 'PAS'),
+        def: attr(card, 'DEF'),
+        avgNote: a.note / games,
+      };
+    });
   if (field.length === 0) return { goalkeeper, attack: [], defense: [], bench: [] };
 
   // Mindest-Einsätze, damit ein einziges starkes Spiel nicht reicht.
@@ -81,22 +85,15 @@ export function trackedLineup(
 
   const attack: LineupPlayer[] = [];
   const defense: LineupPlayer[] = [];
+  // Platz für Platz: der insgesamt höchste noch offene Wert gewinnt.
   const pick = (pool: LineupPlayer[]) => {
-    // Werte im Teamvergleich auf 0..1 bringen, damit Offensive und Defensive vergleichbar sind.
-    const norm = (vals: number[]) => {
-      const lo = Math.min(...vals);
-      const hi = Math.max(...vals);
-      return (v: number) => (hi > lo ? (v - lo) / (hi - lo) : 0.5);
-    };
-    const nOff = norm(field.map((p) => p.off));
-    const nDef = norm(field.map((p) => p.def));
     const left = [...pool];
     while (left.length > 0 && (attack.length < 2 || defense.length < 2)) {
       let best: { i: number; slot: 'a' | 'd'; v: number; tie: number } | null = null;
       left.forEach((p, i) => {
         const opts: { slot: 'a' | 'd'; v: number }[] = [];
-        if (attack.length < 2) opts.push({ slot: 'a', v: nOff(p.off) });
-        if (defense.length < 2) opts.push({ slot: 'd', v: nDef(p.def) });
+        if (attack.length < 2) opts.push({ slot: 'a', v: p.off });
+        if (defense.length < 2) opts.push({ slot: 'd', v: p.def });
         for (const o of opts) {
           if (!best || o.v > best.v || (o.v === best.v && p.avgNote > best.tie)) best = { i, slot: o.slot, v: o.v, tie: p.avgNote };
         }
