@@ -28,7 +28,6 @@ import {
   CircleCheck,
   EyeOff,
   Crown,
-  Search,
 } from 'lucide-react';
 import FifaCard from './FifaCard';
 import {
@@ -67,7 +66,6 @@ import { shortDate, readable } from './ui';
 import { useBackClose, goBackLayer } from '../lib/backStack';
 import { GAME_MINUTES } from '../lib/matchTiming';
 import VoiceTrackingPanel, { type VoicePlayer } from './VoiceTrackingPanel';
-import AssistCheck from './AssistCheck';
 import {
   fetchScoring,
   saveScoring as apiSaveScoring,
@@ -1674,7 +1672,6 @@ function MatchEditor({
   const [reassignTeam, setReassignTeam] = useState<string | null>(null);
 
   const [voiceOpen, setVoiceOpen] = useState(false);
-  const [assistOpen, setAssistOpen] = useState(false);
   // Pro-Modus: Für Geübte, die nur noch per Audio tracken. Die Aktions-Tasten
   // verschwinden, dafür stehen Foto, Nummer und Name groß da. Die Wahl bleibt
   // auf dem Gerät gemerkt, damit man sie nicht bei jedem Spiel neu trifft.
@@ -1755,13 +1752,6 @@ function MatchEditor({
           <Mic className="w-3.5 h-3.5" /> Audio-Tracking
         </button>
         <button
-          onClick={() => setAssistOpen(true)}
-          title="Aufnahme(n) dieses Spiels noch einmal auswerten und die Vorlagen vergleichen"
-          className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border border-[#E6238E]/50 text-[#ff7cc2] bg-[#E6238E]/10 hover:bg-[#E6238E]/20 cursor-pointer active:scale-95 transition"
-        >
-          <Search className="w-3.5 h-3.5" /> Vorlagen prüfen
-        </button>
-        <button
           onClick={() => onUndo(match.id)}
           disabled={undoCount === 0}
           className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 border border-white/10 bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
@@ -1781,32 +1771,6 @@ function MatchEditor({
           onApply={applyVoice}
           onClose={() => setVoiceOpen(false)}
           onCreatePlayer={(teamId, name) => onAddPlayer(match.id, teamId, name)}
-        />
-      )}
-
-      {assistOpen && (
-        <AssistCheck
-          matchId={match.id}
-          matchDate={match.date}
-          homeName={home?.name ?? match.homeTeamId}
-          awayName={away?.name ?? match.awayTeamId}
-          players={voicePlayers}
-          stored={Object.fromEntries(
-            [match.homeTeamId, match.awayTeamId].flatMap((teamId) =>
-              teamRows(teamId).map(({ r }) => [`${teamId}::${r.playerName}`, r.counts.assist || 0] as const)
-            )
-          )}
-          onFix={(teamId, player, dir) => {
-            const k = rowKey(match.id, teamId, player);
-            const passOk = rows[k]?.counts.pass_ok || 0;
-            // Vorlage nachtragen: der Pass war schon als Pass gezählt → er WIRD zur
-            // Vorlage (Vorlage +1 zählt automatisch einen Pass mit, daher Pass −1).
-            // Vorlage entfernen: sie bleibt ein normaler Pass.
-            onDelta(k, match.id, 'assist', dir);
-            if (dir === 1 && passOk > 0) onDelta(k, match.id, 'pass_ok', -1);
-            if (dir === -1) onDelta(k, match.id, 'pass_ok', 1);
-          }}
-          onClose={() => setAssistOpen(false)}
         />
       )}
 
