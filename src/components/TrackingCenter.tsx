@@ -26,6 +26,8 @@ import {
   Sparkles,
   CircleDashed,
   CircleCheck,
+  EyeOff,
+  Crown,
 } from 'lucide-react';
 import FifaCard from './FifaCard';
 import {
@@ -74,6 +76,8 @@ import {
   resetTracking,
   publishDay,
   publishMatch,
+  fetchLiveState,
+  type PublishMode,
   leagueDayKey,
   eventDayKey,
   testSheet,
@@ -238,7 +242,7 @@ export default function TrackingCenter({
   const [rows, setRows] = useState<RowMap>({});
   const rowsRef = useRef<RowMap>({});
   useEffect(() => { rowsRef.current = rows; }, [rows]);
-  const [dayLive, setDayLive] = useState(false);
+  const [dayMode, setDayMode] = useState<PublishMode>('off');
   const [liveMatchIds, setLiveMatchIds] = useState<Set<string>>(new Set());
   const [loadingDay, setLoadingDay] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -263,11 +267,18 @@ export default function TrackingCenter({
   // Tracking-Status je Spiel (wird getrackt / fertig) – für alle Geräte sichtbar.
   // Solange ein Tag offen ist, alle 15 s nachladen (nur im sichtbaren Tab).
   const [trackStatus, setTrackStatusMap] = useState<TrackStatusMap>({});
+  // Veröffentlichungs-Stand aller Tage (live für alle / Vorschau nur Super-Admins).
+  const [liveState, setLiveState] = useState<{ days: string[]; previewDays: string[] }>({ days: [], previewDays: [] });
   usePolling(
     () => {
       fetchTrackStatus().then(setTrackStatusMap).catch(() => {});
+      fetchLiveState().then(setLiveState).catch(() => {});
     },
     15_000
+  );
+  const modeOf = useCallback(
+    (key: string): PublishMode => (liveState.days.includes(key) ? 'live' : liveState.previewDays.includes(key) ? 'preview' : 'off'),
+    [liveState]
   );
   const changeTrackStatus = useCallback(
     (matchId: string, status: TrackStatus | null) => {
@@ -417,7 +428,7 @@ export default function TrackingCenter({
     async (key: string, games: Match[], rk: string | null, rmap?: RosterMap) => {
       setLoadingDay(true);
       try {
-        const { rows: saved, live, liveMatchIds: liveIds } = await fetchDayStats(key);
+        const { rows: saved, live, preview, liveMatchIds: liveIds } = await fetchDayStats(key);
         setLiveMatchIds(new Set(liveIds ?? []));
         const savedMap: Record<string, { role: string; counts: ActionCounts }> = {};
         saved.forEach((r) => {
@@ -474,10 +485,10 @@ export default function TrackingCenter({
           };
         });
         setRows(next);
-        setDayLive(live);
+        setDayMode(live ? 'live' : preview ? 'preview' : 'off');
       } catch {
         setRows({});
-        setDayLive(false);
+        setDayMode('off');
       } finally {
         setLoadingDay(false);
       }
@@ -717,15 +728,29 @@ export default function TrackingCenter({
     [dayKey, dayMatches, selectedMatchId, reloadDay]
   );
 
-  const togglePublish = useCallback(async () => {
-    const next = !dayLive;
-    setDayLive(next);
-    try {
-      await publishDay(dayKey, next);
-    } catch {
-      setDayLive(!next);
-    }
-  }, [dayLive, dayKey]);
+  // Spieltag/Testspiel veröffentlichen: für alle · nur Super-Admins · verstecken.
+  const setPublish = useCallback(
+    async (key: string, mode: PublishMode) => {
+      if (!key) return;
+      if (mode === 'live' && !window.confirm('Stats dieses Tages jetzt für ALLE auf der Website live schalten?')) return;
+      const prevState = liveState;
+      const prevMode = dayMode;
+      setLiveState((cur) => ({
+        days: mode === 'live' ? [...cur.days.filter((d) => d !== key), key] : cur.days.filter((d) => d !== key),
+        previewDays: mode === 'preview' ? [...cur.previewDays.filter((d) => d !== key), key] : cur.previewDays.filter((d) => d !== key),
+      }));
+      if (key === dayKey) setDayMode(mode);
+      try {
+        const r = await publishDay(key, mode);
+        setLiveState({ days: r.days ?? [], previewDays: r.previewDays ?? [] });
+      } catch (e) {
+        setLiveState(prevState);
+        if (key === dayKey) setDayMode(prevMode);
+        window.alert(e instanceof Error ? e.message : 'Konnte nicht gespeichert werden.');
+      }
+    },
+    [liveState, dayMode, dayKey]
+  );
 
   // Ein einzelnes Spiel live schalten/verstecken – unabhängig vom ganzen Tag/Event.
   const toggleMatchLive = useCallback(async (matchId: string) => {
@@ -997,8 +1022,8 @@ export default function TrackingCenter({
               resolveTeam={resolveTeam}
               rows={rows}
               loading={loadingDay}
-              live={dayLive}
-              onTogglePublish={togglePublish}
+              mode={dayMode}
+              onPublish={(m) => setPublish(dayKey, m)}
               liveMatchIds={liveMatchIds}
               onToggleMatchLive={toggleMatchLive}
               onOpenMatch={setSelectedMatchId}
@@ -1022,6 +1047,8 @@ export default function TrackingCenter({
               onOpenEvent={openEvent}
               trackedIds={trackedIds}
               statusMap={trackStatus}
+              modeOf={modeOf}
+              onPublish={setPublish}
             />
           )}
         </main>
@@ -1058,6 +1085,92 @@ export default function TrackingCenter({
 // Fortschrittsbalken „X von Y Spielen getrackt" für einen Spieltag/Abend.
 // Grün = auf „Fertig" gesetzt, gelb = „Wird getrackt". 100 % erst, wenn ALLE
 // Spiele fertig sind. „mit Daten" zeigt zusätzlich, wo schon etwas erfasst ist.
+// Kleines Abzeichen: Live (für alle) / Vorschau (nur Super-Admins).
+function PublishChip({ mode }: { mode: PublishMode }) {
+  if (mode === 'off') return null;
+  return mode === 'live' ? (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-hl-green/15 text-hl-green border border-hl-green/40">
+      <Radio className="w-3 h-3" /> Live
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#E9C46A]/15 text-[#E9C46A] border border-[#E9C46A]/40 truncate">
+      <Crown className="w-3 h-3 shrink-0" /> Vorschau
+    </span>
+  );
+}
+
+// Sobald alle Spiele „Fertig" sind: Knöpfe zum Veröffentlichen direkt auf der Karte.
+function ReadyToPublish({
+  total,
+  done,
+  mode,
+  onPublish,
+}: {
+  total: number;
+  done: number;
+  mode: PublishMode;
+  onPublish: (mode: PublishMode) => void;
+}) {
+  if (total === 0 || done < total || mode === 'live') return null;
+  const stop = (e: React.MouseEvent | React.KeyboardEvent) => e.stopPropagation();
+  return (
+    <div className="mt-3 rounded-xl border border-hl-green/30 bg-hl-green/[.06] p-3" onClick={stop} onKeyDown={stop}>
+      <div className="text-[12px] font-bold text-hl-green mb-2">
+        {mode === 'preview' ? 'Vorschau aktiv – nur Super-Admins sehen die Stats' : 'Alles fertig getrackt 🎉 Jetzt live schalten?'}
+      </div>
+      <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-2">
+        {mode !== 'preview' && (
+          <button
+            type="button"
+            onClick={() => onPublish('preview')}
+            className="px-3 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-[#E9C46A]/45 bg-[#E9C46A]/12 text-[#E9C46A] hover:bg-[#E9C46A]/20 cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <Crown className="w-3.5 h-3.5" /> Nur Super-Admins
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => onPublish('live')}
+          className={`px-3 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-hl-green/45 bg-hl-green/15 text-hl-green hover:bg-hl-green/25 cursor-pointer flex items-center justify-center gap-1.5 ${
+            mode === 'preview' ? 'min-[380px]:col-span-2' : ''
+          }`}
+        >
+          <Radio className="w-3.5 h-3.5" /> Für alle live
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Umschalter oben im Tag: versteckt · nur Super-Admins (Vorschau) · für alle live.
+function PublishSwitch({ mode, onChange }: { mode: PublishMode; onChange: (m: PublishMode) => void }) {
+  const opts: { m: PublishMode; label: string; short: string; icon: React.ReactNode; on: string }[] = [
+    { m: 'off', label: 'Versteckt', short: 'Aus', icon: <EyeOff className="w-3.5 h-3.5 shrink-0" />, on: 'bg-white/10 text-hl-text border-white/25' },
+    { m: 'preview', label: 'Nur Super-Admins', short: 'Vorschau', icon: <Crown className="w-3.5 h-3.5 shrink-0" />, on: 'bg-[#E9C46A]/15 text-[#E9C46A] border-[#E9C46A]/45' },
+    { m: 'live', label: 'Für alle live', short: 'Für alle', icon: <Radio className="w-3.5 h-3.5 shrink-0" />, on: 'bg-hl-green/15 text-hl-green border-hl-green/40' },
+  ];
+  return (
+    <div className="grid grid-cols-3 w-full sm:w-auto sm:inline-grid rounded-xl border border-white/10 bg-white/[.03] p-0.5 gap-0.5" role="radiogroup" aria-label="Sichtbarkeit der Stats">
+      {opts.map((o) => (
+        <button
+          key={o.m}
+          type="button"
+          role="radio"
+          aria-checked={mode === o.m}
+          onClick={() => mode !== o.m && onChange(o.m)}
+          title={o.label}
+          className={`min-w-0 px-2.5 sm:px-3 py-1.5 rounded-[10px] text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border transition-colors cursor-pointer whitespace-nowrap ${
+            mode === o.m ? o.on : 'border-transparent text-hl-mute hover:text-hl-text'
+          }`}
+        >
+          {o.icon} <span className="sm:hidden truncate">{o.short}</span>
+          <span className="hidden sm:inline">{o.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function TrackProgress({ done, tracking, withData, total }: { done: number; tracking: number; withData: number; total: number }) {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   const trackPct = total > 0 ? Math.min(100 - pct, (tracking / total) * 100) : 0;
@@ -1102,6 +1215,8 @@ function DayList({
   onOpenEvent,
   trackedIds,
   statusMap,
+  modeOf,
+  onPublish,
 }: {
   seasons: Season[];
   seasonId: string;
@@ -1113,6 +1228,8 @@ function DayList({
   onOpenEvent: (ev: EventConfig) => void;
   trackedIds: Set<string>;
   statusMap: TrackStatusMap;
+  modeOf: (dayKey: string) => PublishMode;
+  onPublish: (dayKey: string, mode: PublishMode) => void;
 }) {
   // Fortschritt eines Tages aus Status (fertig/läuft) + vorhandenen Daten.
   const progress = (dayKey: string, ids: string[]) => ({
@@ -1140,24 +1257,41 @@ function DayList({
           <div className="hl-card p-8 text-center text-hl-mute">Keine Spiele in dieser Saison.</div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 hl-cascade-soft">
-            {matchdays.map((d) => (
-              <button
-                key={d.matchday}
-                onClick={() => onOpen(d.matchday)}
-                className="hl-card p-5 text-left hover:border-brand-accent/40 transition-colors cursor-pointer group"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase tracking-[2px] text-hl-dim">Spieltag</span>
-                  <ChevronRight className="w-4 h-4 text-hl-faint group-hover:text-brand-accent-light transition-colors" />
+            {matchdays.map((d) => {
+              const key = leagueDayKey(seasonId, d.matchday);
+              const pr = progress(key, d.games.map((g) => g.id));
+              const mode = modeOf(key);
+              return (
+                <div
+                  key={d.matchday}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onOpen(d.matchday)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onOpen(d.matchday);
+                    }
+                  }}
+                  className="hl-card p-5 text-left hover:border-brand-accent/40 transition-colors cursor-pointer group"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] uppercase tracking-[2px] text-hl-dim">Spieltag</span>
+                    <span className="flex items-center gap-2 min-w-0">
+                      <PublishChip mode={mode} />
+                      <ChevronRight className="w-4 h-4 shrink-0 text-hl-faint group-hover:text-brand-accent-light transition-colors" />
+                    </span>
+                  </div>
+                  <div className="font-display font-black text-4xl leading-none mt-1 tabular-nums">{d.matchday}</div>
+                  <div className="mt-3 text-xs text-hl-mute flex items-center gap-3">
+                    <span>{d.games.length} Spiele</span>
+                    {d.date && <span className="text-hl-faint">{shortDate(d.date)}</span>}
+                  </div>
+                  <TrackProgress {...pr} />
+                  <ReadyToPublish total={pr.total} done={pr.done} mode={mode} onPublish={(m) => onPublish(key, m)} />
                 </div>
-                <div className="font-display font-black text-4xl leading-none mt-1 tabular-nums">{d.matchday}</div>
-                <div className="mt-3 text-xs text-hl-mute flex items-center gap-3">
-                  <span>{d.games.length} Spiele</span>
-                  {d.date && <span className="text-hl-faint">{shortDate(d.date)}</span>}
-                </div>
-                <TrackProgress {...progress(leagueDayKey(seasonId, d.matchday), d.games.map((g) => g.id))} />
-              </button>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -1168,24 +1302,41 @@ function DayList({
             <FlaskConical className="w-4 h-4 text-hl-magenta" /> Testspielabende
           </h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 hl-cascade-soft">
-            {events.map((ev) => (
-              <button
+            {events.map((ev) => {
+              const key = eventDayKey(ev.id);
+              const pr = progress(key, (ev.matches ?? []).map((m) => m.id));
+              const mode = modeOf(key);
+              return (
+              <div
                 key={ev.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => onOpenEvent(ev)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onOpenEvent(ev);
+                  }
+                }}
                 className="hl-card p-5 text-left hover:border-hl-magenta/50 transition-colors cursor-pointer group"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-[10px] uppercase tracking-[2px] text-hl-magenta">{ev.id === activeEventId ? 'Aktiv' : 'Testspiel'}</span>
-                  <ChevronRight className="w-4 h-4 text-hl-faint group-hover:text-hl-magenta transition-colors" />
+                  <span className="flex items-center gap-2 min-w-0">
+                    <PublishChip mode={mode} />
+                    <ChevronRight className="w-4 h-4 shrink-0 text-hl-faint group-hover:text-hl-magenta transition-colors" />
+                  </span>
                 </div>
                 <div className="font-display font-black text-xl leading-tight mt-1">{ev.title || ev.label || 'Testspiel'}</div>
                 <div className="mt-2 text-xs text-hl-mute flex items-center gap-3">
                   <span>{ev.teams?.length ?? 0} Teams</span>
                   <span className="text-hl-faint">{ev.matches?.length ?? 0} Spiele</span>
                 </div>
-                <TrackProgress {...progress(eventDayKey(ev.id), (ev.matches ?? []).map((m) => m.id))} />
-              </button>
-            ))}
+                <TrackProgress {...pr} />
+                <ReadyToPublish total={pr.total} done={pr.done} mode={mode} onPublish={(m) => onPublish(key, m)} />
+              </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1203,8 +1354,8 @@ function DayView({
   resolveTeam,
   rows,
   loading,
-  live,
-  onTogglePublish,
+  mode,
+  onPublish,
   liveMatchIds,
   onToggleMatchLive,
   onOpenMatch,
@@ -1222,8 +1373,8 @@ function DayView({
   resolveTeam: (key: string) => Team | undefined;
   rows: RowMap;
   loading: boolean;
-  live: boolean;
-  onTogglePublish: () => void;
+  mode: PublishMode;
+  onPublish: (mode: PublishMode) => void;
   liveMatchIds: Set<string>;
   onToggleMatchLive: (matchId: string) => void;
   onOpenMatch: (id: string) => void;
@@ -1298,15 +1449,7 @@ function DayView({
               {resetBusy ? 'Setze zurück…' : isEvent ? 'Testspiel zurücksetzen' : 'Spieltag zurücksetzen'}
             </button>
           )}
-          <button
-            onClick={onTogglePublish}
-            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-colors cursor-pointer border ${
-              live ? 'bg-hl-green/15 border-hl-green/40 text-hl-green' : 'bg-white/5 border-white/10 text-hl-mute hover:text-hl-text'
-            }`}
-          >
-            <Radio className="w-3.5 h-3.5" />
-            {live ? 'Live · sichtbar' : 'Live schalten'}
-          </button>
+          <PublishSwitch mode={mode} onChange={onPublish} />
         </div>
       </div>
 
@@ -1393,7 +1536,8 @@ function DayView({
       <p className="text-[11px] text-hl-dim mt-5 flex items-start gap-1.5">
         <Shield className="w-3.5 h-3.5 shrink-0 mt-0.5" />
         <span>
-          Oben „Live schalten" macht {isEvent ? 'das ganze Testspiel' : 'den ganzen Spieltag'} auf einmal sichtbar. Oder pro Spiel
+          Oben „Für alle live" macht {isEvent ? 'das ganze Testspiel' : 'den ganzen Spieltag'} auf einmal sichtbar, „Nur Super-Admins" zeigt
+          die komplette Website mit Stats erst mal nur Super-Admins (z. B. für Insta-Posts). Oder pro Spiel
           rechts einzeln live schalten (sobald erfasst) – so kannst du fertige Spiele schon zeigen, während der Rest noch läuft.
           Ohne das bleiben die Werte interner Entwurf.
         </span>

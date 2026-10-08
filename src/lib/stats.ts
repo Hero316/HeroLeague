@@ -23,11 +23,20 @@ export function fetchLiveDays(): Promise<string[]> {
   return apiFetch<string[]>('/api/stats?resource=live');
 }
 
-export function publishDay(dayKey: string, live: boolean): Promise<{ days: string[] }> {
+// Veröffentlichungs-Stufe: für alle live · nur Super-Admins (Vorschau) · versteckt.
+export type PublishMode = 'live' | 'preview' | 'off';
+
+export function publishDay(dayKey: string, mode: PublishMode | boolean): Promise<{ days: string[]; previewDays?: string[] }> {
+  const m: PublishMode = typeof mode === 'boolean' ? (mode ? 'live' : 'off') : mode;
   return apiFetch('/api/stats?resource=publish', {
     method: 'POST',
-    body: JSON.stringify({ dayKey, live }),
+    body: JSON.stringify({ dayKey, mode: m }),
   });
+}
+
+// Live-/Vorschau-Stand aller Tage (nur eingeloggt; fürs Tracking Center).
+export function fetchLiveState(): Promise<{ days: string[]; previewDays: string[] }> {
+  return apiFetch('/api/stats?resource=live-state');
 }
 
 // Ein einzelnes Spiel live schalten (unabhängig vom ganzen Tag/Event).
@@ -39,7 +48,7 @@ export function publishMatch(matchId: string, live: boolean): Promise<{ days: st
 }
 
 // Alle Zeilen eines Spieltags/Abends (+ ob er live ist, + einzeln live geschaltete Spiele).
-export function fetchDayStats(dayKey: string): Promise<{ rows: MatchPlayerStat[]; live: boolean; liveMatchIds?: string[] }> {
+export function fetchDayStats(dayKey: string): Promise<{ rows: MatchPlayerStat[]; live: boolean; preview?: boolean; liveMatchIds?: string[] }> {
   return apiFetch(`/api/stats?resource=day&day=${encodeURIComponent(dayKey)}`);
 }
 
@@ -65,7 +74,7 @@ export function fetchMatchStats(matchId: string): Promise<{ rows: MatchPlayerSta
 export function fetchPublicStats(
   seasonId?: string,
   includeAll?: boolean
-): Promise<{ rows: MatchPlayerStat[]; days: string[] }> {
+): Promise<{ rows: MatchPlayerStat[]; days: string[]; preview?: string[] }> {
   const params: string[] = [];
   if (seasonId) params.push(`season=${encodeURIComponent(seasonId)}`);
   if (includeAll) params.push('all=1');

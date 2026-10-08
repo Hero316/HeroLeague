@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql } from './_lib/db.js';
 import { requirePermission, getSession } from './_lib/auth.js';
+import type { SessionPayload } from './_lib/auth.js';
 import { badRequest, isNonEmptyString } from './_lib/validate.js';
 import { sheetInfo } from './_lib/gsheets.js';
 import { exportLeagueDay, exportScoringConfig } from './_lib/sheetExport.js';
@@ -81,10 +82,30 @@ interface StatRow {
   counts: Record<string, number>;
 }
 
-async function readLiveDays(): Promise<string[]> {
+// Veröffentlichung: `days` = für ALLE live, `previewDays` = Vorschau NUR für
+// Super-Admins (die ganze Website mit Stats, z. B. um Insta-Posts vorzubereiten,
+// bevor es alle sehen). Schlüssel: Spieltag/Event-dayKey oder `match:<id>`.
+async function readLive(): Promise<{ days: string[]; previewDays: string[] }> {
   const rows = await sql`SELECT value FROM settings WHERE key = 'tracking-live'`;
-  const days = (rows[0]?.value as { days?: unknown })?.days;
-  return Array.isArray(days) ? days.filter((d): d is string => typeof d === 'string') : [];
+  const v = (rows[0]?.value ?? {}) as { days?: unknown; previewDays?: unknown };
+  const list = (x: unknown) => (Array.isArray(x) ? x.filter((d): d is string => typeof d === 'string') : []);
+  return { days: list(v.days), previewDays: list(v.previewDays) };
+}
+async function readLiveDays(): Promise<string[]> {
+  return (await readLive()).days;
+}
+async function writeLive(days: string[], previewDays: string[]): Promise<void> {
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('tracking-live', ${JSON.stringify({ days, previewDays })}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+}
+// Was darf DIESE Anfrage sehen? Super-Admins zusätzlich die Vorschau.
+async function visibleLive(session: SessionPayload | null): Promise<{ days: string[]; preview: string[] }> {
+  const { days, previewDays } = await readLive();
+  if (session?.role !== 'superadmin') return { days, preview: [] };
+  const extra = previewDays.filter((d) => !days.includes(d));
+  return { days: [...days, ...extra], preview: extra };
 }
 
 // --- Schreib-Handler (Staff) -----------------------------------------------
@@ -272,19 +293,24 @@ const exportScoring = requirePermission('tracking')(async (req: VercelRequest, r
 });
 
 const savePublish = requirePermission('tracking')(async (req: VercelRequest, res: VercelResponse) => {
-  const b = (req.body ?? {}) as { dayKey?: unknown; matchId?: unknown; live?: unknown };
+  const b = (req.body ?? {}) as { dayKey?: unknown; matchId?: unknown; live?: unknown; mode?: unknown };
   // Einzelnes Spiel live schalten (key `match:<id>`) ODER den ganzen Tag/das Event (dayKey).
   const key = isNonEmptyString(b.matchId) ? `match:${b.matchId}` : isNonEmptyString(b.dayKey) ? b.dayKey : '';
   if (!key) return badRequest(res, 'dayKey oder matchId ist Pflicht.');
-  const current = new Set(await readLiveDays());
-  if (b.live) current.add(key);
-  else current.delete(key);
-  const days = [...current];
-  await sql`
-    INSERT INTO settings (key, value) VALUES ('tracking-live', ${JSON.stringify({ days })}::jsonb)
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
-  `;
-  return res.json({ days });
+  // mode: 'live' = für alle · 'preview' = nur Super-Admins · 'off' = versteckt.
+  // (Alt: live true/false.)
+  const mode = b.mode === 'live' || b.mode === 'preview' || b.mode === 'off' ? b.mode : b.live ? 'live' : 'off';
+  const cur = await readLive();
+  const live = new Set(cur.days);
+  const preview = new Set(cur.previewDays);
+  live.delete(key);
+  preview.delete(key);
+  if (mode === 'live') live.add(key);
+  if (mode === 'preview') preview.add(key);
+  const days = [...live];
+  const previewDays = [...preview];
+  await writeLive(days, previewDays);
+  return res.json({ days, previewDays });
 });
 
 // Getrackte Daten KOMPLETT zurücksetzen – ein oder mehrere Spiele, oder den
@@ -314,15 +340,11 @@ const resetTally = requirePermission('tracking')(async (req: VercelRequest, res:
     deleted += r2.length;
   }
 
-  // Aus „live" nehmen: die Spiele (match:<id>) und bei wholeDay den ganzen Tag.
-  const current = new Set(await readLiveDays());
-  for (const id of matchIds) current.delete(`match:${id}`);
-  if (wholeDay) current.delete(dayKey);
-  const days = [...current];
-  await sql`
-    INSERT INTO settings (key, value) VALUES ('tracking-live', ${JSON.stringify({ days })}::jsonb)
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
-  `;
+  // Aus „live" (und der Vorschau) nehmen: die Spiele (match:<id>) und bei wholeDay den ganzen Tag.
+  const cur = await readLive();
+  const drop = new Set([...matchIds.map((id) => `match:${id}`), ...(wholeDay ? [dayKey] : [])]);
+  const days = cur.days.filter((d) => !drop.has(d));
+  await writeLive(days, cur.previewDays.filter((d) => !drop.has(d)));
   // Zurückgesetzte Spiele sind auch nicht mehr „fertig getrackt".
   const statusKeys = matchIds.map((id) => `${dayKey}|${id}`);
   if (statusKeys.length) {
@@ -477,9 +499,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Testspiel/Event: nur die veröffentlichten Roh-Daten EINES Events
         // (day_key = "event:<id>"). Komplett getrennt von den Liga-Saisons.
         const eventId = typeof req.query.event === 'string' ? req.query.event : '';
+        const viewer = await getSession(req);
         if (eventId) {
           const key = `event:${eventId}`;
-          const live = await readLiveDays();
+          const live = (await visibleLive(viewer)).days;
           const eventLive = live.includes(key);
           const liveMatchIds = live.filter((k) => k.startsWith('match:')).map((k) => k.slice('match:'.length));
           if (!eventLive && liveMatchIds.length === 0) return res.json({ rows: [], days: [] });
@@ -503,10 +526,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             return res.json({ rows, days: [] });
           }
         }
-        const live = await readLiveDays();
+        const vis = await visibleLive(viewer);
+        const live = vis.days;
         const days = season ? live.filter((d) => d.startsWith(`s:${season}:`)) : live;
         const liveMatchIds = live.filter((k) => k.startsWith('match:')).map((k) => k.slice('match:'.length));
-        if (days.length === 0 && liveMatchIds.length === 0) return res.json({ rows: [], days: [] });
+        // Nur-Vorschau-Teile (für den Hinweis „nur du siehst das" auf der Website).
+        const preview = season ? vis.preview.filter((d) => d.startsWith(`s:${season}:`) || d.startsWith('match:')) : vis.preview;
+        if (days.length === 0 && liveMatchIds.length === 0) return res.json({ rows: [], days: [], preview });
         // Live geschaltete Tage ODER einzeln live geschaltete Spiele (auf die Saison begrenzt).
         const rows = (season
           ? await sql`
@@ -520,13 +546,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                      player_name AS "playerName", role, counts
               FROM match_player_stats
               WHERE day_key = ANY(${days}::text[]) OR match_id = ANY(${liveMatchIds}::text[])`) as StatRow[];
-        return res.json({ rows, days });
+        return res.json({ rows, days, preview });
       }
 
+      // ÖFFENTLICH: Fortschritt eines gerade laufenden Trackings („Das Team ist am
+      // Tracken · 40 %") – je Liga-Spieltag der aktuellen Saison, der Status-
+      // Einträge hat, aber noch nicht komplett live geschaltet ist. Ohne Namen.
+      if (resource === 'tracking-progress') {
+        const [statusRows, live, season] = await Promise.all([
+          sql`SELECT value FROM settings WHERE key = 'tracking-status'`,
+          getSession(req).then((sess) => visibleLive(sess)).then((v) => v.days),
+          sql`SELECT id FROM seasons WHERE is_current = true LIMIT 1`,
+        ]);
+        const sid = (season[0] as { id?: string } | undefined)?.id;
+        const map = (statusRows[0]?.value ?? {}) as Record<string, { status?: string }>;
+        const byDay = new Map<string, Map<string, string>>();
+        for (const [k, v] of Object.entries(map)) {
+          const i = k.lastIndexOf('|');
+          if (i < 0) continue;
+          const dayKey = k.slice(0, i);
+          if (!sid || !dayKey.startsWith(`s:${sid}:`)) continue;
+          const m = byDay.get(dayKey) ?? new Map<string, string>();
+          m.set(k.slice(i + 1), String(v?.status ?? ''));
+          byDay.set(dayKey, m);
+        }
+        const days: { dayKey: string; matchday: number; done: number; tracking: number; total: number; pct: number }[] = [];
+        for (const [dayKey, st] of byDay) {
+          if (live.includes(dayKey)) continue; // schon komplett veröffentlicht
+          const matchday = Number(dayKey.split(':')[2]);
+          if (!Number.isFinite(matchday)) continue;
+          const ids = (await sql`SELECT id FROM matches WHERE season_id = ${sid} AND matchday = ${matchday}`) as { id: string }[];
+          const total = ids.length;
+          if (!total) continue;
+          const done = ids.filter((m) => st.get(m.id) === 'done').length;
+          const tracking = ids.filter((m) => st.get(m.id) === 'tracking').length;
+          days.push({ dayKey, matchday, done, tracking, total, pct: Math.round((done / total) * 100) });
+        }
+        days.sort((x, y) => y.matchday - x.matchday);
+        return res.json({ days });
+      }
       // Roh-Daten je Spieltag/Spiel nur für eingeloggte Nutzer (Entwürfe sind intern).
       const session = await getSession(req);
       if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
 
+      if (resource === 'live-state') {
+        return res.json(await readLive());
+      }
       if (resource === 'day') {
         const day = typeof req.query.day === 'string' ? req.query.day : '';
         if (!day) return badRequest(res, 'day fehlt.');
@@ -534,10 +599,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           SELECT day_key AS "dayKey", match_id AS "matchId", team_id AS "teamId",
                  player_name AS "playerName", role, counts
           FROM match_player_stats WHERE day_key = ${day}`) as StatRow[];
-        const liveSet = await readLiveDays();
+        const { days: liveSet, previewDays } = await readLive();
         const live = liveSet.includes(day);
         const liveMatchIds = liveSet.filter((k) => k.startsWith('match:')).map((k) => k.slice('match:'.length));
-        return res.json({ rows, live, liveMatchIds });
+        return res.json({ rows, live, preview: !live && previewDays.includes(day), liveMatchIds });
       }
       if (resource === 'match') {
         const matchId = typeof req.query.matchId === 'string' ? req.query.matchId : '';
@@ -568,42 +633,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               WHERE v ~ '^[0-9]+$' AND v::int > 0
             )`) as { matchId: string; dayKey: string }[];
         return res.json({ matchIds: [...new Set(rows.map((r) => r.matchId))], tracked: rows });
-      }
-      // ÖFFENTLICH: Fortschritt eines gerade laufenden Trackings („Das Team ist am
-      // Tracken · 40 %") – je Liga-Spieltag der aktuellen Saison, der Status-
-      // Einträge hat, aber noch nicht komplett live geschaltet ist. Ohne Namen.
-      if (resource === 'tracking-progress') {
-        const [statusRows, live, season] = await Promise.all([
-          sql`SELECT value FROM settings WHERE key = 'tracking-status'`,
-          readLiveDays(),
-          sql`SELECT id FROM seasons WHERE is_current = true LIMIT 1`,
-        ]);
-        const sid = (season[0] as { id?: string } | undefined)?.id;
-        const map = (statusRows[0]?.value ?? {}) as Record<string, { status?: string }>;
-        const byDay = new Map<string, Map<string, string>>();
-        for (const [k, v] of Object.entries(map)) {
-          const i = k.lastIndexOf('|');
-          if (i < 0) continue;
-          const dayKey = k.slice(0, i);
-          if (!sid || !dayKey.startsWith(`s:${sid}:`)) continue;
-          const m = byDay.get(dayKey) ?? new Map<string, string>();
-          m.set(k.slice(i + 1), String(v?.status ?? ''));
-          byDay.set(dayKey, m);
-        }
-        const days: { dayKey: string; matchday: number; done: number; tracking: number; total: number; pct: number }[] = [];
-        for (const [dayKey, st] of byDay) {
-          if (live.includes(dayKey)) continue; // schon komplett veröffentlicht
-          const matchday = Number(dayKey.split(':')[2]);
-          if (!Number.isFinite(matchday)) continue;
-          const ids = (await sql`SELECT id FROM matches WHERE season_id = ${sid} AND matchday = ${matchday}`) as { id: string }[];
-          const total = ids.length;
-          if (!total) continue;
-          const done = ids.filter((m) => st.get(m.id) === 'done').length;
-          const tracking = ids.filter((m) => st.get(m.id) === 'tracking').length;
-          days.push({ dayKey, matchday, done, tracking, total, pct: Math.round((done / total) * 100) });
-        }
-        days.sort((x, y) => y.matchday - x.matchday);
-        return res.json({ days });
       }
       if (resource === 'track-status') {
         if (!(await getSession(req))) return res.status(401).json({ error: 'Nicht angemeldet' });
