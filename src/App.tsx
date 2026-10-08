@@ -313,7 +313,7 @@ export default function App() {
   // Eigene Hero-Hintergrundbilder laden (unkritisch – Fallback bleibt Standard)
   useEffect(() => {
     apiFetch<HeroImages>('/api/twitch?resource=hero')
-      .then((data) => setHeroImages({ match: data.match || '', pom: data.pom || '', table: data.table || '' }))
+      .then((data) => setHeroImages({ match: data.match || '', pom: data.pom || '', table: data.table || '', order: data.order }))
       .catch(() => {
         // Kein eigenes Bild gepflegt – Standard-Design bleibt
       });

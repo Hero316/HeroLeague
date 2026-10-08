@@ -253,7 +253,12 @@ const saveHero = requirePermission('homepage')(async (req: VercelRequest, res: V
     const url = normalizeUrl(v);
     return /^https?:\/\//i.test(url) ? url : '';
   };
-  const cfg = { match: pick(match), pom: pick(pom), table: pick(table) };
+  // Reihenfolge der Slides: nur bekannte Arten, jede einmal, Rest in Standard-Reihenfolge.
+  const KINDS = ['match', 'pom', 'table'];
+  const rawOrder: unknown[] = Array.isArray(req.body?.order) ? req.body.order : [];
+  const order = rawOrder.filter((k, i): k is string => typeof k === 'string' && KINDS.includes(k) && rawOrder.indexOf(k) === i);
+  for (const k of KINDS) if (!order.includes(k)) order.push(k);
+  const cfg = { match: pick(match), pom: pick(pom), table: pick(table), order };
 
   await sql`
     INSERT INTO settings (key, value) VALUES ('hero', ${JSON.stringify(cfg)}::jsonb)
