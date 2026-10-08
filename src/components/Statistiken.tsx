@@ -877,7 +877,7 @@ export default function Statistiken({
                       idx === 0 ? 'text-hl-gold' : idx === 1 ? 'text-[#C7D0DA]' : idx === 2 ? 'text-[#E0A46B]' : 'text-hl-dim';
                     const sub = [
                       `${p.gamesInGoal} im Tor`,
-                      `${p.cleanSheets}× zu null`,
+                      p.cleanSheets > 0 ? `${p.cleanSheets}× zu null` : null,
                       `${p.goalsConceded} Gegentore`,
                       p.saves > 0 ? `${p.saves} Paraden` : null,
                     ]
