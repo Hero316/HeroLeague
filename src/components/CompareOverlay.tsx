@@ -3,7 +3,6 @@ import { AnimatePresence, motion } from 'motion/react';
 import { X, ArrowLeftRight, Swords, Search, ChevronDown } from 'lucide-react';
 import type { Match, MatchPlayerStat, PlayerStat, ScoringConfig, Team } from '../types';
 import { cardForPlayer } from '../lib/playerCards';
-import { heroRanking } from '../lib/trackingAwards';
 import { useBackClose } from '../lib/backStack';
 import FifaCard from './FifaCard';
 import StatRadar, { type RadarSeries } from './StatRadar';
@@ -213,20 +212,11 @@ function PlayerPicker({
 export default function CompareOverlay({ open, onClose, players, teams, trackingRows, matches, scoringConfig }: Props) {
   useBackClose(open, onClose);
 
-  // HERO-ONE-Punkte (wie auf der HERO-ONE-Seite: Tracking-Score + Sieg-Bonus).
-  const heroPts = useMemo(() => {
-    const m = new Map<string, number>();
-    if (!scoringConfig) return m;
-    const league = trackingRows.filter((r) => r.dayKey.startsWith('s:'));
-    for (const p of heroRanking(league, scoringConfig, matches ?? [])) m.set(`${p.teamId}::${p.playerName}`, p.score);
-    return m;
-  }, [trackingRows, scoringConfig, matches]);
-  const heroOf = (p: PlayerStat) => heroPts.get(`${p.teamId}::${p.name}`) ?? 0;
-
-  // Standardauswahl: die zwei Spieler mit den meisten HERO-ONE-Punkten.
+  // Standardauswahl: die zwei torgefährlichsten Spieler. (Bewusst NICHT nach
+  // HERO-ONE-Wertung – die bleibt geheim, nur die Nominierten sind öffentlich.)
   const ranked = useMemo(
-    () => [...players].sort((a, b) => (heroPts.get(`${b.teamId}::${b.name}`) ?? 0) - (heroPts.get(`${a.teamId}::${a.name}`) ?? 0)),
-    [players, heroPts]
+    () => [...players].sort((a, b) => b.goals - a.goals || b.assists - a.assists || a.name.localeCompare(b.name)),
+    [players]
   );
   const [idA, setIdA] = useState<string>('');
   const [idB, setIdB] = useState<string>('');
@@ -270,9 +260,8 @@ export default function CompareOverlay({ open, onClose, players, teams, tracking
     out.push({ label: 'Spiele', a: pA.matchesPlayed, b: pB.matchesPlayed });
     out.push({ label: 'Siegquote', a: winRate(pA), b: winRate(pB), decimals: 0, suffix: '%' });
     out.push({ label: 'Bester Spieler', a: pA.motmCount, b: pB.motmCount });
-    if (heroPts.size > 0) out.push({ label: 'HERO-ONE-Punkte', a: heroOf(pA), b: heroOf(pB), decimals: 1 });
     return out;
-  }, [pA, pB, cardA, cardB, heroPts]);
+  }, [pA, pB, cardA, cardB]);
 
   // Radar nur überlagern, wenn beide dieselbe Rolle haben (gleiche Achsen).
   const sameRole = cardA && cardB && cardA.role === cardB.role;
