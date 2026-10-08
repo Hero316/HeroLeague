@@ -191,10 +191,10 @@ function NomineeCard({
     >
       <button type="button" onClick={onToggle} aria-expanded={open} className="w-full flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-3 text-left cursor-pointer min-w-0">
         <span className="shrink-0">
-          <PlayerCrest player={p} teams={teams} photoSize="md" crestSize="lg" onSelectTeam={onSelectTeam} />
+          <PlayerCrest player={p} teams={teams} photoSize="xl" crestSize="xl" onSelectTeam={onSelectTeam} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block font-display font-black uppercase tracking-tight text-white text-lg sm:text-xl leading-tight truncate">{p.name}</span>
+          <span className="block font-display font-black uppercase tracking-tight text-white text-xl sm:text-2xl leading-tight truncate">{p.name}</span>
           <span className="block text-[12px] text-hl-mute truncate">
             {team?.name ?? p.teamName}
             {keeper ? ' · Torwart' : ''}

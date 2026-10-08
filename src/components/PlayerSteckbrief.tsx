@@ -216,17 +216,22 @@ function Steckbrief({
   const keeper = card?.role === 'keeper';
   const games = keeper ? player.gamesInGoal || player.matchesPlayed : player.matchesPlayed;
   const winRate = player.matchesPlayed > 0 ? Math.round((player.wins / player.matchesPlayed) * 100) : null;
+  // Tore/Vorlagen: getrackt ODER aus den Ergebnissen – der höhere Wert (viele
+  // Ergebnisse sind ohne Torschützen eingetragen).
+  const t = card?.total;
+  const goals = Math.max(player.goals, t ? t.goal + t.penalty_goal : 0);
+  const assists = Math.max(player.assists, t ? t.assist : 0);
   const stats: { v: string; l: string }[] = keeper
     ? [
         { v: String(games), l: 'IM TOR' },
+        { v: String(t?.save ?? 0), l: 'PARADEN' },
         { v: String(player.cleanSheets), l: 'ZU NULL' },
-        { v: String(player.goalsConceded), l: 'GEGENTORE' },
-        { v: winRate == null ? '–' : `${winRate}%`, l: 'SIEGE' },
+        { v: String(goals), l: 'TORE' },
       ]
     : [
         { v: String(player.matchesPlayed), l: 'SPIELE' },
-        { v: String(player.goals), l: 'TORE' },
-        { v: String(player.assists), l: 'VORLAGEN' },
+        { v: String(goals), l: 'TORE' },
+        { v: String(assists), l: 'VORLAGEN' },
         { v: winRate == null ? '–' : `${winRate}%`, l: 'SIEGE' },
       ];
   const top = placements.slice(0, 5);

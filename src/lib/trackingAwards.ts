@@ -112,25 +112,48 @@ function leaders(
     .map(({ teamId, playerName, value, quote, games }) => ({ teamId, playerName, value, quote, games }));
 }
 
+// Mindestversuche, ab denen eine Quote gewertet wird (sonst führt „5 von 5").
+export const PASS_MIN = 5;
+export const DUEL_MIN = 10;
+export const DRIBBLE_MIN = 10;
+export const SHOT_MIN = 5;
+
+// Summen je Spieler (für die sortierbaren Statistik-Tabellen).
+export function playerTotals(rows: MatchPlayerStat[], cfg: ScoringConfig): RankedPlayer[] {
+  return aggregate(rows, cfg);
+}
+
+// „Beste Dribbler": erfolgreiche Dribblings × Quote – so zählen Menge UND
+// Erfolg (5 von 5 = 5,0 schlägt nicht 20 von 25 = 16,0).
+export const dribblerValue = (won: number, lost: number): number | null => {
+  const att = won + lost;
+  return att >= DRIBBLE_MIN ? Math.round(((won * won) / att) * 10) / 10 : null;
+};
+
 // Beste Passquote: nach Quote sortiert (ab genügend Pässen), Menge = angekommene Pässe.
 export function passLeaders(rows: MatchPlayerStat[], cfg: ScoringConfig): StatLeader[] {
   return leaders(rows, cfg, {
     value: (t) => t.pass_ok,
     quote: (t) => ratio(t.pass_ok, t.pass_ok + t.pass_fail),
     attempts: (t) => t.pass_ok + t.pass_fail,
-    minAttempts: 5,
+    minAttempts: PASS_MIN,
     sortByQuote: true,
   });
 }
-// Beste Dribbling-Quote: nach Quote sortiert (ab genügend Dribblings).
+// Beste Dribbler: nach Dribbler-Wert (erfolgreiche × Quote), ab DRIBBLE_MIN Dribblings.
 export function dribbleLeaders(rows: MatchPlayerStat[], cfg: ScoringConfig): StatLeader[] {
-  return leaders(rows, cfg, {
-    value: (t) => t.dribble_won,
-    quote: (t) => ratio(t.dribble_won, t.dribble_won + t.dribble_lost),
-    attempts: (t) => t.dribble_won + t.dribble_lost,
-    minAttempts: 5,
-    sortByQuote: true,
-  });
+  return aggregate(rows, cfg)
+    .map((p) => ({ p, v: dribblerValue(p.total.dribble_won, p.total.dribble_lost) }))
+    .filter((x): x is { p: RankedPlayer; v: number } => x.v != null)
+    .sort((a, b) => b.v - a.v || a.p.playerName.localeCompare(b.p.playerName))
+    .slice(0, 10)
+    .map(({ p }) => ({
+      teamId: p.teamId,
+      playerName: p.playerName,
+      value: p.total.dribble_won,
+      quote: ratio(p.total.dribble_won, p.total.dribble_won + p.total.dribble_lost),
+      games: p.games,
+    }));
 }
 // Beste Zweikampfquote: nach Quote sortiert (ab genügend Zweikämpfen).
 export function duelLeaders(rows: MatchPlayerStat[], cfg: ScoringConfig): StatLeader[] {
@@ -138,7 +161,7 @@ export function duelLeaders(rows: MatchPlayerStat[], cfg: ScoringConfig): StatLe
     value: (t) => t.duel_won,
     quote: (t) => ratio(t.duel_won, t.duel_won + t.duel_lost),
     attempts: (t) => t.duel_won + t.duel_lost,
-    minAttempts: 5,
+    minAttempts: DUEL_MIN,
     sortByQuote: true,
   });
 }
@@ -273,6 +296,16 @@ const GG_W_CLEAN = 0.5; // je Spiel zu null
 const GG_W_PEN = 1.0; // je gehaltenem Elfmeter
 const GG_W_POS = 0.15; // je Stellungsspiel-Parade
 
+// Erklärung der Goldener-Handschuh-Punkte (Info-Knopf auf der Website).
+export const GOLDEN_GLOVE_EXPLAIN: string[] = [
+  `Gewertet ab ${KEEPER_MIN_GAMES} Spielen im Tor.`,
+  `+${GG_W_GSAA} je Gegentor weniger als der Liga-Schnitt (pro Spiel hochgerechnet)`,
+  `+${GG_W_CLEAN} je Spiel zu null`,
+  `+${GG_W_SAVE} je Parade`,
+  `+${GG_W_POS} je Standparade`,
+  `+${GG_W_PEN} je gehaltenem Elfmeter`,
+];
+
 export function goldenGloveRanking(rows: MatchPlayerStat[], cfg: ScoringConfig): KeeperEntry[] {
   const keepers = aggregate(rows, cfg).filter((p) => p.role === 'keeper');
   // Dynamischer Liga-Schnitt: Gegentore pro Torwart-Spiel über alle Keeper.
@@ -321,8 +354,7 @@ export function goldenGloveRanking(rows: MatchPlayerStat[], cfg: ScoringConfig):
 // wird hier NICHT nochmal addiert – nur die Kopfballtore für sich.
 export function headerGoalLeaders(rows: MatchPlayerStat[], cfg: ScoringConfig): StatLeader[] {
   return leaders(rows, cfg, {
-    value: (t) => t.goal_header,
-    quote: (t) => ratio(t.goal_header, t.goal + t.penalty_goal),
+    value: (t) => t.goal_header, // nur die Anzahl – keine Prozentangabe
   });
 }
 
@@ -487,7 +519,7 @@ export function playerPlacements(
     add('Kopfballtore', headerGoalLeaders(rows, cfg), (r) => `${r.value}`);
     add('Beste Passquote', passLeaders(rows, cfg), (r) => pctOf(r.quote));
     add('Beste Zweikampfquote', duelLeaders(rows, cfg), (r) => pctOf(r.quote));
-    add('Beste Dribbling-Quote', dribbleLeaders(rows, cfg), (r) => pctOf(r.quote));
+    add('Beste Dribbler', dribbleLeaders(rows, cfg), (r) => `${r.value} · ${pctOf(r.quote)}`);
     add('Meiste Torschüsse', shotLeaders(rows, cfg), (r) => `${r.value}`);
     add('Balleroberer', ballWinnerLeaders(rows, cfg), (r) => `${r.value}`);
     add('Schlüsselpässe', keyPassLeaders(rows, cfg), (r) => `${r.value}`);

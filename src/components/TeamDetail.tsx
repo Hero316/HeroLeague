@@ -94,17 +94,34 @@ export default function TeamDetail({
       .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))[0];
   }, [teamMatches]);
 
+  // Getrackte Tore/Vorlagen je Spieler (wie in den Statistiken). Viele Ergebnisse
+  // werden ohne Torschützen eingetragen – dann zeigte das Profil „0 Tore",
+  // obwohl die Statistiken Tore kennen. Deshalb gilt der höhere der beiden Werte.
+  const trackedGoals = useMemo(() => {
+    const m = new Map<string, { goals: number; assists: number }>();
+    for (const r of trackingRows) {
+      if (r.teamId !== team.id) continue;
+      const c = normalizeCounts(r.counts);
+      const e = m.get(r.playerName) ?? { goals: 0, assists: 0 };
+      e.goals += c.goal + c.penalty_goal;
+      e.assists += c.assist;
+      m.set(r.playerName, e);
+    }
+    return m;
+  }, [trackingRows, team.id]);
+
   // Kader mit Statistiken aus den Spieldaten verknüpfen
   const roster: RosterEntry[] = useMemo(
     () =>
       (team.spielerliste || []).map((player) => {
         const stats = players.find((p) => p.teamId === team.id && p.name === player.name);
+        const tracked = trackedGoals.get(player.name);
         const matchesPlayed = stats?.matchesPlayed ?? 0;
         const wins = stats?.wins ?? 0;
         return {
           ...player,
-          goals: stats?.goals ?? 0,
-          assists: stats?.assists ?? 0,
+          goals: Math.max(stats?.goals ?? 0, tracked?.goals ?? 0),
+          assists: Math.max(stats?.assists ?? 0, tracked?.assists ?? 0),
           matchesPlayed,
           wins,
           draws: stats?.draws ?? 0,
@@ -114,7 +131,7 @@ export default function TeamDetail({
           gamesInGoal: stats?.gamesInGoal ?? 0,
         };
       }),
-    [team.spielerliste, players, team.id]
+    [team.spielerliste, players, team.id, trackedGoals]
   );
 
   // Captain (max. einer pro Team, im Admin gesetzt)
@@ -177,7 +194,7 @@ export default function TeamDetail({
       matchesPlayed: p.matchesPlayed,
     });
     const field = ordered.slice(0, 4).map(toXI);
-    const bench = ordered.slice(4, 6).map(toXI);
+    const bench = ordered.slice(4, 8).map(toXI);
     if (!gk && field.length === 0) return null;
     return { goalkeeper: gk ? toXI(gk) : null, field, bench };
   }, [roster]);
@@ -200,27 +217,25 @@ export default function TeamDetail({
   // „Note je Spiel"-Auf/Zu je Spieler merken, damit auch DAS nach dem Rücksprung
   // aus einem Spiel erhalten bleibt (man will ja weitere Spiele ansehen).
   const NOTES_KEY = 'hl-teamdetail-notes';
+  // Einmal aufgeklappt bleibt es offen – auch beim Wechsel zu anderen Spielern.
   const readNotesOpen = (): boolean => {
     try {
       const r = JSON.parse(sessionStorage.getItem(NOTES_KEY) || 'null');
-      return !!(r && r.team === team.id && r.player === selectedPlayerName && r.open);
+      return !!(r && r.open);
     } catch {
       return false;
     }
   };
   const [notesOpen, setNotesOpen] = useState<boolean>(() => readNotesOpen());
-  // Bei Spielerwechsel Noten passend setzen (offen NUR, wenn für den Spieler gemerkt).
-  useEffect(() => {
-    setNotesOpen(readNotesOpen());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [team.id, selectedPlayerName]);
   useEffect(() => {
     try {
-      if (selectedPlayerName) sessionStorage.setItem(NOTES_KEY, JSON.stringify({ team: team.id, player: selectedPlayerName, open: notesOpen }));
+      sessionStorage.setItem(NOTES_KEY, JSON.stringify({ open: notesOpen }));
     } catch {
       /* egal */
     }
-  }, [team.id, selectedPlayerName, notesOpen]);
+  }, [notesOpen]);
+  // Erklärung der Quoten („Was heißt das?") – aufklappbar.
+  const [quotaInfo, setQuotaInfo] = useState(false);
 
   // Einen Spieler öffnen = in die URL navigieren (History-Eintrag → „Zurück" führt
   // sauber hierher zurück). Danach zum Kopf scrollen für die Umblendung.
@@ -544,6 +559,13 @@ export default function TeamDetail({
                 {/* Statistics Center: Quoten + Note je Spiel (aus getrackten Daten) */}
                 {playerCardData && scoringConfig && (
                   <div className="mt-4">
+                    {trackedRole === 'keeper' && (
+                      <div className="flex gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap mb-2">
+                        <StatTile value={trackedTotal.save} label="PARADEN" accent />
+                        <StatTile value={trackedTotal.save_top} label="GLANZPARADEN" />
+                        <StatTile value={trackedTotal.gk_goal_against} label="GEGENTORE" />
+                      </div>
+                    )}
                     {trackedQuotas && (
                       <div className="flex gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar">
                         {trackedQuotas.passquote !== null && (
@@ -557,6 +579,34 @@ export default function TeamDetail({
                         )}
                         {trackedQuotas.dribblingquote !== null && (
                           <StatTile value={`${Math.round(trackedQuotas.dribblingquote * 100)}%`} label="DRIBBLING" accent />
+                        )}
+                      </div>
+                    )}
+                    {trackedQuotas && (
+                      <div className="mt-2">
+                        <button
+                          onClick={() => setQuotaInfo((v) => !v)}
+                          className="inline-flex items-center gap-1 font-sans font-bold text-[10px] tracking-[1.5px] uppercase text-hl-dim hover:text-hl-soft cursor-pointer"
+                        >
+                          <Info className="w-3.5 h-3.5" /> Was bedeuten die Quoten?
+                        </button>
+                        {quotaInfo && (
+                          <ul className="mt-1.5 space-y-1 text-[11.5px] leading-snug text-hl-mute font-sans max-w-md">
+                            <li>
+                              <b className="text-hl-soft">Passquote:</b> angekommene Pässe ÷ alle Passversuche.
+                            </li>
+                            <li>
+                              <b className="text-hl-soft">Schussquote:</b> Anteil der Schüsse, die aufs Tor gehen (Tore + gehaltene
+                              Schüsse; geblockte zählen {Math.round(scoringConfig.shotBlockFactor * 100)} %) ÷ alle Schüsse
+                              {scoringConfig.minimums.shots > 0 ? ` – ab ${scoringConfig.minimums.shots} Schüssen` : ''}.
+                            </li>
+                            <li>
+                              <b className="text-hl-soft">Zweikampf:</b> gewonnene ÷ alle Zweikämpfe.
+                            </li>
+                            <li>
+                              <b className="text-hl-soft">Dribbling:</b> erfolgreiche ÷ alle Dribblings.
+                            </li>
+                          </ul>
                         )}
                       </div>
                     )}

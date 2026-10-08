@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { motion } from 'motion/react';
 import { X, Hand } from 'lucide-react';
 import type { MatchPlayerStat, PlayerStat, ScoringConfig, Team } from '../types';
-import { keeperBoards, KEEPER_MIN_GAMES, type KeeperBoard } from '../lib/trackingAwards';
+import { keeperBoards, playerTotals, GOLDEN_GLOVE_EXPLAIN, type KeeperBoard } from '../lib/trackingAwards';
+import StatTable, { sortStatRows, type StatTableRow } from './StatTable';
 import { DEFAULT_SCORING } from '../lib/scoring';
 import { useBackClose } from '../lib/backStack';
 import { useBackdropDismiss, ModalPortal } from './ui';
@@ -37,6 +38,21 @@ export default function KeeperStats({ open, onClose, rows, teams, players, scori
   const backdrop = useBackdropDismiss(onClose);
   const cfg = scoringConfig ?? DEFAULT_SCORING;
   const boards = useMemo(() => (open ? keeperBoards(rows, cfg) : []), [open, rows, cfg]);
+  // Paraden · Glanzparaden · Standparaden in EINER sortierbaren Tabelle.
+  const saveRows = useMemo<StatTableRow[]>(
+    () =>
+      open
+        ? playerTotals(rows, cfg)
+            .filter((p) => p.role === 'keeper' || p.total.save + p.total.gk_position_save > 0)
+            .filter((p) => p.total.save + p.total.save_top + p.total.gk_position_save > 0)
+            .map((p) => ({
+              teamId: p.teamId,
+              playerName: p.playerName,
+              values: { save: p.total.save, top: p.total.save_top, pos: p.total.gk_position_save },
+            }))
+        : [],
+    [open, rows, cfg]
+  );
 
   // Für Foto/Wappen: den Spieler in der Liga-Spielerliste suchen, sonst ein
   // minimales Ersatzobjekt bauen (Name + Verein reichen fürs Wappen).
@@ -92,14 +108,58 @@ export default function KeeperStats({ open, onClose, rows, teams, players, scori
               <div className="mt-4 max-w-2xl mx-auto">
                 <StatAccordion
                   defaultOpen={boards[0]?.id ?? null}
-                  items={boards.map((b) => ({
-                    id: b.id,
-                    title: b.label,
-                    accent: '#22DFC9',
-                    icon: <Hand className="w-4 h-4" />,
-                    preview: b.rows[0] ? `1. ${b.rows[0].playerName} · ${fmtBoard(b, b.rows[0].value)}${b.unit ? ` ${b.unit}` : ''}` : undefined,
-                    content: <BoardRows board={b} crestFor={crestFor} teams={teams} onSelectTeam={onSelectTeam} />,
-                  }))}
+                  items={(() => {
+                    const item = (b: KeeperBoard) => ({
+                      id: b.id,
+                      title: b.label,
+                      accent: '#22DFC9',
+                      icon: <Hand className="w-4 h-4" />,
+                      preview: b.rows[0] ? `1. ${b.rows[0].playerName} · ${fmtBoard(b, b.rows[0].value)}${b.unit ? ` ${b.unit}` : ''}` : undefined,
+                      content: (
+                        <>
+                          {b.id === 'glove' && (
+                            <ul className="mb-2 px-2 sm:px-3 text-[11.5px] text-hl-mute font-sans space-y-0.5">
+                              {GOLDEN_GLOVE_EXPLAIN.map((l) => (
+                                <li key={l}>• {l}</li>
+                              ))}
+                            </ul>
+                          )}
+                          <BoardRows board={b} crestFor={crestFor} teams={teams} onSelectTeam={onSelectTeam} />
+                        </>
+                      ),
+                    });
+                    const merged = new Set(['saves', 'top', 'pos']);
+                    const glove = boards.filter((b) => b.id === 'glove').map(item);
+                    const rest = boards.filter((b) => b.id !== 'glove' && !merged.has(b.id)).map(item);
+                    const top = sortStatRows(saveRows, 'save')[0];
+                    const saves = saveRows.length
+                      ? [
+                          {
+                            id: 'saves',
+                            title: 'Paraden',
+                            accent: '#22DFC9',
+                            icon: <Hand className="w-4 h-4" />,
+                            preview: top ? `1. ${top.playerName} · ${top.values.save} PAR` : undefined,
+                            content: (
+                              <StatTable
+                                rows={saveRows}
+                                cols={[
+                                  { key: 'save', label: 'Paraden' },
+                                  { key: 'top', label: 'Glanz' },
+                                  { key: 'pos', label: 'Stand' },
+                                ]}
+                                defaultSort="save"
+                                accent="#22DFC9"
+                                teams={teams}
+                                note="Glanzparaden zählen auch als Parade · Standparade = sicher gefangen, ohne Gefahr"
+                                onSelect={onSelectTeam}
+                              />
+                            ),
+                          },
+                        ]
+                      : [];
+                    return [...glove, ...saves, ...rest];
+                  })()}
                 />
               </div>
             )}

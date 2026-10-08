@@ -5,17 +5,21 @@ import {
   scorerRanking as trackScorers,
   assistRanking as trackAssists,
   goldenGloveRanking,
-  passLeaders,
-  dribbleLeaders,
-  duelLeaders,
-  shotLeaders,
+  playerTotals,
+  dribblerValue,
+  PASS_MIN,
+  DUEL_MIN,
+  DRIBBLE_MIN,
+  SHOT_MIN,
+  GOLDEN_GLOVE_EXPLAIN,
   ballWinnerLeaders,
   keyPassLeaders,
   headerGoalLeaders,
   type StatLeader,
 } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
-import { Swords, Hand, IdCard, BarChart3, Send, Zap, Target, Shield, Sparkles, Goal, Crown, Handshake } from 'lucide-react';
+import { Swords, Hand, IdCard, BarChart3, Send, Zap, Target, Shield, Sparkles, Goal, Crown, Handshake, Info } from 'lucide-react';
+import StatTable, { pctFmt, sortStatRows, type StatTableCol, type StatTableRow } from './StatTable';
 import StatAccordion from './StatAccordion';
 import TrackingProgressBanner from './TrackingProgressBanner';
 import { useTrackingProgress } from '../lib/trackingProgress';
@@ -71,6 +75,7 @@ export default function Statistiken({
 }: StatistikenProps) {
   const [compareOpen, setCompareOpen] = React.useState(false);
   const [keeperOpen, setKeeperOpen] = React.useState(false);
+  const [gloveInfo, setGloveInfo] = React.useState(false);
   const [steckbriefOpen, setSteckbriefOpen] = React.useState(false);
   // Spieltag-Filter: „Gesamt" (null) oder ein einzelner Spieltag. Alle Werte
   // der Seite (Kacheln, Team-Karten, Torschützen, Bestenlisten, Torhüter)
@@ -240,22 +245,98 @@ export default function Statistiken({
       else scorePts.set(k, { teamId: e.teamId, playerName: e.playerName, value: e.assists, quote: null, games: e.games });
     }
     const toLeader = (e: { teamId: string; playerName: string; games: number }, value: number): StatLeader => ({ teamId: e.teamId, playerName: e.playerName, value, quote: null, games: e.games });
-    return [
+    // Sortierbare Tabellen (Gesamt · erfolgreich · Quote) aus den Summen je Spieler.
+    const totals = playerTotals(trackingRows, cfg);
+    const table = (
+      make: (t: (typeof totals)[number]['total']) => Record<string, number | null> | null
+    ): StatTableRow[] =>
+      totals
+        .map((p) => ({ teamId: p.teamId, playerName: p.playerName, values: make(p.total) }))
+        .filter((r): r is StatTableRow => r.values !== null);
+    const q = (a: number, b: number, min: number) => (b >= min && b > 0 ? a / b : null);
+    const shotRows = table((t) => {
+      const all = t.goal + t.shot_on + t.shot_miss + t.shot_blocked_off;
+      const on = t.goal + t.shot_on;
+      return all > 0 ? { all, on, quote: q(on, all, SHOT_MIN) } : null;
+    });
+    const passRows = table((t) => {
+      const all = t.pass_ok + t.pass_fail;
+      return all > 0 ? { all, ok: t.pass_ok, quote: q(t.pass_ok, all, PASS_MIN) } : null;
+    });
+    const duelRows = table((t) => {
+      const all = t.duel_won + t.duel_lost;
+      return all > 0 ? { all, won: t.duel_won, quote: q(t.duel_won, all, DUEL_MIN) } : null;
+    });
+    const dribRows = table((t) => {
+      const all = t.dribble_won + t.dribble_lost;
+      return all > 0
+        ? { all, won: t.dribble_won, quote: q(t.dribble_won, all, DRIBBLE_MIN), value: dribblerValue(t.dribble_won, t.dribble_lost) }
+        : null;
+    });
+    const tables: {
+      id: string;
+      title: string;
+      accent: string;
+      icon: React.ReactNode;
+      rows: StatTableRow[];
+      cols: StatTableCol[];
+      defaultSort: string;
+      note: string;
+    }[] = [
+      {
+        id: 'shots', title: 'Torschüsse', accent: '#F0559E', icon: <Target className="w-4 h-4" />, rows: shotRows, defaultSort: 'on',
+        cols: [{ key: 'all', label: 'Gesamt' }, { key: 'on', label: 'Aufs Tor' }, { key: 'quote', label: 'Quote', fmt: pctFmt }],
+        note: `Quote = Schüsse aufs Tor (inkl. Tore) ÷ alle Schüsse · ab ${SHOT_MIN} Schüssen`,
+      },
+      {
+        id: 'pass', title: 'Pässe', accent: '#22DFC9', icon: <Send className="w-4 h-4" />, rows: passRows, defaultSort: 'quote',
+        cols: [{ key: 'all', label: 'Gesamt' }, { key: 'ok', label: 'Angek.' }, { key: 'quote', label: 'Quote', fmt: pctFmt }],
+        note: `Quote = angekommene Pässe ÷ alle Pässe · ab ${PASS_MIN} Pässen`,
+      },
+      {
+        id: 'duel', title: 'Zweikämpfe', accent: '#43E5A0', icon: <Swords className="w-4 h-4" />, rows: duelRows, defaultSort: 'quote',
+        cols: [{ key: 'all', label: 'Gesamt' }, { key: 'won', label: 'Gew.' }, { key: 'quote', label: 'Quote', fmt: pctFmt }],
+        note: `Quote = gewonnene ÷ alle Zweikämpfe · ab ${DUEL_MIN} Zweikämpfen`,
+      },
+      {
+        id: 'drib', title: 'Beste Dribbler', accent: '#E9C46A', icon: <Zap className="w-4 h-4" />, rows: dribRows, defaultSort: 'value',
+        cols: [
+          { key: 'all', label: 'Gesamt' },
+          { key: 'won', label: 'Erfolgr.' },
+          { key: 'quote', label: 'Quote', fmt: pctFmt },
+          { key: 'value', label: 'Wert', fmt: (v) => v.toFixed(1) },
+        ],
+        note: `Wert = erfolgreiche Dribblings × Quote (Menge UND Erfolg zählen) · ab ${DRIBBLE_MIN} Dribblings`,
+      },
+    ];
+    const lists = [
       { id: 'goals', title: 'Torschützen', accent: '#E9C46A', icon: <Crown className="w-4 h-4" />, mode: 'count' as const,
         rows: trackScorers(trackingRows, cfg).slice(0, 10).map((e) => toLeader(e, e.goals)) },
       { id: 'assists', title: 'Vorlagen', accent: '#22DFC9', icon: <Handshake className="w-4 h-4" />, mode: 'count' as const,
         rows: trackAssists(trackingRows, cfg).slice(0, 10).map((e) => toLeader(e, e.assists)) },
       { id: 'scorer', title: 'Scorerpunkte (Tore + Vorlagen)', accent: '#43E5A0', icon: <Target className="w-4 h-4" />, mode: 'count' as const,
         rows: [...scorePts.values()].sort((a, b) => b.value - a.value || a.playerName.localeCompare(b.playerName)).slice(0, 10) },
-      { id: 'pass', title: 'Beste Passquote', accent: '#22DFC9', icon: <Send className="w-4 h-4" />, mode: 'quote' as const, rows: passLeaders(trackingRows, cfg) },
-      { id: 'duel', title: 'Beste Zweikampfquote', accent: '#43E5A0', icon: <Swords className="w-4 h-4" />, mode: 'quote' as const, rows: duelLeaders(trackingRows, cfg) },
-      { id: 'drib', title: 'Beste Dribbling-Quote', accent: '#E9C46A', icon: <Zap className="w-4 h-4" />, mode: 'quote' as const, rows: dribbleLeaders(trackingRows, cfg) },
-      { id: 'shots', title: 'Meiste Torschüsse', accent: '#F0559E', icon: <Target className="w-4 h-4" />, mode: 'count' as const, rows: shotLeaders(trackingRows, cfg) },
       { id: 'win', title: 'Balleroberer', accent: '#58F0CD', icon: <Shield className="w-4 h-4" />, mode: 'count' as const, rows: ballWinnerLeaders(trackingRows, cfg) },
       { id: 'key', title: 'Schlüsselpässe', accent: '#c99bff', icon: <Sparkles className="w-4 h-4" />, mode: 'count' as const, rows: keyPassLeaders(trackingRows, cfg) },
       { id: 'head', title: 'Kopfballtore', accent: '#F0559E', icon: <Goal className="w-4 h-4" />, mode: 'count' as const, rows: headerGoalLeaders(trackingRows, cfg) },
     ].filter((b) => b.rows.length > 0);
+    return {
+      lists,
+      tables: tables.filter((t) => t.rows.length > 0),
+    };
   }, [trackingRows, cfg]);
+
+  const listItem = (b: (typeof boards.lists)[number]) => {
+    const top = b.rows[0];
+    return {
+      id: b.id,
+      title: b.title,
+      accent: b.accent,
+      icon: b.icon,
+      preview: top ? `1. ${top.playerName} · ${top.value}` : undefined,
+      content: <LeaderList rows={b.rows} mode={b.mode} accent={b.accent} teams={teams} onSelect={onSelectTeam} />,
+    };
+  };
 
   const topScorer = scorerRows[0] ?? null;
   const topAssist = assistRows[0] ?? null;
@@ -290,6 +371,7 @@ export default function Statistiken({
     avatar: React.ReactNode;
     onClick?: () => void; // Namensklick: Spieler → Spielerdetail, Team → Teamseite
     tied?: Team[]; // weitere Teams mit genau demselben Wert
+    team?: Team; // bei Team-Karten: das (erste) Team
   }
 
   const cards: LeaderCard[] = [];
@@ -323,12 +405,12 @@ export default function Statistiken({
   if (bestRatio) {
     cards.push({
       kind: 'SPIELER',
-      category: 'BESTE QUOTE',
+      category: 'TORE PRO SPIEL',
       onClick: onSelectTeam ? () => onSelectTeam(bestRatio.teamId, bestRatio.name) : undefined,
       accent: 'magenta',
       value: bestRatio.goals / bestRatio.matchesPlayed,
       decimals: 1,
-      unit: 'Tore/Spiel',
+      unit: 'Tore pro Spiel',
       name: bestRatio.name,
       sub: bestRatio.teamName,
       avatar: <PlayerCrest player={bestRatio} teams={teams} photoSize="lg" crestSize="xl" onSelectTeam={onSelectTeam} />,
@@ -339,6 +421,7 @@ export default function Statistiken({
     cards.push({
       kind: 'TEAM',
       category: 'BESTE OFFENSIVE',
+      team: t,
       onClick: onSelectTeam ? () => onSelectTeam(t.id) : undefined,
       accent: 'teal',
       value: clubStats.bestAttack.goalsFor,
@@ -363,6 +446,7 @@ export default function Statistiken({
     cards.push({
       kind: 'TEAM',
       category: 'BESTE DEFENSIVE',
+      team: t,
       onClick: onSelectTeam ? () => onSelectTeam(t.id) : undefined,
       accent: 'teal',
       value: clubStats.bestDefense.goalsAgainst,
@@ -387,6 +471,7 @@ export default function Statistiken({
     cards.push({
       kind: 'TEAM',
       category: 'MEISTE WEISSE WESTEN',
+      team: t,
       onClick: onSelectTeam ? () => onSelectTeam(t.id) : undefined,
       accent: 'gold',
       value: clubStats.mostCleanSheets.cleanSheets,
@@ -569,6 +654,26 @@ export default function Statistiken({
                 <div className={`font-display font-black text-xl sm:text-2xl uppercase tracking-tight leading-none ${VALUE_COLOR[c.accent]}`}>
                   {c.category}
                 </div>
+                {c.team && c.tied && c.tied.length > 0 ? (
+                  /* Gleichstand: alle Teams gleichberechtigt nebeneinander */
+                  <div className="mt-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {[c.team, ...c.tied].map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={onSelectTeam ? () => onSelectTeam(t.id) : undefined}
+                          className={`flex flex-col items-center gap-1.5 min-w-0 ${onSelectTeam ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+                          title={t.name}
+                        >
+                          <TeamCrest name={t.name} shortName={t.shortName} color={t.logoColor} logoUrl={t.logoUrl} size="lg" />
+                          <span className="max-w-full font-display font-black text-[15px] leading-tight uppercase text-white text-center line-clamp-2">{t.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="font-sans text-[12.5px] text-hl-mute mt-2 text-center">{c.sub}</div>
+                  </div>
+                ) : (
                 <div className="flex items-center gap-3.5 mt-4">
                   {c.avatar}
                   <div className="min-w-0">
@@ -587,30 +692,13 @@ export default function Statistiken({
                     <div className="font-sans text-[12.5px] text-hl-mute mt-1 truncate">{c.sub}</div>
                   </div>
                 </div>
+                )}
                 <div className="flex items-baseline gap-2 mt-5">
                   <span className={`font-display font-black text-[52px] lg:text-[66px] leading-[.9] ${VALUE_COLOR[c.accent]}`}>
                     <CountUp value={c.value} decimals={c.decimals ?? 0} />
                   </span>
                   <span className="font-sans font-bold text-[13px] tracking-wider text-hl-dim">{c.unit}</span>
                 </div>
-                {c.tied && c.tied.length > 0 && (
-                  <div className="mt-4 pt-3 border-t border-white/[.07]">
-                    <div className="font-sans font-bold text-[10px] tracking-[1.5px] uppercase text-hl-dim mb-2">Gleichauf</div>
-                    <div className="flex flex-wrap gap-x-3 gap-y-2">
-                      {c.tied.map((t) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          onClick={onSelectTeam ? () => onSelectTeam(t.id) : undefined}
-                          className={`flex items-center gap-1.5 min-w-0 max-w-full ${onSelectTeam ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
-                        >
-                          <TeamCrest name={t.name} shortName={t.shortName} color={t.logoColor} logoUrl={t.logoUrl} size="xs" />
-                          <span className="font-sans font-semibold text-[12.5px] text-white truncate">{t.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           ))}
@@ -690,7 +778,26 @@ export default function Statistiken({
                   Goldener Handschuh
                 </h3>
                 <span className="font-sans font-bold text-[11px] tracking-[1.5px] text-hl-dim mt-1">TOP 5 · TORHÜTER</span>
+                <button
+                  type="button"
+                  onClick={() => setGloveInfo((v) => !v)}
+                  aria-expanded={gloveInfo}
+                  title="Wie werden die Punkte berechnet?"
+                  className="ml-auto p-1.5 rounded-full text-hl-dim hover:text-white hover:bg-white/5 cursor-pointer"
+                >
+                  <Info className="w-4 h-4" />
+                </button>
               </div>
+              {gloveInfo && (
+                <div className="mb-3 rounded-xl border border-white/10 bg-white/[.03] px-4 py-3 text-[12px] text-hl-mute font-sans">
+                  <div className="font-bold text-hl-soft mb-1">So entstehen die Punkte (PKT):</div>
+                  <ul className="space-y-0.5">
+                    {GOLDEN_GLOVE_EXPLAIN.map((l) => (
+                      <li key={l}>• {l}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className="relative rounded-[20px] overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] border border-white/10 backdrop-blur-lg shadow-[0_20px_50px_rgba(0,0,0,.35)]">
                 <div className="absolute top-0 right-0 w-[220px] h-[220px] pointer-events-none" style={{ background: GLOW.teal }} />
                 <div ref={glove.ref} className="relative divide-y divide-white/[.06] hl-cascade-soft">
@@ -745,7 +852,7 @@ export default function Statistiken({
       )}
 
       {/* Bestenlisten der Saison – aufklappbar, je Liste Platz 1 bis 10 */}
-      {boards.length > 0 && (
+      {(boards.lists.length > 0 || boards.tables.length > 0) && (
         <Reveal className="mt-10">
           <div className="flex items-center gap-2 mb-4">
             <BarChart3 className="w-5 h-5 text-brand-accent-light" />
@@ -754,18 +861,25 @@ export default function Statistiken({
             </h2>
           </div>
           <StatAccordion
-            items={boards.map((b) => {
-              const top = b.rows[0];
-              const pct = top?.quote != null ? `${Math.round(top.quote * 100)}%` : null;
-              return {
-                id: b.id,
-                title: b.title,
-                accent: b.accent,
-                icon: b.icon,
-                preview: top ? `1. ${top.playerName} · ${b.mode === 'quote' ? pct ?? top.value : top.value}` : undefined,
-                content: <LeaderList rows={b.rows} mode={b.mode} accent={b.accent} teams={teams} onSelect={onSelectTeam} />,
-              };
-            })}
+            items={[
+              ...boards.lists.slice(0, 3).map((b) => listItem(b)),
+              ...boards.tables.map((t) => {
+                const top = sortStatRows(t.rows, t.defaultSort)[0];
+                const col = t.cols.find((c) => c.key === t.defaultSort);
+                const v = top?.values[t.defaultSort];
+                return {
+                  id: t.id,
+                  title: t.title,
+                  accent: t.accent,
+                  icon: t.icon,
+                  preview: top && v != null ? `1. ${top.playerName} · ${col?.fmt ? col.fmt(v) : v}` : undefined,
+                  content: (
+                    <StatTable rows={t.rows} cols={t.cols} defaultSort={t.defaultSort} accent={t.accent} teams={teams} note={t.note} onSelect={onSelectTeam} />
+                  ),
+                };
+              }),
+              ...boards.lists.slice(3).map((b) => listItem(b)),
+            ]}
           />
         </Reveal>
       )}

@@ -20,7 +20,7 @@ export interface XIEntry {
 interface BestLineupProps {
   goalkeeper: XIEntry | null;
   field: XIEntry[]; // bis zu 4, bereits nach Siegquote sortiert (best zuerst)
-  bench: XIEntry[]; // bis zu 2 (5./6. bester)
+  bench: XIEntry[]; // bis zu 4 (Plätze 6–9)
   team: Team;
   onSelectPlayer?: (name: string) => void;
   tracked?: boolean; // true = aus dem Tracking berechnet (anderer Erklärtext)
@@ -118,6 +118,17 @@ const Chip = React.memo(function Chip({
   );
 });
 
+// Kleine Beschriftung über einer Feld-Reihe.
+function RowLabel({ text }: { text: string }) {
+  return (
+    <div className="text-center mb-1.5">
+      <span className="inline-block px-2 py-0.5 rounded-full bg-black/30 text-[9px] lg:text-[10px] font-sans font-bold uppercase tracking-[1px] text-white/85">
+        {text}
+      </span>
+    </div>
+  );
+}
+
 export default function BestLineup({ goalkeeper, field, bench, team, onSelectPlayer, tracked = false }: BestLineupProps) {
   const color = team.logoColor || '#22DFC9';
   const accent = readable(color);
@@ -134,11 +145,11 @@ export default function BestLineup({ goalkeeper, field, bench, team, onSelectPla
       </div>
       <p className="font-sans text-[11px] lg:text-[12px] text-hl-dim mb-4">
         {tracked
-          ? 'Vorne die Torgefährlichsten, hinten die stärksten Verteidiger, Bank nach Ø-Note · Zahl = Ø-Note – automatisch aus dem Tracking.'
+          ? 'Vorne die besten Offensivspieler, hinten die besten Defensivspieler, Bank nach Ø-Note · Zahl = Ø-Note – automatisch aus dem Tracking.'
           : 'Beste Spieler nach Siegquote · fester Torwart – automatisch aus den Ergebnissen.'}
       </p>
 
-      <div className="flex gap-2 items-stretch">
+      <div className="flex flex-col gap-2">
         {/* Fußballfeld */}
         <div
           className="relative flex-1 min-w-0 rounded-2xl overflow-hidden border border-white/10 px-2 py-4 lg:px-3 lg:py-6"
@@ -154,17 +165,23 @@ export default function BestLineup({ goalkeeper, field, bench, team, onSelectPla
 
           <div className="relative flex flex-col gap-5 lg:gap-7">
             {topRow.length > 0 && (
+              <div>
+              {tracked && <RowLabel text="Beste Offensivspieler des Teams" />}
               <div className="flex justify-around gap-2">
                 {topRow.map((p) => (
                   <Chip key={p.name} name={p.name} firstName={p.firstName} imageUrl={p.imageUrl} winRate={p.winRate} value={p.value} color={color} accent={accent} index={idx++} onSelect={onSelectPlayer} />
                 ))}
               </div>
+              </div>
             )}
             {bottomRow.length > 0 && (
+              <div>
+              {tracked && <RowLabel text="Beste Defensivspieler des Teams" />}
               <div className="flex justify-around gap-2">
                 {bottomRow.map((p) => (
                   <Chip key={p.name} name={p.name} firstName={p.firstName} imageUrl={p.imageUrl} winRate={p.winRate} value={p.value} color={color} accent={accent} index={idx++} onSelect={onSelectPlayer} />
                 ))}
+              </div>
               </div>
             )}
             {goalkeeper && (
@@ -186,10 +203,11 @@ export default function BestLineup({ goalkeeper, field, bench, team, onSelectPla
           </div>
         </div>
 
-        {/* Auswechselbank (5./6. bester) – seitlich am Feld */}
+        {/* Auswechselbank (bis zu 4) – unter dem Feld */}
         {bench.length > 0 && (
-          <div className="w-[70px] lg:w-[92px] shrink-0 rounded-2xl border border-white/10 bg-white/[.03] flex flex-col items-center gap-3 lg:gap-4 py-3 lg:py-5 px-1">
-            <span className="font-sans font-bold text-[8px] lg:text-[10px] tracking-[1.5px] text-hl-dim uppercase">Bank</span>
+          <div className="rounded-2xl border border-white/10 bg-white/[.03] px-2 py-2.5 lg:py-3">
+            <div className="font-sans font-bold text-[8px] lg:text-[10px] tracking-[1.5px] text-hl-dim uppercase text-center mb-1.5">Bank</div>
+            <div className="flex justify-around gap-1">
             {bench.map((p, i) => (
               <Chip
                 key={p.name}
@@ -202,10 +220,11 @@ export default function BestLineup({ goalkeeper, field, bench, team, onSelectPla
                 accent={accent}
                 index={idx++}
                 size="bench"
-                badge={`${i + 5}`}
+                badge={`${i + 6}`}
                 onSelect={onSelectPlayer}
               />
             ))}
+            </div>
           </div>
         )}
       </div>
