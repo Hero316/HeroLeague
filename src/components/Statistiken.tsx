@@ -759,14 +759,14 @@ export default function Statistiken({
                     type="button"
                     onClick={c.onClick}
                     title={c.onClick ? `${c.name} – Spieler anzeigen` : c.name}
-                    className={`absolute bottom-0 top-3 right-2 sm:right-4 w-[46%] sm:w-[44%] flex items-end justify-end ${c.onClick ? 'cursor-pointer' : 'cursor-default'}`}
+                    className={`absolute bottom-0 top-3 right-0 w-[48%] sm:w-[46%] flex items-end justify-end ${c.onClick ? 'cursor-pointer' : 'cursor-default'}`}
                   >
                     <img
                       src={cutoutOf(c.visual, teams)}
                       alt={c.name}
                       loading="lazy"
                       decoding="async"
-                      className="max-h-full max-w-full object-contain object-bottom drop-shadow-[0_10px_24px_rgba(0,0,0,.5)] transition-transform duration-300 origin-bottom hover:scale-[1.03]"
+                      className="max-h-full max-w-full object-contain object-bottom drop-shadow-[0_10px_24px_rgba(0,0,0,.5)] transition-transform duration-300 origin-bottom-right hover:scale-[1.03]"
                     />
                   </button>
                 )}
