@@ -51,34 +51,6 @@ export function parseVoice(payload: {
   });
 }
 
-// Tor-Prüfmodus: Gemini liefert NUR die Tore – je mit Torschütze und Vorlage
-// (leer = keine Vorlage) samt kurzer Begründung und Stelle aus der Aufnahme.
-export interface GoalCheck {
-  team: string;
-  scorer: string;
-  assist: string;
-  reason: string;
-  quote: string;
-}
-export function parseGoals(payload: { audioUrl: string; mimeType?: string; context: VoiceContext }): Promise<{ transcript: string; goals: GoalCheck[] }> {
-  return apiFetch('/api/stats?resource=voice', { method: 'POST', body: JSON.stringify({ ...payload, mode: 'goals' }) });
-}
-
-// Aufnahme ↔ Spiel verknüpfen (für späteres Nachprüfen, z. B. der Vorlagen).
-export function linkTrackingAudio(matchId: string, url: string): Promise<{ ok: boolean }> {
-  return apiFetch('/api/stats?resource=voice-audio', { method: 'POST', body: JSON.stringify({ matchId, url }) });
-}
-
-export interface TrackingAudio {
-  url: string;
-  at: string; // ISO-Zeitpunkt des Uploads
-  size?: number; // Bytes (WAV 16 kHz mono ≈ 32 000 Bytes/Sekunde)
-}
-// Aufnahmen dieses Spiels (linked) + alle Tracking-Aufnahmen (recent, neueste zuerst).
-export function fetchTrackingAudio(matchId: string): Promise<{ linked: TrackingAudio[]; recent: TrackingAudio[] }> {
-  return apiFetch(`/api/stats?resource=voice-audio&matchId=${encodeURIComponent(matchId)}`);
-}
-
 // Saisonweite Tracking-Regeln (frei formulierter Text) laden/speichern.
 export function fetchTrackingRules(): Promise<{ text: string }> {
   return apiFetch<{ text: string }>('/api/stats?resource=tracking-rules');
