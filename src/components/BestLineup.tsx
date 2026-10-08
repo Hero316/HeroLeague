@@ -145,7 +145,7 @@ export default function BestLineup({ goalkeeper, field, bench, team, onSelectPla
       </div>
       <p className="font-sans text-[11px] lg:text-[12px] text-hl-dim mb-4">
         {tracked
-          ? 'Vorne die besten Offensivspieler, hinten die besten Defensivspieler, Bank nach Ø-Note · Zahl = Ø-Note – automatisch aus dem Tracking.'
+          ? 'Aus den FIFA-Kartenwerten: vorne die Stärksten in Schuss, Dribbling & Pass, hinten die mit dem besten DEF-Wert · Bank nach Ø-Note · Zahl = Ø-Note.'
           : 'Beste Spieler nach Siegquote · fester Torwart – automatisch aus den Ergebnissen.'}
       </p>
 
