@@ -1,7 +1,7 @@
 import React from 'react';
 import { Star, Crown, ChevronDown } from 'lucide-react';
 import type { Match, MatchPlayerStat, ScoringConfig, Team } from '../types';
-import PlayerCrest from './PlayerCrest';
+import { monogram } from './ui';
 import { numberWord } from '../lib/heroAward';
 import TrackingProgressBanner from './TrackingProgressBanner';
 import { useTrackingProgress } from '../lib/trackingProgress';
@@ -190,8 +190,19 @@ function NomineeCard({
       className={`rounded-2xl border transition-colors ${open ? 'border-[rgba(233,196,106,.45)] bg-[rgba(233,196,106,.06)]' : 'border-white/10 bg-white/[.03]'}`}
     >
       <button type="button" onClick={onToggle} aria-expanded={open} className="w-full flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-3 text-left cursor-pointer min-w-0">
-        <span className="shrink-0">
-          <PlayerCrest player={p} teams={teams} photoSize="xl" crestSize="xl" onSelectTeam={onSelectTeam} />
+        {/* Immer gleich groß: Foto ODER (ohne Foto) das Vereinslogo im selben Rahmen –
+            sonst wären Karten ohne Foto kleiner und uneinheitlich. */}
+        <span
+          className="shrink-0 w-[104px] h-[104px] rounded-[26px] grid place-items-center overflow-hidden border-2 border-[#E9C46A] bg-white/[.04] shadow-[0_0_18px_rgba(233,196,106,.22)]"
+          title={p.name}
+        >
+          {p.imageUrl ? (
+            <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
+          ) : team?.logoUrl ? (
+            <img src={team.logoUrl} alt={team.name} className="w-[76%] h-[76%] object-contain" loading="lazy" />
+          ) : (
+            <span className="font-display font-black text-4xl text-hl-gold">{monogram(p.name)}</span>
+          )}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block font-display font-black uppercase tracking-tight text-white text-xl sm:text-2xl leading-tight truncate">{p.name}</span>

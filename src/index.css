@@ -78,6 +78,15 @@ html {
      an den <body> gehängten Pop-ups sie erben). Weicher Farb-Übergang beim
      Tab-Wechsel. Außerhalb der Team-App bleibt --section auf dem Teal-Standard. */
   transition: --section 0.55s ease;
+  /* Platz für die Scroll-Leiste immer freihalten: Wird eine Seite (z. B. durch
+     Aufklappen) plötzlich länger, springt der Inhalt sonst kurz nach links. */
+  scrollbar-gutter: stable;
+}
+
+/* Dasselbe für Vollbild-Pop-ups mit eigenem Scrollen (Torhüter-Statistiken,
+   Steckbrief, 1 gegen 1 …): kein Ruck, wenn beim Aufklappen die Leiste kommt. */
+.fixed.overflow-y-auto {
+  scrollbar-gutter: stable;
 }
 
 body {
