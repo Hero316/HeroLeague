@@ -416,7 +416,7 @@ export function keeperBoards(rows: MatchPlayerStat[], cfg: ScoringConfig): Keepe
       id: 'glove',
       label: 'Goldener Handschuh',
       hint: `Gesamtwertung · ab ${KEEPER_MIN_GAMES} Spielen im Tor`,
-      unit: 'PKT',
+      unit: 'Punkte',
       decimals: 1,
       rows: glove.slice(0, 10).map((p) => ({
         teamId: p.teamId,
@@ -427,7 +427,7 @@ export function keeperBoards(rows: MatchPlayerStat[], cfg: ScoringConfig): Keepe
     });
 
   out.push(
-    board('saves', 'Meiste Paraden', 'Summe aller Paraden', 'PAR', 0, all, (p) => p.total.save, (p) =>
+    board('saves', 'Meiste Paraden', 'Summe aller Paraden', 'Paraden', 0, all, (p) => p.total.save, (p) =>
       `${spiele(p)} · ${(p.total.save / games(p)).toFixed(1)} pro Spiel`
     ),
     board(
@@ -441,25 +441,25 @@ export function keeperBoards(rows: MatchPlayerStat[], cfg: ScoringConfig): Keepe
       (p) => `${p.total.save} von ${gkActions(p)} gehalten`,
       { percent: true }
     ),
-    board('clean', 'Meiste weiße Westen', 'Spiele ohne Gegentor', 'ZU NULL', 0, all, (p) => p.cleanSheets, (p) =>
+    board('clean', 'Meiste weiße Westen', 'Spiele ohne Gegentor', 'Spiele zu null', 0, all, (p) => p.cleanSheets, (p) =>
       `${spiele(p)} · ${p.total.gk_goal_against} Gegentore`
     ),
     board(
       'conceded',
       'Wenigste Gegentore',
       `Gegentore pro Spiel · ab ${KEEPER_MIN_GAMES} Spielen im Tor`,
-      'Ø',
+      'Gegentore pro Spiel',
       2,
       all.filter((p) => p.games >= KEEPER_MIN_GAMES),
       (p) => p.total.gk_goal_against / games(p),
       (p) => `${p.total.gk_goal_against} Gegentore in ${p.games} Spielen`,
       { asc: true, keepZero: true }
     ),
-    board('top', 'Glanzparaden', 'Die Paraden, bei denen alle aufstehen', 'GLANZ', 0, all, (p) => p.total.save_top, (p) =>
+    board('top', 'Glanzparaden', 'Die Paraden, bei denen alle aufstehen', 'Glanzparaden', 0, all, (p) => p.total.save_top, (p) =>
       `von ${p.total.save} Paraden insgesamt`
     ),
-    board('pens', 'Gehaltene Elfmeter', 'Vom Punkt pariert', 'ELFM.', 0, all, (p) => p.total.penalty_save, (p) => spiele(p)),
-    board('pos', 'Standparaden', 'Sichere Beute – ohne Gefahr weggefangen', 'STAND', 0, all, (p) => p.total.gk_position_save, (p) =>
+    board('pens', 'Gehaltene Elfmeter', 'Vom Punkt pariert', 'Elfmeter', 0, all, (p) => p.total.penalty_save, (p) => spiele(p)),
+    board('pos', 'Standparaden', 'Sichere Beute – ohne Gefahr weggefangen', 'Standparaden', 0, all, (p) => p.total.gk_position_save, (p) =>
       spiele(p)
     ),
     board(

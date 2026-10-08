@@ -139,14 +139,14 @@ export default function KeeperStats({ open, onClose, rows, teams, players, scori
                             title: 'Paraden',
                             accent: '#22DFC9',
                             icon: <Hand className="w-4 h-4" />,
-                            preview: top ? `1. ${top.playerName} · ${top.values.save} PAR` : undefined,
+                            preview: top ? `1. ${top.playerName} · ${top.values.save} Paraden` : undefined,
                             content: (
                               <StatTable
                                 rows={saveRows}
                                 cols={[
                                   { key: 'save', label: 'Paraden' },
-                                  { key: 'top', label: 'Glanz' },
-                                  { key: 'pos', label: 'Stand' },
+                                  { key: 'top', label: 'Glanz\u00ADparaden' },
+                                  { key: 'pos', label: 'Stand\u00ADparaden' },
                                 ]}
                                 defaultSort="save"
                                 accent="#22DFC9"
@@ -204,9 +204,11 @@ function BoardRows({
             </button>
             <div className="font-sans text-[11px] text-hl-dim truncate mt-0.5">{r.sub}</div>
           </div>
-          <div className="flex items-baseline gap-1 shrink-0 pl-2">
+          <div className="flex flex-col items-end shrink-0 pl-2 max-w-[84px]">
             <span className="font-display font-black text-xl sm:text-2xl leading-none text-brand-accent-light tabular-nums">{fmtBoard(board, r.value)}</span>
-            {!!board.unit && <span className="font-sans font-bold text-[9px] tracking-wider text-hl-dim">{board.unit}</span>}
+            {!!board.unit && (
+              <span className="mt-0.5 font-sans font-bold text-[9px] uppercase tracking-wider text-hl-dim text-right leading-tight">{board.unit}</span>
+            )}
           </div>
         </div>
       ))}

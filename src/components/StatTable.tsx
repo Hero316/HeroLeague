@@ -59,7 +59,7 @@ export default function StatTable({
 
   return (
     <div className="pt-1 min-w-0">
-      <div className="flex items-center gap-2 px-1.5 pb-1.5 border-b border-white/[.08]">
+      <div className="flex items-end gap-1.5 sm:gap-2 px-1.5 pb-1.5 border-b border-white/[.08]">
         <span className="w-5 shrink-0" />
         <span className="flex-1 min-w-0 text-[10px] font-bold uppercase tracking-wider text-hl-faint">Spieler</span>
         {cols.map((c) => {
@@ -71,13 +71,14 @@ export default function StatTable({
               onClick={() => setSortKey(c.key)}
               aria-pressed={on}
               title={`Nach „${c.label}" sortieren`}
-              className={`shrink-0 w-[52px] sm:w-16 flex items-center justify-end gap-0.5 text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-colors ${
+              className={`shrink-0 w-[44px] sm:w-[84px] flex items-end justify-end gap-0.5 text-[9px] sm:text-[10px] font-bold uppercase sm:tracking-wider cursor-pointer transition-colors ${
                 on ? '' : 'text-hl-dim hover:text-white'
               }`}
               style={on ? { color: accent } : undefined}
             >
-              <span className="truncate">{c.label}</span>
-              {on && <ArrowDown className="w-3 h-3 shrink-0" />}
+              {/* Ausgeschrieben; lange Wörter dürfen umbrechen (weiche Trennung). */}
+              <span className="min-w-0 text-right leading-tight hyphens-manual break-words">{c.label}</span>
+              {on && <ArrowDown className="w-3 h-3 shrink-0 mb-px" />}
             </button>
           );
         })}
@@ -90,13 +91,18 @@ export default function StatTable({
               <button
                 type="button"
                 onClick={onSelect ? () => onSelect(r.teamId, r.playerName) : undefined}
-                className="w-full flex items-center gap-2 rounded-lg px-1.5 py-1.5 hover:bg-white/[.05] transition-colors cursor-pointer text-left min-w-0"
+                className="w-full flex items-center gap-1.5 sm:gap-2 rounded-lg px-1.5 py-1.5 hover:bg-white/[.05] transition-colors cursor-pointer text-left min-w-0"
               >
                 <span className="w-5 shrink-0 text-center font-display font-black tabular-nums text-xs" style={{ color: i === 0 ? accent : undefined }}>
                   {i + 1}
                 </span>
                 <span className="flex-1 min-w-0 flex items-center gap-1.5">
-                  {t && <TeamCrest name={t.name} shortName={t.shortName} color={t.logoColor} logoUrl={t.logoUrl} size="xs" />}
+                  {/* Wappen erst ab sm – am Handy braucht der Name den Platz. */}
+                  {t && (
+                    <span className="hidden sm:inline-flex shrink-0">
+                      <TeamCrest name={t.name} shortName={t.shortName} color={t.logoColor} logoUrl={t.logoUrl} size="xs" />
+                    </span>
+                  )}
                   <span className="min-w-0 truncate font-sans font-semibold text-sm text-white">{r.playerName}</span>
                 </span>
                 {cols.map((c) => {
@@ -105,7 +111,7 @@ export default function StatTable({
                   return (
                     <span
                       key={c.key}
-                      className={`shrink-0 w-[52px] sm:w-16 text-right tabular-nums ${on ? 'font-display font-black text-sm text-white' : 'font-mono text-[12px] text-hl-mute'}`}
+                      className={`shrink-0 w-[44px] sm:w-[84px] text-right tabular-nums ${on ? 'font-display font-black text-sm text-white' : 'font-mono text-[12px] text-hl-mute'}`}
                     >
                       {v == null ? '–' : c.fmt ? c.fmt(v) : v}
                     </span>
