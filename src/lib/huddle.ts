@@ -56,6 +56,12 @@ export function primeAudio(): void {
   } catch { /* ohne WebAudio: nur Sprech-Erkennung fehlt */ }
 }
 
+// Der gemeinsame AudioContext (für die Warte-Musik).
+export function huddleAudioContext(): AudioContext | null {
+  primeAudio();
+  return sharedCtx;
+}
+
 interface PollResult {
   huddle: HuddleState | null;
   participants: HuddleParticipant[];
@@ -95,7 +101,12 @@ interface Peer {
   makingOffer: boolean;
   ignoreOffer: boolean;
   polite: boolean;
-  screenTrackId: string | null;
+  screenSenders: RTCRtpSender[];
+  camSenders: RTCRtpSender[];
+  // Welche Video-Streams des Peers sind Kamera bzw. Bildschirm? (per 'media'-Signal
+  // gemeldet). undefined = alter Client ohne Meldung → Video gilt als Bildschirm.
+  info?: { cam: string | null; scr: string | null };
+  videos: Map<string, MediaStream>; // empfangene Video-Streams (nach Stream-ID)
 }
 
 // Ein aktiver Huddle als Client-Session (Audio-Mesh + optional Bildschirm).
@@ -106,6 +117,8 @@ export class HuddleSession {
   myId: string;
   private local: MediaStream | null = null;
   private screen: MediaStream | null = null;
+  private camera: MediaStream | null = null;
+  private facing: 'user' | 'environment' = 'user';
   private peers = new Map<string, Peer>();
   private audios = new Map<string, HTMLAudioElement>();
   private pendingIce = new Map<string, RTCIceCandidateInit[]>();
@@ -120,6 +133,7 @@ export class HuddleSession {
   private wake: (() => void) | null = null;
   muted = false;
   sharing = false;
+  camOn = false;
   participants: HuddleParticipant[] = [];
   onParticipants: (p: HuddleParticipant[]) => void = () => {};
   onEnded: () => void = () => {};
@@ -127,6 +141,8 @@ export class HuddleSession {
   onScreen: (from: string, stream: MediaStream | null) => void = () => {};
   // Menge der IDs (myId + Peer-IDs), die GERADE reden.
   onSpeaking: (ids: Set<string>) => void = () => {};
+  // Kamera-Bild: from = 'me' oder Peer-ID; stream = null ⇒ Kamera aus.
+  onCamera: (from: string, stream: MediaStream | null) => void = () => {};
 
   constructor(huddleId: string, myId: string) {
     this.huddleId = huddleId;
@@ -234,10 +250,12 @@ export class HuddleSession {
 
   private makePeer(peerId: string): Peer {
     const pc = new RTCPeerConnection(ICE);
-    const peer: Peer = { pc, makingOffer: false, ignoreOffer: false, polite: this.myId > peerId, screenTrackId: null };
+    const peer: Peer = { pc, makingOffer: false, ignoreOffer: false, polite: this.myId > peerId, screenSenders: [], camSenders: [], videos: new Map() };
     this.peers.set(peerId, peer);
     if (this.local) for (const t of this.local.getTracks()) pc.addTrack(t, this.local);
-    if (this.screen) for (const t of this.screen.getVideoTracks()) pc.addTrack(t, this.screen);
+    if (this.screen) for (const t of this.screen.getVideoTracks()) peer.screenSenders.push(pc.addTrack(t, this.screen));
+    if (this.camera) for (const t of this.camera.getVideoTracks()) peer.camSenders.push(pc.addTrack(t, this.camera));
+    this.sendMedia(peerId);
 
     pc.onicecandidate = (e) => {
       if (e.candidate) huddleSignal(this.huddleId, peerId, 'ice', e.candidate.toJSON()).catch(() => {});
@@ -272,11 +290,18 @@ export class HuddleSession {
         a.srcObject = stream;
         a.play().catch(() => {});
         this.addAnalyser(peerId, stream);
-      } else if (e.track.kind === 'video') {
-        this.onScreen(peerId, stream);
-        const clear = () => this.onScreen(peerId, null);
-        e.track.addEventListener('ended', clear);
-        e.track.addEventListener('mute', clear);
+      } else if (e.track.kind === 'video' && stream) {
+        peer.videos.set(stream.id, stream);
+        e.track.addEventListener('ended', () => {
+          peer.videos.delete(stream.id);
+          this.classify(peerId);
+        });
+        // Alter Client (meldet nichts): wie früher – Stummschalten = Freigabe vorbei.
+        e.track.addEventListener('mute', () => {
+          if (!peer.info) this.onScreen(peerId, null);
+        });
+        e.track.addEventListener('unmute', () => this.classify(peerId));
+        this.classify(peerId);
       }
     };
     pc.onconnectionstatechange = () => {
@@ -289,6 +314,12 @@ export class HuddleSession {
     const peer = this.peers.get(senderId) ?? this.makePeer(senderId);
     const pc = peer.pc;
     try {
+      if (kind === 'media') {
+        const m = (payload ?? {}) as { cam?: unknown; scr?: unknown };
+        peer.info = { cam: typeof m.cam === 'string' ? m.cam : null, scr: typeof m.scr === 'string' ? m.scr : null };
+        this.classify(senderId);
+        return;
+      }
       if (kind === 'desc') {
         const desc = payload as RTCSessionDescriptionInit;
         const offerCollision = desc.type === 'offer' && (peer.makingOffer || pc.signalingState !== 'stable');
@@ -338,6 +369,7 @@ export class HuddleSession {
     if (out) { try { out.disconnect(); } catch { /* egal */ } this.outputs.delete(peerId); }
     this.pendingIce.delete(peerId);
     this.onScreen(peerId, null);
+    this.onCamera(peerId, null);
   }
 
   toggleMute(): boolean {
@@ -346,16 +378,40 @@ export class HuddleSession {
     return this.muted;
   }
 
+  // Empfangene Videos eines Peers einordnen: Kamera oder Bildschirm.
+  private classify(peerId: string) {
+    const peer = this.peers.get(peerId);
+    if (!peer) return;
+    const info = peer.info;
+    if (!info) {
+      // Alter Client: jedes Video ist der Bildschirm (letzter Stream gewinnt).
+      const last = [...peer.videos.values()].pop() ?? null;
+      this.onScreen(peerId, last);
+      return;
+    }
+    this.onScreen(peerId, (info.scr && peer.videos.get(info.scr)) || null);
+    this.onCamera(peerId, (info.cam && peer.videos.get(info.cam)) || null);
+  }
+
+  // Allen (oder einem) Peer melden, welche eigenen Streams Kamera/Bildschirm sind.
+  private sendMedia(only?: string) {
+    const payload = { cam: this.camera?.id ?? null, scr: this.screen?.id ?? null };
+    const targets = only ? [only] : [...this.peers.keys()];
+    for (const id of targets) huddleSignal(this.huddleId, id, 'media', payload).catch(() => {});
+  }
+
   // Bildschirm teilen starten (fügt allen Peers eine Videospur hinzu → Renegotiation).
   async startScreen(): Promise<MediaStream> {
-    const s = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+    const s = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 15, max: 30 } }, audio: false });
     this.screen = s;
     this.sharing = true;
+    for (const t of s.getVideoTracks()) {
+      // Text/Folien scharf übertragen statt flüssig-matschig.
+      try { (t as MediaStreamTrack & { contentHint?: string }).contentHint = 'detail'; } catch { /* egal */ }
+    }
+    this.sendMedia();
     for (const [, peer] of this.peers) {
-      for (const t of s.getVideoTracks()) {
-        const sender = peer.pc.addTrack(t, s);
-        peer.screenTrackId = sender.track ? sender.track.id : null;
-      }
+      for (const t of s.getVideoTracks()) peer.screenSenders.push(peer.pc.addTrack(t, s));
     }
     // Wenn der Nutzer im Browser „Freigabe beenden" tippt.
     const vt = s.getVideoTracks()[0];
@@ -370,14 +426,72 @@ export class HuddleSession {
     this.screen = null;
     this.sharing = false;
     for (const [, peer] of this.peers) {
-      for (const sender of peer.pc.getSenders()) {
-        if (sender.track && sender.track.kind === 'video') {
-          try { peer.pc.removeTrack(sender); } catch { /* egal */ }
-        }
+      for (const sender of peer.screenSenders) {
+        try { peer.pc.removeTrack(sender); } catch { /* egal */ }
       }
+      peer.screenSenders = [];
     }
     for (const t of s.getTracks()) t.stop();
+    this.sendMedia();
     this.onScreen('me', null);
+  }
+
+  // Kamera an (Videoanruf, FaceTime-artig). Eigener Stream – das Mikro bleibt getrennt.
+  async startCamera(): Promise<MediaStream> {
+    const cam = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: this.facing, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24, max: 30 } },
+      audio: false,
+    });
+    this.camera = cam;
+    this.camOn = true;
+    this.sendMedia();
+    for (const [, peer] of this.peers) {
+      for (const t of cam.getVideoTracks()) peer.camSenders.push(peer.pc.addTrack(t, cam));
+    }
+    this.onCamera('me', cam);
+    return cam;
+  }
+
+  stopCamera(): void {
+    if (!this.camera) return;
+    const cam = this.camera;
+    this.camera = null;
+    this.camOn = false;
+    for (const [, peer] of this.peers) {
+      for (const sender of peer.camSenders) {
+        try { peer.pc.removeTrack(sender); } catch { /* egal */ }
+      }
+      peer.camSenders = [];
+    }
+    for (const t of cam.getTracks()) t.stop();
+    this.sendMedia();
+    this.onCamera('me', null);
+  }
+
+  // Handy: zwischen Front- und Rückkamera wechseln (ohne Neuverhandlung).
+  async switchCamera(): Promise<void> {
+    if (!this.camera) return;
+    this.facing = this.facing === 'user' ? 'environment' : 'user';
+    const next = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: this.facing, width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false,
+    });
+    const track = next.getVideoTracks()[0];
+    const old = this.camera;
+    for (const [, peer] of this.peers) {
+      for (const sender of peer.camSenders) await sender.replaceTrack(track).catch(() => {});
+    }
+    // Stream-ID beibehalten (die anderen ordnen das Video darüber zu).
+    for (const t of old.getVideoTracks()) {
+      old.removeTrack(t);
+      t.stop();
+    }
+    old.addTrack(track);
+    this.onCamera('me', new MediaStream([track]));
+  }
+
+  get facingMode() {
+    return this.facing;
   }
 
   stop() {
@@ -386,6 +500,7 @@ export class HuddleSession {
     if (this.timer) clearTimeout(this.timer);
     if (this.levelTimer) { clearInterval(this.levelTimer); this.levelTimer = null; }
     if (this.screen) { for (const t of this.screen.getTracks()) t.stop(); this.screen = null; }
+    if (this.camera) { for (const t of this.camera.getTracks()) t.stop(); this.camera = null; }
     for (const id of [...this.peers.keys()]) this.closePeer(id);
     if (this.wake) { this.wake(); this.wake = null; }
     for (const an of this.analysers.values()) { try { an.disconnect(); } catch { /* egal */ } }
