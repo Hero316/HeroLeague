@@ -54,8 +54,10 @@ import ChatApp from './components/ChatApp';
 import Avatar from './components/Avatar';
 import DeepLinkModal from './components/DeepLinkModal';
 import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight, Target, Star, Twitch, MonitorPlay } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight, Target, Star, Twitch, MonitorPlay, Crown } from 'lucide-react';
 import TrackingCenter from './components/TrackingCenter';
+import HeroOneAdmin from './components/HeroOneAdmin';
+import { effectivePermissions } from './lib/permissions';
 import SpielberichtPage from './components/SpielberichtPage';
 import WertungenPage from './components/WertungenPage';
 
@@ -133,25 +135,32 @@ export default function App() {
   const isReferee = sessionUser?.role === 'referee';
   const isMatchAdmin = sessionUser?.role === 'match_admin';
   const isTeamMember = sessionUser?.role === 'team_member';
-  // Reine Team-Mitglieder (Chat/Aufgaben/Tickets) haben KEIN Liga-Backoffice –
-  // sie erreichen nur die Team-App (über das Hamburger-Menü). Backoffice bleibt
-  // Super-Admins, Spiel-Admins und Schiedsrichtern vorbehalten.
-  // Schiedsrichter sehen die normale Website + den Schiedsrichtermodus, aber kein
-  // Backoffice (dort hätten sie ohnehin keine Rechte).
-  const canAccessBackoffice = isAdmin && !isTeamMember && !isReferee;
+  // Backoffice-Bereiche dieser Person (Super-Admin: alle; sonst individuell
+  // angehakt oder Standard der Rolle – siehe Benutzerverwaltung → „Rechte").
+  // Geschützt wird serverseitig; hier wird nur ein-/ausgeblendet.
+  const perms = useMemo(
+    () => effectivePermissions(sessionUser?.role, sessionUser?.permissions),
+    [sessionUser?.role, sessionUser?.permissions]
+  );
+  // Backoffice sieht, wer mind. einen Bereich hat. Schiedsrichter nie (nur
+  // Schiedsrichtermodus); reine Team-Mitglieder ohne Bereich nur die Team-App.
+  const canAccessBackoffice = isAdmin && !isReferee && perms.length > 0;
   // Interne Team-App (Chat/Aufgaben/Kalender/Tickets/Ideen): für alle
   // eingeloggten Rollen AUSSER Schiedsrichter. Ein Schiri pfeift nur Spiele und
   // darf die internen Team-Daten GAR NICHT sehen (weder Oberfläche noch Daten).
   const canUseTeamApp = isAdmin && !isReferee;
-  // Tickets verwalten (Status/Zuweisung/Löschen) dürfen nur Super-Admins.
+  // Team-App-Tickets verwalten (Status/Zuweisung/Löschen) dürfen nur Super-Admins.
   const canManageTickets = isSuperadmin;
-  // Granulare Rechte – der Spiel-Admin bekommt bewusst nur einen Teil:
-  const canManageMatches = isSuperadmin || isMatchAdmin; // Spielplan, Ergebnisse, Klubs, Ergebniszettel, Schiedsrichtermodus
+  const canTrack = perms.includes('tracking'); // Statistics Center (Tracking)
+  const canManageMatches = perms.includes('results'); // Spielplan, Ergebnisse, Ergebniszettel, Schiedsrichtermodus
+  const canManageClubs = perms.includes('clubs'); // Klubs & Kader, Kader-Meldung
   const canManageSeason = isSuperadmin; // Saison verwalten
-  const canManagePom = isSuperadmin || isMatchAdmin; // Spieler des Monats
-  const canEditHighlights = isSuperadmin || isMatchAdmin; // Highlights (öffentlich, inline)
-  const canEditHomepage = isSuperadmin; // Startseite (Hero/Countdown), News-Ticker, Partner & Sponsoren
-  const canManageChannels = isSuperadmin; // Twitch/Social, Event/Testspiel
+  const canManagePom = perms.includes('awards'); // Auszeichnungen (Spieler/Torwart des Spieltages, HERO ONE intern)
+  const canEditHighlights = perms.includes('highlights'); // Highlights (öffentlich, inline)
+  const canEditHomepage = perms.includes('homepage'); // Startseite (Hero/Countdown), News-Ticker, Partner & Sponsoren
+  const canManageChannels = perms.includes('channels'); // Twitch/Social, OBS, Streams, Event/Testspiel
+  const canManageSignups = perms.includes('signups'); // Anmeldungen & Tippspiel
+  const canManageEventTickets = perms.includes('tickets'); // Zuschauer-Tickets
   const canManageUsers = isSuperadmin; // Benutzerverwaltung
   // Sichtbares Event – rollenabhängig:
   //  • activeId  = öffentlich für ALLE sichtbar (echter Live-Gang).
@@ -170,9 +179,7 @@ export default function App() {
   // Auf der Testspiel-Seite tatsächlich gezeigtes Event (aktiv, oder Admin-Vorschau).
   const shownEvent = activeEvent ?? (canManageChannels ? lastEvent : null);
   // Backoffice-Rubriken sichtbar, wenn mind. eine Sektion darin zugänglich ist:
-  const canSeeLeagueArea = canManageMatches || canManageSeason;
-  const canSeeStartseiteArea = canEditHomepage || canManagePom;
-  const canSeeChannelsArea = canManageChannels;
+  const canSeeLeagueArea = canManageMatches || canManageClubs || canManageSeason;
   // Admin hat den Schiedsrichtermodus manuell geöffnet (per Navbar-Schnellzugang).
   // Abend-Aufstellungen (Schiedsrichtermodus), Schlüssel `${seasonId}:${matchday}`.
   const [roster, setRoster] = useState<RosterMap>({});
@@ -448,7 +455,7 @@ export default function App() {
   // Startseite geschickt – von dort geht es über das Hamburger-Menü in die
   // Team-App. Andere Rollen (Super-Admin, Spiel-Admin, Schiri) bleiben.
   useEffect(() => {
-    if ((isTeamMember || isReferee) && currentPath === '/admin') navigateTo('/');
+    if (isAdmin && !canAccessBackoffice && currentPath === '/admin') navigateTo('/');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isTeamMember, isReferee, currentPath]);
 
@@ -792,7 +799,11 @@ export default function App() {
         const team = teams.find((t) => t.id === opts.teamKey) ?? teams.find((t) => norm(t.name) === norm(opts.teamKey));
         if (!team) return;
         if ((team.spielerliste ?? []).some((p) => norm(p.name) === norm(name))) return;
-        handleEditTeam(team.id, { spielerliste: [...(team.spielerliste ?? []), { name }] });
+        // Schmaler Server-Weg: hängt NUR den Namen an den echten Kader an – dafür
+        // reicht das Recht „Statistics Center" (kein Super-Admin nötig).
+        await runAdminAction(() =>
+          apiFetch(`/api/teams/${encodeURIComponent(team.id)}`, { method: 'PUT', body: JSON.stringify({ addPlayer: { name } }) })
+        );
       }
     },
     [eventArchive, teams]
@@ -1603,10 +1614,10 @@ export default function App() {
         </div>
       );
     }
-    if (!canManageMatches) {
+    if (!canTrack) {
       return (
         <div className="h-screen flex flex-col items-center justify-center gap-4 bg-[#060E0F] text-hl-text p-6 text-center">
-          <p className="text-hl-mute">Für das Statistics Center brauchst du Spiel-Admin-Rechte.</p>
+          <p className="text-hl-mute">Für das Statistics Center fehlt dir das Recht „Statistics Center (Tracking)".</p>
           <button
             onClick={() => navigateTo('/admin')}
             className="px-5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer"
@@ -1634,7 +1645,7 @@ export default function App() {
   // ROUTE: /admin – geschütztes Backoffice. Team-Mitglieder haben hier nichts zu
   // suchen (siehe Redirect-Effekt oben) – kurz nichts zeigen, bis er greift.
   if (currentPath === '/admin') {
-    if (isAdmin && (isTeamMember || isReferee)) return null;
+    if (isAdmin && !canAccessBackoffice) return null;
     return (
       <div className="min-h-screen text-hl-text font-sans flex flex-col justify-between">
         <PageBackground page="default" />
@@ -1711,7 +1722,7 @@ export default function App() {
               </div>
 
               {/* Statistics Center: eigene große Seite zum Auswerten der Spieltage. */}
-              {canManageMatches && (
+              {canTrack && (
                 <button
                   onClick={() => navigateTo('/tracking')}
                   className="hl-card p-5 w-full flex items-center gap-4 text-left hover:border-brand-accent/40 transition-colors cursor-pointer group"
@@ -1737,16 +1748,18 @@ export default function App() {
                   <AdminDashboard
                     teamsCount={visibleTeams.length}
                     matchesCount={currentSeasonMatches.length}
-                    canSeeSponsors={canManagePom}
-                    canManageClubs={canManageMatches}
+                    canSeeSponsors={canEditHomepage}
+                    canManageClubs={canManageClubs}
+                    canSeeResults={canManageMatches}
                   />
                 }
                 categories={[
                   ...(canSeeLeagueArea ? [{ id: 'spiele', label: 'Spiele & Liga' }] : []),
-                  ...(canSeeStartseiteArea ? [{ id: 'startseite', label: 'Startseite' }] : []),
-                  ...(canSeeChannelsArea ? [{ id: 'kanaele', label: 'Kanäle & Event' }] : []),
-                  ...(isSuperadmin ? [{ id: 'anmeldungen', label: 'Anmeldungen' }] : []),
-                  ...(canManageTickets ? [{ id: 'tickets', label: 'Zuschauer-Tickets' }] : []),
+                  ...(canManagePom ? [{ id: 'auszeichnungen', label: 'Auszeichnungen' }] : []),
+                  ...(canEditHomepage ? [{ id: 'startseite', label: 'Startseite' }] : []),
+                  ...(canManageChannels ? [{ id: 'kanaele', label: 'Kanäle & Event' }] : []),
+                  ...(canManageSignups ? [{ id: 'anmeldungen', label: 'Anmeldungen' }] : []),
+                  ...(canManageEventTickets ? [{ id: 'tickets', label: 'Zuschauer-Tickets' }] : []),
                   ...(canManageUsers ? [{ id: 'zugaenge', label: 'Zugänge' }] : []),
                 ]}
               >
@@ -1788,7 +1801,7 @@ export default function App() {
                     </>
                   )}
 
-                  {(canManageMatches || canManageSeason || canEditHomepage || canManagePom || canManageChannels) && (
+                  {(canManageClubs || canManageSeason || canEditHomepage || canManagePom || canManageChannels) && (
                     <AdminPanel
                       teams={visibleTeams}
                       matches={currentSeasonMatches}
@@ -1797,7 +1810,7 @@ export default function App() {
                       seasons={seasons.filter((s) => s.id !== demo.seasonId)}
                       currentSeasonId={currentSeason?.id ?? ''}
                       isSuperadmin={isSuperadmin}
-                      canManageClubs={canManageMatches}
+                      canManageClubs={canManageClubs}
                       canManageSeason={canManageSeason}
                       canEditHomepage={canEditHomepage}
                       canManagePom={canManagePom}
@@ -1856,7 +1869,7 @@ export default function App() {
                     </AccordionSection>
                   )}
 
-                  {isSuperadmin && (
+                  {canManageSignups && (
                     <>
                       <AccordionSection
                         id="season-signups"
@@ -1888,6 +1901,11 @@ export default function App() {
                       >
                         <TippBonusAdmin teams={leagueTeams} />
                       </AccordionSection>
+                    </>
+                  )}
+
+                  {canManageEventTickets && (
+                    <>
                       <AccordionSection
                         id="event-tickets"
                         category="tickets"
@@ -1901,7 +1919,26 @@ export default function App() {
                     </>
                   )}
 
-                  {isSuperadmin && (
+                  {canManagePom && (
+                    <AccordionSection
+                      id="hero-one-admin"
+                      category="auszeichnungen"
+                      title="HERO ONE · interne Rangliste"
+                      subtitle="Nur hier im Backend: wer aktuell vorne liegt – mit Punkten (öffentlich nur die 10 Nominierten)"
+                      icon={<Crown className="w-5 h-5" />}
+                      accent="#E9C46A"
+                    >
+                      <HeroOneAdmin
+                        rows={trackingRows}
+                        cfg={scoring}
+                        matches={currentSeasonMatches}
+                        teams={visibleTeams}
+                        seasonLabel={currentSeasonName}
+                      />
+                    </AccordionSection>
+                  )}
+
+                  {canManageUsers && (
                     <AccordionSection
                       id="users"
                       category="zugaenge"

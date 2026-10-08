@@ -44,11 +44,13 @@ export default function AdminDashboard({
   matchesCount,
   canSeeSponsors,
   canManageClubs,
+  canSeeResults,
 }: {
   teamsCount: number;
   matchesCount: number;
   canSeeSponsors: boolean;
   canManageClubs: boolean;
+  canSeeResults: boolean;
 }) {
   const { openSection } = useAdminNav();
   const [sponsorTotal, setSponsorTotal] = useState<number | null>(null);
@@ -97,7 +99,7 @@ export default function AdminDashboard({
             onClick={() => openSection('clubs', 'spiele')}
           />
         )}
-        {canManageClubs && (
+        {canSeeResults && (
           <Tile
             icon={<CalendarDays className="w-5 h-5" />}
             accent="#43E5A0"

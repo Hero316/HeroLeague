@@ -6,7 +6,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { randomUUID, randomInt } from 'node:crypto';
 import { sql, getTeams } from './db.js';
-import { getSession } from './auth.js';
+import { getSession, hasPermission } from './auth.js';
 import { badRequest } from './validate.js';
 import {
   checkCode, clientIp, codeBlock, isDisposableEmail, isEmail, issueCode, mailButton,
@@ -603,7 +603,7 @@ async function selfCheckin(req: VercelRequest, res: VercelResponse) {
 async function requireSuper(req: VercelRequest, res: VercelResponse): Promise<boolean> {
   const session = await getSession(req);
   if (!session) { res.status(401).json({ error: 'Nicht angemeldet' }); return false; }
-  if (session.role !== 'superadmin') { res.status(403).json({ error: 'Keine Berechtigung.' }); return false; }
+  if (!hasPermission(session, 'tickets')) { res.status(403).json({ error: 'Keine Berechtigung.' }); return false; }
   return true;
 }
 async function adminList(req: VercelRequest, res: VercelResponse) {

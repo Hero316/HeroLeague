@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { Absence, Scorer, Team } from '../../src/types';
 import { normalizeRoster, sql } from '../_lib/db.js';
-import { requireSuperadmin } from '../_lib/auth.js';
+import { requirePermission, requireSuperadmin } from '../_lib/auth.js';
 import { badRequest, isNonEmptyString, isRoster } from '../_lib/validate.js';
 
 // Neu in den Kader aufgenommene Spieler dürfen nicht rückwirkend als eingesetzt gelten.
@@ -41,7 +41,7 @@ async function markNewPlayersAbsentInPastMatches(teamId: string, addedNames: str
   }
 }
 
-const updateTeam = requireSuperadmin(async (req: VercelRequest, res: VercelResponse) => {
+const updateTeam = requirePermission('clubs')(async (req: VercelRequest, res: VercelResponse) => {
   const id = String(req.query.id);
   const { name, shortName, logoUrl, logoColor, logoIcon, spielerliste, seasonIds } = req.body ?? {};
 
@@ -95,6 +95,31 @@ const updateTeam = requireSuperadmin(async (req: VercelRequest, res: VercelRespo
   return res.json(team);
 });
 
+// Schmaler Weg fürs Statistics Center: EINEN Spieler (nur Name) an den Kader
+// anhängen. Darf auch, wer nur „Tracking" freigegeben hat – ohne sonst etwas am
+// Klub ändern zu können (Name, Logo, Kapitän … bleiben „Klubs & Kader").
+const addPlayer = requirePermission('clubs', 'tracking')(async (req: VercelRequest, res: VercelResponse) => {
+  const id = String(req.query.id);
+  const raw = (req.body ?? {}).addPlayer?.name;
+  if (!isNonEmptyString(raw) || raw.trim().length > 60) return badRequest(res, 'Bitte einen Spielernamen angeben.');
+  const name = raw.trim().replace(/\s+/g, ' ');
+
+  const rows = await sql`
+    SELECT id, name, short_name AS "shortName", logo_color AS "logoColor",
+           logo_icon AS "logoIcon", logo_url AS "logoUrl", spielerliste
+    FROM teams WHERE id = ${id}
+  `;
+  if (rows.length === 0) return res.status(404).json({ error: 'Team nicht gefunden.' });
+  const team = { ...rows[0], spielerliste: normalizeRoster(rows[0].spielerliste) } as Team;
+  const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (team.spielerliste.some((p) => norm(p.name) === norm(name))) return res.json(team);
+
+  team.spielerliste = [...team.spielerliste, { name }];
+  await sql`UPDATE teams SET spielerliste = ${JSON.stringify(team.spielerliste)}::jsonb WHERE id = ${id}`;
+  await markNewPlayersAbsentInPastMatches(id, [name]);
+  return res.json(team);
+});
+
 const deleteTeam = requireSuperadmin(async (req: VercelRequest, res: VercelResponse) => {
   const id = String(req.query.id);
   // Spiele des Vereins werden per FK-Kaskade mitgelöscht
@@ -105,6 +130,7 @@ const deleteTeam = requireSuperadmin(async (req: VercelRequest, res: VercelRespo
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
+    if (req.method === 'PUT' && req.body?.addPlayer) return addPlayer(req, res);
     if (req.method === 'PUT') return updateTeam(req, res);
     if (req.method === 'DELETE') return deleteTeam(req, res);
     return res.status(405).json({ error: 'Nicht unterstützt' });
