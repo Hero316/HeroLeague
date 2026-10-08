@@ -1,5 +1,6 @@
 import React from 'react';
 import { Star, Crown, ChevronDown } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import type { Match, MatchPlayerStat, ScoringConfig, Team } from '../types';
 import { monogram } from './ui';
 import { numberWord } from '../lib/heroAward';
@@ -152,6 +153,7 @@ function NomineeCard({
   onPlayer?: () => void;
   onSelectTeam?: (teamId: string, playerName?: string) => void;
 }) {
+  const reduce = useReducedMotion();
   const t = p.total;
   const goals = t.goal + t.penalty_goal;
   const keeper = p.role === 'keeper';
@@ -187,7 +189,7 @@ function NomineeCard({
 
   return (
     <div
-      className={`rounded-2xl border transition-colors ${open ? 'border-[rgba(233,196,106,.45)] bg-[rgba(233,196,106,.06)]' : 'border-white/10 bg-white/[.03]'}`}
+      className={`rounded-2xl border transition-colors duration-300 ${open ? 'border-[rgba(233,196,106,.45)] bg-[rgba(233,196,106,.06)]' : 'border-white/10 bg-white/[.03]'}`}
     >
       <button type="button" onClick={onToggle} aria-expanded={open} className="w-full flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-3 text-left cursor-pointer min-w-0">
         {/* Immer gleich groß: Foto ODER (ohne Foto) das Vereinslogo im selben Rahmen –
@@ -214,23 +216,53 @@ function NomineeCard({
         </span>
         <ChevronDown className={`w-5 h-5 shrink-0 text-hl-gold transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
       </button>
-      {open && (
-        <div className="px-3 sm:px-4 pb-4">
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-            {stats.map((s) => (
-              <div key={s.label} className="rounded-xl bg-white/[.04] border border-white/[.06] px-2.5 py-2 text-center min-w-0">
-                <div className="font-display font-black text-white text-lg leading-none tabular-nums">{s.value}</div>
-                <div className="text-[9.5px] font-bold uppercase tracking-wider text-hl-dim mt-1 truncate">{s.label}</div>
-              </div>
-            ))}
-          </div>
-          {onPlayer && (
-            <button type="button" onClick={onPlayer} className="mt-3 text-[12px] font-bold text-hl-gold hover:text-white cursor-pointer">
-              Zum Spielerprofil →
-            </button>
-          )}
-        </div>
-      )}
+      {/* Weich aufklappen: Höhe fährt sanft auf, die Werte poppen nacheinander rein. */}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="stats"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: reduce ? 0 : 0.38, ease: [0.22, 1, 0.36, 1] }}
+            style={{ overflow: 'hidden' }}
+          >
+            <div className="px-3 sm:px-4 pb-4">
+              <motion.div
+                className="grid grid-cols-2 sm:grid-cols-5 gap-2"
+                initial="hidden"
+                animate="show"
+                variants={{ show: { transition: { staggerChildren: reduce ? 0 : 0.035, delayChildren: reduce ? 0 : 0.08 } } }}
+              >
+                {stats.map((s) => (
+                  <motion.div
+                    key={s.label}
+                    variants={{
+                      hidden: { opacity: 0, y: 10, scale: 0.96 },
+                      show: { opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 420, damping: 30 } },
+                    }}
+                    className="rounded-xl bg-white/[.04] border border-white/[.06] px-2.5 py-2 text-center min-w-0"
+                  >
+                    <div className="font-display font-black text-white text-lg leading-none tabular-nums">{s.value}</div>
+                    <div className="text-[9.5px] font-bold uppercase tracking-wider text-hl-dim mt-1 truncate">{s.label}</div>
+                  </motion.div>
+                ))}
+              </motion.div>
+              {onPlayer && (
+                <motion.button
+                  type="button"
+                  onClick={onPlayer}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1, transition: { delay: reduce ? 0 : 0.08 + stats.length * 0.035 } }}
+                  className="mt-3 text-[12px] font-bold text-hl-gold hover:text-white cursor-pointer"
+                >
+                  Zum Spielerprofil →
+                </motion.button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
