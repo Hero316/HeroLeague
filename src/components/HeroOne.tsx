@@ -3,6 +3,7 @@ import { Star, Crown, ChevronDown } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import type { Match, MatchPlayerStat, ScoringConfig, Team } from '../types';
 import { monogram } from './ui';
+import { validCutout } from '../lib/playerPhoto';
 import { numberWord } from '../lib/heroAward';
 import TrackingProgressBanner from './TrackingProgressBanner';
 import { useTrackingProgress } from '../lib/trackingProgress';
@@ -23,6 +24,7 @@ interface HeroEntry extends HeroRanked {
   id: string;
   name: string;
   imageUrl?: string;
+  cutoutUrl?: string; // freigestellt (ohne Hintergrund)
   teamName: string;
   teamLogoColor: string;
 }
@@ -46,6 +48,7 @@ export default function HeroOne({ rows, cfg, matches, teams, seasonNumber, seaso
           id: `${p.teamId}::${p.playerName}`,
           name: p.playerName,
           imageUrl: team?.spielerliste?.find((s) => s.name === p.playerName)?.imageUrl,
+          cutoutUrl: validCutout(team?.spielerliste?.find((s) => s.name === p.playerName)),
           teamName: team?.name ?? '',
           teamLogoColor: team?.logoColor || '#3B82F6',
         };
@@ -192,20 +195,23 @@ function NomineeCard({
       className={`rounded-2xl border transition-colors duration-300 ${open ? 'border-[rgba(233,196,106,.45)] bg-[rgba(233,196,106,.06)]' : 'border-white/10 bg-white/[.03]'}`}
     >
       <button type="button" onClick={onToggle} aria-expanded={open} className="w-full flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-3 text-left cursor-pointer min-w-0">
-        {/* Immer gleich groß: Foto ODER (ohne Foto) das Vereinslogo im selben Rahmen –
-            sonst wären Karten ohne Foto kleiner und uneinheitlich. */}
-        <span
-          className="shrink-0 w-[104px] h-[104px] rounded-[26px] grid place-items-center overflow-hidden border-2 border-[#E9C46A] bg-white/[.04] shadow-[0_0_18px_rgba(233,196,106,.22)]"
-          title={p.name}
-        >
-          {p.imageUrl ? (
-            <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
-          ) : team?.logoUrl ? (
-            <img src={team.logoUrl} alt={team.name} className="w-[76%] h-[76%] object-contain" loading="lazy" />
-          ) : (
-            <span className="font-display font-black text-4xl text-hl-gold">{monogram(p.name)}</span>
-          )}
-        </span>
+        {/* Immer gleich breit. Freigestellt: Spieler steht ohne Rahmen unten auf
+            der Kartenkante. Sonst Foto bzw. Vereinslogo – ohne goldenen Kasten. */}
+        {p.cutoutUrl ? (
+          <span className="shrink-0 w-[104px] h-[116px] -mb-3 -mt-1 flex items-end justify-center" title={p.name}>
+            <img src={p.cutoutUrl} alt={p.name} className="max-w-full max-h-full object-contain object-bottom drop-shadow-[0_8px_18px_rgba(0,0,0,.5)]" loading="lazy" />
+          </span>
+        ) : (
+          <span className="shrink-0 w-[104px] h-[104px] rounded-[26px] grid place-items-center overflow-hidden" title={p.name}>
+            {p.imageUrl ? (
+              <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
+            ) : team?.logoUrl ? (
+              <img src={team.logoUrl} alt={team.name} className="w-[86%] h-[86%] object-contain" loading="lazy" />
+            ) : (
+              <span className="font-display font-black text-4xl text-hl-gold">{monogram(p.name)}</span>
+            )}
+          </span>
+        )}
         <span className="min-w-0 flex-1">
           <span className="block font-display font-black uppercase tracking-tight text-white text-xl sm:text-2xl leading-tight truncate">{p.name}</span>
           <span className="block text-[12px] text-hl-mute truncate">

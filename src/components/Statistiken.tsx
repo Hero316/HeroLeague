@@ -25,6 +25,7 @@ import TrackingProgressBanner from './TrackingProgressBanner';
 import { useTrackingProgress } from '../lib/trackingProgress';
 import PlayerCrest from './PlayerCrest';
 import { TeamCrest, monogram, shade } from './ui';
+import { validCutout } from '../lib/playerPhoto';
 import { CountUp, Reveal, useSettledList } from './anim';
 import CompareOverlay from './CompareOverlay';
 import KeeperStats from './KeeperStats';
@@ -70,6 +71,13 @@ const VALUE_COLOR: Record<Accent, string> = {
 type CardVisual =
   | { type: 'player'; imageUrl?: string; teamId: string; color?: string; name: string }
   | { type: 'teams'; teams: Team[] };
+
+// Freigestelltes Foto des Spielers (falls vorhanden) – aus dem Kader des Vereins.
+function cutoutOf(visual: CardVisual, teams: Team[]): string | undefined {
+  if (visual.type !== 'player') return undefined;
+  const p = teams.find((t) => t.id === visual.teamId)?.spielerliste?.find((x) => x.name === visual.name);
+  return validCutout(p);
+}
 
 function BigLogo({ team, onSelect }: { team: Team; onSelect?: () => void }) {
   const inner = team.logoUrl ? (
@@ -739,10 +747,29 @@ export default function Statistiken({
                       <span className="font-sans font-bold text-[13px] tracking-wider text-hl-dim">{c.unit}</span>
                     </div>
                   </div>
+                  {/* Freigestellter Spieler: Platz reservieren, Bild steht unten auf der Kachelkante. */}
                   <div className={`shrink-0 self-center ${many <= 1 ? 'w-[118px] sm:w-[140px] lg:w-[156px]' : 'w-[46%]'}`}>
-                    <CardVisualView visual={c.visual} teams={teams} onPlayer={c.onClick} onSelectTeam={onSelectTeam} />
+                    {!cutoutOf(c.visual, teams) && (
+                      <CardVisualView visual={c.visual} teams={teams} onPlayer={c.onClick} onSelectTeam={onSelectTeam} />
+                    )}
                   </div>
                 </div>
+                {cutoutOf(c.visual, teams) && (
+                  <button
+                    type="button"
+                    onClick={c.onClick}
+                    title={c.onClick ? `${c.name} – Spieler anzeigen` : c.name}
+                    className={`absolute bottom-0 top-3 right-2 sm:right-4 w-[46%] sm:w-[44%] flex items-end justify-end ${c.onClick ? 'cursor-pointer' : 'cursor-default'}`}
+                  >
+                    <img
+                      src={cutoutOf(c.visual, teams)}
+                      alt={c.name}
+                      loading="lazy"
+                      decoding="async"
+                      className="max-h-full max-w-full object-contain object-bottom drop-shadow-[0_10px_24px_rgba(0,0,0,.5)] transition-transform duration-300 origin-bottom hover:scale-[1.03]"
+                    />
+                  </button>
+                )}
               </div>
             );
           })}

@@ -19,13 +19,14 @@ export function calculatePlayers(teams: Team[], matches: Match[]): PlayerStat[] 
   const playerMap: { [key: string]: PlayerStat } = {};
   const keyOf = (teamId: string, name: string) => `${teamId}::${name}`;
 
-  const ensurePlayer = (name: string, teamId: string, teamName: string, teamLogoColor: string, imageUrl?: string) => {
+  const ensurePlayer = (name: string, teamId: string, teamName: string, teamLogoColor: string, imageUrl?: string, cutoutUrl?: string) => {
     const key = keyOf(teamId, name);
     if (!playerMap[key]) {
       playerMap[key] = {
         id: `p-${teamId}-${name.replace(/\s+/g, '-')}`,
         name,
         imageUrl,
+        ...(cutoutUrl ? { cutoutUrl } : {}),
         teamId,
         teamName,
         teamLogoColor,
@@ -44,13 +45,15 @@ export function calculatePlayers(teams: Team[], matches: Match[]): PlayerStat[] 
     } else if (imageUrl && !playerMap[key].imageUrl) {
       // Kaderfoto nachtragen, falls der Spieler zuerst über einen Torschützen-Eintrag entstand
       playerMap[key].imageUrl = imageUrl;
+      if (cutoutUrl) playerMap[key].cutoutUrl = cutoutUrl;
     }
     return playerMap[key];
   };
 
   teams.forEach((t) => {
     (t.spielerliste || []).forEach((player) => {
-      ensurePlayer(player.name, t.id, t.name, t.logoColor || '#3B82F6', player.imageUrl);
+      const cutout = player.imageUrl && player.cutoutUrl && player.cutoutSrc === player.imageUrl ? player.cutoutUrl : undefined;
+      ensurePlayer(player.name, t.id, t.name, t.logoColor || '#3B82F6', player.imageUrl, cutout);
     });
   });
 
