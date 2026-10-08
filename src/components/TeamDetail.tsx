@@ -388,12 +388,16 @@ export default function TeamDetail({
   // Eine Statistik-Kachel für die Spieler-Detailansicht.
   // Mobil teilen sich die Kacheln die Breite (eine Reihe, kein Umbruch), ab sm
   // wieder natürliche Breite.
-  const StatTile = ({ value, label, accent }: { value: React.ReactNode; label: string; accent?: boolean }) => (
+  // `top` = kleine Zeile über dem Wert (z. B. „11 von 16" bei Quoten).
+  const StatTile = ({ value, label, accent, top }: { value: React.ReactNode; label: string; accent?: boolean; top?: string }) => (
     <div className="flex-1 min-w-0 sm:flex-none sm:min-w-[70px] lg:min-w-[92px] bg-white/[.04] border border-white/[.08] rounded-xl px-1.5 sm:px-3 lg:px-4 py-2.5 lg:py-3.5 text-center">
+      {top && (
+        <div className="font-sans font-semibold text-[9px] sm:text-[10px] lg:text-[11px] text-hl-dim tabular-nums leading-none mb-1.5 lg:mb-2 truncate">{top}</div>
+      )}
       <div className="font-display font-black text-[19px] sm:text-[26px] lg:text-[34px] leading-none" style={accent ? { color: accentSoft } : { color: '#fff' }}>
         {value}
       </div>
-      <div className="font-sans font-bold text-[8px] sm:text-[9px] lg:text-[11px] tracking-[1px] sm:tracking-[1.5px] text-hl-dim mt-1.5 lg:mt-2">{label}</div>
+      <div className="font-sans font-bold text-[8px] sm:text-[9px] lg:text-[11px] tracking-[1px] sm:tracking-[1.5px] text-hl-dim mt-1.5 lg:mt-2 hyphens-manual break-words leading-tight">{label}</div>
     </div>
   );
 
@@ -568,17 +572,38 @@ export default function TeamDetail({
                     )}
                     {trackedQuotas && (
                       <div className="flex gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap overflow-x-auto no-scrollbar">
+                        {/* Oben klein: aus wie vielen Versuchen die Quote entsteht. */}
                         {trackedQuotas.passquote !== null && (
-                          <StatTile value={`${Math.round(trackedQuotas.passquote * 100)}%`} label="PASSQUOTE" accent />
+                          <StatTile
+                            top={`${trackedTotal.pass_ok} von ${trackedTotal.pass_ok + trackedTotal.pass_fail}`}
+                            value={`${Math.round(trackedQuotas.passquote * 100)}%`}
+                            label={'PASS\u00ADQUOTE'}
+                            accent
+                          />
                         )}
                         {trackedQuotas.schussquote !== null && (
-                          <StatTile value={`${Math.round(trackedQuotas.schussquote * 100)}%`} label="SCHUSSQ." accent />
+                          <StatTile
+                            top={`${trackedTotal.goal + trackedTotal.shot_on} von ${trackedQuotas.gesamtschuesse}`}
+                            value={`${Math.round(trackedQuotas.schussquote * 100)}%`}
+                            label={'SCHUSS\u00ADQUOTE'}
+                            accent
+                          />
                         )}
                         {trackedQuotas.zweikampfquote !== null && (
-                          <StatTile value={`${Math.round(trackedQuotas.zweikampfquote * 100)}%`} label="ZWEIKAMPF" accent />
+                          <StatTile
+                            top={`${trackedTotal.duel_won} von ${trackedTotal.duel_won + trackedTotal.duel_lost}`}
+                            value={`${Math.round(trackedQuotas.zweikampfquote * 100)}%`}
+                            label={'ZWEIKAMPF\u00ADQUOTE'}
+                            accent
+                          />
                         )}
                         {trackedQuotas.dribblingquote !== null && (
-                          <StatTile value={`${Math.round(trackedQuotas.dribblingquote * 100)}%`} label="DRIBBLING" accent />
+                          <StatTile
+                            top={`${trackedTotal.dribble_won} von ${trackedTotal.dribble_won + trackedTotal.dribble_lost}`}
+                            value={`${Math.round(trackedQuotas.dribblingquote * 100)}%`}
+                            label={'DRIBBLING\u00ADQUOTE'}
+                            accent
+                          />
                         )}
                       </div>
                     )}

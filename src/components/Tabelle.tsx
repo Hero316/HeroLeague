@@ -21,8 +21,8 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
   // Einsortier-Animation: startet alphabetisch und rutscht in die echte Tabelle.
   const { ref: listRef, items: displayStandings } = useSettledList(standings, (s) => s.teamName);
 
-  // Abstiegszone = letzte 2 (nur bei genug Teams).
-  const relegationStart = standings.length >= 6 ? standings.length - 2 : Number.POSITIVE_INFINITY;
+  // Abstiegszone = letzte 3 (bei 12 Teams: Platz 10–12; nur bei genug Teams).
+  const relegationStart = standings.length >= 6 ? standings.length - 3 : Number.POSITIVE_INFINITY;
 
   const rankColors: Record<number, string> = { 1: '#E9C46A', 2: '#C9D1CC', 3: '#C98A5A' };
 
