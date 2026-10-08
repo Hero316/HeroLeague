@@ -53,7 +53,7 @@ import HighlightsPage from './components/HighlightsPage';
 import ChatApp from './components/ChatApp';
 import Avatar from './components/Avatar';
 import DeepLinkModal from './components/DeepLinkModal';
-import { PageHeader, Footer, AccordionGroup, AccordionSection } from './components/ui';
+import { PageHeader, Footer, AccordionGroup, AccordionSection, loadPartners } from './components/ui';
 import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight, Target, Star, Twitch, MonitorPlay, Crown } from 'lucide-react';
 import TrackingCenter from './components/TrackingCenter';
 import HeroOneAdmin from './components/HeroOneAdmin';
@@ -93,6 +93,10 @@ export default function App() {
   const [statsPreview, setStatsPreview] = useState<string[]>([]);
   const [eventTrackingRows, setEventTrackingRows] = useState<MatchPlayerStat[]>([]);
   const [scoring, setScoring] = useState<ScoringConfig>(DEFAULT_SCORING);
+  // Erst wenn Tracking-Werte UND Score-Einstellungen da sind, zeigen Seiten die
+  // daraus berechneten Dinge (z. B. Beste Aufstellung) – sonst „springt" es.
+  const [trackingLoaded, setTrackingLoaded] = useState(false);
+  const [scoringLoaded, setScoringLoaded] = useState(false);
   // Spieler des Monats schon beim Laden holen, damit der Hero direkt mit finaler
   // Höhe erscheint (sonst kommt der Slide asynchron dazu und der Hero „springt").
   const [pom, setPom] = useState<PlayerOfMonth | null>(null);
@@ -288,6 +292,8 @@ export default function App() {
           teamIds: [],
         })),
         apiFetch<PlayerOfMonth>('/api/player-of-the-month').catch(() => null),
+        // Partner gleich mitladen – sonst ploppt das Sponsor-Logo auf der Startseite nach.
+        loadPartners(),
       ]);
       setTeams(dataTeams);
       setMatches(dataMatches);
@@ -560,7 +566,8 @@ export default function App() {
       .then(setScoring)
       .catch(() => {
         /* Defaults bleiben */
-      });
+      })
+      .finally(() => setScoringLoaded(true));
   }, []);
 
   // Getrackte Werte (nur veröffentlichte) der AKTIVEN Saison laden – reagiert auf
@@ -571,17 +578,25 @@ export default function App() {
       setTrackingRows([]);
       return;
     }
+    let alive = true;
     // Im Demo-Modus auch Entwürfe zeigen (ohne „Live schalten") – nur Demo-Saison.
     // Super-Admins bekommen zusätzlich die „Nur Super-Admins"-Vorschau – deshalb
     // nach dem Ein-/Ausloggen neu laden.
     fetchPublicStats(sid, demo.active)
       .then((r) => {
+        if (!alive) return;
         setTrackingRows(Array.isArray(r.rows) ? r.rows : []);
         setStatsPreview(Array.isArray(r.preview) ? r.preview : []);
       })
       .catch(() => {
         /* keine Daten – Karten bleiben verborgen */
+      })
+      .finally(() => {
+        if (alive) setTrackingLoaded(true);
       });
+    return () => {
+      alive = false;
+    };
   }, [currentSeason?.id, demo.active, sessionUser?.role]);
 
   // HERO ONE: getrackte Werte der AUSGEWÄHLTEN Saison (aktuelle = trackingRows,
@@ -1258,6 +1273,7 @@ export default function App() {
               onBack={goBack}
               onSelectTeam={openTeamDetail}
               trackingRows={trackingRows}
+              trackingReady={trackingLoaded && scoringLoaded}
               scoringConfig={scoring}
               onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
               onOpenPlayer={(name) => navigateTo(`/verein/${encodeURIComponent(teamId)}/spieler/${encodeURIComponent(name)}`)}

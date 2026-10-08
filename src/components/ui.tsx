@@ -323,6 +323,26 @@ export function PageHeader({ kicker, title, text }: PageHeaderProps) {
 // Modulweiter Cache der Partner: nur einmal je Seitenaufruf laden, danach zeigen
 // alle Footer-Instanzen die Logos sofort (der Footer wird pro Route neu gemountet).
 let partnersCache: PartnersConfig | null = null;
+let partnersInflight: Promise<Partner[]> | null = null;
+
+// Partner einmal laden und merken (Startseite, Partner-Sektion, Sponsor-Logo
+// der Auszeichnung). So erscheint das Logo beim Wechsel zur Startseite sofort.
+export function loadPartners(): Promise<Partner[]> {
+  if (partnersCache) return Promise.resolve(partnersCache.items);
+  if (!partnersInflight) {
+    partnersInflight = apiFetch<PartnersConfig>('/api/twitch?resource=partners')
+      .then((data) => {
+        partnersCache = { items: Array.isArray(data.items) ? data.items : [] };
+        return partnersCache.items;
+      })
+      .catch(() => {
+        partnersInflight = null;
+        return [] as Partner[];
+      });
+  }
+  return partnersInflight;
+}
+export const cachedPartners = (): Partner[] | null => partnersCache?.items ?? null;
 
 // Wiederverwendbarer Sponsor-/Partner-Link: rendert einen normalen Link und
 // zählt jeden Klick pro Sponsor (aufgeschlüsselt nach `placement`). Überall wo
@@ -550,14 +570,7 @@ export function PartnerSection() {
 
   React.useEffect(() => {
     if (partnersCache) return; // schon geladen
-    apiFetch<PartnersConfig>('/api/twitch?resource=partners')
-      .then((data) => {
-        partnersCache = { items: Array.isArray(data.items) ? data.items : [] };
-        setPartners(partnersCache.items);
-      })
-      .catch(() => {
-        /* noch nicht konfiguriert – keine Sektion */
-      });
+    void loadPartners().then(setPartners);
   }, []);
 
   const withLogo = partners.filter((p) => p.logoUrl);

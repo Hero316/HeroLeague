@@ -4,7 +4,7 @@ import { apiFetch } from '../lib/api';
 import { MapPin } from 'lucide-react';
 import { calculateStandings } from '../lib/standings';
 import { numberWord } from '../lib/heroAward';
-import { TeamCrest, shortDate, SponsorLink } from './ui';
+import { TeamCrest, shortDate, SponsorLink, cachedPartners, loadPartners } from './ui';
 import AwardsSlide from './AwardsSlide';
 import { normalizeHeroOrder } from '../lib/heroSlides';
 import TrackingProgressBanner from './TrackingProgressBanner';
@@ -36,7 +36,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
   const trackingProgress = useTrackingProgress();
   const pom = pomProp !== undefined ? pomProp : pomState;
   // Partner-Liste für den Sponsor der „Spieler des Spieltages"-Auszeichnung.
-  const [partners, setPartners] = useState<Partner[]>([]);
+  const [partners, setPartners] = useState<Partner[]>(() => cachedPartners() ?? []);
   const [active, setActive] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -52,12 +52,10 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
   }, [pomProp]);
 
   // Partner laden (für das Sponsor-Logo neben der Auszeichnung).
+  // Einmal geladen und gemerkt (beim Seitenstart vorgeladen) – kein Nachploppen.
   useEffect(() => {
-    apiFetch<{ items: Partner[] }>('/api/twitch?resource=partners')
-      .then((data) => setPartners(Array.isArray(data.items) ? data.items : []))
-      .catch(() => {
-        /* keine Partner gepflegt */
-      });
+    if (cachedPartners()) return;
+    void loadPartners().then(setPartners);
   }, []);
 
   const getTeam = (id: string) => teams.find((t) => t.id === id);
