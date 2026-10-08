@@ -24,7 +24,7 @@ import StatAccordion from './StatAccordion';
 import TrackingProgressBanner from './TrackingProgressBanner';
 import { useTrackingProgress } from '../lib/trackingProgress';
 import PlayerCrest from './PlayerCrest';
-import { TeamCrest } from './ui';
+import { TeamCrest, monogram, shade } from './ui';
 import { CountUp, Reveal, useSettledList } from './anim';
 import CompareOverlay from './CompareOverlay';
 import KeeperStats from './KeeperStats';
@@ -63,6 +63,90 @@ const VALUE_COLOR: Record<Accent, string> = {
 };
 
 // Statistik-Seite: Liga-Kennzahlen als Kachelzeile + Leader-Cards für Spieler und Teams.
+// ---------------------------------------------------------------------------
+// Großes Bild rechts in den Bestwert-Kacheln: Spielerfoto (sonst Vereinslogo)
+// bzw. ein oder mehrere Vereinslogos (Gleichstand – je mehr, desto kleiner).
+// ---------------------------------------------------------------------------
+type CardVisual =
+  | { type: 'player'; imageUrl?: string; teamId: string; color?: string; name: string }
+  | { type: 'teams'; teams: Team[] };
+
+function BigLogo({ team, onSelect }: { team: Team; onSelect?: () => void }) {
+  const inner = team.logoUrl ? (
+    <img src={team.logoUrl} alt={team.name} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="w-full h-full object-contain drop-shadow-[0_8px_18px_rgba(0,0,0,.45)]" />
+  ) : (
+    <span
+      className="w-full h-full rounded-[22%] grid place-items-center font-display font-black text-white text-[34cqw] leading-none"
+      style={{ background: `linear-gradient(140deg, ${team.logoColor || '#22DFC9'}, ${shade(team.logoColor || '#22DFC9', 0.45)})` }}
+    >
+      {monogram(team.shortName || team.name)}
+    </span>
+  );
+  return onSelect ? (
+    <button type="button" onClick={onSelect} title={`${team.name} – Vereinsseite öffnen`} className="@container block w-full aspect-square cursor-pointer transition-transform duration-200 hover:scale-105">
+      {inner}
+    </button>
+  ) : (
+    <span className="@container block w-full aspect-square" title={team.name}>
+      {inner}
+    </span>
+  );
+}
+
+function CardVisualView({
+  visual,
+  teams,
+  onPlayer,
+  onSelectTeam,
+}: {
+  visual: CardVisual;
+  teams: Team[];
+  onPlayer?: () => void;
+  onSelectTeam?: (teamId: string, playerName?: string) => void;
+}) {
+  if (visual.type === 'teams') {
+    const n = visual.teams.length;
+    const cols = n <= 1 ? 1 : n === 2 || n === 4 ? 2 : 3;
+    return (
+      <div className="grid gap-2 sm:gap-3" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+        {visual.teams.map((t) => (
+          <BigLogo key={t.id} team={t} onSelect={onSelectTeam ? () => onSelectTeam(t.id) : undefined} />
+        ))}
+      </div>
+    );
+  }
+  const team = teams.find((t) => t.id === visual.teamId);
+  if (!visual.imageUrl) {
+    if (team) return <BigLogo team={team} onSelect={onSelectTeam ? () => onSelectTeam(team.id) : undefined} />;
+    return (
+      <span
+        className="w-full aspect-square rounded-2xl grid place-items-center font-display font-black text-white text-[clamp(28px,8vw,48px)]"
+        style={{ background: `linear-gradient(140deg, ${visual.color || '#22DFC9'}, ${shade(visual.color || '#22DFC9', 0.45)})` }}
+      >
+        {monogram(visual.name)}
+      </span>
+    );
+  }
+  return (
+    <div className="relative w-full aspect-square">
+      <button
+        type="button"
+        onClick={onPlayer}
+        title={onPlayer ? `${visual.name} – Spieler anzeigen` : visual.name}
+        className={`block w-full h-full rounded-2xl overflow-hidden border-2 shadow-[0_12px_30px_rgba(0,0,0,.45)] ${onPlayer ? 'cursor-pointer' : 'cursor-default'}`}
+        style={{ borderColor: visual.color || 'rgba(255,255,255,.2)' }}
+      >
+        <img src={visual.imageUrl} alt={visual.name} loading="lazy" decoding="async" className="w-full h-full object-cover transition-transform duration-300 hover:scale-105" />
+      </button>
+      {team && (
+        <span className="absolute -bottom-2 -right-2 w-[34%]">
+          <BigLogo team={team} onSelect={onSelectTeam ? () => onSelectTeam(team.id) : undefined} />
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function Statistiken({
   players,
   matches: allMatches,
@@ -369,8 +453,8 @@ export default function Statistiken({
     decimals?: number;
     unit: string;
     name: string;
-    sub: string;
-    avatar: React.ReactNode;
+    sub?: string;
+    visual: CardVisual;
     onClick?: () => void; // Namensklick: Spieler → Spielerdetail, Team → Teamseite
     tied?: Team[]; // weitere Teams mit genau demselben Wert
     team?: Team; // bei Team-Karten: das (erste) Team
@@ -388,7 +472,7 @@ export default function Statistiken({
       unit: 'Tore',
       name: topScorer.name,
       sub: topScorer.teamName,
-      avatar: <PlayerCrest player={topScorer} teams={teams} photoSize="lg" crestSize="xl" onSelectTeam={onSelectTeam} />,
+      visual: { type: 'player', imageUrl: topScorer.imageUrl, teamId: topScorer.teamId, color: topScorer.teamLogoColor, name: topScorer.name },
     });
   }
   if (topAssist) {
@@ -401,7 +485,7 @@ export default function Statistiken({
       unit: 'Vorlagen',
       name: topAssist.name,
       sub: topAssist.teamName,
-      avatar: <PlayerCrest player={topAssist} teams={teams} photoSize="lg" crestSize="xl" onSelectTeam={onSelectTeam} />,
+      visual: { type: 'player', imageUrl: topAssist.imageUrl, teamId: topAssist.teamId, color: topAssist.teamLogoColor, name: topAssist.name },
     });
   }
   if (bestRatio) {
@@ -415,7 +499,7 @@ export default function Statistiken({
       unit: 'Tore pro Spiel',
       name: bestRatio.name,
       sub: bestRatio.teamName,
-      avatar: <PlayerCrest player={bestRatio} teams={teams} photoSize="lg" crestSize="xl" onSelectTeam={onSelectTeam} />,
+      visual: { type: 'player', imageUrl: bestRatio.imageUrl, teamId: bestRatio.teamId, color: bestRatio.teamLogoColor, name: bestRatio.name },
     });
   }
   if (clubStats.bestAttack && clubStats.bestAttack.goalsFor > 0) {
@@ -429,18 +513,8 @@ export default function Statistiken({
       value: clubStats.bestAttack.goalsFor,
       unit: 'Tore',
       name: t.name,
-      sub: `${clubStats.bestAttack.goalsFor} erzielte Tore`,
       tied: clubStats.bestAttackTied,
-      avatar: (
-        <TeamCrest
-          name={t.name}
-          shortName={t.shortName}
-          color={t.logoColor}
-          logoUrl={t.logoUrl}
-          size="lg"
-          onSelect={onSelectTeam ? () => onSelectTeam(t.id) : undefined}
-        />
-      ),
+      visual: { type: 'teams', teams: [t, ...(clubStats.bestAttackTied ?? [])] },
     });
   }
   if (clubStats.bestDefense) {
@@ -454,18 +528,8 @@ export default function Statistiken({
       value: clubStats.bestDefense.goalsAgainst,
       unit: clubStats.bestDefense.goalsAgainst === 1 ? 'Gegentor' : 'Gegentore',
       name: t.name,
-      sub: `Nur ${clubStats.bestDefense.goalsAgainst} Gegentore`,
       tied: clubStats.bestDefenseTied,
-      avatar: (
-        <TeamCrest
-          name={t.name}
-          shortName={t.shortName}
-          color={t.logoColor}
-          logoUrl={t.logoUrl}
-          size="lg"
-          onSelect={onSelectTeam ? () => onSelectTeam(t.id) : undefined}
-        />
-      ),
+      visual: { type: 'teams', teams: [t, ...(clubStats.bestDefenseTied ?? [])] },
     });
   }
   if (clubStats.mostCleanSheets && clubStats.mostCleanSheets.cleanSheets > 0) {
@@ -479,18 +543,8 @@ export default function Statistiken({
       value: clubStats.mostCleanSheets.cleanSheets,
       unit: clubStats.mostCleanSheets.cleanSheets === 1 ? 'Spiel' : 'Spiele',
       name: t.name,
-      sub: `Zu null in ${clubStats.mostCleanSheets.cleanSheets} ${clubStats.mostCleanSheets.cleanSheets === 1 ? 'Spiel' : 'Spielen'}`,
       tied: clubStats.mostCleanSheetsTied,
-      avatar: (
-        <TeamCrest
-          name={t.name}
-          shortName={t.shortName}
-          color={t.logoColor}
-          logoUrl={t.logoUrl}
-          size="lg"
-          onSelect={onSelectTeam ? () => onSelectTeam(t.id) : undefined}
-        />
-      ),
+      visual: { type: 'teams', teams: [t, ...(clubStats.mostCleanSheetsTied ?? [])] },
     });
   }
 
@@ -645,65 +699,53 @@ export default function Statistiken({
         </div>
       ) : (
         <Reveal className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-5">
-          {cards.map((c) => (
-            <div
-              key={c.category}
-              className="relative rounded-[20px] overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] border border-white/10 p-6 backdrop-blur-lg shadow-[0_20px_50px_rgba(0,0,0,.35)]"
-            >
-              <div className="absolute top-0 right-0 w-[180px] h-[180px] pointer-events-none" style={{ background: GLOW[c.accent] }} />
-              <div className="relative">
-                {/* Große, klare Überschrift der Auszeichnung (kein „SPIELER"-Label mehr). */}
-                <div className={`font-display font-black text-xl sm:text-2xl uppercase tracking-tight leading-none ${VALUE_COLOR[c.accent]}`}>
-                  {c.category}
-                </div>
-                {c.team && c.tied && c.tied.length > 0 ? (
-                  /* Gleichstand: alle Teams gleichberechtigt nebeneinander */
-                  <div className="mt-4">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {[c.team, ...c.tied].map((t) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          onClick={onSelectTeam ? () => onSelectTeam(t.id) : undefined}
-                          className={`flex flex-col items-center gap-1.5 min-w-0 ${onSelectTeam ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
-                          title={t.name}
-                        >
-                          <TeamCrest name={t.name} shortName={t.shortName} color={t.logoColor} logoUrl={t.logoUrl} size="lg" />
-                          <span className="max-w-full font-display font-black text-[15px] leading-tight uppercase text-white text-center line-clamp-2">{t.name}</span>
-                        </button>
-                      ))}
+          {cards.map((c) => {
+            const many = c.visual.type === 'teams' ? c.visual.teams.length : 1;
+            // Mehr Teams im Gleichstand → Logos und Zahl etwas kleiner, damit alles ins Feld passt.
+            const numCls = many <= 1 ? 'text-[56px] sm:text-[64px] lg:text-[76px]' : many === 2 ? 'text-[48px] sm:text-[56px] lg:text-[64px]' : 'text-[40px] sm:text-[46px] lg:text-[52px]';
+            return (
+              <div
+                key={c.category}
+                className="relative flex rounded-[20px] overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] border border-white/10 p-5 sm:p-6 backdrop-blur-lg shadow-[0_20px_50px_rgba(0,0,0,.35)]"
+              >
+                <div className="absolute top-0 right-0 w-[180px] h-[180px] pointer-events-none" style={{ background: GLOW[c.accent] }} />
+                {/* Links: Überschrift, Name, große Zahl · rechts: großes Bild/Logo */}
+                <div className="relative flex-1 min-w-0 flex gap-3 sm:gap-4">
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <div className={`font-display font-black text-xl sm:text-2xl uppercase tracking-tight leading-none ${VALUE_COLOR[c.accent]}`}>
+                      {c.category}
                     </div>
-                    <div className="font-sans text-[12.5px] text-hl-mute mt-2 text-center">{c.sub}</div>
-                  </div>
-                ) : (
-                <div className="flex items-center gap-3.5 mt-4">
-                  {c.avatar}
-                  <div className="min-w-0">
-                    {c.onClick ? (
-                      <button
-                        type="button"
-                        onClick={c.onClick}
-                        className="block max-w-full text-left font-display font-black text-[26px] leading-[.95] uppercase text-white truncate cursor-pointer hover:opacity-80 transition-opacity"
-                        title={`${c.name} – ${c.kind === 'SPIELER' ? 'Spieler anzeigen' : 'Verein anzeigen'}`}
-                      >
-                        {c.name}
-                      </button>
-                    ) : (
-                      <div className="font-display font-black text-[26px] leading-[.95] uppercase text-white truncate">{c.name}</div>
+                    {many <= 1 && (
+                      <div className="mt-3 min-w-0">
+                        {c.onClick ? (
+                          <button
+                            type="button"
+                            onClick={c.onClick}
+                            className="block max-w-full text-left font-display font-black text-[22px] sm:text-[26px] leading-[.95] uppercase text-white truncate cursor-pointer hover:opacity-80 transition-opacity"
+                            title={`${c.name} – ${c.kind === 'SPIELER' ? 'Spieler anzeigen' : 'Verein anzeigen'}`}
+                          >
+                            {c.name}
+                          </button>
+                        ) : (
+                          <div className="font-display font-black text-[22px] sm:text-[26px] leading-[.95] uppercase text-white truncate">{c.name}</div>
+                        )}
+                        {c.sub && <div className="font-sans text-[12.5px] text-hl-mute mt-1 truncate">{c.sub}</div>}
+                      </div>
                     )}
-                    <div className="font-sans text-[12.5px] text-hl-mute mt-1 truncate">{c.sub}</div>
+                    <div className="mt-auto pt-4 flex items-baseline gap-2 flex-wrap">
+                      <span className={`font-display font-black leading-[.85] ${numCls} ${VALUE_COLOR[c.accent]}`}>
+                        <CountUp value={c.value} decimals={c.decimals ?? 0} />
+                      </span>
+                      <span className="font-sans font-bold text-[13px] tracking-wider text-hl-dim">{c.unit}</span>
+                    </div>
                   </div>
-                </div>
-                )}
-                <div className="flex items-baseline gap-2 mt-5">
-                  <span className={`font-display font-black text-[52px] lg:text-[66px] leading-[.9] ${VALUE_COLOR[c.accent]}`}>
-                    <CountUp value={c.value} decimals={c.decimals ?? 0} />
-                  </span>
-                  <span className="font-sans font-bold text-[13px] tracking-wider text-hl-dim">{c.unit}</span>
+                  <div className={`shrink-0 self-center ${many <= 1 ? 'w-[118px] sm:w-[140px] lg:w-[156px]' : 'w-[46%]'}`}>
+                    <CardVisualView visual={c.visual} teams={teams} onPlayer={c.onClick} onSelectTeam={onSelectTeam} />
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </Reveal>
       )}
 
