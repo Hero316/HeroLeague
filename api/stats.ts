@@ -6,7 +6,7 @@ import { badRequest, isNonEmptyString } from './_lib/validate.js';
 import { sheetInfo } from './_lib/gsheets.js';
 import { exportLeagueDay, exportScoringConfig } from './_lib/sheetExport.js';
 import { readDemo } from './_lib/demo.js';
-import { isGeminiConfigured, uploadAudio, parseTracking, type VoiceContext, type RosterPlayer } from './_lib/gemini.js';
+import { isGeminiConfigured, uploadAudio, parseTracking, parseGoals, type VoiceContext, type RosterPlayer } from './_lib/gemini.js';
 import { list as listBlobs } from '@vercel/blob';
 
 // ===========================================================================
@@ -486,7 +486,9 @@ const voiceTracking = requirePermission('tracking')(async (req: VercelRequest, r
   if (!isGeminiConfigured()) {
     return res.status(400).json({ error: 'Gemini ist nicht eingerichtet. Bitte GEMINI_API_KEY in Vercel hinterlegen.' });
   }
-  const b = (req.body ?? {}) as { audioUrl?: unknown; mimeType?: unknown; transcript?: unknown; context?: unknown };
+  const b = (req.body ?? {}) as { audioUrl?: unknown; mimeType?: unknown; transcript?: unknown; context?: unknown; mode?: unknown };
+  // mode 'goals' = Tor-Prüfmodus: nur Tore + Vorlage ja/nein (für „Vorlagen nachprüfen").
+  const parse = b.mode === 'goals' ? parseGoals : parseTracking;
   const context = sanitizeContext(b.context);
   const transcript = typeof b.transcript === 'string' ? b.transcript.slice(0, 20000).trim() : '';
   const audioUrl = typeof b.audioUrl === 'string' ? b.audioUrl : '';
@@ -515,12 +517,12 @@ const voiceTracking = requirePermission('tracking')(async (req: VercelRequest, r
       const INLINE_LIMIT = 14 * 1024 * 1024;
       const result =
         buf.length <= INLINE_LIMIT
-          ? await parseTracking({ audioInline: { base64: buf.toString('base64'), mimeType }, context })
-          : await parseTracking({ audio: await uploadAudio(buf, mimeType), context });
+          ? await parse({ audioInline: { base64: buf.toString('base64'), mimeType }, context })
+          : await parse({ audio: await uploadAudio(buf, mimeType), context });
       return res.json(result);
     }
     if (transcript) {
-      const result = await parseTracking({ transcript, context });
+      const result = await parse({ transcript, context });
       return res.json(result);
     }
     return badRequest(res, 'Kein Audio und kein Transkript übergeben.');
