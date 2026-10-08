@@ -51,8 +51,8 @@ export default function StatAccordion({ items, defaultOpen = null }: { items: Ac
                 </span>
               )}
               <span className="min-w-0 flex-1">
-                <span className="block font-display font-black uppercase tracking-tight text-white text-[15px] leading-tight truncate">{it.title}</span>
-                {it.preview && !isOpen && <span className="block font-sans text-[12px] text-hl-mute truncate mt-0.5">{it.preview}</span>}
+                <span className="block font-display font-black uppercase tracking-tight text-white text-[15px] sm:text-[17px] lg:text-lg leading-tight truncate">{it.title}</span>
+                {it.preview && !isOpen && <span className="block font-sans text-[12px] sm:text-[13px] lg:text-sm text-hl-mute truncate mt-0.5">{it.preview}</span>}
               </span>
               <span
                 className="ml-auto w-8 h-8 shrink-0 grid place-items-center rounded-lg border transition-colors duration-200"

@@ -105,7 +105,7 @@ export default function KeeperStats({ open, onClose, rows, teams, players, scori
                 stehen hier die Torhüter-Ranglisten.
               </div>
             ) : (
-              <div className="mt-4 max-w-2xl mx-auto">
+              <div className="mt-4 max-w-2xl lg:max-w-4xl mx-auto">
                 <StatAccordion
                   defaultOpen={boards[0]?.id ?? null}
                   items={(() => {
@@ -181,26 +181,26 @@ function BoardRows({
   return (
     <div className="divide-y divide-white/[.06]">
       {board.rows.map((r, i) => (
-        <div key={`${r.teamId}::${r.playerName}`} className="flex items-center gap-3 px-2 sm:px-3 py-2.5">
-          <div className={`font-display font-black text-xl sm:text-2xl w-6 sm:w-7 text-center shrink-0 ${RANK_COLOR(i)}`}>{i + 1}</div>
+        <div key={`${r.teamId}::${r.playerName}`} className="flex items-center gap-3 sm:gap-4 px-2 sm:px-3 py-2.5 sm:py-3">
+          <div className={`font-display font-black text-xl sm:text-2xl lg:text-3xl w-6 sm:w-8 text-center shrink-0 ${RANK_COLOR(i)}`}>{i + 1}</div>
           <div className="shrink-0">
-            <PlayerCrest player={crestFor(r.teamId, r.playerName)} teams={teams} photoSize="sm" crestSize="md" onSelectTeam={onSelectTeam} />
+            <PlayerCrest player={crestFor(r.teamId, r.playerName)} teams={teams} photoSize="md" crestSize="lg" onSelectTeam={onSelectTeam} />
           </div>
           <div className="min-w-0 flex-1">
             <button
               onClick={() => onSelectTeam?.(r.teamId, r.playerName)}
-              className={`block max-w-full text-left font-sans font-bold text-[13.5px] sm:text-sm text-white truncate ${
+              className={`block max-w-full text-left font-sans font-bold text-[13.5px] sm:text-base lg:text-lg text-white truncate ${
                 onSelectTeam ? 'cursor-pointer hover:text-brand-accent-light transition-colors' : 'cursor-default'
               }`}
             >
               {r.playerName}
             </button>
-            <div className="font-sans text-[11px] text-hl-dim truncate mt-0.5">{r.sub}</div>
+            <div className="font-sans text-[11px] sm:text-xs lg:text-sm text-hl-dim truncate mt-0.5">{r.sub}</div>
           </div>
-          <div className="flex flex-col items-end shrink-0 pl-2 max-w-[84px]">
-            <span className="font-display font-black text-xl sm:text-2xl leading-none text-brand-accent-light tabular-nums">{fmtBoard(board, r.value)}</span>
+          <div className="flex flex-col items-end shrink-0 pl-2 max-w-[84px] sm:max-w-[120px]">
+            <span className="font-display font-black text-xl sm:text-2xl lg:text-3xl leading-none text-brand-accent-light tabular-nums">{fmtBoard(board, r.value)}</span>
             {!!board.unit && (
-              <span className="mt-0.5 font-sans font-bold text-[9px] uppercase tracking-wider text-hl-dim text-right leading-tight">{board.unit}</span>
+              <span className="mt-0.5 font-sans font-bold text-[9px] sm:text-[10px] lg:text-[11px] uppercase tracking-wider text-hl-dim text-right leading-tight">{board.unit}</span>
             )}
           </div>
         </div>
