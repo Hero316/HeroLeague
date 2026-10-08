@@ -1,25 +1,30 @@
-import type { ActionCounts, ActionKey, MatchPlayerStat, ScoringConfig } from '../types';
+import type { ActionCounts, MatchPlayerStat, ScoringConfig } from '../types';
 import { matchNote, normalizeCounts } from './rating';
 
 // ===========================================================================
 // Beste Aufstellung aus dem Tracking (Teamseite, Mini-Feld 2-2 + Torwart + Bank).
+// 66/33-Prinzip auf Basis der „Wert"-Spalten aus den Statistiken
+// (Wert = erfolgreiche × Quote = erfolgreiche² ÷ Versuche, pro Spiel):
+//  • vorne:  ⅔ Schuss-Wert (aufs Tor inkl. Tore) + ⅓ Dribbler-Wert
+//  • hinten: ⅔ Zweikampf-Wert + ⅓ Pass-Wert
+// Jeder Teilwert wird im Teamvergleich eingeordnet (Bester im Team = 1), damit
+// z. B. viele Pässe nicht die Zweikämpfe „überstimmen". Menge × Quote sorgt
+// dafür, dass 1 von 1 kaum zählt, 11 von 16 dagegen viel.
 //  • Torwart: der im Kader ausgewählte Torwart (sonst wer am häufigsten im Tor stand)
-//  • 2 vorne: bester Offensiv-Wert pro Spiel (Tore, Vorlagen, Schüsse, Schlüsselpässe, Dribblings)
-//  • 2 hinten: bester Defensiv-Wert pro Spiel (Zweikämpfe, Ballgewinne, Blocks, Ballverluste)
+//  • Plätze nacheinander an den höchsten Wert – jeder dahin, wo er am stärksten ist
 //  • Bank: die nächsten 4 nach Ø-Note
-// Gewichte = die Punkte aus den Score-Einstellungen (Statistics Center), damit
-// alles zur übrigen Bewertung passt. Wer vorne UND hinten top ist, kommt dahin,
-// wo er im Teamvergleich am stärksten ist.
 // ===========================================================================
 
-const OFF_KEYS: ActionKey[] = ['goal', 'penalty_goal', 'assist', 'shot_on', 'shot_miss', 'key_pass', 'dribble_won', 'dribble_lost'];
-const DEF_KEYS: ActionKey[] = ['duel_won', 'duel_lost', 'interception', 'shot_blocked_def', 'turnover'];
+const W_MAIN = 2 / 3;
+const W_SIDE = 1 / 3;
+// Menge × Quote (= erfolgreiche² ÷ Versuche); 0 ohne Versuche.
+const wert = (ok: number, all: number) => (all > 0 ? (ok * ok) / all : 0);
 
 export interface LineupPlayer {
   name: string;
   games: number; // getrackte Spiele als Feldspieler (bzw. im Tor beim Torwart)
-  off: number; // Offensiv-Wert pro Spiel
-  def: number; // Defensiv-Wert pro Spiel
+  off: number; // Offensiv-Wert (0..1 im Teamvergleich)
+  def: number; // Defensiv-Wert (0..1 im Teamvergleich)
   avgNote: number;
 }
 
@@ -30,9 +35,6 @@ export interface TrackedLineup {
   bench: LineupPlayer[]; // bis zu 4
 }
 
-const weighted = (c: ActionCounts, cfg: ScoringConfig, keys: ActionKey[]) =>
-  keys.reduce((s, k) => s + (c[k] || 0) * (cfg.points[k] || 0), 0);
-
 export function trackedLineup(
   rows: MatchPlayerStat[],
   cfg: ScoringConfig,
@@ -40,18 +42,18 @@ export function trackedLineup(
   kader: { name: string; goalkeeper?: boolean }[]
 ): TrackedLineup | null {
   const inKader = new Set(kader.map((p) => p.name));
-  const acc = new Map<string, { games: number; keeperGames: number; off: number; def: number; note: number }>();
+  const acc = new Map<string, { games: number; keeperGames: number; total: ActionCounts | null; note: number }>();
   for (const r of rows) {
     if (r.teamId !== teamId || !inKader.has(r.playerName)) continue;
     const c = normalizeCounts(r.counts);
-    const a = acc.get(r.playerName) ?? { games: 0, keeperGames: 0, off: 0, def: 0, note: 0 };
+    const a = acc.get(r.playerName) ?? { games: 0, keeperGames: 0, total: null, note: 0 };
     if (r.role === 'keeper') {
       a.keeperGames += 1;
     } else {
       a.games += 1;
-      a.off += weighted(c, cfg, OFF_KEYS);
-      a.def += weighted(c, cfg, DEF_KEYS);
       a.note += matchNote(c, cfg, 'field');
+      if (!a.total) a.total = { ...c };
+      else for (const k of Object.keys(c) as (keyof ActionCounts)[]) a.total[k] = (a.total[k] || 0) + (c[k] || 0);
     }
     acc.set(r.playerName, a);
   }
@@ -68,10 +70,36 @@ export function trackedLineup(
     ? { name: keeperName, games: keeperAcc?.keeperGames ?? 0, off: 0, def: 0, avgNote: keeperNote(rows, cfg, teamId, keeperName) }
     : null;
 
-  const field: LineupPlayer[] = [...acc.entries()]
-    .filter(([name, a]) => name !== keeperName && a.games > 0)
-    .map(([name, a]) => ({ name, games: a.games, off: a.off / a.games, def: a.def / a.games, avgNote: a.note / a.games }));
-  if (field.length === 0) return { goalkeeper, attack: [], defense: [], bench: [] };
+  // Teilwerte (Menge × Quote) pro Spiel je Feldspieler.
+  const raw = [...acc.entries()]
+    .filter(([name, a]) => name !== keeperName && a.games > 0 && a.total)
+    .map(([name, a]) => {
+      const t = a.total as ActionCounts;
+      const g = a.games;
+      const shotsAll = t.goal + t.shot_on + t.shot_miss + t.shot_blocked_off;
+      return {
+        name,
+        games: g,
+        avgNote: a.note / g,
+        shot: wert(t.goal + t.shot_on, shotsAll) / g,
+        drib: wert(t.dribble_won, t.dribble_won + t.dribble_lost) / g,
+        duel: wert(t.duel_won, t.duel_won + t.duel_lost) / g,
+        pass: wert(t.pass_ok, t.pass_ok + t.pass_fail) / g,
+      };
+    });
+  if (raw.length === 0) return { goalkeeper, attack: [], defense: [], bench: [] };
+
+  // Im Teamvergleich einordnen: Bester im Team = 1 (je Teilwert).
+  const max = (k: 'shot' | 'drib' | 'duel' | 'pass') => Math.max(...raw.map((p) => p[k]));
+  const mx = { shot: max('shot'), drib: max('drib'), duel: max('duel'), pass: max('pass') };
+  const rel = (v: number, m: number) => (m > 0 ? v / m : 0);
+  const field: LineupPlayer[] = raw.map((p) => ({
+    name: p.name,
+    games: p.games,
+    avgNote: p.avgNote,
+    off: W_MAIN * rel(p.shot, mx.shot) + W_SIDE * rel(p.drib, mx.drib),
+    def: W_MAIN * rel(p.duel, mx.duel) + W_SIDE * rel(p.pass, mx.pass),
+  }));
 
   // Mindest-Einsätze, damit ein einziges starkes Spiel nicht reicht.
   const maxGames = Math.max(...field.map((p) => p.games));
@@ -81,22 +109,15 @@ export function trackedLineup(
 
   const attack: LineupPlayer[] = [];
   const defense: LineupPlayer[] = [];
+  // Platz für Platz: der insgesamt höchste noch offene Wert gewinnt.
   const pick = (pool: LineupPlayer[]) => {
-    // Werte im Teamvergleich auf 0..1 bringen, damit Offensive und Defensive vergleichbar sind.
-    const norm = (vals: number[]) => {
-      const lo = Math.min(...vals);
-      const hi = Math.max(...vals);
-      return (v: number) => (hi > lo ? (v - lo) / (hi - lo) : 0.5);
-    };
-    const nOff = norm(field.map((p) => p.off));
-    const nDef = norm(field.map((p) => p.def));
     const left = [...pool];
     while (left.length > 0 && (attack.length < 2 || defense.length < 2)) {
       let best: { i: number; slot: 'a' | 'd'; v: number; tie: number } | null = null;
       left.forEach((p, i) => {
         const opts: { slot: 'a' | 'd'; v: number }[] = [];
-        if (attack.length < 2) opts.push({ slot: 'a', v: nOff(p.off) });
-        if (defense.length < 2) opts.push({ slot: 'd', v: nDef(p.def) });
+        if (attack.length < 2) opts.push({ slot: 'a', v: p.off });
+        if (defense.length < 2) opts.push({ slot: 'd', v: p.def });
         for (const o of opts) {
           if (!best || o.v > best.v || (o.v === best.v && p.avgNote > best.tie)) best = { i, slot: o.slot, v: o.v, tie: p.avgNote };
         }
