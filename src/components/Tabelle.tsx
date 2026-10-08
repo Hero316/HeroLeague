@@ -49,7 +49,7 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
     <div ref={listRef} className={compact ? '' : 'hl-card px-2.5 sm:px-[22px] py-3 sm:pt-3 sm:pb-[18px] hl-cascade-soft'}>
       {/* Kopfzeile */}
       <div
-        className={`grid ${gridCols} gap-1.5 sm:gap-2 px-1.5 sm:px-2.5 pt-3 pb-3 border-b border-white/[.08] font-sans font-bold text-[10px] sm:text-[10.5px] tracking-wider text-hl-faint`}
+        className={`grid ${gridCols} gap-1.5 sm:gap-2 px-1.5 sm:px-2.5 pt-3 pb-3 border-b border-white/[.08] font-sans font-bold text-[10px] sm:text-[11px] ${compact ? '' : 'lg:text-xs'} tracking-wider text-hl-faint`}
       >
         <span>#</span>
         <span>CLUB</span>
@@ -115,7 +115,7 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
                 size="md"
               />
               <span className="flex flex-col gap-1 min-w-0">
-                <span className="font-sans font-semibold text-[13px] sm:text-sm text-hl-text leading-tight break-words">
+                <span className={`font-sans font-semibold ${compact ? 'text-[13px] sm:text-sm' : 'text-sm sm:text-base lg:text-[17px]'} text-hl-text leading-tight break-words`}>
                   {standing.teamName}
                 </span>
                 {standing.form.length > 0 && (
@@ -128,17 +128,17 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
               </span>
             </span>
 
-            <span className="text-center font-sans text-xs sm:text-[13px] lg:text-[15px] text-hl-mute">
+            <span className="text-center font-sans text-[13px] sm:text-sm lg:text-[15px] text-hl-mute">
               {standing.played}
             </span>
-            <span className={`text-center font-sans text-[13px] lg:text-[15px] text-hl-mute ${sunCls}`}>{standing.won}</span>
-            <span className={`text-center font-sans text-[13px] lg:text-[15px] text-hl-mute ${sunCls}`}>{standing.drawn}</span>
-            <span className={`text-center font-sans text-[13px] lg:text-[15px] text-hl-mute ${sunCls}`}>{standing.lost}</span>
-            <span className={`text-center font-sans text-[13px] lg:text-[15px] text-hl-soft ${goalsCls}`}>
+            <span className={`text-center font-sans text-[13px] sm:text-sm lg:text-[15px] text-hl-mute ${sunCls}`}>{standing.won}</span>
+            <span className={`text-center font-sans text-[13px] sm:text-sm lg:text-[15px] text-hl-mute ${sunCls}`}>{standing.drawn}</span>
+            <span className={`text-center font-sans text-[13px] sm:text-sm lg:text-[15px] text-hl-mute ${sunCls}`}>{standing.lost}</span>
+            <span className={`text-center font-sans text-[13px] sm:text-sm lg:text-[15px] text-hl-soft ${goalsCls}`}>
               {standing.goalsFor}:{standing.goalsAgainst}
             </span>
             <span
-              className={`text-center font-sans font-bold text-xs sm:text-[13px] lg:text-[15px] ${
+              className={`text-center font-sans font-bold text-[13px] sm:text-sm lg:text-[15px] ${
                 standing.goalDifference > 0
                   ? 'text-hl-green-soft'
                   : standing.goalDifference < 0
@@ -162,11 +162,11 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
 
       {/* Fußzeile */}
       {compact ? (
-        <div className="pt-4 px-1.5 sm:px-2.5 font-sans font-semibold text-[10px] sm:text-[10.5px] tracking-wider text-hl-faint">
+        <div className="pt-4 px-1.5 sm:px-2.5 font-sans font-semibold text-[10px] sm:text-[11px] lg:text-xs tracking-wider text-hl-faint">
           SORTIERUNG: 1. PUNKTE · 2. TORDIFFERENZ · 3. DIREKTER VERGLEICH · 4. ERZIELTE TORE
         </div>
       ) : (
-        <div className="flex flex-wrap gap-3 sm:gap-5 items-center pt-[18px] px-1.5 sm:px-2.5 pb-1 font-sans font-semibold text-[10.5px] sm:text-[11px] tracking-[.5px] text-hl-dim">
+        <div className="flex flex-wrap gap-3 sm:gap-5 items-center pt-[18px] px-1.5 sm:px-2.5 pb-1 font-sans font-semibold text-[10.5px] sm:text-xs lg:text-[13px] tracking-[.5px] text-hl-dim">
           {Number.isFinite(relegationStart) && (
             <span className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-[3px] bg-hl-red" />
