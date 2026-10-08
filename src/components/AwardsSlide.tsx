@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { MatchPlayerStat, Partner, PlayerCard, PlayerOfMonth, ScoringConfig, StatRole, Team } from '../types';
 import { awardView, fmtNote } from '../lib/awards';
 import FifaCard from './FifaCard';
@@ -220,25 +220,7 @@ export default function AwardsSlide(props: Props) {
   return (
     <div className="relative w-full max-w-[1320px] mx-auto px-4 sm:px-10 pt-8 pb-24 sm:pt-8 sm:pb-24">
       {/* Kopf: „präsentiert von" + Sponsor-Logo (klickbar) untereinander */}
-      {sponsor && (sponsor.logoUrl || sponsor.name) && (
-        <div className="flex flex-col items-center text-center gap-2.5 sm:gap-3">
-          <span className="font-sans font-bold text-[10px] sm:text-xs tracking-[3px] uppercase text-white/70">präsentiert von</span>
-          <SponsorLink
-            sponsorId={sponsor.id}
-            sponsorName={sponsor.name}
-            placement="spieler-des-spieltages"
-            href={sponsor.linkUrl}
-            title={sponsor.name}
-            className="inline-flex items-center rounded-2xl bg-white px-4 py-2.5 sm:px-5 sm:py-3 shadow-[0_14px_40px_-14px_rgba(0,0,0,.8)] transition-transform duration-200 hover:scale-[1.03]"
-          >
-            {sponsor.logoUrl ? (
-              <img src={sponsor.logoUrl} alt={sponsor.name || 'Sponsor'} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-8 sm:h-11 w-auto max-w-[260px] object-contain" />
-            ) : (
-              <span className="font-display font-black text-lg text-[#0b1718]">{sponsor.name}</span>
-            )}
-          </SponsorLink>
-        </div>
-      )}
+      {sponsor && (sponsor.logoUrl || sponsor.name) && <SponsorHead sponsor={sponsor} />}
 
       {/* Die beiden Auszeichnungen – spiegelsymmetrisch zur Mittellinie */}
       <div className="relative mt-8 sm:mt-10 grid grid-cols-2 grid-rows-[auto_auto_auto] gap-x-3 sm:gap-x-10 lg:gap-x-14 items-start">
@@ -248,6 +230,43 @@ export default function AwardsSlide(props: Props) {
       </div>
 
       {buttons && <div className="mt-8 sm:mt-9 flex gap-3 justify-center flex-wrap">{buttons}</div>}
+    </div>
+  );
+}
+
+// „präsentiert von" + Sponsor-Logo: Logo sofort laden (nicht „lazy"); der
+// ganze Block bleibt unsichtbar (Platz ist aber reserviert), bis das Logo da ist,
+// und blendet dann sanft ein – nichts ploppt oder springt.
+function SponsorHead({ sponsor }: { sponsor: Partner }) {
+  const [ready, setReady] = useState(!sponsor.logoUrl);
+  return (
+    <div className="flex flex-col items-center text-center gap-2.5 sm:gap-3 transition-opacity duration-300" style={{ opacity: ready ? 1 : 0 }}>
+      <span className="font-sans font-bold text-[10px] sm:text-xs tracking-[3px] uppercase text-white/70">präsentiert von</span>
+      <SponsorLink
+        sponsorId={sponsor.id}
+        sponsorName={sponsor.name}
+        placement="spieler-des-spieltages"
+        href={sponsor.linkUrl}
+        title={sponsor.name}
+        className="inline-flex items-center rounded-2xl bg-white px-4 py-2.5 sm:px-5 sm:py-3 shadow-[0_14px_40px_-14px_rgba(0,0,0,.8)] transition-transform duration-200 hover:scale-[1.03]"
+      >
+        {sponsor.logoUrl ? (
+          <img
+            src={sponsor.logoUrl}
+            alt={sponsor.name || 'Sponsor'}
+            decoding="async"
+            referrerPolicy="no-referrer"
+            ref={(el) => {
+              if (el?.complete && el.naturalWidth > 0 && !ready) setReady(true);
+            }}
+            onLoad={() => setReady(true)}
+            onError={() => setReady(true)}
+            className="h-8 sm:h-11 w-auto max-w-[260px] object-contain"
+          />
+        ) : (
+          <span className="font-display font-black text-lg text-[#0b1718]">{sponsor.name}</span>
+        )}
+      </SponsorLink>
     </div>
   );
 }

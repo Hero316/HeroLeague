@@ -37,6 +37,7 @@ interface TeamDetailProps {
   onBack: () => void;
   onSelectTeam: (teamId: string) => void;
   trackingRows?: MatchPlayerStat[]; // veröffentlichte getrackte Zähler (Statistics Center)
+  trackingReady?: boolean; // false = Tracking/Score-Einstellungen laden noch (dann nichts Vorläufiges zeigen)
   scoringConfig?: ScoringConfig; // Score-Einstellungen (für Note/Quoten/Karte)
   onOpenMatch?: (matchId: string) => void; // öffnet den Spielbericht
   onOpenPlayer?: (name: string) => void; // öffnet einen Spieler über die URL (/verein/…/spieler/…)
@@ -66,6 +67,7 @@ export default function TeamDetail({
   onBack,
   onSelectTeam,
   trackingRows = [],
+  trackingReady = true,
   scoringConfig,
   onOpenMatch,
   onOpenPlayer,
@@ -1082,15 +1084,26 @@ export default function TeamDetail({
           })()}
 
           {/* Beste Aufstellung – mit Tracking: 2 vorne / 2 hinten / Bank nach Ø-Note; sonst nach Siegquote */}
-          {(trackedXI ?? bestXI) && (
-            <BestLineup
-              goalkeeper={(trackedXI ?? bestXI)!.goalkeeper}
-              field={(trackedXI ?? bestXI)!.field}
-              bench={(trackedXI ?? bestXI)!.bench}
-              team={team}
-              onSelectPlayer={selectPlayer}
-              tracked={Boolean(trackedXI)}
-            />
+          {/* Solange die Tracking-Daten laden: ruhiger Platzhalter statt einer
+              vorläufigen Aufstellung, die danach umspringt. */}
+          {!trackingReady && (trackedXI ?? bestXI) && (
+            <div className="hl-card rounded-[20px] p-[22px] animate-pulse" aria-hidden>
+              <div className="h-4 w-44 rounded bg-white/10" />
+              <div className="mt-3 h-3 w-3/4 rounded bg-white/[.06]" />
+              <div className="mt-5 rounded-2xl bg-white/[.04]" style={{ aspectRatio: '1 / 0.78' }} />
+            </div>
+          )}
+          {trackingReady && (trackedXI ?? bestXI) && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}>
+              <BestLineup
+                goalkeeper={(trackedXI ?? bestXI)!.goalkeeper}
+                field={(trackedXI ?? bestXI)!.field}
+                bench={(trackedXI ?? bestXI)!.bench}
+                team={team}
+                onSelectPlayer={selectPlayer}
+                tracked={Boolean(trackedXI)}
+              />
+            </motion.div>
           )}
 
           {/* Partner / Trikot-Sponsoren dieses Teams */}
