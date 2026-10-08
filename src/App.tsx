@@ -89,6 +89,8 @@ export default function App() {
   // Statistics Center: veröffentlichte getrackte Zähler + Score-Einstellungen
   // (für Spieler-FIFA-Karten und den Spielbericht). Öffentlich, ohne Login.
   const [trackingRows, setTrackingRows] = useState<MatchPlayerStat[]>([]);
+  // Spieltage, die nur als Super-Admin-Vorschau sichtbar sind (Hinweis-Pille).
+  const [statsPreview, setStatsPreview] = useState<string[]>([]);
   const [eventTrackingRows, setEventTrackingRows] = useState<MatchPlayerStat[]>([]);
   const [scoring, setScoring] = useState<ScoringConfig>(DEFAULT_SCORING);
   // Spieler des Monats schon beim Laden holen, damit der Hero direkt mit finaler
@@ -554,12 +556,17 @@ export default function App() {
       return;
     }
     // Im Demo-Modus auch Entwürfe zeigen (ohne „Live schalten") – nur Demo-Saison.
+    // Super-Admins bekommen zusätzlich die „Nur Super-Admins"-Vorschau – deshalb
+    // nach dem Ein-/Ausloggen neu laden.
     fetchPublicStats(sid, demo.active)
-      .then((r) => setTrackingRows(r.rows))
+      .then((r) => {
+        setTrackingRows(Array.isArray(r.rows) ? r.rows : []);
+        setStatsPreview(Array.isArray(r.preview) ? r.preview : []);
+      })
       .catch(() => {
         /* keine Daten – Karten bleiben verborgen */
       });
-  }, [currentSeason?.id, demo.active]);
+  }, [currentSeason?.id, demo.active, sessionUser?.role]);
 
   // HERO ONE: getrackte Werte der AUSGEWÄHLTEN Saison (aktuelle = trackingRows,
   // ältere Saisons werden bei Bedarf nachgeladen).
@@ -590,7 +597,7 @@ export default function App() {
     fetchEventStats(evId)
       .then((r) => setEventTrackingRows(r.rows))
       .catch(() => setEventTrackingRows([]));
-  }, [shownEvent?.id, eventHasLive]);
+  }, [shownEvent?.id, eventHasLive, sessionUser?.role]);
 
   // Event-Spiele, für die es veröffentlichte Werte gibt (→ Spielbericht anklickbar).
   const eventReportMatchIds = useMemo(() => new Set(eventTrackingRows.map((r) => r.matchId)), [eventTrackingRows]);
@@ -2199,6 +2206,22 @@ export default function App() {
         </>
       )}
       </div>
+
+      {isSuperadmin && statsPreview.length > 0 && (
+        <div
+          className="fixed left-3 z-40 pointer-events-none bottom-[calc(env(safe-area-inset-bottom)+5.75rem)] lg:bottom-4"
+          role="status"
+        >
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-[#E9C46A]/50 bg-[#1a1406]/90 backdrop-blur px-3 py-1.5 text-[11px] font-bold text-[#E9C46A] shadow-lg">
+            👑 Stats-Vorschau:{' '}
+            {statsPreview
+              .map((k) => (k.startsWith('s:') ? `${k.split(':')[2]}. Spieltag` : 'Spiel'))
+              .filter((v, i, a) => a.indexOf(v) === i)
+              .join(', ')}{' '}
+            · nur Super-Admins sehen das
+          </div>
+        </div>
+      )}
 
       {activeEvent && activeTab === 'home' && (
         <EventBanner event={activeEvent} isLive={eventHasLive} staffPreview={eventStaffPreview} onOpen={() => navigateTo('/testspiel')} onOpenTickets={activeEvent?.ticketKey ? () => navigateTo(`/tickets/${encodeURIComponent(activeEvent.ticketKey!)}`) : undefined} />
