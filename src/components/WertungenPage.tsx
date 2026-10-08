@@ -116,13 +116,25 @@ export default function WertungenPage({ rows, cfg, teams, matches, seasonLabel, 
 
           {/* HERO ONE */}
           <section>
-            <h2 className="font-display font-black text-xl uppercase tracking-tight flex items-center gap-2 mb-4">
-              <Crown className="w-5 h-5 text-hl-gold" /> <span className="hl-gold-text">HERO ONE</span> · Saison
+            <h2 className="font-display font-black text-xl uppercase tracking-tight flex items-center gap-2 mb-1">
+              <Crown className="w-5 h-5 text-hl-gold" /> <span className="hl-gold-text">HERO ONE</span> · Die Nominierten
             </h2>
-            <div className="hl-card divide-y divide-white/[.06] overflow-hidden">
-              {season.slice(0, 10).map((p, i) => (
-                <RankRow key={`${p.teamId}-${p.playerName}`} rank={i + 1} p={p} teamOf={teamOf} photoOf={photoOf} onSelect={onSelectPlayer} />
-              ))}
+            <p className="text-[12px] text-hl-dim mb-4">Alphabetisch – wer gewinnt, bleibt bis zur Verleihung geheim.</p>
+            {/* Nur die 10 Nominierten, alphabetisch, ohne Punkte/Platz. */}
+            <div className="flex flex-wrap gap-2">
+              {season
+                .slice(0, 10)
+                .sort((a, b) => a.playerName.localeCompare(b.playerName, 'de'))
+                .map((p) => (
+                  <button
+                    key={`${p.teamId}-${p.playerName}`}
+                    onClick={() => onSelectPlayer(p.teamId, p.playerName)}
+                    className="inline-flex items-center gap-2 rounded-full border border-hl-gold/25 bg-hl-gold/[.06] hover:bg-hl-gold/15 px-3 py-1.5 cursor-pointer max-w-full min-w-0"
+                  >
+                    <span className="text-[13px] font-semibold text-white truncate">{p.playerName}</span>
+                    <span className="text-[11px] text-hl-mute truncate">{teamOf(p.teamId)?.name ?? ''}</span>
+                  </button>
+                ))}
             </div>
           </section>
 

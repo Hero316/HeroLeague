@@ -475,7 +475,7 @@ export function playerPlacements(
   const self = agg.find(me);
   if (!self) return [];
 
-  add('HERO-Score', matches ? heroRanking(rows, cfg, matches) : seasonRanking(rows, cfg), (r) => r.score.toFixed(1));
+  // Bewusst KEIN „HERO-Score"-Platz: die HERO-ONE-Wertung bleibt geheim.
   if (self.role === 'keeper') {
     for (const b of keeperBoards(rows, cfg)) {
       add(b.label, b.rows, (r) => (b.percent ? `${Math.round(r.value * 100)} %` : b.decimals > 0 ? r.value.toFixed(b.decimals) : String(r.value)));

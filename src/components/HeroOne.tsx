@@ -1,12 +1,11 @@
 import React from 'react';
-import { Star } from 'lucide-react';
+import { Star, Crown, ChevronDown } from 'lucide-react';
 import type { Match, MatchPlayerStat, ScoringConfig, Team } from '../types';
 import PlayerCrest from './PlayerCrest';
-import { Reveal } from './anim';
 import { numberWord } from '../lib/heroAward';
 import TrackingProgressBanner from './TrackingProgressBanner';
 import { useTrackingProgress } from '../lib/trackingProgress';
-import { HERO_DRAW_BONUS, HERO_WIN_BONUS, heroRanking, type HeroRanked } from '../lib/trackingAwards';
+import { heroRanking, type HeroRanked } from '../lib/trackingAwards';
 
 interface HeroOneProps {
   rows: MatchPlayerStat[]; // veröffentlichte getrackte Werte der gewählten Saison
@@ -27,16 +26,18 @@ interface HeroEntry extends HeroRanked {
   teamLogoColor: string;
 }
 
-// HERO ONE – die höchste Auszeichnung der Liga (früher „Ballon d'Or").
-// Wertung aus dem Tracking: Summe der Spiel-Scores aller live geschalteten
-// Liga-Spiele (Pässe, Zweikämpfe, Dribblings, Schüsse, Tore, Vorlagen, Paraden …,
-// gewichtet nach den Punkten im Statistics Center) + kleiner Sieg-Bonus.
-// Gleiche Rangliste wie „HERO ONE" unter Wertungen (heroRanking).
+// HERO ONE – die höchste Auszeichnung der Liga. Intern gewertet aus dem Tracking
+// (heroRanking: Summe der Spiel-Scores + kleiner Sieg-Bonus). Öffentlich zeigt
+// die Seite NUR die 10 Nominierten – alphabetisch, ohne Punkte und Platzierung.
 export default function HeroOne({ rows, cfg, matches, teams, seasonNumber, seasonLabel, onSelectTeam, onOpenWertungen }: HeroOneProps) {
-  const ranking = React.useMemo<HeroEntry[]>(() => {
+  // Die 10 Nominierten = die 10 Besten der internen Wertung. Angezeigt wird
+  // BEWUSST alphabetisch und ohne Punkte/Platzierung – wer HERO ONE wird,
+  // bleibt bis zur Verleihung geheim.
+  const nominees = React.useMemo<HeroEntry[]>(() => {
     const leagueRows = rows.filter((r) => r.dayKey.startsWith('s:'));
     return heroRanking(leagueRows, cfg, matches)
       .filter((p) => p.score > 0)
+      .slice(0, NOMINEES)
       .map((p) => {
         const team = teams.find((t) => t.id === p.teamId);
         return {
@@ -47,35 +48,18 @@ export default function HeroOne({ rows, cfg, matches, teams, seasonNumber, seaso
           teamName: team?.name ?? '',
           teamLogoColor: team?.logoColor || '#3B82F6',
         };
-      });
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, 'de'));
   }, [rows, cfg, matches, teams]);
 
   const word = numberWord(seasonNumber ?? 1);
   const progress = useTrackingProgress();
-  const de = (n: number) => n.toFixed(1).replace('.', ',');
+  const [openId, setOpenId] = React.useState<string | null>(null);
   const teamOf = (p: HeroEntry) => teams.find((t) => t.id === p.teamId);
-
-  const breakdown = (p: HeroEntry) => {
-    const goals = p.total.goal + p.total.penalty_goal;
-    return [
-      `${p.games} ${p.games === 1 ? 'Spiel' : 'Spiele'}`,
-      `Ø Note ${de(p.avgNote)}`,
-      goals > 0 ? `${goals} ⚽` : null,
-      p.total.assist > 0 ? `${p.total.assist} 🅰️` : null,
-      p.role === 'keeper' && p.total.save > 0 ? `${p.total.save} Paraden` : null,
-      p.cleanSheets > 0 ? `${p.cleanSheets}× 🧤` : null,
-      p.wins > 0 ? `${p.wins} ${p.wins === 1 ? 'Sieg' : 'Siege'}` : null,
-    ].filter(Boolean);
-  };
-
-  // Klick auf den Spielernamen öffnet direkt das Spieler-Detail.
   const goPlayer = (p: HeroEntry) => {
     const t = teamOf(p);
     if (t && onSelectTeam) onSelectTeam(t.id, p.name);
   };
-
-  const leader = ranking[0] ?? null;
-  const rest = ranking.slice(1, 10);
 
   return (
     <div className="max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pb-16">
@@ -104,111 +88,137 @@ export default function HeroOne({ rows, cfg, matches, teams, seasonNumber, seaso
             <span className="hl-gold-text text-6xl sm:text-8xl">{word}</span>
           </h1>
           <p className="mt-4 max-w-[620px] mx-auto font-sans text-sm sm:text-[15px] text-hl-mute leading-relaxed">
-            Der wertvollste Spieler {seasonLabel ? `der ${seasonLabel}` : 'der Saison'} — ermittelt aus allem, was wir
-            in jedem Spiel tracken: Tore, Vorlagen, Pässe, Zweikämpfe, Dribblings, Schüsse, Paraden und mehr.
-            Dazu gibt es pro Sieg +{de(HERO_WIN_BONUS)} und pro Unentschieden +
-            {de(HERO_DRAW_BONUS)} Punkte.
+            Die {NOMINEES} Nominierten {seasonLabel ? `der ${seasonLabel}` : 'der Saison'} – ermittelt aus allem, was wir in
+            jedem Spiel tracken. Wer am Ende HERO {word} wird, bleibt bis zur Verleihung geheim.
           </p>
         </div>
       </div>
 
       {progress.map((d) => (
-        <TrackingProgressBanner
-          key={d.dayKey}
-          day={d}
-          className="mb-5 max-w-[760px] mx-auto"
-        />
+        <TrackingProgressBanner key={d.dayKey} day={d} className="mb-5 max-w-[760px] mx-auto" />
       ))}
 
-      {ranking.length === 0 ? (
+      {nominees.length === 0 ? (
         <div className="hl-card text-center py-14 text-hl-mute font-sans text-sm">
-          Noch keine Wertung verfügbar. Sobald getrackte Spiele live geschaltet sind, erscheint hier der HERO-{word}-Anwärter.
+          Noch keine Nominierten. Sobald getrackte Spiele live geschaltet sind, erscheinen hier die {NOMINEES} Nominierten.
         </div>
       ) : (
         <>
-          {/* Sieger-Spotlight (Platz 1) */}
-          {leader && (
-            <Reveal>
-              <div className="relative overflow-hidden rounded-[26px] border border-[rgba(233,196,106,.35)] bg-[linear-gradient(180deg,rgba(233,196,106,.14),rgba(10,14,11,.35))] shadow-[0_28px_70px_rgba(0,0,0,.45)] p-6 sm:p-8">
-                <div
-                  className="absolute -top-24 -right-16 w-[360px] h-[360px] pointer-events-none"
-                  style={{ background: 'radial-gradient(circle, rgba(233,196,106,.22), transparent 66%)' }}
-                />
-                <div className="relative flex flex-col sm:flex-row items-center gap-6 sm:gap-8">
-                  <div className="relative shrink-0">
-                    <span className="absolute -top-2 -left-2 z-10 grid place-items-center w-9 h-9 rounded-xl bg-hl-gold text-[#0b0f0b] font-display font-black text-lg lg:text-xl shadow-[0_6px_18px_rgba(233,196,106,.5)]">
-                      1
-                    </span>
-                    <PlayerCrest player={leader} teams={teams} photoSize="xl" crestSize="hero" onSelectTeam={onSelectTeam} />
-                  </div>
-                  <div className="flex-1 min-w-0 text-center sm:text-left">
-                    <div className="font-sans font-extrabold text-[11px] tracking-[2px] text-hl-gold uppercase mb-1.5">
-                      Aktueller Spitzenreiter
-                    </div>
-                    <button
-                      onClick={() => goPlayer(leader)}
-                      title={teamOf(leader) ? `${leader.name} – Spieler anzeigen` : undefined}
-                      className={`block max-w-full font-display font-black text-4xl sm:text-6xl uppercase text-white leading-[.9] truncate text-center sm:text-left ${teamOf(leader) && onSelectTeam ? 'cursor-pointer hover:text-hl-gold transition-colors' : 'cursor-default'}`}
-                    >
-                      {leader.name}
-                    </button>
-                    {breakdown(leader).length > 0 && (
-                      <div className="mt-3 font-sans text-[13px] text-hl-mute">{breakdown(leader).join('  ·  ')}</div>
-                    )}
-                  </div>
-                  <div className="shrink-0 text-center">
-                    <div className="font-display font-black text-6xl sm:text-7xl lg:text-8xl leading-none text-hl-gold drop-shadow-[0_0_18px_rgba(233,196,106,.4)] tabular-nums">
-                      {de(leader.score)}
-                    </div>
-                    <div className="font-sans font-bold text-[11px] tracking-[2px] text-hl-dim mt-1">PUNKTE</div>
-                  </div>
-                </div>
-              </div>
-            </Reveal>
-          )}
-
-          {/* Verfolger (Platz 2+) */}
-          {rest.length > 0 && (
-            <div className="hl-card mt-5 px-2 sm:px-4 pt-2 pb-3 hl-cascade-soft">
-              {rest.map((p, i) => {
-                const rank = i + 2;
-                const bd = breakdown(p);
-                const canClick = Boolean(teamOf(p) && onSelectTeam);
-                return (
-                  <div
-                    key={p.id}
-                    className="flex items-center gap-3 sm:gap-3.5 px-2 sm:px-4 py-3.5 border-b border-white/[.05] last:border-0"
-                  >
-                    <div className="w-7 sm:w-8 text-center font-display font-black text-xl sm:text-3xl lg:text-4xl text-hl-dim shrink-0">
-                      {rank}
-                    </div>
-                    <div className="shrink-0">
-                      <PlayerCrest player={p} teams={teams} photoSize="md" crestSize="lg" onSelectTeam={onSelectTeam} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <button
-                        onClick={() => goPlayer(p)}
-                        title={teamOf(p) ? `${p.name} – Spieler anzeigen` : undefined}
-                        className={`block max-w-full text-left font-sans font-bold text-[15px] text-white truncate ${canClick ? 'cursor-pointer hover:text-hl-gold transition-colors' : 'cursor-default'}`}
-                      >
-                        {p.name}
-                      </button>
-                      {bd.length > 0 && (
-                        <div className="font-sans text-[12px] text-hl-dim truncate mt-0.5">{bd.join(' · ')}</div>
-                      )}
-                    </div>
-                    <div className="flex items-baseline gap-1 shrink-0 pl-2">
-                      <span className="font-display font-black text-2xl sm:text-3xl lg:text-4xl leading-none text-hl-gold tabular-nums">
-                        {de(p.score)}
-                      </span>
-                      <span className="font-sans font-bold text-[10px] tracking-wider text-hl-dim">PKT</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <Crown className="w-4 h-4 text-hl-gold" />
+            <span className="font-sans font-extrabold text-[11px] tracking-[2.5px] uppercase text-hl-gold">
+              Die Nominierten · alphabetisch
+            </span>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start hl-cascade-soft">
+            {nominees.map((p) => (
+              <NomineeCard
+                key={p.id}
+                p={p}
+                team={teamOf(p)}
+                teams={teams}
+                open={openId === p.id}
+                onToggle={() => setOpenId((cur) => (cur === p.id ? null : p.id))}
+                onPlayer={onSelectTeam ? () => goPlayer(p) : undefined}
+                onSelectTeam={onSelectTeam}
+              />
+            ))}
+          </div>
         </>
+      )}
+    </div>
+  );
+}
+
+const NOMINEES = 10;
+const pct = (a: number, b: number) => (b > 0 ? `${Math.round((a / b) * 100)} %` : '–');
+
+// Eine Nominierten-Karte: Foto/Wappen, Name, Verein, Kurzinfo – aufklappbar mit
+// allen getrackten Werten (Quoten + Mengen). Keine Punkte, keine Note, kein Rang.
+function NomineeCard({
+  p,
+  team,
+  teams,
+  open,
+  onToggle,
+  onPlayer,
+  onSelectTeam,
+}: {
+  p: HeroEntry;
+  team?: Team;
+  teams: Team[];
+  open: boolean;
+  onToggle: () => void;
+  onPlayer?: () => void;
+  onSelectTeam?: (teamId: string, playerName?: string) => void;
+}) {
+  const t = p.total;
+  const goals = t.goal + t.penalty_goal;
+  const keeper = p.role === 'keeper';
+  const shots = t.goal + t.shot_on + t.shot_miss + t.shot_blocked_off;
+  const stats: { label: string; value: string }[] = keeper
+    ? [
+        { label: 'Spiele im Tor', value: String(p.games) },
+        { label: 'Paraden', value: String(t.save) },
+        { label: 'Paradenquote', value: pct(t.save, t.save + t.gk_goal_against) },
+        { label: 'Glanzparaden', value: String(t.save_top) },
+        { label: 'Zu null', value: String(p.cleanSheets) },
+        { label: 'Gegentore', value: String(t.gk_goal_against) },
+        { label: 'Gehaltene Elfm.', value: String(t.penalty_save) },
+        { label: 'Passquote', value: pct(t.pass_ok, t.pass_ok + t.pass_fail) },
+        { label: 'Tore', value: String(goals) },
+        { label: 'Vorlagen', value: String(t.assist) },
+      ]
+    : [
+        { label: 'Spiele', value: String(p.games) },
+        { label: 'Tore', value: String(goals) },
+        { label: 'Vorlagen', value: String(t.assist) },
+        { label: 'Torschüsse', value: String(t.goal + t.shot_on) },
+        { label: 'Schussquote', value: pct(t.goal + t.shot_on, shots) },
+        { label: 'Passquote', value: pct(t.pass_ok, t.pass_ok + t.pass_fail) },
+        { label: 'Schlüsselpässe', value: String(t.key_pass) },
+        { label: 'Zweikampfquote', value: pct(t.duel_won, t.duel_won + t.duel_lost) },
+        { label: 'Dribbling-Quote', value: pct(t.dribble_won, t.dribble_won + t.dribble_lost) },
+        { label: 'Ballgewinne', value: String(t.interception + t.duel_won) },
+      ];
+  const short = keeper
+    ? `${p.games} ${p.games === 1 ? 'Spiel' : 'Spiele'} · ${t.save} Paraden · ${p.cleanSheets}× zu null`
+    : `${p.games} ${p.games === 1 ? 'Spiel' : 'Spiele'} · ${goals} ${goals === 1 ? 'Tor' : 'Tore'} · ${t.assist} ${t.assist === 1 ? 'Vorlage' : 'Vorlagen'}`;
+
+  return (
+    <div
+      className={`rounded-2xl border transition-colors ${open ? 'border-[rgba(233,196,106,.45)] bg-[rgba(233,196,106,.06)]' : 'border-white/10 bg-white/[.03]'}`}
+    >
+      <button type="button" onClick={onToggle} aria-expanded={open} className="w-full flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-3 text-left cursor-pointer min-w-0">
+        <span className="shrink-0">
+          <PlayerCrest player={p} teams={teams} photoSize="md" crestSize="lg" onSelectTeam={onSelectTeam} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-display font-black uppercase tracking-tight text-white text-lg sm:text-xl leading-tight truncate">{p.name}</span>
+          <span className="block text-[12px] text-hl-mute truncate">
+            {team?.name ?? p.teamName}
+            {keeper ? ' · Torwart' : ''}
+          </span>
+          <span className="block text-[11.5px] text-hl-dim truncate mt-0.5">{short}</span>
+        </span>
+        <ChevronDown className={`w-5 h-5 shrink-0 text-hl-gold transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="px-3 sm:px-4 pb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            {stats.map((s) => (
+              <div key={s.label} className="rounded-xl bg-white/[.04] border border-white/[.06] px-2.5 py-2 text-center min-w-0">
+                <div className="font-display font-black text-white text-lg leading-none tabular-nums">{s.value}</div>
+                <div className="text-[9.5px] font-bold uppercase tracking-wider text-hl-dim mt-1 truncate">{s.label}</div>
+              </div>
+            ))}
+          </div>
+          {onPlayer && (
+            <button type="button" onClick={onPlayer} className="mt-3 text-[12px] font-bold text-hl-gold hover:text-white cursor-pointer">
+              Zum Spielerprofil →
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
