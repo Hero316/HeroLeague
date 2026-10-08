@@ -93,7 +93,7 @@ export default function HeroOne({ rows, cfg, matches, teams, seasonNumber, seaso
           </h1>
           <p className="mt-4 max-w-[620px] mx-auto font-sans text-sm sm:text-[15px] text-hl-mute leading-relaxed">
             Die {NOMINEES} Nominierten {seasonLabel ? `der ${seasonLabel}` : 'der Saison'} – ermittelt aus allem, was wir in
-            jedem Spiel tracken. Wer am Ende HERO {word} wird, bleibt bis zur Verleihung geheim.
+            jedem Spiel tracken.
           </p>
         </div>
       </div>
