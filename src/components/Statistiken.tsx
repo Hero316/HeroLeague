@@ -72,6 +72,38 @@ type CardVisual =
   | { type: 'player'; imageUrl?: string; teamId: string; color?: string; name: string }
   | { type: 'teams'; teams: Team[] };
 
+// Spielerbild in den Top-5-Listen (Torschützenkönig / Goldener Handschuh):
+// freigestellt → steht ohne Hintergrund auf der Zeilenkante; sonst großes Foto/Wappen.
+function RowPortrait({
+  p,
+  teams,
+  onSelectTeam,
+  onPlayer,
+}: {
+  p: Pick<PlayerStat, 'name' | 'imageUrl' | 'teamId' | 'teamLogoColor' | 'teamName'>;
+  teams: Team[];
+  onSelectTeam?: (teamId: string, playerName?: string) => void;
+  onPlayer?: () => void;
+}) {
+  const cut = validCutout(teams.find((t) => t.id === p.teamId)?.spielerliste?.find((x) => x.name === p.name));
+  return (
+    <div className="shrink-0 w-[60px] sm:w-[74px] lg:w-[84px] self-stretch flex items-center justify-center">
+      {cut ? (
+        <button
+          type="button"
+          onClick={onPlayer}
+          title={p.name}
+          className="self-end -mb-3.5 sm:-mb-4 h-[66px] sm:h-[80px] lg:h-[90px] flex items-end justify-center cursor-pointer"
+        >
+          <img src={cut} alt={p.name} loading="lazy" decoding="async" className="h-full w-auto max-w-full object-contain object-bottom drop-shadow-[0_6px_14px_rgba(0,0,0,.5)]" />
+        </button>
+      ) : (
+        <PlayerCrest player={p} teams={teams} photoSize="lg" crestSize="xl" onSelectTeam={onSelectTeam} />
+      )}
+    </div>
+  );
+}
+
 // Freigestelltes Foto des Spielers (falls vorhanden) – aus dem Kader des Vereins.
 function cutoutOf(visual: CardVisual, teams: Team[]): string | undefined {
   if (visual.type !== 'player') return undefined;
@@ -570,7 +602,7 @@ export default function Statistiken({
                 role="tab"
                 aria-selected={on}
                 onClick={() => setMatchday(md)}
-                className={`px-4 py-2 rounded-full text-xs font-sans font-bold uppercase tracking-wider border transition-colors cursor-pointer ${
+                className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-sans font-bold uppercase tracking-wider border transition-colors cursor-pointer ${
                   on
                     ? 'bg-brand-accent-light text-[#04201c] border-brand-accent-light'
                     : 'border-white/15 text-hl-mute hover:text-white hover:border-white/30'
@@ -604,7 +636,7 @@ export default function Statistiken({
             <div className="font-display font-black text-[42px] lg:text-[54px] leading-[.9] text-brand-accent-light">
               <CountUp value={tile.value} decimals={tile.decimals} />
             </div>
-            <div className="font-sans font-bold text-[11px] tracking-[1.5px] text-hl-dim mt-1.5">{tile.label}</div>
+            <div className="font-sans font-bold text-[11px] sm:text-xs lg:text-sm tracking-[1.5px] text-hl-dim mt-1.5">{tile.label}</div>
           </div>
         ))}
       </div>
@@ -623,7 +655,7 @@ export default function Statistiken({
               </span>
               <span className="min-w-0">
                 <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">Mein Steckbrief</span>
-                <span className="block text-[11px] font-sans font-semibold text-hl-mute mt-0.5 truncate">Deine Werte & Platzierungen · zum Teilen</span>
+                <span className="block text-[11px] sm:text-xs lg:text-[13px] font-sans font-semibold text-hl-mute mt-0.5 truncate">Deine Werte & Platzierungen · zum Teilen</span>
               </span>
             </button>
           )}
@@ -645,7 +677,7 @@ export default function Statistiken({
               </span>
               <span className="relative min-w-0 flex-1">
                 <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">1 gegen 1</span>
-                <span className="block text-[11px] font-sans font-semibold text-hl-mute mt-0.5 truncate">Zwei Spieler direkt vergleichen</span>
+                <span className="block text-[11px] sm:text-xs lg:text-[13px] font-sans font-semibold text-hl-mute mt-0.5 truncate">Zwei Spieler direkt vergleichen</span>
               </span>
               <span className="relative shrink-0 font-display font-black italic text-[22px] leading-none tracking-tight bg-gradient-to-r from-brand-accent-light to-[#E6238E] bg-clip-text text-transparent transition-transform duration-300 group-hover:scale-110">
                 VS
@@ -664,7 +696,7 @@ export default function Statistiken({
               </span>
               <span className="min-w-0">
                 <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">Torhüter</span>
-                <span className="block text-[11px] font-sans font-semibold text-hl-mute mt-0.5 truncate">Paraden, Zu-null-Spiele & Bestenliste</span>
+                <span className="block text-[11px] sm:text-xs lg:text-[13px] font-sans font-semibold text-hl-mute mt-0.5 truncate">Paraden, Zu-null-Spiele & Bestenliste</span>
               </span>
             </button>
           )}
@@ -784,10 +816,10 @@ export default function Statistiken({
             <div>
               <div className="flex items-center gap-2.5 mb-4">
                 <span className="text-2xl">⚽</span>
-                <h3 className="font-display font-black text-xl sm:text-2xl uppercase tracking-tight text-white">
+                <h3 className="font-display font-black text-xl sm:text-2xl lg:text-3xl uppercase tracking-tight text-white">
                   Torschützenkönig
                 </h3>
-                <span className="font-sans font-bold text-[11px] tracking-[1.5px] text-hl-dim mt-1">TOP 5 · SPIELER</span>
+                <span className="font-sans font-bold text-[11px] sm:text-xs tracking-[1.5px] text-hl-dim mt-1">TOP 5 · SPIELER</span>
               </div>
               <div className="relative rounded-[20px] overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] border border-white/10 backdrop-blur-lg shadow-[0_20px_50px_rgba(0,0,0,.35)]">
                 <div className="absolute top-0 right-0 w-[220px] h-[220px] pointer-events-none" style={{ background: GLOW.gold }} />
@@ -808,29 +840,27 @@ export default function Statistiken({
                         layout="position"
                         transition={{ type: 'spring', stiffness: 240, damping: 32 }}
                         key={p.id}
-                        className="flex items-center gap-3.5 px-4 sm:px-6 py-3.5"
+                        className="flex items-center gap-3.5 sm:gap-4 px-4 sm:px-6 py-3.5 sm:py-4"
                       >
                         <div className={`font-display font-black text-2xl sm:text-3xl lg:text-[40px] w-7 sm:w-8 text-center shrink-0 ${rankColor}`}>
                           {idx + 1}
                         </div>
-                        <div className="shrink-0">
-                          <PlayerCrest player={p} teams={teams} photoSize="md" crestSize="lg" onSelectTeam={onSelectTeam} />
-                        </div>
+                        <RowPortrait p={p} teams={teams} onSelectTeam={onSelectTeam} onPlayer={() => goPlayer(p)} />
                         <div className="min-w-0 flex-1">
                           <button
                             onClick={() => goPlayer(p)}
                             title={teamOf(p) ? `${p.teamName} – Vereinsseite öffnen` : undefined}
-                            className={`block max-w-full text-left font-sans font-bold text-sm sm:text-[15px] text-white truncate ${teamOf(p) && onSelectTeam ? 'cursor-pointer hover:text-hl-gold transition-colors' : 'cursor-default'}`}
+                            className={`block max-w-full text-left font-sans font-bold text-[15px] sm:text-lg lg:text-xl text-white truncate ${teamOf(p) && onSelectTeam ? 'cursor-pointer hover:text-hl-gold transition-colors' : 'cursor-default'}`}
                           >
                             {p.name}
                           </button>
-                          <div className="font-sans text-[11.5px] text-hl-dim truncate mt-0.5">{sub}</div>
+                          <div className="font-sans text-xs sm:text-[13px] lg:text-sm text-hl-dim truncate mt-0.5">{sub}</div>
                         </div>
                         <div className="flex items-baseline gap-1 shrink-0 pl-2">
-                          <span className="font-display font-black text-2xl sm:text-3xl lg:text-[40px] leading-none text-hl-gold tabular-nums">
+                          <span className="font-display font-black text-2xl sm:text-[34px] lg:text-[44px] leading-none text-hl-gold tabular-nums">
                             <CountUp value={p.goals} />
                           </span>
-                          <span className="font-sans font-bold text-[10px] tracking-wider text-hl-dim">TORE</span>
+                          <span className="font-sans font-bold text-[10px] sm:text-[11px] lg:text-xs tracking-wider text-hl-dim">TORE</span>
                         </div>
                       </motion.div>
                     );
@@ -845,10 +875,10 @@ export default function Statistiken({
             <div>
               <div className="flex items-center gap-2.5 mb-4">
                 <span className="text-2xl">🧤</span>
-                <h3 className="font-display font-black text-xl sm:text-2xl uppercase tracking-tight text-white">
+                <h3 className="font-display font-black text-xl sm:text-2xl lg:text-3xl uppercase tracking-tight text-white">
                   Goldener Handschuh
                 </h3>
-                <span className="font-sans font-bold text-[11px] tracking-[1.5px] text-hl-dim mt-1">TOP 5 · TORHÜTER</span>
+                <span className="font-sans font-bold text-[11px] sm:text-xs tracking-[1.5px] text-hl-dim mt-1">TOP 5 · TORHÜTER</span>
                 <button
                   type="button"
                   onClick={() => setGloveInfo((v) => !v)}
@@ -860,7 +890,7 @@ export default function Statistiken({
                 </button>
               </div>
               {gloveInfo && (
-                <div className="mb-3 rounded-xl border border-white/10 bg-white/[.03] px-4 py-3 text-[12px] text-hl-mute font-sans">
+                <div className="mb-3 rounded-xl border border-white/10 bg-white/[.03] px-4 py-3 text-[12px] sm:text-[13px] lg:text-sm text-hl-mute font-sans">
                   <div className="font-bold text-hl-soft mb-1">So entstehen die Punkte (PKT):</div>
                   <ul className="space-y-0.5">
                     {GOLDEN_GLOVE_EXPLAIN.map((l) => (
@@ -888,29 +918,27 @@ export default function Statistiken({
                         layout="position"
                         transition={{ type: 'spring', stiffness: 240, damping: 32 }}
                         key={p.id}
-                        className="flex items-center gap-3.5 px-4 sm:px-6 py-3.5"
+                        className="flex items-center gap-3.5 sm:gap-4 px-4 sm:px-6 py-3.5 sm:py-4"
                       >
                         <div className={`font-display font-black text-2xl sm:text-3xl lg:text-[40px] w-7 sm:w-8 text-center shrink-0 ${rankColor}`}>
                           {idx + 1}
                         </div>
-                        <div className="shrink-0">
-                          <PlayerCrest player={p} teams={teams} photoSize="md" crestSize="lg" onSelectTeam={onSelectTeam} />
-                        </div>
+                        <RowPortrait p={p} teams={teams} onSelectTeam={onSelectTeam} onPlayer={() => goPlayer(p)} />
                         <div className="min-w-0 flex-1">
                           <button
                             onClick={() => goPlayer(p)}
                             title={teamOf(p) ? `${p.teamName} – Vereinsseite öffnen` : undefined}
-                            className={`block max-w-full text-left font-sans font-bold text-sm sm:text-[15px] text-white truncate ${teamOf(p) && onSelectTeam ? 'cursor-pointer hover:text-hl-gold transition-colors' : 'cursor-default'}`}
+                            className={`block max-w-full text-left font-sans font-bold text-[15px] sm:text-lg lg:text-xl text-white truncate ${teamOf(p) && onSelectTeam ? 'cursor-pointer hover:text-hl-gold transition-colors' : 'cursor-default'}`}
                           >
                             {p.name}
                           </button>
-                          <div className="font-sans text-[11.5px] text-hl-dim truncate mt-0.5">{sub}</div>
+                          <div className="font-sans text-xs sm:text-[13px] lg:text-sm text-hl-dim truncate mt-0.5">{sub}</div>
                         </div>
                         <div className="flex items-baseline gap-1 shrink-0 pl-2">
-                          <span className="font-display font-black text-2xl sm:text-3xl lg:text-[40px] leading-none text-brand-accent-light tabular-nums">
+                          <span className="font-display font-black text-2xl sm:text-[34px] lg:text-[44px] leading-none text-brand-accent-light tabular-nums">
                             <CountUp value={p.score} decimals={1} />
                           </span>
-                          <span className="font-sans font-bold text-[10px] tracking-wider text-hl-dim">PUNKTE</span>
+                          <span className="font-sans font-bold text-[10px] sm:text-[11px] lg:text-xs tracking-wider text-hl-dim">PUNKTE</span>
                         </div>
                       </motion.div>
                     );
@@ -982,22 +1010,27 @@ function LeaderList({
             <button
               type="button"
               onClick={onSelect ? () => onSelect(p.teamId, p.playerName) : undefined}
-              className="w-full flex items-center gap-2 rounded-lg px-1.5 py-1.5 hover:bg-white/[.05] transition-colors cursor-pointer text-left min-w-0"
+              className="w-full flex items-center gap-2 sm:gap-3 rounded-lg px-1.5 sm:px-2.5 py-1.5 sm:py-2 lg:py-2.5 hover:bg-white/[.05] transition-colors cursor-pointer text-left min-w-0"
             >
-              <span className="w-5 shrink-0 text-center font-display font-black tabular-nums text-xs" style={{ color: i === 0 ? accent : undefined }}>
+              <span className="w-5 sm:w-7 shrink-0 text-center font-display font-black tabular-nums text-xs sm:text-sm lg:text-base" style={{ color: i === 0 ? accent : undefined }}>
                 {i + 1}
               </span>
-              {t && <TeamCrest name={t.name} shortName={t.shortName} color={t.logoColor} logoUrl={t.logoUrl} size="xs" />}
-              <span className="flex-1 min-w-0 truncate font-sans font-semibold text-sm text-white">{p.playerName}</span>
+              {t && (
+                <>
+                  <span className="sm:hidden shrink-0"><TeamCrest name={t.name} shortName={t.shortName} color={t.logoColor} logoUrl={t.logoUrl} size="xs" /></span>
+                  <span className="hidden sm:inline-flex shrink-0"><TeamCrest name={t.name} shortName={t.shortName} color={t.logoColor} logoUrl={t.logoUrl} size="sm" /></span>
+                </>
+              )}
+              <span className="flex-1 min-w-0 truncate font-sans font-semibold text-sm sm:text-base lg:text-[17px] text-white">{p.playerName}</span>
               {mode === 'quote' ? (
                 <>
-                  <span className="shrink-0 font-mono text-[11px] text-hl-dim tabular-nums">{p.value}×</span>
-                  <span className="shrink-0 w-10 text-right font-display font-black tabular-nums text-white text-sm">{pct ?? '–'}</span>
+                  <span className="shrink-0 font-mono text-[11px] sm:text-xs lg:text-sm text-hl-dim tabular-nums">{p.value}×</span>
+                  <span className="shrink-0 w-10 sm:w-14 text-right font-display font-black tabular-nums text-white text-sm sm:text-lg lg:text-xl">{pct ?? '–'}</span>
                 </>
               ) : (
                 <>
-                  {pct && <span className="shrink-0 font-mono text-[11px] text-hl-dim tabular-nums">{pct}</span>}
-                  <span className="shrink-0 min-w-7 text-right font-display font-black tabular-nums text-white text-sm">{p.value}</span>
+                  {pct && <span className="shrink-0 font-mono text-[11px] sm:text-xs lg:text-sm text-hl-dim tabular-nums">{pct}</span>}
+                  <span className="shrink-0 min-w-7 sm:min-w-9 text-right font-display font-black tabular-nums text-white text-sm sm:text-lg lg:text-xl">{p.value}</span>
                 </>
               )}
             </button>
