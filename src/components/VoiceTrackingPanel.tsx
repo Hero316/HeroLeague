@@ -9,6 +9,7 @@ import {
   parseVoice,
   fetchTrackingRules,
   saveTrackingRules,
+  linkTrackingAudio,
   type VoiceEvent,
   type VoiceRosterPlayer,
 } from '../lib/voice';
@@ -261,6 +262,8 @@ export default function VoiceTrackingPanel({ matchId, homeName, awayName, homeTe
       // ohne alles noch mal einzusprechen (überlebt auch versehentliches Schließen).
       const audio = { url: up.url, mimeType: 'audio/wav' };
       setRetryAudio(audio);
+      // Aufnahme mit dem Spiel verknüpfen – für „Vorlagen nachprüfen" & Co.
+      void linkTrackingAudio(matchId, up.url).catch(() => {});
       try {
         sessionStorage.setItem(audioKey, JSON.stringify(audio));
       } catch {
@@ -274,7 +277,7 @@ export default function VoiceTrackingPanel({ matchId, homeName, awayName, homeTe
     } finally {
       setProgress('');
     }
-  }, [cleanupStream, runEvaluate, audioKey]);
+  }, [cleanupStream, runEvaluate, audioKey, matchId]);
 
   const evaluateText = useCallback(() => {
     const t = textValue.trim();
@@ -724,7 +727,7 @@ function TabBtn({ active, onClick, icon, label }: { active: boolean; onClick: ()
 }
 
 // Ein KI-Ereignis auf einen Kaderspieler abbilden → "teamId::name" oder ''.
-function resolveSelection(ev: VoiceEvent, players: VoicePlayer[]): string {
+export function resolveSelection(ev: VoiceEvent, players: VoicePlayer[]): string {
   const t = normName(ev.team);
   let side: 'home' | 'away' | null = null;
   if (t === 'home' || t === 'heim') side = 'home';

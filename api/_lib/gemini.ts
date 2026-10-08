@@ -34,7 +34,7 @@ export const ACTION_CATALOG: ActionDef[] = [
   { key: 'pass_ok', label: 'Pass erfolgreich', hint: 'angekommener/gespielter Pass, Ablage, Abspiel, "passt zu", "legt ab", "findet"' },
   { key: 'pass_fail', label: 'Fehlpass', hint: 'Pass kommt nicht an, "verspringt", "Fehlpass", "zu ungenau", "vertändelt den Pass"' },
   { key: 'key_pass', label: 'Schlüsselpass', hint: 'gefährlicher Pass, der eine Torchance einleitet: Steilpass, tödlicher Pass, Zuckerpass, "legt auf". Nur key_pass ausgeben – die App zählt ihn automatisch als pass_ok.' },
-  { key: 'assist', label: 'Assist', hint: 'Vorlage – der letzte Pass VOR einem Tor. "Vorlage von", "bereitet das Tor vor", "assistiert".' },
+  { key: 'assist', label: 'Assist', hint: 'Vorlage – der Pass, nach dem der Mitspieler DIREKT ein Tor macht (siehe Regel 3d). "Vorlage von", "bereitet das Tor vor", "assistiert" – aber auch ohne dieses Wort automatisch erkennen.' },
   { key: 'shot_on', label: 'Torschuss', hint: 'Schuss aufs Tor, gehalten oder geblockt vom Torwart, "prüft den Keeper", "aufs Tor".' },
   { key: 'shot_miss', label: 'Fehlschuss', hint: 'Schuss daneben/drüber/an den Pfosten, "verzieht", "vorbei".' },
   { key: 'shot_blocked_off', label: 'Schuss geblockt (offensiv)', hint: 'eigener Schuss wird von einem Gegner geblockt.' },
@@ -210,6 +210,15 @@ Jede Taste ist ein EIGENER Zähler, der nur nach OBEN geht. Jedes Vorkommen eine
    - MEHRERE ausgespielte Gegner in EINER Aktion: „X dribbelt Y und Z aus" / „lässt Y und Z stehen" / „geht an Y und Z vorbei" → dribble_won für X so oft wie Gegner ausgespielt wurden (hier +2) UND duel_lost je Gegner (Y +1, Z +1). Beispiel: „Maik dribbelt Justin und Darius aus" → Maik dribble_won +2, Justin duel_lost +1, Darius duel_lost +1.
    - Abgefangener Pass: „X fängt den Pass von Y ab" → interception für X UND pass_fail für Y.
    - Geblockter Schuss: „Y blockt den Schuss von X" → shot_blocked_off für X UND shot_blocked_def für Y.
+   (d) VORLAGE (assist) AUTOMATISCH ERKENNEN – auch wenn das Wort „Vorlage" NICHT fällt. Prüfe bei JEDEM Tor, was direkt davor passiert ist:
+   - VORLAGE: X spielt einen Pass (auch Flanke, Ecke, Querpass, Steckpass, Rückpass) zu einem Mitspieler Y, und Y erzielt DIREKT danach das Tor – ohne eigene Aktion dazwischen. Dann: assist für X (statt pass_ok bzw. key_pass) und goal für Y.
+     Beispiel: „Adrian Süß passt auf Matteo Süß, Matteo schießt – Tor!" → assist für Adrian Süß, goal für Matteo Süß.
+     Beispiel: „Flanke von Adrian, Matteo köpft rein" → assist für Adrian, goal_header für Matteo.
+     Ballannahme oder Mitnahme OHNE Gegnerkontakt („nimmt an", „legt ihn sich vor", „zieht direkt ab") ist KEINE eigene Aktion – die Vorlage bleibt.
+   - KEINE VORLAGE, sobald Y zwischen Pass und Tor eine eigene Aktion macht: ein Dribbling/Gegner ausspielen („dribbelt aus", „geht vorbei", „tunnelt"), ein gewonnener Zweikampf, ein weiterer Pass, oder ein erster Schuss, der gehalten/geblockt wird und erst der Nachschuss/Abpraller ist drin. Dann bekommt X nur pass_ok (bzw. key_pass bei einem gefährlichen Pass) und Y das Tor.
+     Beispiel: „Adrian passt auf Matteo, Matteo dribbelt den Verteidiger aus, rennt an ihm vorbei und schießt – Tor" → pass_ok für Adrian (KEINE Vorlage), dribble_won + goal für Matteo, duel_lost für den Verteidiger.
+   - Pro Tor höchstens EINE Vorlage. Kein assist bei Eigentor, Elfmeter oder wenn der Pass vom Gegner kam. Wird „Vorlage von X" ausdrücklich gesagt, gilt das immer.
+
 4. NICHT DOPPELT zählen: Der Ballverlust des Ballführenden ist ENTWEDER pass_fail (verlorener Pass) ODER dribble_lost (misslungenes Dribbling) ODER turnover (sonstiger Ballverlust, auch „gegen Y") – nie mehrfach für dieselbe Situation und NIEMALS duel_lost. duel_lost bekommt ausschließlich der ausgespielte Verteidiger (Spiegelbild zu dribble_won des Angreifers). Eine Interception ist kein Zweikampf. Ein vom Torwart gehaltener Schuss (save) ist kein vom Feldspieler geblockter Schuss (shot_blocked_def).
 5. Korrekturen: Wenn der Sprecher etwas zurücknimmt ("nein", "doch nicht", "verspreche", "streich das", "Entschuldigung, das war falsch", "Quatsch"), dann gib das zurückgenommene Ereignis GAR NICHT aus (nicht etwa mit negativem delta ausgleichen). Liefere immer das bereinigte Endergebnis.
 6. Erfinde nichts. Nur Aktionen ausgeben, die klar genannt werden oder sich zwingend aus der Fußball-Logik (Punkt 3) ergeben und zu einem Kaderspieler passen. Unklares mit niedriger "confidence" und kurzer "note" markieren.
