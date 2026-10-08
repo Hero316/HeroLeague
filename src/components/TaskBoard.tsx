@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight, Plus, X, Send, Trash2, Loader2, MessageSquare, Users, CalendarDays, ListChecks, Clock, Move, Check, Calendar, CheckSquare, Image as ImageIcon, Mic, File as FileIcon, Copy, Pencil, Smile, SlidersHorizontal } from 'lucide-react';
-import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember, Match, EventArchive, TaskKind, LinkItem } from '../types';
-import { fetchTasksRange, fetchAllTasks, fetchTask, createTask, updateTask, deleteTask, addTaskComment, editTaskComment, deleteTaskComment, reactTaskComment, fetchTeam, memberMap } from '../lib/collab';
+import type { Task, TaskComment, TaskStatus, TicketPriority, TeamMember, Match, EventArchive, TaskKind, LinkItem, ChecklistItem, RsvpEntry, RsvpStatus } from '../types';
+import { fetchTasksRange, fetchAllTasks, fetchTask, createTask, updateTask, rsvpTask, deleteTask, addTaskComment, editTaskComment, deleteTaskComment, reactTaskComment, fetchTeam, memberMap } from '../lib/collab';
 import { apiFetch, uploadFile } from '../lib/api';
 import { getUrlParam, setUrlParam } from '../lib/urlState';
 import { loadPref, savePref } from '../lib/prefs';
@@ -13,6 +13,7 @@ import MentionTextarea from './MentionTextarea';
 import MentionText from './MentionText';
 import { useStickToBottom } from '../lib/useStickToBottom';
 import LinkChips from './LinkChips';
+import { Collapsible, Checklist, RsvpBar, RsvpDot, PersonChips, RSVP_META, scheduleSummary } from './TaskParts';
 import { VoiceMessage } from './AudioPlayer';
 import { useBackdropDismiss, ModalPortal, SegmentedControl, EmptyState } from './ui';
 import { BUBBLE_MINE, pickNameColor, EmojiPicker, useLongPress, QUICK_REACTIONS, ActionBtn } from './ChatSystem';
@@ -398,7 +399,9 @@ function ScheduleFields({
   onAllDay,
   onStart,
   onEndTime,
+  bare = false,
 }: {
+  bare?: boolean; // ohne eigenen Rahmen (z. B. in einem aufklappbaren Block)
   kind: TaskKind;
   dueDate: string;
   endDate: string;
@@ -413,7 +416,7 @@ function ScheduleFields({
 }) {
   const pureTask = kind === 'aufgabe';
   return (
-    <div className="mt-3 rounded-xl border border-white/10 hl-surf-soft p-3 space-y-3">
+    <div className={bare ? 'space-y-3' : 'mt-3 rounded-xl border border-white/10 hl-surf-soft p-3 space-y-3'}>
       <label className="flex items-center gap-2 cursor-pointer select-none">
         <button
           type="button"
@@ -756,6 +759,8 @@ export function TaskDetail({
   const [comments, setComments] = useState<TaskComment[]>(task.comments ?? []);
   const [commentBody, setCommentBody] = useState('');
   const [links, setLinks] = useState<LinkItem[]>(task.links ?? []);
+  const [checklist, setChecklist] = useState<ChecklistItem[]>(task.checklist ?? []);
+  const [rsvp, setRsvp] = useState<Record<string, RsvpEntry>>(task.rsvp ?? {});
   const [busy, setBusy] = useState(false);
   // Chat-artiger Anhang (Bild/Video/Datei/Audio) für den nächsten Beitrag.
   const [attach, setAttach] = useState<{ type: 'file' | 'audio'; url: string; mime: string; title: string } | null>(null);
@@ -813,13 +818,78 @@ export function TaskDetail({
 
   useEffect(() => {
     let alive = true;
-    fetchTask(task.id).then((full) => alive && setComments(full.comments ?? [])).catch(() => {});
+    fetchTask(task.id)
+      .then((full) => {
+        if (!alive) return;
+        setComments(full.comments ?? []);
+        setRsvp(full.rsvp ?? {});
+        if (!clPending.current) setChecklist(full.checklist ?? []);
+      })
+      .catch(() => {});
     return () => {
       alive = false;
     };
   }, [task.id]);
 
   const toggleAssignee = (id: string) => setAssignees((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const mergeAssignees = (ids: string[]) => setAssignees((prev) => [...new Set([...prev, ...ids])]);
+
+  // Stichpunkt-Aufgaben speichern sich selbst (kurz verzögert) – abhaken oder
+  // jemanden zuteilen wirkt sofort für alle, ohne „Speichern" zu drücken.
+  const clTimer = useRef<number | null>(null);
+  const clPending = useRef<ChecklistItem[] | null>(null);
+  const cleanChecklist = (items: ChecklistItem[]) => items.filter((i) => i.text.trim() || i.assignees.length > 0);
+  const flushChecklist = useCallback(async () => {
+    if (clTimer.current) {
+      clearTimeout(clTimer.current);
+      clTimer.current = null;
+    }
+    const next = clPending.current;
+    if (!next) return;
+    clPending.current = null;
+    try {
+      await updateTask(task.id, { checklist: cleanChecklist(next) });
+      onChanged();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Aufgaben konnten nicht gespeichert werden.');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task.id]);
+  const changeChecklist = (next: ChecklistItem[]) => {
+    setChecklist(next);
+    // Wer eine Stichpunkt-Aufgabe bekommt, gehört automatisch zum Termin.
+    mergeAssignees(next.flatMap((i) => i.assignees));
+    clPending.current = next;
+    if (clTimer.current) clearTimeout(clTimer.current);
+    clTimer.current = window.setTimeout(() => void flushChecklist(), 900);
+  };
+  // Fenster zu (ohne „Speichern") ⇒ offene Änderungen trotzdem sichern.
+  useEffect(() => () => void flushChecklist(), [flushChecklist]);
+
+  // Zusage / Absage / später – sofort gespeichert, der Ersteller bekommt eine Push.
+  const answer = async (st: RsvpStatus | null, time?: string | null) => {
+    const prev = rsvp;
+    setRsvp((r) => {
+      const n = { ...r };
+      if (st) n[currentUserId] = { status: st, time: time ?? null, at: new Date().toISOString() };
+      else delete n[currentUserId];
+      return n;
+    });
+    try {
+      const t = await rsvpTask(task.id, st, time);
+      setRsvp(t.rsvp ?? {});
+      mergeAssignees((t.assignees ?? []).map((a) => a.userId));
+      onChanged();
+    } catch (err) {
+      setRsvp(prev);
+      alert(err instanceof Error ? err.message : 'Antwort konnte nicht gespeichert werden.');
+    }
+  };
+  const participants = team.filter((m) => assignees.includes(m.id) || m.id === task.createdBy);
+  const others = team.filter((m) => !participants.includes(m));
+  const rsvpCounts = (['yes', 'late', 'no'] as RsvpStatus[])
+    .map((st) => ({ st, n: assignees.filter((id) => rsvp[id]?.status === st).length }))
+    .filter((x) => x.n > 0);
 
   const save = async () => {
     if (!title.trim()) return alert('Titel darf nicht leer sein.');
@@ -833,9 +903,13 @@ export function TaskDetail({
         setCommentBody('');
         setAttach(null);
       }
+      if (clTimer.current) clearTimeout(clTimer.current);
+      clTimer.current = null;
+      clPending.current = null;
       await updateTask(task.id, {
         title: title.trim(),
         notes,
+        checklist: cleanChecklist(checklist),
         type,
         status,
         priority,
@@ -843,7 +917,7 @@ export function TaskDetail({
         endDate: type !== 'aufgabe' && endDate && dueDate && endDate > dueDate ? endDate : null,
         startTime: allDay ? null : startTime || null,
         endTime: allDay ? null : endTime || null,
-        assignees,
+        assignees: [...new Set([...assignees, ...checklist.flatMap((i) => i.assignees)])],
       });
       onChanged();
       onClose();
@@ -888,18 +962,21 @@ export function TaskDetail({
 
   return (
     <ModalPortal>
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[70] bg-black/80 flex items-start sm:items-center justify-center p-0 pt-[env(safe-area-inset-top)] sm:p-6 overflow-y-auto" {...backdrop}>
-      <motion.div {...zoomModalProps(origin ?? ZERO_ORIGIN)} className="hl-card hl-modal-card w-full max-w-xl my-0 sm:my-8 p-5 sm:p-6 rounded-3xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="font-display font-black text-xl text-white uppercase tracking-tight">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[70] bg-black/80 flex items-stretch sm:items-center justify-center sm:p-6" {...backdrop}>
+      {/* Feste Fensterhöhe: Kopf + Fuß bleiben stehen, NUR der Inhalt scrollt –
+          nichts wird mehr oben/unten abgeschnitten (Handy: Vollbild mit Safe-Area). */}
+      <motion.div {...zoomModalProps(origin ?? ZERO_ORIGIN)} className="hl-card hl-modal-card w-full max-w-xl flex flex-col h-[100dvh] sm:h-auto sm:max-h-[calc(100dvh-3rem)] rounded-none sm:rounded-3xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="shrink-0 flex items-center justify-between gap-3 px-5 sm:px-6 pb-3 pt-[calc(env(safe-area-inset-top)+0.9rem)] sm:pt-5 border-b border-white/[.06]">
+          <h3 className="font-display font-black text-xl text-white uppercase tracking-tight truncate">
             {type === 'aufgabe' ? 'Aufgabe' : type === 'beides' ? 'Eintrag' : 'Termin'}
           </h3>
-          <button onClick={onClose} className="p-2 -mr-1 rounded-full text-hl-mute hover:text-white hover:bg-white/5 transition-colors cursor-pointer">
+          <button onClick={onClose} className="shrink-0 p-2 -mr-1 rounded-full text-hl-mute hover:text-white hover:bg-white/5 transition-colors cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 sm:px-6 py-4">
+        <div className="space-y-3.5">
           <SegmentedControl
             groupId="taskdetailtype"
             fill
@@ -917,24 +994,43 @@ export function TaskDetail({
             <input value={title} onChange={(e) => setTitle(e.target.value)} className={inputClass} />
           </div>
 
+          {type !== 'aufgabe' && (
+            <RsvpBar
+              key={rsvp[currentUserId]?.status ?? 'none'}
+              mine={rsvp[currentUserId]}
+              defaultLateTime={startTime || undefined}
+              onAnswer={answer}
+            />
+          )}
+
           <div>
-            <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-1.5">Notizen</label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className={`${inputClass} resize-y`} />
+            <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-1.5">Notizen & Aufgaben</label>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Notizen…" className={`${inputClass} resize-y`} />
+            <div className="mt-2">
+              <Checklist items={checklist} onChange={changeChecklist} participants={participants} others={others} />
+            </div>
           </div>
 
-          <ScheduleFields
-            kind={type}
-            dueDate={dueDate}
-            endDate={endDate}
-            allDay={allDay}
-            startTime={startTime}
-            endTime={endTime}
-            onDue={setDueDate}
-            onEnd={setEndDate}
-            onAllDay={setAllDay}
-            onStart={setStartTime}
-            onEndTime={setEndTime}
-          />
+          <Collapsible
+            icon={<Clock className="w-4 h-4" />}
+            title="Zeit"
+            summary={<span className="truncate">{scheduleSummary({ kind: type, dueDate, endDate, allDay, startTime, endTime })}</span>}
+          >
+            <ScheduleFields
+              bare
+              kind={type}
+              dueDate={dueDate}
+              endDate={endDate}
+              allDay={allDay}
+              startTime={startTime}
+              endTime={endTime}
+              onDue={setDueDate}
+              onEnd={setEndDate}
+              onAllDay={setAllDay}
+              onStart={setStartTime}
+              onEndTime={setEndTime}
+            />
+          </Collapsible>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -955,30 +1051,41 @@ export function TaskDetail({
             </div>
           </div>
 
-          <div>
-            <label className="text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5" /> Personen
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {team.map((m) => {
-                const on = assignees.includes(m.id);
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => toggleAssignee(m.id)}
-                    className={`flex items-center gap-1.5 pl-1 pr-3 py-1 rounded-full border text-[13px] font-sans font-semibold transition-all active:scale-95 cursor-pointer ${
-                      on ? 'bg-brand-accent-light/20 border-brand-accent-light/50 text-brand-accent-light' : 'bg-white/5 border-white/10 text-hl-mute hover:text-white'
-                    }`}
-                  >
-                    <Avatar name={m.name} url={m.avatarUrl} size={22} />
-                    {m.name}
-                  </button>
-                );
-              })}
-              {team.length === 0 && <span className="text-xs text-hl-faint">Keine Team-Mitglieder.</span>}
-            </div>
-          </div>
+          <Collapsible
+            icon={<Users className="w-4 h-4" />}
+            title="Personen"
+            summary={
+              assignees.length === 0 ? (
+                <span className="text-hl-faint">niemand</span>
+              ) : (
+                <>
+                  {rsvpCounts.length > 0 && (
+                    <span className="hidden min-[400px]:inline text-[11.5px] font-semibold truncate">
+                      {rsvpCounts.map((x) => (
+                        <span key={x.st} className="ml-1.5" style={{ color: RSVP_META[x.st].color }}>
+                          {RSVP_META[x.st].icon} {x.n}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                  <span className="flex -space-x-1.5 shrink-0">
+                    {assignees.slice(0, 5).map((id) => {
+                      const m = team.find((t) => t.id === id);
+                      return (
+                        <span key={id} className="relative inline-flex hl-avatar-ring">
+                          <Avatar name={m?.name ?? '?'} url={m?.avatarUrl} size={22} />
+                          <RsvpDot entry={rsvp[id]} />
+                        </span>
+                      );
+                    })}
+                    {assignees.length > 5 && <span className="text-[11px] text-hl-mute pl-2.5">+{assignees.length - 5}</span>}
+                  </span>
+                </>
+              )
+            }
+          >
+            <PersonChips people={team} selected={assignees} onToggle={toggleAssignee} rsvp={rsvp} />
+          </Collapsible>
         </div>
 
         <div className="mt-5">
@@ -1119,7 +1226,9 @@ export function TaskDetail({
           {emojiOpen && <EmojiPicker onPick={(e) => setCommentBody((b) => b + e)} onClose={() => setEmojiOpen(false)} />}
         </div>
 
-        <div className="flex justify-between gap-2.5 mt-5 pt-4 border-t border-white/5">
+        </div>
+
+        <div className="shrink-0 flex justify-between gap-2.5 px-5 sm:px-6 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:pb-5 border-t border-white/[.06]">
           {canDelete ? (
             <button onClick={remove} disabled={busy} className="px-4 py-3 rounded-2xl text-xs font-bold uppercase tracking-wider bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:bg-rose-500/20 transition-all active:scale-[.98] cursor-pointer disabled:opacity-50 flex items-center gap-1.5">
               <Trash2 className="w-3.5 h-3.5" /> Löschen
@@ -1162,8 +1271,14 @@ function NewTaskModal({
   const [priority, setPriority] = useState<TicketPriority>('mittel');
   const [assignees, setAssignees] = useState<string[]>([]);
   const [links, setLinks] = useState<LinkItem[]>([]);
+  const [notes, setNotes] = useState('');
+  const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [busy, setBusy] = useState(false);
   const toggle = (id: string) => setAssignees((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const changeChecklist = (next: ChecklistItem[]) => {
+    setChecklist(next);
+    setAssignees((p) => [...new Set([...p, ...next.flatMap((i) => i.assignees)])]);
+  };
   const backdrop = useBackdropDismiss(onClose);
 
   const create = async () => {
@@ -1172,6 +1287,8 @@ function NewTaskModal({
     try {
       await createTask({
         title: title.trim(),
+        notes,
+        checklist: checklist.filter((i) => i.text.trim() || i.assignees.length > 0),
         type,
         dueDate: dueDate || null,
         endDate: type !== 'aufgabe' && endDate && dueDate && endDate > dueDate ? endDate : null,
@@ -1191,18 +1308,19 @@ function NewTaskModal({
 
   return (
     <ModalPortal>
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4 overflow-y-auto" {...backdrop}>
-      <motion.div initial={{ scale: 0.8, y: 24, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.85, y: 12, opacity: 0 }} transition={{ type: 'spring', stiffness: 420, damping: 20, mass: 0.8 }} className="hl-card hl-modal-card w-full max-w-md p-5 sm:p-6 rounded-3xl my-6" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="font-display font-black text-xl text-white uppercase tracking-tight">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] bg-black/80 flex items-stretch sm:items-center justify-center sm:p-6" {...backdrop}>
+      <motion.div initial={{ scale: 0.8, y: 24, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.85, y: 12, opacity: 0 }} transition={{ type: 'spring', stiffness: 420, damping: 20, mass: 0.8 }} className="hl-card hl-modal-card w-full max-w-md flex flex-col h-[100dvh] sm:h-auto sm:max-h-[calc(100dvh-3rem)] rounded-none sm:rounded-3xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="shrink-0 flex items-center justify-between gap-3 px-5 sm:px-6 pb-3 pt-[calc(env(safe-area-inset-top)+0.9rem)] sm:pt-5 border-b border-white/[.06]">
+          <h3 className="font-display font-black text-xl text-white uppercase tracking-tight truncate">
             {type === 'aufgabe' ? 'Neue Aufgabe' : type === 'beides' ? 'Neuer Eintrag' : 'Neuer Termin'}
           </h3>
-          <button onClick={onClose} className="p-2 -mr-1 rounded-full text-hl-mute hover:text-white hover:bg-white/5 cursor-pointer transition-colors">
+          <button onClick={onClose} className="shrink-0 p-2 -mr-1 rounded-full text-hl-mute hover:text-white hover:bg-white/5 cursor-pointer transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 sm:px-6 py-4">
+        <div className="space-y-3.5">
           <SegmentedControl
             groupId="newtasktype"
             fill
@@ -1220,19 +1338,40 @@ function NewTaskModal({
             <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus placeholder={type === 'aufgabe' ? 'z.B. Video schneiden' : 'z.B. DVAG Treff'} className={inputClass} />
           </div>
 
-          <ScheduleFields
-            kind={type}
-            dueDate={dueDate}
-            endDate={endDate}
-            allDay={allDay}
-            startTime={startTime}
-            endTime={endTime}
-            onDue={setDueDate}
-            onEnd={setEndDate}
-            onAllDay={setAllDay}
-            onStart={setStartTime}
-            onEndTime={setEndTime}
-          />
+          <div>
+            <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-1.5">Notizen & Aufgaben</label>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Notizen…" className={`${inputClass} resize-y`} />
+            <div className="mt-2">
+              <Checklist
+                items={checklist}
+                onChange={changeChecklist}
+                participants={team.filter((m) => assignees.includes(m.id))}
+                others={team.filter((m) => !assignees.includes(m.id))}
+              />
+            </div>
+          </div>
+
+          <Collapsible
+            icon={<Clock className="w-4 h-4" />}
+            title="Zeit"
+            defaultOpen
+            summary={<span className="truncate">{scheduleSummary({ kind: type, dueDate, endDate, allDay, startTime, endTime })}</span>}
+          >
+            <ScheduleFields
+              bare
+              kind={type}
+              dueDate={dueDate}
+              endDate={endDate}
+              allDay={allDay}
+              startTime={startTime}
+              endTime={endTime}
+              onDue={setDueDate}
+              onEnd={setEndDate}
+              onAllDay={setAllDay}
+              onStart={setStartTime}
+              onEndTime={setEndTime}
+            />
+          </Collapsible>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -1253,37 +1392,38 @@ function NewTaskModal({
             </div>
           </div>
 
-          <div>
-            <label className="text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5" /> Personen
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {team.map((m) => {
-                const on = assignees.includes(m.id);
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => toggle(m.id)}
-                    className={`flex items-center gap-1.5 pl-1 pr-3 py-1 rounded-full border text-[13px] font-sans font-semibold transition-all active:scale-95 cursor-pointer ${
-                      on ? 'bg-brand-accent-light/20 border-brand-accent-light/50 text-brand-accent-light' : 'bg-white/5 border-white/10 text-hl-mute hover:text-white'
-                    }`}
-                  >
-                    <Avatar name={m.name} url={m.avatarUrl} size={22} />
-                    {m.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <Collapsible
+            icon={<Users className="w-4 h-4" />}
+            title="Personen"
+            defaultOpen
+            summary={
+              assignees.length === 0 ? (
+                <span className="text-hl-faint">niemand</span>
+              ) : (
+                <span className="flex -space-x-1.5 shrink-0">
+                  {assignees.slice(0, 5).map((id) => {
+                    const m = team.find((t) => t.id === id);
+                    return (
+                      <span key={id} className="inline-flex hl-avatar-ring">
+                        <Avatar name={m?.name ?? '?'} url={m?.avatarUrl} size={22} />
+                      </span>
+                    );
+                  })}
+                </span>
+              )
+            }
+          >
+            <PersonChips people={team} selected={assignees} onToggle={toggle} />
+          </Collapsible>
 
           <div>
             <label className="block text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-2">Links (z.B. Google-Drive-Ordner)</label>
             <LinkChips links={links} onChange={setLinks} />
           </div>
         </div>
+        </div>
 
-        <div className="flex gap-2.5 mt-6">
+        <div className="shrink-0 flex gap-2.5 px-5 sm:px-6 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:pb-5 border-t border-white/[.06]">
           <button onClick={onClose} className="flex-1 py-3 rounded-2xl text-xs font-bold uppercase tracking-wider bg-white/5 border border-white/10 text-hl-mute hover:text-white cursor-pointer transition-colors active:scale-[.98]">
             Abbrechen
           </button>

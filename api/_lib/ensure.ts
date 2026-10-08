@@ -69,6 +69,8 @@ export async function ensureSchema(): Promise<void> {
     await sql`SELECT 1 FROM huddle_signals LIMIT 1`;
     // Benannte Links („Link-Tasten") mitprüfen.
     await sql`SELECT links FROM tasks LIMIT 1`;
+    // Stichpunkt-Aufgaben im Termin + Zu-/Absagen mitprüfen.
+    await sql`SELECT checklist, rsvp FROM tasks LIMIT 1`;
     // Hero-Punkte (Belohnung fürs Abschließen) mitprüfen, sonst überspringt der
     // Schnell-Check das Anlegen auf bereits bestehenden Datenbanken.
     await sql`SELECT 1 FROM hero_events LIMIT 1`;
@@ -133,6 +135,10 @@ export async function ensureSchema(): Promise<void> {
   await run(sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS end_time TEXT`);
   // Termin/Aufgabe/beides.
   await run(sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'termin'`);
+  // Stichpunkt-Aufgaben in den Notizen (je Punkt: Text, erledigt, zuständige
+  // Personen) + Zu-/Absagen der Beteiligten ({ userId: {status,time,at} }).
+  await run(sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS checklist JSONB NOT NULL DEFAULT '[]'`);
+  await run(sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS rsvp JSONB NOT NULL DEFAULT '{}'`);
   await run(sql`CREATE TABLE IF NOT EXISTS task_assignees (
     task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL, user_name TEXT NOT NULL DEFAULT '', PRIMARY KEY (task_id, user_id))`);

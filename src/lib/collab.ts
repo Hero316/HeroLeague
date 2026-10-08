@@ -1,6 +1,8 @@
 // Client-Helfer für die Team-Zusammenarbeit (Tickets, Aufgaben, Benachrichtigungen).
 import { apiFetch } from './api';
 import type {
+  ChecklistItem,
+  RsvpStatus,
   Ticket,
   TicketComment,
   TicketPriority,
@@ -124,6 +126,7 @@ export const createTask = (input: {
   priority?: TicketPriority;
   assignees?: string[];
   links?: LinkItem[];
+  checklist?: ChecklistItem[];
 }) => apiFetch<Task>('/api/tasks', { method: 'POST', body: JSON.stringify(input) });
 
 export const updateTask = (
@@ -141,8 +144,13 @@ export const updateTask = (
     priority?: TicketPriority;
     assignees?: string[];
     links?: LinkItem[];
+    checklist?: ChecklistItem[];
   }
 ) => apiFetch<Task>('/api/tasks', { method: 'POST', body: JSON.stringify({ id, ...patch }) });
+
+// Zusage / Absage / „komme später (ca. HH:MM)" – null nimmt die Antwort zurück.
+export const rsvpTask = (id: string, status: RsvpStatus | null, time?: string | null) =>
+  apiFetch<Task>('/api/tasks', { method: 'POST', body: JSON.stringify({ id, op: 'rsvp', status, time: time ?? null }) });
 
 export const deleteTask = (id: string) =>
   apiFetch<{ ok: boolean }>('/api/tasks', { method: 'POST', body: JSON.stringify({ id, op: 'delete' }) });
