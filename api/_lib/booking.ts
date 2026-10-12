@@ -11,7 +11,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHmac, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import { put } from '@vercel/blob';
-import { sql } from './db.js';
+import { normalizeRoster, sql } from './db.js';
 import { getSession, hasPermission } from './auth.js';
 import { badRequest } from './validate.js';
 import {
@@ -266,7 +266,36 @@ async function canBook(req: VercelRequest, cfg: BookingConfig): Promise<{ ok: bo
 }
 
 // Vorregistriert? (Season-2-Vorregistrierung ODER Season-1-Captain)
+// Aktuelles Liga-Team, bei dem diese E-Mail als Manager (Kader-Meldung)
+// hinterlegt ist – inkl. Kader und Logo zum Übernehmen.
+interface ManagerTeam { id: string; name: string; logoUrl: string; roster: RosterEntry[] }
+async function managerTeam(mail: string): Promise<ManagerTeam | null> {
+  try {
+    const rows = await sql`SELECT value FROM settings WHERE key = 'managers'`;
+    const map = (rows[0]?.value ?? {}) as Record<string, unknown>;
+    const teamId = Object.entries(map).find(([, list]) => Array.isArray(list) && list.some((e) => typeof e === 'string' && normEmail(e) === mail))?.[0];
+    if (!teamId) return null;
+    const t = (await sql`SELECT id, name, logo_url AS "logoUrl", spielerliste FROM teams WHERE id = ${teamId} LIMIT 1`)[0] as
+      { id: string; name: string; logoUrl: string | null; spielerliste: unknown } | undefined;
+    if (!t) return null;
+    const roster: RosterEntry[] = normalizeRoster(t.spielerliste).map((p) => {
+      const parts = p.name.trim().split(/\s+/);
+      return {
+        firstName: parts[0] ?? '',
+        lastName: parts.slice(1).join(' '),
+        number: typeof p.number === 'number' && p.number >= 0 && p.number <= 99 ? p.number : null,
+        captain: p.captain === true,
+        keeper: p.goalkeeper === true,
+      };
+    });
+    return { id: t.id, name: t.name, logoUrl: t.logoUrl || '', roster };
+  } catch {
+    return null;
+  }
+}
+
 async function isPreregistered(mail: string): Promise<boolean> {
+  if (await managerTeam(mail)) return true;
   try {
     const rows = await sql`SELECT 1 FROM season_signups WHERE email = ${mail} LIMIT 1`;
     if (rows.length) return true;
@@ -405,6 +434,23 @@ async function bookingVerify(req: VercelRequest, res: VercelResponse) {
       /* egal */
     }
   }
+  // Aktuelles Team (Manager-E-Mail aus der Kader-Meldung)? → Teamname, Kader
+  // mit Nummern/Kapitän/Torwart und Logo übernehmen; Kontakt aus der
+  // Vorregistrierung bleibt, falls vorhanden.
+  const team = await managerTeam(mail);
+  if (team) {
+    prereg = {
+      entry: 'team',
+      contactName: (prereg?.contactName as string) || '',
+      phone: (prereg?.phone as string) || '',
+      since: prereg?.since,
+      teamName: team.name,
+      current: true,
+      teamId: team.id,
+      roster: team.roster,
+      logoUrl: team.logoUrl,
+    };
+  }
   // Schon verbindlich gebucht? → Status anzeigen (und ggf. weiter bezahlen).
   const booking = await bookingByEmail(mail);
   return res.json({ ok: true, token: signToken(mail), email: mail, prereg, booking });
@@ -503,6 +549,9 @@ async function bookingSubmit(req: VercelRequest, res: VercelResponse) {
   } catch (e) {
     return badRequest(res, e instanceof Error ? e.message : 'Logo-Fehler.');
   }
+  // Aktuelles Team (Manager-E-Mail): Logo übernehmen, wenn kein neues kam.
+  const current = await managerTeam(email);
+  if (!logoUrl && b.keepLogo === true && current?.logoUrl) logoUrl = current.logoUrl;
   const now = new Date().toISOString();
   const consents = {
     acceptedAt: now,
@@ -519,9 +568,9 @@ async function bookingSubmit(req: VercelRequest, res: VercelResponse) {
     testMode: allowed.test,
   };
   await sql`INSERT INTO season_bookings
-      (id, ref, email, status, team_name, contact_name, phone, package, price_cents, early_bird, roster, logo_url, consents, note, created_at, updated_at)
+      (id, ref, email, status, team_name, contact_name, phone, package, price_cents, early_bird, roster, logo_url, consents, note, source_team_id, created_at, updated_at)
     VALUES (${id}, ${ref}, ${email}, 'pending', ${teamName}, ${contactName}, ${phone}, ${pkg}, ${price.cents}, ${early},
-      ${JSON.stringify(roster)}::jsonb, ${logoUrl}, ${JSON.stringify(consents)}::jsonb, ${clamp(b.note, 800)}, now(), now())`;
+      ${JSON.stringify(roster)}::jsonb, ${logoUrl}, ${JSON.stringify(consents)}::jsonb, ${clamp(b.note, 800)}, ${current?.id ?? ''}, now(), now())`;
 
   // Bestätigung an das Team – inkl. Zahlung + vollständigen Teilnahmebedingungen.
   const reference = `${ref} ${teamName}`;
@@ -585,7 +634,8 @@ async function requireSignups(req: VercelRequest, res: VercelResponse): Promise<
 async function adminBookings(_req: VercelRequest, res: VercelResponse) {
   const rows = await sql`SELECT id, ref, email, status, team_name AS "teamName", contact_name AS "contactName", phone,
       package, price_cents AS "priceCents", early_bird AS "earlyBird", roster, logo_url AS "logoUrl", consents, note,
-      created_at AS "createdAt", paid_at AS "paidAt", team_id AS "teamId", transferred_at AS "transferredAt"
+      created_at AS "createdAt", paid_at AS "paidAt", team_id AS "teamId", transferred_at AS "transferredAt",
+      source_team_id AS "sourceTeamId"
     FROM season_bookings ORDER BY created_at DESC`;
   return res.json(rows);
 }
@@ -619,7 +669,7 @@ async function readInvites(): Promise<Record<string, string>> {
 // Alle Vorregistrierten (Teams + einzelne Spieler) und Season-1-Captains mit
 // Einladungs- und Buchungsstatus.
 async function adminInvites(_req: VercelRequest, res: VercelResponse) {
-  const people = new Map<string, { email: string; name: string; teamName: string; source: 'team' | 'player' | 'captain'; createdAt: string | null }>();
+  const people = new Map<string, { email: string; name: string; teamName: string; source: 'team' | 'player' | 'captain' | 'manager'; createdAt: string | null }>();
   try {
     const rows = await sql`SELECT email, entry, team_name AS "teamName", contact_name AS "contactName", data, created_at AS "createdAt"
       FROM season_signups ORDER BY created_at ASC`;
@@ -645,6 +695,23 @@ async function adminInvites(_req: VercelRequest, res: VercelResponse) {
     }
   } catch {
     /* egal */
+  }
+  // Manager der aktuellen Teams (Kader-Meldung) – auch sie bekommen den Vorab-Zugang.
+  try {
+    const rows = await sql`SELECT value FROM settings WHERE key = 'managers'`;
+    const map = (rows[0]?.value ?? {}) as Record<string, unknown>;
+    const names = new Map(((await sql`SELECT id, name FROM teams`) as { id: string; name: string }[]).map((t) => [t.id, t.name]));
+    for (const [teamId, list] of Object.entries(map)) {
+      if (!Array.isArray(list)) continue;
+      for (const e of list) {
+        if (typeof e !== 'string' || !isEmail(e)) continue;
+        const mail = normEmail(e);
+        const prev = people.get(mail);
+        people.set(mail, { email: mail, name: prev?.name ?? '', teamName: names.get(teamId) ?? prev?.teamName ?? '', source: 'manager', createdAt: prev?.createdAt ?? null });
+      }
+    }
+  } catch {
+    /* keine Manager */
   }
   const invites = await readInvites();
   const booked = new Map<string, string>();

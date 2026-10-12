@@ -53,6 +53,11 @@ export interface Prereg {
   squadSize?: number | null;
   since?: string;
   captain?: boolean; // Captain aus Season 1
+  // Aktuelles Liga-Team (Manager-E-Mail aus der Kader-Meldung):
+  current?: boolean;
+  teamId?: string;
+  roster?: RosterRow[];
+  logoUrl?: string;
 }
 
 export interface RosterRow {
@@ -71,6 +76,7 @@ export interface BookingPayload {
   package: PackageId;
   roster: RosterRow[];
   logo?: string; // Data-URL (Bild oder PDF)
+  keepLogo?: boolean; // Logo des aktuellen Teams übernehmen
   note?: string;
   acceptJersey: boolean;
   acceptRules: boolean;
@@ -106,13 +112,14 @@ export interface BookingAdminRow {
   paidAt: string | null;
   teamId: string;
   transferredAt: string | null;
+  sourceTeamId: string; // aktuelles Liga-Team (per Manager-E-Mail erkannt)
 }
 
 export interface BookingInvitee {
   email: string;
   name: string;
   teamName: string;
-  source: 'team' | 'player' | 'captain';
+  source: 'team' | 'player' | 'captain' | 'manager';
   createdAt: string | null;
   invitedAt: string | null;
   booking: BookingStatus | null;

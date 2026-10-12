@@ -33,6 +33,7 @@ export interface BookingDraft {
   pkg: PackageId | null;
   logo: string; // Data-URL
   logoName: string;
+  keepLogoUrl: string; // Logo des aktuellen Teams (wird übernommen, wenn kein neues kommt)
   note: string;
   acceptJersey: boolean;
   acceptRules: boolean;
@@ -43,7 +44,7 @@ export interface BookingDraft {
 export const emptyRow = (): RosterRow => ({ firstName: '', lastName: '', number: null, captain: false, keeper: false });
 export const newDraft = (rows: number): BookingDraft => ({
   email: '', token: '', prereg: null, existing: null, teamName: '', contactName: '', phone: '',
-  roster: Array.from({ length: rows }, emptyRow), pkg: null, logo: '', logoName: '', note: '',
+  roster: Array.from({ length: rows }, emptyRow), pkg: null, logo: '', logoName: '', keepLogoUrl: '', note: '',
   acceptJersey: false, acceptRules: false, acceptTerms: false, result: null,
 });
 
@@ -254,7 +255,10 @@ export default function BookingFlow({
                           const p = r.prereg;
                           let roster = d.roster;
                           const filled = roster.filter((x) => x.firstName || x.lastName).length;
-                          if (p?.squadSize && filled === 0) {
+                          if (p?.roster?.length && filled === 0) {
+                            // Kader des aktuellen Teams übernehmen (auf Mindestgröße auffüllen).
+                            roster = [...p.roster.map((x) => ({ ...x })), ...Array.from({ length: Math.max(0, cfg.minSquad - p.roster.length) }, emptyRow)];
+                          } else if (p?.squadSize && filled === 0) {
                             const n = Math.min(cfg.maxSquad, Math.max(cfg.minSquad, p.squadSize));
                             roster = Array.from({ length: n }, emptyRow);
                           }
@@ -268,6 +272,7 @@ export default function BookingFlow({
                             contactName: d.contactName || p?.contactName || '',
                             phone: d.phone || p?.phone || '',
                             roster,
+                            keepLogoUrl: d.logo ? d.keepLogoUrl : p?.logoUrl || d.keepLogoUrl,
                           };
                         });
                         go(r.booking && r.booking.status !== 'cancelled' ? 'status' : 'team');
@@ -345,7 +350,7 @@ function EmailStep({ cfg, draft, patch, intro, onSent }: { cfg: BookingPublicCon
         title={intro === 'prereg' ? 'Schon vorregistriert?' : 'Los geht’s'}
         text={
           intro === 'prereg'
-            ? 'Gib die E-Mail-Adresse ein, mit der ihr euch vorregistriert habt. Nach der Bestätigung füllen wir eure Angaben automatisch aus.'
+            ? 'Gib die E-Mail-Adresse ein, mit der ihr euch vorregistriert habt – oder die bei eurem Team als Manager hinterlegt ist. Nach der Bestätigung füllen wir eure Angaben automatisch aus, bei aktuellen Teams inklusive Kader, Rückennummern und Logo.'
             : 'Bestätige zuerst deine E-Mail-Adresse. Warst du schon vorregistriert, übernehmen wir deine Angaben automatisch.'
         }
       />
@@ -441,8 +446,9 @@ function TeamStep({ draft, patch, onNext }: { draft: BookingDraft; patch: (p: Pa
         <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} className="mb-5 flex items-start gap-3 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-3.5 py-3">
           <Sparkles className="w-4 h-4 text-emerald-300 shrink-0 mt-0.5" />
           <p className="text-[13.5px] text-emerald-100/90 leading-snug min-w-0">
-            {p.captain ? 'Willkommen zurück, Captain! ' : 'Wir haben eure Vorregistrierung gefunden. '}
-            Eure Angaben sind schon eingetragen – bitte kurz prüfen.
+            {p.current
+              ? <>Willkommen zurück, <strong>{p.teamName}</strong>! Euer aktueller Kader mit Rückennummern{p.logoUrl ? ' und euer Logo' : ''} ist schon übernommen – ihr könnt alles bearbeiten, Spieler entfernen oder neue eintragen.</>
+              : <>{p.captain ? 'Willkommen zurück, Captain! ' : 'Wir haben eure Vorregistrierung gefunden. '}Eure Angaben sind schon eingetragen – bitte kurz prüfen.</>}
           </p>
         </motion.div>
       )}
@@ -608,13 +614,13 @@ function PackageStep({ cfg, draft, patch, earlyActive, onNext }: { cfg: BookingP
             <input ref={file} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,application/pdf" className="hidden" onChange={(e) => pickLogo(e.target.files?.[0])} />
             <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[.035] p-3">
               <div className="shrink-0 w-14 h-14 rounded-xl bg-white/[.06] grid place-items-center overflow-hidden">
-                {busy ? <Loader2 className="w-5 h-5 animate-spin text-white/60" /> : draft.logo.startsWith('data:image') ? <img src={draft.logo} alt="" className="w-full h-full object-contain" /> : draft.logo ? <FileText className="w-6 h-6 text-[#8FA8FF]" /> : <Upload className="w-5 h-5 text-white/40" />}
+                {busy ? <Loader2 className="w-5 h-5 animate-spin text-white/60" /> : draft.logo.startsWith('data:image') ? <img src={draft.logo} alt="" className="w-full h-full object-contain" /> : draft.logo ? <FileText className="w-6 h-6 text-[#8FA8FF]" /> : draft.keepLogoUrl ? <img src={draft.keepLogoUrl} alt="" className="w-full h-full object-contain" /> : <Upload className="w-5 h-5 text-white/40" />}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-[13.5px] text-white/85 truncate">{draft.logoName || 'Noch kein Logo gewählt'}</div>
+                <div className="text-[13.5px] text-white/85 truncate">{draft.logoName || (draft.keepLogoUrl ? 'Euer aktuelles Logo (übernommen)' : 'Noch kein Logo gewählt')}</div>
                 <div className="flex flex-wrap gap-2 mt-1.5">
-                  <button type="button" onClick={(e) => { e.preventDefault(); file.current?.click(); }} className="px-3 py-1.5 rounded-lg text-[12px] font-bold text-white bg-white/10 hover:bg-white/15 cursor-pointer">{draft.logo ? 'Ändern' : 'Datei wählen'}</button>
-                  {draft.logo && <button type="button" onClick={(e) => { e.preventDefault(); patch({ logo: '', logoName: '' }); }} className="px-3 py-1.5 rounded-lg text-[12px] font-bold text-white/60 hover:text-rose-300 cursor-pointer">Entfernen</button>}
+                  <button type="button" onClick={(e) => { e.preventDefault(); file.current?.click(); }} className="px-3 py-1.5 rounded-lg text-[12px] font-bold text-white bg-white/10 hover:bg-white/15 cursor-pointer">{draft.logo || draft.keepLogoUrl ? 'Ändern' : 'Datei wählen'}</button>
+                  {(draft.logo || draft.keepLogoUrl) && <button type="button" onClick={(e) => { e.preventDefault(); patch({ logo: '', logoName: '', keepLogoUrl: '' }); }} className="px-3 py-1.5 rounded-lg text-[12px] font-bold text-white/60 hover:text-rose-300 cursor-pointer">Entfernen</button>}
                 </div>
               </div>
             </div>
@@ -654,7 +660,7 @@ function ConfirmStep({
     try {
       const r = await submitBooking({
         token: draft.token, teamName: draft.teamName.trim(), contactName: draft.contactName.trim(), phone: draft.phone.trim(),
-        package: draft.pkg, roster: draft.roster, logo: draft.logo || undefined, note: draft.note.trim(),
+        package: draft.pkg, roster: draft.roster, logo: draft.logo || undefined, keepLogo: !draft.logo && !!draft.keepLogoUrl, note: draft.note.trim(),
         acceptJersey: draft.acceptJersey, acceptRules: draft.acceptRules, acceptTerms: draft.acceptTerms,
       });
       onDone({ booking: r.booking, reference: r.reference });
@@ -684,7 +690,7 @@ function ConfirmStep({
         <Row label="Kontakt" value={<>{draft.contactName}<br /><span className="text-white/55">{draft.email} · {draft.phone}</span></>} edit="team" />
         <Row label="Kader" value={<>{draft.roster.length} Spieler{captain ? ` · Kapitän: ${captain.firstName} ${captain.lastName}` : ''}</>} edit="roster" />
         <Row label="Paket" value={<>{price.label} · <strong>{euro(price.cents)}</strong></>} edit="package" />
-        <Row label="Logo" value={draft.logoName || 'wird nachgereicht'} edit="package" />
+        <Row label="Logo" value={draft.logoName || (draft.keepLogoUrl ? 'aktuelles Logo' : 'wird nachgereicht')} edit="package" />
       </div>
 
       <div className="space-y-2.5">
