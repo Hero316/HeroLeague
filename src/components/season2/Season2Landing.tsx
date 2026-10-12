@@ -436,12 +436,8 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
           <motion.div className="absolute inset-y-0 w-1/3 -skew-x-12" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.07), transparent)' }} initial={{ left: '-40%' }} animate={{ left: ['-40%', '140%'] }} transition={{ duration: 6, repeat: Infinity, repeatDelay: 3, ease: 'easeInOut' }} />
 
           <motion.div className="relative w-full max-w-6xl mx-auto px-4 pb-14 sm:pb-20 pt-32" style={{ y: titleY, opacity: titleOpacity }}>
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.6 }} className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[.06] backdrop-blur px-3 py-1.5 text-[11px] font-mono uppercase tracking-[.2em] text-white/80">
-              <span className="relative flex w-2 h-2"><span className="absolute inset-0 rounded-full bg-[#D7FF3B] animate-ping opacity-70" /><span className="relative w-2 h-2 rounded-full bg-[#D7FF3B]" /></span>
-              {soldOut ? 'Ausgebucht' : canBook ? 'Buchung geöffnet' : 'Anmeldung startet bald'}
-            </motion.div>
             {cfg.maxTeams ? (
-              <motion.div initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.25, duration: 0.5 }} className="mt-3">
+              <motion.div initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.15, duration: 0.5 }}>
                 <SlotsBadge left={cfg.slotsLeft ?? 0} total={cfg.maxTeams} soldOut={soldOut} />
               </motion.div>
             ) : null}
