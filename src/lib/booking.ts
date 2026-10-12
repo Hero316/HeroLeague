@@ -168,7 +168,7 @@ export const bookingAdminInvite = (emails: string[]) => post<{ ok: boolean; sent
 
 // --- Anzeige-Helfer ---------------------------------------------------------
 export const euro = (cents: number) =>
-  `${(cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €`;
+  `${(cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}\u00a0€`;
 
 // „Mo., 26. Oktober 2026, 23:59 Uhr" (deutsche Zeit).
 export function formatDeadline(iso: string): string {
