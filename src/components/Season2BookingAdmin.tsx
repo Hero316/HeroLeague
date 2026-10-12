@@ -37,7 +37,7 @@ const STATUS: Record<BookingStatus, { label: string; cls: string; icon: typeof C
   paid: { label: 'Bezahlt', cls: 'text-emerald-300 bg-emerald-400/10 border-emerald-300/25', icon: CheckCircle2 },
   cancelled: { label: 'Storniert', cls: 'text-rose-300 bg-rose-500/10 border-rose-400/25', icon: Ban },
 };
-const PKG_LABEL = (b: BookingAdminRow) => (b.package === 'one' ? '1 Season' : b.earlyBird ? '2 Seasons · Early Bird' : '2 Seasons');
+const PKG_LABEL = (b: BookingAdminRow) => (b.package === 'one' ? 'Eine Season' : b.earlyBird ? 'Doppelpaket · Early Bird' : 'Doppelpaket');
 const isPdf = (url: string) => /\.pdf($|\?)/i.test(url);
 const fullName = (r: { firstName: string; lastName: string }) => `${r.firstName} ${r.lastName}`.trim();
 
@@ -712,9 +712,9 @@ function SettingsTab({ cfg, onSaved }: { cfg: BookingAdminConfig; onSaved: (c: B
   const ebState = !until ? 'unset' : Date.now() >= new Date(until).getTime() ? 'ended' : 'running';
   const missing = [
     !until && 'Enddatum des Early Bird',
-    !c.payLinkOne && 'Revolut-Link 1 Season',
-    !c.payLinkTwo && 'Revolut-Link 2 Seasons',
-    !c.payLinkTwoEarly && 'Revolut-Link Early Bird',
+    !c.payLinkOne && 'Zahlungslink Season 2',
+    !c.payLinkTwo && 'Zahlungslink Doppelpaket',
+    !c.payLinkTwoEarly && 'Zahlungslink Early Bird',
   ].filter(Boolean) as string[];
 
   const save = async (extra: { newKey?: boolean } = {}) => {
@@ -763,7 +763,7 @@ function SettingsTab({ cfg, onSaved }: { cfg: BookingAdminConfig; onSaved: (c: B
           {ebState === 'ended' && <><strong>Early Bird ist vorbei</strong> (seit {formatDeadline(until)}). Die Seite zeigt automatisch {euro(c.priceTwo)} für zwei Seasons.</>}
           {ebState === 'unset' && <><strong>Noch kein Enddatum.</strong> Ohne Enddatum gibt es keinen Early-Bird-Preis – zwei Seasons kosten dann {euro(c.priceTwo)}.</>}
           <div className="mt-1.5 text-[12px] opacity-80">
-            Läuft automatisch ab: Danach zeigt die Website den normalen Preis und neue Buchungen bekommen den {euro(c.priceTwo)}-Link. Ihr bekommt 24 Std. vorher und beim Ablauf eine Erinnerungsmail – dann bitte den {euro(c.priceTwoEarly)}-Link in Revolut deaktivieren.
+            Läuft automatisch ab: Danach zeigt die Website den normalen Preis und neue Buchungen bekommen den {euro(c.priceTwo)}-Link. Ihr bekommt 24 Std. vorher und beim Ablauf eine Erinnerungsmail – dann bitte den {euro(c.priceTwoEarly)}-Link beim Zahlungsanbieter (PayPal/Revolut) deaktivieren.
           </div>
         </div>
         <L label="Was zählt für die Frist?">
@@ -776,15 +776,18 @@ function SettingsTab({ cfg, onSaved }: { cfg: BookingAdminConfig; onSaved: (c: B
       </section>
 
       <section className="space-y-3">
-        <h4 className="text-[11px] font-mono uppercase tracking-wider text-hl-dim">Preise &amp; Revolut-Zahlungslinks</h4>
+        <h4 className="text-[11px] font-mono uppercase tracking-wider text-hl-dim">Preise &amp; Zahlungslinks (PayPal, Revolut …)</h4>
         <div className="grid grid-cols-3 gap-2">
-          <L label="1 Season €">{euroInput('priceOne')}</L>
-          <L label="2 Seasons €">{euroInput('priceTwo')}</L>
+          <L label="Eine Season €">{euroInput('priceOne')}</L>
+          <L label="Doppelpaket €">{euroInput('priceTwo')}</L>
           <L label="Early Bird €">{euroInput('priceTwoEarly')}</L>
         </div>
-        <L label="Link 1 Season" hint="Revolut Business → Zahlungslink mit genau diesem Betrag anlegen und hier einfügen."><input value={c.payLinkOne} onChange={(e) => set({ payLinkOne: e.target.value })} placeholder="https://checkout.revolut.com/…" className={inp} /></L>
-        <L label="Link 2 Seasons"><input value={c.payLinkTwo} onChange={(e) => set({ payLinkTwo: e.target.value })} placeholder="https://…" className={inp} /></L>
-        <L label="Link 2 Seasons · Early Bird"><input value={c.payLinkTwoEarly} onChange={(e) => set({ payLinkTwoEarly: e.target.value })} placeholder="https://…" className={inp} /></L>
+        <p className="text-[12px] text-hl-soft leading-relaxed">
+          Je Preis ein Link mit <strong className="text-white">genau diesem Betrag</strong>. PayPal: <span className="font-mono text-white">https://paypal.me/EUERNAME/550EUR</span> – der Betrag steht hinten im Link und ist dann vorausgefüllt. Später geht genauso ein Revolut-Zahlungslink. Die Teams sehen nur „Jetzt bezahlen“, keinen Anbieternamen.
+        </p>
+        <L label={`Link Eine Season (${euro(c.priceOne)})`}><input value={c.payLinkOne} onChange={(e) => set({ payLinkOne: e.target.value })} placeholder={`https://paypal.me/…/${c.priceOne / 100}EUR`} className={inp} /></L>
+        <L label={`Link Doppelpaket (${euro(c.priceTwo)})`}><input value={c.payLinkTwo} onChange={(e) => set({ payLinkTwo: e.target.value })} placeholder={`https://paypal.me/…/${c.priceTwo / 100}EUR`} className={inp} /></L>
+        <L label={`Link Doppelpaket · Early Bird (${euro(c.priceTwoEarly)})`}><input value={c.payLinkTwoEarly} onChange={(e) => set({ payLinkTwoEarly: e.target.value })} placeholder={`https://paypal.me/…/${c.priceTwoEarly / 100}EUR`} className={inp} /></L>
       </section>
 
       <section className="space-y-3">

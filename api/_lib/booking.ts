@@ -6,7 +6,7 @@
 // Ablauf: E-Mail → 6-stelliger Code → signiertes Kurzzeit-Token. Mit dem Token
 // werden Daten einer früheren Vorregistrierung vorausgefüllt und die Buchung
 // abgeschickt (Team, Kader, Logo, Paket, Pflicht-Zustimmungen). Zahlung per
-// Revolut-Zahlungslink; der Eingang wird im Backoffice bestätigt.
+// Zahlungslink (z. B. Revolut); der Eingang wird im Backoffice bestätigt.
 // ===========================================================================
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHmac, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -43,7 +43,7 @@ export interface BookingConfig {
   priceOne: number; // Cent
   priceTwo: number;
   priceTwoEarly: number;
-  payLinkOne: string; // Revolut-Zahlungslinks je Preis
+  payLinkOne: string; // Zahlungslinks je Preis (Anbieter egal, z. B. Revolut)
   payLinkTwo: string;
   payLinkTwoEarly: string;
   minSquad: number;
@@ -99,7 +99,7 @@ const DEFAULT_CONFIG: BookingConfig = {
   payLinkTwoEarly: '',
   minSquad: 8,
   maxSquad: 14,
-  termsVersion: 'Entwurf v1',
+  termsVersion: 'Fassung 1',
   terms: DEFAULT_TERMS,
   rules: DEFAULT_RULES,
 };
@@ -129,11 +129,17 @@ function earlyBirdActive(cfg: BookingConfig, at = Date.now()): boolean {
   if (!until) return false;
   return at < new Date(until).getTime();
 }
+// „Season 2" → „Season 2 + Season 3" (Doppelpaket).
+export function twoSeasonsLabel(cfg: BookingConfig): string {
+  const l = cfg.seasonLabel;
+  const next = /\d+\s*$/.test(l) ? l.replace(/(\d+)\s*$/, (m) => String(Number(m) + 1)) : 'Folge-Season';
+  return `${l} + ${next}`;
+}
 function priceFor(cfg: BookingConfig, pkg: PackageId, early: boolean) {
-  if (pkg === 'one') return { cents: cfg.priceOne, link: cfg.payLinkOne, label: `1 Season (${cfg.seasonLabel})` };
+  if (pkg === 'one') return { cents: cfg.priceOne, link: cfg.payLinkOne, label: cfg.seasonLabel };
   return early
-    ? { cents: cfg.priceTwoEarly, link: cfg.payLinkTwoEarly || cfg.payLinkTwo, label: '2 Seasons · Early Bird' }
-    : { cents: cfg.priceTwo, link: cfg.payLinkTwo, label: '2 Seasons' };
+    ? { cents: cfg.priceTwoEarly, link: cfg.payLinkTwoEarly || cfg.payLinkTwo, label: `${twoSeasonsLabel(cfg)} · Early Bird` }
+    : { cents: cfg.priceTwo, link: cfg.payLinkTwo, label: twoSeasonsLabel(cfg) };
 }
 const eur = (cents: number) => `${(cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €`;
 
@@ -176,16 +182,16 @@ async function earlyBirdReminders(cfg: BookingConfig) {
     try {
       await sendBrandedMail({
         to: NOTIFY_TO, from: FROM,
-        subject: ended ? `⏰ Early Bird ${cfg.seasonLabel} ist abgelaufen – Revolut-Link prüfen` : `⏰ Early Bird ${cfg.seasonLabel} endet morgen`,
+        subject: ended ? `⏰ Early Bird ${cfg.seasonLabel} ist abgelaufen – Zahlungslink prüfen` : `⏰ Early Bird ${cfg.seasonLabel} endet morgen`,
         layout: {
           preheader: ended ? 'Ab jetzt gilt der normale Preis für das Zweierpaket.' : `Endet ${when} Uhr.`,
           heading: ended ? 'Early Bird ist abgelaufen' : 'Early Bird endet bald', accent: ACCENT, accentDark: ACCENT_DARK,
           intro: ended
-            ? `Seit ${when} Uhr kostet das Paket für zwei Seasons auf der Website automatisch ${eur(cfg.priceTwo)} statt ${eur(cfg.priceTwoEarly)}.`
+            ? `Seit ${when} Uhr kostet ${twoSeasonsLabel(cfg)} auf der Website automatisch ${eur(cfg.priceTwo)} statt ${eur(cfg.priceTwoEarly)}.`
             : `Der Early Bird (${eur(cfg.priceTwoEarly)} für zwei Seasons) endet ${when} Uhr. Danach stellt die Website automatisch auf ${eur(cfg.priceTwo)} um.`,
           bodyHtml: ended
             ? p(`<strong>Bitte jetzt erledigen:</strong>`) +
-              p(`1. In Revolut Business den Early-Bird-Zahlungslink (${eur(cfg.priceTwoEarly)}) deaktivieren, damit niemand mehr darüber zahlt.`) +
+              p(`1. Beim Zahlungsanbieter (z. B. Revolut) den Early-Bird-Zahlungslink (${eur(cfg.priceTwoEarly)}) deaktivieren, damit niemand mehr darüber zahlt.`) +
               p(`2. Prüfen, dass der Link für ${eur(cfg.priceTwo)} im Backoffice eingetragen ist (neue Buchungen bekommen automatisch diesen Link).`) +
               p(`3. Offene Early-Bird-Buchungen ohne Zahlung: <strong>${openEarly}</strong>${cfg.deadlineBasis === 'payment' ? ' – für die Frist zählt der Zahlungseingang, diese Teams müssten jetzt eigentlich den normalen Preis zahlen.' : ' – sie haben rechtzeitig gebucht und behalten den Early-Bird-Preis.'}`)
             : p(`Wenn ihr noch einmal an die Vorregistrierten erinnern wollt, ist jetzt der richtige Moment.`) +
@@ -193,7 +199,7 @@ async function earlyBirdReminders(cfg: BookingConfig) {
           footnote: 'Automatische Erinnerung aus dem Backoffice „Season 2 – Buchungen".',
         },
         text: ended
-          ? `Early Bird ist abgelaufen (${when}). Bitte den Revolut-Link für ${eur(cfg.priceTwoEarly)} deaktivieren und prüfen, dass der ${eur(cfg.priceTwo)}-Link eingetragen ist. Offene Early-Bird-Buchungen: ${openEarly}.`
+          ? `Early Bird ist abgelaufen (${when}). Bitte den Zahlungslink für ${eur(cfg.priceTwoEarly)} deaktivieren und prüfen, dass der ${eur(cfg.priceTwo)}-Link eingetragen ist. Offene Early-Bird-Buchungen: ${openEarly}.`
           : `Early Bird endet ${when}. Offene Early-Bird-Buchungen: ${openEarly}.`,
       });
     } catch {
@@ -702,8 +708,8 @@ export function inviteMail(cfg: BookingConfig, link: string, base = 'https://her
   </td></tr>
   ${untilTxt ? `<tr><td style="padding:0 6px 22px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#0B1236" style="background:#0B1236;border:1px solid #2F5BFF;border-radius:16px;padding:14px 16px;">
-      <div style="${T}font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#8FA8FF;">Early Bird · Paket für zwei Seasons</div>
-      <div style="${F}font-size:24px;font-weight:900;color:#ffffff;margin-top:6px;line-height:1.15;">Zwei Seasons zusammen buchen: ${eur(cfg.priceTwoEarly)} <span style="${T}font-size:14px;font-weight:400;color:#7C86A8;text-decoration:line-through;">${eur(cfg.priceTwo)}</span></div>
+      <div style="${T}font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#8FA8FF;">Early Bird · Doppelpaket</div>
+      <div style="${F}font-size:24px;font-weight:900;color:#ffffff;margin-top:6px;line-height:1.15;">${escapeHtml(twoSeasonsLabel(cfg))}: ${eur(cfg.priceTwoEarly)} <span style="${T}font-size:15px;font-weight:700;color:#F43F5E;text-decoration:line-through;">${eur(cfg.priceOne * 2)}</span></div>
       <div style="${T}font-size:13px;line-height:1.5;color:#B8C0D9;margin-top:6px;">Das sind nur ${eur(Math.round(cfg.priceTwoEarly / 2))} pro Season – eine einzelne Season kostet ${eur(cfg.priceOne)}.<br>Early Bird gilt nur bis <strong style="color:#ffffff;">${escapeHtml(untilTxt)} Uhr</strong>.</div>
     </td></tr></table>
   </td></tr>` : ''}
@@ -721,7 +727,7 @@ export function inviteMail(cfg: BookingConfig, link: string, base = 'https://her
     'Euer Vorsprung ist kurz – ein paar Stunden, vielleicht ein paar Tage. Nutzt die Chance jetzt.',
     '',
     `Jetzt Startplatz sichern: ${link}`,
-    untilTxt ? `\nEarly Bird (Paket für zwei Seasons): zwei Seasons zusammen für ${eur(cfg.priceTwoEarly)} statt ${eur(cfg.priceTwo)} – nur ${eur(Math.round(cfg.priceTwoEarly / 2))} pro Season (einzelne Season: ${eur(cfg.priceOne)}). Gilt bis ${untilTxt} Uhr.` : '',
+    untilTxt ? `\nEarly Bird (Doppelpaket): ${twoSeasonsLabel(cfg)} zusammen für ${eur(cfg.priceTwoEarly)} statt ${eur(cfg.priceOne * 2)} – nur ${eur(Math.round(cfg.priceTwoEarly / 2))} pro Season (einzelne Season: ${eur(cfg.priceOne)}). Gilt bis ${untilTxt} Uhr.` : '',
     '',
     'Euer persönlicher Vorab-Zugang – bitte nicht weiterleiten.',
   ].join('\n');
