@@ -49,7 +49,8 @@ export interface BookingSummary {
   earlyBird: boolean;
   createdAt: string;
   paidAt: string | null;
-  payLink: string;
+  payLink: string; // PayPal
+  revolutLink?: string; // Karte / Überweisung
   packageLabel: string;
   reference?: string; // Nachricht für die Zahlung: Buchungsnr. · Team · Paket
 }
@@ -135,7 +136,8 @@ export interface BookingInvitee {
 }
 
 export interface BookingAdminConfig {
-  payLink: string; // EIN Link für alle Pakete (z. B. PayPal.me)
+  payLink: string; // PayPal-Taste (PayPal.me)
+  revolutLink: string; // Taste „Karte / Überweisung" (Revolut-Link)
   published: boolean;
   open: boolean;
   preregOnly: boolean;
@@ -151,9 +153,6 @@ export interface BookingAdminConfig {
   priceOne: number;
   priceTwo: number;
   priceTwoEarly: number;
-  payLinkOne: string;
-  payLinkTwo: string;
-  payLinkTwoEarly: string;
   minSquad: number;
   maxSquad: number;
   maxTeams: number;

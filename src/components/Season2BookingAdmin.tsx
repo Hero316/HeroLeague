@@ -797,7 +797,7 @@ function SettingsTab({ cfg, onSaved }: { cfg: BookingAdminConfig; onSaved: (c: B
   const ebState = !until ? 'unset' : Date.now() >= new Date(until).getTime() ? 'ended' : 'running';
   const missing = [
     !until && 'Enddatum des Early Bird',
-    !c.payLink && (!c.payLinkOne || !c.payLinkTwo || !c.payLinkTwoEarly) && 'Zahlungslink (PayPal)',
+    !c.payLink && !c.revolutLink && 'Zahlungslink (PayPal oder Karte/Überweisung)',
   ].filter(Boolean) as string[];
 
   const save = async (extra: { newKey?: boolean } = {}) => {
@@ -846,7 +846,7 @@ function SettingsTab({ cfg, onSaved }: { cfg: BookingAdminConfig; onSaved: (c: B
           {ebState === 'ended' && <><strong>Early Bird ist vorbei</strong> (seit {formatDeadline(until)}). Die Seite zeigt automatisch {euro(c.priceTwo)} für zwei Seasons.</>}
           {ebState === 'unset' && <><strong>Noch kein Enddatum.</strong> Ohne Enddatum gibt es keinen Early-Bird-Preis – zwei Seasons kosten dann {euro(c.priceTwo)}.</>}
           <div className="mt-1.5 text-[12px] opacity-80">
-            Läuft automatisch ab: Danach zeigt die Website den normalen Preis und neue Buchungen bekommen den {euro(c.priceTwo)}-Link. Ihr bekommt 24 Std. vorher und beim Ablauf eine Erinnerungsmail – dann bitte den {euro(c.priceTwoEarly)}-Link beim Zahlungsanbieter (PayPal/Revolut) deaktivieren.
+            Läuft automatisch ab: Danach zeigt die Website den normalen Preis. Ihr bekommt 24 Std. vorher und beim Ablauf eine Erinnerungsmail. An den Zahlungslinks müsst ihr nichts ändern.
           </div>
         </div>
         <L label="Was zählt für die Frist?">
@@ -859,23 +859,21 @@ function SettingsTab({ cfg, onSaved }: { cfg: BookingAdminConfig; onSaved: (c: B
       </section>
 
       <section className="space-y-3">
-        <h4 className="text-[11px] font-mono uppercase tracking-wider text-hl-dim">Preise &amp; Zahlungslinks (PayPal, Revolut …)</h4>
+        <h4 className="text-[11px] font-mono uppercase tracking-wider text-hl-dim">Preise &amp; Zahlung</h4>
         <div className="grid grid-cols-3 gap-2">
           <L label="Eine Season €">{euroInput('priceOne')}</L>
           <L label="Doppelpaket €">{euroInput('priceTwo')}</L>
           <L label="Early Bird €">{euroInput('priceTwoEarly')}</L>
         </div>
-        <L label="Zahlungslink für alle Pakete (z. B. PayPal.me)" hint="Ein Link reicht. Betrag und Nachricht (Buchungsnummer · Team · Paket) tragen die Teams beim Bezahlen selbst ein – das wird ihnen auf der Seite und in der Mail Schritt für Schritt angezeigt.">
+        <L label="PayPal-Taste – Link (PayPal.me)">
           <input value={c.payLink} onChange={(e) => set({ payLink: e.target.value })} placeholder="https://paypal.me/EUERNAME" className={inp} />
         </L>
-        <details className="rounded-xl border border-white/10 bg-white/[.02] px-3 py-2">
-          <summary className="text-[12.5px] font-bold text-hl-mute cursor-pointer">Optional: eigener Link je Paket (überschreibt den Link oben)</summary>
-          <div className="mt-3 space-y-3">
-            <L label={`Link Eine Season (${euro(c.priceOne)})`}><input value={c.payLinkOne} onChange={(e) => set({ payLinkOne: e.target.value })} placeholder="leer = Link oben" className={inp} /></L>
-            <L label={`Link Doppelpaket (${euro(c.priceTwo)})`}><input value={c.payLinkTwo} onChange={(e) => set({ payLinkTwo: e.target.value })} placeholder="leer = Link oben" className={inp} /></L>
-            <L label={`Link Doppelpaket · Early Bird (${euro(c.priceTwoEarly)})`}><input value={c.payLinkTwoEarly} onChange={(e) => set({ payLinkTwoEarly: e.target.value })} placeholder="leer = Link oben" className={inp} /></L>
-          </div>
-        </details>
+        <L label="Taste „Karte / Überweisung“ – Link (Revolut)">
+          <input value={c.revolutLink} onChange={(e) => set({ revolutLink: e.target.value })} placeholder="https://revolut.me/EUERNAME" className={inp} />
+        </L>
+        <p className="text-[12px] text-hl-mute leading-relaxed">
+          Beim Bezahlen sehen die Teams beide Tasten nebeneinander. Leeres Feld = Taste wird nicht angezeigt. Betrag und Nachricht (Buchungsnummer · Team · Paket) tragen die Teams selbst ein – das steht Schritt für Schritt auf der Seite und in der Mail.
+        </p>
       </section>
 
       <section className="space-y-3">
