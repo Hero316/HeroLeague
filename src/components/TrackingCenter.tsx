@@ -120,6 +120,7 @@ interface EditRow {
   playerName: string;
   role: StatRole;
   counts: ActionCounts;
+  out?: boolean; // „Spielt nicht" in DIESEM Spiel – zählt nicht als Einsatz (gespeichert als role 'out')
   number?: number; // feste Trikotnummer (aus dem Kader), optional
   imageUrl?: string; // Spielerfoto aus dem Kader – damit man beim Tracken sofort weiß, wer gemeint ist
 }
@@ -430,9 +431,13 @@ export default function TrackingCenter({
       try {
         const { rows: saved, live, preview, liveMatchIds: liveIds } = await fetchDayStats(key);
         setLiveMatchIds(new Set(liveIds ?? []));
-        const savedMap: Record<string, { role: string; counts: ActionCounts }> = {};
+        const savedMap: Record<string, { role: string; counts: ActionCounts; out: boolean }> = {};
         saved.forEach((r) => {
-          savedMap[rowKey(r.matchId, r.teamId, r.playerName)] = { role: r.role, counts: normalizeCounts(r.counts) };
+          savedMap[rowKey(r.matchId, r.teamId, r.playerName)] = {
+            role: r.role === 'out' ? 'field' : r.role,
+            counts: normalizeCounts(r.counts),
+            out: r.role === 'out',
+          };
         });
         // Für den Spieltag als abwesend markierte Spieler je Team (Union über alle
         // Spiele des Tages) – so wirkt ein „Rausnehmen" im Backend spieltagsweit.
@@ -459,10 +464,11 @@ export default function TrackingCenter({
               const k = rowKey(m.id, tid, pl.name);
               const sv = savedMap[k];
               const role: StatRole = teamHasKeeper ? pl.role : (sv?.role as StatRole) || pl.role;
-              next[k] = { teamId: tid, teamName, playerName: pl.name, role, counts: sv?.counts ?? emptyCounts(), number: pl.number, imageUrl: pl.imageUrl };
+              next[k] = { teamId: tid, teamName, playerName: pl.name, role, counts: sv?.counts ?? emptyCounts(), out: sv?.out || undefined, number: pl.number, imageUrl: pl.imageUrl };
               // Korrigierte Rolle (Torwart-Zuordnung) auch in der DB festschreiben,
               // damit Auswertung/Export sie nutzen – nur bei echter Abweichung.
-              if (sv && sv.role !== role) {
+              // („Spielt nicht" bleibt dabei unangetastet.)
+              if (sv && !sv.out && sv.role !== role) {
                 saveTally({ dayKey: key, matchId: m.id, teamId: tid, playerName: pl.name, role, counts: sv.counts }).catch(() => {});
               }
             });
@@ -480,8 +486,9 @@ export default function TrackingCenter({
             teamId: r.teamId,
             teamName: resolveTeam(r.teamId)?.name ?? r.teamId,
             playerName: r.playerName,
-            role: (r.role as StatRole) || 'field',
+            role: r.role === 'keeper' ? 'keeper' : 'field',
             counts: normalizeCounts(r.counts),
+            out: r.role === 'out' || undefined,
           };
         });
         setRows(next);
@@ -559,7 +566,7 @@ export default function TrackingCenter({
           matchId,
           teamId: row.teamId,
           playerName: row.playerName,
-          role: row.role,
+          role: row.out ? 'out' : row.role,
           counts: row.counts,
         });
       } catch {
@@ -641,6 +648,20 @@ export default function TrackingCenter({
         const row = prev[k];
         if (!row) return prev;
         const updated = { ...row, role };
+        scheduleSave(k, updated, matchId);
+        return { ...prev, [k]: updated };
+      });
+    },
+    [scheduleSave]
+  );
+
+  // „Spielt nicht" für EIN Spiel an/aus (z. B. setzt jemand am Abend Spiele aus).
+  const setOut = useCallback(
+    (k: string, matchId: string, out: boolean) => {
+      setRows((prev) => {
+        const row = prev[k];
+        if (!row) return prev;
+        const updated = { ...row, out: out || undefined };
         scheduleSave(k, updated, matchId);
         return { ...prev, [k]: updated };
       });
@@ -1005,6 +1026,7 @@ export default function TrackingCenter({
               cfg={cfg}
               onDelta={applyDelta}
               onRole={setRole}
+              onOut={setOut}
               onUndo={undo}
               undoCount={undoCount >= 0 ? undoStack.current.filter((e) => e.matchId === selectedMatchId).length : 0}
               onBack={goBackLayer}
@@ -1556,6 +1578,7 @@ function MatchEditor({
   cfg,
   onDelta,
   onRole,
+  onOut,
   onUndo,
   undoCount,
   onBack,
@@ -1571,6 +1594,7 @@ function MatchEditor({
   cfg: ScoringConfig;
   onDelta: (k: string, matchId: string, action: keyof ActionCounts, delta: number) => void;
   onRole: (k: string, matchId: string, role: StatRole) => void;
+  onOut: (k: string, matchId: string, out: boolean) => void;
   onUndo: (matchId: string) => void;
   undoCount: number;
   onBack: () => void;
@@ -1695,6 +1719,7 @@ function MatchEditor({
       const team = resolveTeam(teamId);
       const teamName = team?.name ?? teamId;
       teamRows(teamId).forEach(({ k, r }) => {
+        if (r.out) return; // „Spielt nicht" → nicht in den Kader für die KI
         // Trikotnummer mitgeben, damit die KI „die Nummer 5" korrekt zuordnet.
         // Eine temporäre Tracking-Nummer schlägt dabei die Kadernummer.
         const rosterNum = team?.spielerliste?.find((p) => normName(p.name) === normName(r.playerName))?.number;
@@ -1798,6 +1823,7 @@ function MatchEditor({
                     cfg={cfg}
                     onDelta={(action, delta) => onDelta(k, match.id, action, delta)}
                     onToggleRole={() => onRole(k, match.id, r.role === 'keeper' ? 'field' : 'keeper')}
+                    onToggleOut={() => onOut(k, match.id, !r.out)}
                     displayNumber={effNumber(k, r)}
                     tempNumber={typeof numOverrides[k] === 'number'}
                     onSetNumber={(n) => setRowNumber(k, n)}
@@ -2195,6 +2221,7 @@ function PlayerCard({
   cfg,
   onDelta,
   onToggleRole,
+  onToggleOut,
   displayNumber,
   tempNumber,
   onSetNumber,
@@ -2208,6 +2235,7 @@ function PlayerCard({
   cfg: ScoringConfig;
   onDelta: (action: keyof ActionCounts, delta: number) => void;
   onToggleRole: () => void;
+  onToggleOut?: () => void; // „Spielt nicht" in diesem Spiel an/aus
   displayNumber?: number;
   tempNumber?: boolean;
   onSetNumber?: (n: number | null) => void;
@@ -2219,6 +2247,21 @@ function PlayerCard({
   const [photoOpen, setPhotoOpen] = useState(false);
   const [photoEdit, setPhotoEdit] = useState(false);
   const isKeeper = row.role === 'keeper';
+  const out = !!row.out;
+  // Feldspieler ohne eine einzige Aktion zählt automatisch NICHT als Einsatz.
+  const noAction = !out && !isKeeper && !Object.values(row.counts).some((v) => (v || 0) > 0);
+  const outBtn = onToggleOut && (
+    <button
+      type="button"
+      onClick={onToggleOut}
+      title={out ? 'Spielt doch – wieder als Einsatz zählen' : 'Hat dieses Spiel NICHT gespielt (zählt nicht als Einsatz)'}
+      className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider cursor-pointer border ${
+        out ? 'bg-rose-500/20 border-rose-400/60 text-rose-300' : 'bg-white/5 border-white/10 text-hl-faint hover:text-rose-300 hover:border-rose-400/40'
+      }`}
+    >
+      {out ? 'Spielt nicht ✕' : 'Spielt nicht'}
+    </button>
+  );
   const note = matchNote(row.counts, cfg, row.role);
   const score = rohscore(row.counts, cfg, row.role);
   const groups = isKeeper ? KEEPER_GROUPS : FIELD_GROUPS;
@@ -2229,7 +2272,7 @@ function PlayerCard({
   // und Name schnell erfassen – Aktions-Tasten wären hier nur im Weg.
   if (pro) {
     return (
-      <div className="hl-card p-2.5 min-w-0">
+      <div className={`hl-card p-2.5 min-w-0 transition-opacity ${out ? 'opacity-45' : ''}`}>
         {photoOpen && displayImage && (
           <PhotoLightbox url={displayImage} name={row.playerName} onClose={() => setPhotoOpen(false)} />
         )}
@@ -2320,12 +2363,13 @@ function PlayerCard({
             </span>
           )}
         </div>
+        {outBtn && <div className="mt-1.5">{outBtn}</div>}
       </div>
     );
   }
 
   return (
-    <div className="hl-card p-2 flex flex-col lg:flex-row gap-2 min-w-0">
+    <div className={`hl-card p-2 flex flex-col lg:flex-row gap-2 min-w-0 ${out ? 'border-dashed !border-rose-400/40' : ''}`}>
       {photoOpen && displayImage && (
         <PhotoLightbox url={displayImage} name={row.playerName} onClose={() => setPhotoOpen(false)} />
       )}
@@ -2440,6 +2484,7 @@ function PlayerCard({
             >
               {note.toFixed(1)}
             </span>
+            {outBtn}
             <button
               onClick={onToggleRole}
               title="Rolle wechseln (Feld/Torwart)"
@@ -2450,10 +2495,16 @@ function PlayerCard({
               {isKeeper ? 'Torwart' : 'Feld'}
             </button>
           </div>
+          {noAction && <div className="text-[9px] text-hl-faint leading-tight mt-1">0 Aktionen – zählt (noch) nicht als Einsatz</div>}
         </div>
       </div>
 
-      {/* Aktions-Gruppen */}
+      {out ? (
+        <div className="flex-1 min-w-0 rounded-lg border border-dashed border-rose-400/30 bg-rose-500/[.06] px-3 py-3 text-xs text-rose-200/90 flex items-center">
+          Hat dieses Spiel nicht gespielt – zählt weder bei „pro Spiel" noch bei Spielen/Siegquote. Mit „Spielt nicht ✕" wieder einwechseln.
+        </div>
+      ) : (
+      /* Aktions-Gruppen */
       <div className="flex-1 min-w-0 flex flex-wrap gap-x-2 gap-y-1.5">
         {groups.map((g) => {
           const acts = actionsOf(g);
@@ -2474,6 +2525,7 @@ function PlayerCard({
           );
         })}
       </div>
+      )}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { badRequest, isNonEmptyString } from './_lib/validate.js';
 import { sheetInfo } from './_lib/gsheets.js';
 import { exportLeagueDay, exportScoringConfig } from './_lib/sheetExport.js';
 import { readDemo } from './_lib/demo.js';
+import { rowPlayed, OUT_ROLE } from './_lib/played.js';
 import { isGeminiConfigured, uploadAudio, parseTracking, type VoiceContext, type RosterPlayer } from './_lib/gemini.js';
 
 // ===========================================================================
@@ -130,7 +131,8 @@ const saveTally = requirePermission('tracking')(async (req: VercelRequest, res: 
   if (!isNonEmptyString(b.teamId) || !isNonEmptyString(b.playerName)) {
     return badRequest(res, 'teamId und playerName sind Pflicht.');
   }
-  const role = b.role === 'keeper' ? 'keeper' : 'field';
+  // 'out' = „Spielt nicht" in diesem Spiel (Zähler bleiben erhalten, zählen aber nicht).
+  const role = b.role === 'keeper' ? 'keeper' : b.role === OUT_ROLE ? OUT_ROLE : 'field';
   const counts = sanitizeCounts(b.counts);
   await sql`
     INSERT INTO match_player_stats (day_key, match_id, team_id, player_name, role, counts, updated_at)
@@ -155,7 +157,8 @@ async function readTallyRow(
     counts: unknown;
   }[];
   if (!rows[0]) return null;
-  return { role: rows[0].role === 'keeper' ? 'keeper' : 'field', counts: sanitizeCounts(rows[0].counts) };
+  const role = rows[0].role === 'keeper' || rows[0].role === OUT_ROLE ? rows[0].role : 'field';
+  return { role, counts: sanitizeCounts(rows[0].counts) };
 }
 
 async function upsertTallyRow(
@@ -166,7 +169,7 @@ async function upsertTallyRow(
   role: string,
   counts: Record<string, number>
 ): Promise<void> {
-  const r = role === 'keeper' ? 'keeper' : 'field';
+  const r = role === 'keeper' || role === OUT_ROLE ? role : 'field';
   await sql`
     INSERT INTO match_player_stats (day_key, match_id, team_id, player_name, role, counts, updated_at)
     VALUES (${dayKey}, ${matchId}, ${teamId}, ${playerName}, ${r}, ${JSON.stringify(counts)}::jsonb, now())
@@ -270,7 +273,8 @@ const exportDay = requirePermission('tracking')(async (req: VercelRequest, res: 
       role: string;
       counts: Record<string, number>;
     }[];
-    const summary = await exportLeagueDay(dayKey, rows);
+    // „Spielt nicht"-Zeilen gehören nicht ins Sheet.
+    const summary = await exportLeagueDay(dayKey, rows.filter((r) => r.role !== OUT_ROLE));
     return res.json({ ok: true, ...summary });
   } catch (err) {
     return res.status(400).json({ error: err instanceof Error ? err.message : 'Export-Fehler' });
@@ -511,7 +515,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                    player_name AS "playerName", role, counts
             FROM match_player_stats WHERE day_key = ${key}`) as StatRow[];
           // Ganzes Event live ⇒ alles; sonst nur einzeln live geschaltete Spiele.
-          const rows = eventLive ? all : all.filter((r) => liveMatchIds.includes(r.matchId));
+          const rows = (eventLive ? all : all.filter((r) => liveMatchIds.includes(r.matchId))).filter((r) => rowPlayed(r.role, r.counts));
           if (rows.length === 0) return res.json({ rows: [], days: [] });
           return res.json({ rows, days: [key] });
         }
@@ -523,7 +527,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               SELECT day_key AS "dayKey", match_id AS "matchId", team_id AS "teamId",
                      player_name AS "playerName", role, counts
               FROM match_player_stats WHERE day_key LIKE ${'s:' + season + ':%'}`) as StatRow[];
-            return res.json({ rows, days: [] });
+            return res.json({ rows: rows.filter((r) => rowPlayed(r.role, r.counts)), days: [] });
           }
         }
         const vis = await visibleLive(viewer);
@@ -546,7 +550,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                      player_name AS "playerName", role, counts
               FROM match_player_stats
               WHERE day_key = ANY(${days}::text[]) OR match_id = ANY(${liveMatchIds}::text[])`) as StatRow[];
-        return res.json({ rows, days, preview });
+        // Nur echte Einsätze: „Spielt nicht" und Feldspieler ohne jede Aktion fallen raus.
+        return res.json({ rows: rows.filter((r) => rowPlayed(r.role, r.counts)), days, preview });
       }
 
       // ÖFFENTLICH: Fortschritt eines gerade laufenden Trackings („Das Team ist am
