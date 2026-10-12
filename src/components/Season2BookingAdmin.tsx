@@ -160,7 +160,7 @@ function BookingsTab({ cfg, teams, seasons, canEditClubs, onTeamsChanged }: { cf
     <div className="space-y-3">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         {[
-          { id: 'all' as const, l: 'Buchungen', v: String(counts.all) },
+          { id: 'all' as const, l: cfg?.maxTeams ? `Plätze vergeben (von ${cfg.maxTeams})` : 'Buchungen', v: String(counts.all - real.filter((b) => b.status === 'cancelled').length) },
           { id: 'paid' as const, l: `Bezahlt · ${euro(paidSum)}`, v: String(counts.paid) },
           { id: 'pending' as const, l: `Offen · ${euro(openSum)}`, v: String(counts.pending) },
           { id: 'test' as const, l: 'Testbuchungen', v: String(counts.test) },
@@ -340,7 +340,7 @@ function BookingDetail({
                 <Row k="Telefon" v={<a href={`tel:${b.phone}`} className="text-brand-accent-light hover:underline">{b.phone}</a>} />
                 <Row k="Gebucht am" v={fmt(b.createdAt)} />
                 <Row k="Bezahlt am" v={fmt(b.paidAt)} />
-                <Row k="Verwendungszweck" v={<span className="font-mono">{b.ref} {b.teamName}</span>} />
+                <Row k="Nachricht bei Zahlung" v={<span className="font-mono">{b.ref} · {b.teamName} · {PKG_LABEL(b).replace(' · Early Bird', '')}</span>} />
                 {b.note && <Row k="Anmerkung" v={<span className="whitespace-pre-wrap">{b.note}</span>} />}
               </div>
             </section>
@@ -581,6 +581,7 @@ function InvitesTab({ cfg }: { cfg: BookingAdminConfig | null }) {
       <div className="hl-card rounded-2xl p-3.5 space-y-2">
         <div className="flex items-center gap-2 text-[13px] font-bold text-white"><KeyRound className="w-4 h-4 text-brand-accent-light" /> Persönlicher Vorab-Link</div>
         <p className="text-[12.5px] text-hl-soft">Mit diesem Link sehen Vorregistrierte die Landingpage schon, bevor sie öffentlich ist. Er steht automatisch in der Einladungsmail.</p>
+        <p className="text-[12.5px] text-hl-soft">Es gibt <strong className="text-white">zwei Mails</strong>: Manager aktueller Teams bekommen „Euer Platz wartet“ (Kader &amp; Logo schon drin), alle anderen „Ihr seid zuerst dran – nur {cfg?.maxTeams ?? 12} Plätze“. Das wird beim Senden automatisch gewählt.</p>
         {accessLink && (
           <button onClick={async () => { try { await navigator.clipboard.writeText(accessLink); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* egal */ } }} className="w-full flex items-center gap-2 rounded-xl bg-black/30 border border-white/10 px-3 py-2.5 text-left cursor-pointer min-w-0">
             <span className="min-w-0 flex-1 font-mono text-[12px] text-white truncate">{accessLink}</span>
@@ -717,9 +718,7 @@ function SettingsTab({ cfg, onSaved }: { cfg: BookingAdminConfig; onSaved: (c: B
   const ebState = !until ? 'unset' : Date.now() >= new Date(until).getTime() ? 'ended' : 'running';
   const missing = [
     !until && 'Enddatum des Early Bird',
-    !c.payLinkOne && 'Zahlungslink Season 2',
-    !c.payLinkTwo && 'Zahlungslink Doppelpaket',
-    !c.payLinkTwoEarly && 'Zahlungslink Early Bird',
+    !c.payLink && (!c.payLinkOne || !c.payLinkTwo || !c.payLinkTwoEarly) && 'Zahlungslink (PayPal)',
   ].filter(Boolean) as string[];
 
   const save = async (extra: { newKey?: boolean } = {}) => {
@@ -787,12 +786,17 @@ function SettingsTab({ cfg, onSaved }: { cfg: BookingAdminConfig; onSaved: (c: B
           <L label="Doppelpaket €">{euroInput('priceTwo')}</L>
           <L label="Early Bird €">{euroInput('priceTwoEarly')}</L>
         </div>
-        <p className="text-[12px] text-hl-soft leading-relaxed">
-          Je Preis ein Link mit <strong className="text-white">genau diesem Betrag</strong>. PayPal: <span className="font-mono text-white">https://paypal.me/EUERNAME/550EUR</span> – der Betrag steht hinten im Link und ist dann vorausgefüllt. Später geht genauso ein Revolut-Zahlungslink. Die Teams sehen nur „Jetzt bezahlen“, keinen Anbieternamen.
-        </p>
-        <L label={`Link Eine Season (${euro(c.priceOne)})`}><input value={c.payLinkOne} onChange={(e) => set({ payLinkOne: e.target.value })} placeholder={`https://paypal.me/…/${c.priceOne / 100}EUR`} className={inp} /></L>
-        <L label={`Link Doppelpaket (${euro(c.priceTwo)})`}><input value={c.payLinkTwo} onChange={(e) => set({ payLinkTwo: e.target.value })} placeholder={`https://paypal.me/…/${c.priceTwo / 100}EUR`} className={inp} /></L>
-        <L label={`Link Doppelpaket · Early Bird (${euro(c.priceTwoEarly)})`}><input value={c.payLinkTwoEarly} onChange={(e) => set({ payLinkTwoEarly: e.target.value })} placeholder={`https://paypal.me/…/${c.priceTwoEarly / 100}EUR`} className={inp} /></L>
+        <L label="Zahlungslink für alle Pakete (z. B. PayPal.me)" hint="Ein Link reicht. Betrag und Nachricht (Buchungsnummer · Team · Paket) tragen die Teams beim Bezahlen selbst ein – das wird ihnen auf der Seite und in der Mail Schritt für Schritt angezeigt.">
+          <input value={c.payLink} onChange={(e) => set({ payLink: e.target.value })} placeholder="https://paypal.me/EUERNAME" className={inp} />
+        </L>
+        <details className="rounded-xl border border-white/10 bg-white/[.02] px-3 py-2">
+          <summary className="text-[12.5px] font-bold text-hl-mute cursor-pointer">Optional: eigener Link je Paket (überschreibt den Link oben)</summary>
+          <div className="mt-3 space-y-3">
+            <L label={`Link Eine Season (${euro(c.priceOne)})`}><input value={c.payLinkOne} onChange={(e) => set({ payLinkOne: e.target.value })} placeholder="leer = Link oben" className={inp} /></L>
+            <L label={`Link Doppelpaket (${euro(c.priceTwo)})`}><input value={c.payLinkTwo} onChange={(e) => set({ payLinkTwo: e.target.value })} placeholder="leer = Link oben" className={inp} /></L>
+            <L label={`Link Doppelpaket · Early Bird (${euro(c.priceTwoEarly)})`}><input value={c.payLinkTwoEarly} onChange={(e) => set({ payLinkTwoEarly: e.target.value })} placeholder="leer = Link oben" className={inp} /></L>
+          </div>
+        </details>
       </section>
 
       <section className="space-y-3">
@@ -800,8 +804,11 @@ function SettingsTab({ cfg, onSaved }: { cfg: BookingAdminConfig; onSaved: (c: B
         <div className="grid grid-cols-2 gap-2">
           <L label="Saison-Name"><input value={c.seasonLabel} onChange={(e) => set({ seasonLabel: e.target.value })} className={inp} /></L>
           <L label="Start-Info"><input value={c.startInfo} onChange={(e) => set({ startInfo: e.target.value })} className={inp} /></L>
+          <L label="Zeitraum dieser Season"><input value={c.seasonDates} onChange={(e) => set({ seasonDates: e.target.value })} placeholder="März – Juli 2027" className={inp} /></L>
+          <L label="Zeitraum Folge-Season"><input value={c.nextSeasonDates} onChange={(e) => set({ nextSeasonDates: e.target.value })} placeholder="Oktober 2027 – Januar 2028" className={inp} /></L>
           <L label="Kader min."><input type="number" min={1} max={30} value={c.minSquad} onChange={(e) => set({ minSquad: Number(e.target.value) || 1 })} className={inp} /></L>
           <L label="Kader max."><input type="number" min={1} max={40} value={c.maxSquad} onChange={(e) => set({ maxSquad: Number(e.target.value) || 1 })} className={inp} /></L>
+          <L label="Startplätze gesamt" hint="Danach „Ausgebucht“ (zählt offene + bezahlte Buchungen, keine stornierten/Test)."><input type="number" min={1} max={200} value={c.maxTeams} onChange={(e) => set({ maxTeams: Number(e.target.value) || 1 })} className={inp} /></L>
         </div>
       </section>
 

@@ -19,7 +19,7 @@ import { S2 } from './theme';
 // versehentlichen Schließen nichts verloren geht.
 // ===========================================================================
 
-export type Step = 'email' | 'code' | 'status' | 'team' | 'roster' | 'package' | 'confirm' | 'done';
+export type Step = 'email' | 'code' | 'status' | 'soldout' | 'team' | 'roster' | 'package' | 'confirm' | 'done';
 
 export interface BookingDraft {
   email: string;
@@ -275,12 +275,17 @@ export default function BookingFlow({
                             keepLogoUrl: d.logo ? d.keepLogoUrl : p?.logoUrl || d.keepLogoUrl,
                           };
                         });
-                        go(r.booking && r.booking.status !== 'cancelled' ? 'status' : 'team');
+                        go(r.booking && r.booking.status !== 'cancelled' ? 'status' : r.soldOut ? 'soldout' : 'team');
                       }}
                       onBack={() => go('email', -1)}
                     />
                   )}
                   {step === 'status' && draft.existing && <StatusStep booking={draft.existing} cfg={cfg} />}
+                  {step === 'soldout' && (
+                    <div>
+                      <StepHead icon={Users} title="Leider ausgebucht" text={`Alle ${cfg.maxTeams ?? ''} Startplätze für ${cfg.seasonLabel} sind vergeben. Wird ein Platz wieder frei, melden wir uns bei euch.`} />
+                    </div>
+                  )}
                   {step === 'team' && <TeamStep draft={draft} patch={patch} onNext={() => go('roster')} />}
                   {step === 'roster' && <RosterStep cfg={cfg} draft={draft} patch={patch} onNext={() => go('package')} />}
                   {step === 'package' && <PackageStep cfg={cfg} draft={draft} patch={patch} earlyActive={earlyActive} onNext={() => go('confirm')} />}
@@ -424,7 +429,7 @@ function StatusStep({ booking, cfg }: { booking: BookingSummary; cfg: BookingPub
           ? `Die Zahlung für „${booking.teamName}" ist eingegangen – euer Startplatz für ${cfg.seasonLabel} ist fix.`
           : `Zu dieser E-Mail gibt es bereits eine verbindliche Buchung für „${booking.teamName}". Es fehlt nur noch die Zahlung.`}
       />
-      <PaymentCard booking={booking} reference={`${booking.ref} ${booking.teamName}`} />
+      <PaymentCard booking={booking} reference={booking.reference || `${booking.ref} · ${booking.teamName} · ${booking.packageLabel}`} />
     </div>
   );
 }
@@ -577,7 +582,7 @@ function PackageStep({ cfg, draft, patch, earlyActive, onNext }: { cfg: BookingP
   const two = priceOf(cfg, 'two', earlyActive);
   const options: { id: PackageId; title: string; sub: string; cents: number; strike?: number; badge?: string }[] = [
     { id: 'two', title: twoSeasonsLabel(cfg.seasonLabel), sub: `${earlyActive ? 'Early Bird · ' : ''}nur ${euro(Math.round(two.cents / 2))} pro Season`, cents: two.cents, strike: cfg.prices.one * 2, badge: earlyActive ? `Early Bird · −${euro(cfg.prices.two - cfg.prices.twoEarly)}` : 'Bester Preis' },
-    { id: 'one', title: cfg.seasonLabel, sub: 'Eine Season', cents: cfg.prices.one },
+    { id: 'one', title: cfg.seasonLabel, sub: cfg.seasonDates ? `Eine Season · ${cfg.seasonDates}` : 'Eine Season', cents: cfg.prices.one },
   ];
   return (
     <div>
@@ -718,18 +723,41 @@ function ConfirmStep({
   );
 }
 
-function PaymentCard({ booking, reference }: { booking: BookingSummary; reference: string }) {
+// Kopierbares Feld (Betrag / Nachricht).
+function CopyField({ label, value, big = false }: { label: string; value: string; big?: boolean }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(reference);
+      await navigator.clipboard.writeText(value);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
       /* egal */
     }
   };
+  return (
+    <button type="button" onClick={copy} className="w-full flex items-center gap-2 rounded-xl bg-black/35 border border-white/15 px-3.5 py-3 text-left cursor-pointer hover:border-white/30">
+      <span className="min-w-0 flex-1">
+        <span className="block text-[10.5px] font-mono uppercase tracking-[.14em] text-white/45">{label}</span>
+        <span className={`block font-mono text-white [overflow-wrap:anywhere] ${big ? 'text-[20px] font-bold' : 'text-[14px]'}`}>{value}</span>
+      </span>
+      <span className={`shrink-0 inline-flex items-center gap-1 text-[11px] font-bold ${copied ? 'text-emerald-300' : 'text-white/60'}`}>
+        {copied ? <><Check className="w-4 h-4" /> Kopiert</> : <><Copy className="w-4 h-4" /> Kopieren</>}
+      </span>
+    </button>
+  );
+}
+
+function PaymentCard({ booking, reference }: { booking: BookingSummary; reference: string }) {
   const paid = booking.status === 'paid';
+  const amount = (booking.priceCents / 100).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const isPayPal = /paypal\./i.test(booking.payLink);
+  const Step = ({ n, children }: { n: number; children: React.ReactNode }) => (
+    <div className="flex items-start gap-3">
+      <span className="shrink-0 w-7 h-7 rounded-full grid place-items-center font-display font-black text-[15px] text-[#06091A]" style={{ background: S2.volt }}>{n}</span>
+      <div className="min-w-0 flex-1 pt-0.5">{children}</div>
+    </div>
+  );
   return (
     <div className="rounded-3xl border border-white/10 overflow-hidden" style={{ background: 'linear-gradient(160deg,rgba(47,91,255,.18),rgba(255,255,255,.03))' }}>
       <div className="p-5">
@@ -741,23 +769,32 @@ function PaymentCard({ booking, reference }: { booking: BookingSummary; referenc
         </div>
       </div>
       {!paid && (
-        <div className="px-5 pb-5 space-y-3">
-          <div>
-            <div className="text-[11px] font-mono uppercase tracking-[.14em] text-white/45 mb-1.5">Verwendungszweck / Notiz bei der Zahlung</div>
-            <button type="button" onClick={copy} className="w-full flex items-center gap-2 rounded-xl bg-black/30 border border-white/10 px-3.5 py-3 text-left cursor-pointer hover:border-white/25">
-              <span className="min-w-0 flex-1 font-mono text-[14px] text-white break-all">{reference}</span>
-              <span className="shrink-0 text-white/60">{copied ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}</span>
-            </button>
-            <p className="text-[12px] text-white/45 mt-1.5">Bitte genau so angeben, damit wir eure Zahlung zuordnen können.</p>
+        <div className="px-5 pb-5 space-y-4">
+          <div className="rounded-2xl border-2 border-[#D7FF3B]/50 bg-[#D7FF3B]/[.06] px-3.5 py-3">
+            <div className="text-[12px] font-black uppercase tracking-wider text-[#D7FF3B]">Wichtig beim Bezahlen</div>
+            <p className="text-[13px] text-white/80 leading-snug mt-1">
+              Betrag und Nachricht müsst ihr beim Bezahlen <strong className="text-white">selbst eintragen</strong> – nur so können wir eure Zahlung eurem Team und Paket zuordnen.
+            </p>
           </div>
-          {booking.payLink ? (
-            <a href={booking.payLink} target="_blank" rel="noopener noreferrer" className="w-full inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-4 font-display font-black uppercase tracking-wide text-[16px] text-[#06091A]" style={{ background: S2.volt }}>
-              <CreditCard className="w-5 h-5" /> Jetzt {euro(booking.priceCents)} bezahlen
-            </a>
-          ) : (
-            <p className="text-[13px] text-white/60 rounded-xl bg-white/[.04] px-3.5 py-3">Den Zahlungslink schicken wir dir in Kürze per E-Mail.</p>
-          )}
-          <p className="text-[12px] text-white/40 leading-snug">Bezahlt wird bequem online über den Link. Sobald die Zahlung eingegangen ist, bekommt ihr eine Bestätigung und euer Startplatz ist fix.</p>
+          <Step n={1}>
+            <div className="text-[13.5px] font-bold text-white mb-1.5">Diesen Betrag eingeben</div>
+            <CopyField label="Betrag in Euro" value={amount} big />
+          </Step>
+          <Step n={2}>
+            <div className="text-[13.5px] font-bold text-white mb-1.5">Diese Nachricht angeben</div>
+            <CopyField label="Nachricht / Verwendungszweck" value={reference} />
+            <p className="text-[11.5px] text-white/45 mt-1.5">Buchungsnummer · Teamname · Paket</p>
+          </Step>
+          <Step n={3}>
+            {booking.payLink ? (
+              <a href={booking.payLink} target="_blank" rel="noopener noreferrer" className="w-full inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-4 font-display font-black uppercase tracking-wide text-[16px] text-[#06091A]" style={{ background: S2.volt }}>
+                <CreditCard className="w-5 h-5" /> {isPayPal ? 'Weiter zu PayPal' : 'Jetzt bezahlen'}
+              </a>
+            ) : (
+              <p className="text-[13px] text-white/60 rounded-xl bg-white/[.04] px-3.5 py-3">Den Zahlungslink schicken wir dir in Kürze per E-Mail.</p>
+            )}
+          </Step>
+          <p className="text-[12px] text-white/40 leading-snug">Sobald die Zahlung eingegangen ist, bekommt ihr eine Bestätigung und euer Startplatz ist fix. Alles steht auch nochmal in eurer Bestätigungsmail.</p>
         </div>
       )}
     </div>

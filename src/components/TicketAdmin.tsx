@@ -158,6 +158,19 @@ export default function TicketAdmin() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [onlyOpen, setOnlyOpen] = useState(false); // nur noch nicht (vollständig) Eingecheckte
+  // Sortierung der Liste: alphabetisch (Einlass) oder nach Anmeldezeit. Wird pro Gerät gemerkt.
+  const [sortBy, setSortBy] = useState<'name' | 'newest' | 'oldest'>(() => {
+    try {
+      const v = localStorage.getItem('hl-ticket-sort');
+      return v === 'newest' || v === 'oldest' ? v : 'name';
+    } catch {
+      return 'name';
+    }
+  });
+  const changeSort = (v: 'name' | 'newest' | 'oldest') => {
+    setSortBy(v);
+    try { localStorage.setItem('hl-ticket-sort', v); } catch { /* egal */ }
+  };
   const [pickId, setPickId] = useState<string | null>(null); // Anmeldung, deren „wie viele da?"-Auswahl offen ist
   // Es können mehrere Veranstaltungen parallel offen sein (Opening Night,
   // Testspieltag, Spieltag …) – hier wird ausgewählt, welche man gerade sieht.
@@ -314,14 +327,13 @@ export default function TicketAdmin() {
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'zuschauer-tickets.csv'; a.click(); URL.revokeObjectURL(url);
   };
 
-  const confirmedRows = useMemo(
-    // Alphabetisch – an der Tür sucht man nach Namen, nicht nach Anmeldezeit.
-    () =>
-      (data?.rows.filter((r) => r.status === 'confirmed') ?? []).slice().sort((a, b) =>
-        a.name.localeCompare(b.name, 'de')
-      ),
-    [data]
-  );
+  const confirmedRows = useMemo(() => {
+    // Standard alphabetisch (an der Tür sucht man nach Namen) – wahlweise nach Anmeldezeit.
+    const t = (r: { verifiedAt: string | null; createdAt: string }) => new Date(r.verifiedAt || r.createdAt).getTime() || 0;
+    return (data?.rows.filter((r) => r.status === 'confirmed') ?? []).slice().sort((a, b) =>
+      sortBy === 'newest' ? t(b) - t(a) : sortBy === 'oldest' ? t(a) - t(b) : a.name.localeCompare(b.name, 'de'),
+    );
+  }, [data, sortBy]);
   const arrivedPersons = confirmedRows.reduce((sum, r) => sum + arrivedOf(r), 0);
   const soldPersons = confirmedRows.reduce((sum, r) => sum + r.quantity, 0);
   // Gesucht wird in Name, E-Mail UND Code – der Gast nennt irgendeines davon.
@@ -613,7 +625,7 @@ export default function TicketAdmin() {
               </button>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setOnlyOpen((v) => !v)}
               className={`px-3 py-1.5 rounded-lg text-[12px] font-bold cursor-pointer border transition-colors ${
@@ -622,6 +634,17 @@ export default function TicketAdmin() {
             >
               Nur offene
             </button>
+            <div className="flex rounded-lg bg-white/[.04] border border-white/10 p-0.5" role="group" aria-label="Sortierung">
+              {([['name', 'A–Z'], ['newest', 'Neueste'], ['oldest', 'Älteste']] as const).map(([v, l]) => (
+                <button
+                  key={v}
+                  onClick={() => changeSort(v)}
+                  className={`px-2.5 py-1 rounded-md text-[12px] font-bold cursor-pointer transition-colors ${sortBy === v ? 'bg-[#E6238E]/20 text-[#ff7ac4]' : 'text-hl-mute hover:text-white'}`}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
             <span className="text-[12px] text-hl-mute tabular-nums ml-auto">
               <b className="text-brand-accent-light">{arrivedPersons}</b> / {soldPersons} Personen da
             </span>

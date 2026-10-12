@@ -183,7 +183,7 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
   const [step, setStep] = useState<Step>('email');
   const [intro, setIntro] = useState<'prereg' | 'new'>('new');
   const [draft, setDraft] = useState<BookingDraft>(() => newDraft(8));
-  const [preregHint, setPreregHint] = useState<'' | 'prereg' | 'soon'>('');
+  const [preregHint, setPreregHint] = useState<'' | 'prereg' | 'soon' | 'soldout'>('');
   const [scrolled, setScrolled] = useState(false);
 
   // Vorab-Zugang aus dem Link übernehmen (und aus der Adresszeile entfernen).
@@ -272,8 +272,10 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
   // Vorregistrierung noch offen? (im Backoffice abschaltbar) – sonst keine
   // „Vorregistrieren"-Tasten mehr, nur „Startet in Kürze".
   const preregOpen = cfg?.signupOpen !== false;
-  const mainLabel = canBook ? 'Startplatz buchen' : preregOpen ? 'Unverbindlich vorregistrieren' : 'Buchung startet in Kürze';
-  const mainAction = () => (canBook ? openFlow('new') : preregOpen ? onNavigate('/anmeldung') : setPreregHint('soon'));
+  // Ausgebucht: keine neuen Buchungen mehr (bestehende können ihren Status sehen).
+  const soldOut = Boolean(cfg?.soldOut) && canBook;
+  const mainLabel = soldOut ? 'Ausgebucht' : canBook ? 'Startplatz buchen' : preregOpen ? 'Unverbindlich vorregistrieren' : 'Buchung startet in Kürze';
+  const mainAction = () => (soldOut ? setPreregHint('soldout') : canBook ? openFlow('new') : preregOpen ? onNavigate('/anmeldung') : setPreregHint('soon'));
   const openFlow = (mode: 'prereg' | 'new', pkg?: PackageId) => {
     if (!canBook) {
       setPreregHint(mode === 'prereg' ? 'prereg' : preregOpen ? '' : 'soon');
@@ -373,10 +375,14 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
   // Doppel-Karte zeigt immer den Preis, der beim Buchen JETZT gilt; der
   // Early-Bird-Sticker verschwindet automatisch mit Ablauf der Frist.
   const twoNow = earlyActive ? cfg.prices.twoEarly : cfg.prices.two;
-  const plans: { id: PackageId; title: string; sub: string; cents: number; strike?: number; perSeason: number; badge?: string; hot?: boolean; points: string[] }[] = [
-    { id: 'one', title: cfg.seasonLabel, sub: 'Eine Season', cents: cfg.prices.one, perSeason: cfg.prices.one, points: ['Startplatz für eine Season', 'Tracking, Statistiken & Spielerkarten', 'Alle Awards & Highlights'] },
+  const plans: { id: PackageId; title: string; sub: string; dates: string[]; cents: number; strike?: number; perSeason: number; badge?: string; hot?: boolean; points: string[] }[] = [
+    { id: 'one', title: cfg.seasonLabel, sub: 'Eine Season', dates: cfg.seasonDates ? [cfg.seasonDates] : [], cents: cfg.prices.one, perSeason: cfg.prices.one, points: ['Startplatz für eine Season', 'Tracking, Statistiken & Spielerkarten', 'Alle Awards & Highlights'] },
     {
       id: 'two', title: twoLabel, sub: 'Doppelpaket',
+      dates: [
+        cfg.seasonDates ? `${cfg.seasonLabel}: ${cfg.seasonDates}` : '',
+        cfg.nextSeasonDates ? `${nextLabel}: ${cfg.nextSeasonDates}` : '',
+      ].filter(Boolean),
       cents: twoNow, strike: cfg.prices.one * 2, perSeason: Math.round(twoNow / 2),
       badge: earlyActive ? undefined : 'Bester Preis', hot: true,
       points: [
@@ -432,7 +438,7 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
           <motion.div className="relative w-full max-w-6xl mx-auto px-4 pb-14 sm:pb-20 pt-32" style={{ y: titleY, opacity: titleOpacity }}>
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.6 }} className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[.06] backdrop-blur px-3 py-1.5 text-[11px] font-mono uppercase tracking-[.2em] text-white/80">
               <span className="relative flex w-2 h-2"><span className="absolute inset-0 rounded-full bg-[#D7FF3B] animate-ping opacity-70" /><span className="relative w-2 h-2 rounded-full bg-[#D7FF3B]" /></span>
-              {canBook ? 'Buchung geöffnet' : 'Anmeldung startet bald'}
+              {soldOut ? 'Ausgebucht' : canBook ? (cfg.maxTeams ? `Nur ${cfg.maxTeams} Plätze · noch ${cfg.slotsLeft ?? cfg.maxTeams} frei` : 'Buchung geöffnet') : cfg.maxTeams ? `Anmeldung startet bald · nur ${cfg.maxTeams} Plätze` : 'Anmeldung startet bald'}
             </motion.div>
             <h1 className="mt-5 font-display font-black uppercase tracking-tight leading-[.8]">
               <span className="block overflow-hidden">
@@ -467,7 +473,9 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
             <AnimatePresence>
               {preregHint && (
                 <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-4 max-w-xl rounded-2xl border border-white/15 bg-black/40 backdrop-blur px-4 py-3 text-[14px] text-white/80">
-                  {preregHint === 'prereg'
+                  {preregHint === 'soldout'
+                    ? `Alle ${cfg.maxTeams ?? ''} Startplätze sind vergeben. Wenn ihr schon gebucht habt, seht ihr euren Status unter „Schon vorregistriert?".`
+                    : preregHint === 'prereg'
                     ? 'Super, dass ihr dabei seid! Sobald die verbindliche Buchung startet, meldet ihr euch hier mit der E-Mail eurer Vorregistrierung an – alle Angaben sind dann schon ausgefüllt. Wir sagen euch per E-Mail Bescheid.'
                     : 'Die verbindliche Buchung startet in Kürze – schaut bald wieder vorbei. Alle Infos und Preise findet ihr schon hier auf der Seite.'}
                 </motion.div>
@@ -618,6 +626,14 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
           <div className="absolute inset-x-0 top-24 h-[420px] pointer-events-none" style={{ background: 'radial-gradient(60% 60% at 50% 40%, rgba(47,91,255,.22), transparent 70%)' }} />
           <SectionHead center kicker="Preise pro Team" title={<>Sichert euch<br /><span className="text-[#D7FF3B]">euren Platz.</span></>} text={`Ein Preis pro Team – egal wie groß euer Kader ist. Wer ${twoLabel} zusammen bucht, spart.`} />
 
+          {cfg.maxTeams ? (
+            <Reveal className="flex justify-center mb-6">
+              <div className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-bold border ${soldOut ? 'border-rose-400/40 bg-rose-500/10 text-rose-200' : 'border-white/15 bg-white/[.05] text-white'}`}>
+                <Users className="w-4 h-4 text-[#D7FF3B]" />
+                {soldOut ? `Ausgebucht – alle ${cfg.maxTeams} Plätze vergeben` : canBook ? <>Nur {cfg.maxTeams} Startplätze · <span className="text-[#D7FF3B]">noch {cfg.slotsLeft ?? cfg.maxTeams} frei</span></> : `Nur ${cfg.maxTeams} Startplätze`}
+              </div>
+            </Reveal>
+          ) : null}
           {earlyActive && cfg.earlyBirdUntil && (
             <Reveal className="max-w-xl mx-auto mb-8">
               <div className="rounded-3xl border border-[#D7FF3B]/35 p-4 sm:p-5" style={{ background: 'linear-gradient(140deg, rgba(215,255,59,.12), rgba(47,91,255,.10))' }}>
@@ -658,7 +674,14 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
                   )}
                   <div className="text-[12px] font-mono uppercase tracking-[.16em] text-white/50">{pl.sub}</div>
                   <div className={`font-display font-black uppercase text-white text-[30px] leading-none mt-1 ${pl.id === 'two' && earlyActive ? 'pr-24 sm:pr-20' : ''}`}>{pl.title}</div>
-                  <div className="mt-6 flex items-end gap-2 flex-wrap">
+                  {pl.dates.length > 0 && (
+                    <div className={`mt-2 space-y-0.5 ${pl.id === 'two' && earlyActive ? 'pr-24 sm:pr-20' : ''}`}>
+                      {pl.dates.map((d) => (
+                        <div key={d} className="flex items-center gap-1.5 text-[12.5px] text-white/55"><Clock className="w-3.5 h-3.5 shrink-0 text-[#8FA8FF]" /> {d}</div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="mt-5 flex items-end gap-2 flex-wrap">
                     <span className="font-display font-black text-[56px] leading-none tabular-nums">{euro(pl.cents)}</span>
                     {pl.strike && <span className="text-[20px] font-bold text-rose-500 line-through decoration-2 tabular-nums mb-1.5">{euro(pl.strike)}</span>}
                   </div>
@@ -669,11 +692,12 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
                     ))}
                   </ul>
                   <button
-                    onClick={() => openFlow('new', pl.id)}
+                    onClick={() => (soldOut ? setPreregHint('soldout') : openFlow('new', pl.id))}
+                    disabled={soldOut}
                     className={`mt-7 w-full inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-4 font-display font-black uppercase tracking-wide text-[16px] cursor-pointer active:scale-[.98] transition-transform ${pl.hot ? 'text-[#06091A]' : 'text-white border border-white/20 hover:bg-white/10'}`}
                     style={pl.hot ? { background: S2.volt } : undefined}
                   >
-                    {canBook ? 'Jetzt buchen' : preregOpen ? 'Vorregistrieren' : 'Startet in Kürze'} <ArrowRight className="w-4 h-4" />
+                    {soldOut ? 'Ausgebucht' : canBook ? 'Jetzt buchen' : preregOpen ? 'Vorregistrieren' : 'Startet in Kürze'} <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
               </Reveal>
