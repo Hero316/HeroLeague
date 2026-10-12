@@ -48,7 +48,11 @@ export function publishMatch(matchId: string, live: boolean): Promise<{ days: st
 }
 
 // Alle Zeilen eines Spieltags/Abends (+ ob er live ist, + einzeln live geschaltete Spiele).
-export function fetchDayStats(dayKey: string): Promise<{ rows: MatchPlayerStat[]; live: boolean; preview?: boolean; liveMatchIds?: string[] }> {
+// Gespeicherte Tracking-Zeile im Tracking Center: role 'out' = „Spielt nicht"
+// in diesem Spiel (taucht in den öffentlichen Daten gar nicht erst auf).
+export type StoredStatRow = Omit<MatchPlayerStat, 'role'> & { role: MatchPlayerStat['role'] | 'out' };
+
+export function fetchDayStats(dayKey: string): Promise<{ rows: StoredStatRow[]; live: boolean; preview?: boolean; liveMatchIds?: string[] }> {
   return apiFetch(`/api/stats?resource=day&day=${encodeURIComponent(dayKey)}`);
 }
 
@@ -131,7 +135,7 @@ export function exportScoringToSheet(
 }
 
 // Eine Spieler-Zeile (Zähler) speichern.
-export function saveTally(row: MatchPlayerStat): Promise<{ ok: boolean }> {
+export function saveTally(row: StoredStatRow): Promise<{ ok: boolean }> {
   return apiFetch('/api/stats?resource=tally', { method: 'POST', body: JSON.stringify(row) });
 }
 

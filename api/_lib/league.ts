@@ -12,7 +12,10 @@ const PTS_DRAW = 1; // 0,1 pro eingesetztem Spieler bei Unentschieden
 // Spielerstatistiken (Tore, Assists, Einsätze, MOTM, Wertungspunkte) aus Kadern und den
 // Torschützen-/Bester-Spieler-Einträgen der beendeten Spiele ableiten – nie manuell gepflegt.
 // Die `points` werden intern in Zehnteln akkumuliert und erst am Ende in echte Punkte umgerechnet.
-export function calculatePlayers(teams: Team[], matches: Match[]): PlayerStat[] {
+// `notPlayed`: Einsätze, die laut Tracking NICHT gespielt wurden (Schlüssel
+// "matchId::teamId::Spieler" – „Spielt nicht" bzw. Feldspieler ohne Aktion).
+// Sie zählen wie eine Abwesenheit in diesem Spiel (Spiele, Siegquote, Punkte).
+export function calculatePlayers(teams: Team[], matches: Match[], notPlayed?: Set<string>): PlayerStat[] {
   // Verschlüsselt nach Team UND Name: Gleiche Spielernamen in verschiedenen Teams
   // (z.B. zwei „Jonathan Siegel") sind unterschiedliche Personen und dürfen NICHT
   // zu einem Eintrag verschmelzen. Innerhalb eines Teams ist der Name eindeutig.
@@ -141,7 +144,8 @@ export function calculatePlayers(teams: Team[], matches: Match[]): PlayerStat[] 
         const stat = playerMap[keyOf(team.id, player.name)];
         if (!stat) return;
         const isAbsent =
-          absentKeys.has(`${team.id}::${player.name}`) && !contributed.has(`${team.id}::${player.name}`);
+          (absentKeys.has(`${team.id}::${player.name}`) || !!notPlayed?.has(`${m.id}::${team.id}::${player.name}`)) &&
+          !contributed.has(`${team.id}::${player.name}`);
         if (!isAbsent) {
           stat.matchesPlayed += 1;
           stat.points += resultPoints(side);
