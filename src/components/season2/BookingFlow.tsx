@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft, ArrowRight, X, Mail, KeyRound, Users, Shirt, Package, ShieldCheck, Loader2, AlertCircle,
-  Plus, Trash2, Crown, Hand, Upload, FileText, CheckCircle2, Copy, Check, CreditCard, Sparkles, ChevronDown, Info,
+  Plus, Trash2, Crown, Hand, Upload, FileText, CheckCircle2, Copy, Check, CreditCard, Sparkles, ChevronDown, Info, NotebookPen,
 } from 'lucide-react';
 import { goBackLayer, useBackClose } from '../../lib/backStack';
 import { useTurnstile } from '../../lib/register';
@@ -133,11 +133,18 @@ export function rosterProblem(rows: RosterRow[], min: number, max: number): stri
   return '';
 }
 
+// „Season 2" → „Season 2 + Season 3" (Doppelpaket).
+export function twoSeasonsLabel(seasonLabel: string): string {
+  const next = /\d+\s*$/.test(seasonLabel) ? seasonLabel.replace(/(\d+)\s*$/, (m) => String(Number(m) + 1)) : 'Folge-Season';
+  return `${seasonLabel} + ${next}`;
+}
+
 export function priceOf(cfg: BookingPublicConfig, pkg: PackageId, earlyActive: boolean) {
-  if (pkg === 'one') return { cents: cfg.prices.one, label: `1 Season · ${cfg.seasonLabel}`, early: false };
+  if (pkg === 'one') return { cents: cfg.prices.one, label: cfg.seasonLabel, early: false };
+  const two = twoSeasonsLabel(cfg.seasonLabel);
   return earlyActive
-    ? { cents: cfg.prices.twoEarly, label: '2 Seasons · Early Bird', early: true }
-    : { cents: cfg.prices.two, label: '2 Seasons', early: false };
+    ? { cents: cfg.prices.twoEarly, label: `${two} · Early Bird`, early: true }
+    : { cents: cfg.prices.two, label: two, early: false };
 }
 
 export default function BookingFlow({
@@ -334,7 +341,7 @@ function EmailStep({ cfg, draft, patch, intro, onSent }: { cfg: BookingPublicCon
   return (
     <form onSubmit={send}>
       <StepHead
-        icon={intro === 'prereg' ? Sparkles : Mail}
+        icon={intro === 'prereg' ? NotebookPen : Mail}
         title={intro === 'prereg' ? 'Schon vorregistriert?' : 'Los geht’s'}
         text={
           intro === 'prereg'
@@ -475,7 +482,7 @@ function RosterStep({ cfg, draft, patch, onNext }: { cfg: BookingPublicConfig; d
       <div className="mb-4 flex items-start gap-2.5 rounded-2xl border border-[#5B7FFF]/30 bg-[#2F5BFF]/10 px-3.5 py-3">
         <Info className="w-4 h-4 text-[#8FA8FF] shrink-0 mt-0.5" />
         <p className="text-[12.5px] text-white/75 leading-snug min-w-0">
-          Rückennummern sind Pflicht und müssen <strong className="text-white">vor dem ersten Einsatz</strong> hinterlegt sein. Kennt ihr sie schon, tragt sie gleich ein – jede Nummer nur einmal.
+          Rückennummer optional – kennt ihr sie schon, tragt sie gleich ein (jede Nummer nur einmal). Sonst könnt ihr sie später nachreichen.
         </p>
       </div>
       <div className="space-y-2.5">
@@ -563,8 +570,8 @@ function PackageStep({ cfg, draft, patch, earlyActive, onNext }: { cfg: BookingP
   };
   const two = priceOf(cfg, 'two', earlyActive);
   const options: { id: PackageId; title: string; sub: string; cents: number; strike?: number; badge?: string }[] = [
-    { id: 'two', title: '2 Seasons', sub: earlyActive ? `Early Bird · statt ${euro(cfg.prices.two)}` : `${euro(Math.round(cfg.prices.two / 2))} pro Season`, cents: two.cents, strike: earlyActive ? cfg.prices.two : undefined, badge: earlyActive ? 'Early Bird' : 'Beliebteste Wahl' },
-    { id: 'one', title: '1 Season', sub: cfg.seasonLabel, cents: cfg.prices.one },
+    { id: 'two', title: twoSeasonsLabel(cfg.seasonLabel), sub: `${earlyActive ? 'Early Bird · ' : ''}nur ${euro(Math.round(two.cents / 2))} pro Season`, cents: two.cents, strike: cfg.prices.one * 2, badge: earlyActive ? `Early Bird · −${euro(cfg.prices.two - cfg.prices.twoEarly)}` : 'Bester Preis' },
+    { id: 'one', title: cfg.seasonLabel, sub: 'Eine Season', cents: cfg.prices.one },
   ];
   return (
     <div>
@@ -582,7 +589,7 @@ function PackageStep({ cfg, draft, patch, earlyActive, onNext }: { cfg: BookingP
                   <div className="text-[12.5px] text-white/55 mt-1 truncate">{o.sub}</div>
                 </div>
                 <div className="shrink-0 text-right">
-                  {o.strike && <div className="text-[12px] text-white/40 line-through tabular-nums">{euro(o.strike)}</div>}
+                  {o.strike && <div className="text-[12.5px] font-bold text-rose-500 line-through decoration-2 tabular-nums">{euro(o.strike)}</div>}
                   <div className="font-display font-black text-white text-[24px] leading-none tabular-nums">{euro(o.cents)}</div>
                 </div>
               </div>
@@ -682,7 +689,7 @@ function ConfirmStep({
 
       <div className="space-y-2.5">
         <Expand title="Regelwerk lesen" text={cfg.rules} />
-        <Expand title={`Teilnahmebedingungen lesen (${cfg.termsVersion})`} text={cfg.terms} />
+        <Expand title="Teilnahmebedingungen lesen" text={cfg.terms} />
         <CheckBox checked={draft.acceptJersey} onChange={(v) => patch({ acceptJersey: v })}>{cfg.jerseyCheckbox}</CheckBox>
         <CheckBox checked={draft.acceptRules} onChange={(v) => patch({ acceptRules: v })}>Ich habe das Regelwerk gelesen und akzeptiere es.</CheckBox>
         <CheckBox checked={draft.acceptTerms} onChange={(v) => patch({ acceptTerms: v })}>{cfg.termsCheckbox}</CheckBox>
@@ -744,7 +751,7 @@ function PaymentCard({ booking, reference }: { booking: BookingSummary; referenc
           ) : (
             <p className="text-[13px] text-white/60 rounded-xl bg-white/[.04] px-3.5 py-3">Den Zahlungslink schicken wir dir in Kürze per E-Mail.</p>
           )}
-          <p className="text-[12px] text-white/40 leading-snug">Bezahlung über Revolut – per Karte, ohne eigenes Revolut-Konto. Sobald die Zahlung eingegangen ist, bekommt ihr eine Bestätigung und euer Startplatz ist fix.</p>
+          <p className="text-[12px] text-white/40 leading-snug">Bezahlt wird bequem online über den Link. Sobald die Zahlung eingegangen ist, bekommt ihr eine Bestätigung und euer Startplatz ist fix.</p>
         </div>
       )}
     </div>

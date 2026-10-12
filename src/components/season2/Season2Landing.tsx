@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, MotionConfig, animate, useInView, useScroll, useTransform } from 'motion/react';
 import {
-  ArrowRight, ArrowLeft, Sparkles, Activity, IdCard, Tv, Trophy, BarChart3, Camera, Shirt, Mail, Users, CreditCard,
-  CheckCircle2, ChevronDown, Clock, Lock, Eye, ShieldCheck, Hash, Zap,
+  ArrowRight, ArrowLeft, NotebookPen, Activity, IdCard, Tv, Trophy, BarChart3, Camera, Shirt, Mail, Users, CreditCard,
+  CheckCircle2, ChevronDown, Clock, Lock, Eye, ShieldCheck, Zap,
 } from 'lucide-react';
 import type { HeroImages, HighlightsConfig, Match, MatchPlayerStat, PlayerStat, Team } from '../../types';
 import {
@@ -47,7 +47,7 @@ function Reveal({ children, delay = 0, className = '' }: { children: React.React
 }
 
 // Zahl, die beim Sichtbarwerden hochzählt (und bei neuen Daten weiterzählt).
-function Counter({ value, suffix = '' }: { value: number; suffix?: string }) {
+function Counter({ value, suffix = '', decimals = 0 }: { value: number; suffix?: string; decimals?: number }) {
   const ref = useRef<HTMLSpanElement | null>(null);
   const inView = useInView(ref, { once: true, margin: '-40px' });
   const [n, setN] = useState(0);
@@ -59,24 +59,31 @@ function Counter({ value, suffix = '' }: { value: number; suffix?: string }) {
       ease: [0.16, 1, 0.3, 1],
       onUpdate: (v) => {
         shown.current = v;
-        setN(Math.round(v));
+        setN(v);
       },
     });
     return () => c.stop();
   }, [inView, value]);
-  return <span ref={ref} className="tabular-nums">{n.toLocaleString('de-DE')}{suffix}</span>;
+  return <span ref={ref} className="tabular-nums">{n.toLocaleString('de-DE', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}{suffix}</span>;
 }
 
-function Marquee({ children, duration = 40, reverse = false }: { children: React.ReactNode; duration?: number; reverse?: boolean }) {
+// Endloses Laufband. Der Inhalt wird mehrfach aneinandergereiht, damit auch
+// auf sehr breiten Monitoren nie eine Lücke entsteht.
+function Marquee({ children, duration = 40, reverse = false, copies = 4 }: { children: React.ReactNode; duration?: number; reverse?: boolean; copies?: number }) {
+  const half = (hidden: boolean) => (
+    <div className="flex shrink-0" aria-hidden={hidden || undefined}>
+      {Array.from({ length: copies }, (_, i) => <Fragment key={i}>{children}</Fragment>)}
+    </div>
+  );
   return (
     <div className="relative overflow-hidden">
       <motion.div
         className="flex w-max"
         animate={{ x: reverse ? ['-50%', '0%'] : ['0%', '-50%'] }}
-        transition={{ duration, ease: 'linear', repeat: Infinity }}
+        transition={{ duration: duration * copies, ease: 'linear', repeat: Infinity }}
       >
-        <div className="flex shrink-0">{children}</div>
-        <div className="flex shrink-0" aria-hidden="true">{children}</div>
+        {half(false)}
+        {half(true)}
       </motion.div>
     </div>
   );
@@ -222,18 +229,24 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
     return Boolean(cfg?.earlyBirdUntil && Date.now() < new Date(cfg.earlyBirdUntil).getTime());
   }, [cfg, tick]);
 
-  // Echte Zahlen aus Season 1.
+  // Echte Zahlen aus Season 1 – aussagekräftig als Werte pro Spiel.
   const stats = useMemo(() => {
     const done = matches.filter((m) => m.status === 'beendet' && m.homeScore !== null && m.awayScore !== null);
     const goals = done.reduce((s, m) => s + (m.homeScore ?? 0) + (m.awayScore ?? 0), 0);
     const squad = teams.reduce((s, t) => s + (t.spielerliste?.length ?? 0), 0);
-    const actions = trackingRows.reduce((s, r) => s + Object.values(r.counts ?? {}).reduce((a, v) => a + (typeof v === 'number' ? v : 0), 0), 0);
+    const perMatch = new Map<string, number>();
+    for (const r of trackingRows) {
+      const n = Object.values(r.counts ?? {}).reduce((a, v) => a + (typeof v === 'number' ? v : 0), 0);
+      perMatch.set(r.matchId, (perMatch.get(r.matchId) ?? 0) + n);
+    }
+    const tracked = [...perMatch.values()].filter((n) => n > 0);
+    const actions = tracked.reduce((a, n) => a + n, 0);
     return [
-      { label: 'Teams', value: teams.length, icon: Users },
-      { label: 'Spieler', value: squad, icon: Shirt },
-      { label: 'Spiele', value: done.length, icon: Activity },
-      { label: 'Tore', value: goals, icon: Trophy },
-      { label: 'Getrackte Aktionen', value: actions, icon: BarChart3 },
+      { label: 'Teams', value: teams.length, decimals: 0, icon: Users },
+      { label: 'Spieler', value: squad, decimals: 0, icon: Shirt },
+      { label: 'Spiele', value: done.length, decimals: 0, icon: Activity },
+      { label: 'Tore pro Spiel', value: done.length ? goals / done.length : 0, decimals: 1, icon: Trophy },
+      { label: 'Getrackte Aktionen pro Spiel', value: tracked.length ? Math.round(actions / tracked.length) : 0, decimals: 0, icon: BarChart3 },
     ].filter((x) => x.value > 0);
   }, [teams, matches, trackingRows]);
 
@@ -319,8 +332,12 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
 
   const seasonWord = cfg.seasonLabel.replace(/\s*\S+$/, '') || 'Season';
   const seasonNum = cfg.seasonLabel.match(/\S+$/)?.[0] ?? '2';
-  const saveTwo = cfg.prices.one * 2 - cfg.prices.two;
-  const saveEarly = cfg.prices.one * 2 - cfg.prices.twoEarly;
+  const nextLabel = /\d+\s*$/.test(cfg.seasonLabel) ? cfg.seasonLabel.replace(/(\d+)\s*$/, (m) => String(Number(m) + 1)) : 'Folge-Season';
+  const twoLabel = `${cfg.seasonLabel} + ${nextLabel}`;
+  const ebSave = cfg.prices.two - cfg.prices.twoEarly;
+  const shortDeadline = cfg.earlyBirdUntil
+    ? new Date(cfg.earlyBirdUntil).toLocaleString('de-DE', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }).replace(',', ',') + ' Uhr'
+    : '';
   const deadlineTxt = cfg.earlyBirdUntil ? formatDeadline(cfg.earlyBirdUntil) : '';
   const earlyEnded = Boolean(cfg.earlyBirdUntil) && !earlyActive;
 
@@ -329,19 +346,18 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
     { icon: IdCard, title: 'Eure eigene Spielerkarte', text: 'Jeder Spieler bekommt eine Karte im FIFA-Style – mit Werten, die sich aus seinen echten Leistungen berechnen.' },
     { icon: BarChart3, title: 'Live-Tabelle & Statistiken', text: 'Tabelle, Torschützen, Vorlagen, Torhüter-Ranking: alles automatisch und sofort nach dem Spiel online.' },
     { icon: Trophy, title: 'Awards & HERO ONE', text: 'Spieler des Spieltags, Torwart des Spieltags, Golden Glove, Torschützenkönig – Leistung wird gefeiert.' },
-    { icon: Tv, title: 'Livestream', text: 'Spieltage laufen live auf Twitch – Familie, Freunde und Fans sind von überall dabei.' },
+    { icon: Tv, title: 'Livestream', text: 'Spieltage laufen live auf unserer Website, auf Twitch und vielem mehr – Familie, Freunde und Fans sind von überall dabei.' },
     { icon: Camera, title: 'Fotos & Highlights', text: 'Highlights und Bilder von den Spieltagen – auf der Website und zum Teilen für euer Team.' },
   ];
 
   const faq = [
     { q: 'Was bedeutet „verbindlich buchen"?', a: `Mit dem Abschluss der Buchung sichert ihr euch verbindlich einen Startplatz. ${cfg.bindingNotice}` },
-    { q: 'Wie bezahlen wir?', a: 'Nach der Buchung bekommt ihr einen Revolut-Zahlungslink – bezahlt wird bequem per Karte, ein Revolut-Konto braucht ihr nicht. Gebt bei der Zahlung eure Buchungsnummer und euren Teamnamen als Verwendungszweck an.' },
+    { q: 'Wie bezahlen wir?', a: 'Nach der Buchung bekommt ihr direkt einen Zahlungslink – bezahlt wird bequem online. Gebt bei der Zahlung eure Buchungsnummer und euren Teamnamen als Verwendungszweck an.' },
     { q: 'Wann ist unser Startplatz fix?', a: 'Sobald eure Zahlung bei uns eingegangen ist. Dann bekommt ihr eine Bestätigung per E-Mail.' },
     { q: 'Bis wann gilt der Early Bird?', a: deadlineTxt
-      ? `Der Early-Bird-Preis von ${euro(cfg.prices.twoEarly)} gilt nur für das Paket mit zwei Seasons und endet am ${deadlineTxt}. ${cfg.deadlineBasis === 'payment' ? 'Maßgeblich ist der Zahlungseingang bis zu diesem Zeitpunkt.' : 'Maßgeblich ist der verbindliche Buchungsabschluss bis zu diesem Zeitpunkt.'} Danach kostet das Zweierpaket ${euro(cfg.prices.two)}.`
-      : `Der Early-Bird-Preis von ${euro(cfg.prices.twoEarly)} gilt nur für kurze Zeit ab dem Start der Buchung – und nur für das Paket mit zwei Seasons. Den genauen Stichtag geben wir mit der Öffnung bekannt.` },
+      ? `Der Early-Bird-Preis von ${euro(cfg.prices.twoEarly)} gilt nur für das Doppelpaket ${twoLabel} und endet am ${deadlineTxt}. ${cfg.deadlineBasis === 'payment' ? 'Maßgeblich ist der Zahlungseingang bis zu diesem Zeitpunkt.' : 'Maßgeblich ist der verbindliche Buchungsabschluss bis zu diesem Zeitpunkt.'} Danach kostet ${twoLabel} ${euro(cfg.prices.two)}.`
+      : `Der Early-Bird-Preis von ${euro(cfg.prices.twoEarly)} gilt nur für kurze Zeit ab dem Start der Buchung – und nur für das Doppelpaket ${twoLabel}. Den genauen Stichtag geben wir mit der Öffnung bekannt.` },
     { q: 'Wir haben uns schon vorregistriert – was jetzt?', a: 'Klickt auf „Schon vorregistriert?" und gebt die E-Mail-Adresse eurer Vorregistrierung ein. Nach der Bestätigung per Code sind eure Angaben schon eingetragen – ihr ergänzt nur noch Kader, Logo und Paket.' },
-    { q: 'Brauchen wir eigene Trikots?', a: 'Ja. Ab Season 2 sind einheitliche Teamtrikots mit gut lesbaren, kontrastreichen Rückennummern Pflicht. Jede Nummer ist im Team nur einmal vergeben und fest einem Spieler zugeordnet.' },
     { q: 'Können wir den Kader später ändern?', a: 'Ja. Änderungen und Nachmeldungen müssen vor dem jeweiligen Einsatz gemeldet werden – inklusive Rückennummer.' },
     { q: 'Was passiert, wenn eine Season ausfällt?', a: 'Findet eine gebuchte Season nicht statt, wird der auf diese Season entfallende bereits gezahlte Teilnahmebeitrag erstattet. Alle Details stehen in den Teilnahmebedingungen.' },
   ];
@@ -350,23 +366,24 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
     { icon: Mail, title: 'E-Mail bestätigen', text: 'Code eingeben – Vorregistrierte sind sofort ausgefüllt.' },
     { icon: Users, title: 'Team & Kader', text: 'Teamname, Ansprechpartner, Spieler mit Rückennummer.' },
     { icon: ShieldCheck, title: 'Verbindlich buchen', text: 'Paket wählen, Logo hochladen, Bedingungen bestätigen.' },
-    { icon: CreditCard, title: 'Bezahlen', text: 'Per Revolut-Link – danach ist euer Startplatz fix.' },
+    { icon: CreditCard, title: 'Bezahlen', text: 'Per Zahlungslink – danach ist euer Startplatz fix.' },
   ];
 
-  // Zwei Karten – die 2-Seasons-Karte zeigt immer den Preis, der beim Buchen
-  // JETZT tatsächlich gilt (Early Bird während der Frist, sonst Zweierpaket).
-  const twoPoints = earlyActive
-    ? [`${euro(saveEarly)} gespart ggü. 2× einzeln (${euro(cfg.prices.one * 2)})`, 'Startplatz für zwei Seasons gesichert', `Early Bird nur bis ${deadlineTxt} – danach ${euro(cfg.prices.two)}`]
-    : earlyEnded
-      ? [`${euro(saveTwo)} gespart ggü. 2× einzeln (${euro(cfg.prices.one * 2)})`, 'Startplatz für zwei Seasons gesichert', 'Ein Preis für beide Seasons']
-      : [`${euro(saveTwo)} gespart ggü. 2× einzeln (${euro(cfg.prices.one * 2)})`, 'Startplatz für zwei Seasons gesichert', `Early Bird zum Start: ${euro(cfg.prices.twoEarly)} – nur für kurze Zeit`];
+  // Zwei Karten: Season 2 einzeln oder Season 2 + Season 3 zusammen. Die
+  // Doppel-Karte zeigt immer den Preis, der beim Buchen JETZT gilt; der
+  // Early-Bird-Sticker verschwindet automatisch mit Ablauf der Frist.
+  const twoNow = earlyActive ? cfg.prices.twoEarly : cfg.prices.two;
   const plans: { id: PackageId; title: string; sub: string; cents: number; strike?: number; perSeason: number; badge?: string; hot?: boolean; points: string[] }[] = [
-    { id: 'one', title: '1 Season', sub: cfg.seasonLabel, cents: cfg.prices.one, perSeason: cfg.prices.one, points: ['Startplatz für eine Season', 'Tracking, Statistiken & Spielerkarten', 'Alle Awards & Highlights'] },
+    { id: 'one', title: cfg.seasonLabel, sub: 'Eine Season', cents: cfg.prices.one, perSeason: cfg.prices.one, points: ['Startplatz für eine Season', 'Tracking, Statistiken & Spielerkarten', 'Alle Awards & Highlights'] },
     {
-      id: 'two', title: '2 Seasons', sub: earlyActive ? 'Early Bird' : 'Zweierpaket',
-      cents: earlyActive ? cfg.prices.twoEarly : cfg.prices.two, strike: earlyActive ? cfg.prices.two : undefined,
-      perSeason: Math.round((earlyActive ? cfg.prices.twoEarly : cfg.prices.two) / 2),
-      badge: earlyActive ? 'Early Bird' : 'Bester Preis', hot: true, points: twoPoints,
+      id: 'two', title: twoLabel, sub: 'Doppelpaket',
+      cents: twoNow, strike: cfg.prices.one * 2, perSeason: Math.round(twoNow / 2),
+      badge: earlyActive ? undefined : 'Bester Preis', hot: true,
+      points: [
+        `${euro(cfg.prices.one * 2 - twoNow)} gespart – nur ${euro(Math.round(twoNow / 2))} statt ${euro(cfg.prices.one)} pro Season`,
+        'Startplatz für beide Seasons gesichert',
+        earlyActive ? `Early Bird nur bis ${deadlineTxt} – danach ${euro(cfg.prices.two)}` : 'Ein Preis für beide Seasons',
+      ],
     },
   ];
 
@@ -390,8 +407,8 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
               <img src="/assets/hero-league-logo.png" alt="Hero League" className="h-8 sm:h-9 w-auto" />
             </button>
             <div className="flex-1" />
-            <button onClick={() => openFlow('prereg')} className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 sm:px-4 py-2 text-[12px] sm:text-[13px] font-bold text-white border border-white/20 bg-white/[.06] hover:bg-white/15 cursor-pointer">
-              <Sparkles className="w-3.5 h-3.5 text-[#D7FF3B]" /> <span className="hidden min-[400px]:inline">Schon</span> vorregistriert?
+            <button onClick={() => openFlow('prereg')} className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 sm:px-4 py-2 text-[12px] sm:text-[13px] font-bold text-white hover:brightness-110 cursor-pointer" style={{ background: S2.blue }}>
+              <NotebookPen className="w-3.5 h-3.5" /> <span className="hidden min-[400px]:inline">Schon</span> vorregistriert?
             </button>
             <button onClick={() => (canBook ? openFlow('new') : scrollTo('preise'))} className="hidden sm:inline-flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-black uppercase tracking-wide text-[#06091A] cursor-pointer" style={{ background: S2.volt }}>
               Platz sichern <ArrowRight className="w-3.5 h-3.5" />
@@ -443,8 +460,8 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
               <button onClick={mainAction} className="group inline-flex items-center gap-2 rounded-2xl px-6 py-4 font-display font-black uppercase tracking-wide text-[17px] text-[#06091A] cursor-pointer active:scale-[.98] transition-transform" style={{ background: S2.volt, boxShadow: '0 18px 50px -16px rgba(215,255,59,.6)' }}>
                 {mainLabel} <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
-              <button onClick={() => openFlow('prereg')} className="inline-flex items-center gap-2 rounded-2xl px-6 py-4 font-display font-black uppercase tracking-wide text-[17px] text-white border border-white/25 bg-white/[.06] backdrop-blur hover:bg-white/15 cursor-pointer">
-                <Sparkles className="w-5 h-5 text-[#D7FF3B]" /> Schon vorregistriert?
+              <button onClick={() => openFlow('prereg')} className="inline-flex items-center gap-2 rounded-2xl px-6 py-4 font-display font-black uppercase tracking-wide text-[17px] text-white hover:brightness-110 cursor-pointer" style={{ background: S2.blue, boxShadow: '0 18px 50px -18px rgba(47,91,255,.7)' }}>
+                <NotebookPen className="w-5 h-5" /> Schon vorregistriert?
               </button>
             </motion.div>
             <AnimatePresence>
@@ -474,7 +491,7 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
         {/* Laufband */}
         <div className="relative border-y border-white/[.07] py-4 -rotate-1 scale-[1.03]" style={{ background: S2.blue }}>
           <Marquee duration={28}>
-            {['Jedes Spiel getrackt', 'Eigene Spielerkarte', 'Live-Tabelle', 'Livestream', 'Awards', 'Highlights', 'Feste Rückennummern', 'Echte Daten'].map((w) => (
+            {['Jedes Spiel getrackt', 'Eigene Spielerkarte', 'Live-Tabelle', 'Livestream', 'Awards', 'Highlights', 'Echte Daten'].map((w) => (
               <span key={w} className="flex items-center gap-6 pr-6 font-display font-black uppercase tracking-tight text-[22px] sm:text-[28px] text-white whitespace-nowrap">
                 {w} <Zap className="w-5 h-5 text-[#D7FF3B] fill-[#D7FF3B]" />
               </span>
@@ -485,13 +502,13 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
         {/* Zahlen */}
         {stats.length > 0 && (
           <section id="zahlen" className="relative max-w-6xl mx-auto px-4 pt-24 sm:pt-32 pb-8">
-            <SectionHead kicker="Season 1 in Zahlen" title={<>Das war erst<br /><span className="text-[#8FA8FF]">der Anfang.</span></>} />
+            <SectionHead kicker="Season One in Zahlen" title={<>Das war erst<br /><span className="text-[#8FA8FF]">der Anfang.</span></>} />
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
               {stats.map((s, i) => (
                 <Reveal key={s.label} delay={i * 0.08} className={i === stats.length - 1 && stats.length % 2 === 1 ? 'col-span-2 lg:col-span-1' : ''}>
                   <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-white/[.07] to-white/[.02] p-5 sm:p-6 h-full">
                     <s.icon className="w-5 h-5 text-[#8FA8FF]" />
-                    <div className="mt-6 font-display font-black text-white text-[44px] sm:text-[56px] leading-none"><Counter value={s.value} /></div>
+                    <div className="mt-6 font-display font-black text-white text-[44px] sm:text-[56px] leading-none"><Counter value={s.value} decimals={s.decimals} /></div>
                     <div className="mt-2 text-[12px] font-mono uppercase tracking-[.14em] text-white/50">{s.label}</div>
                     <div className="absolute -bottom-10 -right-10 w-28 h-28 rounded-full blur-2xl" style={{ background: 'rgba(47,91,255,.25)' }} />
                   </div>
@@ -582,7 +599,7 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
         {logos.length > 3 && (
           <section className="relative max-w-6xl mx-auto px-4 pt-20 sm:pt-28 text-center">
             <Reveal>
-              <div className="text-[11px] font-mono uppercase tracking-[.22em] text-white/45">Diese Teams waren in Season 1 dabei</div>
+              <div className="text-[11px] font-mono uppercase tracking-[.22em] text-white/45">Diese Teams sind bereits dabei</div>
             </Reveal>
             <div className="mt-6 -mx-4">
               <Marquee duration={35}>
@@ -599,7 +616,7 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
         {/* Preise */}
         <section id="preise" className="relative max-w-6xl mx-auto px-4 pt-24 sm:pt-32 scroll-mt-20">
           <div className="absolute inset-x-0 top-24 h-[420px] pointer-events-none" style={{ background: 'radial-gradient(60% 60% at 50% 40%, rgba(47,91,255,.22), transparent 70%)' }} />
-          <SectionHead center kicker="Preise pro Team" title={<>Sichert euch<br /><span className="text-[#D7FF3B]">euren Platz.</span></>} text="Ein Preis pro Team – egal wie groß euer Kader ist. Wer gleich zwei Seasons bucht, spart." />
+          <SectionHead center kicker="Preise pro Team" title={<>Sichert euch<br /><span className="text-[#D7FF3B]">euren Platz.</span></>} text={`Ein Preis pro Team – egal wie groß euer Kader ist. Wer ${twoLabel} zusammen bucht, spart.`} />
 
           {earlyActive && cfg.earlyBirdUntil && (
             <Reveal className="max-w-xl mx-auto mb-8">
@@ -608,7 +625,7 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
                   <Clock className="w-5 h-5 text-[#D7FF3B] shrink-0 mt-0.5" />
                   <div className="min-w-0">
                     <div className="font-display font-black uppercase text-white text-[18px] leading-tight">Early Bird endet am {deadlineTxt}</div>
-                    <div className="text-[12.5px] text-white/60 mt-1">{cfg.deadlineBasis === 'payment' ? 'Maßgeblich ist der Zahlungseingang bis zu diesem Zeitpunkt.' : 'Maßgeblich ist der verbindliche Buchungsabschluss bis zu diesem Zeitpunkt.'} Danach kostet das Zweierpaket {euro(cfg.prices.two)}.</div>
+                    <div className="text-[12.5px] text-white/60 mt-1">{cfg.deadlineBasis === 'payment' ? 'Maßgeblich ist der Zahlungseingang bis zu diesem Zeitpunkt.' : 'Maßgeblich ist der verbindliche Buchungsabschluss bis zu diesem Zeitpunkt.'} Danach kostet {twoLabel} {euro(cfg.prices.two)}.</div>
                   </div>
                 </div>
                 <Countdown target={cfg.earlyBirdUntil} />
@@ -623,11 +640,27 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
                   {pl.badge && (
                     <span className="absolute -top-3 left-6 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider text-[#06091A]" style={{ background: S2.volt }}>{pl.badge}</span>
                   )}
+                  {pl.id === 'two' && earlyActive && (
+                    <motion.div
+                      initial={{ scale: 0.6, rotate: -20, opacity: 0 }}
+                      whileInView={{ scale: 1, rotate: 8, opacity: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ type: 'spring', stiffness: 260, damping: 14, delay: 0.35 }}
+                      className="absolute -top-6 -right-3 sm:-right-6 z-10 w-[124px] h-[124px] rounded-full grid place-items-center text-center px-3 text-[#06091A] shadow-[0_14px_34px_-10px_rgba(215,255,59,.65)]"
+                      style={{ background: S2.volt }}
+                    >
+                      <div className="leading-tight">
+                        <div className="text-[9.5px] font-black uppercase tracking-wider">Early Bird</div>
+                        <div className="font-display font-black text-[25px] leading-none my-0.5">−{euro(ebSave)}</div>
+                        <div className="text-[9.5px] font-bold leading-tight">Jetzt noch bis {shortDeadline} buchen</div>
+                      </div>
+                    </motion.div>
+                  )}
                   <div className="text-[12px] font-mono uppercase tracking-[.16em] text-white/50">{pl.sub}</div>
-                  <div className="font-display font-black uppercase text-white text-[30px] leading-none mt-1">{pl.title}</div>
+                  <div className={`font-display font-black uppercase text-white text-[30px] leading-none mt-1 ${pl.id === 'two' && earlyActive ? 'pr-24 sm:pr-20' : ''}`}>{pl.title}</div>
                   <div className="mt-6 flex items-end gap-2 flex-wrap">
                     <span className="font-display font-black text-[56px] leading-none tabular-nums">{euro(pl.cents)}</span>
-                    {pl.strike && <span className="text-[18px] text-white/40 line-through tabular-nums mb-1.5">{euro(pl.strike)}</span>}
+                    {pl.strike && <span className="text-[20px] font-bold text-rose-500 line-through decoration-2 tabular-nums mb-1.5">{euro(pl.strike)}</span>}
                   </div>
                   <div className="text-[13px] text-white/50 mt-1.5">{pl.id === 'one' ? 'pro Team' : `= ${euro(pl.perSeason)} pro Season`}</div>
                   <ul className="mt-6 space-y-2.5 flex-1">
@@ -647,7 +680,7 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
             ))}
           </div>
           <Reveal className="mt-6 text-center text-[12.5px] text-white/45 max-w-2xl mx-auto">
-            Alle Preise pro Team inkl. aller Leistungen. Das Early-Bird-Angebot gilt ausschließlich für die gemeinsame Buchung beider Seasons{deadlineTxt ? ` bis ${deadlineTxt}` : ' – nur für kurze Zeit ab dem Start der Buchung'}.
+            Alle Preise pro Team inkl. aller Leistungen. Das Early-Bird-Angebot gilt ausschließlich für die gemeinsame Buchung von {twoLabel}{deadlineTxt ? ` bis ${deadlineTxt}` : ' – nur für kurze Zeit ab dem Start der Buchung'}.
             {!canBook && (preregOpen
               ? <><br />Die verbindliche Buchung ist noch nicht geöffnet – registriert euch jetzt unverbindlich vor, dann melden wir uns zuerst bei euch.</>
               : <><br />Die verbindliche Buchung startet in Kürze.</>)}
@@ -671,33 +704,12 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
           </div>
         </section>
 
-        {/* Trikot-Pflicht */}
-        <section className="relative max-w-6xl mx-auto px-4 pt-24 sm:pt-32">
-          <Reveal>
-            <div className="relative overflow-hidden rounded-[32px] border border-white/10 p-6 sm:p-10" style={{ background: 'linear-gradient(130deg, #0B1745 0%, #16277A 45%, #2F5BFF 120%)' }}>
-              <motion.div className="absolute -right-6 sm:right-6 top-1/2 -translate-y-1/2 font-display font-black text-[180px] sm:text-[300px] leading-none text-white/[.07] select-none" animate={{ rotate: [0, 3, 0] }} transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}>
-                10
-              </motion.div>
-              <div className="relative max-w-2xl">
-                <div className="inline-flex items-center gap-2 text-[11px] font-mono uppercase tracking-[.22em] text-[#D7FF3B]"><Hash className="w-3.5 h-3.5" /> Neu ab {cfg.seasonLabel}</div>
-                <h2 className="mt-3 font-display font-black uppercase tracking-tight text-white text-[34px] sm:text-[52px] leading-[.9]">Einheitliche Trikots.<br />Feste Nummern.</h2>
-                <p className="mt-4 text-[15px] sm:text-[16.5px] text-white/80 leading-relaxed">
-                  Ab Season Two sind einheitliche Teamtrikots mit gut lesbaren, kontrastreichen Rückennummern verpflichtend. Jede Rückennummer darf innerhalb eines Teams nur einmal vergeben sein und muss einem Spieler eindeutig zugeordnet werden.
-                </p>
-                <p className="mt-3 text-[14.5px] text-white/65 leading-relaxed">
-                  Die Zuordnung ist vor dem ersten Einsatz in der Kaderliste zu hinterlegen. Änderungen und Nachmeldungen müssen vor dem jeweiligen Einsatz gemeldet werden. Die Rückennummern dienen der zuverlässigen Erfassung und Zuordnung der Spielerdaten und Statistiken.
-                </p>
-              </div>
-            </div>
-          </Reveal>
-        </section>
-
         {/* Regelwerk & Teilnahmebedingungen */}
         <section id="regeln" className="relative max-w-4xl mx-auto px-4 pt-24 sm:pt-32">
           <SectionHead kicker="Transparent von Anfang an" title={<>Regelwerk &amp;<br />Bedingungen.</>} text="Alles, was ihr vor der Buchung wissen müsst – zum Nachlesen, ganz ohne Kleingedrucktes." />
           <div className="space-y-3">
             <LegalPanel title="Regelwerk" text={cfg.rules} />
-            <LegalPanel title={`Teilnahmebedingungen · ${cfg.termsVersion}`} text={cfg.terms} />
+            <LegalPanel title="Teilnahmebedingungen" text={cfg.terms} />
           </div>
         </section>
 
@@ -720,7 +732,7 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
                   <button onClick={mainAction} className="inline-flex items-center gap-2 rounded-2xl px-7 py-4 font-display font-black uppercase tracking-wide text-[17px] text-[#06091A] cursor-pointer" style={{ background: S2.volt }}>
                     {mainLabel} <ArrowRight className="w-5 h-5" />
                   </button>
-                  <button onClick={() => openFlow('prereg')} className="inline-flex items-center gap-2 rounded-2xl px-7 py-4 font-display font-black uppercase tracking-wide text-[17px] text-white border border-white/25 hover:bg-white/10 cursor-pointer">Schon vorregistriert?</button>
+                  <button onClick={() => openFlow('prereg')} className="inline-flex items-center gap-2 rounded-2xl px-7 py-4 font-display font-black uppercase tracking-wide text-[17px] text-white hover:brightness-110 cursor-pointer" style={{ background: S2.blue }}><NotebookPen className="w-5 h-5" /> Schon vorregistriert?</button>
                 </div>
               </div>
             </div>
