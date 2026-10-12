@@ -102,6 +102,7 @@ const DEFAULT_CONFIG: BookingConfig = {
   rules: DEFAULT_RULES,
 };
 
+export const DEFAULT_BOOKING_CONFIG = DEFAULT_CONFIG;
 export async function getBookingConfig(): Promise<BookingConfig> {
   try {
     const rows = await sql`SELECT value FROM settings WHERE key = 'season_booking'`;
@@ -450,7 +451,7 @@ async function bookingSubmit(req: VercelRequest, res: VercelResponse) {
       layout: {
         preheader: `Eure verbindliche ${cfg.seasonLabel}-Buchung ist eingegangen.`,
         heading: 'Buchung eingegangen ✅', accent: ACCENT, accentDark: ACCENT_DARK,
-        intro: `Danke, ${escapeHtml(contactName)}! Die verbindliche Buchung von „${escapeHtml(teamName)}" für ${escapeHtml(price.label)} ist bei uns eingegangen.`,
+        intro: `Danke, ${contactName}! Die verbindliche Buchung von „${teamName}" für ${price.label} ist bei uns eingegangen.`,
         bodyHtml:
           p(`<strong>Betrag:</strong> ${eur(price.cents)}<br><strong>Buchungsnummer:</strong> ${ref}<br><strong>Verwendungszweck / Notiz bei der Zahlung:</strong> ${escapeHtml(reference)}`) +
           (price.link ? mailButton(`Jetzt ${eur(price.cents)} bezahlen`, price.link, ACCENT) : p('Den Zahlungslink schicken wir dir gesondert.')) +
@@ -474,7 +475,7 @@ async function bookingSubmit(req: VercelRequest, res: VercelResponse) {
         layout: {
           preheader: `${teamName} hat ${price.label} gebucht.`,
           heading: `Neue Buchung – ${cfg.seasonLabel}`, accent: ACCENT, accentDark: ACCENT_DARK,
-          intro: `${escapeHtml(teamName)} (${escapeHtml(contactName)}, ${escapeHtml(email)}, ${escapeHtml(phone)}) hat ${escapeHtml(price.label)} für ${eur(price.cents)} gebucht.`,
+          intro: `${teamName} (${contactName}, ${email}, ${phone}) hat ${price.label} für ${eur(price.cents)} gebucht.`,
           bodyHtml: p(`<strong>Buchungsnummer:</strong> ${ref}`) + p(`<strong>Kader (${roster.length})</strong><br>${rosterHtml}`) + (logoUrl ? p(`<a href="${escapeHtml(logoUrl)}">Team-Logo ansehen</a>`) : ''),
           footnote: 'Zahlungseingang bitte im Backoffice unter „Season-2-Buchungen" bestätigen.',
         },
@@ -572,6 +573,28 @@ async function adminInvites(_req: VercelRequest, res: VercelResponse) {
   );
 }
 
+// Inhalt der Einladungsmail (auch für die Vorschau genutzt).
+export function inviteMail(cfg: BookingConfig, link: string) {
+  const until = earlyBirdUntil(cfg);
+  const untilTxt = until ? new Date(until).toLocaleString('de-DE', { timeZone: 'Europe/Berlin', weekday: 'short', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '';
+  const p = (t: string) => `<p style="font-family:Arial,Helvetica,sans-serif;color:#3a4441;font-size:14px;line-height:1.6;margin:0 0 12px;">${t}</p>`;
+  return {
+    subject: `${cfg.seasonLabel}: Euer Vorab-Zugang zur Buchung 🏆`,
+    layout: {
+      preheader: `Ihr seid vorregistriert – sichert euch euren Startplatz für ${cfg.seasonLabel} vor allen anderen.`,
+      heading: `${cfg.seasonLabel} – ihr seid zuerst dran`, accent: ACCENT, accentDark: ACCENT_DARK,
+      intro: `Danke, dass ihr euch für ${cfg.seasonLabel} vorregistriert habt! Bevor die Buchung öffentlich startet, könnt ihr euren Startplatz jetzt verbindlich sichern.`,
+      bodyHtml:
+        p(`Meldet euch auf der Seite mit <strong>dieser E-Mail-Adresse</strong> an – eure Angaben aus der Vorregistrierung sind dann schon eingetragen. Ihr ergänzt nur noch Kader, Logo und Paket.`) +
+        (untilTxt ? p(`<strong>Early Bird:</strong> Das Paket für zwei Seasons gibt es bis ${escapeHtml(untilTxt)} Uhr für ${eur(cfg.priceTwoEarly)} statt ${eur(cfg.priceTwo)}.`) : '') +
+        mailButton('Jetzt Startplatz sichern', link, ACCENT) +
+        p(`<span style="font-size:12px;color:#7a8580;">Der Link ist euer persönlicher Vorab-Zugang – bitte nicht öffentlich teilen.</span>`),
+      footnote: 'Fragen? Antworte einfach auf diese E-Mail.',
+    },
+    text: `${cfg.seasonLabel} – euer Vorab-Zugang zur Buchung: ${link}`,
+  };
+}
+
 // Einladung mit Vorab-Link an ausgewählte Vorregistrierte (max. 10 je Aufruf –
 // das Backoffice schickt größere Listen in Paketen, damit nichts abbricht).
 async function adminInvite(req: VercelRequest, res: VercelResponse) {
@@ -581,30 +604,12 @@ async function adminInvite(req: VercelRequest, res: VercelResponse) {
   const cfg = await ensureAccessKey(await getBookingConfig());
   const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'hero-league.de');
   const link = `https://${host}/season2?zugang=${encodeURIComponent(cfg.accessKey)}`;
-  const until = earlyBirdUntil(cfg);
-  const untilTxt = until ? new Date(until).toLocaleString('de-DE', { timeZone: 'Europe/Berlin', weekday: 'short', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '';
-  const p = (t: string) => `<p style="font-family:Arial,Helvetica,sans-serif;color:#3a4441;font-size:14px;line-height:1.6;margin:0 0 12px;">${t}</p>`;
   const invites = await readInvites();
   const sent: string[] = [];
   const failed: string[] = [];
   for (const to of emails) {
     try {
-      await sendBrandedMail({
-        to, from: FROM,
-        subject: `${cfg.seasonLabel}: Euer Vorab-Zugang zur Buchung 🏆`,
-        layout: {
-          preheader: `Ihr seid vorregistriert – sichert euch euren Startplatz für ${cfg.seasonLabel} vor allen anderen.`,
-          heading: `${cfg.seasonLabel} – ihr seid zuerst dran`, accent: ACCENT, accentDark: ACCENT_DARK,
-          intro: `Danke, dass ihr euch für ${escapeHtml(cfg.seasonLabel)} vorregistriert habt! Bevor die Buchung öffentlich startet, könnt ihr euren Startplatz jetzt verbindlich sichern.`,
-          bodyHtml:
-            p(`Meldet euch auf der Seite mit <strong>dieser E-Mail-Adresse</strong> an – eure Angaben aus der Vorregistrierung sind dann schon eingetragen. Ihr ergänzt nur noch Kader, Logo und Paket.`) +
-            (untilTxt ? p(`<strong>Early Bird:</strong> Das Paket für zwei Seasons gibt es bis ${escapeHtml(untilTxt)} Uhr für ${eur(cfg.priceTwoEarly)} statt ${eur(cfg.priceTwo)}.`) : '') +
-            mailButton('Jetzt Startplatz sichern', link, ACCENT) +
-            p(`<span style="font-size:12px;color:#7a8580;">Der Link ist euer persönlicher Vorab-Zugang – bitte nicht öffentlich teilen.</span>`),
-          footnote: 'Fragen? Antworte einfach auf diese E-Mail.',
-        },
-        text: `${cfg.seasonLabel} – euer Vorab-Zugang zur Buchung: ${link}`,
-      });
+      await sendBrandedMail({ to, from: FROM, ...inviteMail(cfg, link) });
       invites[to] = new Date().toISOString();
       sent.push(to);
     } catch {
@@ -645,7 +650,7 @@ async function adminBookingStatus(req: VercelRequest, res: VercelResponse) {
         layout: {
           preheader: `Euer Startplatz für ${cfg.seasonLabel} ist fix.`,
           heading: 'Ihr seid dabei! 🏆', accent: ACCENT, accentDark: ACCENT_DARK,
-          intro: `Hi ${escapeHtml(b.contactName)}, eure Zahlung über ${eur(b.priceCents)} (${b.ref}) ist eingegangen. Der Startplatz von „${escapeHtml(b.teamName)}" für ${escapeHtml(cfg.seasonLabel)} ist damit fix.`,
+          intro: `Hi ${b.contactName}, eure Zahlung über ${eur(b.priceCents)} (${b.ref}) ist eingegangen. Der Startplatz von „${b.teamName}" für ${cfg.seasonLabel} ist damit fix.`,
           bodyHtml: `<p style="font-family:Arial,Helvetica,sans-serif;color:#3a4441;font-size:14px;line-height:1.6;margin:0;">Alle weiteren Infos zum Start bekommt ihr rechtzeitig per E-Mail. Denkt an eure Trikots mit festen Rückennummern!</p>`,
           footnote: 'Fragen? Antworte einfach auf diese E-Mail.',
         },
