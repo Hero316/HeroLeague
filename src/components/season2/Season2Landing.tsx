@@ -347,13 +347,21 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
     { icon: CreditCard, title: 'Bezahlen', text: 'Per Revolut-Link – danach ist euer Startplatz fix.' },
   ];
 
-  const plans: { id: PackageId | 'early'; title: string; sub: string; cents: number; strike?: number; perSeason: number; badge?: string; hot?: boolean; points: string[]; disabled?: boolean }[] = [
+  // Zwei Karten – die 2-Seasons-Karte zeigt immer den Preis, der beim Buchen
+  // JETZT tatsächlich gilt (Early Bird während der Frist, sonst Zweierpaket).
+  const twoPoints = earlyActive
+    ? [`${euro(saveEarly)} gespart ggü. 2× einzeln (${euro(cfg.prices.one * 2)})`, 'Startplatz für zwei Seasons gesichert', `Early Bird nur bis ${deadlineTxt} – danach ${euro(cfg.prices.two)}`]
+    : earlyEnded
+      ? [`${euro(saveTwo)} gespart ggü. 2× einzeln (${euro(cfg.prices.one * 2)})`, 'Startplatz für zwei Seasons gesichert', 'Ein Preis für beide Seasons']
+      : [`${euro(saveTwo)} gespart ggü. 2× einzeln (${euro(cfg.prices.one * 2)})`, 'Startplatz für zwei Seasons gesichert', `Early Bird zum Start: ${euro(cfg.prices.twoEarly)} – 14 Tage ab offizieller Öffnung`];
+  const plans: { id: PackageId; title: string; sub: string; cents: number; strike?: number; perSeason: number; badge?: string; hot?: boolean; points: string[] }[] = [
     { id: 'one', title: '1 Season', sub: cfg.seasonLabel, cents: cfg.prices.one, perSeason: cfg.prices.one, points: ['Startplatz für eine Season', 'Tracking, Statistiken & Spielerkarten', 'Alle Awards & Highlights'] },
     {
-      id: 'early', title: '2 Seasons', sub: 'Early Bird', cents: cfg.prices.twoEarly, strike: cfg.prices.two, perSeason: Math.round(cfg.prices.twoEarly / 2), badge: earlyEnded ? 'Abgelaufen' : 'Bester Preis', hot: !earlyEnded,
-      points: [`${euro(saveEarly)} gespart ggü. 2× einzeln`, 'Startplatz für zwei Seasons gesichert', deadlineTxt ? `Nur bis ${deadlineTxt}` : `${'14'} Tage ab offizieller Öffnung`], disabled: earlyEnded,
+      id: 'two', title: '2 Seasons', sub: earlyActive ? 'Early Bird' : 'Zweierpaket',
+      cents: earlyActive ? cfg.prices.twoEarly : cfg.prices.two, strike: earlyActive ? cfg.prices.two : undefined,
+      perSeason: Math.round((earlyActive ? cfg.prices.twoEarly : cfg.prices.two) / 2),
+      badge: earlyActive ? 'Early Bird' : 'Bester Preis', hot: true, points: twoPoints,
     },
-    { id: 'two', title: '2 Seasons', sub: 'Zweierpaket', cents: cfg.prices.two, perSeason: Math.round(cfg.prices.two / 2), badge: earlyEnded ? 'Beliebt' : undefined, points: [`${euro(saveTwo)} gespart ggü. 2× einzeln`, 'Startplatz für zwei Seasons gesichert', 'Ein Preis, kein zweites Mal buchen'] },
   ];
 
   return (
@@ -600,18 +608,18 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
             </Reveal>
           )}
 
-          <div className="relative grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
+          <div className="relative grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch max-w-4xl mx-auto">
             {plans.map((pl, i) => (
               <Reveal key={pl.id} delay={i * 0.1} className={pl.hot ? 'md:-mt-4' : ''}>
-                <div className={`relative h-full flex flex-col rounded-[28px] p-6 sm:p-7 border ${pl.hot ? 'border-[#D7FF3B]/60' : 'border-white/10'} ${pl.disabled ? 'opacity-55' : ''}`} style={{ background: pl.hot ? 'linear-gradient(170deg, rgba(47,91,255,.35), rgba(7,11,28,.9) 70%)' : 'rgba(255,255,255,.03)', boxShadow: pl.hot ? '0 30px 80px -30px rgba(47,91,255,.7)' : undefined }}>
+                <div className={`relative h-full flex flex-col rounded-[28px] p-6 sm:p-7 border ${pl.hot ? 'border-[#D7FF3B]/60' : 'border-white/10'}`} style={{ background: pl.hot ? 'linear-gradient(170deg, rgba(47,91,255,.35), rgba(7,11,28,.9) 70%)' : 'rgba(255,255,255,.03)', boxShadow: pl.hot ? '0 30px 80px -30px rgba(47,91,255,.7)' : undefined }}>
                   {pl.badge && (
-                    <span className={`absolute -top-3 left-6 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider ${pl.disabled ? 'bg-white/15 text-white/70' : 'text-[#06091A]'}`} style={pl.disabled ? undefined : { background: S2.volt }}>{pl.badge}</span>
+                    <span className="absolute -top-3 left-6 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider text-[#06091A]" style={{ background: S2.volt }}>{pl.badge}</span>
                   )}
                   <div className="text-[12px] font-mono uppercase tracking-[.16em] text-white/50">{pl.sub}</div>
                   <div className="font-display font-black uppercase text-white text-[30px] leading-none mt-1">{pl.title}</div>
                   <div className="mt-6 flex items-end gap-2 flex-wrap">
-                    <span className={`font-display font-black text-[56px] leading-none tabular-nums ${pl.disabled ? 'line-through' : ''}`}>{euro(pl.cents)}</span>
-                    {pl.strike && !pl.disabled && <span className="text-[18px] text-white/40 line-through tabular-nums mb-1.5">{euro(pl.strike)}</span>}
+                    <span className="font-display font-black text-[56px] leading-none tabular-nums">{euro(pl.cents)}</span>
+                    {pl.strike && <span className="text-[18px] text-white/40 line-through tabular-nums mb-1.5">{euro(pl.strike)}</span>}
                   </div>
                   <div className="text-[13px] text-white/50 mt-1.5">{pl.id === 'one' ? 'pro Team' : `= ${euro(pl.perSeason)} pro Season`}</div>
                   <ul className="mt-6 space-y-2.5 flex-1">
@@ -620,12 +628,11 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
                     ))}
                   </ul>
                   <button
-                    disabled={pl.disabled}
-                    onClick={() => openFlow('new', pl.id === 'one' ? 'one' : 'two')}
-                    className={`mt-7 w-full inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-4 font-display font-black uppercase tracking-wide text-[16px] cursor-pointer active:scale-[.98] transition-transform disabled:cursor-not-allowed ${pl.hot ? 'text-[#06091A]' : 'text-white border border-white/20 hover:bg-white/10'}`}
+                    onClick={() => openFlow('new', pl.id)}
+                    className={`mt-7 w-full inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-4 font-display font-black uppercase tracking-wide text-[16px] cursor-pointer active:scale-[.98] transition-transform ${pl.hot ? 'text-[#06091A]' : 'text-white border border-white/20 hover:bg-white/10'}`}
                     style={pl.hot ? { background: S2.volt } : undefined}
                   >
-                    {pl.disabled ? 'Early Bird vorbei' : canBook ? 'Jetzt buchen' : 'Vorregistrieren'} {!pl.disabled && <ArrowRight className="w-4 h-4" />}
+                    {canBook ? 'Jetzt buchen' : 'Vorregistrieren'} <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
               </Reveal>
