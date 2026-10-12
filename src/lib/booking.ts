@@ -7,6 +7,9 @@ export type BookingStatus = 'pending' | 'paid' | 'cancelled';
 
 export interface BookingPublicConfig {
   visible: boolean; // false = noch nicht veröffentlicht (nur seasonLabel/startInfo kommen mit)
+  maxTeams?: number; // Startplätze gesamt
+  slotsLeft?: number; // noch freie Startplätze
+  soldOut?: boolean; // alle Plätze vergeben
   signupOpen?: boolean; // unverbindliche Vorregistrierung (/anmeldung) noch offen
   published: boolean;
   preview: boolean; // sichtbar, aber (noch) nicht öffentlich – Vorab-Link oder Admin
@@ -16,6 +19,8 @@ export interface BookingPublicConfig {
   testMode: boolean;
   seasonLabel: string;
   startInfo: string;
+  seasonDates?: string; // Zeitraum, z. B. „März – Juli 2027"
+  nextSeasonDates?: string; // Zeitraum der Folge-Season
   openAt: string;
   earlyBirdUntil: string; // ISO, '' = Stichtag noch nicht festgelegt
   earlyBirdActive: boolean;
@@ -43,6 +48,7 @@ export interface BookingSummary {
   paidAt: string | null;
   payLink: string;
   packageLabel: string;
+  reference?: string; // Nachricht für die Zahlung: Buchungsnr. · Team · Paket
 }
 
 export interface Prereg {
@@ -126,12 +132,15 @@ export interface BookingInvitee {
 }
 
 export interface BookingAdminConfig {
+  payLink: string; // EIN Link für alle Pakete (z. B. PayPal.me)
   published: boolean;
   open: boolean;
   preregOnly: boolean;
   accessKey: string;
   seasonLabel: string;
   startInfo: string;
+  seasonDates: string;
+  nextSeasonDates: string;
   openAt: string;
   earlyBirdDays: number;
   earlyBirdEnd: string; // festes Ende ('' = Öffnung + earlyBirdDays)
@@ -144,6 +153,7 @@ export interface BookingAdminConfig {
   payLinkTwoEarly: string;
   minSquad: number;
   maxSquad: number;
+  maxTeams: number;
   termsVersion: string;
   terms: string;
   rules: string;
@@ -161,7 +171,7 @@ export const fetchBookingConfig = () => apiFetch<BookingPublicConfig>(url('booki
 export const requestBookingCode = (body: { email: string; website?: string; turnstileToken?: string }) =>
   post<{ ok: boolean; devCode?: string }>('booking-request-code', body);
 export const verifyBookingCode = (email: string, code: string) =>
-  post<{ ok: boolean; token: string; email: string; prereg: Prereg | null; booking: BookingSummary | null }>('booking-verify', { email, code });
+  post<{ ok: boolean; token: string; email: string; prereg: Prereg | null; booking: BookingSummary | null; soldOut?: boolean }>('booking-verify', { email, code });
 export const submitBooking = (body: BookingPayload) =>
   post<{ ok: boolean; booking: BookingSummary | null; reference: string }>('booking-submit', body);
 

@@ -36,6 +36,8 @@ export interface BookingConfig {
   accessKey: string; // Vorab-Zugang: /season2?zugang=<key> zeigt die unveröffentlichte Seite
   seasonLabel: string;
   startInfo: string;
+  seasonDates: string; // Zeitraum dieser Season, z. B. „März – Juli 2027"
+  nextSeasonDates: string; // Zeitraum der Folge-Season (Doppelpaket)
   openAt: string; // ISO – offizielle Öffnung (Start der Early-Bird-Frist), '' = noch offen
   earlyBirdDays: number; // 14 (nur wenn kein festes Enddatum gesetzt ist)
   earlyBirdEnd: string; // ISO – festes Ende des Early Bird ('' = Öffnung + earlyBirdDays)
@@ -43,11 +45,13 @@ export interface BookingConfig {
   priceOne: number; // Cent
   priceTwo: number;
   priceTwoEarly: number;
-  payLinkOne: string; // Zahlungslinks je Preis (Anbieter egal, z. B. Revolut)
+  payLink: string; // EIN Zahlungslink für alle Pakete (z. B. PayPal.me) – Betrag + Nachricht trägt das Team selbst ein
+  payLinkOne: string; // optional: eigene Links je Preis (Anbieter egal, z. B. Revolut)
   payLinkTwo: string;
   payLinkTwoEarly: string;
   minSquad: number;
   maxSquad: number;
+  maxTeams: number; // Startplätze gesamt – danach „Ausgebucht"
   termsVersion: string;
   terms: string; // Teilnahmebedingungen (Volltext)
   rules: string; // Regelwerk (Volltext)
@@ -87,6 +91,8 @@ const DEFAULT_CONFIG: BookingConfig = {
   accessKey: '',
   seasonLabel: 'Season 2',
   startInfo: 'Start im März 2027',
+  seasonDates: 'März – Juli 2027',
+  nextSeasonDates: 'Oktober 2027 – Januar 2028',
   openAt: '',
   earlyBirdDays: 14,
   earlyBirdEnd: '',
@@ -94,11 +100,13 @@ const DEFAULT_CONFIG: BookingConfig = {
   priceOne: 55000,
   priceTwo: 100000,
   priceTwoEarly: 95000,
+  payLink: '',
   payLinkOne: '',
   payLinkTwo: '',
   payLinkTwoEarly: '',
   minSquad: 8,
   maxSquad: 14,
+  maxTeams: 12,
   termsVersion: 'Fassung 1',
   terms: DEFAULT_TERMS,
   rules: DEFAULT_RULES,
@@ -136,10 +144,14 @@ export function twoSeasonsLabel(cfg: BookingConfig): string {
   return `${l} + ${next}`;
 }
 function priceFor(cfg: BookingConfig, pkg: PackageId, early: boolean) {
-  if (pkg === 'one') return { cents: cfg.priceOne, link: cfg.payLinkOne, label: cfg.seasonLabel };
+  if (pkg === 'one') return { cents: cfg.priceOne, link: cfg.payLinkOne || cfg.payLink, label: cfg.seasonLabel };
   return early
-    ? { cents: cfg.priceTwoEarly, link: cfg.payLinkTwoEarly || cfg.payLinkTwo, label: `${twoSeasonsLabel(cfg)} · Early Bird` }
-    : { cents: cfg.priceTwo, link: cfg.payLinkTwo, label: twoSeasonsLabel(cfg) };
+    ? { cents: cfg.priceTwoEarly, link: cfg.payLinkTwoEarly || cfg.payLinkTwo || cfg.payLink, label: `${twoSeasonsLabel(cfg)} · Early Bird` }
+    : { cents: cfg.priceTwo, link: cfg.payLinkTwo || cfg.payLink, label: twoSeasonsLabel(cfg) };
+}
+// Nachricht, die das Team beim Bezahlen angibt (Team + Paket + Buchungsnummer).
+function payReference(ref: string, teamName: string, packageLabel: string): string {
+  return `${ref} · ${teamName} · ${packageLabel.replace(' · Early Bird', '')}`;
 }
 const eur = (cents: number) => `${(cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €`;
 
@@ -205,6 +217,18 @@ async function earlyBirdReminders(cfg: BookingConfig) {
     } catch {
       /* Mail optional */
     }
+  }
+}
+
+// Vergebene Startplätze = verbindliche Buchungen (offen oder bezahlt), ohne
+// stornierte und ohne Testbuchungen.
+async function takenSlots(): Promise<number> {
+  try {
+    const rows = await sql`SELECT count(*)::int AS n FROM season_bookings
+      WHERE status <> 'cancelled' AND COALESCE((consents->>'testMode')::boolean, false) = false`;
+    return (rows[0]?.n as number) ?? 0;
+  } catch {
+    return 0;
   }
 }
 
@@ -335,8 +359,12 @@ async function bookingConfig(req: VercelRequest, res: VercelResponse) {
     return res.json({ visible: false, published: false, seasonLabel: cfg.seasonLabel, startInfo: cfg.startInfo, signupOpen: preregOpen });
   }
   const { ok, test } = await canBook(req, cfg);
+  const taken = await takenSlots();
   return res.json({
     visible: true,
+    maxTeams: cfg.maxTeams,
+    slotsLeft: Math.max(0, cfg.maxTeams - taken),
+    soldOut: taken >= cfg.maxTeams,
     signupOpen: preregOpen,
     published: cfg.published,
     preview: !cfg.published,
@@ -346,6 +374,8 @@ async function bookingConfig(req: VercelRequest, res: VercelResponse) {
     testMode: test,
     seasonLabel: cfg.seasonLabel,
     startInfo: cfg.startInfo,
+    seasonDates: cfg.seasonDates,
+    nextSeasonDates: cfg.nextSeasonDates,
     openAt: cfg.openAt,
     earlyBirdUntil: earlyBirdUntil(cfg),
     earlyBirdActive: earlyBirdActive(cfg),
@@ -453,7 +483,8 @@ async function bookingVerify(req: VercelRequest, res: VercelResponse) {
   }
   // Schon verbindlich gebucht? → Status anzeigen (und ggf. weiter bezahlen).
   const booking = await bookingByEmail(mail);
-  return res.json({ ok: true, token: signToken(mail), email: mail, prereg, booking });
+  const soldOut = (await takenSlots()) >= cfg.maxTeams;
+  return res.json({ ok: true, token: signToken(mail), email: mail, prereg, booking, soldOut });
 }
 
 async function bookingByEmail(mail: string) {
@@ -465,7 +496,7 @@ async function bookingByEmail(mail: string) {
     if (!b) return null;
     const cfg = await getBookingConfig();
     const p = priceFor(cfg, b.package, b.earlyBird);
-    return { ...b, payLink: b.status === 'pending' ? p.link : '', packageLabel: p.label };
+    return { ...b, payLink: b.status === 'pending' ? p.link : '', packageLabel: p.label, reference: payReference(b.ref, b.teamName, p.label) };
   } catch {
     return null;
   }
@@ -496,6 +527,9 @@ async function bookingSubmit(req: VercelRequest, res: VercelResponse) {
   if (await tooManyAttempts('booking-submit', clientIp(req), 10, 30)) return res.status(429).json({ error: 'Zu viele Versuche. Bitte später erneut.' });
 
   if (allowed.preregOnly && !(await isPreregistered(email))) return badRequest(res, PREREG_ONLY_MSG);
+  if (!allowed.test && (await takenSlots()) >= cfg.maxTeams) {
+    return res.status(409).json({ error: `Leider ausgebucht – alle ${cfg.maxTeams} Startplätze sind vergeben.`, soldOut: true });
+  }
   const existing = await bookingByEmail(email);
   if (existing && existing.status !== 'cancelled') {
     return res.status(409).json({ error: 'Zu dieser E-Mail gibt es schon eine verbindliche Buchung.', booking: existing });
@@ -573,7 +607,7 @@ async function bookingSubmit(req: VercelRequest, res: VercelResponse) {
       ${JSON.stringify(roster)}::jsonb, ${logoUrl}, ${JSON.stringify(consents)}::jsonb, ${clamp(b.note, 800)}, ${current?.id ?? ''}, now(), now())`;
 
   // Bestätigung an das Team – inkl. Zahlung + vollständigen Teilnahmebedingungen.
-  const reference = `${ref} ${teamName}`;
+  const reference = payReference(ref, teamName, price.label);
   const rosterHtml = roster
     .map((r) => `${r.number !== null ? `#${r.number} ` : ''}${escapeHtml(r.firstName)} ${escapeHtml(r.lastName)}${r.captain ? ' (C)' : ''}${r.keeper ? ' (TW)' : ''}`)
     .join('<br>');
@@ -588,8 +622,14 @@ async function bookingSubmit(req: VercelRequest, res: VercelResponse) {
         heading: 'Buchung eingegangen ✅', accent: ACCENT, accentDark: ACCENT_DARK,
         intro: `Danke, ${contactName}! Die verbindliche Buchung von „${teamName}" für ${price.label} ist bei uns eingegangen.`,
         bodyHtml:
-          p(`<strong>Betrag:</strong> ${eur(price.cents)}<br><strong>Buchungsnummer:</strong> ${ref}<br><strong>Verwendungszweck / Notiz bei der Zahlung:</strong> ${escapeHtml(reference)}`) +
-          (price.link ? mailButton(`Jetzt ${eur(price.cents)} bezahlen`, price.link, ACCENT) : p('Den Zahlungslink schicken wir dir gesondert.')) +
+          `<div style="margin:0 0 14px;padding:16px;border:2px solid ${ACCENT};border-radius:14px;background:#f4f7ff;font-family:Arial,Helvetica,sans-serif;color:#1d2433;">
+            <div style="font-size:12px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:${ACCENT};margin-bottom:10px;">So bezahlt ihr – bitte genau so angeben</div>
+            <div style="font-size:14px;line-height:1.6;"><strong>1. Betrag eingeben:</strong> <span style="font-size:18px;font-weight:800;">${eur(price.cents)}</span></div>
+            <div style="font-size:14px;line-height:1.6;margin-top:6px;"><strong>2. Als Nachricht / Verwendungszweck:</strong><br>
+              <span style="display:inline-block;margin-top:4px;padding:8px 10px;background:#ffffff;border:1px solid #d6def5;border-radius:8px;font-family:'Courier New',monospace;font-size:14px;font-weight:700;">${escapeHtml(reference)}</span></div>
+            <div style="font-size:12.5px;line-height:1.5;color:#55607a;margin-top:10px;">Nur mit Team, Paket und Buchungsnummer können wir eure Zahlung zuordnen.</div>
+          </div>` +
+          (price.link ? mailButton(`3. Jetzt bezahlen`, price.link, ACCENT) : p('Den Zahlungslink schicken wir dir gesondert.')) +
           p(`Sobald die Zahlung bei uns eingegangen ist, bekommst du eine Bestätigung. Erst dann ist euer Startplatz fix.`) +
           p(`<strong>Euer Kader</strong><br>${rosterHtml}`) +
           p(`<strong>Hinweis:</strong> ${escapeHtml(BINDING_NOTICE)}`) +
@@ -597,7 +637,7 @@ async function bookingSubmit(req: VercelRequest, res: VercelResponse) {
             <strong>Teilnahmebedingungen (Fassung: ${escapeHtml(cfg.termsVersion)}, akzeptiert am ${new Date(now).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' })})</strong><br><br>${termsHtml}</div>`,
         footnote: 'Fragen? Antworte einfach auf diese E-Mail.',
       },
-      text: `Buchung eingegangen: ${teamName} – ${price.label} – ${eur(price.cents)}\nBuchungsnummer: ${ref}\nVerwendungszweck: ${reference}\n${price.link ? `Bezahlen: ${price.link}\n` : ''}\n${BINDING_NOTICE}\n\nTeilnahmebedingungen (${cfg.termsVersion}):\n${cfg.terms}`,
+      text: `Buchung eingegangen: ${teamName} – ${price.label} – ${eur(price.cents)}\nBuchungsnummer: ${ref}\n\nSo bezahlt ihr:\n1. Betrag eingeben: ${eur(price.cents)}\n2. Als Nachricht angeben: ${reference}\n${price.link ? `Bezahlen: ${price.link}\n` : ''}\n${BINDING_NOTICE}\n\nTeilnahmebedingungen (${cfg.termsVersion}):\n${cfg.terms}`,
     });
   } catch {
     /* Mail optional */
@@ -728,7 +768,35 @@ async function adminInvites(_req: VercelRequest, res: VercelResponse) {
 
 // Einladungsmail an Vorregistrierte – eigenes, dunkles Season-2-Design
 // (passend zur Landingpage). `base` = https://<host> für Bild-URLs.
-export function inviteMail(cfg: BookingConfig, link: string, base = 'https://hero-league.de') {
+// Zwei Varianten:
+//  • 'current' – Manager der aktuellen Teams: „Euer Platz wartet", Kader &
+//    Logo sind schon drin;
+//  • 'prereg'  – Vorregistrierte (neue Teams): Vorsprung + „nur X Plätze".
+export type InviteKind = 'current' | 'prereg';
+export function inviteMail(cfg: BookingConfig, link: string, base = 'https://hero-league.de', kind: InviteKind = 'prereg', teamName = '') {
+  const max = cfg.maxTeams;
+  const team = teamName ? escapeHtml(teamName) : '';
+  const v = kind === 'current'
+    ? {
+        pre: `Euer Startplatz für ${cfg.seasonLabel} wartet – Kader und Logo sind schon eingetragen.`,
+        kicker: team ? `Für ${team}` : 'Für euer Team',
+        head: 'Euer Platz wartet.',
+        intro: `Als Team aus Season One könnt ihr euren Startplatz für ${escapeHtml(cfg.seasonLabel)} jetzt sichern – <strong style="color:#ffffff;">noch bevor neue Teams buchen können.</strong> Euren Kader mit Rückennummern und euer Logo haben wir schon für euch eingetragen.`,
+        box: `🏆 <strong style="color:#D7FF3B;">Nur ${max} Plätze für ${escapeHtml(cfg.seasonLabel)}.</strong> Bucht jetzt verbindlich – dann ist euer Platz sicher.`,
+        steps: ['Mit dieser E-Mail anmelden', 'Kader &amp; Logo prüfen', 'Paket wählen &amp; bezahlen'],
+        subject: `⚡ ${cfg.seasonLabel}: Euer Platz wartet${teamName ? `, ${teamName}` : ''}`,
+        textIntro: `Als Team aus Season One könnt ihr euren Startplatz jetzt sichern – noch bevor neue Teams buchen können. Kader und Logo sind schon eingetragen.\nNur ${max} Plätze – bucht jetzt, dann ist euer Platz sicher.`,
+      }
+    : {
+        pre: `Nur ${max} Plätze – ihr seid vorregistriert und könnt jetzt vor allen anderen buchen.`,
+        kicker: 'Exklusiv für euch',
+        head: 'Ihr seid zuerst dran.',
+        intro: `Weil ihr euch vorregistriert habt, könnt ihr euren Startplatz für ${escapeHtml(cfg.seasonLabel)} jetzt schon sichern – <strong style="color:#ffffff;">bevor die Buchung für alle öffnet.</strong>`,
+        box: `🔥 <strong style="color:#D7FF3B;">Es gibt nur ${max} Plätze</strong> – und auch die Teams aus Season One sind schon eingeladen. Wer zuerst verbindlich bucht, ist dabei. Euer Vorsprung ist kurz – nutzt ihn jetzt.`,
+        steps: ['Mit dieser E-Mail anmelden', 'Eure Daten sind schon drin', 'Kader &amp; Logo – fertig'],
+        subject: `⚡ ${cfg.seasonLabel}: Nur ${max} Plätze – ihr seid zuerst dran`,
+        textIntro: `Weil ihr euch vorregistriert habt, könnt ihr euren Startplatz jetzt schon sichern – bevor die Buchung für alle öffnet.\nEs gibt nur ${max} Plätze – wer zuerst verbindlich bucht, ist dabei.`,
+      };
   const until = earlyBirdUntil(cfg);
   const untilTxt = until
     ? new Date(until).toLocaleString('de-DE', { timeZone: 'Europe/Berlin', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -746,7 +814,7 @@ export function inviteMail(cfg: BookingConfig, link: string, base = 'https://her
 <meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark">
 <style>@font-face{font-family:'Saira Condensed';font-weight:900;src:url(${escapeHtml(base)}/fonts/EJRLQgErUN8XuHNEtX81i9TmEkrnIcxQ962f.woff2) format('woff2');}</style></head>
 <body style="margin:0;padding:0;background:#04060E;">
-<span style="display:none!important;opacity:0;color:transparent;height:0;width:0;overflow:hidden">Ihr seid vorregistriert – die Buchung ist für euch schon offen, bevor sie für alle startet.</span>
+<span style="display:none!important;opacity:0;color:transparent;height:0;width:0;overflow:hidden">${escapeHtml(v.pre)}</span>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#04060E" style="background:#04060E;padding:20px 10px 32px;">
 <tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
@@ -754,13 +822,13 @@ export function inviteMail(cfg: BookingConfig, link: string, base = 'https://her
     <a href="${escapeHtml(link)}" style="text-decoration:none;"><img src="${escapeHtml(base)}/assets/mail/season2-invite.jpg" width="560" alt="${label} – Vorab-Zugang für vorregistrierte Teams" style="display:block;width:100%;max-width:560px;height:auto;border:0;border-radius:20px;"></a>
   </td></tr>
   <tr><td style="padding:0 6px;">
-    <div style="${T}font-size:11px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#D7FF3B;">Exklusiv für euch</div>
-    <div style="${F}font-size:36px;font-weight:900;line-height:1.02;text-transform:uppercase;color:#ffffff;margin:8px 0 14px;">Ihr seid zuerst dran.</div>
-    <p style="${T}font-size:15px;line-height:1.6;color:#B8C0D9;margin:0 0 18px;">Weil ihr euch vorregistriert habt, könnt ihr euren Startplatz für ${label} jetzt schon sichern – <strong style="color:#ffffff;">bevor die Buchung für alle öffnet.</strong></p>
+    <div style="${T}font-size:11px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#D7FF3B;">${v.kicker}</div>
+    <div style="${F}font-size:36px;font-weight:900;line-height:1.02;text-transform:uppercase;color:#ffffff;margin:8px 0 14px;">${v.head}</div>
+    <p style="${T}font-size:15px;line-height:1.6;color:#B8C0D9;margin:0 0 18px;">${v.intro}</p>
   </td></tr>
   <tr><td style="padding:0 6px 20px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#141A0A" style="background:#141A0A;border:1px solid #4A5A14;border-radius:16px;padding:14px 16px;">
-      <div style="${T}font-size:14px;line-height:1.5;color:#E9FF9A;">⏳ <strong style="color:#D7FF3B;">Euer Vorsprung ist kurz</strong> – ein paar Stunden, vielleicht ein paar Tage. Wann es für alle losgeht, steht noch nicht fest. Nutzt die Chance jetzt.</div>
+      <div style="${T}font-size:14px;line-height:1.5;color:#E9FF9A;">${v.box}</div>
     </td></tr></table>
   </td></tr>
   <tr><td style="padding:0 6px 22px;">
@@ -770,7 +838,7 @@ export function inviteMail(cfg: BookingConfig, link: string, base = 'https://her
   </td></tr>
   <tr><td style="padding:0 2px 20px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-      ${step('1', 'Mit dieser E-Mail anmelden')}${step('2', 'Eure Daten sind schon drin')}${step('3', 'Kader &amp; Logo – fertig')}
+      ${step('1', v.steps[0])}${step('2', v.steps[1])}${step('3', v.steps[2])}
     </tr></table>
   </td></tr>
   ${untilTxt ? `<tr><td style="padding:0 6px 22px;">
@@ -788,17 +856,16 @@ export function inviteMail(cfg: BookingConfig, link: string, base = 'https://her
 </td></tr></table>
 </body></html>`;
   const text = [
-    `${cfg.seasonLabel} – ihr seid zuerst dran.`,
+    `${cfg.seasonLabel} – ${kind === 'current' ? 'euer Platz wartet' : 'ihr seid zuerst dran'}.`,
     '',
-    `Weil ihr euch vorregistriert habt, könnt ihr euren Startplatz jetzt schon sichern – bevor die Buchung für alle öffnet.`,
-    'Euer Vorsprung ist kurz – ein paar Stunden, vielleicht ein paar Tage. Nutzt die Chance jetzt.',
+    v.textIntro,
     '',
     `Jetzt Startplatz sichern: ${link}`,
     untilTxt ? `\nEarly Bird (Doppelpaket): ${twoSeasonsLabel(cfg)} zusammen für ${eur(cfg.priceTwoEarly)} statt ${eur(cfg.priceOne * 2)} – nur ${eur(Math.round(cfg.priceTwoEarly / 2))} pro Season (einzelne Season: ${eur(cfg.priceOne)}). Gilt bis ${untilTxt} Uhr.` : '',
     '',
     'Euer persönlicher Vorab-Zugang – bitte nicht weiterleiten.',
   ].join('\n');
-  return { subject: `⚡ ${cfg.seasonLabel}: Ihr seid zuerst dran`, html, text };
+  return { subject: v.subject, html, text };
 }
 
 // Einladung mit Vorab-Link an ausgewählte Vorregistrierte (max. 10 je Aufruf –
@@ -811,12 +878,14 @@ async function adminInvite(req: VercelRequest, res: VercelResponse) {
   const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'hero-league.de');
   const base = `https://${host}`;
   const link = `${base}/season2?zugang=${encodeURIComponent(cfg.accessKey)}`;
-  const mail = inviteMail(cfg, link, base);
   const invites = await readInvites();
   const sent: string[] = [];
   const failed: string[] = [];
   for (const to of emails) {
     try {
+      // Manager eines aktuellen Teams → eigene Mail („Euer Platz wartet").
+      const team = await managerTeam(to);
+      const mail = team ? inviteMail(cfg, link, base, 'current', team.name) : inviteMail(cfg, link, base, 'prereg');
       await sendMail({ to, from: FROM, ...mail });
       invites[to] = new Date().toISOString();
       sent.push(to);
@@ -895,6 +964,8 @@ async function adminBookingConfig(req: VercelRequest, res: VercelResponse) {
     accessKey: cur.accessKey,
     seasonLabel: clamp(c.seasonLabel, 40) || cur.seasonLabel,
     startInfo: clamp(c.startInfo, 120),
+    seasonDates: clamp(c.seasonDates, 80),
+    nextSeasonDates: clamp(c.nextSeasonDates, 80),
     openAt: openAt && Number.isFinite(new Date(openAt).getTime()) ? new Date(openAt).toISOString() : '',
     earlyBirdDays: Math.min(60, Math.max(0, Math.round(Number(c.earlyBirdDays ?? cur.earlyBirdDays)) || 0)),
     earlyBirdEnd: (() => {
@@ -905,11 +976,13 @@ async function adminBookingConfig(req: VercelRequest, res: VercelResponse) {
     priceOne: cents(c.priceOne, cur.priceOne),
     priceTwo: cents(c.priceTwo, cur.priceTwo),
     priceTwoEarly: cents(c.priceTwoEarly, cur.priceTwoEarly),
+    payLink: link(c.payLink, cur.payLink),
     payLinkOne: link(c.payLinkOne, cur.payLinkOne),
     payLinkTwo: link(c.payLinkTwo, cur.payLinkTwo),
     payLinkTwoEarly: link(c.payLinkTwoEarly, cur.payLinkTwoEarly),
     minSquad: Math.min(30, Math.max(1, Math.round(Number(c.minSquad ?? cur.minSquad)) || cur.minSquad)),
     maxSquad: Math.min(40, Math.max(1, Math.round(Number(c.maxSquad ?? cur.maxSquad)) || cur.maxSquad)),
+    maxTeams: Math.min(200, Math.max(1, Math.round(Number(c.maxTeams ?? cur.maxTeams)) || cur.maxTeams)),
     termsVersion: clamp(c.termsVersion, 60) || cur.termsVersion,
     terms: clamp(c.terms, 20000) || cur.terms,
     rules: clamp(c.rules, 30000) || cur.rules,
