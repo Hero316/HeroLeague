@@ -438,8 +438,13 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
           <motion.div className="relative w-full max-w-6xl mx-auto px-4 pb-14 sm:pb-20 pt-32" style={{ y: titleY, opacity: titleOpacity }}>
             <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.6 }} className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[.06] backdrop-blur px-3 py-1.5 text-[11px] font-mono uppercase tracking-[.2em] text-white/80">
               <span className="relative flex w-2 h-2"><span className="absolute inset-0 rounded-full bg-[#D7FF3B] animate-ping opacity-70" /><span className="relative w-2 h-2 rounded-full bg-[#D7FF3B]" /></span>
-              {soldOut ? 'Ausgebucht' : canBook ? (cfg.maxTeams ? `Nur ${cfg.maxTeams} Plätze · noch ${cfg.slotsLeft ?? cfg.maxTeams} frei` : 'Buchung geöffnet') : cfg.maxTeams ? `Anmeldung startet bald · nur ${cfg.maxTeams} Plätze` : 'Anmeldung startet bald'}
+              {soldOut ? 'Ausgebucht' : canBook ? 'Buchung geöffnet' : 'Anmeldung startet bald'}
             </motion.div>
+            {cfg.maxTeams ? (
+              <motion.div initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.25, duration: 0.5 }} className="mt-3">
+                <SlotsBadge left={cfg.slotsLeft ?? 0} total={cfg.maxTeams} soldOut={soldOut} />
+              </motion.div>
+            ) : null}
             <h1 className="mt-5 font-display font-black uppercase tracking-tight leading-[.8]">
               <span className="block overflow-hidden">
                 <motion.span className="block text-[clamp(3.6rem,17vw,10rem)]" initial={{ y: '105%' }} animate={{ y: 0 }} transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}>
@@ -627,11 +632,8 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
           <SectionHead center kicker="Preise pro Team" title={<>Sichert euch<br /><span className="text-[#D7FF3B]">euren Platz.</span></>} text={`Ein Preis pro Team – egal wie groß euer Kader ist. Wer ${twoLabel} zusammen bucht, spart.`} />
 
           {cfg.maxTeams ? (
-            <Reveal className="flex justify-center mb-6">
-              <div className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-bold border ${soldOut ? 'border-rose-400/40 bg-rose-500/10 text-rose-200' : 'border-white/15 bg-white/[.05] text-white'}`}>
-                <Users className="w-4 h-4 text-[#D7FF3B]" />
-                {soldOut ? `Ausgebucht – alle ${cfg.maxTeams} Plätze vergeben` : canBook ? <>Nur {cfg.maxTeams} Startplätze · <span className="text-[#D7FF3B]">noch {cfg.slotsLeft ?? cfg.maxTeams} frei</span></> : `Nur ${cfg.maxTeams} Startplätze`}
-              </div>
+            <Reveal className="flex justify-center mb-8">
+              <SlotsBadge left={cfg.slotsLeft ?? 0} total={cfg.maxTeams} soldOut={soldOut} big />
             </Reveal>
           ) : null}
           {earlyActive && cfg.earlyBirdUntil && (
@@ -800,6 +802,23 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
         )}
       </div>
     </MotionConfig>
+  );
+}
+
+// Großer, roter Hinweis: „Nur noch X von 24 Plätzen frei" (pulsiert leicht).
+function SlotsBadge({ left, total, soldOut, big = false }: { left: number; total: number; soldOut: boolean; big?: boolean }) {
+  return (
+    <motion.div
+      animate={soldOut ? undefined : { boxShadow: ['0 0 0 0 rgba(244,63,94,.45)', '0 0 0 14px rgba(244,63,94,0)', '0 0 0 0 rgba(244,63,94,0)'] }}
+      transition={{ duration: 2.2, repeat: Infinity }}
+      className={`inline-flex items-center gap-2.5 rounded-2xl border-2 border-rose-500/70 text-white ${big ? 'px-5 py-3' : 'px-4 py-2.5'}`}
+      style={{ background: 'linear-gradient(135deg, rgba(225,29,72,.35), rgba(127,29,29,.35))' }}
+    >
+      <span className="relative flex w-2.5 h-2.5 shrink-0"><span className="absolute inset-0 rounded-full bg-rose-400 animate-ping opacity-75" /><span className="relative w-2.5 h-2.5 rounded-full bg-rose-500" /></span>
+      <span className={`font-display font-black uppercase tracking-tight leading-none ${big ? 'text-[22px] sm:text-[28px]' : 'text-[18px] sm:text-[22px]'}`}>
+        {soldOut ? <>Ausgebucht – alle Plätze vergeben</> : <>Nur noch <span className="text-rose-300">{left}</span> von {total} Plätzen frei</>}
+      </span>
+    </motion.div>
   );
 }
 
