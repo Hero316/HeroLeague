@@ -31,6 +31,7 @@ import TippBonusAdmin from './components/TippBonusAdmin';
 import TippReminder from './components/TippReminder';
 import StreamStage, { LeagueStreamStage } from './components/StreamStage';
 import StreamAdmin, { ObsLinks } from './components/StreamAdmin';
+import StudioRegie from './components/StudioRegie';
 import { fetchStreams, fetchLeagueStreams } from './lib/streams';
 import InstallPrompt from './components/InstallPrompt';
 import Ergebniszettel from './components/Ergebniszettel';
@@ -56,7 +57,7 @@ import ChatApp from './components/ChatApp';
 import Avatar from './components/Avatar';
 import DeepLinkModal from './components/DeepLinkModal';
 import { PageHeader, Footer, AccordionGroup, AccordionSection, loadPartners } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight, Target, Star, Twitch, MonitorPlay, Crown } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight, Target, Star, Twitch, MonitorPlay, Crown, Clapperboard } from 'lucide-react';
 import TrackingCenter from './components/TrackingCenter';
 import HeroOneAdmin from './components/HeroOneAdmin';
 import { effectivePermissions } from './lib/permissions';
@@ -1884,6 +1885,19 @@ export default function App() {
                       demoActive={demo.active}
                       onToggleDemo={handleToggleDemo}
                     />
+                  )}
+
+                  {canManageChannels && (
+                    <AccordionSection
+                      id="studio-regie"
+                      category="kanaele"
+                      title="Live-Regie (Studio-Stream)"
+                      subtitle="OBS-Overlay quer & hoch mit Partnern – Konfetti, Links & Einblendungen per Knopfdruck"
+                      icon={<Clapperboard className="w-5 h-5" />}
+                      accent="#FFC53D"
+                    >
+                      <StudioRegie />
+                    </AccordionSection>
                   )}
 
                   {canManageChannels && (

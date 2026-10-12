@@ -666,7 +666,7 @@ function LineupBar({ m, vis }: { m: OverlayMatch; vis: (n: string) => Visual | u
 
 // Instagram-Name aus dem im Admin gepflegten Social-Link („Social Media").
 // „instagram.com/heroleague" → „@heroleague". Nichts gepflegt → keine Pille.
-function useInstagramHandle(enabled: boolean): string {
+export function useInstagramHandle(enabled: boolean): string {
   const [handle, setHandle] = useState('');
   useEffect(() => {
     if (!enabled) return;
@@ -683,7 +683,7 @@ function useInstagramHandle(enabled: boolean): string {
   return handle;
 }
 
-function BrandCorner({ instagram }: { instagram: string }) {
+export function BrandCorner({ instagram }: { instagram: string }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: -16 }}
@@ -711,7 +711,7 @@ const ROTATING_PARTNERS = [
   { label: 'Schuh- & Ausrüstungspartner', name: 'Unisport', logo: '/assets/partners/unisport.png', h: 52 },
 ];
 
-function PartnerBar() {
+export function PartnerBar() {
   const [i, setI] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setI((n) => (n + 1) % ROTATING_PARTNERS.length), 9000);
