@@ -18,7 +18,7 @@ import {
   checkCode, clientIp, codeBlock, isDisposableEmail, isEmail, issueCode, mailButton,
   normEmail, sendBrandedMail, tooManyAttempts, verifyTurnstile,
 } from './publicforms.js';
-import { escapeHtml } from './mail.js';
+import { escapeHtml, sendMail } from './mail.js';
 
 const PURPOSE = 'season-booking';
 const FROM = 'Hero League – Season 2 <anmeldung@hero-league.de>';
@@ -573,26 +573,79 @@ async function adminInvites(_req: VercelRequest, res: VercelResponse) {
   );
 }
 
-// Inhalt der Einladungsmail (auch für die Vorschau genutzt).
-export function inviteMail(cfg: BookingConfig, link: string) {
+// Einladungsmail an Vorregistrierte – eigenes, dunkles Season-2-Design
+// (passend zur Landingpage). `base` = https://<host> für Bild-URLs.
+export function inviteMail(cfg: BookingConfig, link: string, base = 'https://hero-league.de') {
   const until = earlyBirdUntil(cfg);
-  const untilTxt = until ? new Date(until).toLocaleString('de-DE', { timeZone: 'Europe/Berlin', weekday: 'short', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '';
-  const p = (t: string) => `<p style="font-family:Arial,Helvetica,sans-serif;color:#3a4441;font-size:14px;line-height:1.6;margin:0 0 12px;">${t}</p>`;
-  return {
-    subject: `${cfg.seasonLabel}: Euer Vorab-Zugang zur Buchung 🏆`,
-    layout: {
-      preheader: `Ihr seid vorregistriert – sichert euch euren Startplatz für ${cfg.seasonLabel} vor allen anderen.`,
-      heading: `${cfg.seasonLabel} – ihr seid zuerst dran`, accent: ACCENT, accentDark: ACCENT_DARK,
-      intro: `Danke, dass ihr euch für ${cfg.seasonLabel} vorregistriert habt! Bevor die Buchung öffentlich startet, könnt ihr euren Startplatz jetzt verbindlich sichern.`,
-      bodyHtml:
-        p(`Meldet euch auf der Seite mit <strong>dieser E-Mail-Adresse</strong> an – eure Angaben aus der Vorregistrierung sind dann schon eingetragen. Ihr ergänzt nur noch Kader, Logo und Paket.`) +
-        (untilTxt ? p(`<strong>Early Bird:</strong> Das Paket für zwei Seasons gibt es bis ${escapeHtml(untilTxt)} Uhr für ${eur(cfg.priceTwoEarly)} statt ${eur(cfg.priceTwo)}.`) : '') +
-        mailButton('Jetzt Startplatz sichern', link, ACCENT) +
-        p(`<span style="font-size:12px;color:#7a8580;">Der Link ist euer persönlicher Vorab-Zugang – bitte nicht öffentlich teilen.</span>`),
-      footnote: 'Fragen? Antworte einfach auf diese E-Mail.',
-    },
-    text: `${cfg.seasonLabel} – euer Vorab-Zugang zur Buchung: ${link}`,
-  };
+  const untilTxt = until
+    ? new Date(until).toLocaleString('de-DE', { timeZone: 'Europe/Berlin', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : '';
+  const F = "font-family:'Saira Condensed','Arial Narrow',Arial,Helvetica,sans-serif;";
+  const T = 'font-family:Arial,Helvetica,sans-serif;';
+  const label = escapeHtml(cfg.seasonLabel);
+  const step = (n: string, t: string) =>
+    `<td width="33%" valign="top" style="padding:0 4px;">
+      <div style="background:#0E1430;border:1px solid #1E2A5E;border-radius:14px;padding:12px 10px;text-align:center;">
+        <div style="${F}font-size:22px;font-weight:900;color:#D7FF3B;line-height:1;">${n}</div>
+        <div style="${T}font-size:12px;line-height:1.35;color:#C9D0E6;margin-top:6px;">${t}</div>
+      </div></td>`;
+  const html = `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark">
+<style>@font-face{font-family:'Saira Condensed';font-weight:900;src:url(${escapeHtml(base)}/fonts/EJRLQgErUN8XuHNEtX81i9TmEkrnIcxQ962f.woff2) format('woff2');}</style></head>
+<body style="margin:0;padding:0;background:#04060E;">
+<span style="display:none!important;opacity:0;color:transparent;height:0;width:0;overflow:hidden">Ihr seid vorregistriert – die Buchung ist für euch schon offen, bevor sie für alle startet.</span>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#04060E" style="background:#04060E;padding:20px 10px 32px;">
+<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;">
+  <tr><td style="padding:0 0 22px;">
+    <a href="${escapeHtml(link)}" style="text-decoration:none;"><img src="${escapeHtml(base)}/assets/mail/season2-invite.jpg" width="560" alt="${label} – Vorab-Zugang für vorregistrierte Teams" style="display:block;width:100%;max-width:560px;height:auto;border:0;border-radius:20px;"></a>
+  </td></tr>
+  <tr><td style="padding:0 6px;">
+    <div style="${T}font-size:11px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#D7FF3B;">Exklusiv für euch</div>
+    <div style="${F}font-size:36px;font-weight:900;line-height:1.02;text-transform:uppercase;color:#ffffff;margin:8px 0 14px;">Ihr seid zuerst dran.</div>
+    <p style="${T}font-size:15px;line-height:1.6;color:#B8C0D9;margin:0 0 18px;">Weil ihr euch vorregistriert habt, könnt ihr euren Startplatz für ${label} jetzt schon sichern – <strong style="color:#ffffff;">bevor die Buchung für alle öffnet.</strong></p>
+  </td></tr>
+  <tr><td style="padding:0 6px 20px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#141A0A" style="background:#141A0A;border:1px solid #4A5A14;border-radius:16px;padding:14px 16px;">
+      <div style="${T}font-size:14px;line-height:1.5;color:#E9FF9A;">⏳ <strong style="color:#D7FF3B;">Euer Vorsprung ist kurz</strong> – ein paar Stunden, vielleicht ein paar Tage. Wann es für alle losgeht, steht noch nicht fest. Nutzt die Chance jetzt.</div>
+    </td></tr></table>
+  </td></tr>
+  <tr><td style="padding:0 6px 22px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" bgcolor="#D7FF3B" style="background:#D7FF3B;border-radius:16px;">
+      <a href="${escapeHtml(link)}" style="display:block;${F}font-size:18px;font-weight:900;letter-spacing:.5px;text-transform:uppercase;color:#06091A;text-decoration:none;padding:17px 14px;white-space:nowrap;">Startplatz sichern&nbsp;&rarr;</a>
+    </td></tr></table>
+  </td></tr>
+  <tr><td style="padding:0 2px 20px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+      ${step('1', 'Mit dieser E-Mail anmelden')}${step('2', 'Eure Daten sind schon drin')}${step('3', 'Kader &amp; Logo – fertig')}
+    </tr></table>
+  </td></tr>
+  ${untilTxt ? `<tr><td style="padding:0 6px 22px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#0B1236" style="background:#0B1236;border:1px solid #2F5BFF;border-radius:16px;padding:14px 16px;">
+      <div style="${T}font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#8FA8FF;">Early Bird</div>
+      <div style="${F}font-size:24px;font-weight:900;color:#ffffff;margin-top:4px;line-height:1.1;">2 Seasons für ${eur(cfg.priceTwoEarly)} <span style="${T}font-size:14px;font-weight:400;color:#7C86A8;text-decoration:line-through;">${eur(cfg.priceTwo)}</span></div>
+      <div style="${T}font-size:12.5px;color:#B8C0D9;margin-top:4px;">nur bis ${escapeHtml(untilTxt)} Uhr</div>
+    </td></tr></table>
+  </td></tr>` : ''}
+  <tr><td align="center" style="padding:6px 6px 0;">
+    <img src="${escapeHtml(base)}/assets/hero-league-logo.png" alt="Hero League" height="34" style="height:34px;width:auto;border:0;opacity:.8;">
+    <p style="${T}font-size:11.5px;line-height:1.6;color:#5E6788;margin:10px 0 0;">Euer persönlicher Vorab-Zugang – bitte nicht weiterleiten.<br>Fragen? Antwortet einfach auf diese Mail. · <a href="https://hero-league.de" style="color:#8FA8FF;text-decoration:none;">hero-league.de</a></p>
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+  const text = [
+    `${cfg.seasonLabel} – ihr seid zuerst dran.`,
+    '',
+    `Weil ihr euch vorregistriert habt, könnt ihr euren Startplatz jetzt schon sichern – bevor die Buchung für alle öffnet.`,
+    'Euer Vorsprung ist kurz – ein paar Stunden, vielleicht ein paar Tage. Nutzt die Chance jetzt.',
+    '',
+    `Jetzt Startplatz sichern: ${link}`,
+    untilTxt ? `\nEarly Bird: 2 Seasons für ${eur(cfg.priceTwoEarly)} statt ${eur(cfg.priceTwo)} – nur bis ${untilTxt} Uhr.` : '',
+    '',
+    'Euer persönlicher Vorab-Zugang – bitte nicht weiterleiten.',
+  ].join('\n');
+  return { subject: `⚡ ${cfg.seasonLabel}: Ihr seid zuerst dran`, html, text };
 }
 
 // Einladung mit Vorab-Link an ausgewählte Vorregistrierte (max. 10 je Aufruf –
@@ -603,13 +656,15 @@ async function adminInvite(req: VercelRequest, res: VercelResponse) {
   if (emails.length === 0) return badRequest(res, 'Keine gültigen E-Mail-Adressen.');
   const cfg = await ensureAccessKey(await getBookingConfig());
   const host = String(req.headers['x-forwarded-host'] || req.headers.host || 'hero-league.de');
-  const link = `https://${host}/season2?zugang=${encodeURIComponent(cfg.accessKey)}`;
+  const base = `https://${host}`;
+  const link = `${base}/season2?zugang=${encodeURIComponent(cfg.accessKey)}`;
+  const mail = inviteMail(cfg, link, base);
   const invites = await readInvites();
   const sent: string[] = [];
   const failed: string[] = [];
   for (const to of emails) {
     try {
-      await sendBrandedMail({ to, from: FROM, ...inviteMail(cfg, link) });
+      await sendMail({ to, from: FROM, ...mail });
       invites[to] = new Date().toISOString();
       sent.push(to);
     } catch {
