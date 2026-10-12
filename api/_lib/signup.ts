@@ -12,6 +12,7 @@ import {
 } from './publicforms.js';
 import { escapeHtml } from './mail.js';
 import { seasonBooking } from './booking.js';
+import { partnerProgram } from './partners.js';
 
 const PURPOSE = 'season-signup';
 const FROM = 'Hero League – Anmeldung <anmeldung@hero-league.de>';
@@ -452,6 +453,8 @@ export async function seasonSignup(req: VercelRequest, res: VercelResponse) {
 
   // Verbindliche Season-2-Buchung (Landingpage /season2) – eigene Datei.
   if (await seasonBooking(req, res, action)) return;
+  // Partnerprogramm (Landingpage /partner + Anfragen) – eigene Datei.
+  if (await partnerProgram(req, res, action)) return;
 
   // Öffentliche Aktionen
   if (req.method === 'GET' && action === 'config') return publicConfig(req, res);

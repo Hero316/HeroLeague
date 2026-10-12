@@ -1,10 +1,11 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown, X, Smartphone, Search, LayoutDashboard, Star, Trophy, Home, Radio, KeyRound, Award, ClipboardList, Ticket } from 'lucide-react';
+import { ChevronDown, X, Smartphone, Search, LayoutDashboard, Star, Trophy, Home, Radio, KeyRound, Award, ClipboardList, Ticket, Handshake, ArrowRight } from 'lucide-react';
 import { ActiveTab, Partner, PartnersConfig, Team } from '../types';
 import { apiFetch } from '../lib/api';
 import { trackSponsorClick } from '../lib/sponsors';
+import { cachedPartnerProgram, loadPartnerProgram } from '../lib/partners';
 import { useBackClose } from '../lib/backStack';
 import { useInstall } from './InstallProvider';
 import { useMediaQuery } from '../lib/useMediaQuery';
@@ -653,6 +654,48 @@ export function PartnerSection() {
   );
 }
 
+// „Partner werden"-Balken über dem Partnerbereich – auf jeder öffentlichen
+// Seite, sobald das Partnerprogramm im Backoffice eingeschaltet ist. Führt zur
+// Landingpage /partner (dort selbst ausgeblendet).
+export function PartnerCta({ onNavigatePath }: { onNavigatePath?: (path: string) => void }) {
+  const [active, setActive] = React.useState(() => cachedPartnerProgram()?.active === true);
+  React.useEffect(() => {
+    void loadPartnerProgram().then((c) => setActive(c?.active === true));
+  }, []);
+  if (!active || /^\/partner/i.test(window.location.pathname)) return null;
+  const go = () => (onNavigatePath ? onNavigatePath('/partner') : window.location.assign('/partner'));
+  return (
+    <section className="relative overflow-hidden border-t border-[#F2C14E]/25" style={{ background: 'linear-gradient(100deg,#0d0b05 0%,#1c160a 45%,#0d0b05 100%)' }}>
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 w-1/3"
+        style={{ background: 'linear-gradient(90deg, transparent, rgba(242,193,78,.16), transparent)' }}
+        initial={{ left: '-35%' }}
+        animate={{ left: '120%' }}
+        transition={{ duration: 3.4, repeat: Infinity, repeatDelay: 4, ease: 'easeInOut' }}
+      />
+      <div className="relative max-w-[1320px] mx-auto px-4 sm:px-10 py-6 sm:py-7 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8">
+        <div className="flex items-center gap-4 min-w-0 flex-1">
+          <span className="shrink-0 grid place-items-center w-12 h-12 rounded-2xl bg-[#F2C14E] text-black shadow-[0_10px_30px_-8px_rgba(242,193,78,.6)]">
+            <Handshake className="w-6 h-6" />
+          </span>
+          <div className="min-w-0">
+            <div className="font-display font-black uppercase text-white text-[22px] sm:text-[26px] leading-none tracking-tight">
+              Partner <span className="text-[#F2C14E]">werden</span>
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={go}
+          className="shrink-0 inline-flex items-center justify-center gap-2 rounded-2xl bg-[#F2C14E] px-6 py-3.5 font-display font-black uppercase tracking-wide text-[16px] text-black cursor-pointer transition-transform duration-150 hover:brightness-105 active:scale-[.98]"
+        >
+          Partner werden <ArrowRight className="w-4 h-4" />
+        </button>
+      </div>
+    </section>
+  );
+}
+
 interface FooterProps {
   onNavigate: (tab: ActiveTab) => void;
   // Navigation zu Nicht-Tab-Seiten (Impressum/Datenschutz) über den rohen Pfad.
@@ -675,6 +718,7 @@ export function Footer({ onNavigate, onNavigatePath }: FooterProps) {
   ];
   return (
     <>
+      <PartnerCta onNavigatePath={onNavigatePath} />
       <PartnerSection />
       <footer className="border-t border-white/[.07] bg-[#080b09]">
         <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-7 flex items-center justify-between gap-6 flex-wrap">
