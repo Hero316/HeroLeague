@@ -428,7 +428,13 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
                         {rank}
                       </span>
                       <TeamCrest name={s.teamName} shortName={s.shortName} color={s.logoColor} logoUrl={s.logoUrl} size="sm" onSelect={onSelectTeam ? () => onSelectTeam(s.teamId) : undefined} />
-                      <span className="flex-1 font-sans font-bold text-[13.5px] text-hl-text truncate">{s.teamName}</span>
+                      {onSelectTeam ? (
+                        <button type="button" onClick={() => onSelectTeam(s.teamId)} title={`${s.teamName} – Vereinsseite öffnen`} className="flex-1 min-w-0 text-left font-sans font-bold text-[13.5px] text-hl-text truncate cursor-pointer hover:text-white transition-colors">
+                          {s.teamName}
+                        </button>
+                      ) : (
+                        <span className="flex-1 min-w-0 font-sans font-bold text-[13.5px] text-hl-text truncate">{s.teamName}</span>
+                      )}
                       <span className={`font-display font-black text-lg ${rank === 1 ? 'text-brand-accent-light' : 'text-white'}`}>
                         {s.points}
                       </span>

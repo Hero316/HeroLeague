@@ -158,7 +158,13 @@ function AwardSide({
         </div>
       </Tap>
       {(data.team?.name || data.club) && (
-        <div className="mt-1 font-sans font-bold uppercase tracking-[1.5px] text-[10px] sm:text-xs text-white/55 truncate max-w-full">{data.team?.name || data.club}</div>
+        <Tap
+          onClick={data.team && onSelectTeam ? () => onSelectTeam(data.team!.id) : undefined}
+          label={data.team ? `${data.team.name} – Vereinsseite öffnen` : undefined}
+          className={`block mt-1 mx-auto ${side === 'left' ? 'lg:mr-0' : 'lg:ml-0'} font-sans font-bold uppercase tracking-[1.5px] text-[10px] sm:text-xs text-white/55 truncate max-w-full ${data.team && onSelectTeam ? 'hover:text-white transition-colors' : ''}`}
+        >
+          {data.team?.name || data.club}
+        </Tap>
       )}
       </div>
       <div className="mt-4 sm:mt-5 flex flex-col lg:flex-row items-center lg:items-end gap-4 sm:gap-8">

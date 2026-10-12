@@ -498,6 +498,7 @@ export default function Statistiken({
     unit: string;
     name: string;
     sub?: string;
+    subTeamId?: string; // Verein unter dem Spielernamen → anklickbar (Vereinsseite)
     visual: CardVisual;
     onClick?: () => void; // Namensklick: Spieler → Spielerdetail, Team → Teamseite
     tied?: Team[]; // weitere Teams mit genau demselben Wert
@@ -516,6 +517,7 @@ export default function Statistiken({
       unit: 'Tore',
       name: topScorer.name,
       sub: topScorer.teamName,
+      subTeamId: topScorer.teamId,
       visual: { type: 'player', imageUrl: topScorer.imageUrl, teamId: topScorer.teamId, color: topScorer.teamLogoColor, name: topScorer.name },
     });
   }
@@ -529,6 +531,7 @@ export default function Statistiken({
       unit: 'Vorlagen',
       name: topAssist.name,
       sub: topAssist.teamName,
+      subTeamId: topAssist.teamId,
       visual: { type: 'player', imageUrl: topAssist.imageUrl, teamId: topAssist.teamId, color: topAssist.teamLogoColor, name: topAssist.name },
     });
   }
@@ -543,6 +546,7 @@ export default function Statistiken({
       unit: 'Tore pro Spiel',
       name: bestRatio.name,
       sub: bestRatio.teamName,
+      subTeamId: bestRatio.teamId,
       visual: { type: 'player', imageUrl: bestRatio.imageUrl, teamId: bestRatio.teamId, color: bestRatio.teamLogoColor, name: bestRatio.name },
     });
   }
@@ -773,7 +777,18 @@ export default function Statistiken({
                         ) : (
                           <div className="font-display font-black text-[22px] sm:text-[26px] leading-[.95] uppercase text-white truncate">{c.name}</div>
                         )}
-                        {c.sub && <div className="font-sans text-[12.5px] text-hl-mute mt-1 truncate">{c.sub}</div>}
+                        {c.sub && (c.subTeamId && onSelectTeam && teams.some((t) => t.id === c.subTeamId) ? (
+                          <button
+                            type="button"
+                            onClick={() => onSelectTeam(c.subTeamId!)}
+                            title={`${c.sub} – Vereinsseite öffnen`}
+                            className="block max-w-full text-left font-sans text-[12.5px] text-hl-mute mt-1 truncate cursor-pointer hover:text-white transition-colors"
+                          >
+                            {c.sub}
+                          </button>
+                        ) : (
+                          <div className="font-sans text-[12.5px] text-hl-mute mt-1 truncate">{c.sub}</div>
+                        ))}
                       </div>
                     )}
                     <div className="mt-auto pt-4 flex items-baseline gap-2 flex-wrap">
