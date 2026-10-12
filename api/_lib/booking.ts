@@ -798,20 +798,20 @@ export function inviteMail(cfg: BookingConfig, link: string, base = 'https://her
         kicker: team ? `Für ${team}` : 'Für euer Team',
         head: 'Euer Platz wartet.',
         intro: `Als Team aus Season One könnt ihr euren Startplatz für ${escapeHtml(cfg.seasonLabel)} jetzt sichern – <strong style="color:#ffffff;">noch bevor neue Teams buchen können.</strong> Euren Kader mit Rückennummern und euer Logo haben wir schon für euch eingetragen.`,
-        box: `🏆 <strong style="color:#D7FF3B;">Nur ${max} Plätze für ${escapeHtml(cfg.seasonLabel)}.</strong> Bucht jetzt verbindlich – dann ist euer Platz sicher.`,
+        box: `🏆 <strong style="color:#D7FF3B;">${escapeHtml(cfg.seasonLabel)} wächst auf ${max} Teams in zwei Ligen</strong> – und die Plätze sind heiß begehrt. Bucht jetzt verbindlich, dann ist euer Platz sicher.`,
         steps: ['Mit dieser E-Mail anmelden', 'Kader &amp; Logo prüfen', 'Paket wählen &amp; bezahlen'],
         subject: `⚡ ${cfg.seasonLabel}: Euer Platz wartet${teamName ? `, ${teamName}` : ''}`,
-        textIntro: `Als Team aus Season One könnt ihr euren Startplatz jetzt sichern – noch bevor neue Teams buchen können. Kader und Logo sind schon eingetragen.\nNur ${max} Plätze – bucht jetzt, dann ist euer Platz sicher.`,
+        textIntro: `Als Team aus Season One könnt ihr euren Startplatz jetzt sichern – noch bevor neue Teams buchen können. Kader und Logo sind schon eingetragen – ihr müsst nur noch prüfen.\n${cfg.seasonLabel} wächst auf ${max} Teams in zwei Ligen – bucht jetzt verbindlich, dann ist euer Platz sicher.`,
       }
     : {
-        pre: `Nur ${max} Plätze – ihr seid vorregistriert und könnt jetzt vor allen anderen buchen.`,
+        pre: `Ihr seid vorregistriert und könnt jetzt vor allen anderen buchen – die Plätze sind begrenzt.`,
         kicker: 'Exklusiv für euch',
         head: 'Ihr seid zuerst dran.',
-        intro: `Weil ihr euch vorregistriert habt, könnt ihr euren Startplatz für ${escapeHtml(cfg.seasonLabel)} jetzt schon sichern – <strong style="color:#ffffff;">bevor die Buchung für alle öffnet.</strong>`,
-        box: `🔥 <strong style="color:#D7FF3B;">Es gibt nur ${max} Plätze</strong> – und auch die Teams aus Season One sind schon eingeladen. Wer zuerst verbindlich bucht, ist dabei. Euer Vorsprung ist kurz – nutzt ihn jetzt.`,
-        steps: ['Mit dieser E-Mail anmelden', 'Eure Daten sind schon drin', 'Kader &amp; Logo – fertig'],
-        subject: `⚡ ${cfg.seasonLabel}: Nur ${max} Plätze – ihr seid zuerst dran`,
-        textIntro: `Weil ihr euch vorregistriert habt, könnt ihr euren Startplatz jetzt schon sichern – bevor die Buchung für alle öffnet.\nEs gibt nur ${max} Plätze – wer zuerst verbindlich bucht, ist dabei.`,
+        intro: `Weil ihr euch vorregistriert habt, könnt ihr euren Startplatz für ${escapeHtml(cfg.seasonLabel)} jetzt schon sichern – <strong style="color:#ffffff;">bevor die Buchung für alle öffnet.</strong> Teamname und Kontakt aus eurer Vorregistrierung sind schon eingetragen – ihr ergänzt nur noch euren Kader und euer Logo.`,
+        box: `🔥 <strong style="color:#D7FF3B;">${escapeHtml(cfg.seasonLabel)} wächst auf ${max} Teams in zwei Ligen</strong> – die Teams aus Season One sind schon eingeladen, und die Plätze gehen schnell weg. Wer zuerst verbindlich bucht, ist dabei.`,
+        steps: ['Mit dieser E-Mail anmelden', 'Teamname &amp; Kontakt sind schon drin', 'Kader &amp; Logo eintragen – fertig'],
+        subject: `⚡ ${cfg.seasonLabel}: Ihr seid zuerst dran – die Plätze sind begrenzt`,
+        textIntro: `Weil ihr euch vorregistriert habt, könnt ihr euren Startplatz jetzt schon sichern – bevor die Buchung für alle öffnet. Teamname und Kontakt aus eurer Vorregistrierung sind schon eingetragen, ihr ergänzt nur noch Kader und Logo.\n${cfg.seasonLabel} wächst auf ${max} Teams in zwei Ligen – wer zuerst verbindlich bucht, ist dabei.`,
       };
   const until = earlyBirdUntil(cfg);
   const untilTxt = until
