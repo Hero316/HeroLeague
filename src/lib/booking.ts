@@ -7,6 +7,7 @@ export type BookingStatus = 'pending' | 'paid' | 'cancelled';
 
 export interface BookingPublicConfig {
   visible: boolean; // false = noch nicht veröffentlicht (nur seasonLabel/startInfo kommen mit)
+  signupOpen?: boolean; // unverbindliche Vorregistrierung (/anmeldung) noch offen
   published: boolean;
   preview: boolean; // sichtbar, aber (noch) nicht öffentlich – Vorab-Link oder Admin
   preregOnly: boolean; // nur Vorregistrierte dürfen buchen
@@ -126,6 +127,7 @@ export interface BookingAdminConfig {
   startInfo: string;
   openAt: string;
   earlyBirdDays: number;
+  earlyBirdEnd: string; // festes Ende ('' = Öffnung + earlyBirdDays)
   deadlineBasis: 'booking' | 'payment';
   priceOne: number;
   priceTwo: number;
