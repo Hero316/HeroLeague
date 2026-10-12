@@ -693,11 +693,11 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
                   </ul>
                   <button
                     onClick={() => (soldOut ? setPreregHint('soldout') : openFlow('new', pl.id))}
-                    disabled={soldOut}
+                    disabled={soldOut || (pl.id === 'two' && canBook && Boolean(cfg.twoSoldOut))}
                     className={`mt-7 w-full inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-4 font-display font-black uppercase tracking-wide text-[16px] cursor-pointer active:scale-[.98] transition-transform ${pl.hot ? 'text-[#06091A]' : 'text-white border border-white/20 hover:bg-white/10'}`}
                     style={pl.hot ? { background: S2.volt } : undefined}
                   >
-                    {soldOut ? 'Ausgebucht' : canBook ? 'Jetzt buchen' : preregOpen ? 'Vorregistrieren' : 'Startet in Kürze'} <ArrowRight className="w-4 h-4" />
+                    {soldOut ? 'Ausgebucht' : pl.id === 'two' && canBook && cfg.twoSoldOut ? 'Doppelpaket ausgebucht' : canBook ? 'Jetzt buchen' : preregOpen ? 'Vorregistrieren' : 'Startet in Kürze'} <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
               </Reveal>

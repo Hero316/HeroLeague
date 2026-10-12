@@ -124,7 +124,9 @@ export default function Season2BookingAdmin({
 function BookingsTab({ cfg, teams, seasons, canEditClubs, onTeamsChanged }: { cfg: BookingAdminConfig | null; teams: Team[]; seasons: Season[]; canEditClubs: boolean; onTeamsChanged: () => void | Promise<void> }) {
   const [list, setList] = useState<BookingAdminRow[] | null>(null);
   const [err, setErr] = useState('');
-  const [filter, setFilter] = useState<'all' | BookingStatus | 'test'>('all');
+  const [showTest, setShowTest] = useState(false);
+  const [showCancelled, setShowCancelled] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const load = () => {
     setErr('');
@@ -133,16 +135,80 @@ function BookingsTab({ cfg, teams, seasons, canEditClubs, onTeamsChanged }: { cf
   useEffect(load, []);
 
   const real = (list ?? []).filter((b) => !b.consents?.testMode);
-  const counts = {
-    all: real.length,
-    paid: real.filter((b) => b.status === 'paid').length,
-    pending: real.filter((b) => b.status === 'pending').length,
-    test: (list ?? []).filter((b) => b.consents?.testMode).length,
+  const pending = real.filter((b) => b.status === 'pending');
+  const paid = real.filter((b) => b.status === 'paid');
+  const cancelled = real.filter((b) => b.status === 'cancelled');
+  const tests = (list ?? []).filter((b) => b.consents?.testMode);
+  const paidSum = paid.reduce((s, b) => s + b.priceCents, 0);
+  const openSum = pending.reduce((s, b) => s + b.priceCents, 0);
+  const curLabel = cfg?.seasonLabel ?? 'Season 2';
+  const nextLabel = /\d+\s*$/.test(curLabel) ? curLabel.replace(/(\d+)\s*$/, (m) => String(Number(m) + 1)) : 'Folge-Season';
+  // Plätze je Season: jede Buchung belegt die aktuelle Season, das Doppelpaket zusätzlich die nächste.
+  const seasonSlots = [
+    { label: curLabel, dates: cfg?.seasonDates ?? '', max: cfg?.maxTeams ?? 12, paid: paid.length, pending: pending.length },
+    { label: nextLabel, dates: cfg?.nextSeasonDates ?? '', max: cfg?.maxTeamsNext ?? 12, paid: paid.filter((b) => b.package === 'two').length, pending: pending.filter((b) => b.package === 'two').length },
+  ];
+
+  // Zahlung direkt aus der Liste bestätigen.
+  const markPaid = async (b: BookingAdminRow) => {
+    if (!window.confirm(`Zahlung von ${euro(b.priceCents)} für „${b.teamName}“ (${PKG_LABEL(b)}) ist angekommen?`)) return;
+    const notify = window.confirm('Soll das Team jetzt die Bestätigungsmail „Ihr seid dabei!“ bekommen?\n\nOK = Mail senden · Abbrechen = ohne Mail');
+    setBusyId(b.id);
+    try {
+      await bookingAdminStatus(b.id, 'paid', notify);
+      load();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Fehler.');
+    } finally {
+      setBusyId(null);
+    }
   };
-  const paidSum = real.filter((b) => b.status === 'paid').reduce((s, b) => s + b.priceCents, 0);
-  const openSum = real.filter((b) => b.status === 'pending').reduce((s, b) => s + b.priceCents, 0);
-  const shown = (list ?? []).filter((b) =>
-    filter === 'all' ? !b.consents?.testMode : filter === 'test' ? b.consents?.testMode : b.status === filter && !b.consents?.testMode,
+
+  const Row = ({ b }: { b: BookingAdminRow }) => {
+    const st = STATUS[b.status];
+    return (
+      <div className="hl-card rounded-2xl p-3 flex flex-wrap items-center gap-3 min-w-0">
+        <button onClick={() => setOpenId(b.id)} className="min-w-0 flex-1 flex items-center gap-3 text-left cursor-pointer">
+          <span className="shrink-0 w-11 h-11 rounded-xl bg-white/[.05] grid place-items-center overflow-hidden">
+            {b.logoUrl && !isPdf(b.logoUrl) ? <img src={b.logoUrl} alt="" className="w-full h-full object-contain" /> : b.logoUrl ? <FileText className="w-5 h-5 text-hl-mute" /> : <Users className="w-5 h-5 text-hl-faint" />}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-1.5 min-w-0">
+              <span className="font-display font-black uppercase tracking-tight text-white text-[16px] truncate">{b.teamName}</span>
+              {b.consents?.testMode && <span className="shrink-0 text-[9.5px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-200">Test</span>}
+              {b.transferredAt && <span className="shrink-0 text-[9.5px] font-black uppercase px-1.5 py-0.5 rounded bg-brand-accent/25 text-brand-accent-light">In Liga</span>}
+            </span>
+            <span className="mt-1 flex flex-wrap items-center gap-1">
+              <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-[#2F5BFF]/25 text-[#a9bcff]">{curLabel}</span>
+              {b.package === 'two' && <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-[#2F5BFF]/25 text-[#a9bcff]">{nextLabel}</span>}
+              <span className="text-[11.5px] text-hl-mute truncate">{b.ref} · {b.roster.length} Spieler · {fmt(b.createdAt)}</span>
+            </span>
+          </span>
+          <span className="shrink-0 text-right">
+            <span className="block font-display font-black text-white text-[16px] tabular-nums">{euro(b.priceCents)}</span>
+            <span className={`inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded-md border text-[10px] font-bold ${st.cls}`}><st.icon className="w-3 h-3" />{st.label}</span>
+          </span>
+        </button>
+        {b.status === 'pending' && (
+          <button
+            onClick={() => markPaid(b)}
+            disabled={busyId === b.id}
+            className="w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-[13px] font-bold text-white bg-emerald-600 hover:bg-emerald-500 cursor-pointer disabled:opacity-50"
+          >
+            {busyId === b.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Zahlung da – bestätigen
+          </button>
+        )}
+      </div>
+    );
+  };
+  const Section = ({ title, hint, items, tone }: { title: string; hint?: string; items: BookingAdminRow[]; tone: string }) => (
+    <section className="space-y-2">
+      <div className="flex items-baseline gap-2">
+        <h4 className={`text-[12px] font-black uppercase tracking-wider ${tone}`}>{title} ({items.length})</h4>
+        {hint && <span className="text-[11.5px] text-hl-faint">{hint}</span>}
+      </div>
+      {items.length === 0 ? <p className="text-[12.5px] text-hl-faint pl-1">–</p> : <div className="grid grid-cols-1 gap-2">{items.map((b) => <Row key={b.id} b={b} />)}</div>}
+    </section>
   );
   const current = list?.find((b) => b.id === openId) ?? null;
 
@@ -157,55 +223,68 @@ function BookingsTab({ cfg, teams, seasons, canEditClubs, onTeamsChanged }: { cf
   };
 
   return (
-    <div className="space-y-3">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        {[
-          { id: 'all' as const, l: cfg?.maxTeams ? `Plätze vergeben (von ${cfg.maxTeams})` : 'Buchungen', v: String(counts.all - real.filter((b) => b.status === 'cancelled').length) },
-          { id: 'paid' as const, l: `Bezahlt · ${euro(paidSum)}`, v: String(counts.paid) },
-          { id: 'pending' as const, l: `Offen · ${euro(openSum)}`, v: String(counts.pending) },
-          { id: 'test' as const, l: 'Testbuchungen', v: String(counts.test) },
-        ].map((s) => (
-          <button key={s.id} onClick={() => setFilter(s.id)} className={`hl-card rounded-2xl p-3 text-center cursor-pointer transition-all min-w-0 ${filter === s.id ? 'border-brand-accent-light/50' : ''}`} style={filter === s.id ? { boxShadow: '0 0 0 1px rgba(18,165,148,.4)' } : undefined}>
-            <div className="font-display font-black text-2xl text-white tabular-nums leading-none">{s.v}</div>
-            <div className="text-[10px] font-sans font-bold uppercase tracking-wide text-hl-dim mt-1 truncate">{s.l}</div>
-          </button>
-        ))}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <button onClick={load} className="flex items-center gap-1.5 text-[12px] font-bold text-hl-mute hover:text-white cursor-pointer px-3 py-2 rounded-xl bg-white/[.04]"><RefreshCw className="w-3.5 h-3.5" /> Aktualisieren</button>
-        {(list?.length ?? 0) > 0 && <button onClick={exportAll} className="flex items-center gap-1.5 text-[12px] font-bold text-hl-mute hover:text-white cursor-pointer px-3 py-2 rounded-xl bg-white/[.04]"><Download className="w-3.5 h-3.5" /> CSV (alle inkl. Kader)</button>}
-      </div>
-      {err && <p className="text-[13px] text-rose-300">{err}</p>}
-      {!list && !err && <div className="py-8 grid place-items-center"><Loader2 className="w-5 h-5 animate-spin text-hl-mute" /></div>}
-      {list && shown.length === 0 && (
-        <div className="hl-card rounded-2xl p-6 text-center text-[13.5px] text-hl-mute">
-          {filter === 'test' ? 'Keine Testbuchungen.' : 'Noch keine Buchungen. Sobald ein Team auf /season2 bucht, erscheint es hier – mit Kader, Logo und allen Angaben.'}
-        </div>
-      )}
-      <div className="grid grid-cols-1 gap-2">
-        {shown.map((b) => {
-          const st = STATUS[b.status];
+    <div className="space-y-4">
+      {/* Plätze je Season */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        {seasonSlots.map((sl) => {
+          const free = Math.max(0, sl.max - sl.paid - sl.pending);
           return (
-            <button key={b.id} onClick={() => setOpenId(b.id)} className="hl-card rounded-2xl p-3 flex items-center gap-3 text-left cursor-pointer hover:border-white/20 transition-colors min-w-0">
-              <span className="shrink-0 w-11 h-11 rounded-xl bg-white/[.05] grid place-items-center overflow-hidden">
-                {b.logoUrl && !isPdf(b.logoUrl) ? <img src={b.logoUrl} alt="" className="w-full h-full object-contain" /> : b.logoUrl ? <FileText className="w-5 h-5 text-hl-mute" /> : <Users className="w-5 h-5 text-hl-faint" />}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-display font-black uppercase tracking-tight text-white text-[16px] truncate">{b.teamName}</span>
-                  {b.consents?.testMode && <span className="shrink-0 text-[9.5px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-200">Test</span>}
-                  {b.transferredAt && <span className="shrink-0 text-[9.5px] font-black uppercase px-1.5 py-0.5 rounded bg-brand-accent/25 text-brand-accent-light">In Liga</span>}
+            <div key={sl.label} className="hl-card rounded-2xl p-3.5 min-w-0">
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="font-display font-black uppercase tracking-tight text-white text-[17px] leading-none">{sl.label}</div>
+                  {sl.dates && <div className="text-[11px] text-hl-faint mt-1 truncate">{sl.dates}</div>}
                 </div>
-                <div className="text-[12px] text-hl-mute truncate">{b.ref} · {PKG_LABEL(b)} · {b.roster.length} Spieler · {fmt(b.createdAt)}</div>
+                <div className="shrink-0 text-right">
+                  <div className="font-display font-black text-white text-[22px] leading-none tabular-nums">{sl.paid + sl.pending}<span className="text-hl-faint text-[15px]">/{sl.max}</span></div>
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-hl-dim mt-0.5">Plätze belegt</div>
+                </div>
               </div>
-              <div className="shrink-0 text-right">
-                <div className="font-display font-black text-white text-[16px] tabular-nums">{euro(b.priceCents)}</div>
-                <span className={`inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded-md border text-[10px] font-bold ${st.cls}`}><st.icon className="w-3 h-3" />{st.label}</span>
+              <div className="mt-3 h-2.5 rounded-full bg-white/10 overflow-hidden flex">
+                <div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, (sl.paid / sl.max) * 100)}%` }} />
+                <div className="h-full bg-amber-400" style={{ width: `${Math.min(100, (sl.pending / sl.max) * 100)}%` }} />
               </div>
-            </button>
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11.5px]">
+                <span className="text-emerald-300"><b>{sl.paid}</b> bestätigt</span>
+                <span className="text-amber-200"><b>{sl.pending}</b> warten auf Zahlung</span>
+                <span className={free === 0 ? 'text-rose-300 font-bold' : 'text-hl-soft'}>{free === 0 ? 'voll' : <><b>{free}</b> frei</>}</span>
+              </div>
+            </div>
           );
         })}
       </div>
+      <p className="text-[11.5px] text-hl-faint -mt-2">Doppelpaket belegt einen Platz in beiden Seasons, das Einzelpaket nur in {curLabel}. Auch offene Buchungen halten ihren Platz – wer nicht zahlt, auf „Storniert“ setzen, dann wird der Platz frei.</p>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[12px] text-hl-mute">Eingegangen: <b className="text-emerald-300">{euro(paidSum)}</b> · offen: <b className="text-amber-200">{euro(openSum)}</b></span>
+        <button onClick={load} className="ml-auto flex items-center gap-1.5 text-[12px] font-bold text-hl-mute hover:text-white cursor-pointer px-3 py-2 rounded-xl bg-white/[.04]"><RefreshCw className="w-3.5 h-3.5" /> Aktualisieren</button>
+        {(list?.length ?? 0) > 0 && <button onClick={exportAll} className="flex items-center gap-1.5 text-[12px] font-bold text-hl-mute hover:text-white cursor-pointer px-3 py-2 rounded-xl bg-white/[.04]"><Download className="w-3.5 h-3.5" /> CSV</button>}
+      </div>
+      {err && <p className="text-[13px] text-rose-300">{err}</p>}
+      {!list && !err && <div className="py-8 grid place-items-center"><Loader2 className="w-5 h-5 animate-spin text-hl-mute" /></div>}
+      {list && real.length === 0 && (
+        <div className="hl-card rounded-2xl p-6 text-center text-[13.5px] text-hl-mute">
+          Noch keine Buchungen. Sobald ein Team auf /season2 bucht, erscheint es hier – mit Kader, Logo und allen Angaben.
+        </div>
+      )}
+      {list && real.length > 0 && (
+        <>
+          <Section title="Warten auf Zahlung" hint="Zahlung bei PayPal prüfen, dann bestätigen" items={pending} tone="text-amber-200" />
+          <Section title="Bestätigt" items={paid} tone="text-emerald-300" />
+          {cancelled.length > 0 && (
+            <div>
+              <button onClick={() => setShowCancelled((v) => !v)} className="text-[12px] font-bold text-hl-mute hover:text-white cursor-pointer">{showCancelled ? '▾' : '▸'} Storniert ({cancelled.length})</button>
+              {showCancelled && <div className="mt-2 grid grid-cols-1 gap-2">{cancelled.map((b) => <Row key={b.id} b={b} />)}</div>}
+            </div>
+          )}
+        </>
+      )}
+      {tests.length > 0 && (
+        <div>
+          <button onClick={() => setShowTest((v) => !v)} className="text-[12px] font-bold text-hl-mute hover:text-white cursor-pointer">{showTest ? '▾' : '▸'} Testbuchungen ({tests.length}) – zählen nicht mit</button>
+          {showTest && <div className="mt-2 grid grid-cols-1 gap-2">{tests.map((b) => <Row key={b.id} b={b} />)}</div>}
+        </div>
+      )}
       <AnimatePresence>
         {current && (
           <BookingDetail
@@ -808,7 +887,8 @@ function SettingsTab({ cfg, onSaved }: { cfg: BookingAdminConfig; onSaved: (c: B
           <L label="Zeitraum Folge-Season"><input value={c.nextSeasonDates} onChange={(e) => set({ nextSeasonDates: e.target.value })} placeholder="Oktober 2027 – Januar 2028" className={inp} /></L>
           <L label="Kader min."><input type="number" min={1} max={30} value={c.minSquad} onChange={(e) => set({ minSquad: Number(e.target.value) || 1 })} className={inp} /></L>
           <L label="Kader max."><input type="number" min={1} max={40} value={c.maxSquad} onChange={(e) => set({ maxSquad: Number(e.target.value) || 1 })} className={inp} /></L>
-          <L label="Startplätze gesamt" hint="Danach „Ausgebucht“ (zählt offene + bezahlte Buchungen, keine stornierten/Test)."><input type="number" min={1} max={200} value={c.maxTeams} onChange={(e) => set({ maxTeams: Number(e.target.value) || 1 })} className={inp} /></L>
+          <L label={`Startplätze ${c.seasonLabel}`} hint="Danach „Ausgebucht“ (offene + bestätigte Buchungen)."><input type="number" min={1} max={200} value={c.maxTeams} onChange={(e) => set({ maxTeams: Number(e.target.value) || 1 })} className={inp} /></L>
+          <L label="Startplätze Folge-Season" hint="Wird nur vom Doppelpaket belegt."><input type="number" min={1} max={200} value={c.maxTeamsNext} onChange={(e) => set({ maxTeamsNext: Number(e.target.value) || 1 })} className={inp} /></L>
         </div>
       </section>
 

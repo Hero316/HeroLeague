@@ -580,8 +580,13 @@ function PackageStep({ cfg, draft, patch, earlyActive, onNext }: { cfg: BookingP
     onNext();
   };
   const two = priceOf(cfg, 'two', earlyActive);
-  const options: { id: PackageId; title: string; sub: string; cents: number; strike?: number; badge?: string }[] = [
-    { id: 'two', title: twoSeasonsLabel(cfg.seasonLabel), sub: `${earlyActive ? 'Early Bird · ' : ''}nur ${euro(Math.round(two.cents / 2))} pro Season`, cents: two.cents, strike: cfg.prices.one * 2, badge: earlyActive ? `Early Bird · −${euro(cfg.prices.two - cfg.prices.twoEarly)}` : 'Bester Preis' },
+  // Doppelpaket ausgebucht (Folge-Season voll)? Dann nur noch einzeln buchbar.
+  const twoOut = Boolean(cfg.twoSoldOut) && !cfg.testMode;
+  useEffect(() => {
+    if (twoOut && draft.pkg === 'two') patch({ pkg: null });
+  }, [twoOut]); // eslint-disable-line react-hooks/exhaustive-deps
+  const options: { id: PackageId; title: string; sub: string; cents: number; strike?: number; badge?: string; disabled?: boolean }[] = [
+    { id: 'two', title: twoSeasonsLabel(cfg.seasonLabel), sub: twoOut ? 'Ausgebucht – Folge-Season ist voll' : `${earlyActive ? 'Early Bird · ' : ''}nur ${euro(Math.round(two.cents / 2))} pro Season`, cents: two.cents, strike: cfg.prices.one * 2, badge: twoOut ? undefined : earlyActive ? `Early Bird · −${euro(cfg.prices.two - cfg.prices.twoEarly)}` : 'Bester Preis', disabled: twoOut },
     { id: 'one', title: cfg.seasonLabel, sub: cfg.seasonDates ? `Eine Season · ${cfg.seasonDates}` : 'Eine Season', cents: cfg.prices.one },
   ];
   return (
@@ -591,7 +596,7 @@ function PackageStep({ cfg, draft, patch, earlyActive, onNext }: { cfg: BookingP
         {options.map((o) => {
           const on = draft.pkg === o.id;
           return (
-            <button key={o.id} type="button" onClick={() => patch({ pkg: o.id })} className={`relative w-full text-left rounded-2xl border p-4 cursor-pointer transition-all ${on ? 'border-[#5B7FFF] bg-[#2F5BFF]/15 shadow-[0_0_0_3px_rgba(47,91,255,.2)]' : 'border-white/10 bg-white/[.035] hover:border-white/25'}`}>
+            <button key={o.id} type="button" disabled={o.disabled} onClick={() => patch({ pkg: o.id })} className={`relative w-full text-left rounded-2xl border p-4 cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed ${on ? 'border-[#5B7FFF] bg-[#2F5BFF]/15 shadow-[0_0_0_3px_rgba(47,91,255,.2)]' : 'border-white/10 bg-white/[.035] hover:border-white/25'}`}>
               {o.badge && <span className="absolute -top-2.5 right-3 px-2.5 py-0.5 rounded-full text-[10.5px] font-black uppercase tracking-wider text-[#06091A]" style={{ background: S2.volt }}>{o.badge}</span>}
               <div className="flex items-center gap-3">
                 <span className={`shrink-0 w-5 h-5 rounded-full border-2 grid place-items-center ${on ? 'border-[#5B7FFF]' : 'border-white/30'}`}>{on && <span className="w-2.5 h-2.5 rounded-full bg-[#5B7FFF]" />}</span>
