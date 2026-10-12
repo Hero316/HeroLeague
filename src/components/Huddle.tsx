@@ -7,7 +7,8 @@ import { HuddleSession, huddleStart, huddleJoin, huddleLeave, huddlePoll, huddle
 import { startHoldMusic } from '../lib/holdMusic';
 import Avatar from './Avatar';
 import { ModalPortal } from './ui';
-import { useBackClose } from '../lib/backStack';
+import { goBackLayer, useBackClose } from '../lib/backStack';
+import { NotesSheet, NotesView } from './HuddleNotes';
 
 // ===========================================================================
 // Huddle-Steuerung (eine aktive Sitzung pro Gerät)
@@ -227,19 +228,60 @@ function useHoldMusic(play: boolean, delayMs: number) {
 }
 
 // Ein Kamerabild (oder geteilter Bildschirm). Immer stumm – der Ton läuft
-// getrennt; stummes Video darf überall automatisch abspielen (sonst bleibt es
-// z. B. in Safari schwarz stehen).
+// getrennt; stummes Video darf überall automatisch abspielen.
+// Robust gegen „schwarzes Bild" (v. a. Safari/iPhone):
+//  • jedes <video> bekommt einen EIGENEN MediaStream mit den Videospuren –
+//    Safari zeigt denselben Stream-Objekt in zwei Elementen (Leiste + Vollbild)
+//    sonst gern nur in einem an, das andere bleibt schwarz;
+//  • sobald eine Spur Bilder liefert (unmute), neu abspielen;
+//  • Wächter: läuft die Spur, aber das Video zeigt nichts, wird es neu
+//    angehängt und gestartet.
 export function VideoView({ stream, mirror = false, fit = 'cover', className = '' }: { stream: MediaStream; mirror?: boolean; fit?: 'cover' | 'contain'; className?: string }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     const v = ref.current;
     if (!v) return;
-    if (v.srcObject !== stream) v.srcObject = stream;
-    v.play().catch(() => {});
-    // Neue Spur im selben Stream (z. B. Kamera gewechselt) → neu anstoßen.
+    let own = new MediaStream(stream.getVideoTracks());
+    const attach = () => {
+      own = new MediaStream(stream.getVideoTracks());
+      v.srcObject = own;
+      v.play().catch(() => {});
+    };
+    attach();
     const kick = () => v.play().catch(() => {});
-    stream.addEventListener('addtrack', kick);
-    return () => stream.removeEventListener('addtrack', kick);
+    const hooked = new Set<MediaStreamTrack>();
+    const hook = () => {
+      for (const t of stream.getVideoTracks()) {
+        if (hooked.has(t)) continue;
+        hooked.add(t);
+        t.addEventListener('unmute', kick);
+      }
+    };
+    hook();
+    const onTracks = () => { hook(); attach(); };
+    stream.addEventListener('addtrack', onTracks);
+    stream.addEventListener('removetrack', onTracks);
+    v.addEventListener('loadedmetadata', kick);
+    const onVis = () => { if (document.visibilityState === 'visible') kick(); };
+    document.addEventListener('visibilitychange', onVis);
+    let stuck = 0;
+    const watch = setInterval(() => {
+      const live = stream.getVideoTracks().some((t) => t.readyState === 'live' && !t.muted);
+      if (!live) { stuck = 0; return; }
+      if (v.paused) kick();
+      if (v.videoWidth === 0 || v.readyState < 2) {
+        stuck += 1;
+        if (stuck >= 2) { stuck = 0; attach(); }
+      } else stuck = 0;
+    }, 1500);
+    return () => {
+      clearInterval(watch);
+      stream.removeEventListener('addtrack', onTracks);
+      stream.removeEventListener('removetrack', onTracks);
+      v.removeEventListener('loadedmetadata', kick);
+      document.removeEventListener('visibilitychange', onVis);
+      for (const t of hooked) t.removeEventListener('unmute', kick);
+    };
   }, [stream]);
   return (
     <video
@@ -301,11 +343,25 @@ export function HuddleBar({
 
   // Notizen entprellt speichern.
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastEdit = useRef(0);
+  const [saving, setSaving] = useState(false);
   const onNotes = (v: string) => {
     setNotes(v);
+    lastEdit.current = Date.now();
+    setSaving(true);
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => huddleSaveNotes(active.state.id, v).catch(() => {}), 600);
+    saveTimer.current = setTimeout(() => {
+      huddleSaveNotes(active.state.id, v).catch(() => {}).finally(() => setSaving(false));
+    }, 600);
   };
+  // Änderungen der anderen live übernehmen – aber nicht, während man selbst tippt.
+  useEffect(() => {
+    const s = active.session;
+    s.onNotes = (n) => {
+      if (Date.now() - lastEdit.current > 2500) setNotes(n);
+    };
+    return () => { s.onNotes = () => {}; };
+  }, [active.session]);
 
   const nameOf = (id: string, fallback: string) => team.find((t) => t.id === id)?.name ?? fallback;
 
@@ -420,27 +476,7 @@ export function HuddleBar({
         </div>
       </motion.div>
 
-      {notesOpen && (
-        <ModalPortal>
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[95] bg-black/70 flex items-center justify-center p-4" onClick={() => setNotesOpen(false)}>
-            <div className="hl-card hl-modal-card w-full max-w-md p-4" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="font-display font-bold text-white uppercase tracking-tight flex items-center gap-1.5"><StickyNote className="w-4 h-4" /> Huddle-Notizen</h4>
-                <button onClick={() => setNotesOpen(false)} className="p-1 text-hl-mute hover:text-white cursor-pointer"><X className="w-5 h-5" /></button>
-              </div>
-              <p className="text-[11px] text-hl-mute mb-2">Alle im Huddle sehen dieselben Notizen. Später im Chat auf die Huddle-Karte tippen, um sie wieder zu öffnen.</p>
-              <textarea
-                value={notes}
-                onChange={(e) => onNotes(e.target.value)}
-                rows={8}
-                autoFocus
-                placeholder="Was wurde besprochen? To-dos, Ideen…"
-                className="w-full hl-surf-0 border border-white/10 rounded-xl px-3 py-2 text-[15px] text-white focus:outline-none focus:border-brand-accent-light resize-y"
-              />
-            </div>
-          </motion.div>
-        </ModalPortal>
-      )}
+      {notesOpen && <NotesSheet notes={notes} onChange={onNotes} onClose={() => goBackLayer()} saving={saving} />}
 
       {stageOpen && (
         <HuddleStage
@@ -717,7 +753,7 @@ export function HuddleCard({
                 <button onClick={() => setShowNotes(false)} className="p-1 text-hl-mute hover:text-white cursor-pointer"><X className="w-5 h-5" /></button>
               </div>
               {notes && notes.trim() ? (
-                <p className="text-[15px] text-hl-soft font-sans whitespace-pre-wrap break-words">{notes}</p>
+                <div className="max-h-[70vh] overflow-y-auto"><NotesView text={notes} /></div>
               ) : (
                 <p className="text-sm text-hl-faint italic">Für diesen Huddle wurden keine Notizen gemacht.</p>
               )}
