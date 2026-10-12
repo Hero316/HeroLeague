@@ -5,6 +5,7 @@ import { sql, getTeams } from './_lib/db.js';
 import { requirePermission, requireMatchWrite, requireSuperadmin, getSession, hasPermission } from './_lib/auth.js';
 import { applyRosterToMatches, type RosterTeamIn } from './_lib/roster.js';
 import { managerRequestCode, managerVerify, managerGetRoster, managerSaveRoster, adminGetManagers, adminSaveManagers, adminGetManagerConfig, adminSaveManagerConfig } from './_lib/managers.js';
+import { getStudio, saveStudio } from './_lib/studio.js';
 import { getTips, submitTip, registerRequestCode, registerVerify, adminListTippUsers, getBonus, submitBonus, adminSetBonusSolution, acceptTerms } from './_lib/tippgame.js';
 
 const DEFAULT_TWITCH = { channel: '', isLive: false };
@@ -965,6 +966,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const rows = await sql`SELECT value FROM settings WHERE key = 'game'`;
         return res.json({ board: toGameBoard(rows[0]?.value) });
       }
+      if (resource === 'studio') return getStudio(req, res);
       if (resource === 'tips') return getTips(req, res);
       if (resource === 'tipp-users') return adminListTippUsers(req, res);
       if (resource === 'tipp-bonus') return getBonus(req, res);
@@ -1003,6 +1005,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'managers') return adminSaveManagers(req, res);
       if (resource === 'manager-config') return adminSaveManagerConfig(req, res);
       if (resource === 'game') return saveGame(req, res);
+      if (resource === 'studio') return saveStudio(req, res);
       if (resource === 'sponsor-click') return trackSponsorClick(req, res);
       if (resource === 'tip') return submitTip(req, res);
       if (resource === 'tipp-register') return registerRequestCode(req, res);

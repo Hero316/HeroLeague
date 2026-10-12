@@ -8,14 +8,17 @@ import './index.css';
 // OBS-Einblendung (/overlay) läuft eigenständig – ohne App, Navbar, Besucherzählung
 // oder Service Worker. Transparent, damit OBS sie über das Kamerabild legen kann.
 const ObsOverlay = lazy(() => import('./components/ObsOverlay.tsx'));
+// Studio-Stream (/overlay/studio): Partner + Live-Regie-Einblendungen.
+const StudioOverlay = lazy(() => import('./components/StudioOverlay.tsx'));
 const isOverlay = /^\/(overlay|obs)(\/|$)/i.test(location.pathname);
+const isStudio = /^\/(overlay|obs)\/studio/i.test(location.pathname);
 if (isOverlay) document.documentElement.classList.add('hl-obs');
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {isOverlay ? (
       <Suspense fallback={null}>
-        <ObsOverlay />
+        {isStudio ? <StudioOverlay /> : <ObsOverlay />}
       </Suspense>
     ) : (
       <ErrorBoundary>
