@@ -501,6 +501,7 @@ CREATE TABLE IF NOT EXISTS season_bookings (
   roster JSONB NOT NULL DEFAULT '[]', logo_url TEXT NOT NULL DEFAULT '',
   consents JSONB NOT NULL DEFAULT '{}', note TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  paid_at TIMESTAMPTZ, team_id TEXT NOT NULL DEFAULT '', transferred_at TIMESTAMPTZ
+  paid_at TIMESTAMPTZ, team_id TEXT NOT NULL DEFAULT '', transferred_at TIMESTAMPTZ,
+  source_team_id TEXT NOT NULL DEFAULT '' -- aktuelles Liga-Team (Manager-E-Mail), falls erkannt
 );
 CREATE INDEX IF NOT EXISTS idx_season_bookings_email ON season_bookings(email);

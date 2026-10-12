@@ -334,6 +334,7 @@ function BookingDetail({
             <section>
               <h4 className="text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1.5">Kontakt</h4>
               <div className="rounded-2xl bg-white/[.03] border border-white/[.06] px-3.5">
+                {b.sourceTeamId && <Row k="Aktuelles Team" v={`${teams.find((t) => t.id === b.sourceTeamId)?.name ?? b.sourceTeamId} (per Manager-E-Mail erkannt)`} />}
                 <Row k="Ansprechpartner" v={b.contactName} />
                 <Row k="E-Mail" v={<a href={`mailto:${b.email}`} className="text-brand-accent-light hover:underline break-all">{b.email}</a>} />
                 <Row k="Telefon" v={<a href={`tel:${b.phone}`} className="text-brand-accent-light hover:underline">{b.phone}</a>} />
@@ -437,7 +438,11 @@ function TransferDialog({ b, teams, seasons, onClose, onDone }: { b: BookingAdmi
   const inSeason = (t: Team) => !t.seasonIds || t.seasonIds.length === 0 || t.seasonIds.includes(seasonId);
   const target = useMemo(() => teams.find((t) => inSeason(t) && norm(t.name) === norm(b.teamName)) ?? null, [teams, seasonId, b.teamName]); // eslint-disable-line react-hooks/exhaustive-deps
   // Älterer Verein mit gleichem Namen (z. B. Season 1) → Spielerfotos/Farbe übernehmen.
-  const source = useMemo(() => target ?? teams.find((t) => norm(t.name) === norm(b.teamName)) ?? null, [teams, target, b.teamName]);
+  // Vorrang: das per Manager-E-Mail erkannte aktuelle Team (auch bei neuem Namen).
+  const source = useMemo(
+    () => target ?? teams.find((t) => b.sourceTeamId && t.id === b.sourceTeamId) ?? teams.find((t) => norm(t.name) === norm(b.teamName)) ?? null,
+    [teams, target, b.teamName, b.sourceTeamId],
+  );
   const [name, setName] = useState(b.teamName);
   const [short, setShort] = useState(() => source?.shortName ?? suggestShort(b.teamName));
   const [busy, setBusy] = useState(false);
@@ -604,7 +609,7 @@ function InvitesTab({ cfg }: { cfg: BookingAdminConfig | null }) {
             <input type="checkbox" checked={sel.has(p.email)} onChange={() => toggle(p.email)} className="shrink-0 w-4 h-4 accent-[#12A594]" />
             <div className="min-w-0 flex-1">
               <div className="text-[13.5px] font-bold text-white truncate">{p.teamName || p.name || p.email}</div>
-              <div className="text-[11.5px] text-hl-mute truncate">{p.email} · {p.source === 'team' ? 'Team' : p.source === 'player' ? 'Spieler' : 'Captain S1'}</div>
+              <div className="text-[11.5px] text-hl-mute truncate">{p.email} · {p.source === 'manager' ? 'Manager (aktuelles Team)' : p.source === 'team' ? 'Team' : p.source === 'player' ? 'Spieler' : 'Captain S1'}</div>
             </div>
             <div className="shrink-0 text-right text-[10.5px] font-bold">
               {p.booking ? (
