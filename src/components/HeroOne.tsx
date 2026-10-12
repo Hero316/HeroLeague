@@ -218,7 +218,30 @@ function NomineeCard({
         <span className="min-w-0 flex-1">
           <span className="block font-display font-black uppercase tracking-tight text-white text-xl sm:text-2xl leading-tight truncate">{p.name}</span>
           <span className="block text-[12px] text-hl-mute truncate">
-            {team?.name ?? p.teamName}
+            {team && onSelectTeam ? (
+              // Liegt im Aufklapp-Knopf → kein verschachtelter <button>; Klick nicht weiterreichen.
+              <span
+                role="link"
+                tabIndex={0}
+                title={`${team.name} – Vereinsseite öffnen`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectTeam(team.id);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onSelectTeam(team.id);
+                  }
+                }}
+                className="cursor-pointer hover:text-white transition-colors"
+              >
+                {team.name}
+              </span>
+            ) : (
+              team?.name ?? p.teamName
+            )}
             {keeper ? ' · Torwart' : ''}
           </span>
           <span className="block text-[11.5px] text-hl-dim truncate mt-0.5">{short}</span>
