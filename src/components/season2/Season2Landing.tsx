@@ -243,7 +243,8 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
     const featured = all.filter((m) => m.featured);
     return [...featured, ...all.filter((m) => !m.featured)].map((m) => m.url).filter((u, i, a) => a.indexOf(u) === i);
   }, [highlights]);
-  const heroBg = images[0] || heroImages.match || '/assets/hero-stadium.png';
+  // Fester Hintergrund oben: Foto aus der Halle (Season 1).
+  const heroBg = '/assets/season2-hero.webp';
   const logos = teams.filter((t) => t.logoUrl);
   const topScorers = useMemo(() => [...players].filter((p) => p.goals > 0).sort((a, b) => b.goals - a.goals).slice(0, 3), [players]);
 
