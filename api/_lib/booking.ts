@@ -51,7 +51,8 @@ export interface BookingConfig {
   payLinkTwoEarly: string;
   minSquad: number;
   maxSquad: number;
-  maxTeams: number; // Startplätze gesamt – danach „Ausgebucht"
+  maxTeams: number; // Startplätze dieser Season (z. B. Season 2) – danach „Ausgebucht"
+  maxTeamsNext: number; // Startplätze der Folge-Season (nur über das Doppelpaket belegt)
   termsVersion: string;
   terms: string; // Teilnahmebedingungen (Volltext)
   rules: string; // Regelwerk (Volltext)
@@ -107,6 +108,7 @@ const DEFAULT_CONFIG: BookingConfig = {
   minSquad: 8,
   maxSquad: 14,
   maxTeams: 12,
+  maxTeamsNext: 12,
   termsVersion: 'Fassung 1',
   terms: DEFAULT_TERMS,
   rules: DEFAULT_RULES,
@@ -220,16 +222,21 @@ async function earlyBirdReminders(cfg: BookingConfig) {
   }
 }
 
-// Vergebene Startplätze = verbindliche Buchungen (offen oder bezahlt), ohne
-// stornierte und ohne Testbuchungen.
-async function takenSlots(): Promise<number> {
+// Belegte Startplätze je Season = verbindliche Buchungen (offen oder bezahlt),
+// ohne stornierte und ohne Testbuchungen. Jede Buchung belegt diese Season;
+// das Doppelpaket ('two') belegt zusätzlich die Folge-Season.
+async function slotCounts(): Promise<{ cur: number; next: number }> {
   try {
-    const rows = await sql`SELECT count(*)::int AS n FROM season_bookings
+    const rows = await sql`SELECT count(*)::int AS cur, count(*) FILTER (WHERE package = 'two')::int AS next
+      FROM season_bookings
       WHERE status <> 'cancelled' AND COALESCE((consents->>'testMode')::boolean, false) = false`;
-    return (rows[0]?.n as number) ?? 0;
+    return { cur: (rows[0]?.cur as number) ?? 0, next: (rows[0]?.next as number) ?? 0 };
   } catch {
-    return 0;
+    return { cur: 0, next: 0 };
   }
+}
+async function takenSlots(): Promise<number> {
+  return (await slotCounts()).cur;
 }
 
 async function signupOpen(): Promise<boolean> {
@@ -359,12 +366,15 @@ async function bookingConfig(req: VercelRequest, res: VercelResponse) {
     return res.json({ visible: false, published: false, seasonLabel: cfg.seasonLabel, startInfo: cfg.startInfo, signupOpen: preregOpen });
   }
   const { ok, test } = await canBook(req, cfg);
-  const taken = await takenSlots();
+  const slots = await slotCounts();
   return res.json({
     visible: true,
     maxTeams: cfg.maxTeams,
-    slotsLeft: Math.max(0, cfg.maxTeams - taken),
-    soldOut: taken >= cfg.maxTeams,
+    slotsLeft: Math.max(0, cfg.maxTeams - slots.cur),
+    soldOut: slots.cur >= cfg.maxTeams,
+    maxTeamsNext: cfg.maxTeamsNext,
+    slotsLeftNext: Math.max(0, cfg.maxTeamsNext - slots.next),
+    twoSoldOut: slots.cur >= cfg.maxTeams || slots.next >= cfg.maxTeamsNext,
     signupOpen: preregOpen,
     published: cfg.published,
     preview: !cfg.published,
@@ -527,8 +537,14 @@ async function bookingSubmit(req: VercelRequest, res: VercelResponse) {
   if (await tooManyAttempts('booking-submit', clientIp(req), 10, 30)) return res.status(429).json({ error: 'Zu viele Versuche. Bitte später erneut.' });
 
   if (allowed.preregOnly && !(await isPreregistered(email))) return badRequest(res, PREREG_ONLY_MSG);
-  if (!allowed.test && (await takenSlots()) >= cfg.maxTeams) {
-    return res.status(409).json({ error: `Leider ausgebucht – alle ${cfg.maxTeams} Startplätze sind vergeben.`, soldOut: true });
+  if (!allowed.test) {
+    const slots = await slotCounts();
+    if (slots.cur >= cfg.maxTeams) {
+      return res.status(409).json({ error: `Leider ausgebucht – alle ${cfg.maxTeams} Startplätze für ${cfg.seasonLabel} sind vergeben.`, soldOut: true });
+    }
+    if (b.package === 'two' && slots.next >= cfg.maxTeamsNext) {
+      return res.status(409).json({ error: `Das Doppelpaket ist ausgebucht – für die Folge-Season sind alle ${cfg.maxTeamsNext} Plätze vergeben. Ihr könnt noch ${cfg.seasonLabel} einzeln buchen.` });
+    }
   }
   const existing = await bookingByEmail(email);
   if (existing && existing.status !== 'cancelled') {
@@ -983,6 +999,7 @@ async function adminBookingConfig(req: VercelRequest, res: VercelResponse) {
     minSquad: Math.min(30, Math.max(1, Math.round(Number(c.minSquad ?? cur.minSquad)) || cur.minSquad)),
     maxSquad: Math.min(40, Math.max(1, Math.round(Number(c.maxSquad ?? cur.maxSquad)) || cur.maxSquad)),
     maxTeams: Math.min(200, Math.max(1, Math.round(Number(c.maxTeams ?? cur.maxTeams)) || cur.maxTeams)),
+    maxTeamsNext: Math.min(200, Math.max(1, Math.round(Number(c.maxTeamsNext ?? cur.maxTeamsNext)) || cur.maxTeamsNext)),
     termsVersion: clamp(c.termsVersion, 60) || cur.termsVersion,
     terms: clamp(c.terms, 20000) || cur.terms,
     rules: clamp(c.rules, 30000) || cur.rules,

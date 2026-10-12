@@ -10,6 +10,9 @@ export interface BookingPublicConfig {
   maxTeams?: number; // Startplätze gesamt
   slotsLeft?: number; // noch freie Startplätze
   soldOut?: boolean; // alle Plätze vergeben
+  maxTeamsNext?: number; // Plätze der Folge-Season (Doppelpaket)
+  slotsLeftNext?: number;
+  twoSoldOut?: boolean; // Doppelpaket nicht mehr buchbar (Folge-Season voll)
   signupOpen?: boolean; // unverbindliche Vorregistrierung (/anmeldung) noch offen
   published: boolean;
   preview: boolean; // sichtbar, aber (noch) nicht öffentlich – Vorab-Link oder Admin
@@ -154,6 +157,7 @@ export interface BookingAdminConfig {
   minSquad: number;
   maxSquad: number;
   maxTeams: number;
+  maxTeamsNext: number;
   termsVersion: string;
   terms: string;
   rules: string;
