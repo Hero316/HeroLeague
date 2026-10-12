@@ -4,9 +4,10 @@ import {
   ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, Crown, Eye, Flame, Gift, Globe, Handshake, Instagram, Loader2,
   MessageSquare, MousePointerClick, Send, Shirt, Sparkles, Trophy, Tv, Users,
 } from 'lucide-react';
-import type { Match, PlayerStat, Team } from '../../types';
+import type { HighlightsConfig, Match, PlayerStat, Team } from '../../types';
 import type { Partner } from '../../types';
-import { loadPartners } from '../ui';
+import { loadPartners, TrimmedLogo } from '../ui';
+import { trackSponsorClick } from '../../lib/sponsors';
 import { PartnerBar, BrandCorner } from '../ObsOverlay';
 import { useTurnstile } from '../../lib/register';
 import { applyPartner, loadPartnerProgram, type PartnerProgramPublic, type PartnerType } from '../../lib/partners';
@@ -31,6 +32,7 @@ interface Props {
   teams: Team[];
   matches: Match[];
   players: PlayerStat[];
+  highlights?: HighlightsConfig;
   onNavigate: (path: string) => void;
 }
 
@@ -199,12 +201,13 @@ const TYPES: { id: PartnerType; title: string; tag: string; text: string; icon: 
     title: 'Weitere',
     tag: 'Individuell',
     icon: Gift,
-    text: 'Gewinnspiel, Event, Catering, Sachpreise – wir finden das passende Format.',
+    text: 'Gewinnspiel, Event, Catering, Sachpreise – oder eure ganz eigene Idee. Schreibt sie uns einfach ins Formular.',
     points: [
       'Gewinnspiele im Livestream (z. B. PS5-Verlosung)',
       'Präsenz bei Spieltagen und Events',
       'Produkte vor Ort, Sampling, Aktionen',
       'Einmalig oder für eine ganze Season',
+      'Eigene Idee? Einfach unten ins Textfeld schreiben',
     ],
   },
 ];
@@ -232,12 +235,11 @@ const FAQ = [
   { q: 'Wie sehen wir, ob es sich lohnt?', a: 'Klicks auf euer Logo zählt die Website automatisch mit. Dazu kommen die Zahlen aus Instagram und dem Livestream – die teilen wir mit euch.' },
 ];
 
-const BUDGETS = ['Noch offen', 'bis 1.000 €', '1.000 – 5.000 €', 'über 5.000 €'];
 
 // --- Formular -------------------------------------------------------------------
 
 function ApplyForm({ cfg, type, setType }: { cfg: PartnerProgramPublic; type: PartnerType | null; setType: (t: PartnerType) => void }) {
-  const [f, setF] = useState({ company: '', contact: '', email: '', phone: '', website: '', budget: '', message: '', hp: '' });
+  const [f, setF] = useState({ company: '', contact: '', email: '', phone: '', website: '', message: '', hp: '' });
   const [privacy, setPrivacy] = useState(false);
   const [terms, setTerms] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -257,7 +259,7 @@ function ApplyForm({ cfg, type, setType }: { cfg: PartnerProgramPublic; type: Pa
     setBusy(true);
     try {
       await applyPartner({
-        company: f.company, contact: f.contact, email: f.email, phone: f.phone, website: f.website, type, budget: f.budget, message: f.message,
+        company: f.company, contact: f.contact, email: f.email, phone: f.phone, website: f.website, type, budget: '', message: f.message,
         acceptPrivacy: privacy, acceptTerms: terms, website2: f.hp, turnstileToken: turnstile.token,
       });
       setDone(true);
@@ -337,23 +339,6 @@ function ApplyForm({ cfg, type, setType }: { cfg: PartnerProgramPublic; type: Pa
       </div>
       {/* Honeypot – für Menschen unsichtbar */}
       <input value={f.hp} onChange={set('hp')} tabIndex={-1} autoComplete="off" aria-hidden className="absolute -left-[9999px] w-px h-px opacity-0" name="website2" />
-      <div>
-        <span className={lbl}>Budget pro Season (optional)</span>
-        <div className="flex flex-wrap gap-2">
-          {BUDGETS.map((b) => (
-            <button
-              key={b}
-              type="button"
-              onClick={() => setF((x) => ({ ...x, budget: x.budget === b ? '' : b }))}
-              className={`rounded-full border px-3.5 py-2 text-[13px] font-semibold cursor-pointer transition-colors ${
-                f.budget === b ? 'border-[#F2C14E] bg-[#F2C14E]/12 text-white' : 'border-white/12 text-white/65 hover:border-white/25'
-              }`}
-            >
-              {b}
-            </button>
-          ))}
-        </div>
-      </div>
       <label className="block">
         <span className={lbl}>Über euch *</span>
         <textarea
@@ -362,7 +347,11 @@ function ApplyForm({ cfg, type, setType }: { cfg: PartnerProgramPublic; type: Pa
           rows={5}
           maxLength={3000}
           className={`${inp} resize-y min-h-[130px]`}
-          placeholder="Wer seid ihr, was macht ihr – und was stellt ihr euch mit der Hero League vor?"
+          placeholder={
+            type === 'other'
+              ? 'Erzählt uns eure Idee – Gewinnspiel, Event, Aktion … und wer ihr seid.'
+              : 'Wer seid ihr, was macht ihr – und was stellt ihr euch mit der Hero League vor?'
+          }
         />
       </label>
       <div className="space-y-3">
@@ -416,7 +405,7 @@ function ApplyForm({ cfg, type, setType }: { cfg: PartnerProgramPublic; type: Pa
 
 // --- Seite ----------------------------------------------------------------------
 
-export default function PartnerLanding({ teams, matches, players, onNavigate }: Props) {
+export default function PartnerLanding({ teams, matches, players, highlights, onNavigate }: Props) {
   const [cfg, setCfg] = useState<PartnerProgramPublic | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -458,6 +447,13 @@ export default function PartnerLanding({ teams, matches, players, onNavigate }: 
   }, [teams, matches, players]);
 
   const withLogo = partners.filter((p) => p.logoUrl);
+  // Gemeinschaftsfoto: das erste hervorgehobene Highlight-Bild aus dem Backoffice
+  // (wie früher oben auf /season2), sonst das Hallenfoto.
+  const groupPhoto = useMemo(() => {
+    if (!highlights) return '/assets/season2-hero.webp';
+    const all = [...highlights.items, ...highlights.albums.flatMap((a) => a.items)].filter((m) => m.type === 'image' && m.url);
+    return (all.find((m) => m.featured) ?? all[0])?.url || '/assets/season2-hero.webp';
+  }, [highlights]);
   const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const pick = (t: PartnerType) => {
     setType(t);
@@ -733,8 +729,8 @@ export default function PartnerLanding({ teams, matches, players, onNavigate }: 
             <Reveal>
               <div className="relative rounded-[28px] overflow-hidden aspect-[4/3] border border-white/10">
                 <motion.img
-                  src="/assets/season2-hero.webp"
-                  alt="Hero League – Teams in der Halle"
+                  src={groupPhoto}
+                  alt="Hero League – Teams und Partner"
                   className="absolute inset-0 w-full h-full object-cover"
                   initial={{ scale: 1.15 }}
                   whileInView={{ scale: 1 }}
@@ -786,7 +782,7 @@ export default function PartnerLanding({ teams, matches, players, onNavigate }: 
                         {t.tag}
                       </span>
                     </div>
-                    <h3 className="mt-6 font-display font-black uppercase text-[30px] sm:text-[32px] text-white leading-[.92]">{t.title}</h3>
+                    <h3 lang="de" className="mt-6 font-display font-black uppercase text-[30px] sm:text-[32px] xl:text-[clamp(22px,1.7vw,32px)] text-white leading-[.92] hyphens-auto [overflow-wrap:anywhere]">{t.title}</h3>
                     <p className="mt-3 text-[15px] text-white/65 leading-relaxed">{t.text}</p>
                     <ul className="mt-6 space-y-2.5 flex-1">
                       {t.points.map((pt) => (
@@ -826,12 +822,13 @@ export default function PartnerLanding({ teams, matches, players, onNavigate }: 
                         href={p.linkUrl || undefined}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={() => trackSponsorClick(p.id, p.name, 'partner-page')}
                         className={`group flex flex-col h-full rounded-[24px] p-6 sm:p-7 text-center transition-transform hover:-translate-y-1 overflow-hidden ${dark ? 'border border-[#F2C14E]/50' : 'bg-white'}`}
                         style={dark ? { background: 'linear-gradient(150deg,#2a2412,#0d0f0a 75%)' } : undefined}
                       >
                         <div className={`text-[11px] font-mono uppercase tracking-[.18em] ${dark ? 'text-[#F2C14E]' : 'text-black/50'}`}>{p.label || 'Partner'}</div>
-                        <div className="mt-5 flex-1 flex items-center justify-center min-h-[80px]">
-                          <img src={p.logoUrl} alt={p.name} className="h-16 sm:h-20 w-auto max-w-[80%] object-contain transition-transform group-hover:scale-105" loading="lazy" />
+                        <div className="mt-5 flex-1 flex items-center justify-center min-h-[110px] transition-transform group-hover:scale-105">
+                          <TrimmedLogo url={p.logoUrl} alt={p.name} maxH={p.tier === 'main' ? 104 : 72} maxW={260} />
                         </div>
                         <div className={`mt-5 text-[14px] font-bold ${dark ? 'text-white' : 'text-black/80'}`}>{p.name}</div>
                       </a>
