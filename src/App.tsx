@@ -1322,7 +1322,7 @@ export default function App() {
     return (
       <>
         <React.Suspense fallback={<div className="min-h-screen bg-[#050706]" />}>
-          <PartnerLanding teams={currentSeasonTeams} matches={currentSeasonMatches} players={players} onNavigate={navigateTo} />
+          <PartnerLanding teams={currentSeasonTeams} matches={currentSeasonMatches} players={players} highlights={highlights} onNavigate={navigateTo} />
         </React.Suspense>
         <Footer onNavigate={goToTab} onNavigatePath={navigateTo} />
       </>

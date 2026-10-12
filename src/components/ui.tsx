@@ -550,6 +550,43 @@ function PartnerLogo({
   );
 }
 
+// Logo ohne eingebackenen Rand, eingepasst in maxH × maxW (z. B. Partner-Seite).
+export function TrimmedLogo({ url, alt, maxH, maxW, className = '' }: { url: string; alt: string; maxH: number; maxW: number; className?: string }) {
+  const box = useLogoBox(url);
+  if (box) {
+    let h = maxH;
+    let w = h * box.ratio;
+    if (w > maxW) {
+      w = maxW;
+      h = w / box.ratio;
+    }
+    return (
+      <span className={`relative block overflow-hidden ${className}`} style={{ width: w, height: h }}>
+        <img
+          src={url}
+          alt={alt}
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          className="absolute max-w-none"
+          style={{ width: w / box.w, height: h / box.h, left: -(box.x * w) / box.w, top: -(box.y * h) / box.h }}
+        />
+      </span>
+    );
+  }
+  return (
+    <img
+      src={url}
+      alt={alt}
+      loading="lazy"
+      decoding="async"
+      referrerPolicy="no-referrer"
+      className={`w-auto object-contain ${className}`}
+      style={{ height: maxH, maxWidth: maxW, opacity: box === undefined ? 0 : undefined }}
+    />
+  );
+}
+
 // Logo-Größen (sichtbarer Inhalt): Hauptpartner klar am größten; Bank- und
 // Ausrüstungspartner identisch; normale Partner etwas kleiner.
 const SIZE_MAIN: [LogoSize, LogoSize] = [{ h: 120, w: 300 }, { h: 170, w: 460 }];
