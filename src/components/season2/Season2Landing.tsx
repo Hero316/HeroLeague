@@ -176,7 +176,7 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
   const [step, setStep] = useState<Step>('email');
   const [intro, setIntro] = useState<'prereg' | 'new'>('new');
   const [draft, setDraft] = useState<BookingDraft>(() => newDraft(8));
-  const [preregHint, setPreregHint] = useState(false);
+  const [preregHint, setPreregHint] = useState<'' | 'prereg' | 'soon'>('');
   const [scrolled, setScrolled] = useState(false);
 
   // Vorab-Zugang aus dem Link übernehmen (und aus der Adresszeile entfernen).
@@ -256,10 +256,15 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
   const titleOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
 
   const canBook = Boolean(cfg?.canBook);
+  // Vorregistrierung noch offen? (im Backoffice abschaltbar) – sonst keine
+  // „Vorregistrieren"-Tasten mehr, nur „Startet in Kürze".
+  const preregOpen = cfg?.signupOpen !== false;
+  const mainLabel = canBook ? 'Startplatz buchen' : preregOpen ? 'Unverbindlich vorregistrieren' : 'Buchung startet in Kürze';
+  const mainAction = () => (canBook ? openFlow('new') : preregOpen ? onNavigate('/anmeldung') : setPreregHint('soon'));
   const openFlow = (mode: 'prereg' | 'new', pkg?: PackageId) => {
     if (!canBook) {
-      if (mode === 'prereg') setPreregHint(true);
-      else onNavigate('/anmeldung');
+      setPreregHint(mode === 'prereg' ? 'prereg' : preregOpen ? '' : 'soon');
+      if (mode !== 'prereg' && preregOpen) onNavigate('/anmeldung');
       return;
     }
     setIntro(mode);
@@ -300,9 +305,9 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
                 {cfg?.startInfo ? <><br /><span className="text-white/85 font-semibold">{cfg.startInfo}</span></> : null}
               </p>
               <div className="mt-8 flex flex-wrap justify-center gap-3">
-                <button onClick={() => onNavigate('/anmeldung')} className="inline-flex items-center gap-2 rounded-2xl px-6 py-3.5 font-display font-black uppercase tracking-wide text-[#06091A] cursor-pointer" style={{ background: S2.volt }}>
+                {cfg?.signupOpen !== false && <button onClick={() => onNavigate('/anmeldung')} className="inline-flex items-center gap-2 rounded-2xl px-6 py-3.5 font-display font-black uppercase tracking-wide text-[#06091A] cursor-pointer" style={{ background: S2.volt }}>
                   Unverbindlich vorregistrieren <ArrowRight className="w-4 h-4" />
-                </button>
+                </button>}
                 <button onClick={() => onNavigate('/')} className="inline-flex items-center gap-2 rounded-2xl px-6 py-3.5 font-display font-black uppercase tracking-wide text-white border border-white/20 hover:bg-white/10 cursor-pointer">Zur Website</button>
               </div>
             </motion.div>
@@ -334,7 +339,7 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
     { q: 'Wann ist unser Startplatz fix?', a: 'Sobald eure Zahlung bei uns eingegangen ist. Dann bekommt ihr eine Bestätigung per E-Mail.' },
     { q: 'Bis wann gilt der Early Bird?', a: deadlineTxt
       ? `Der Early-Bird-Preis von ${euro(cfg.prices.twoEarly)} gilt nur für das Paket mit zwei Seasons und endet am ${deadlineTxt}. ${cfg.deadlineBasis === 'payment' ? 'Maßgeblich ist der Zahlungseingang bis zu diesem Zeitpunkt.' : 'Maßgeblich ist der verbindliche Buchungsabschluss bis zu diesem Zeitpunkt.'} Danach kostet das Zweierpaket ${euro(cfg.prices.two)}.`
-      : `Der Early-Bird-Preis von ${euro(cfg.prices.twoEarly)} gilt ${'14'} Tage ab der offiziellen Öffnung der Buchung – nur für das Paket mit zwei Seasons. Den genauen Stichtag geben wir mit der Öffnung bekannt.` },
+      : `Der Early-Bird-Preis von ${euro(cfg.prices.twoEarly)} gilt nur für kurze Zeit ab dem Start der Buchung – und nur für das Paket mit zwei Seasons. Den genauen Stichtag geben wir mit der Öffnung bekannt.` },
     { q: 'Wir haben uns schon vorregistriert – was jetzt?', a: 'Klickt auf „Schon vorregistriert?" und gebt die E-Mail-Adresse eurer Vorregistrierung ein. Nach der Bestätigung per Code sind eure Angaben schon eingetragen – ihr ergänzt nur noch Kader, Logo und Paket.' },
     { q: 'Brauchen wir eigene Trikots?', a: 'Ja. Ab Season 2 sind einheitliche Teamtrikots mit gut lesbaren, kontrastreichen Rückennummern Pflicht. Jede Nummer ist im Team nur einmal vergeben und fest einem Spieler zugeordnet.' },
     { q: 'Können wir den Kader später ändern?', a: 'Ja. Änderungen und Nachmeldungen müssen vor dem jeweiligen Einsatz gemeldet werden – inklusive Rückennummer.' },
@@ -354,7 +359,7 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
     ? [`${euro(saveEarly)} gespart ggü. 2× einzeln (${euro(cfg.prices.one * 2)})`, 'Startplatz für zwei Seasons gesichert', `Early Bird nur bis ${deadlineTxt} – danach ${euro(cfg.prices.two)}`]
     : earlyEnded
       ? [`${euro(saveTwo)} gespart ggü. 2× einzeln (${euro(cfg.prices.one * 2)})`, 'Startplatz für zwei Seasons gesichert', 'Ein Preis für beide Seasons']
-      : [`${euro(saveTwo)} gespart ggü. 2× einzeln (${euro(cfg.prices.one * 2)})`, 'Startplatz für zwei Seasons gesichert', `Early Bird zum Start: ${euro(cfg.prices.twoEarly)} – 14 Tage ab offizieller Öffnung`];
+      : [`${euro(saveTwo)} gespart ggü. 2× einzeln (${euro(cfg.prices.one * 2)})`, 'Startplatz für zwei Seasons gesichert', `Early Bird zum Start: ${euro(cfg.prices.twoEarly)} – nur für kurze Zeit`];
   const plans: { id: PackageId; title: string; sub: string; cents: number; strike?: number; perSeason: number; badge?: string; hot?: boolean; points: string[] }[] = [
     { id: 'one', title: '1 Season', sub: cfg.seasonLabel, cents: cfg.prices.one, perSeason: cfg.prices.one, points: ['Startplatz für eine Season', 'Tracking, Statistiken & Spielerkarten', 'Alle Awards & Highlights'] },
     {
@@ -435,8 +440,8 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
               <span className="text-white/55">Jedes Spiel getrackt, jede Aktion gezählt{cfg.startInfo ? ` – ${cfg.startInfo}.` : '.'}</span>
             </motion.p>
             <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.85, duration: 0.7 }} className="mt-7 flex flex-wrap gap-3">
-              <button onClick={() => (canBook ? openFlow('new') : onNavigate('/anmeldung'))} className="group inline-flex items-center gap-2 rounded-2xl px-6 py-4 font-display font-black uppercase tracking-wide text-[17px] text-[#06091A] cursor-pointer active:scale-[.98] transition-transform" style={{ background: S2.volt, boxShadow: '0 18px 50px -16px rgba(215,255,59,.6)' }}>
-                {canBook ? 'Startplatz buchen' : 'Unverbindlich vorregistrieren'} <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              <button onClick={mainAction} className="group inline-flex items-center gap-2 rounded-2xl px-6 py-4 font-display font-black uppercase tracking-wide text-[17px] text-[#06091A] cursor-pointer active:scale-[.98] transition-transform" style={{ background: S2.volt, boxShadow: '0 18px 50px -16px rgba(215,255,59,.6)' }}>
+                {mainLabel} <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
               <button onClick={() => openFlow('prereg')} className="inline-flex items-center gap-2 rounded-2xl px-6 py-4 font-display font-black uppercase tracking-wide text-[17px] text-white border border-white/25 bg-white/[.06] backdrop-blur hover:bg-white/15 cursor-pointer">
                 <Sparkles className="w-5 h-5 text-[#D7FF3B]" /> Schon vorregistriert?
@@ -445,7 +450,9 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
             <AnimatePresence>
               {preregHint && (
                 <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mt-4 max-w-xl rounded-2xl border border-white/15 bg-black/40 backdrop-blur px-4 py-3 text-[14px] text-white/80">
-                  Super, dass ihr dabei seid! Sobald die verbindliche Buchung startet, meldet ihr euch hier mit der E-Mail eurer Vorregistrierung an – alle Angaben sind dann schon ausgefüllt. Wir sagen euch per E-Mail Bescheid.
+                  {preregHint === 'prereg'
+                    ? 'Super, dass ihr dabei seid! Sobald die verbindliche Buchung startet, meldet ihr euch hier mit der E-Mail eurer Vorregistrierung an – alle Angaben sind dann schon ausgefüllt. Wir sagen euch per E-Mail Bescheid.'
+                    : 'Die verbindliche Buchung startet in Kürze – schaut bald wieder vorbei. Alle Infos und Preise findet ihr schon hier auf der Seite.'}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -633,15 +640,17 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
                     className={`mt-7 w-full inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-4 font-display font-black uppercase tracking-wide text-[16px] cursor-pointer active:scale-[.98] transition-transform ${pl.hot ? 'text-[#06091A]' : 'text-white border border-white/20 hover:bg-white/10'}`}
                     style={pl.hot ? { background: S2.volt } : undefined}
                   >
-                    {canBook ? 'Jetzt buchen' : 'Vorregistrieren'} <ArrowRight className="w-4 h-4" />
+                    {canBook ? 'Jetzt buchen' : preregOpen ? 'Vorregistrieren' : 'Startet in Kürze'} <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
               </Reveal>
             ))}
           </div>
           <Reveal className="mt-6 text-center text-[12.5px] text-white/45 max-w-2xl mx-auto">
-            Alle Preise pro Team inkl. aller Leistungen. Das Early-Bird-Angebot gilt ausschließlich für die gemeinsame Buchung beider Seasons{deadlineTxt ? ` bis ${deadlineTxt}` : ` – ${'14'} Tage ab offizieller Öffnung der Buchung`}.
-            {!canBook && <><br />Die verbindliche Buchung ist noch nicht geöffnet – registriert euch jetzt unverbindlich vor, dann melden wir uns zuerst bei euch.</>}
+            Alle Preise pro Team inkl. aller Leistungen. Das Early-Bird-Angebot gilt ausschließlich für die gemeinsame Buchung beider Seasons{deadlineTxt ? ` bis ${deadlineTxt}` : ' – nur für kurze Zeit ab dem Start der Buchung'}.
+            {!canBook && (preregOpen
+              ? <><br />Die verbindliche Buchung ist noch nicht geöffnet – registriert euch jetzt unverbindlich vor, dann melden wir uns zuerst bei euch.</>
+              : <><br />Die verbindliche Buchung startet in Kürze.</>)}
           </Reveal>
         </section>
 
@@ -708,8 +717,8 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
                 <h2 className="font-display font-black uppercase tracking-tight text-white text-[44px] sm:text-[84px] leading-[.85]">Seid dabei,<br /><span className="text-[#D7FF3B]">wenn’s losgeht.</span></h2>
                 {cfg.startInfo && <p className="mt-5 text-white/70 text-[16px]">{cfg.startInfo}</p>}
                 <div className="mt-8 flex flex-wrap justify-center gap-3">
-                  <button onClick={() => (canBook ? openFlow('new') : onNavigate('/anmeldung'))} className="inline-flex items-center gap-2 rounded-2xl px-7 py-4 font-display font-black uppercase tracking-wide text-[17px] text-[#06091A] cursor-pointer" style={{ background: S2.volt }}>
-                    {canBook ? 'Startplatz buchen' : 'Unverbindlich vorregistrieren'} <ArrowRight className="w-5 h-5" />
+                  <button onClick={mainAction} className="inline-flex items-center gap-2 rounded-2xl px-7 py-4 font-display font-black uppercase tracking-wide text-[17px] text-[#06091A] cursor-pointer" style={{ background: S2.volt }}>
+                    {mainLabel} <ArrowRight className="w-5 h-5" />
                   </button>
                   <button onClick={() => openFlow('prereg')} className="inline-flex items-center gap-2 rounded-2xl px-7 py-4 font-display font-black uppercase tracking-wide text-[17px] text-white border border-white/25 hover:bg-white/10 cursor-pointer">Schon vorregistriert?</button>
                 </div>
@@ -733,8 +742,8 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
         <AnimatePresence>
           {scrolled && !flowOpen && (
             <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} transition={{ type: 'spring', stiffness: 260, damping: 28 }} className="sm:hidden fixed inset-x-0 bottom-0 z-40 px-4 pt-3 bg-gradient-to-t from-[#04060E] via-[#04060E]/90 to-transparent" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + .75rem)' }}>
-              <button onClick={() => (canBook ? openFlow('new') : onNavigate('/anmeldung'))} className="w-full inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-4 font-display font-black uppercase tracking-wide text-[16px] text-[#06091A] cursor-pointer" style={{ background: S2.volt, boxShadow: '0 14px 40px -12px rgba(215,255,59,.55)' }}>
-                {canBook ? (earlyActive ? `Platz sichern · ab ${euro(Math.round(cfg.prices.twoEarly / 2))}/Season` : 'Startplatz buchen') : 'Unverbindlich vorregistrieren'} <ArrowRight className="w-4 h-4" />
+              <button onClick={mainAction} className="w-full inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-4 font-display font-black uppercase tracking-wide text-[16px] text-[#06091A] cursor-pointer" style={{ background: S2.volt, boxShadow: '0 14px 40px -12px rgba(215,255,59,.55)' }}>
+                {canBook && earlyActive ? `Platz sichern · ab ${euro(Math.round(cfg.prices.twoEarly / 2))}/Season` : mainLabel} <ArrowRight className="w-4 h-4" />
               </button>
             </motion.div>
           )}

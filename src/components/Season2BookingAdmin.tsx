@@ -12,6 +12,7 @@ import {
   bookingAdminStatus, bookingAdminTransfer, euro, formatDeadline,
   type BookingAdminConfig, type BookingAdminRow, type BookingInvitee, type BookingStatus,
 } from '../lib/booking';
+import { signupAdminConfig, signupAdminSave, type SignupConfig } from '../lib/register';
 import type { Player, Season, Team } from '../types';
 
 // ===========================================================================
@@ -39,6 +40,14 @@ const STATUS: Record<BookingStatus, { label: string; cls: string; icon: typeof C
 const PKG_LABEL = (b: BookingAdminRow) => (b.package === 'one' ? '1 Season' : b.earlyBird ? '2 Seasons · Early Bird' : '2 Seasons');
 const isPdf = (url: string) => /\.pdf($|\?)/i.test(url);
 const fullName = (r: { firstName: string; lastName: string }) => `${r.firstName} ${r.lastName}`.trim();
+
+// Ende des Early Bird: festes Enddatum – sonst Öffnung + Tage.
+function ebUntil(c: Pick<BookingAdminConfig, 'earlyBirdEnd' | 'openAt' | 'earlyBirdDays'> | null): string {
+  if (!c) return '';
+  if (c.earlyBirdEnd && Number.isFinite(new Date(c.earlyBirdEnd).getTime())) return new Date(c.earlyBirdEnd).toISOString();
+  if (!c.openAt || !Number.isFinite(new Date(c.openAt).getTime())) return '';
+  return new Date(new Date(c.openAt).getTime() + c.earlyBirdDays * 86400000).toISOString();
+}
 
 function csvDownload(name: string, rows: (string | number)[][]) {
   const esc = (v: string | number) => {
@@ -238,9 +247,9 @@ function BookingDetail({
     let notify = true;
     if (status === 'paid') {
       let warn = '';
-      if (b.earlyBird && cfg?.deadlineBasis === 'payment' && cfg.openAt) {
-        const until = new Date(new Date(cfg.openAt).getTime() + cfg.earlyBirdDays * 86400000);
-        if (Date.now() > until.getTime()) warn = `\n\nAchtung: Für den Early Bird zählt der Zahlungseingang – die Frist ist am ${formatDeadline(until.toISOString())} abgelaufen.`;
+      const until = ebUntil(cfg);
+      if (b.earlyBird && cfg?.deadlineBasis === 'payment' && until && Date.now() > new Date(until).getTime()) {
+        warn = `\n\nAchtung: Für den Early Bird zählt der Zahlungseingang – die Frist ist am ${formatDeadline(until)} abgelaufen.`;
       }
       if (!window.confirm(`Zahlung von ${euro(b.priceCents)} für „${b.teamName}“ als eingegangen markieren?${warn}`)) return;
       notify = window.confirm('Soll das Team jetzt die Bestätigungsmail „Ihr seid dabei!“ bekommen?\n\nOK = Mail senden · Abbrechen = ohne Mail');
@@ -653,15 +662,56 @@ function L({ label, hint, children }: { label: string; hint?: string; children: 
   );
 }
 
+// Vorregistrierung (/anmeldung) an/aus – gleicher Schalter wie unter
+// „Team- & Spieler-Anmeldungen", hier direkt neben der Landingpage-Freigabe.
+function PreregSwitch({ published }: { published: boolean }) {
+  const [sc, setSc] = useState<Omit<SignupConfig, 'turnstileSiteKey'> | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    signupAdminConfig().then((r) => setSc(r.config)).catch((e) => setErr(e instanceof Error ? e.message : 'Fehler beim Laden.'));
+  }, []);
+  const toggle = async () => {
+    if (!sc) return;
+    const next = !sc.open;
+    const q = next
+      ? 'Vorregistrierung wieder ÖFFNEN? Dann können sich neue Teams/Spieler unverbindlich anmelden.'
+      : 'Vorregistrierung SCHLIESSEN? Neue Anmeldungen sind dann nicht mehr möglich, die bestehenden bleiben erhalten.';
+    if (!window.confirm(q)) return;
+    setBusy(true);
+    setErr('');
+    try {
+      await signupAdminSave({ config: { ...sc, open: next } });
+      setSc({ ...sc, open: next });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Fehler beim Speichern.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const target = published ? 'die Season-2-Landingpage (/season2)' : sc?.open ? 'die Vorregistrierung (/anmeldung)' : 'nirgends – der Balken ist ausgeblendet';
+  return (
+    <section className="space-y-2">
+      <h4 className="text-[11px] font-mono uppercase tracking-wider text-hl-dim">Vorregistrierung</h4>
+      {sc ? (
+        <Toggle on={sc.open} onChange={() => { if (!busy) void toggle(); }} title="Vorregistrierung offen (wirkt sofort)" text="Aus = auf /anmeldung kann sich niemand mehr neu vorregistrieren. Bestehende Vorregistrierungen bleiben erhalten und können eingeladen werden." />
+      ) : !err ? <div className="py-3"><Loader2 className="w-4 h-4 animate-spin text-hl-mute" /></div> : null}
+      {err && <p className="text-[12.5px] text-rose-300">{err}</p>}
+      <p className="text-[12.5px] text-hl-soft">Der blaue Balken auf der Startseite führt gerade zu: <strong className="text-white">{target}</strong>.</p>
+    </section>
+  );
+}
+
 function SettingsTab({ cfg, onSaved }: { cfg: BookingAdminConfig; onSaved: (c: BookingAdminConfig) => void }) {
   const [c, setC] = useState<BookingAdminConfig>(cfg);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const set = (p: Partial<BookingAdminConfig>) => setC((x) => ({ ...x, ...p }));
   const dirty = JSON.stringify(c) !== JSON.stringify(cfg);
-  const until = c.openAt ? new Date(new Date(c.openAt).getTime() + c.earlyBirdDays * 86400000).toISOString() : '';
+  const until = ebUntil(c);
+  const ebState = !until ? 'unset' : Date.now() >= new Date(until).getTime() ? 'ended' : 'running';
   const missing = [
-    !c.openAt && 'Öffnungsdatum (Start der Early-Bird-Frist)',
+    !until && 'Enddatum des Early Bird',
     !c.payLinkOne && 'Revolut-Link 1 Season',
     !c.payLinkTwo && 'Revolut-Link 2 Seasons',
     !c.payLinkTwoEarly && 'Revolut-Link Early Bird',
@@ -690,8 +740,9 @@ function SettingsTab({ cfg, onSaved }: { cfg: BookingAdminConfig; onSaved: (c: B
 
   return (
     <div className="space-y-5">
+      <PreregSwitch published={cfg.published} />
       <section className="space-y-2">
-        <h4 className="text-[11px] font-mono uppercase tracking-wider text-hl-dim">Freigabe</h4>
+        <h4 className="text-[11px] font-mono uppercase tracking-wider text-hl-dim">Freigabe Landingpage &amp; Buchung</h4>
         <Toggle on={c.published} onChange={(v) => set({ published: v })} title="Landingpage öffentlich" text="Aus = Besucher sehen „Noch nicht veröffentlicht“. Admins und Vorregistrierte mit Vorab-Link sehen die Seite trotzdem. An = jeder sieht /season2, das Startseiten-Banner führt dorthin." />
         <Toggle on={c.open} onChange={(v) => set({ open: v })} title="Verbindliche Buchung geöffnet" text="Aus = Buchen nicht möglich (Admins können als Testbuchung ausprobieren)." />
         <Toggle on={c.preregOnly} onChange={(v) => set({ preregOnly: v })} title="Nur für Vorregistrierte" text="An = nur E-Mail-Adressen aus der Vorregistrierung (und Season-1-Captains) können buchen. Später ausschalten, um für alle zu öffnen." />
@@ -700,12 +751,21 @@ function SettingsTab({ cfg, onSaved }: { cfg: BookingAdminConfig; onSaved: (c: B
       <section className="space-y-3">
         <h4 className="text-[11px] font-mono uppercase tracking-wider text-hl-dim">Early Bird</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <L label="Offizielle Öffnung (Start der Frist)">
+          <L label="Early Bird endet am" hint="Ab diesem Zeitpunkt gilt automatisch der normale Preis.">
+            <input type="datetime-local" value={toLocalInput(c.earlyBirdEnd)} onChange={(e) => set({ earlyBirdEnd: e.target.value ? new Date(e.target.value).toISOString() : '' })} className={inp} />
+          </L>
+          <L label="Offizielle Öffnung (optional)" hint={c.earlyBirdEnd ? 'Nur zur Info.' : `Ohne Enddatum: Early Bird = ${c.earlyBirdDays} Tage ab Öffnung.`}>
             <input type="datetime-local" value={toLocalInput(c.openAt)} onChange={(e) => set({ openAt: e.target.value ? new Date(e.target.value).toISOString() : '' })} className={inp} />
           </L>
-          <L label="Dauer in Tagen"><input type="number" min={0} max={60} value={c.earlyBirdDays} onChange={(e) => set({ earlyBirdDays: Number(e.target.value) || 0 })} className={inp} /></L>
         </div>
-        <p className={`text-[12.5px] ${until ? 'text-emerald-200/90' : 'text-amber-200/80'}`}>{until ? `Early Bird endet am ${formatDeadline(until)} – so steht es auf der Seite.` : 'Noch kein Starttermin – auf der Seite steht „14 Tage ab offizieller Öffnung“.'}</p>
+        <div className={`rounded-xl border px-3 py-2.5 text-[12.5px] leading-relaxed ${ebState === 'running' ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100' : ebState === 'ended' ? 'border-white/10 bg-white/[.04] text-hl-soft' : 'border-amber-300/25 bg-amber-400/10 text-amber-100'}`}>
+          {ebState === 'running' && <><strong>Early Bird läuft</strong> bis {formatDeadline(until)} – so steht es auf der Seite und in der Einladungsmail.</>}
+          {ebState === 'ended' && <><strong>Early Bird ist vorbei</strong> (seit {formatDeadline(until)}). Die Seite zeigt automatisch {euro(c.priceTwo)} für zwei Seasons.</>}
+          {ebState === 'unset' && <><strong>Noch kein Enddatum.</strong> Ohne Enddatum gibt es keinen Early-Bird-Preis – zwei Seasons kosten dann {euro(c.priceTwo)}.</>}
+          <div className="mt-1.5 text-[12px] opacity-80">
+            Läuft automatisch ab: Danach zeigt die Website den normalen Preis und neue Buchungen bekommen den {euro(c.priceTwo)}-Link. Ihr bekommt 24 Std. vorher und beim Ablauf eine Erinnerungsmail – dann bitte den {euro(c.priceTwoEarly)}-Link in Revolut deaktivieren.
+          </div>
+        </div>
         <L label="Was zählt für die Frist?">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {([['booking', 'Buchungsabschluss'], ['payment', 'Zahlungseingang']] as const).map(([id, l]) => (

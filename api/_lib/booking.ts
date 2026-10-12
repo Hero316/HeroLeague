@@ -37,7 +37,8 @@ export interface BookingConfig {
   seasonLabel: string;
   startInfo: string;
   openAt: string; // ISO – offizielle Öffnung (Start der Early-Bird-Frist), '' = noch offen
-  earlyBirdDays: number; // 14
+  earlyBirdDays: number; // 14 (nur wenn kein festes Enddatum gesetzt ist)
+  earlyBirdEnd: string; // ISO – festes Ende des Early Bird ('' = Öffnung + earlyBirdDays)
   deadlineBasis: 'booking' | 'payment'; // zählt für die Frist der Buchungsabschluss oder der Zahlungseingang
   priceOne: number; // Cent
   priceTwo: number;
@@ -88,6 +89,7 @@ const DEFAULT_CONFIG: BookingConfig = {
   startInfo: 'Start im März 2027',
   openAt: '',
   earlyBirdDays: 14,
+  earlyBirdEnd: '',
   deadlineBasis: 'booking',
   priceOne: 55000,
   priceTwo: 100000,
@@ -114,6 +116,7 @@ export async function getBookingConfig(): Promise<BookingConfig> {
 
 // Early Bird: nur das Zweierpaket, 14 Tage ab offizieller Öffnung.
 function earlyBirdUntil(cfg: BookingConfig): string {
+  if (cfg.earlyBirdEnd && Number.isFinite(new Date(cfg.earlyBirdEnd).getTime())) return new Date(cfg.earlyBirdEnd).toISOString();
   if (!cfg.openAt) return '';
   const t = new Date(cfg.openAt).getTime();
   if (!Number.isFinite(t)) return '';
@@ -133,6 +136,80 @@ function priceFor(cfg: BookingConfig, pkg: PackageId, early: boolean) {
     : { cents: cfg.priceTwo, link: cfg.payLinkTwo, label: '2 Seasons' };
 }
 const eur = (cents: number) => `${(cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} €`;
+
+// --- Erinnerungen ans Team (Early Bird endet / ist abgelaufen) -------------
+// Ohne Cronjob: wird bei jedem Aufruf der Landingpage bzw. des Backoffice
+// geprüft und pro Frist (Enddatum) nur EINMAL verschickt.
+async function earlyBirdReminders(cfg: BookingConfig) {
+  const until = earlyBirdUntil(cfg);
+  if (!until || !NOTIFY_TO) return;
+  const end = new Date(until).getTime();
+  const now = Date.now();
+  const due: ('soon' | 'ended')[] = [];
+  if (now >= end - 24 * 3600 * 1000 && now < end) due.push('soon');
+  if (now >= end && now < end + 14 * 86400000) due.push('ended');
+  if (due.length === 0) return;
+  let sent: Record<string, string> = {};
+  try {
+    const rows = await sql`SELECT value FROM settings WHERE key = 'season_booking_reminders'`;
+    sent = (rows[0]?.value as Record<string, string>) ?? {};
+  } catch {
+    return;
+  }
+  const todo = due.filter((k) => sent[k] !== until);
+  if (todo.length === 0) return;
+  // Erst merken, dann senden – so geht bei parallelen Aufrufen keine Mail doppelt raus.
+  for (const k of todo) sent[k] = until;
+  await sql`INSERT INTO settings (key, value) VALUES ('season_booking_reminders', ${JSON.stringify(sent)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`;
+  const when = new Date(until).toLocaleString('de-DE', { timeZone: 'Europe/Berlin', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+  const p = (t: string) => `<p style="font-family:Arial,Helvetica,sans-serif;color:#3a4441;font-size:14px;line-height:1.6;margin:0 0 12px;">${t}</p>`;
+  let openEarly = 0;
+  try {
+    const rows = await sql`SELECT count(*)::int AS n FROM season_bookings WHERE early_bird = true AND status = 'pending'`;
+    openEarly = (rows[0]?.n as number) ?? 0;
+  } catch {
+    /* egal */
+  }
+  for (const k of todo) {
+    const ended = k === 'ended';
+    try {
+      await sendBrandedMail({
+        to: NOTIFY_TO, from: FROM,
+        subject: ended ? `⏰ Early Bird ${cfg.seasonLabel} ist abgelaufen – Revolut-Link prüfen` : `⏰ Early Bird ${cfg.seasonLabel} endet morgen`,
+        layout: {
+          preheader: ended ? 'Ab jetzt gilt der normale Preis für das Zweierpaket.' : `Endet ${when} Uhr.`,
+          heading: ended ? 'Early Bird ist abgelaufen' : 'Early Bird endet bald', accent: ACCENT, accentDark: ACCENT_DARK,
+          intro: ended
+            ? `Seit ${when} Uhr kostet das Paket für zwei Seasons auf der Website automatisch ${eur(cfg.priceTwo)} statt ${eur(cfg.priceTwoEarly)}.`
+            : `Der Early Bird (${eur(cfg.priceTwoEarly)} für zwei Seasons) endet ${when} Uhr. Danach stellt die Website automatisch auf ${eur(cfg.priceTwo)} um.`,
+          bodyHtml: ended
+            ? p(`<strong>Bitte jetzt erledigen:</strong>`) +
+              p(`1. In Revolut Business den Early-Bird-Zahlungslink (${eur(cfg.priceTwoEarly)}) deaktivieren, damit niemand mehr darüber zahlt.`) +
+              p(`2. Prüfen, dass der Link für ${eur(cfg.priceTwo)} im Backoffice eingetragen ist (neue Buchungen bekommen automatisch diesen Link).`) +
+              p(`3. Offene Early-Bird-Buchungen ohne Zahlung: <strong>${openEarly}</strong>${cfg.deadlineBasis === 'payment' ? ' – für die Frist zählt der Zahlungseingang, diese Teams müssten jetzt eigentlich den normalen Preis zahlen.' : ' – sie haben rechtzeitig gebucht und behalten den Early-Bird-Preis.'}`)
+            : p(`Wenn ihr noch einmal an die Vorregistrierten erinnern wollt, ist jetzt der richtige Moment.`) +
+              p(`Offene Early-Bird-Buchungen ohne Zahlung: <strong>${openEarly}</strong>`),
+          footnote: 'Automatische Erinnerung aus dem Backoffice „Season 2 – Buchungen".',
+        },
+        text: ended
+          ? `Early Bird ist abgelaufen (${when}). Bitte den Revolut-Link für ${eur(cfg.priceTwoEarly)} deaktivieren und prüfen, dass der ${eur(cfg.priceTwo)}-Link eingetragen ist. Offene Early-Bird-Buchungen: ${openEarly}.`
+          : `Early Bird endet ${when}. Offene Early-Bird-Buchungen: ${openEarly}.`,
+      });
+    } catch {
+      /* Mail optional */
+    }
+  }
+}
+
+async function signupOpen(): Promise<boolean> {
+  try {
+    const rows = await sql`SELECT value FROM settings WHERE key = 'season_signup'`;
+    return (rows[0]?.value as { open?: boolean } | undefined)?.open !== false;
+  } catch {
+    return true;
+  }
+}
 
 // --- Token (nach bestätigtem Code) -----------------------------------------
 function secret(): string {
@@ -216,13 +293,16 @@ interface RosterEntry { firstName: string; lastName: string; number: number | nu
 // Konfiguration für die Landingpage (Preise, Frist, Texte, Status).
 async function bookingConfig(req: VercelRequest, res: VercelResponse) {
   const cfg = await getBookingConfig();
+  await earlyBirdReminders(cfg).catch(() => {});
+  const preregOpen = await signupOpen();
   if (!(await canView(req, cfg))) {
     // Noch nicht veröffentlicht – nur das Nötigste verraten.
-    return res.json({ visible: false, published: false, seasonLabel: cfg.seasonLabel, startInfo: cfg.startInfo });
+    return res.json({ visible: false, published: false, seasonLabel: cfg.seasonLabel, startInfo: cfg.startInfo, signupOpen: preregOpen });
   }
   const { ok, test } = await canBook(req, cfg);
   return res.json({
     visible: true,
+    signupOpen: preregOpen,
     published: cfg.published,
     preview: !cfg.published,
     preregOnly: cfg.preregOnly && !test,
@@ -719,7 +799,11 @@ async function adminBookingStatus(req: VercelRequest, res: VercelResponse) {
 }
 
 async function adminBookingConfig(req: VercelRequest, res: VercelResponse) {
-  if (req.method === 'GET') return res.json(await ensureAccessKey(await getBookingConfig()));
+  if (req.method === 'GET') {
+    const cfg = await ensureAccessKey(await getBookingConfig());
+    await earlyBirdReminders(cfg).catch(() => {});
+    return res.json(cfg);
+  }
   const c = (req.body ?? {}) as Partial<BookingConfig> & { newKey?: boolean };
   const cur = await ensureAccessKey(await getBookingConfig(), c.newKey === true);
   const link = (v: unknown, fallback: string) => {
@@ -740,6 +824,10 @@ async function adminBookingConfig(req: VercelRequest, res: VercelResponse) {
     startInfo: clamp(c.startInfo, 120),
     openAt: openAt && Number.isFinite(new Date(openAt).getTime()) ? new Date(openAt).toISOString() : '',
     earlyBirdDays: Math.min(60, Math.max(0, Math.round(Number(c.earlyBirdDays ?? cur.earlyBirdDays)) || 0)),
+    earlyBirdEnd: (() => {
+      const e = clamp(c.earlyBirdEnd, 40);
+      return e && Number.isFinite(new Date(e).getTime()) ? new Date(e).toISOString() : '';
+    })(),
     deadlineBasis: c.deadlineBasis === 'payment' ? 'payment' : 'booking',
     priceOne: cents(c.priceOne, cur.priceOne),
     priceTwo: cents(c.priceTwo, cur.priceTwo),
