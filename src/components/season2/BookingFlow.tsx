@@ -756,7 +756,6 @@ function CopyField({ label, value, big = false }: { label: string; value: string
 function PaymentCard({ booking, reference }: { booking: BookingSummary; reference: string }) {
   const paid = booking.status === 'paid';
   const amount = (booking.priceCents / 100).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const isPayPal = /paypal\./i.test(booking.payLink);
   const Step = ({ n, children }: { n: number; children: React.ReactNode }) => (
     <div className="flex items-start gap-3">
       <span className="shrink-0 w-7 h-7 rounded-full grid place-items-center font-display font-black text-[15px] text-[#06091A]" style={{ background: S2.volt }}>{n}</span>
@@ -791,10 +790,28 @@ function PaymentCard({ booking, reference }: { booking: BookingSummary; referenc
             <p className="text-[11.5px] text-white/45 mt-1.5">Buchungsnummer · Teamname · Paket</p>
           </Step>
           <Step n={3}>
-            {booking.payLink ? (
-              <a href={booking.payLink} target="_blank" rel="noopener noreferrer" className="w-full inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-4 font-display font-black uppercase tracking-wide text-[16px] text-[#06091A]" style={{ background: S2.volt }}>
-                <CreditCard className="w-5 h-5" /> {isPayPal ? 'Weiter zu PayPal' : 'Jetzt bezahlen'}
-              </a>
+            {booking.payLink || booking.revolutLink ? (
+              <>
+                <div className="text-[13.5px] font-bold text-white mb-2">Bezahlen – wie es euch lieber ist</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {booking.payLink && (
+                    <a href={booking.payLink} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center justify-center gap-0.5 rounded-2xl px-4 py-3.5 text-center cursor-pointer active:scale-[.98] transition-transform" style={{ background: '#FFC439' }}>
+                      <span className="inline-flex items-center gap-2 font-display font-black text-[19px] leading-none tracking-tight">
+                        <span className="text-[#003087]">Pay</span><span className="text-[#009CDE] -ml-2">Pal</span>
+                      </span>
+                      <span className="text-[11.5px] font-bold text-[#06091A]/70">PayPal-Konto oder Gastzahlung</span>
+                    </a>
+                  )}
+                  {booking.revolutLink && (
+                    <a href={booking.revolutLink} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center justify-center gap-0.5 rounded-2xl px-4 py-3.5 text-center cursor-pointer active:scale-[.98] transition-transform bg-white">
+                      <span className="inline-flex items-center gap-2 font-display font-black uppercase text-[17px] leading-none tracking-wide text-[#06091A]">
+                        <CreditCard className="w-5 h-5" /> Karte / Überweisung
+                      </span>
+                      <span className="text-[11.5px] font-bold text-[#06091A]/60">Kreditkarte, Apple Pay, Google Pay</span>
+                    </a>
+                  )}
+                </div>
+              </>
             ) : (
               <p className="text-[13px] text-white/60 rounded-xl bg-white/[.04] px-3.5 py-3">Den Zahlungslink schicken wir dir in Kürze per E-Mail.</p>
             )}

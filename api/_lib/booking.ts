@@ -45,10 +45,8 @@ export interface BookingConfig {
   priceOne: number; // Cent
   priceTwo: number;
   priceTwoEarly: number;
-  payLink: string; // EIN Zahlungslink für alle Pakete (z. B. PayPal.me) – Betrag + Nachricht trägt das Team selbst ein
-  payLinkOne: string; // optional: eigene Links je Preis (Anbieter egal, z. B. Revolut)
-  payLinkTwo: string;
-  payLinkTwoEarly: string;
+  payLink: string; // PayPal-Taste (PayPal.me) – Betrag + Nachricht trägt das Team selbst ein
+  revolutLink: string; // zweite Taste „Karte / Überweisung" (Revolut-Link)
   minSquad: number;
   maxSquad: number;
   maxTeams: number; // Startplätze dieser Season (z. B. Season 2) – danach „Ausgebucht"
@@ -102,9 +100,7 @@ const DEFAULT_CONFIG: BookingConfig = {
   priceTwo: 100000,
   priceTwoEarly: 95000,
   payLink: '',
-  payLinkOne: '',
-  payLinkTwo: '',
-  payLinkTwoEarly: '',
+  revolutLink: '',
   minSquad: 8,
   maxSquad: 14,
   maxTeams: 12,
@@ -118,7 +114,10 @@ export const DEFAULT_BOOKING_CONFIG = DEFAULT_CONFIG;
 export async function getBookingConfig(): Promise<BookingConfig> {
   try {
     const rows = await sql`SELECT value FROM settings WHERE key = 'season_booking'`;
-    return { ...DEFAULT_CONFIG, ...((rows[0]?.value as Partial<BookingConfig>) || {}) };
+    const v = (rows[0]?.value || {}) as Partial<BookingConfig> & { payLinkOne?: string; payLinkTwo?: string; payLinkTwoEarly?: string };
+    // Früher gab es je Paket einen eigenen Link – falls nur der gepflegt war, als PayPal-Link übernehmen.
+    const payLink = v.payLink || v.payLinkOne || v.payLinkTwo || v.payLinkTwoEarly || '';
+    return { ...DEFAULT_CONFIG, ...v, payLink };
   } catch {
     return DEFAULT_CONFIG;
   }
@@ -146,10 +145,12 @@ export function twoSeasonsLabel(cfg: BookingConfig): string {
   return `${l} + ${next}`;
 }
 function priceFor(cfg: BookingConfig, pkg: PackageId, early: boolean) {
-  if (pkg === 'one') return { cents: cfg.priceOne, link: cfg.payLinkOne || cfg.payLink, label: cfg.seasonLabel };
+  // Die Zahlungslinks gelten für alle Pakete – Betrag + Nachricht trägt das Team selbst ein.
+  const links = { link: cfg.payLink, revolut: cfg.revolutLink };
+  if (pkg === 'one') return { cents: cfg.priceOne, ...links, label: cfg.seasonLabel };
   return early
-    ? { cents: cfg.priceTwoEarly, link: cfg.payLinkTwoEarly || cfg.payLinkTwo || cfg.payLink, label: `${twoSeasonsLabel(cfg)} · Early Bird` }
-    : { cents: cfg.priceTwo, link: cfg.payLinkTwo || cfg.payLink, label: twoSeasonsLabel(cfg) };
+    ? { cents: cfg.priceTwoEarly, ...links, label: `${twoSeasonsLabel(cfg)} · Early Bird` }
+    : { cents: cfg.priceTwo, ...links, label: twoSeasonsLabel(cfg) };
 }
 // Nachricht, die das Team beim Bezahlen angibt (Team + Paket + Buchungsnummer).
 function payReference(ref: string, teamName: string, packageLabel: string): string {
@@ -204,16 +205,14 @@ async function earlyBirdReminders(cfg: BookingConfig) {
             ? `Seit ${when} Uhr kostet ${twoSeasonsLabel(cfg)} auf der Website automatisch ${eur(cfg.priceTwo)} statt ${eur(cfg.priceTwoEarly)}.`
             : `Der Early Bird (${eur(cfg.priceTwoEarly)} für zwei Seasons) endet ${when} Uhr. Danach stellt die Website automatisch auf ${eur(cfg.priceTwo)} um.`,
           bodyHtml: ended
-            ? p(`<strong>Bitte jetzt erledigen:</strong>`) +
-              p(`1. Beim Zahlungsanbieter (z. B. Revolut) den Early-Bird-Zahlungslink (${eur(cfg.priceTwoEarly)}) deaktivieren, damit niemand mehr darüber zahlt.`) +
-              p(`2. Prüfen, dass der Link für ${eur(cfg.priceTwo)} im Backoffice eingetragen ist (neue Buchungen bekommen automatisch diesen Link).`) +
-              p(`3. Offene Early-Bird-Buchungen ohne Zahlung: <strong>${openEarly}</strong>${cfg.deadlineBasis === 'payment' ? ' – für die Frist zählt der Zahlungseingang, diese Teams müssten jetzt eigentlich den normalen Preis zahlen.' : ' – sie haben rechtzeitig gebucht und behalten den Early-Bird-Preis.'}`)
+            ? p(`An den Zahlungslinks (PayPal / Karte) müsst ihr nichts ändern – die Teams tragen den Betrag selbst ein, und die Website zeigt ab jetzt automatisch den normalen Preis.`) +
+              p(`Offene Early-Bird-Buchungen ohne Zahlung: <strong>${openEarly}</strong>${cfg.deadlineBasis === 'payment' ? ' – für die Frist zählt der Zahlungseingang, diese Teams müssten jetzt eigentlich den normalen Preis zahlen.' : ' – sie haben rechtzeitig gebucht und behalten den Early-Bird-Preis.'}`)
             : p(`Wenn ihr noch einmal an die Vorregistrierten erinnern wollt, ist jetzt der richtige Moment.`) +
               p(`Offene Early-Bird-Buchungen ohne Zahlung: <strong>${openEarly}</strong>`),
           footnote: 'Automatische Erinnerung aus dem Backoffice „Season 2 – Buchungen".',
         },
         text: ended
-          ? `Early Bird ist abgelaufen (${when}). Bitte den Zahlungslink für ${eur(cfg.priceTwoEarly)} deaktivieren und prüfen, dass der ${eur(cfg.priceTwo)}-Link eingetragen ist. Offene Early-Bird-Buchungen: ${openEarly}.`
+          ? `Early Bird ist abgelaufen (${when}). Die Website zeigt jetzt automatisch ${eur(cfg.priceTwo)}. Offene Early-Bird-Buchungen: ${openEarly}.`
           : `Early Bird endet ${when}. Offene Early-Bird-Buchungen: ${openEarly}.`,
       });
     } catch {
@@ -506,7 +505,8 @@ async function bookingByEmail(mail: string) {
     if (!b) return null;
     const cfg = await getBookingConfig();
     const p = priceFor(cfg, b.package, b.earlyBird);
-    return { ...b, payLink: b.status === 'pending' ? p.link : '', packageLabel: p.label, reference: payReference(b.ref, b.teamName, p.label) };
+    const open = b.status === 'pending';
+    return { ...b, payLink: open ? p.link : '', revolutLink: open ? p.revolut : '', packageLabel: p.label, reference: payReference(b.ref, b.teamName, p.label) };
   } catch {
     return null;
   }
@@ -645,7 +645,11 @@ async function bookingSubmit(req: VercelRequest, res: VercelResponse) {
               <span style="display:inline-block;margin-top:4px;padding:8px 10px;background:#ffffff;border:1px solid #d6def5;border-radius:8px;font-family:'Courier New',monospace;font-size:14px;font-weight:700;">${escapeHtml(reference)}</span></div>
             <div style="font-size:12.5px;line-height:1.5;color:#55607a;margin-top:10px;">Nur mit Team, Paket und Buchungsnummer können wir eure Zahlung zuordnen.</div>
           </div>` +
-          (price.link ? mailButton(`3. Jetzt bezahlen`, price.link, ACCENT) : p('Den Zahlungslink schicken wir dir gesondert.')) +
+          (price.link || price.revolut
+            ? p('<strong>3. Bezahlen – so wie es euch lieber ist:</strong>') +
+              (price.link ? mailButton('Mit PayPal bezahlen', price.link, ACCENT) : '') +
+              (price.revolut ? mailButton('Karte / Überweisung', price.revolut, '#1f2a44') : '')
+            : p('Den Zahlungslink schicken wir dir gesondert.')) +
           p(`Sobald die Zahlung bei uns eingegangen ist, bekommst du eine Bestätigung. Erst dann ist euer Startplatz fix.`) +
           p(`<strong>Euer Kader</strong><br>${rosterHtml}`) +
           p(`<strong>Hinweis:</strong> ${escapeHtml(BINDING_NOTICE)}`) +
@@ -653,7 +657,7 @@ async function bookingSubmit(req: VercelRequest, res: VercelResponse) {
             <strong>Teilnahmebedingungen (Fassung: ${escapeHtml(cfg.termsVersion)}, akzeptiert am ${new Date(now).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' })})</strong><br><br>${termsHtml}</div>`,
         footnote: 'Fragen? Antworte einfach auf diese E-Mail.',
       },
-      text: `Buchung eingegangen: ${teamName} – ${price.label} – ${eur(price.cents)}\nBuchungsnummer: ${ref}\n\nSo bezahlt ihr:\n1. Betrag eingeben: ${eur(price.cents)}\n2. Als Nachricht angeben: ${reference}\n${price.link ? `Bezahlen: ${price.link}\n` : ''}\n${BINDING_NOTICE}\n\nTeilnahmebedingungen (${cfg.termsVersion}):\n${cfg.terms}`,
+      text: `Buchung eingegangen: ${teamName} – ${price.label} – ${eur(price.cents)}\nBuchungsnummer: ${ref}\n\nSo bezahlt ihr:\n1. Betrag eingeben: ${eur(price.cents)}\n2. Als Nachricht angeben: ${reference}\n${price.link ? `PayPal: ${price.link}\n` : ''}${price.revolut ? `Karte / Überweisung: ${price.revolut}\n` : ''}\n${BINDING_NOTICE}\n\nTeilnahmebedingungen (${cfg.termsVersion}):\n${cfg.terms}`,
     });
   } catch {
     /* Mail optional */
@@ -993,9 +997,7 @@ async function adminBookingConfig(req: VercelRequest, res: VercelResponse) {
     priceTwo: cents(c.priceTwo, cur.priceTwo),
     priceTwoEarly: cents(c.priceTwoEarly, cur.priceTwoEarly),
     payLink: link(c.payLink, cur.payLink),
-    payLinkOne: link(c.payLinkOne, cur.payLinkOne),
-    payLinkTwo: link(c.payLinkTwo, cur.payLinkTwo),
-    payLinkTwoEarly: link(c.payLinkTwoEarly, cur.payLinkTwoEarly),
+    revolutLink: link(c.revolutLink, cur.revolutLink),
     minSquad: Math.min(30, Math.max(1, Math.round(Number(c.minSquad ?? cur.minSquad)) || cur.minSquad)),
     maxSquad: Math.min(40, Math.max(1, Math.round(Number(c.maxSquad ?? cur.maxSquad)) || cur.maxSquad)),
     maxTeams: Math.min(200, Math.max(1, Math.round(Number(c.maxTeams ?? cur.maxTeams)) || cur.maxTeams)),
