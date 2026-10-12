@@ -44,6 +44,9 @@ import EventBanner from './components/EventBanner';
 import SeasonSignup from './components/SeasonSignup';
 import SeasonSignupBanner from './components/SeasonSignupBanner';
 import Season2Landing from './components/season2/Season2Landing';
+import PartnerAdmin from './components/PartnerAdmin';
+// Partner-Landingpage nur bei Bedarf laden (bringt die Livestream-Vorschau mit).
+const PartnerLanding = React.lazy(() => import('./components/partner/PartnerLanding'));
 import Season2BookingAdmin from './components/Season2BookingAdmin';
 import EventTickets from './components/EventTickets';
 import SelfCheckin from './components/SelfCheckin';
@@ -57,7 +60,7 @@ import ChatApp from './components/ChatApp';
 import Avatar from './components/Avatar';
 import DeepLinkModal from './components/DeepLinkModal';
 import { PageHeader, Footer, AccordionGroup, AccordionSection, loadPartners } from './components/ui';
-import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight, Target, Star, Twitch, MonitorPlay, Crown, Clapperboard } from 'lucide-react';
+import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight, Target, Star, Twitch, MonitorPlay, Crown, Clapperboard, Handshake } from 'lucide-react';
 import TrackingCenter from './components/TrackingCenter';
 import HeroOneAdmin from './components/HeroOneAdmin';
 import { effectivePermissions } from './lib/permissions';
@@ -1314,6 +1317,18 @@ export default function App() {
     );
   }
 
+  // ROUTE: /partner (auch /partner-werden, /sponsoring) – Partnerprogramm-Landingpage.
+  if (/^\/(partner|partner-werden|sponsoring)\/?$/i.test(currentPath)) {
+    return (
+      <>
+        <React.Suspense fallback={<div className="min-h-screen bg-[#050706]" />}>
+          <PartnerLanding teams={currentSeasonTeams} matches={currentSeasonMatches} players={players} onNavigate={navigateTo} />
+        </React.Suspense>
+        <Footer onNavigate={goToTab} onNavigatePath={navigateTo} />
+      </>
+    );
+  }
+
   // ROUTE: /anmeldung – öffentliche, unverbindliche Season-2-Team-Anmeldung.
   if (currentPath.startsWith('/anmeldung')) {
     return <SeasonSignup onNavigate={navigateTo} />;
@@ -1950,6 +1965,16 @@ export default function App() {
                         accent="#2F5BFF"
                       >
                         <Season2BookingAdmin teams={visibleTeams} seasons={seasons.filter((s) => s.id !== demo.seasonId)} canEditClubs={canManageClubs} onTeamsChanged={fetchData} />
+                      </AccordionSection>
+                      <AccordionSection
+                        id="partner-requests"
+                        category="anmeldungen"
+                        title="Partneranfragen & Partner-Seite"
+                        subtitle="„Partner werden“-Anfragen · /partner an- und ausschalten · Zahlen auf der Seite pflegen"
+                        icon={<Handshake className="w-5 h-5" />}
+                        accent="#F2C14E"
+                      >
+                        <PartnerAdmin />
                       </AccordionSection>
                       <AccordionSection
                         id="season-signups"
