@@ -490,3 +490,17 @@ CREATE TABLE match_player_stats (
   PRIMARY KEY (match_id, team_id, player_name)
 );
 CREATE INDEX idx_match_player_stats_day ON match_player_stats(day_key);
+
+-- Season 2: verbindliche Buchungen (Landingpage /season2). Wird automatisch
+-- über api/_lib/ensure.ts angelegt.
+CREATE TABLE IF NOT EXISTS season_bookings (
+  id TEXT PRIMARY KEY, ref TEXT NOT NULL UNIQUE, email TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending', team_name TEXT NOT NULL DEFAULT '',
+  contact_name TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '',
+  package TEXT NOT NULL, price_cents INTEGER NOT NULL, early_bird BOOLEAN NOT NULL DEFAULT false,
+  roster JSONB NOT NULL DEFAULT '[]', logo_url TEXT NOT NULL DEFAULT '',
+  consents JSONB NOT NULL DEFAULT '{}', note TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  paid_at TIMESTAMPTZ, team_id TEXT NOT NULL DEFAULT '', transferred_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_season_bookings_email ON season_bookings(email);
