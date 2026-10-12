@@ -622,9 +622,9 @@ export function inviteMail(cfg: BookingConfig, link: string, base = 'https://her
   </td></tr>
   ${untilTxt ? `<tr><td style="padding:0 6px 22px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td bgcolor="#0B1236" style="background:#0B1236;border:1px solid #2F5BFF;border-radius:16px;padding:14px 16px;">
-      <div style="${T}font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#8FA8FF;">Early Bird</div>
-      <div style="${F}font-size:24px;font-weight:900;color:#ffffff;margin-top:4px;line-height:1.1;">2 Seasons für ${eur(cfg.priceTwoEarly)} <span style="${T}font-size:14px;font-weight:400;color:#7C86A8;text-decoration:line-through;">${eur(cfg.priceTwo)}</span></div>
-      <div style="${T}font-size:12.5px;color:#B8C0D9;margin-top:4px;">nur bis ${escapeHtml(untilTxt)} Uhr</div>
+      <div style="${T}font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#8FA8FF;">Early Bird · Paket für zwei Seasons</div>
+      <div style="${F}font-size:24px;font-weight:900;color:#ffffff;margin-top:6px;line-height:1.15;">Zwei Seasons zusammen buchen: ${eur(cfg.priceTwoEarly)} <span style="${T}font-size:14px;font-weight:400;color:#7C86A8;text-decoration:line-through;">${eur(cfg.priceTwo)}</span></div>
+      <div style="${T}font-size:13px;line-height:1.5;color:#B8C0D9;margin-top:6px;">Das sind nur ${eur(Math.round(cfg.priceTwoEarly / 2))} pro Season – eine einzelne Season kostet ${eur(cfg.priceOne)}.<br>Early Bird gilt nur bis <strong style="color:#ffffff;">${escapeHtml(untilTxt)} Uhr</strong>.</div>
     </td></tr></table>
   </td></tr>` : ''}
   <tr><td align="center" style="padding:6px 6px 0;">
@@ -641,7 +641,7 @@ export function inviteMail(cfg: BookingConfig, link: string, base = 'https://her
     'Euer Vorsprung ist kurz – ein paar Stunden, vielleicht ein paar Tage. Nutzt die Chance jetzt.',
     '',
     `Jetzt Startplatz sichern: ${link}`,
-    untilTxt ? `\nEarly Bird: 2 Seasons für ${eur(cfg.priceTwoEarly)} statt ${eur(cfg.priceTwo)} – nur bis ${untilTxt} Uhr.` : '',
+    untilTxt ? `\nEarly Bird (Paket für zwei Seasons): zwei Seasons zusammen für ${eur(cfg.priceTwoEarly)} statt ${eur(cfg.priceTwo)} – nur ${eur(Math.round(cfg.priceTwoEarly / 2))} pro Season (einzelne Season: ${eur(cfg.priceOne)}). Gilt bis ${untilTxt} Uhr.` : '',
     '',
     'Euer persönlicher Vorab-Zugang – bitte nicht weiterleiten.',
   ].join('\n');
