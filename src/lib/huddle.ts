@@ -143,6 +143,9 @@ export class HuddleSession {
   onSpeaking: (ids: Set<string>) => void = () => {};
   // Kamera-Bild: from = 'me' oder Peer-ID; stream = null ⇒ Kamera aus.
   onCamera: (from: string, stream: MediaStream | null) => void = () => {};
+  // Gemeinsame Notizen haben sich (durch jemand anderen) geändert.
+  onNotes: (notes: string) => void = () => {};
+  private lastNotes: string | null = null;
 
   constructor(huddleId: string, myId: string) {
     this.huddleId = huddleId;
@@ -238,6 +241,9 @@ export class HuddleSession {
       if (!r.huddle || r.huddle.endedAt) { this.stop(); this.onEnded(); return; }
       this.participants = r.participants;
       this.onParticipants(r.participants);
+      const n = r.huddle.notes ?? '';
+      if (this.lastNotes === null) this.lastNotes = n;
+      else if (n !== this.lastNotes) { this.lastNotes = n; this.onNotes(n); }
       const others = new Set(r.participants.map((p) => p.userId).filter((id) => id !== this.myId));
       for (const id of others) if (!this.peers.has(id)) this.makePeer(id);
       for (const id of [...this.peers.keys()]) if (!others.has(id)) this.closePeer(id);
