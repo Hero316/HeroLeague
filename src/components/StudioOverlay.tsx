@@ -233,8 +233,8 @@ function Headline({ cue, portrait }: { cue: Cue; portrait: boolean }) {
   // Schriftgröße so, dass das längste Wort in eine Zeile passt und lange Titel nicht ausufern.
   const title = cue.title || 'Hero League';
   const longest = Math.max(...title.split(' ').map((w) => w.length), 1);
-  const base = portrait ? 160 : 210;
-  const size = Math.round(Math.max(56, Math.min(base, (portrait ? 1750 : 3200) / longest, title.length > 18 ? (base * 18) / title.length + 30 : base)));
+  const base = portrait ? 145 : 210;
+  const size = Math.round(Math.max(56, Math.min(base, (portrait ? 1600 : 3200) / longest, title.length > 18 ? (base * 18) / title.length + 30 : base)));
   return (
     <motion.div className="absolute inset-0 grid place-items-center" exit={{ opacity: 0, transition: { duration: 0.35 } }}>
       {/* Abdunkeln, damit der Text auf jedem Kamerabild lesbar ist */}
@@ -274,7 +274,7 @@ function Headline({ cue, portrait }: { cue: Cue; portrait: boolean }) {
         >
           <div
             className="font-display font-black uppercase italic leading-[.88] tracking-tight bg-clip-text text-transparent break-words"
-            style={{ fontSize: size, backgroundImage: `linear-gradient(180deg, #FFFFFF 35%, #FFE7A3 62%, ${GOLD} 100%)`, paddingRight: '0.08em' }}
+            style={{ fontSize: size, backgroundImage: `linear-gradient(180deg, #FFFFFF 35%, #FFE7A3 62%, ${GOLD} 100%)`, padding: '0 0.22em' }}
           >
             {title}
           </div>
@@ -549,7 +549,7 @@ function Countdown({ cue, startedAt, w, h }: { cue: Cue; startedAt: number; w: n
           <Confetti w={w} h={h} />
           <motion.div
             className="relative font-display font-black uppercase italic leading-none bg-clip-text text-transparent drop-shadow-[0_14px_40px_rgba(0,0,0,.65)]"
-            style={{ fontSize: 260, backgroundImage: `linear-gradient(180deg, #FFFFFF 35%, #FFE7A3 62%, ${GOLD} 100%)`, paddingRight: '0.08em' }}
+            style={{ fontSize: 260, backgroundImage: `linear-gradient(180deg, #FFFFFF 35%, #FFE7A3 62%, ${GOLD} 100%)`, padding: '0 0.22em' }}
             initial={{ scale: 2.2, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: 'spring', stiffness: 260, damping: 16 }}
