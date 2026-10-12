@@ -42,6 +42,8 @@ import EventPage, { EventTab } from './components/EventPage';
 import EventBanner from './components/EventBanner';
 import SeasonSignup from './components/SeasonSignup';
 import SeasonSignupBanner from './components/SeasonSignupBanner';
+import Season2Landing from './components/season2/Season2Landing';
+import Season2BookingAdmin from './components/Season2BookingAdmin';
 import EventTickets from './components/EventTickets';
 import SelfCheckin from './components/SelfCheckin';
 import ManagerKader from './components/ManagerKader';
@@ -1296,6 +1298,21 @@ export default function App() {
     );
   }
 
+  // ROUTE: /season2 (auch /saison2) – Season-2-Landingpage mit verbindlicher Buchung.
+  if (/^\/(season|saison)-?2\/?$/i.test(currentPath)) {
+    return (
+      <Season2Landing
+        teams={currentSeasonTeams}
+        matches={currentSeasonMatches}
+        players={players}
+        trackingRows={trackingRows}
+        highlights={highlights}
+        heroImages={heroImages}
+        onNavigate={navigateTo}
+      />
+    );
+  }
+
   // ROUTE: /anmeldung – öffentliche, unverbindliche Season-2-Team-Anmeldung.
   if (currentPath.startsWith('/anmeldung')) {
     return <SeasonSignup onNavigate={navigateTo} />;
@@ -1911,6 +1928,16 @@ export default function App() {
                   {canManageSignups && (
                     <>
                       <AccordionSection
+                        id="season2-bookings"
+                        category="anmeldungen"
+                        title="Season 2 – Buchungen & Landingpage"
+                        subtitle="Verbindliche Buchungen mit Kader & Logo · Zahlung bestätigen · Vorregistrierte einladen · /season2 freigeben"
+                        icon={<Trophy className="w-5 h-5" />}
+                        accent="#2F5BFF"
+                      >
+                        <Season2BookingAdmin teams={visibleTeams} seasons={seasons.filter((s) => s.id !== demo.seasonId)} canEditClubs={canManageClubs} onTeamsChanged={fetchData} />
+                      </AccordionSection>
+                      <AccordionSection
                         id="season-signups"
                         category="anmeldungen"
                         title="Team- & Spieler-Anmeldungen"
@@ -2112,7 +2139,7 @@ export default function App() {
           <Hero teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} trackingRows={trackingRows} scoring={scoring} seasonId={currentSeason?.id} />
           {/* Season-2-Anmeldung sitzt bewusst zwischen Hero und Highlights,
               damit sie beim Scrollen mitten im Blickfeld liegt. */}
-          <SeasonSignupBanner inline onOpen={() => navigateTo('/anmeldung')} />
+          <SeasonSignupBanner inline onOpen={(path) => navigateTo(path)} />
           <HighlightsHome
             highlights={highlights}
             editMode={editMode && canEditHighlights}

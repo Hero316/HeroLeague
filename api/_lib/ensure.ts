@@ -78,6 +78,8 @@ export async function ensureSchema(): Promise<void> {
     // WICHTIG: die neue Spalte `entry` (Team vs. Spieler) mitprüfen, sonst
     // überspringt der Schnell-Check das ALTER auf bereits bestehenden Tabellen.
     await sql`SELECT entry FROM season_signups LIMIT 1`;
+    // Verbindliche Season-2-Buchungen (Landingpage /season2).
+    await sql`SELECT team_id, transferred_at FROM season_bookings LIMIT 1`;
     // WICHTIG: die neue Spalte `consent_at` (Einwilligung) mitprüfen, sonst
     // überspringt der Schnell-Check das ALTER auf bestehenden Datenbanken.
     await sql`SELECT consent_at FROM event_tickets LIMIT 1`;
@@ -337,6 +339,21 @@ export async function ensureSchema(): Promise<void> {
   // Team- ODER Spieler-Anmeldung.
   await run(sql`ALTER TABLE season_signups ADD COLUMN IF NOT EXISTS entry TEXT NOT NULL DEFAULT 'team'`);
   await run(sql`CREATE INDEX IF NOT EXISTS idx_season_signups_created ON season_signups(created_at DESC)`);
+
+  // --- Season-2: VERBINDLICHE Buchung (Landingpage /season2). Kader, Logo,
+  // Paket/Preis und dokumentierte Zustimmungen (Zeitpunkt + Fassung). -------
+  await run(sql`CREATE TABLE IF NOT EXISTS season_bookings (
+    id TEXT PRIMARY KEY, ref TEXT NOT NULL UNIQUE, email TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending', team_name TEXT NOT NULL DEFAULT '',
+    contact_name TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '',
+    package TEXT NOT NULL, price_cents INTEGER NOT NULL, early_bird BOOLEAN NOT NULL DEFAULT false,
+    roster JSONB NOT NULL DEFAULT '[]', logo_url TEXT NOT NULL DEFAULT '',
+    consents JSONB NOT NULL DEFAULT '{}', note TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    paid_at TIMESTAMPTZ, team_id TEXT NOT NULL DEFAULT '', transferred_at TIMESTAMPTZ)`);
+  await run(sql`ALTER TABLE season_bookings ADD COLUMN IF NOT EXISTS team_id TEXT NOT NULL DEFAULT ''`);
+  await run(sql`ALTER TABLE season_bookings ADD COLUMN IF NOT EXISTS transferred_at TIMESTAMPTZ`);
+  await run(sql`CREATE INDEX IF NOT EXISTS idx_season_bookings_email ON season_bookings(email)`);
 
   // --- Zuschauer-Tickets (Testspieltag). Eine Zeile je (event_key, email);
   // Reservierung bis reserved_until, danach frei. Kapazität wird beim

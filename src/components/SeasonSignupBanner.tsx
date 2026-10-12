@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Trophy, ArrowRight, CalendarClock } from 'lucide-react';
 import { fetchSignupConfig, type SignupConfig } from '../lib/register';
+import { fetchBookingConfig } from '../lib/booking';
 
 // Auffälliges Banner auf der Startseite, das zur Season-2-Anmeldung führt.
 // WICHTIG: Es ist SOFORT beim Laden sichtbar (mit statischen Standardtexten) und
@@ -9,15 +10,21 @@ import { fetchSignupConfig, type SignupConfig } from '../lib/register';
 const DEFAULT_CFG: SignupConfig = { open: true, seasonLabel: 'Season 2', startInfo: 'Start im März 2027', minSquad: 8, maxSquad: 12, note: '', turnstileSiteKey: '' };
 // `inline` = das Banner sitzt mitten auf der Seite (zwischen Hero und
 // Highlights) statt als randlose Leiste ganz oben: abgerundet und mit Abstand.
-export default function SeasonSignupBanner({ onOpen, inline = false }: { onOpen: () => void; inline?: boolean }) {
+// Ist die Season-2-Landingpage veröffentlicht, führt das Banner dorthin (/season2),
+// sonst wie bisher zur unverbindlichen Vorregistrierung (/anmeldung).
+export default function SeasonSignupBanner({ onOpen, inline = false }: { onOpen: (path: string) => void; inline?: boolean }) {
   const [cfg, setCfg] = useState<SignupConfig>(DEFAULT_CFG);
-  const [closed, setClosed] = useState(false);
-  useEffect(() => { fetchSignupConfig().then((c) => { setCfg(c); setClosed(!c.open); }).catch(() => {}); }, []);
-  if (closed) return null;
+  const [signupOpen, setSignupOpen] = useState(true);
+  const [landing, setLanding] = useState<{ published: boolean; canBook: boolean }>({ published: false, canBook: false });
+  useEffect(() => {
+    fetchSignupConfig().then((c) => { setCfg(c); setSignupOpen(c.open); }).catch(() => {});
+    fetchBookingConfig().then((b) => setLanding({ published: Boolean(b.published), canBook: Boolean(b.published && b.canBook && !b.testMode) })).catch(() => {});
+  }, []);
+  if (!signupOpen && !landing.published) return null;
 
   const banner = (
     <button
-      onClick={onOpen}
+      onClick={() => onOpen(landing.published ? '/season2' : '/anmeldung')}
       className={`group relative block w-full text-left overflow-hidden cursor-pointer border-[rgba(47,91,255,.32)] ${
         inline ? 'rounded-2xl border shadow-[0_18px_50px_-24px_rgba(47,91,255,.55)]' : 'border-b'
       }`}
@@ -38,19 +45,19 @@ export default function SeasonSignupBanner({ onOpen, inline = false }: { onOpen:
               {cfg.seasonLabel}
             </span>
             <span className="font-display font-black text-[17px] sm:text-2xl uppercase tracking-tight leading-none" style={{ color: '#8FA8FF', textShadow: '0 0 16px rgba(47,91,255,.65)' }}>
-              Jetzt anmelden
+              {landing.canBook ? 'Platz sichern' : 'Jetzt anmelden'}
             </span>
           </div>
           {cfg.startInfo && (
             <div className="mt-1.5 hidden sm:flex items-center gap-2 text-xs font-sans text-hl-soft">
               <CalendarClock className="w-3.5 h-3.5 text-[#5B7FFF]" />
-              {cfg.startInfo} · unverbindlich
+              {cfg.startInfo} · {landing.published ? (landing.canBook ? 'Buchung geöffnet' : 'Alle Infos & Preise') : 'unverbindlich'}
             </div>
           )}
         </div>
         {/* Handy: runder Pfeil (spart Platz für die einzeiligen Texte); ab sm volle Taste */}
         <span className="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-full text-white font-display font-black uppercase tracking-wide w-10 h-10 sm:w-auto sm:h-auto sm:px-5 sm:py-2.5 text-sm" style={{ background: 'linear-gradient(135deg,#16277A,#2F5BFF)' }}>
-          <span className="hidden sm:inline">Anmelden</span>
+          <span className="hidden sm:inline">{landing.published ? 'Mehr erfahren' : 'Anmelden'}</span>
           <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
         </span>
       </div>
