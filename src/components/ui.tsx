@@ -691,7 +691,7 @@ export function PartnerSection() {
   );
 }
 
-// „Partner werden"-Balken über dem Partnerbereich – auf jeder öffentlichen
+// „Partner werden"-Balken unter dem Partnerbereich – auf jeder öffentlichen
 // Seite, sobald das Partnerprogramm im Backoffice eingeschaltet ist. Führt zur
 // Landingpage /partner (dort selbst ausgeblendet).
 export function PartnerCta({ onNavigatePath }: { onNavigatePath?: (path: string) => void }) {
@@ -755,8 +755,8 @@ export function Footer({ onNavigate, onNavigatePath }: FooterProps) {
   ];
   return (
     <>
-      <PartnerCta onNavigatePath={onNavigatePath} />
       <PartnerSection />
+      <PartnerCta onNavigatePath={onNavigatePath} />
       <footer className="border-t border-white/[.07] bg-[#080b09]">
         <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-7 flex items-center justify-between gap-6 flex-wrap">
         <div className="flex items-center gap-3">
