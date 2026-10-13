@@ -1,7 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'motion/react';
-import { ChevronDown, X, Smartphone, Search, LayoutDashboard, Star, Trophy, Home, Radio, KeyRound, Award, ClipboardList, Ticket, Handshake, ArrowRight } from 'lucide-react';
+import { motion, AnimatePresence, LayoutGroup } from 'motion/react';
+import { ChevronDown, X, Smartphone, Search, LayoutDashboard, Star, Trophy, Radio, KeyRound, Award, ClipboardList, Ticket, Handshake, ArrowRight, Shield, Globe, CalendarDays } from 'lucide-react';
 import { ActiveTab, Partner, PartnersConfig, Team } from '../types';
 import { apiFetch } from '../lib/api';
 import { trackSponsorClick } from '../lib/sponsors';
@@ -1079,7 +1079,11 @@ interface AccordionSectionMeta {
   title: string;
   subtitle?: string;
   category?: string;
+  order?: number; // Reihenfolge in der Seitenleiste (klein = oben), sonst Einbau-Reihenfolge
 }
+// Menüpunkte einer Rubrik in fester Reihenfolge (order, dann Registrierung).
+const byOrder = (list: AccordionSectionMeta[]) =>
+  list.map((s, i) => ({ s, i })).sort((a, b) => (a.s.order ?? 50) - (b.s.order ?? 50) || a.i - b.i).map((x) => x.s);
 
 interface AccordionContextValue {
   openId: string | null;
@@ -1119,13 +1123,16 @@ const DASH_ID = '__start__';
 const CAT_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   [DASH_ID]: LayoutDashboard,
   team: Star,
-  spiele: Trophy,
+  spieltag: CalendarDays,
+  liga: Shield,
   auszeichnungen: Award,
-  startseite: Home,
-  anmeldungen: ClipboardList,
-  tickets: Ticket,
-  kanaele: Radio,
+  livestream: Radio,
+  website: Globe,
+  partner: Handshake,
+  buchungen: ClipboardList,
+  fans: Ticket,
   zugaenge: KeyRound,
+  spiele: Trophy,
 };
 // Kurzlabel fürs Dock: „★ Intern“→„Intern“, „Spiele & Liga“→„Spiele“.
 const shortCatLabel = (label: string) => label.replace(/^★\s*/, '').replace(/^Zuschauer-/, '').split(' & ')[0];
@@ -1183,9 +1190,9 @@ export function AccordionGroup({
     setOpenId(null);
   });
 
-  const allCategories: AccordionCategory[] = dashboard
-    ? [{ id: DASH_ID, label: dashboardLabel }, ...(categories ?? [])]
-    : categories ?? [];
+  // Rubriken ohne sichtbaren Menüpunkt (z. B. wegen fehlender Rechte) ausblenden.
+  const filled = (categories ?? []).filter((c) => sections.some((s) => s.category === c.id));
+  const allCategories: AccordionCategory[] = dashboard ? [{ id: DASH_ID, label: dashboardLabel }, ...filled] : filled;
   const categoryLabel = (id?: string) => allCategories.find((c) => c.id === id)?.label ?? '';
   const isDash = !!dashboard && activeCategory === DASH_ID;
   // Aufgeräumte Einzelansicht nur am PC (ab sm) – dort steuert die linke Sidebar,
@@ -1209,7 +1216,7 @@ export function AccordionGroup({
     if (!singleView || isDash || activeCategory == null) return;
     const openBelongs = openId != null && sections.some((s) => s.id === openId && s.category === activeCategory);
     if (openBelongs) return;
-    const first = sections.find((s) => s.category === activeCategory);
+    const first = byOrder(sections.filter((s) => s.category === activeCategory))[0];
     if (first) setOpenId(first.id);
   }, [singleView, isDash, activeCategory, sections, openId]);
 
@@ -1310,62 +1317,89 @@ export function AccordionGroup({
       <div className="sm:flex sm:gap-6 sm:items-start">
         {allCategories.length > 0 && (
           <aside
-            className="hidden sm:block w-60 shrink-0 sticky top-4 self-start max-h-[calc(100vh-2rem)] overflow-y-auto pr-1 [scrollbar-width:thin]"
+            className="hidden sm:block w-[264px] shrink-0 sticky top-4 self-start max-h-[calc(100vh-2rem)] overflow-y-auto pr-1 [scrollbar-width:thin]"
             aria-label="Backoffice-Bereiche"
           >
-            <nav className="space-y-1">
-              {allCategories.map((c) => {
-                const active = c.id === activeCategory;
-                const Icon = CAT_ICON[c.id] ?? Star;
-                // Sektionen dieser Rubrik (in Reihenfolge ihrer Registrierung =
-                // JSX-Reihenfolge). Die Übersicht (DASH_ID) hat keine.
-                const catSections = c.id === DASH_ID ? [] : sections.filter((s) => s.category === c.id);
-                return (
-                  <div key={c.id}>
-                    <button
-                      type="button"
-                      onClick={() => selectCategory(c.id)}
-                      aria-pressed={active}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-bold font-sans transition-colors cursor-pointer border ${
-                        active
-                          ? 'bg-brand-accent-light/12 text-white border-brand-accent-light/40'
-                          : 'bg-transparent text-hl-mute border-transparent hover:text-white hover:bg-white/[.04]'
-                      }`}
-                    >
-                      <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-brand-accent-light' : ''}`} />
-                      <span className="truncate">{c.label}</span>
-                    </button>
-                    {/* Unter der aktiven Rubrik: ihre Menüpunkte als Unterliste –
-                        Klick öffnet den Bereich rechts. Sanft aufklappen statt springen. */}
-                    {active && catSections.length > 0 && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        transition={{ duration: 0.2, ease: 'easeOut' }}
-                        style={{ overflow: 'hidden' }}
-                        className="ml-3.5 mt-1 mb-1.5 space-y-0.5 border-l border-white/10 pl-2.5"
+            <LayoutGroup id="admin-side">
+              <nav className="space-y-1.5">
+                {allCategories.map((c) => {
+                  const active = c.id === activeCategory;
+                  const Icon = CAT_ICON[c.id] ?? Star;
+                  // Menüpunkte dieser Rubrik in fester Reihenfolge. Die Übersicht hat keine.
+                  const catSections = c.id === DASH_ID ? [] : byOrder(sections.filter((s) => s.category === c.id));
+                  return (
+                    <div key={c.id}>
+                      <button
+                        type="button"
+                        onClick={() => selectCategory(c.id)}
+                        aria-pressed={active}
+                        className={`group relative w-full flex items-center gap-3 pl-2 pr-3 py-2 rounded-2xl text-left cursor-pointer transition-colors duration-200 ${
+                          active ? 'text-white' : 'text-hl-soft hover:text-white hover:bg-white/[.045]'
+                        }`}
                       >
-                        {catSections.map((s) => {
-                          const isOpen = openId === s.id;
-                          return (
-                            <button
-                              key={s.id}
-                              type="button"
-                              onClick={() => openSection(s.id, c.id)}
-                              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[13px] font-sans transition-colors cursor-pointer ${
-                                isOpen ? 'bg-white/[.06] text-white font-semibold' : 'text-hl-mute hover:text-white hover:bg-white/[.03]'
-                              }`}
-                            >
-                              {s.title}
-                            </button>
-                          );
-                        })}
-                      </motion.div>
-                    )}
-                  </div>
-                );
-              })}
-            </nav>
+                        {/* Aktiver Hintergrund gleitet weich zur gewählten Rubrik */}
+                        {active && (
+                          <motion.span
+                            layoutId="admin-side-active"
+                            className="absolute inset-0 rounded-2xl bg-brand-accent-light/[.13] ring-1 ring-brand-accent-light/35"
+                            transition={{ type: 'spring', stiffness: 420, damping: 38 }}
+                          />
+                        )}
+                        <span
+                          className={`relative grid place-items-center w-10 h-10 rounded-xl shrink-0 transition-colors duration-200 ${
+                            active ? 'bg-brand-accent-light text-[#04120d]' : 'bg-white/[.06] text-hl-soft group-hover:text-white group-hover:bg-white/[.09]'
+                          }`}
+                        >
+                          <Icon className="w-5 h-5" />
+                        </span>
+                        <span className="relative flex-1 min-w-0 truncate font-sans font-extrabold text-[15.5px] tracking-tight">{c.label}</span>
+                        {catSections.length > 0 && (
+                          <ChevronDown className={`relative w-4 h-4 shrink-0 transition-transform duration-300 ${active ? 'rotate-180 text-brand-accent-light' : 'text-hl-faint'}`} />
+                        )}
+                      </button>
+                      {/* Menüpunkte der aktiven Rubrik – klappen weich auf und zu, nichts springt */}
+                      <AnimatePresence initial={false}>
+                        {active && catSections.length > 0 && (
+                          <motion.div
+                            key="sub"
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                            style={{ overflow: 'hidden' }}
+                          >
+                            <div className="relative ml-[27px] mt-1.5 mb-2 pl-3 border-l-2 border-white/[.08] space-y-0.5">
+                              {catSections.map((s) => {
+                                const isOpen = openId === s.id;
+                                return (
+                                  <button
+                                    key={s.id}
+                                    type="button"
+                                    onClick={() => openSection(s.id, c.id)}
+                                    className={`relative w-full text-left pl-3 pr-2.5 py-2.5 rounded-xl font-sans text-[14px] leading-snug cursor-pointer transition-colors duration-200 ${
+                                      isOpen ? 'text-white font-bold bg-white/[.07]' : 'text-hl-mute font-semibold hover:text-white hover:bg-white/[.04]'
+                                    }`}
+                                  >
+                                    {isOpen && (
+                                      <motion.span
+                                        layoutId="admin-side-sub"
+                                        className="absolute -left-[15px] top-2 bottom-2 w-[3px] rounded-full bg-brand-accent-light"
+                                        transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+                                      />
+                                    )}
+                                    {s.title}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  );
+                })}
+              </nav>
+            </LayoutGroup>
           </aside>
         )}
 
@@ -1504,6 +1538,7 @@ export function AccordionSection({
   subtitle,
   accent = '#22DFC9',
   category,
+  order,
   show = true,
   children,
 }: {
@@ -1513,6 +1548,7 @@ export function AccordionSection({
   subtitle?: string;
   accent?: string; // Farbe des Symbol-Kästchens
   category?: string; // Rubrik/Reiter – nur sichtbar, wenn dieser Reiter aktiv ist
+  order?: number; // Reihenfolge in der Seitenleiste (klein = oben)
   show?: boolean; // false = Sektion für diese Rolle komplett ausblenden (auch aus der Suche)
   children: React.ReactNode;
 }) {
@@ -1527,9 +1563,9 @@ export function AccordionSection({
   const unregister = ctx?.unregister;
   React.useEffect(() => {
     if (!show) return;
-    register?.({ id, title, subtitle, category });
+    register?.({ id, title, subtitle, category, order });
     return () => unregister?.(id);
-  }, [id, title, subtitle, category, register, unregister, show]);
+  }, [id, title, subtitle, category, order, register, unregister, show]);
 
   // Wenn dieser Abschnitt per Suche geöffnet wurde: sanft dorthin scrollen.
   const scrollTargetId = ctx?.scrollTargetId;

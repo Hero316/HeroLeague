@@ -1754,7 +1754,7 @@ export default function AdminPanel({
       <AccordionSection
         id="kader-meldung"
         show={canManageClubs}
-        category="spiele"
+        category="liga" order={2}
         title="Kader-Meldung der Manager"
         subtitle="hero-league.de/kader freigeben / schließen · wer hat schon gemeldet?"
         icon={<Users className="w-5 h-5" />}
@@ -1840,8 +1840,8 @@ export default function AdminPanel({
       <AccordionSection
         id="clubs"
         show={canManageClubs}
-        category="spiele"
-        title="Klubs registrieren & bearbeiten"
+        category="liga" order={1}
+        title="Klubs & Kader"
         subtitle="Neue Vereine anlegen · Kader, Logos, Farben & Wappen pflegen"
         icon={<Shield className="w-5 h-5" />}
       >
@@ -2386,7 +2386,7 @@ export default function AdminPanel({
       <AccordionSection
         id="pom"
         show={canManagePom}
-        category="auszeichnungen"
+        category="auszeichnungen" order={1}
         title="Spieler & Torwart des Spieltages"
         subtitle="Automatisch aus dem Tracking (beste Note), änderbar · Sponsor & Fotos"
         icon={<Award className="w-5 h-5" />}
@@ -2685,8 +2685,8 @@ export default function AdminPanel({
       <AccordionSection
         id="hero"
         show={canEditHomepage}
-        category="startseite"
-        title="Startseite · Hero-Bilder & Countdown"
+        category="website" order={1}
+        title="Startseite: Bilder & Countdown"
         subtitle="Hintergrundbilder + Reihenfolge der drei Slides · Countdown bis zum Anstoß"
         icon={<ImageIcon className="w-5 h-5" />}
         accent="#22DFC9"
@@ -2930,7 +2930,7 @@ export default function AdminPanel({
       <AccordionSection
         id="news"
         show={canEditHomepage}
-        category="startseite"
+        category="website" order={2}
         title="News-Laufband (Ticker)"
         subtitle="Eigene Kurz-Nachrichten für das Laufband oben auf der Seite"
         icon={<Megaphone className="w-5 h-5" />}
@@ -3034,7 +3034,7 @@ export default function AdminPanel({
       <AccordionSection
         id="twitch"
         show={canManageChannels}
-        category="kanaele"
+        category="website" order={3}
         title="Twitch & Social Media"
         subtitle="Twitch-Kanal, Live-Banner & Social-Media-Links"
         icon={<Radio className="w-5 h-5" />}
@@ -3171,8 +3171,8 @@ export default function AdminPanel({
       {canEditHomepage && (
         <AccordionSection
           id="partners"
-          category="startseite"
-          title="Partner & Sponsoren"
+          category="partner" order={1}
+          title="Partner-Logos"
           subtitle="Logo-Leiste ganz unten auf jeder Seite"
           icon={<Handshake className="w-5 h-5" />}
           accent="#E6238E"
@@ -3361,7 +3361,7 @@ export default function AdminPanel({
       {canEditHomepage && (
         <AccordionSection
           id="sponsor-clicks"
-          category="startseite"
+          category="partner" order={3}
           title="Sponsoren-Klicks"
           subtitle="Wie oft welcher Sponsor angeklickt wurde"
           icon={<BarChart3 className="w-5 h-5" />}
@@ -3425,7 +3425,7 @@ export default function AdminPanel({
       <AccordionSection
         id="event"
         show={canManageChannels}
-        category="kanaele"
+        category="spieltag" order={3}
         title="Testspiel / Event"
         subtitle="Spontanes Event ein-/ausblenden, Ergebnisse pflegen"
         icon={<Zap className="w-5 h-5" />}
@@ -4284,7 +4284,7 @@ export default function AdminPanel({
       {canManageSeason && (
       <AccordionSection
         id="season"
-        category="spiele"
+        category="liga" order={9}
         title="Demo-Modus"
         subtitle="Zufalls-Kopie zum Vorstellen (echte Saison bleibt unberührt)"
         icon={<CalendarPlus className="w-5 h-5" />}
