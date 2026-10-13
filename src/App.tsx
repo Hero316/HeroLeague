@@ -1826,12 +1826,16 @@ export default function App() {
                   />
                 }
                 categories={[
-                  ...(canSeeLeagueArea ? [{ id: 'spiele', label: 'Spiele & Liga' }] : []),
-                  ...(canManagePom ? [{ id: 'auszeichnungen', label: 'Auszeichnungen' }] : []),
-                  ...(canEditHomepage ? [{ id: 'startseite', label: 'Startseite' }] : []),
-                  ...(canManageChannels ? [{ id: 'kanaele', label: 'Kanäle & Event' }] : []),
-                  ...(canManageSignups ? [{ id: 'anmeldungen', label: 'Anmeldungen' }] : []),
-                  ...(canManageEventTickets ? [{ id: 'tickets', label: 'Zuschauer-Tickets' }] : []),
+                  // Rubriken nach „Was will ich tun?“. Rubriken ohne sichtbaren Menüpunkt
+                  // (fehlende Rechte) blendet die Seitenleiste automatisch aus.
+                  { id: 'spieltag', label: 'Spieltag' },
+                  { id: 'liga', label: 'Liga & Teams' },
+                  { id: 'auszeichnungen', label: 'Auszeichnungen' },
+                  { id: 'livestream', label: 'Livestream' },
+                  { id: 'website', label: 'Website' },
+                  { id: 'partner', label: 'Partner' },
+                  { id: 'buchungen', label: 'Buchungen' },
+                  { id: 'fans', label: 'Fans & Tippspiel' },
                   ...(canManageUsers ? [{ id: 'zugaenge', label: 'Zugänge' }] : []),
                 ]}
               >
@@ -1840,8 +1844,8 @@ export default function App() {
                     <>
                       <AccordionSection
                         id="results"
-                        category="spiele"
-                        title="Spielplan-Ergebnisse eintragen"
+                        category="spieltag" order={1}
+                        title="Ergebnisse & LIVE"
                         subtitle="Ergebnisse, Torschützen & Vorlagen zuweisen, Spiele LIVE stellen"
                         icon={<Sparkles className="w-5 h-5" />}
                       >
@@ -1856,7 +1860,7 @@ export default function App() {
 
                       <AccordionSection
                         id="schedule"
-                        category="spiele"
+                        category="spieltag" order={2}
                         title="Spielplan verwalten"
                         subtitle="Spiele anlegen oder löschen"
                         icon={<CalendarPlus className="w-5 h-5" />}
@@ -1905,7 +1909,7 @@ export default function App() {
                   {canManageChannels && (
                     <AccordionSection
                       id="studio-regie"
-                      category="kanaele"
+                      category="livestream" order={1}
                       title="Live-Regie (Studio-Stream)"
                       subtitle="OBS-Overlay quer & hoch mit Partnern – Konfetti, Links & Einblendungen per Knopfdruck"
                       icon={<Clapperboard className="w-5 h-5" />}
@@ -1918,8 +1922,8 @@ export default function App() {
                   {canManageChannels && (
                     <AccordionSection
                       id="obs-overlay"
-                      category="kanaele"
-                      title="OBS-Einblendung (Livestream)"
+                      category="livestream" order={2}
+                      title="OBS-Einblendung Feld 1 & 2"
                       subtitle="Je ein Link für Feld 1 und Feld 2 – Scoreboard, Uhr & Tor-Einblendung direkt im Stream"
                       icon={<MonitorPlay className="w-5 h-5" />}
                       accent="#9147FF"
@@ -1931,7 +1935,7 @@ export default function App() {
                   {canManageChannels && (
                     <AccordionSection
                       id="streams"
-                      category="kanaele"
+                      category="livestream" order={4}
                       title="Live-Streams (Testspieltag)"
                       subtitle="Zwei Twitch-Kanäle (Feld 1 & 2) für die Startseite"
                       icon={<Twitch className="w-5 h-5" />}
@@ -1944,7 +1948,7 @@ export default function App() {
                   {canManageChannels && (
                     <AccordionSection
                       id="league-streams"
-                      category="kanaele"
+                      category="livestream" order={3}
                       title="Live-Streams (Liga)"
                       subtitle="Eigene Twitch-Kanäle für den echten Ligabetrieb (Feld 1 & 2)"
                       icon={<Twitch className="w-5 h-5" />}
@@ -1958,8 +1962,8 @@ export default function App() {
                     <>
                       <AccordionSection
                         id="season2-bookings"
-                        category="anmeldungen"
-                        title="Season 2 – Buchungen & Landingpage"
+                        category="buchungen" order={1}
+                        title="Buchungen & Landingpage"
                         subtitle="Verbindliche Buchungen mit Kader & Logo · Zahlung bestätigen · Vorregistrierte einladen · /season2 freigeben"
                         icon={<Trophy className="w-5 h-5" />}
                         accent="#2F5BFF"
@@ -1968,8 +1972,8 @@ export default function App() {
                       </AccordionSection>
                       <AccordionSection
                         id="partner-requests"
-                        category="anmeldungen"
-                        title="Partneranfragen & Partner-Seite"
+                        category="partner" order={2}
+                        title="Partneranfragen & /partner"
                         subtitle="„Partner werden“-Anfragen · /partner an- und ausschalten · Zahlen auf der Seite pflegen"
                         icon={<Handshake className="w-5 h-5" />}
                         accent="#F2C14E"
@@ -1978,8 +1982,8 @@ export default function App() {
                       </AccordionSection>
                       <AccordionSection
                         id="season-signups"
-                        category="anmeldungen"
-                        title="Team- & Spieler-Anmeldungen"
+                        category="buchungen" order={2}
+                        title="Vorregistrierungen"
                         subtitle="Season 2 · oben zwischen Teams und einzelnen Spielern umschalten · Captains, Fenster, CSV"
                         icon={<Trophy className="w-5 h-5" />}
                         accent="#12A594"
@@ -1988,7 +1992,7 @@ export default function App() {
                       </AccordionSection>
                       <AccordionSection
                         id="tipp-users"
-                        category="anmeldungen"
+                        category="fans" order={2}
                         title="Tippspiel – Teilnehmer"
                         subtitle="Angemeldete Tipper (Name, E-Mail, Alter) · CSV-Export für Gewinne"
                         icon={<Target className="w-5 h-5" />}
@@ -1998,7 +2002,7 @@ export default function App() {
                       </AccordionSection>
                       <AccordionSection
                         id="tipp-bonus"
-                        category="anmeldungen"
+                        category="fans" order={3}
                         title="Tippspiel – Zusatzfragen (Lösung)"
                         subtitle="Am Saisonende die richtigen Antworten setzen · vergibt die Zusatzpunkte"
                         icon={<Star className="w-5 h-5" />}
@@ -2013,7 +2017,7 @@ export default function App() {
                     <>
                       <AccordionSection
                         id="event-tickets"
-                        category="tickets"
+                        category="fans" order={1}
                         title="Zuschauer-Tickets"
                         subtitle="Opening Night · Testspieltage · Spieltage — mehrere gleichzeitig · Einlass, Plätze & Spenden-Link"
                         icon={<Ticket className="w-5 h-5" />}
@@ -2027,7 +2031,7 @@ export default function App() {
                   {canManagePom && (
                     <AccordionSection
                       id="hero-one-admin"
-                      category="auszeichnungen"
+                      category="auszeichnungen" order={2}
                       title="HERO ONE · interne Rangliste"
                       subtitle="Nur hier im Backend: wer aktuell vorne liegt – mit Punkten (öffentlich nur die 10 Nominierten)"
                       icon={<Crown className="w-5 h-5" />}

@@ -86,7 +86,7 @@ export default function AdminDashboard({
             label="Sponsoren-Klicks"
             value={sponsorTotal ?? '–'}
             sub={`${sponsorCount} Sponsoren · Details ›`}
-            onClick={() => openSection('sponsor-clicks', 'startseite')}
+            onClick={() => openSection('sponsor-clicks', 'partner')}
           />
         )}
         {canManageClubs && (
@@ -96,7 +96,7 @@ export default function AdminDashboard({
             label="Klubs"
             value={teamsCount}
             sub="Verwalten ›"
-            onClick={() => openSection('clubs', 'spiele')}
+            onClick={() => openSection('clubs', 'liga')}
           />
         )}
         {canSeeResults && (
@@ -106,7 +106,7 @@ export default function AdminDashboard({
             label="Spiele"
             value={matchesCount}
             sub="Ergebnisse ›"
-            onClick={() => openSection('results', 'spiele')}
+            onClick={() => openSection('results', 'spieltag')}
           />
         )}
       </div>
