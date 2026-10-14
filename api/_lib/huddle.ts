@@ -4,6 +4,7 @@ import { getSession } from './auth.js';
 import { badRequest } from './validate.js';
 import { genId, sessionName } from './collab.js';
 import { sendPushToUser } from './push.js';
+import { summarizeMeeting } from './gemini.js';
 
 // Huddle = WLAN-Anruf im Slack-Style (Audio-Raum zu einer Unterhaltung).
 // Signalisierung (WebRTC) läuft kurzlebig per Polling über huddle_signals –
@@ -31,19 +32,20 @@ async function endIfEmpty(huddleId: string): Promise<boolean> {
   const act = await activeParticipants(huddleId);
   if (act.length > 0) return false;
   const rows = (await sql`
-    UPDATE huddles SET ended_at = now() WHERE id = ${huddleId} AND ended_at IS NULL
+    UPDATE huddles SET ended_at = now(), recording_at = NULL WHERE id = ${huddleId} AND ended_at IS NULL
     RETURNING message_id, COALESCE(notes,'') AS notes,
+      (SELECT count(*) FROM huddle_transcript t WHERE t.huddle_id = huddles.id)::int AS "lines",
       to_char(started_at AT TIME ZONE 'Europe/Berlin', 'DD.MM.YYYY') AS "dateLabel",
       to_char(started_at AT TIME ZONE 'Europe/Berlin', 'HH24:MI') AS "startLabel",
       GREATEST(1, round(extract(epoch from (now() - started_at)) / 60))::int AS "durMin"
   `) as {
-    message_id: string | null; notes: string; dateLabel: string; startLabel: string; durMin: number;
+    message_id: string | null; notes: string; lines: number; dateLabel: string; startLabel: string; durMin: number;
   }[];
   if (rows.length && rows[0].message_id) {
     const r = rows[0];
     // Karte bekommt Datum, Startzeit und Dauer in den Body; attach_title = 'notes'
     // markiert, dass es Notizen gibt (sonst leer ⇒ kein Notizen-Knopf).
-    const hasNotes = r.notes.trim().length > 0;
+    const hasNotes = r.notes.trim().length > 0 || r.lines > 0; // auch eine Mitschrift zählt
     const body = `Beendet · ${r.dateLabel}, ${r.startLabel} Uhr · ${r.durMin} Min`;
     await sql`UPDATE messages SET body = ${body}, attach_title = ${hasNotes ? 'notes' : ''} WHERE id = ${r.message_id}`;
   }
@@ -54,11 +56,14 @@ async function huddleById(id: string) {
   const rows = (await sql`
     SELECT id, conversation_id AS "conversationId", created_by AS "createdBy",
            COALESCE(notes,'') AS notes, message_id AS "messageId",
-           started_at AS "startedAt", ended_at AS "endedAt"
+           started_at AS "startedAt", ended_at AS "endedAt",
+           recording_at AS "recordingAt", summary, summary_at AS "summaryAt",
+           (SELECT count(*) FROM huddle_transcript t WHERE t.huddle_id = huddles.id)::int AS "transcriptCount"
     FROM huddles WHERE id = ${id}
   `) as {
     id: string; conversationId: string; createdBy: string; notes: string;
     messageId: string | null; startedAt: string; endedAt: string | null;
+    recordingAt: string | null; summary: unknown; summaryAt: string | null; transcriptCount: number;
   }[];
   return rows[0] ?? null;
 }
@@ -107,7 +112,16 @@ export async function huddle(req: VercelRequest, res: VercelResponse) {
       h = (await huddleById(h.id))!;
     }
     const participants = await activeParticipants(h.id);
-    return res.json({ huddle: h, participants, signals });
+    // Mitschrift nur auf Wunsch mitliefern (tAfter = nur neue Zeilen seit Zeitpunkt).
+    let transcript: unknown[] | undefined;
+    if (typeof req.query.transcript === 'string') {
+      const after = typeof req.query.tAfter === 'string' && req.query.tAfter ? req.query.tAfter : '1970-01-01T00:00:00Z';
+      transcript = await sql`
+        SELECT id, user_id AS "userId", user_name AS "userName", text, created_at AS "createdAt"
+        FROM huddle_transcript WHERE huddle_id = ${h.id} AND created_at > ${after}::timestamptz
+        ORDER BY created_at LIMIT 3000`;
+    }
+    return res.json({ huddle: h, participants, signals, transcript });
   }
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Nicht unterstützt' });
@@ -189,6 +203,51 @@ export async function huddle(req: VercelRequest, res: VercelResponse) {
       VALUES (${genId('hs')}, ${huddleId}, ${uid}, ${targetId}, ${kind}, ${JSON.stringify(b.payload ?? null)}::jsonb)
     `;
     return res.json({ ok: true });
+  }
+
+  // --- Mitschreiben (Meeting-Protokoll) ---------------------------------------
+  // An/aus: alle im Huddle sehen sofort, dass mitgeschrieben wird.
+  if (op === 'record') {
+    if (h.endedAt) return badRequest(res, 'Dieser Huddle ist beendet.');
+    const on = b.on === true;
+    await sql`UPDATE huddles SET recording_at = ${on ? new Date().toISOString() : null} WHERE id = ${huddleId}`;
+    return res.json({ ok: true, recordingAt: on ? new Date().toISOString() : null });
+  }
+  // Eigene erkannte Sätze speichern (jedes Gerät nur die EIGENE Stimme).
+  if (op === 'transcript') {
+    const fresh = await huddleById(huddleId);
+    if (!fresh || fresh.endedAt || !fresh.recordingAt) return res.json({ ok: true, skipped: true });
+    const lines = (Array.isArray(b.lines) ? b.lines : [])
+      .filter((x: unknown): x is string => typeof x === 'string')
+      .map((x: string) => x.replace(/\s+/g, ' ').trim().slice(0, 1200))
+      .filter(Boolean)
+      .slice(0, 30);
+    const name = sessionName(session);
+    for (const text of lines) {
+      await sql`INSERT INTO huddle_transcript (id, huddle_id, user_id, user_name, text) VALUES (${genId('ht')}, ${huddleId}, ${uid}, ${name}, ${text})`;
+    }
+    return res.json({ ok: true });
+  }
+  // KI-Zusammenfassung (ein Aufruf, nur Text → sehr günstig).
+  if (op === 'summarize') {
+    const rows = (await sql`
+      SELECT user_name AS "userName", text, created_at AS "createdAt"
+      FROM huddle_transcript WHERE huddle_id = ${huddleId} ORDER BY created_at LIMIT 5000
+    `) as { userName: string; text: string; createdAt: string }[];
+    if (!rows.length) return badRequest(res, 'Es gibt noch keine Mitschrift für diesen Huddle.');
+    const start = new Date(rows[0].createdAt).getTime();
+    let body = rows
+      .map((r) => `[${Math.max(0, Math.floor((new Date(r.createdAt).getTime() - start) / 60000))}] ${r.userName}: ${r.text}`)
+      .join('\n');
+    if (body.length > 160_000) body = body.slice(0, 160_000); // Deckel ~2,5 Std. – hält die Kosten klein
+    const names = [...new Set(rows.map((r) => r.userName).filter(Boolean))];
+    try {
+      const summary = await summarizeMeeting(body, names);
+      await sql`UPDATE huddles SET summary = ${JSON.stringify(summary)}::jsonb, summary_at = now() WHERE id = ${huddleId}`;
+      return res.json({ ok: true, summary, summaryAt: new Date().toISOString() });
+    } catch (e) {
+      return res.status(502).json({ error: e instanceof Error ? e.message : 'Zusammenfassung fehlgeschlagen.' });
+    }
   }
 
   if (op === 'notes') {

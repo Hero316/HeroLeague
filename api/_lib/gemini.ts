@@ -334,3 +334,77 @@ export async function parseTracking(opts: {
 
   return { transcript: typeof parsed.transcript === 'string' ? parsed.transcript : '', events };
 }
+
+// ===========================================================================
+// Meeting-Zusammenfassung (Huddle „Mitschreiben") – reiner TEXT rein, kurzes
+// JSON raus. Bewusst sparsam: kein Audio, ein einziger Aufruf auf Knopfdruck.
+// ===========================================================================
+
+export interface MeetingSummary {
+  title: string;
+  overview: string;
+  actionItems: { task: string; owner: string }[];
+  decisions: string[];
+  sections: { heading: string; points: string[] }[];
+}
+
+const MEETING_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    title: { type: 'STRING' },
+    overview: { type: 'STRING' },
+    actionItems: {
+      type: 'ARRAY',
+      items: { type: 'OBJECT', properties: { task: { type: 'STRING' }, owner: { type: 'STRING' } }, required: ['task'] },
+    },
+    decisions: { type: 'ARRAY', items: { type: 'STRING' } },
+    sections: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: { heading: { type: 'STRING' }, points: { type: 'ARRAY', items: { type: 'STRING' } } },
+        required: ['heading', 'points'],
+      },
+    },
+  },
+  required: ['title', 'overview', 'actionItems', 'decisions', 'sections'],
+} as const;
+
+const MEETING_INSTRUCTION = `Du bist Protokollführer der Hero League (Kleinfeld-Fußballliga mit Website, Livestream, Tracking und Team-App).
+Du bekommst die automatische Mitschrift eines internen Team-Meetings. Jede Zeile: [Minute] Name: Gesagtes.
+Die Mitschrift stammt aus einer Browser-Spracherkennung und enthält Hörfehler – erschließe den gemeinten Inhalt sinnvoll, erfinde aber nichts.
+
+Schreibe ein Protokoll auf Deutsch, knapp und konkret – wie gute Meeting-Notizen, kein Fließtext-Geschwafel:
+- title: kurzer, treffender Titel des Meetings (max. 8 Wörter).
+- overview: 1–2 Sätze, worum es ging.
+- actionItems: ALLE vereinbarten oder offensichtlich nötigen Aufgaben als klare To-dos (Verb zuerst, mit Details wie Namen/Zahlen). owner = wer es übernimmt, nur wenn aus dem Gespräch klar, sonst leer.
+- decisions: getroffene Entscheidungen (leer, wenn keine).
+- sections: die besprochenen Themen als Überschrift + Stichpunkte, in der Reihenfolge des Gesprächs. Wichtige Zahlen, Namen und Begründungen erhalten.
+Keine Wiederholungen zwischen den Abschnitten. Ist die Mitschrift sehr kurz, entsprechend kurz bleiben.`;
+
+export async function summarizeMeeting(transcript: string, participants: string[]): Promise<MeetingSummary> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('Die KI ist nicht eingerichtet (GEMINI_API_KEY fehlt).');
+  const parts = [{ text: `Teilnehmer: ${participants.join(', ') || 'unbekannt'}\n\nMitschrift:\n${transcript}` }];
+  const text = await callGemini(apiKey, MEETING_INSTRUCTION, parts, MEETING_SCHEMA);
+  let p: Partial<MeetingSummary>;
+  try {
+    p = JSON.parse(text) as Partial<MeetingSummary>;
+  } catch {
+    throw new Error('Die KI-Antwort war unvollständig – bitte noch einmal versuchen.');
+  }
+  const str = (v: unknown, n: number) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
+  return {
+    title: str(p.title, 120) || 'Meeting',
+    overview: str(p.overview, 600),
+    actionItems: (Array.isArray(p.actionItems) ? p.actionItems : [])
+      .map((a) => ({ task: str(a?.task, 300), owner: str(a?.owner, 60) }))
+      .filter((a) => a.task)
+      .slice(0, 40),
+    decisions: (Array.isArray(p.decisions) ? p.decisions : []).map((d) => str(d, 300)).filter(Boolean).slice(0, 30),
+    sections: (Array.isArray(p.sections) ? p.sections : [])
+      .map((s) => ({ heading: str(s?.heading, 120), points: (Array.isArray(s?.points) ? s.points : []).map((x) => str(x, 400)).filter(Boolean).slice(0, 20) }))
+      .filter((s) => s.heading && s.points.length)
+      .slice(0, 15),
+  };
+}

@@ -666,6 +666,26 @@ export interface HuddleState {
   messageId: string | null;
   startedAt: string;
   endedAt: string | null;
+  recordingAt?: string | null; // Mitschreiben läuft (null = aus)
+  summary?: MeetingSummary | null; // KI-Protokoll
+  summaryAt?: string | null;
+  transcriptCount?: number;
+}
+
+// KI-Protokoll eines Huddles (wie Notion-Meeting-Notizen).
+export interface MeetingSummary {
+  title: string;
+  overview: string;
+  actionItems: { task: string; owner: string }[];
+  decisions: string[];
+  sections: { heading: string; points: string[] }[];
+}
+export interface TranscriptLine {
+  id: string;
+  userId: string;
+  userName: string;
+  text: string;
+  createdAt: string;
 }
 
 // Abstimmung (Umfrage) im Chat – wie bei WhatsApp.

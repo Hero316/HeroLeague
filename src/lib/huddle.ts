@@ -2,7 +2,7 @@
 // Peer-to-Peer über WebRTC mit gratis STUN (keine Anmeldung, keine Kosten).
 // Signalisierung per Polling über /api/chat?resource=huddle (kein WebSocket).
 import { apiFetch } from './api';
-import type { HuddleState, HuddleParticipant } from '../types';
+import type { HuddleState, HuddleParticipant, MeetingSummary, TranscriptLine } from '../types';
 
 // STUN (direkte Verbindung) + TURN (Vermittler als Rückfallebene). TURN ist
 // nötig, wenn keine direkte P2P-Verbindung zustande kommt — typisch bei iPhones
@@ -66,6 +66,7 @@ interface PollResult {
   huddle: HuddleState | null;
   participants: HuddleParticipant[];
   signals: { senderId: string; kind: string; payload: unknown }[];
+  transcript?: TranscriptLine[];
 }
 
 export const huddlePoll = (params: { conversationId?: string; huddleId?: string }) => {
@@ -88,6 +89,16 @@ export const huddleLeave = (huddleId: string) =>
   apiFetch('/api/chat?resource=huddle', { method: 'POST', body: JSON.stringify({ op: 'leave', huddleId }) });
 export const huddleSignal = (huddleId: string, targetId: string, kind: string, payload: unknown) =>
   apiFetch('/api/chat?resource=huddle', { method: 'POST', body: JSON.stringify({ op: 'signal', huddleId, targetId, kind, payload }) });
+// --- Mitschreiben (Meeting-Protokoll) -------------------------------------------
+export const huddleRecord = (huddleId: string, on: boolean) =>
+  apiFetch<{ ok: boolean; recordingAt: string | null }>('/api/chat?resource=huddle', { method: 'POST', body: JSON.stringify({ op: 'record', huddleId, on }) });
+export const huddleSendTranscript = (huddleId: string, lines: string[]) =>
+  apiFetch('/api/chat?resource=huddle', { method: 'POST', body: JSON.stringify({ op: 'transcript', huddleId, lines }) });
+export const huddleSummarize = (huddleId: string) =>
+  apiFetch<{ ok: boolean; summary: MeetingSummary; summaryAt: string }>('/api/chat?resource=huddle', { method: 'POST', body: JSON.stringify({ op: 'summarize', huddleId }) });
+export const huddleTranscript = (huddleId: string, after = '') =>
+  apiFetch<PollResult>(`/api/chat?resource=huddle&huddleId=${encodeURIComponent(huddleId)}&transcript=1${after ? `&tAfter=${encodeURIComponent(after)}` : ''}`);
+
 export const huddleSaveNotes = (huddleId: string, notes: string) =>
   apiFetch('/api/chat?resource=huddle', { method: 'POST', body: JSON.stringify({ op: 'notes', huddleId, notes }) });
 
@@ -145,6 +156,8 @@ export class HuddleSession {
   onCamera: (from: string, stream: MediaStream | null) => void = () => {};
   // Gemeinsame Notizen haben sich (durch jemand anderen) geändert.
   onNotes: (notes: string) => void = () => {};
+  // Huddle-Zustand nach jedem Abruf (u. a. „Mitschreiben läuft").
+  onState: (h: HuddleState) => void = () => {};
   private lastNotes: string | null = null;
 
   constructor(huddleId: string, myId: string) {
@@ -241,6 +254,7 @@ export class HuddleSession {
       if (!r.huddle || r.huddle.endedAt) { this.stop(); this.onEnded(); return; }
       this.participants = r.participants;
       this.onParticipants(r.participants);
+      this.onState(r.huddle);
       const n = r.huddle.notes ?? '';
       if (this.lastNotes === null) this.lastNotes = n;
       else if (n !== this.lastNotes) { this.lastNotes = n; this.onNotes(n); }
