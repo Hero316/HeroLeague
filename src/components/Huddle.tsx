@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePolling } from '../lib/usePolling';
 import { motion } from 'motion/react';
-import { Headphones, Mic, MicOff, PhoneOff, StickyNote, X, Radio, MonitorUp, Maximize2, Loader2, Video, VideoOff, SwitchCamera, Music, Music2 } from 'lucide-react';
+import { Headphones, Mic, MicOff, PhoneOff, StickyNote, X, Radio, MonitorUp, Maximize2, Loader2, Video, VideoOff, SwitchCamera, Music, Music2, AudioLines, FileText } from 'lucide-react';
 import type { HuddleState, HuddleParticipant, TeamMember, ChatMessage } from '../types';
-import { HuddleSession, huddleStart, huddleJoin, huddleLeave, huddlePoll, huddleSaveNotes, canShareScreen, primeAudio, huddleAudioContext, IS_IOS } from '../lib/huddle';
+import { HuddleSession, huddleStart, huddleJoin, huddleLeave, huddlePoll, huddleSaveNotes, huddleRecord, canShareScreen, primeAudio, huddleAudioContext, IS_IOS } from '../lib/huddle';
+import { MeetingRecorder, canTranscribe } from '../lib/meetingRecorder';
+import { ProtocolModal } from './HuddleProtocol';
 import { startHoldMusic } from '../lib/holdMusic';
 import Avatar from './Avatar';
 import { ModalPortal } from './ui';
@@ -42,6 +44,13 @@ export function useHuddleController(currentUserId: string) {
     session.onParticipants = (p) => setActive((cur) => (cur && cur.session === session ? { ...cur, participants: p } : cur));
     session.onEnded = () => { ref.current = null; setActive(null); setSpeaking(new Set()); };
     session.onSpeaking = (ids) => setSpeaking((prev) => (sameSet(prev, ids) ? prev : ids));
+    // Zustand (u. a. „Mitschreiben läuft") übernehmen, sobald er sich ändert.
+    session.onState = (h) => setActive((cur) => {
+      if (!cur || cur.session !== session) return cur;
+      const s0 = cur.state;
+      if (s0.recordingAt === h.recordingAt && s0.transcriptCount === h.transcriptCount && s0.summaryAt === h.summaryAt) return cur;
+      return { ...cur, state: { ...s0, recordingAt: h.recordingAt, transcriptCount: h.transcriptCount, summary: h.summary, summaryAt: h.summaryAt } };
+    });
     session.onScreen = (from, stream) => setActive((cur) => {
       if (!cur || cur.session !== session) return cur;
       if (!stream) return cur.screen && cur.screen.from === from ? { ...cur, screen: null } : cur;
@@ -146,12 +155,49 @@ export function useHuddleController(currentUserId: string) {
     ref.current?.switchCamera().catch(() => alert('Kamera-Wechsel nicht möglich.'));
   }, []);
 
+  // --- Mitschreiben: jedes Gerät schreibt die EIGENE Stimme mit ----------------
+  const recRef = useRef<MeetingRecorder | null>(null);
+  const [interim, setInterim] = useState('');
+  const [recError, setRecError] = useState('');
+  const recordingOn = !!active?.state.recordingAt;
+  const shouldRecord = recordingOn && !!active && !active.muted && !recError;
+  const activeId = active?.state.id ?? null;
+  useEffect(() => {
+    if (!shouldRecord || !activeId) return;
+    const r = new MeetingRecorder(activeId);
+    r.onInterim = setInterim;
+    r.onError = (m) => setRecError(m);
+    recRef.current = r;
+    r.start();
+    return () => {
+      r.stop();
+      if (recRef.current === r) recRef.current = null;
+    };
+  }, [shouldRecord, activeId]);
+  useEffect(() => {
+    if (!recordingOn) setRecError('');
+  }, [recordingOn]);
+
+  const toggleRecording = useCallback(async () => {
+    const cur = ref.current;
+    if (!cur) return;
+    const on = !recordingOn;
+    if (on && !window.confirm('Mitschreiben starten?\n\nAlle im Huddle sehen, dass mitgeschrieben wird. Jedes Gerät schreibt die eigene Stimme mit – danach kann eine KI alles zusammenfassen.')) return;
+    if (on && !canTranscribe()) alert('Dein Browser kann selbst nicht mitschreiben (am besten Chrome oder Safari) – die anderen schreiben trotzdem mit.');
+    try {
+      const r = await huddleRecord(cur.huddleId, on);
+      setActive((a) => (a && a.session === cur ? { ...a, state: { ...a.state, recordingAt: r.recordingAt } } : a));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Hat nicht geklappt.');
+    }
+  }, [recordingOn]);
+
   // Beim Verlassen der Seite höflich abmelden.
   useEffect(() => {
     return () => { if (ref.current) { ref.current.stop(); huddleLeave(ref.current.huddleId).catch(() => {}); } };
   }, []);
 
-  return { active, speaking, busy, startInConversation, joinHuddle, leave, toggleMute, toggleScreen, toggleCamera, switchCamera };
+  return { active, speaking, busy, startInConversation, joinHuddle, leave, toggleMute, toggleScreen, toggleCamera, switchCamera, toggleRecording, interim, recError };
 }
 
 export type HuddleController = ReturnType<typeof useHuddleController>;
@@ -308,6 +354,9 @@ export function HuddleBar({
   onToggleScreen,
   onToggleCamera,
   onSwitchCamera,
+  onToggleRecording,
+  interim = '',
+  recError = '',
 }: {
   active: ActiveHuddle;
   speaking: Set<string>;
@@ -318,8 +367,13 @@ export function HuddleBar({
   onToggleScreen: () => void;
   onToggleCamera: () => void;
   onSwitchCamera: () => void;
+  onToggleRecording?: () => void;
+  interim?: string;
+  recError?: string;
 }) {
   const [stageOpen, setStageOpen] = useState(false);
+  const [protocolOpen, setProtocolOpen] = useState(false);
+  const recording = !!active.state.recordingAt;
   useBackClose(stageOpen, () => setStageOpen(false));
   const [notesOpen, setNotesOpen] = useState(false);
   const [notes, setNotes] = useState(active.state.notes ?? '');
@@ -410,6 +464,22 @@ export function HuddleBar({
             ))}
           </div>
         )}
+        {/* Mitschreiben läuft – für ALLE sichtbar */}
+        {recording && (
+          <div className="mb-2 flex items-center gap-2 rounded-xl bg-black/25 border border-white/15 px-2.5 py-1.5 min-w-0">
+            <span className="relative flex w-2.5 h-2.5 shrink-0">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75 animate-ping" />
+              <span className="relative inline-flex rounded-full w-2.5 h-2.5 bg-rose-500" />
+            </span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-white shrink-0">Wird mitgeschrieben</span>
+            <span className="flex-1 min-w-0 truncate text-[12px] text-white/75 font-sans italic">
+              {recError ? recError : active.muted ? 'Du bist stumm – deine Stimme wird nicht mitgeschrieben' : interim || ''}
+            </span>
+            <button onClick={() => setProtocolOpen(true)} className="shrink-0 inline-flex items-center gap-1 rounded-full bg-white/15 hover:bg-white/25 px-2.5 py-1 text-[11px] font-bold text-white cursor-pointer">
+              <FileText className="w-3.5 h-3.5" /> Protokoll
+            </button>
+          </div>
+        )}
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="hidden min-[420px]:flex items-center gap-1.5 shrink-0">
             <Radio className="w-4 h-4 text-white animate-pulse" />
@@ -460,6 +530,15 @@ export function HuddleBar({
           >
             {active.camOn ? <Video className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
           </button>
+          {onToggleRecording && (
+            <button
+              onClick={onToggleRecording}
+              title={recording ? 'Mitschreiben beenden' : 'Mitschreiben (KI-Protokoll)'}
+              className={`p-2.5 rounded-full cursor-pointer shrink-0 ${recording ? 'bg-rose-500 text-white' : 'bg-white/15 text-white hover:bg-white/25'}`}
+            >
+              <AudioLines className="w-5 h-5" />
+            </button>
+          )}
           <button onClick={() => setNotesOpen(true)} title="Notizen" className="hidden min-[400px]:inline-flex p-2.5 rounded-full bg-white/15 text-white hover:bg-white/25 cursor-pointer shrink-0">
             <StickyNote className="w-5 h-5" />
           </button>
@@ -477,6 +556,7 @@ export function HuddleBar({
       </motion.div>
 
       {notesOpen && <NotesSheet notes={notes} onChange={onNotes} onClose={() => goBackLayer()} saving={saving} />}
+      {protocolOpen && <ProtocolModal huddleId={active.state.id} live onClose={() => setProtocolOpen(false)} />}
 
       {stageOpen && (
         <HuddleStage
@@ -490,6 +570,8 @@ export function HuddleBar({
           onToggleCamera={onToggleCamera}
           onSwitchCamera={onSwitchCamera}
           onOpenNotes={() => setNotesOpen(true)}
+          onToggleRecording={onToggleRecording}
+          onOpenProtocol={() => setProtocolOpen(true)}
           onClose={() => setStageOpen(false)}
         />
       )}
@@ -511,6 +593,8 @@ function HuddleStage({
   onToggleCamera,
   onSwitchCamera,
   onOpenNotes,
+  onToggleRecording,
+  onOpenProtocol,
   onClose,
 }: {
   active: ActiveHuddle;
@@ -523,8 +607,11 @@ function HuddleStage({
   onToggleCamera: () => void;
   onSwitchCamera: () => void;
   onOpenNotes: () => void;
+  onToggleRecording?: () => void;
+  onOpenProtocol: () => void;
   onClose: () => void;
 }) {
+  const recording = !!active.state.recordingAt;
   const screenRef = useRef<HTMLVideoElement>(null);
   const screen = active.screen;
   useEffect(() => {
@@ -624,6 +711,20 @@ function HuddleStage({
               <MonitorUp className="w-6 h-6" />
             </button>
           )}
+          {onToggleRecording && (
+            <button
+              onClick={onToggleRecording}
+              title={recording ? 'Mitschreiben beenden' : 'Mitschreiben (KI-Protokoll)'}
+              className={`p-4 rounded-full cursor-pointer ${recording ? 'bg-rose-500 text-white' : 'bg-white/15 text-white hover:bg-white/25'}`}
+            >
+              <AudioLines className="w-6 h-6" />
+            </button>
+          )}
+          {recording && (
+            <button onClick={onOpenProtocol} title="Protokoll" className="p-4 rounded-full bg-white/15 text-white hover:bg-white/25 cursor-pointer">
+              <FileText className="w-6 h-6" />
+            </button>
+          )}
           <button onClick={onOpenNotes} title="Notizen" className="p-4 rounded-full bg-white/15 text-white hover:bg-white/25 cursor-pointer">
             <StickyNote className="w-6 h-6" />
           </button>
@@ -704,20 +805,8 @@ export function HuddleCard({
   const live = !!huddleId && huddleId === isLiveHuddleId;
   const hasNotes = message.attachTitle === 'notes';
   const meta = (message.body || '').replace(/^Beendet · /, ''); // Datum, Startzeit, Dauer
-  const [notes, setNotes] = useState<string | null>(null);
   const [showNotes, setShowNotes] = useState(false);
-  useBackClose(showNotes, () => setShowNotes(false));
-
-  const openNotes = async () => {
-    try {
-      const r = await huddlePoll({ huddleId });
-      setNotes(r.huddle?.notes ?? '');
-      setShowNotes(true);
-    } catch {
-      setNotes('');
-      setShowNotes(true);
-    }
-  };
+  const openNotes = () => setShowNotes(true);
 
   return (
     <div className="flex justify-center my-2">
@@ -738,29 +827,13 @@ export function HuddleCard({
           </div>
           {hasNotes && (
             <button onClick={openNotes} className="text-[11px] font-bold uppercase tracking-wider bg-white/10 text-hl-soft px-2.5 py-1 rounded-full cursor-pointer hover:text-white shrink-0">
-              Notizen
+              Protokoll
             </button>
           )}
         </div>
       )}
 
-      {showNotes && (
-        <ModalPortal>
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[75] bg-black/70 flex items-center justify-center p-4" onClick={() => setShowNotes(false)}>
-            <div className="hl-card hl-modal-card w-full max-w-md p-4" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="font-display font-bold text-white uppercase tracking-tight flex items-center gap-1.5"><StickyNote className="w-4 h-4" /> Huddle-Notizen</h4>
-                <button onClick={() => setShowNotes(false)} className="p-1 text-hl-mute hover:text-white cursor-pointer"><X className="w-5 h-5" /></button>
-              </div>
-              {notes && notes.trim() ? (
-                <div className="max-h-[70vh] overflow-y-auto"><NotesView text={notes} /></div>
-              ) : (
-                <p className="text-sm text-hl-faint italic">Für diesen Huddle wurden keine Notizen gemacht.</p>
-              )}
-            </div>
-          </motion.div>
-        </ModalPortal>
-      )}
+      {showNotes && <ProtocolModal huddleId={huddleId} onClose={() => setShowNotes(false)} />}
     </div>
   );
 }

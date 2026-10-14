@@ -298,6 +298,21 @@ CREATE TABLE IF NOT EXISTS huddle_signals (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_huddle_signals_target ON huddle_signals(huddle_id, target_id, created_at);
+-- Meeting-Mitschrift: „Mitschreiben" im Huddle. Jedes Gerät transkribiert die
+-- eigene Stimme (Browser-Spracherkennung) → eine Zeile je Satz mit Namen.
+-- Die KI-Zusammenfassung (Action Items, Entscheidungen, Themen) liegt in huddles.summary.
+ALTER TABLE huddles ADD COLUMN IF NOT EXISTS recording_at TIMESTAMPTZ;   -- läuft gerade Mitschreiben? (NULL = aus)
+ALTER TABLE huddles ADD COLUMN IF NOT EXISTS summary JSONB;              -- KI-Zusammenfassung
+ALTER TABLE huddles ADD COLUMN IF NOT EXISTS summary_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS huddle_transcript (
+  id         TEXT PRIMARY KEY,
+  huddle_id  TEXT NOT NULL REFERENCES huddles(id) ON DELETE CASCADE,
+  user_id    TEXT NOT NULL,
+  user_name  TEXT NOT NULL DEFAULT '',
+  text       TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_huddle_transcript ON huddle_transcript(huddle_id, created_at);
 -- messages.attach_type erlaubt zusätzlich 'huddle' (die Anruf-Karte im Chat).
 
 -- In-App-Benachrichtigungen (Erwähnungen, Zuweisungen, neue Kommentare).

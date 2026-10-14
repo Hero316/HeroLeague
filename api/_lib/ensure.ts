@@ -67,6 +67,9 @@ export async function ensureSchema(): Promise<void> {
     // Huddle (WLAN-Anrufe/Slack-Style): Räume, Teilnehmer, Signalisierung.
     await sql`SELECT 1 FROM huddles LIMIT 1`;
     await sql`SELECT 1 FROM huddle_signals LIMIT 1`;
+    // Meeting-Mitschrift (Mitschreiben im Huddle + KI-Zusammenfassung) mitprüfen.
+    await sql`SELECT recording_at, summary, summary_at FROM huddles LIMIT 1`;
+    await sql`SELECT 1 FROM huddle_transcript LIMIT 1`;
     // Benannte Links („Link-Tasten") mitprüfen.
     await sql`SELECT links FROM tasks LIMIT 1`;
     // Stichpunkt-Aufgaben im Termin + Zu-/Absagen mitprüfen.
@@ -317,6 +320,18 @@ export async function ensureSchema(): Promise<void> {
     kind TEXT NOT NULL, payload JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
   await run(sql`CREATE INDEX IF NOT EXISTS idx_huddle_signals_target ON huddle_signals(huddle_id, target_id, created_at)`);
+  // Meeting-Mitschrift: jedes Gerät schreibt die EIGENE Stimme mit (Browser-
+  // Spracherkennung, kostenlos) → Zeilen mit Namen. Zusammenfassung per KI auf Knopfdruck.
+  await run(sql`ALTER TABLE huddles ADD COLUMN IF NOT EXISTS recording_at TIMESTAMPTZ`);
+  await run(sql`ALTER TABLE huddles ADD COLUMN IF NOT EXISTS summary JSONB`);
+  await run(sql`ALTER TABLE huddles ADD COLUMN IF NOT EXISTS summary_at TIMESTAMPTZ`);
+  await run(sql`CREATE TABLE IF NOT EXISTS huddle_transcript (
+    id TEXT PRIMARY KEY,
+    huddle_id TEXT NOT NULL REFERENCES huddles(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL, user_name TEXT NOT NULL DEFAULT '',
+    text TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now())`);
+  await run(sql`CREATE INDEX IF NOT EXISTS idx_huddle_transcript ON huddle_transcript(huddle_id, created_at)`);
 
   // --- Hero-Punkte (Belohnung fürs Abschließen von Aufgaben/Terminen/Tickets/
   // Ideen). Eine Zeile je belohntem Nutzer & Ereignis. `seen=false` ⇒ die Person

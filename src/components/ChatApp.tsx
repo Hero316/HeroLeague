@@ -9,6 +9,7 @@ import IdeasBoard from './IdeasBoard';
 import TeamSettings from './TeamSettings';
 import DeepLinkModal from './DeepLinkModal';
 import { useHuddleController, HuddleBar } from './Huddle';
+import { ProtocolModal } from './HuddleProtocol';
 import { useInstall } from './InstallProvider';
 import { pushDebug, enablePush } from '../lib/push';
 import { fetchNotifications, fetchIdeas, fetchAllTasks, fetchTeam, fetchHeroEvents, markHeroEventsSeen } from '../lib/collab';
@@ -146,6 +147,18 @@ export default function ChatApp({
   // (Deep-Link/Reload). Wird beim Tippen auf „Chats" unten geleert, damit man in
   // der LISTE landet – nicht wieder im zuletzt geöffneten Chat.
   const [chatConv, setChatConv] = useState<string | null>(() => initialConversationId ?? getUrlParam('c'));
+  // Geteilter Protokoll-Link (/chat?protokoll=HUDDLE-ID) → Meeting-Protokoll direkt öffnen.
+  const [protocolId, setProtocolId] = useState<string | null>(() => getUrlParam('protokoll'));
+  const closeProtocol = () => {
+    setProtocolId(null);
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete('protokoll');
+      window.history.replaceState(window.history.state, '', u.toString());
+    } catch {
+      /* egal */
+    }
+  };
   // Neuer Deep-Link (z. B. aus einer Benachrichtigung) → Chat wieder öffnen.
   useEffect(() => {
     if (initialConversationId) setChatConv(initialConversationId);
@@ -592,8 +605,13 @@ export default function ChatApp({
           onToggleScreen={huddle.toggleScreen}
           onToggleCamera={huddle.toggleCamera}
           onSwitchCamera={huddle.switchCamera}
+          onToggleRecording={huddle.toggleRecording}
+          interim={huddle.interim}
+          recError={huddle.recError}
         />
       )}
+
+      {protocolId && <ProtocolModal huddleId={protocolId} onClose={closeProtocol} />}
 
       {/* Untere Tab-Leiste: schwebende bunte Insel. Der aktive Tab wird zur
           kräftig gefüllten Pille in seiner EIGENEN Farbe – die „fliegt" beim
