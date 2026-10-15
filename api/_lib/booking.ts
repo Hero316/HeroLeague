@@ -5,8 +5,8 @@
 //
 // Ablauf: E-Mail → 6-stelliger Code → signiertes Kurzzeit-Token. Mit dem Token
 // werden Daten einer früheren Vorregistrierung vorausgefüllt und die Buchung
-// abgeschickt (Team, Kader, Logo, Paket, Pflicht-Zustimmungen). Zahlung per
-// Zahlungslink (z. B. Revolut); der Eingang wird im Backoffice bestätigt.
+// abgeschickt (Team, Kader, Logo, Paket, Pflicht-Zustimmungen). Bezahlt wird per
+// Rechnung (invoice.ts, Zahlungsziel paymentDays); der Eingang wird im Backoffice bestätigt.
 // ===========================================================================
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHmac, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -19,6 +19,7 @@ import {
   normEmail, sendBrandedMail, tooManyAttempts, verifyTurnstile,
 } from './publicforms.js';
 import { escapeHtml, sendMail } from './mail.js';
+import { cleanInvoice, DEFAULT_INVOICE, drawInvoiceNo, invoiceHtml, invoiceMissing, invoiceText, type InvoiceBooking, type InvoiceSettings } from './invoice.js';
 
 const PURPOSE = 'season-booking';
 const FROM = 'Hero League – Season 2 <anmeldung@hero-league.de>';
@@ -45,8 +46,10 @@ export interface BookingConfig {
   priceOne: number; // Cent
   priceTwo: number;
   priceTwoEarly: number;
+  paymentDays: number; // Zahlungsziel der Rechnung in Tagen
   payLink: string; // PayPal-Taste (PayPal.me) – Betrag + Nachricht trägt das Team selbst ein
   revolutLink: string; // zweite Taste „Karte / Überweisung" (Revolut-Link)
+  invoice: InvoiceSettings; // Rechnungsvorlage (Absender, Bank, Steuer, Nummernkreis)
   minSquad: number;
   maxSquad: number;
   maxTeams: number; // Startplätze dieser Season (z. B. Season 2) – danach „Ausgebucht"
@@ -56,14 +59,20 @@ export interface BookingConfig {
   rules: string; // Regelwerk (Volltext)
 }
 
-export const BINDING_NOTICE =
-  'Deine Buchung ist verbindlich. Eine kostenfreie Stornierung bei freiwilligem Rückzug oder Nichtantritt deines Teams ist nicht vorgesehen. Gesetzliche Rücktritts-, Kündigungs- und Erstattungsrechte bleiben unberührt.';
+// Hinweis direkt vor dem Abschluss (Button-Lösung): verbindlich + zahlungspflichtig,
+// Zahlung erst per Rechnung mit Zahlungsziel.
+export const bindingNotice = (days: number) =>
+  `Deine Buchung ist verbindlich und zahlungspflichtig. Jetzt wird noch nichts bezahlt – ihr bekommt eine Rechnung per E-Mail, zahlbar innerhalb von ${days} Tagen ab Rechnungsdatum. Eine kostenfreie Stornierung bei freiwilligem Rückzug oder Nichtantritt deines Teams ist nicht vorgesehen – die Rechnung ist auch dann zu bezahlen. Gesetzliche Rücktritts-, Kündigungs- und Erstattungsrechte bleiben unberührt.`;
+export const BINDING_NOTICE = bindingNotice(30);
 export const JERSEY_CHECKBOX =
   'Wir spielen in einheitlichen Teamtrikots mit gut lesbaren, kontrastreichen Rückennummern. Jede Nummer ist im Team nur einmal vergeben, eindeutig einem Spieler zugeordnet und wird vor dem ersten Einsatz in der Kaderliste hinterlegt.';
 export const TERMS_CHECKBOX =
   'Ich habe die Teilnahmebedingungen einschließlich der Regelung zu Teamrückzug und Nichtantritt gelesen und akzeptiere sie.';
 
-const DEFAULT_TERMS = `Rückzug und Nichtantritt
+const DEFAULT_TERMS = `Zahlung
+Die Buchung ist verbindlich und zahlungspflichtig. Nach der Buchung erhält das Team eine Rechnung per E-Mail an die angegebene Rechnungsadresse. Der Rechnungsbetrag ist innerhalb von 30 Tagen ab Rechnungsdatum ohne Abzug zu zahlen. Der Startplatz ist mit der Buchung reserviert.
+
+Rückzug und Nichtantritt
 Bei freiwilligem Rückzug oder Nichtantritt des Teams bleibt die vereinbarte Zahlungspflicht grundsätzlich bestehen. Ersparte Aufwendungen sowie Einnahmen aus einer erneuten Vergabe desselben Startplatzes werden angerechnet. Gesetzliche Rücktritts-, Kündigungs- und Erstattungsrechte bleiben unberührt.
 
 Ausfall einer Season
@@ -99,8 +108,10 @@ const DEFAULT_CONFIG: BookingConfig = {
   priceOne: 55000,
   priceTwo: 100000,
   priceTwoEarly: 95000,
+  paymentDays: 30,
   payLink: '',
   revolutLink: '',
+  invoice: DEFAULT_INVOICE,
   minSquad: 8,
   maxSquad: 14,
   maxTeams: 12,
@@ -117,7 +128,7 @@ export async function getBookingConfig(): Promise<BookingConfig> {
     const v = (rows[0]?.value || {}) as Partial<BookingConfig> & { payLinkOne?: string; payLinkTwo?: string; payLinkTwoEarly?: string };
     // Früher gab es je Paket einen eigenen Link – falls nur der gepflegt war, als PayPal-Link übernehmen.
     const payLink = v.payLink || v.payLinkOne || v.payLinkTwo || v.payLinkTwoEarly || '';
-    return { ...DEFAULT_CONFIG, ...v, payLink };
+    return { ...DEFAULT_CONFIG, ...v, payLink, invoice: { ...DEFAULT_INVOICE, ...(v.invoice ?? {}) } };
   } catch {
     return DEFAULT_CONFIG;
   }
@@ -197,7 +208,7 @@ async function earlyBirdReminders(cfg: BookingConfig) {
     try {
       await sendBrandedMail({
         to: NOTIFY_TO, from: FROM,
-        subject: ended ? `⏰ Early Bird ${cfg.seasonLabel} ist abgelaufen – Zahlungslink prüfen` : `⏰ Early Bird ${cfg.seasonLabel} endet morgen`,
+        subject: ended ? `⏰ Early Bird ${cfg.seasonLabel} ist abgelaufen` : `⏰ Early Bird ${cfg.seasonLabel} endet morgen`,
         layout: {
           preheader: ended ? 'Ab jetzt gilt der normale Preis für das Zweierpaket.' : `Endet ${when} Uhr.`,
           heading: ended ? 'Early Bird ist abgelaufen' : 'Early Bird endet bald', accent: ACCENT, accentDark: ACCENT_DARK,
@@ -205,7 +216,7 @@ async function earlyBirdReminders(cfg: BookingConfig) {
             ? `Seit ${when} Uhr kostet ${twoSeasonsLabel(cfg)} auf der Website automatisch ${eur(cfg.priceTwo)} statt ${eur(cfg.priceTwoEarly)}.`
             : `Der Early Bird (${eur(cfg.priceTwoEarly)} für zwei Seasons) endet ${when} Uhr. Danach stellt die Website automatisch auf ${eur(cfg.priceTwo)} um.`,
           bodyHtml: ended
-            ? p(`An den Zahlungslinks (PayPal / Karte) müsst ihr nichts ändern – die Teams tragen den Betrag selbst ein, und die Website zeigt ab jetzt automatisch den normalen Preis.`) +
+            ? p(`Ihr müsst nichts ändern – die Website zeigt ab jetzt automatisch den normalen Preis. Rechnungen enthalten immer den Preis, der bei der Buchung galt.`) +
               p(`Offene Early-Bird-Buchungen ohne Zahlung: <strong>${openEarly}</strong>${cfg.deadlineBasis === 'payment' ? ' – für die Frist zählt der Zahlungseingang, diese Teams müssten jetzt eigentlich den normalen Preis zahlen.' : ' – sie haben rechtzeitig gebucht und behalten den Early-Bird-Preis.'}`)
             : p(`Wenn ihr noch einmal an die Vorregistrierten erinnern wollt, ist jetzt der richtige Moment.`) +
               p(`Offene Early-Bird-Buchungen ohne Zahlung: <strong>${openEarly}</strong>`),
@@ -395,7 +406,8 @@ async function bookingConfig(req: VercelRequest, res: VercelResponse) {
     termsVersion: cfg.termsVersion,
     terms: cfg.terms,
     rules: cfg.rules,
-    bindingNotice: BINDING_NOTICE,
+    bindingNotice: bindingNotice(cfg.paymentDays),
+    paymentDays: cfg.paymentDays,
     termsCheckbox: TERMS_CHECKBOX,
     jerseyCheckbox: JERSEY_CHECKBOX,
     turnstileSiteKey: process.env.TURNSTILE_SITE_KEY || '',
@@ -602,13 +614,27 @@ async function bookingSubmit(req: VercelRequest, res: VercelResponse) {
   // Aktuelles Team (Manager-E-Mail): Logo übernehmen, wenn kein neues kam.
   const current = await managerTeam(email);
   if (!logoUrl && b.keepLogo === true && current?.logoUrl) logoUrl = current.logoUrl;
+  // Rechnungsadresse (Pflicht – an sie geht die Rechnung).
+  const bill = (b.billing && typeof b.billing === 'object' ? b.billing : {}) as Record<string, unknown>;
+  const billing = {
+    name: clamp(bill.name, 120),
+    street: clamp(bill.street, 120),
+    zip: clamp(bill.zip, 12),
+    city: clamp(bill.city, 80),
+  };
+  if (!billing.name || !billing.street || !billing.zip || !billing.city) {
+    return badRequest(res, 'Bitte die vollständige Rechnungsadresse angeben (Name, Straße, PLZ, Ort).');
+  }
+  if (b.confirmPayable !== true) return badRequest(res, 'Bitte die zahlungspflichtige Buchung im Fenster bestätigen.');
   const now = new Date().toISOString();
   const consents = {
     acceptedAt: now,
     termsVersion: cfg.termsVersion,
     termsText: cfg.terms,
     termsCheckbox: TERMS_CHECKBOX,
-    bindingNotice: BINDING_NOTICE,
+    bindingNotice: bindingNotice(cfg.paymentDays),
+    paymentDays: cfg.paymentDays,
+    confirmedPaymentDialog: b.confirmPayable === true, // zweite Bestätigung im Pop-up
     rulesAccepted: true,
     jerseyAccepted: true,
     jerseyCheckbox: JERSEY_CHECKBOX,
@@ -618,9 +644,9 @@ async function bookingSubmit(req: VercelRequest, res: VercelResponse) {
     testMode: allowed.test,
   };
   await sql`INSERT INTO season_bookings
-      (id, ref, email, status, team_name, contact_name, phone, package, price_cents, early_bird, roster, logo_url, consents, note, source_team_id, created_at, updated_at)
+      (id, ref, email, status, team_name, contact_name, phone, package, price_cents, early_bird, roster, logo_url, consents, note, source_team_id, billing, created_at, updated_at)
     VALUES (${id}, ${ref}, ${email}, 'pending', ${teamName}, ${contactName}, ${phone}, ${pkg}, ${price.cents}, ${early},
-      ${JSON.stringify(roster)}::jsonb, ${logoUrl}, ${JSON.stringify(consents)}::jsonb, ${clamp(b.note, 800)}, ${current?.id ?? ''}, now(), now())`;
+      ${JSON.stringify(roster)}::jsonb, ${logoUrl}, ${JSON.stringify(consents)}::jsonb, ${clamp(b.note, 800)}, ${current?.id ?? ''}, ${JSON.stringify(billing)}::jsonb, now(), now())`;
 
   // Bestätigung an das Team – inkl. Zahlung + vollständigen Teilnahmebedingungen.
   const reference = payReference(ref, teamName, price.label);
@@ -639,25 +665,19 @@ async function bookingSubmit(req: VercelRequest, res: VercelResponse) {
         intro: `Danke, ${contactName}! Die verbindliche Buchung von „${teamName}" für ${price.label} ist bei uns eingegangen.`,
         bodyHtml:
           `<div style="margin:0 0 14px;padding:16px;border:2px solid ${ACCENT};border-radius:14px;background:#f4f7ff;font-family:Arial,Helvetica,sans-serif;color:#1d2433;">
-            <div style="font-size:12px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:${ACCENT};margin-bottom:10px;">So bezahlt ihr – bitte genau so angeben</div>
-            <div style="font-size:14px;line-height:1.6;"><strong>1. Betrag eingeben:</strong> <span style="font-size:18px;font-weight:800;">${eur(price.cents)}</span></div>
-            <div style="font-size:14px;line-height:1.6;margin-top:6px;"><strong>2. Als Nachricht / Verwendungszweck:</strong><br>
-              <span style="display:inline-block;margin-top:4px;padding:8px 10px;background:#ffffff;border:1px solid #d6def5;border-radius:8px;font-family:'Courier New',monospace;font-size:14px;font-weight:700;">${escapeHtml(reference)}</span></div>
-            <div style="font-size:12.5px;line-height:1.5;color:#55607a;margin-top:10px;">Nur mit Team, Paket und Buchungsnummer können wir eure Zahlung zuordnen.</div>
+            <div style="font-size:12px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:${ACCENT};margin-bottom:10px;">Jetzt noch nichts bezahlen</div>
+            <div style="font-size:14px;line-height:1.6;">Ihr bekommt in Kürze eine <strong>Rechnung per E-Mail</strong> über <strong>${eur(price.cents)}</strong> (${escapeHtml(price.label)}).</div>
+            <div style="font-size:14px;line-height:1.6;margin-top:6px;">Zahlbar innerhalb von <strong>${cfg.paymentDays} Tagen</strong> ab Rechnungsdatum. Bitte gebt dann die Rechnungsnummer als Verwendungszweck an.</div>
+            <div style="font-size:12.5px;line-height:1.5;color:#55607a;margin-top:10px;">Rechnung an: ${escapeHtml(billing.name)}, ${escapeHtml(billing.street)}, ${escapeHtml(billing.zip)} ${escapeHtml(billing.city)} · Buchungsnummer ${escapeHtml(ref)}</div>
           </div>` +
-          (price.link || price.revolut
-            ? p('<strong>3. Bezahlen – so wie es euch lieber ist:</strong>') +
-              (price.link ? mailButton('Mit PayPal bezahlen', price.link, ACCENT) : '') +
-              (price.revolut ? mailButton('Karte / Überweisung', price.revolut, '#1f2a44') : '')
-            : p('Den Zahlungslink schicken wir dir gesondert.')) +
-          p(`Sobald die Zahlung bei uns eingegangen ist, bekommst du eine Bestätigung. Erst dann ist euer Startplatz fix.`) +
+          p(`Euer Startplatz ist mit dieser Buchung reserviert. Die Buchung ist verbindlich – die Rechnung ist auch bei Rückzug oder Nichtantritt zu bezahlen.`) +
           p(`<strong>Euer Kader</strong><br>${rosterHtml}`) +
-          p(`<strong>Hinweis:</strong> ${escapeHtml(BINDING_NOTICE)}`) +
+          p(`<strong>Hinweis:</strong> ${escapeHtml(bindingNotice(cfg.paymentDays))}`) +
           `<div style="margin-top:14px;padding:14px;border:1px solid #e2e8f5;border-radius:12px;font-family:Arial,Helvetica,sans-serif;color:#3a4441;font-size:12.5px;line-height:1.55;">
             <strong>Teilnahmebedingungen (Fassung: ${escapeHtml(cfg.termsVersion)}, akzeptiert am ${new Date(now).toLocaleString('de-DE', { timeZone: 'Europe/Berlin' })})</strong><br><br>${termsHtml}</div>`,
         footnote: 'Fragen? Antworte einfach auf diese E-Mail.',
       },
-      text: `Buchung eingegangen: ${teamName} – ${price.label} – ${eur(price.cents)}\nBuchungsnummer: ${ref}\n\nSo bezahlt ihr:\n1. Betrag eingeben: ${eur(price.cents)}\n2. Als Nachricht angeben: ${reference}\n${price.link ? `PayPal: ${price.link}\n` : ''}${price.revolut ? `Karte / Überweisung: ${price.revolut}\n` : ''}\n${BINDING_NOTICE}\n\nTeilnahmebedingungen (${cfg.termsVersion}):\n${cfg.terms}`,
+      text: `Buchung eingegangen: ${teamName} – ${price.label} – ${eur(price.cents)}\nBuchungsnummer: ${ref}\n\nJetzt noch nichts bezahlen: Ihr bekommt eine Rechnung per E-Mail, zahlbar innerhalb von ${cfg.paymentDays} Tagen ab Rechnungsdatum.\nRechnung an: ${billing.name}, ${billing.street}, ${billing.zip} ${billing.city}\n\n${bindingNotice(cfg.paymentDays)}\n\nTeilnahmebedingungen (${cfg.termsVersion}):\n${cfg.terms}`,
     });
   } catch {
     /* Mail optional */
@@ -695,7 +715,7 @@ async function adminBookings(_req: VercelRequest, res: VercelResponse) {
   const rows = await sql`SELECT id, ref, email, status, team_name AS "teamName", contact_name AS "contactName", phone,
       package, price_cents AS "priceCents", early_bird AS "earlyBird", roster, logo_url AS "logoUrl", consents, note,
       created_at AS "createdAt", paid_at AS "paidAt", team_id AS "teamId", transferred_at AS "transferredAt",
-      source_team_id AS "sourceTeamId"
+      source_team_id AS "sourceTeamId", billing, invoice_no AS "invoiceNo", invoice_at AS "invoiceAt", invoice_sent_at AS "invoiceSentAt"
     FROM season_bookings ORDER BY created_at DESC`;
   return res.json(rows);
 }
@@ -803,7 +823,7 @@ export function inviteMail(cfg: BookingConfig, link: string, base = 'https://her
         head: 'Euer Platz wartet.',
         intro: `Als Team aus Season One könnt ihr euren Startplatz für ${escapeHtml(cfg.seasonLabel)} jetzt sichern – <strong style="color:#ffffff;">noch bevor neue Teams buchen können.</strong> Euren Kader mit Rückennummern und euer Logo haben wir schon für euch eingetragen.`,
         box: `🏆 <strong style="color:#D7FF3B;">${escapeHtml(cfg.seasonLabel)} wächst auf ${max} Teams in zwei Ligen</strong> – und die Plätze sind heiß begehrt. Bucht jetzt verbindlich, dann ist euer Platz sicher.`,
-        steps: ['Mit dieser E-Mail anmelden', 'Kader &amp; Logo prüfen', 'Paket wählen &amp; bezahlen'],
+        steps: ['Mit dieser E-Mail anmelden', 'Kader &amp; Logo prüfen', 'Paket wählen &amp; verbindlich buchen – Rechnung folgt'],
         subject: `⚡ ${cfg.seasonLabel}: Euer Platz wartet${teamName ? `, ${teamName}` : ''}`,
         textIntro: `Als Team aus Season One könnt ihr euren Startplatz jetzt sichern – noch bevor neue Teams buchen können. Kader und Logo sind schon eingetragen – ihr müsst nur noch prüfen.\n${cfg.seasonLabel} wächst auf ${max} Teams in zwei Ligen – bucht jetzt verbindlich, dann ist euer Platz sicher.`,
       }
@@ -996,8 +1016,10 @@ async function adminBookingConfig(req: VercelRequest, res: VercelResponse) {
     priceOne: cents(c.priceOne, cur.priceOne),
     priceTwo: cents(c.priceTwo, cur.priceTwo),
     priceTwoEarly: cents(c.priceTwoEarly, cur.priceTwoEarly),
+    paymentDays: Math.min(90, Math.max(7, Math.round(Number(c.paymentDays ?? cur.paymentDays)) || 30)),
     payLink: link(c.payLink, cur.payLink),
     revolutLink: link(c.revolutLink, cur.revolutLink),
+    invoice: cleanInvoice(c.invoice, cur.invoice),
     minSquad: Math.min(30, Math.max(1, Math.round(Number(c.minSquad ?? cur.minSquad)) || cur.minSquad)),
     maxSquad: Math.min(40, Math.max(1, Math.round(Number(c.maxSquad ?? cur.maxSquad)) || cur.maxSquad)),
     maxTeams: Math.min(200, Math.max(1, Math.round(Number(c.maxTeams ?? cur.maxTeams)) || cur.maxTeams)),
@@ -1009,6 +1031,46 @@ async function adminBookingConfig(req: VercelRequest, res: VercelResponse) {
   await sql`INSERT INTO settings (key, value) VALUES ('season_booking', ${JSON.stringify(next)}::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`;
   return res.json(next);
+}
+
+// Rechnung: Nummer vergeben (einmalig), Vorlage zurückgeben, optional per E-Mail senden.
+async function adminBookingInvoice(req: VercelRequest, res: VercelResponse) {
+  const { id, send } = req.body ?? {};
+  if (typeof id !== 'string' || !id) return badRequest(res, 'Ungültig.');
+  const cfg = await getBookingConfig();
+  const missing = invoiceMissing(cfg.invoice);
+  if (missing.length) return badRequest(res, `Erst die Rechnungsdaten in den Einstellungen ausfüllen: ${missing.join(', ')}.`);
+  const load = async () => (await sql`SELECT ref, email, team_name AS "teamName", contact_name AS "contactName", package,
+      price_cents AS "priceCents", early_bird AS "earlyBird", billing, invoice_no AS "invoiceNo", invoice_at AS "invoiceAt",
+      invoice_sent_at AS "invoiceSentAt", status FROM season_bookings WHERE id = ${id}`)[0] as (InvoiceBooking & { invoiceSentAt: string | null; status: string }) | undefined;
+  let b = await load();
+  if (!b) return res.status(404).json({ error: 'Nicht gefunden' });
+  if (b.status === 'cancelled' && !b.invoiceNo) return badRequest(res, 'Für stornierte Buchungen wird keine Rechnung erstellt.');
+  if (!b.invoiceNo) {
+    const no = await drawInvoiceNo(cfg.invoice);
+    await sql`UPDATE season_bookings SET invoice_no = ${no}, invoice_at = now(), updated_at = now() WHERE id = ${id} AND invoice_no = ''`;
+    b = (await load())!;
+  }
+  const ctx = {
+    seasonLabel: cfg.seasonLabel, twoLabel: twoSeasonsLabel(cfg), seasonDates: cfg.seasonDates,
+    nextSeasonDates: cfg.nextSeasonDates, paymentDays: cfg.paymentDays, inv: cfg.invoice,
+  };
+  if (send === true) {
+    if (!process.env.RESEND_API_KEY) return res.status(500).json({ error: 'E-Mail-Versand ist nicht eingerichtet.' });
+    try {
+      await sendMail({
+        to: b.email, from: FROM,
+        subject: `Rechnung ${b.invoiceNo} – ${b.teamName} · Hero League ${cfg.seasonLabel}`,
+        html: invoiceHtml(b, ctx),
+        text: invoiceText(b, ctx),
+      });
+    } catch {
+      return res.status(502).json({ error: 'Die E-Mail konnte nicht verschickt werden.' });
+    }
+    await sql`UPDATE season_bookings SET invoice_sent_at = now(), updated_at = now() WHERE id = ${id}`;
+    b = (await load())!;
+  }
+  return res.json({ invoiceNo: b.invoiceNo, invoiceAt: b.invoiceAt, invoiceSentAt: b.invoiceSentAt, html: invoiceHtml(b, ctx, { forPrint: true }) });
 }
 
 // --- Dispatcher (aus seasonSignup aufgerufen) -------------------------------
@@ -1023,6 +1085,7 @@ export async function seasonBooking(req: VercelRequest, res: VercelResponse, act
     if (req.method === 'POST' && action === 'admin-booking-status') return void (await adminBookingStatus(req, res)), true;
     if (action === 'admin-booking-config') return void (await adminBookingConfig(req, res)), true;
     if (req.method === 'POST' && action === 'admin-booking-delete') return void (await adminBookingDelete(req, res)), true;
+    if (req.method === 'POST' && action === 'admin-booking-invoice') return void (await adminBookingInvoice(req, res)), true;
     if (req.method === 'POST' && action === 'admin-booking-transfer') return void (await adminBookingTransfer(req, res)), true;
     if (req.method === 'GET' && action === 'admin-booking-invites') return void (await adminInvites(req, res)), true;
     if (req.method === 'POST' && action === 'admin-booking-invite') return void (await adminInvite(req, res)), true;

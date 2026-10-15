@@ -9,8 +9,8 @@ import { goBackLayer, useBackClose } from '../lib/backStack';
 import { apiFetch } from '../lib/api';
 import {
   bookingAdminConfig, bookingAdminDelete, bookingAdminInvite, bookingAdminInvitees, bookingAdminList, bookingAdminSaveConfig,
-  bookingAdminStatus, bookingAdminTransfer, euro, formatDeadline,
-  type BookingAdminConfig, type BookingAdminRow, type BookingInvitee, type BookingStatus,
+  bookingAdminInvoice, bookingAdminStatus, bookingAdminTransfer, euro, formatDeadline,
+  type BookingAdminConfig, type InvoiceSettings, type BookingAdminRow, type BookingInvitee, type BookingStatus,
 } from '../lib/booking';
 import { signupAdminConfig, signupAdminSave, type SignupConfig } from '../lib/register';
 import type { Player, Season, Team } from '../types';
@@ -38,6 +38,26 @@ const STATUS: Record<BookingStatus, { label: string; cls: string; icon: typeof C
   cancelled: { label: 'Storniert', cls: 'text-rose-300 bg-rose-500/10 border-rose-400/25', icon: Ban },
 };
 const PKG_LABEL = (b: BookingAdminRow) => (b.package === 'one' ? 'Eine Season' : b.earlyBird ? 'Doppelpaket · Early Bird' : 'Doppelpaket');
+const fmtDay = (iso: string | null | undefined, plusDays = 0) =>
+  iso ? new Date(new Date(iso).getTime() + plusDays * 86_400_000).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Berlin' }) : '–';
+const invoiceMissing = (inv: InvoiceSettings | undefined) =>
+  [!inv?.issuer && 'Absender (Name + Anschrift)', !inv?.bank && 'Bankverbindung', !inv?.taxId && 'Steuernummer / USt-IdNr.'].filter(Boolean) as string[];
+// Rechnung ansehen/drucken: Fenster sofort öffnen (sonst blockt der Browser das Pop-up), dann befüllen.
+async function viewInvoice(b: BookingAdminRow) {
+  const w = window.open('', '_blank');
+  try {
+    const r = await bookingAdminInvoice(b.id);
+    if (w) {
+      w.document.open();
+      w.document.write(r.html);
+      w.document.close();
+    }
+    return r;
+  } catch (e) {
+    w?.close();
+    throw e;
+  }
+}
 const isPdf = (url: string) => /\.pdf($|\?)/i.test(url);
 const fullName = (r: { firstName: string; lastName: string }) => `${r.firstName} ${r.lastName}`.trim();
 
@@ -128,6 +148,7 @@ function BookingsTab({ cfg, teams, seasons, canEditClubs, onTeamsChanged }: { cf
   const [showCancelled, setShowCancelled] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [bulk, setBulk] = useState('');
   const load = () => {
     setErr('');
     bookingAdminList().then(setList).catch((e) => setErr(e instanceof Error ? e.message : 'Fehler beim Laden.'));
@@ -148,6 +169,26 @@ function BookingsTab({ cfg, teams, seasons, canEditClubs, onTeamsChanged }: { cf
     { label: curLabel, dates: cfg?.seasonDates ?? '', max: cfg?.maxTeams ?? 12, paid: paid.length, pending: pending.length },
     { label: nextLabel, dates: cfg?.nextSeasonDates ?? '', max: cfg?.maxTeamsNext ?? 12, paid: paid.filter((b) => b.package === 'two').length, pending: pending.filter((b) => b.package === 'two').length },
   ];
+
+  // Alle noch nicht verschickten Rechnungen auf einmal raus (nacheinander, mit Fortschritt).
+  const toInvoice = real.filter((b) => b.status === 'pending' && !b.invoiceSentAt);
+  const sendAllInvoices = async () => {
+    const miss = invoiceMissing(cfg?.invoice);
+    if (miss.length) return window.alert(`Erst unter „Einstellungen" die Rechnungsdaten ausfüllen: ${miss.join(', ')}.`);
+    if (!window.confirm(`${toInvoice.length} Rechnung(en) jetzt per E-Mail verschicken?\n\n${toInvoice.map((b) => `• ${b.teamName} – ${euro(b.priceCents)}`).join('\n')}`)) return;
+    const failed: string[] = [];
+    for (let i = 0; i < toInvoice.length; i++) {
+      setBulk(`${i + 1}/${toInvoice.length}`);
+      try {
+        await bookingAdminInvoice(toInvoice[i].id, true);
+      } catch (e) {
+        failed.push(`${toInvoice[i].teamName}: ${e instanceof Error ? e.message : 'Fehler'}`);
+      }
+    }
+    setBulk('');
+    load();
+    window.alert(failed.length ? `Nicht verschickt:\n${failed.join('\n')}` : 'Alle Rechnungen sind raus ✓');
+  };
 
   // Zahlung direkt aus der Liste bestätigen.
   const markPaid = async (b: BookingAdminRow) => {
@@ -182,6 +223,11 @@ function BookingsTab({ cfg, teams, seasons, canEditClubs, onTeamsChanged }: { cf
               <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-[#2F5BFF]/25 text-[#a9bcff]">{curLabel}</span>
               {b.package === 'two' && <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-[#2F5BFF]/25 text-[#a9bcff]">{nextLabel}</span>}
               <span className="text-[11.5px] text-hl-mute truncate">{b.ref} · {b.roster.length} Spieler · {fmt(b.createdAt)}</span>
+              {b.status !== 'cancelled' && (
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${b.invoiceSentAt ? 'bg-emerald-400/15 text-emerald-300' : 'bg-amber-400/15 text-amber-200'}`}>
+                  {b.invoiceSentAt ? `Rechnung ${b.invoiceNo} verschickt` : b.invoiceNo ? `Rechnung ${b.invoiceNo} nicht verschickt` : 'Rechnung fehlt'}
+                </span>
+              )}
             </span>
           </span>
           <span className="shrink-0 text-right">
@@ -213,9 +259,10 @@ function BookingsTab({ cfg, teams, seasons, canEditClubs, onTeamsChanged }: { cf
   const current = list?.find((b) => b.id === openId) ?? null;
 
   const exportAll = () => {
-    const rows: (string | number)[][] = [['Buchungsnr.', 'Status', 'Team', 'Ansprechpartner', 'E-Mail', 'Telefon', 'Paket', 'Betrag €', 'Gebucht am', 'Bezahlt am', 'Spieler', 'Nr.', 'Kapitän', 'Torwart', 'Logo', 'Test']];
+    const rows: (string | number)[][] = [['Buchungsnr.', 'Status', 'Team', 'Ansprechpartner', 'E-Mail', 'Telefon', 'Paket', 'Betrag €', 'Gebucht am', 'Bezahlt am', 'Rechnung an', 'Rechnungsnr.', 'Rechnung verschickt', 'Spieler', 'Nr.', 'Kapitän', 'Torwart', 'Logo', 'Test']];
     for (const b of list ?? []) {
-      const base = [b.ref, STATUS[b.status].label, b.teamName, b.contactName, b.email, b.phone, PKG_LABEL(b), (b.priceCents / 100).toFixed(2).replace('.', ','), fmt(b.createdAt), fmt(b.paidAt)];
+      const base = [b.ref, STATUS[b.status].label, b.teamName, b.contactName, b.email, b.phone, PKG_LABEL(b), (b.priceCents / 100).toFixed(2).replace('.', ','), fmt(b.createdAt), fmt(b.paidAt),
+        [b.billing?.name, b.billing?.street, `${b.billing?.zip ?? ''} ${b.billing?.city ?? ''}`.trim()].filter(Boolean).join(', '), b.invoiceNo ?? '', fmt(b.invoiceSentAt)];
       if (b.roster.length === 0) rows.push([...base, '', '', '', '', b.logoUrl, b.consents?.testMode ? 'ja' : '']);
       for (const r of b.roster) rows.push([...base, fullName(r), r.number ?? '', r.captain ? 'ja' : '', r.keeper ? 'ja' : '', b.logoUrl, b.consents?.testMode ? 'ja' : '']);
     }
@@ -253,11 +300,16 @@ function BookingsTab({ cfg, teams, seasons, canEditClubs, onTeamsChanged }: { cf
           );
         })}
       </div>
-      <p className="text-[11.5px] text-hl-faint -mt-2">Doppelpaket belegt einen Platz in beiden Seasons, das Einzelpaket nur in {curLabel}. Auch offene Buchungen halten ihren Platz – wer nicht zahlt, auf „Storniert“ setzen, dann wird der Platz frei.</p>
+      <p className="text-[11.5px] text-hl-faint -mt-2">Doppelpaket belegt einen Platz in beiden Seasons, das Einzelpaket nur in {curLabel}. Auch offene Buchungen halten ihren Platz. Die Buchung ist verbindlich – wird eine Rechnung nicht bezahlt, erst mahnen; „Storniert“ gibt den Platz frei.</p>
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[12px] text-hl-mute">Eingegangen: <b className="text-emerald-300">{euro(paidSum)}</b> · offen: <b className="text-amber-200">{euro(openSum)}</b></span>
         <button onClick={load} className="ml-auto flex items-center gap-1.5 text-[12px] font-bold text-hl-mute hover:text-white cursor-pointer px-3 py-2 rounded-xl bg-white/[.04]"><RefreshCw className="w-3.5 h-3.5" /> Aktualisieren</button>
+        {toInvoice.length > 0 && (
+          <button onClick={sendAllInvoices} disabled={!!bulk} className="flex items-center gap-1.5 text-[12px] font-bold text-white cursor-pointer px-3 py-2 rounded-xl bg-brand-accent disabled:opacity-60">
+            {bulk ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} {bulk ? `Sende ${bulk} …` : `Rechnungen senden (${toInvoice.length})`}
+          </button>
+        )}
         {(list?.length ?? 0) > 0 && <button onClick={exportAll} className="flex items-center gap-1.5 text-[12px] font-bold text-hl-mute hover:text-white cursor-pointer px-3 py-2 rounded-xl bg-white/[.04]"><Download className="w-3.5 h-3.5" /> CSV</button>}
       </div>
       {err && <p className="text-[13px] text-rose-300">{err}</p>}
@@ -269,7 +321,7 @@ function BookingsTab({ cfg, teams, seasons, canEditClubs, onTeamsChanged }: { cf
       )}
       {list && real.length > 0 && (
         <>
-          <Section title="Warten auf Zahlung" hint="Zahlung bei PayPal prüfen, dann bestätigen" items={pending} tone="text-amber-200" />
+          <Section title="Warten auf Zahlung" hint="Rechnung schicken – Geld auf dem Konto? Dann bestätigen" items={pending} tone="text-amber-200" />
           <Section title="Bestätigt" items={paid} tone="text-emerald-300" />
           {cancelled.length > 0 && (
             <div>
@@ -345,6 +397,19 @@ function BookingDetail({
       setBusy('');
     }
   };
+  const invoice = async (send: boolean) => {
+    if (send && !window.confirm(`${b.invoiceSentAt ? 'Rechnung ERNEUT' : 'Rechnung'} per E-Mail an ${b.email} schicken?`)) return;
+    setBusy(send ? 'send' : 'invoice');
+    try {
+      if (send) await bookingAdminInvoice(b.id, true);
+      else await viewInvoice(b);
+      onChanged();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Fehler.');
+    } finally {
+      setBusy('');
+    }
+  };
   const remove = async () => {
     if (!window.confirm(`Buchung ${b.ref} („${b.teamName}“) endgültig löschen? Das kann nicht rückgängig gemacht werden.`)) return;
     if (!test && !window.confirm('Das ist KEINE Testbuchung. Wirklich löschen?')) return;
@@ -411,6 +476,24 @@ function BookingDetail({
             </div>
 
             <section>
+              <h4 className="text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1.5">Rechnung</h4>
+              <div className="rounded-2xl bg-white/[.03] border border-white/[.06] px-3.5">
+                <Row k="Rechnung an" v={b.billing?.name ? <span className="whitespace-pre-line">{[b.billing.name, b.billing.street, `${b.billing.zip ?? ''} ${b.billing.city ?? ''}`.trim()].filter(Boolean).join('\n')}</span> : <span className="text-hl-faint">keine Rechnungsadresse angegeben – an {b.contactName}</span>} />
+                <Row k="Rechnungsnr." v={b.invoiceNo ? <span className="font-mono">{b.invoiceNo}</span> : <span className="text-amber-200">noch nicht erstellt</span>} />
+                {b.invoiceNo && <Row k="Rechnungsdatum" v={`${fmtDay(b.invoiceAt)} · zahlbar bis ${fmtDay(b.invoiceAt, cfg?.paymentDays ?? 30)}`} />}
+                <Row k="Per E-Mail" v={b.invoiceSentAt ? <span className="text-emerald-300">verschickt am {fmt(b.invoiceSentAt)}</span> : <span className="text-amber-200">noch nicht verschickt</span>} />
+              </div>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button disabled={!!busy || (b.status === 'cancelled' && !b.invoiceNo)} onClick={() => invoice(false)} className="flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold text-white bg-white/[.07] hover:bg-white/[.12] disabled:opacity-40 cursor-pointer">
+                  {busy === 'invoice' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />} {b.invoiceNo ? 'Rechnung ansehen / PDF' : 'Rechnung erstellen'}
+                </button>
+                <button disabled={!!busy || (b.status === 'cancelled' && !b.invoiceNo)} onClick={() => invoice(true)} className="flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold text-white bg-brand-accent disabled:opacity-40 cursor-pointer">
+                  {busy === 'send' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} {b.invoiceSentAt ? 'Erneut per E-Mail senden' : 'Per E-Mail senden'}
+                </button>
+              </div>
+            </section>
+
+            <section>
               <h4 className="text-[11px] font-mono uppercase tracking-wider text-hl-dim mb-1.5">Kontakt</h4>
               <div className="rounded-2xl bg-white/[.03] border border-white/[.06] px-3.5">
                 {b.sourceTeamId && <Row k="Aktuelles Team" v={`${teams.find((t) => t.id === b.sourceTeamId)?.name ?? b.sourceTeamId} (per Manager-E-Mail erkannt)`} />}
@@ -419,7 +502,7 @@ function BookingDetail({
                 <Row k="Telefon" v={<a href={`tel:${b.phone}`} className="text-brand-accent-light hover:underline">{b.phone}</a>} />
                 <Row k="Gebucht am" v={fmt(b.createdAt)} />
                 <Row k="Bezahlt am" v={fmt(b.paidAt)} />
-                <Row k="Nachricht bei Zahlung" v={<span className="font-mono">{b.ref} · {b.teamName} · {PKG_LABEL(b).replace(' · Early Bird', '')}</span>} />
+                <Row k="Verwendungszweck" v={<span className="font-mono">{b.invoiceNo || '(Rechnungsnummer)'}</span>} />
                 {b.note && <Row k="Anmerkung" v={<span className="whitespace-pre-wrap">{b.note}</span>} />}
               </div>
             </section>
@@ -797,8 +880,9 @@ function SettingsTab({ cfg, onSaved }: { cfg: BookingAdminConfig; onSaved: (c: B
   const ebState = !until ? 'unset' : Date.now() >= new Date(until).getTime() ? 'ended' : 'running';
   const missing = [
     !until && 'Enddatum des Early Bird',
-    !c.payLink && !c.revolutLink && 'Zahlungslink (PayPal oder Karte/Überweisung)',
+    ...invoiceMissing(c.invoice).map((m) => `Rechnung: ${m}`),
   ].filter(Boolean) as string[];
+  const setInv = (p: Partial<InvoiceSettings>) => setC((x) => ({ ...x, invoice: { ...x.invoice, ...p } }));
 
   const save = async (extra: { newKey?: boolean } = {}) => {
     if (c.open && !cfg.open && missing.length && !window.confirm(`Buchung öffnen, obwohl noch fehlt:\n• ${missing.join('\n• ')}?`)) return;
@@ -846,7 +930,7 @@ function SettingsTab({ cfg, onSaved }: { cfg: BookingAdminConfig; onSaved: (c: B
           {ebState === 'ended' && <><strong>Early Bird ist vorbei</strong> (seit {formatDeadline(until)}). Die Seite zeigt automatisch {euro(c.priceTwo)} für zwei Seasons.</>}
           {ebState === 'unset' && <><strong>Noch kein Enddatum.</strong> Ohne Enddatum gibt es keinen Early-Bird-Preis – zwei Seasons kosten dann {euro(c.priceTwo)}.</>}
           <div className="mt-1.5 text-[12px] opacity-80">
-            Läuft automatisch ab: Danach zeigt die Website den normalen Preis. Ihr bekommt 24 Std. vorher und beim Ablauf eine Erinnerungsmail. An den Zahlungslinks müsst ihr nichts ändern.
+            Läuft automatisch ab: Danach zeigt die Website den normalen Preis. Ihr bekommt 24 Std. vorher und beim Ablauf eine Erinnerungsmail.
           </div>
         </div>
         <L label="Was zählt für die Frist?">
@@ -865,14 +949,48 @@ function SettingsTab({ cfg, onSaved }: { cfg: BookingAdminConfig; onSaved: (c: B
           <L label="Doppelpaket €">{euroInput('priceTwo')}</L>
           <L label="Early Bird €">{euroInput('priceTwoEarly')}</L>
         </div>
-        <L label="PayPal-Taste – Link (PayPal.me)">
-          <input value={c.payLink} onChange={(e) => set({ payLink: e.target.value })} placeholder="https://paypal.me/EUERNAME" className={inp} />
-        </L>
-        <L label="Taste „Karte / Überweisung“ – Link (Revolut)">
-          <input value={c.revolutLink} onChange={(e) => set({ revolutLink: e.target.value })} placeholder="https://revolut.me/EUERNAME" className={inp} />
+        <L label="Zahlungsziel der Rechnung (Tage)" hint="Steht so auf der Seite, im Bestätigungs-Pop-up, in der Mail und auf der Rechnung.">
+          <input type="number" min={7} max={90} value={c.paymentDays} onChange={(e) => set({ paymentDays: Number(e.target.value) || 30 })} className={inp} />
         </L>
         <p className="text-[12px] text-hl-mute leading-relaxed">
-          Beim Bezahlen sehen die Teams beide Tasten nebeneinander. Leeres Feld = Taste wird nicht angezeigt. Betrag und Nachricht (Buchungsnummer · Team · Paket) tragen die Teams selbst ein – das steht Schritt für Schritt auf der Seite und in der Mail.
+          Bei der Buchung wird nichts bezahlt. Die Teams buchen verbindlich und bekommen danach eine Rechnung per E-Mail (Liste → „Rechnungen senden“ oder einzeln in der Buchung).
+        </p>
+      </section>
+
+      <section className="space-y-3">
+        <h4 className="text-[11px] font-mono uppercase tracking-wider text-hl-dim">Rechnungsvorlage</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <L label="Absender (Name + Anschrift)" hint="Pro Zeile: Name/Firma, Straße, PLZ Ort.">
+            <textarea rows={4} value={c.invoice.issuer} onChange={(e) => setInv({ issuer: e.target.value })} placeholder={'Hero League – Max Mustermann\nMusterstraße 1\n12345 Musterstadt'} className={inp} />
+          </L>
+          <L label="Kontakt (optional)">
+            <textarea rows={4} value={c.invoice.contact} onChange={(e) => setInv({ contact: e.target.value })} placeholder={'info@hero-league.de\nhero-league.de'} className={inp} />
+          </L>
+          <L label="Bankverbindung" hint="Kontoinhaber, IBAN, BIC, Bank – je eine Zeile.">
+            <textarea rows={4} value={c.invoice.bank} onChange={(e) => setInv({ bank: e.target.value })} placeholder={'Kontoinhaber: …\nIBAN: DE00 0000 0000 0000 0000 00\nBIC: …'} className={inp} />
+          </L>
+          <div className="space-y-3">
+            <L label="Steuernummer oder USt-IdNr."><input value={c.invoice.taxId} onChange={(e) => setInv({ taxId: e.target.value })} className={inp} /></L>
+            <L label="Umsatzsteuer">
+              <div className="grid grid-cols-3 gap-2">
+                {([[0, 'keine (§ 19)'], [7, '7 %'], [19, '19 %']] as const).map(([v, l]) => (
+                  <button key={v} type="button" onClick={() => setInv({ vatRate: v })} className={`rounded-xl py-2.5 text-[13px] font-bold cursor-pointer ${c.invoice.vatRate === v ? 'bg-brand-accent text-white' : 'bg-white/[.05] text-hl-mute'}`}>{l}</button>
+                ))}
+              </div>
+            </L>
+          </div>
+          {c.invoice.vatRate === 0 && (
+            <L label="Hinweis ohne Umsatzsteuer"><input value={c.invoice.taxNote} onChange={(e) => setInv({ taxNote: e.target.value })} className={inp} /></L>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <L label="Nummern-Präfix"><input value={c.invoice.prefix} onChange={(e) => setInv({ prefix: e.target.value })} className={inp} /></L>
+            <L label="Nächste Nr." hint={`→ ${c.invoice.prefix}${new Date().getFullYear()}-${String(c.invoice.nextNo).padStart(3, '0')}`}>
+              <input type="number" min={cfg.invoice.nextNo} value={c.invoice.nextNo} onChange={(e) => setInv({ nextNo: Number(e.target.value) || 1 })} className={inp} />
+            </L>
+          </div>
+        </div>
+        <p className="text-[12px] text-hl-mute leading-relaxed">
+          {c.invoice.vatRate > 0 ? `Preise gelten als Bruttopreise – die Rechnung weist ${c.invoice.vatRate} % USt. aus.` : 'Kleinunternehmer: Die Rechnung weist keine Umsatzsteuer aus.'} Bitte mit Steuerberater abstimmen. Rechnungsnummern werden fortlaufend vergeben und nie doppelt.
         </p>
       </section>
 

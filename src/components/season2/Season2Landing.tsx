@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence, MotionConfig, animate, useInView, useScroll, useTransform } from 'motion/react';
 import {
-  ArrowRight, ArrowLeft, NotebookPen, Activity, IdCard, Tv, Trophy, BarChart3, Camera, Shirt, Mail, Users, CreditCard,
+  ArrowRight, ArrowLeft, NotebookPen, Activity, IdCard, Tv, Trophy, BarChart3, Camera, Shirt, Mail, Users, Receipt,
   CheckCircle2, ChevronDown, Clock, Lock, Eye, ShieldCheck, Zap,
 } from 'lucide-react';
 import type { HeroImages, HighlightsConfig, Match, MatchPlayerStat, PlayerStat, Team } from '../../types';
@@ -352,10 +352,12 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
     { icon: Camera, title: 'Fotos & Highlights', text: 'Highlights und Bilder von den Spieltagen – auf der Website und zum Teilen für euer Team.' },
   ];
 
+  const payDays = cfg.paymentDays ?? 30;
   const faq = [
     { q: 'Was bedeutet „verbindlich buchen"?', a: `Mit dem Abschluss der Buchung sichert ihr euch verbindlich einen Startplatz. ${cfg.bindingNotice}` },
-    { q: 'Wie bezahlen wir?', a: 'Nach der Buchung bekommt ihr direkt einen Zahlungslink – bezahlt wird bequem online. Gebt bei der Zahlung eure Buchungsnummer und euren Teamnamen als Verwendungszweck an.' },
-    { q: 'Wann ist unser Startplatz fix?', a: 'Sobald eure Zahlung bei uns eingegangen ist. Dann bekommt ihr eine Bestätigung per E-Mail.' },
+    { q: 'Müssen wir bei der Buchung schon bezahlen?', a: `Nein. Bei der Buchung wird noch nichts bezahlt. Ihr bekommt von uns eine Rechnung per E-Mail an die angegebene Rechnungsadresse – zahlbar innerhalb von ${payDays} Tagen ab Rechnungsdatum. Die Buchung selbst ist aber verbindlich und zahlungspflichtig.` },
+    { q: 'Wie bezahlen wir?', a: `Per Überweisung auf Rechnung. Die Bankverbindung steht auf der Rechnung – bitte gebt die Rechnungsnummer als Verwendungszweck an. Zahlungsziel: ${payDays} Tage ab Rechnungsdatum.` },
+    { q: 'Wann ist unser Startplatz fix?', a: 'Mit dem Abschluss der Buchung ist euer Startplatz für euch reserviert – ihr bekommt direkt eine Bestätigung per E-Mail. Die Rechnung folgt separat.' },
     { q: 'Bis wann gilt der Early Bird?', a: deadlineTxt
       ? `Der Early-Bird-Preis von ${euro(cfg.prices.twoEarly)} gilt nur für das Doppelpaket ${twoLabel} und endet am ${deadlineTxt}. ${cfg.deadlineBasis === 'payment' ? 'Maßgeblich ist der Zahlungseingang bis zu diesem Zeitpunkt.' : 'Maßgeblich ist der verbindliche Buchungsabschluss bis zu diesem Zeitpunkt.'} Danach kostet ${twoLabel} ${euro(cfg.prices.two)}.`
       : `Der Early-Bird-Preis von ${euro(cfg.prices.twoEarly)} gilt nur für kurze Zeit ab dem Start der Buchung – und nur für das Doppelpaket ${twoLabel}. Den genauen Stichtag geben wir mit der Öffnung bekannt.` },
@@ -368,7 +370,7 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
     { icon: Mail, title: 'E-Mail bestätigen', text: 'Code eingeben – Vorregistrierte sind sofort ausgefüllt.' },
     { icon: Users, title: 'Team & Kader', text: 'Teamname, Ansprechpartner, Spieler mit Rückennummer.' },
     { icon: ShieldCheck, title: 'Verbindlich buchen', text: 'Paket wählen, Logo hochladen, Bedingungen bestätigen.' },
-    { icon: CreditCard, title: 'Bezahlen', text: 'Per Zahlungslink – danach ist euer Startplatz fix.' },
+    { icon: Receipt, title: 'Rechnung kommt', text: `Jetzt noch nichts zahlen – ihr bekommt eine Rechnung per E-Mail, zahlbar in ${payDays} Tagen.` },
   ];
 
   // Zwei Karten: Season 2 einzeln oder Season 2 + Season 3 zusammen. Die
@@ -470,6 +472,9 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
               <button onClick={() => openFlow('prereg')} className="inline-flex items-center gap-2 rounded-2xl px-6 py-4 font-display font-black uppercase tracking-wide text-[17px] text-white hover:brightness-110 cursor-pointer" style={{ background: S2.blue, boxShadow: '0 18px 50px -18px rgba(47,91,255,.7)' }}>
                 <NotebookPen className="w-5 h-5" /> Schon vorregistriert?
               </button>
+            </motion.div>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1, duration: 0.6 }} className="mt-4">
+              <PayLaterNote days={payDays} />
             </motion.div>
             <AnimatePresence>
               {preregHint && (
@@ -647,6 +652,10 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
             </Reveal>
           )}
 
+          <Reveal className="max-w-4xl mx-auto mb-10">
+            <PayLaterNote days={payDays} big />
+          </Reveal>
+
           <div className="relative grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch max-w-4xl mx-auto">
             {plans.map((pl, i) => (
               <Reveal key={pl.id} delay={i * 0.1} className={pl.hot ? 'md:-mt-4' : ''}>
@@ -697,12 +706,15 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
                   >
                     {soldOut ? 'Ausgebucht' : pl.id === 'two' && canBook && cfg.twoSoldOut ? 'Doppelpaket ausgebucht' : canBook ? 'Jetzt buchen' : preregOpen ? 'Vorregistrieren' : 'Startet in Kürze'} <ArrowRight className="w-4 h-4" />
                   </button>
+                  <div className="mt-3 flex items-center justify-center gap-1.5 text-[12.5px] font-semibold text-[#E9FF9A] text-center">
+                    <Receipt className="w-3.5 h-3.5 shrink-0" /> Jetzt noch nichts zahlen · Rechnung per E-Mail
+                  </div>
                 </div>
               </Reveal>
             ))}
           </div>
           <Reveal className="mt-6 text-center text-[12.5px] text-white/45 max-w-2xl mx-auto">
-            Alle Preise pro Team inkl. aller Leistungen. Das Early-Bird-Angebot gilt ausschließlich für die gemeinsame Buchung von {twoLabel}{deadlineTxt ? ` bis ${deadlineTxt}` : ' – nur für kurze Zeit ab dem Start der Buchung'}.
+            Alle Preise pro Team inkl. aller Leistungen. Bezahlt wird per Rechnung (Zahlungsziel {payDays} Tage) – bei der Buchung selbst fällt noch keine Zahlung an. Das Early-Bird-Angebot gilt ausschließlich für die gemeinsame Buchung von {twoLabel}{deadlineTxt ? ` bis ${deadlineTxt}` : ' – nur für kurze Zeit ab dem Start der Buchung'}.
             {!canBook && (preregOpen
               ? <><br />Die verbindliche Buchung ist noch nicht geöffnet – registriert euch jetzt unverbindlich vor, dann melden wir uns zuerst bei euch.</>
               : <><br />Die verbindliche Buchung startet in Kürze.</>)}
@@ -750,7 +762,8 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
               <div className="relative">
                 <h2 className="font-display font-black uppercase tracking-tight text-white text-[44px] sm:text-[84px] leading-[.85]">Seid dabei,<br /><span className="text-[#D7FF3B]">wenn’s losgeht.</span></h2>
                 {cfg.startInfo && <p className="mt-5 text-white/70 text-[16px]">{cfg.startInfo}</p>}
-                <div className="mt-8 flex flex-wrap justify-center gap-3">
+                <div className="mt-6 flex justify-center"><PayLaterNote days={payDays} /></div>
+                <div className="mt-6 flex flex-wrap justify-center gap-3">
                   <button onClick={mainAction} className="inline-flex items-center gap-2 rounded-2xl px-7 py-4 font-display font-black uppercase tracking-wide text-[17px] text-[#06091A] cursor-pointer" style={{ background: S2.volt }}>
                     {mainLabel} <ArrowRight className="w-5 h-5" />
                   </button>
@@ -776,6 +789,7 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
         <AnimatePresence>
           {scrolled && !flowOpen && (
             <motion.div initial={{ y: 100 }} animate={{ y: 0 }} exit={{ y: 100 }} transition={{ type: 'spring', stiffness: 260, damping: 28 }} className="sm:hidden fixed inset-x-0 bottom-0 z-40 px-4 pt-3 bg-gradient-to-t from-[#04060E] via-[#04060E]/90 to-transparent" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + .75rem)' }}>
+              {canBook && <div className="mb-1.5 text-center text-[12px] font-semibold text-[#E9FF9A]">Jetzt buchen – später per Rechnung zahlen</div>}
               <button onClick={mainAction} className="w-full inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-4 font-display font-black uppercase tracking-wide text-[16px] text-[#06091A] cursor-pointer" style={{ background: S2.volt, boxShadow: '0 14px 40px -12px rgba(215,255,59,.55)' }}>
                 {canBook && earlyActive ? `Platz sichern · ab ${euro(Math.round(cfg.prices.twoEarly / 2))}/Season` : mainLabel} <ArrowRight className="w-4 h-4" />
               </button>
@@ -802,6 +816,32 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
 }
 
 // Großer, roter Hinweis: „Nur noch X von 24 Plätzen frei" (pulsiert leicht).
+// „Jetzt noch nichts zahlen" – taucht bewusst mehrfach auf der Seite auf,
+// damit klar ist: gebucht wird verbindlich, bezahlt wird per Rechnung.
+function PayLaterNote({ days, big = false }: { days: number; big?: boolean }) {
+  if (big) {
+    return (
+      <div className="relative overflow-hidden rounded-3xl border-2 border-[#D7FF3B]/60 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4" style={{ background: 'linear-gradient(135deg, rgba(215,255,59,.16), rgba(47,91,255,.14))' }}>
+        <div className="w-12 h-12 rounded-2xl grid place-items-center shrink-0 text-[#06091A]" style={{ background: S2.volt }}><Receipt className="w-6 h-6" /></div>
+        <div className="min-w-0">
+          <div className="font-display font-black uppercase text-white text-[22px] sm:text-[26px] leading-none">Jetzt buchen. Später zahlen.</div>
+          <p className="mt-2 text-[14px] text-white/75 leading-snug">
+            Bei der Buchung bezahlt ihr <strong className="text-white">noch nichts</strong>. Ihr bekommt eine <strong className="text-white">Rechnung per E-Mail</strong>, zahlbar innerhalb von <strong className="text-white">{days} Tagen</strong>. Die Buchung ist verbindlich und zahlungspflichtig.
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="inline-flex items-start gap-2.5 rounded-2xl border border-[#D7FF3B]/45 bg-black/45 backdrop-blur px-4 py-2.5 text-left max-w-xl">
+      <Receipt className="w-5 h-5 text-[#D7FF3B] shrink-0 mt-0.5" />
+      <div className="min-w-0 text-[13.5px] leading-snug text-white/80">
+        <strong className="text-white">Jetzt noch nichts zahlen.</strong> Ihr bucht verbindlich – die Rechnung kommt per E-Mail, zahlbar in {days} Tagen.
+      </div>
+    </div>
+  );
+}
+
 function SlotsBadge({ left, total, soldOut, big = false }: { left: number; total: number; soldOut: boolean; big?: boolean }) {
   return (
     <motion.div

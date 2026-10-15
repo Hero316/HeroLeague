@@ -14,7 +14,8 @@ import { S2 } from './theme';
 
 // ===========================================================================
 // Verbindliche Season-2-Buchung als Vollbild-Ebene über der Landingpage.
-// Ablauf: E-Mail → Code → Team → Kader → Paket & Logo → Bestätigen → Bezahlen.
+// Ablauf: E-Mail → Code → Team (+ Rechnungsadresse) → Kader → Paket & Logo → zahlungspflichtig buchen.
+// Bezahlt wird NICHT sofort: Das Team bekommt eine Rechnung (Zahlungsziel, Standard 30 Tage).
 // Der Formularzustand liegt in der Landingpage (BookingDraft), damit nach einem
 // versehentlichen Schließen nichts verloren geht.
 // ===========================================================================
@@ -38,6 +39,10 @@ export interface BookingDraft {
   acceptJersey: boolean;
   acceptRules: boolean;
   acceptTerms: boolean;
+  billName: string;
+  billStreet: string;
+  billZip: string;
+  billCity: string;
   result: { booking: BookingSummary | null; reference: string } | null;
 }
 
@@ -45,7 +50,8 @@ export const emptyRow = (): RosterRow => ({ firstName: '', lastName: '', number:
 export const newDraft = (rows: number): BookingDraft => ({
   email: '', token: '', prereg: null, existing: null, teamName: '', contactName: '', phone: '',
   roster: Array.from({ length: rows }, emptyRow), pkg: null, logo: '', logoName: '', keepLogoUrl: '', note: '',
-  acceptJersey: false, acceptRules: false, acceptTerms: false, result: null,
+  acceptJersey: false, acceptRules: false, acceptTerms: false,
+  billName: '', billStreet: '', billZip: '', billCity: '', result: null,
 });
 
 const FLOW: Step[] = ['team', 'roster', 'package', 'confirm'];
@@ -286,7 +292,7 @@ export default function BookingFlow({
                       <StepHead icon={Users} title="Leider ausgebucht" text={`Alle ${cfg.maxTeams ?? ''} Startplätze für ${cfg.seasonLabel} sind vergeben. Wird ein Platz wieder frei, melden wir uns bei euch.`} />
                     </div>
                   )}
-                  {step === 'team' && <TeamStep draft={draft} patch={patch} onNext={() => go('roster')} />}
+                  {step === 'team' && <TeamStep draft={draft} patch={patch} days={cfg.paymentDays ?? 30} onNext={() => go('roster')} />}
                   {step === 'roster' && <RosterStep cfg={cfg} draft={draft} patch={patch} onNext={() => go('package')} />}
                   {step === 'package' && <PackageStep cfg={cfg} draft={draft} patch={patch} earlyActive={earlyActive} onNext={() => go('confirm')} />}
                   {step === 'confirm' && (
@@ -427,19 +433,22 @@ function StatusStep({ booking, cfg }: { booking: BookingSummary; cfg: BookingPub
         title={paid ? 'Ihr seid dabei!' : 'Buchung gefunden'}
         text={paid
           ? `Die Zahlung für „${booking.teamName}" ist eingegangen – euer Startplatz für ${cfg.seasonLabel} ist fix.`
-          : `Zu dieser E-Mail gibt es bereits eine verbindliche Buchung für „${booking.teamName}". Es fehlt nur noch die Zahlung.`}
+          : `Zu dieser E-Mail gibt es bereits eine verbindliche Buchung für „${booking.teamName}". Die Rechnung kommt per E-Mail.`}
       />
-      <PaymentCard booking={booking} reference={booking.reference || `${booking.ref} · ${booking.teamName} · ${booking.packageLabel}`} />
+      <PaymentCard booking={booking} days={cfg.paymentDays ?? 30} reference={booking.reference || `${booking.ref} · ${booking.teamName} · ${booking.packageLabel}`} />
     </div>
   );
 }
 
-function TeamStep({ draft, patch, onNext }: { draft: BookingDraft; patch: (p: Partial<BookingDraft>) => void; onNext: () => void }) {
+function TeamStep({ draft, patch, onNext, days }: { draft: BookingDraft; patch: (p: Partial<BookingDraft>) => void; onNext: () => void; days: number }) {
   const [err, setErr] = useState('');
   const next = () => {
     if (!draft.teamName.trim()) return setErr('Bitte euren Teamnamen angeben.');
     if (!draft.contactName.trim()) return setErr('Bitte einen Ansprechpartner angeben.');
     if (draft.phone.replace(/\D/g, '').length < 6) return setErr('Bitte eine gültige Telefonnummer angeben.');
+    if (!draft.billName.trim() || !draft.billStreet.trim() || !draft.billZip.trim() || !draft.billCity.trim()) {
+      return setErr('Bitte die vollständige Rechnungsadresse angeben – an sie schicken wir die Rechnung.');
+    }
     setErr('');
     onNext();
   };
@@ -461,7 +470,47 @@ function TeamStep({ draft, patch, onNext }: { draft: BookingDraft; patch: (p: Pa
         <Field label="Teamname"><input value={draft.teamName} onChange={(e) => patch({ teamName: e.target.value })} maxLength={60} placeholder="z. B. FC Beispiel" className={inputCls} /></Field>
         <Field label="Ansprechpartner"><input value={draft.contactName} onChange={(e) => patch({ contactName: e.target.value })} maxLength={80} autoComplete="name" placeholder="Vor- und Nachname" className={inputCls} /></Field>
         <Field label="Handynummer" hint="Für Rückfragen zur Buchung – wird nicht veröffentlicht."><input type="tel" inputMode="tel" autoComplete="tel" value={draft.phone} onChange={(e) => patch({ phone: e.target.value })} maxLength={40} placeholder="+49 …" className={inputCls} /></Field>
-        <Field label="E-Mail"><input value={draft.email} disabled className={`${inputCls} opacity-60`} /></Field>
+        <Field label="E-Mail" hint="An diese Adresse schicken wir Bestätigung und Rechnung."><input value={draft.email} disabled className={`${inputCls} opacity-60`} /></Field>
+
+        {/* Rechnungsadresse – Pflicht, an sie geht die Rechnung */}
+        <div className="pt-3">
+          <div className="flex items-center gap-2 mb-1">
+            <FileText className="w-4 h-4 text-[#8FA8FF]" />
+            <span className="font-display font-black uppercase text-white text-[17px] leading-none">Rechnungsadresse</span>
+          </div>
+          <p className="text-[12.5px] text-white/55 leading-snug mb-3">
+            Ihr zahlt nicht sofort: Nach der Buchung bekommt ihr eine Rechnung an diese Adresse, zahlbar innerhalb von {days} Tagen.
+          </p>
+          <div className="space-y-3">
+            <Field label="Rechnung an (Name oder Firma)">
+              <input
+                value={draft.billName}
+                onChange={(e) => patch({ billName: e.target.value })}
+                onFocus={(e) => {
+                  if (draft.billName || !draft.contactName) return;
+                  patch({ billName: draft.contactName });
+                  const el = e.currentTarget;
+                  setTimeout(() => el.select(), 0); // vorausgefüllt, aber direkt überschreibbar
+                }}
+                maxLength={120}
+                autoComplete="name"
+                placeholder="z. B. Max Mustermann oder FC Beispiel e. V."
+                className={inputCls}
+              />
+            </Field>
+            <Field label="Straße und Hausnummer">
+              <input value={draft.billStreet} onChange={(e) => patch({ billStreet: e.target.value })} maxLength={120} autoComplete="street-address" placeholder="Musterstraße 1" className={inputCls} />
+            </Field>
+            <div className="grid grid-cols-[110px_1fr] gap-3">
+              <Field label="PLZ">
+                <input value={draft.billZip} onChange={(e) => patch({ billZip: e.target.value })} maxLength={12} inputMode="numeric" autoComplete="postal-code" placeholder="12345" className={inputCls} />
+              </Field>
+              <Field label="Ort">
+                <input value={draft.billCity} onChange={(e) => patch({ billCity: e.target.value })} maxLength={80} autoComplete="address-level2" placeholder="Musterstadt" className={inputCls} />
+              </Field>
+            </div>
+          </div>
+        </div>
         {err && <ErrorBox>{err}</ErrorBox>}
         <Primary onClick={next}>Weiter zum Kader <ArrowRight className="w-4 h-4" /></Primary>
       </div>
@@ -637,7 +686,7 @@ function PackageStep({ cfg, draft, patch, earlyActive, onNext }: { cfg: BookingP
           </Field>
         </div>
         <Field label="Anmerkung (optional)">
-          <textarea value={draft.note} onChange={(e) => patch({ note: e.target.value })} rows={3} maxLength={800} placeholder="z. B. Wunsch zu Spielzeiten, Rechnungsadresse …" className={`${inputCls} resize-none`} />
+          <textarea value={draft.note} onChange={(e) => patch({ note: e.target.value })} rows={3} maxLength={800} placeholder="z. B. Wunsch zu Spielzeiten …" className={`${inputCls} resize-none`} />
         </Field>
         {err && <ErrorBox>{err}</ErrorBox>}
         <Primary onClick={next}>Weiter zum Abschluss <ArrowRight className="w-4 h-4" /></Primary>
@@ -659,12 +708,23 @@ function ConfirmStep({
 }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [dialog, setDialog] = useState(false);
+  useBackClose(dialog, () => setDialog(false));
+  const days = cfg.paymentDays ?? 30;
   const price = priceOf(cfg, draft.pkg ?? 'one', earlyActive);
   const all = draft.acceptJersey && draft.acceptRules && draft.acceptTerms;
   const captain = draft.roster.find((r) => r.captain);
-  const submit = async () => {
+  // Erster Klick: nur prüfen und das Bestätigungs-Fenster öffnen.
+  const ask = () => {
     if (!all) return setErr('Bitte alle drei Punkte bestätigen.');
     if (!draft.pkg) return onEdit('package');
+    if (!draft.billName.trim() || !draft.billStreet.trim() || !draft.billZip.trim() || !draft.billCity.trim()) return onEdit('team');
+    setErr('');
+    setDialog(true);
+  };
+  // Zweiter Klick im Fenster: zahlungspflichtig buchen.
+  const submit = async () => {
+    if (!draft.pkg) return;
     setBusy(true);
     setErr('');
     try {
@@ -672,10 +732,14 @@ function ConfirmStep({
         token: draft.token, teamName: draft.teamName.trim(), contactName: draft.contactName.trim(), phone: draft.phone.trim(),
         package: draft.pkg, roster: draft.roster, logo: draft.logo || undefined, keepLogo: !draft.logo && !!draft.keepLogoUrl, note: draft.note.trim(),
         acceptJersey: draft.acceptJersey, acceptRules: draft.acceptRules, acceptTerms: draft.acceptTerms,
+        billing: { name: draft.billName.trim(), street: draft.billStreet.trim(), zip: draft.billZip.trim(), city: draft.billCity.trim() },
+        confirmPayable: true,
       });
+      setDialog(false);
       onDone({ booking: r.booking, reference: r.reference });
     } catch (x) {
       const msg = x instanceof Error ? x.message : 'Buchung fehlgeschlagen.';
+      setDialog(false);
       if (/abgelaufen/i.test(msg)) {
         window.alert('Deine E-Mail-Bestätigung ist abgelaufen. Bitte bestätige sie kurz erneut – deine Angaben bleiben erhalten.');
         return onExpired();
@@ -698,9 +762,21 @@ function ConfirmStep({
       <div className="rounded-2xl border border-white/10 bg-white/[.035] px-3.5 mb-5">
         <Row label="Team" value={draft.teamName} edit="team" />
         <Row label="Kontakt" value={<>{draft.contactName}<br /><span className="text-white/55">{draft.email} · {draft.phone}</span></>} edit="team" />
+        <Row label="Rechnung an" value={<>{draft.billName}<br /><span className="text-white/55">{draft.billStreet}, {draft.billZip} {draft.billCity}</span></>} edit="team" />
         <Row label="Kader" value={<>{draft.roster.length} Spieler{captain ? ` · Kapitän: ${captain.firstName} ${captain.lastName}` : ''}</>} edit="roster" />
         <Row label="Paket" value={<>{price.label} · <strong>{euro(price.cents)}</strong></>} edit="package" />
         <Row label="Logo" value={draft.logoName || (draft.keepLogoUrl ? 'aktuelles Logo' : 'wird nachgereicht')} edit="package" />
+      </div>
+
+      {/* Jetzt noch nichts zahlen */}
+      <div className="mb-5 rounded-2xl border-2 border-[#D7FF3B]/45 bg-[#D7FF3B]/[.07] px-3.5 py-3.5 flex items-start gap-3">
+        <FileText className="w-5 h-5 text-[#D7FF3B] shrink-0 mt-0.5" />
+        <div className="min-w-0">
+          <div className="text-[13px] font-black uppercase tracking-wider text-[#D7FF3B]">Jetzt noch nichts bezahlen</div>
+          <p className="text-[13.5px] text-white/80 leading-snug mt-1">
+            Ihr bekommt eine <strong className="text-white">Rechnung per E-Mail</strong> über {euro(price.cents)} – zahlbar innerhalb von <strong className="text-white">{days} Tagen</strong> ab Rechnungsdatum.
+          </p>
+        </div>
       </div>
 
       <div className="space-y-2.5">
@@ -719,11 +795,69 @@ function ConfirmStep({
 
       <div className="mt-4 space-y-3">
         {err && <ErrorBox>{err}</ErrorBox>}
-        <Primary onClick={submit} disabled={busy || !all}>
-          {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Verbindlich buchen · {euro(price.cents)}</>}
+        <Primary onClick={ask} disabled={busy || !all}>
+          Zahlungspflichtig buchen · {euro(price.cents)}
         </Primary>
-        <p className="text-[12px] text-white/40 text-center leading-snug">Nach dem Absenden bekommst du die Zahlungsinfos und eine Bestätigung per E-Mail.</p>
+        <p className="text-[12px] text-white/40 text-center leading-snug">Nach der Buchung bekommt ihr eine Bestätigung per E-Mail. Die Rechnung folgt separat.</p>
       </div>
+
+      {/* Zweite Bestätigung: verbindlich, zahlungspflichtig, Rechnung folgt */}
+      <AnimatePresence>
+        {dialog && (
+          <motion.div
+            key="confirm-dialog"
+            className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm sm:p-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => !busy && goBackLayer()}
+          >
+            <motion.div
+              role="alertdialog"
+              aria-modal="true"
+              aria-label="Zahlungspflichtig buchen"
+              className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl border border-white/12 p-5 sm:p-6"
+              style={{ background: S2.bg2, paddingBottom: 'calc(env(safe-area-inset-bottom) + 1.25rem)' }}
+              initial={{ y: 60, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 60, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 340, damping: 32 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span className="inline-grid place-items-center w-12 h-12 rounded-2xl mb-4 text-[#06091A]" style={{ background: S2.volt }}>
+                <ShieldCheck className="w-6 h-6" />
+              </span>
+              <h3 className="font-display font-black uppercase text-white text-[26px] leading-[.95] tracking-tight">Jetzt verbindlich buchen?</h3>
+              <ul className="mt-4 space-y-2.5">
+                {[
+                  <>Ihr bucht <strong className="text-white">{price.label}</strong> für <strong className="text-white">{draft.teamName}</strong> zum Preis von <strong className="text-white">{euro(price.cents)}</strong>.</>,
+                  <>Die Buchung ist <strong className="text-white">verbindlich und zahlungspflichtig</strong>.</>,
+                  <>Jetzt wird nichts bezahlt. Ihr bekommt eine <strong className="text-white">Rechnung per E-Mail</strong> an {draft.billName}, zahlbar innerhalb von <strong className="text-white">{days} Tagen</strong>.</>,
+                  <>Bei freiwilligem Rückzug oder Nichtantritt gibt es <strong className="text-white">kein kostenloses Zurück</strong> – die Rechnung ist trotzdem zu bezahlen (siehe Teilnahmebedingungen). Gesetzliche Rechte bleiben unberührt.</>,
+                ].map((t, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-[14px] text-white/75 leading-snug">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-[#D7FF3B]" />
+                    <span className="min-w-0">{t}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-6 space-y-2.5">
+                <Primary onClick={submit} disabled={busy}>
+                  {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Zahlungspflichtig buchen</>}
+                </Primary>
+                <button
+                  type="button"
+                  onClick={() => goBackLayer()}
+                  disabled={busy}
+                  className="w-full rounded-2xl px-5 py-3.5 font-display font-black uppercase tracking-wide text-[15px] text-white border border-white/20 hover:bg-white/10 cursor-pointer disabled:opacity-50"
+                >
+                  Zurück
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -753,70 +887,28 @@ function CopyField({ label, value, big = false }: { label: string; value: string
   );
 }
 
-function PaymentCard({ booking, reference }: { booking: BookingSummary; reference: string }) {
+function PaymentCard({ booking, reference, days = 30 }: { booking: BookingSummary; reference: string; days?: number }) {
   const paid = booking.status === 'paid';
-  const amount = (booking.priceCents / 100).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const Step = ({ n, children }: { n: number; children: React.ReactNode }) => (
-    <div className="flex items-start gap-3">
-      <span className="shrink-0 w-7 h-7 rounded-full grid place-items-center font-display font-black text-[15px] text-[#06091A]" style={{ background: S2.volt }}>{n}</span>
-      <div className="min-w-0 flex-1 pt-0.5">{children}</div>
-    </div>
-  );
   return (
     <div className="rounded-3xl border border-white/10 overflow-hidden" style={{ background: 'linear-gradient(160deg,rgba(47,91,255,.18),rgba(255,255,255,.03))' }}>
       <div className="p-5">
         <div className="text-[11px] font-mono uppercase tracking-[.16em] text-white/45">{booking.packageLabel}</div>
         <div className="font-display font-black text-white text-[44px] leading-none mt-1 tabular-nums">{euro(booking.priceCents)}</div>
         <div className={`inline-flex items-center gap-1.5 mt-3 px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider ${paid ? 'bg-emerald-400/15 text-emerald-300' : 'bg-amber-300/15 text-amber-200'}`}>
-          {paid ? <CheckCircle2 className="w-3.5 h-3.5" /> : <CreditCard className="w-3.5 h-3.5" />}
-          {paid ? 'Bezahlt' : 'Zahlung offen'}
+          {paid ? <CheckCircle2 className="w-3.5 h-3.5" /> : <FileText className="w-3.5 h-3.5" />}
+          {paid ? 'Bezahlt' : 'Rechnung folgt'}
         </div>
       </div>
       {!paid && (
-        <div className="px-5 pb-5 space-y-4">
-          <div className="rounded-2xl border-2 border-[#D7FF3B]/50 bg-[#D7FF3B]/[.06] px-3.5 py-3">
-            <div className="text-[12px] font-black uppercase tracking-wider text-[#D7FF3B]">Wichtig beim Bezahlen</div>
-            <p className="text-[13px] text-white/80 leading-snug mt-1">
-              Betrag und Nachricht müsst ihr beim Bezahlen <strong className="text-white">selbst eintragen</strong> – nur so können wir eure Zahlung eurem Team und Paket zuordnen.
+        <div className="px-5 pb-5 space-y-3">
+          <div className="rounded-2xl border-2 border-[#D7FF3B]/45 bg-[#D7FF3B]/[.07] px-3.5 py-3">
+            <div className="text-[12px] font-black uppercase tracking-wider text-[#D7FF3B]">Jetzt noch nichts bezahlen</div>
+            <p className="text-[13.5px] text-white/80 leading-snug mt-1">
+              Ihr bekommt eine <strong className="text-white">Rechnung per E-Mail</strong>. Zahlbar innerhalb von <strong className="text-white">{days} Tagen</strong> ab Rechnungsdatum – bitte dann die Rechnungsnummer als Verwendungszweck angeben.
             </p>
           </div>
-          <Step n={1}>
-            <div className="text-[13.5px] font-bold text-white mb-1.5">Diesen Betrag eingeben</div>
-            <CopyField label="Betrag in Euro" value={amount} big />
-          </Step>
-          <Step n={2}>
-            <div className="text-[13.5px] font-bold text-white mb-1.5">Diese Nachricht angeben</div>
-            <CopyField label="Nachricht / Verwendungszweck" value={reference} />
-            <p className="text-[11.5px] text-white/45 mt-1.5">Buchungsnummer · Teamname · Paket</p>
-          </Step>
-          <Step n={3}>
-            {booking.payLink || booking.revolutLink ? (
-              <>
-                <div className="text-[13.5px] font-bold text-white mb-2">Bezahlen – wie es euch lieber ist</div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {booking.payLink && (
-                    <a href={booking.payLink} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center justify-center gap-0.5 rounded-2xl px-4 py-3.5 text-center cursor-pointer active:scale-[.98] transition-transform" style={{ background: '#FFC439' }}>
-                      <span className="inline-flex items-center gap-2 font-display font-black text-[19px] leading-none tracking-tight">
-                        <span className="text-[#003087]">Pay</span><span className="text-[#009CDE] -ml-2">Pal</span>
-                      </span>
-                      <span className="text-[11.5px] font-bold text-[#06091A]/70">PayPal-Konto oder Gastzahlung</span>
-                    </a>
-                  )}
-                  {booking.revolutLink && (
-                    <a href={booking.revolutLink} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center justify-center gap-0.5 rounded-2xl px-4 py-3.5 text-center cursor-pointer active:scale-[.98] transition-transform bg-white">
-                      <span className="inline-flex items-center gap-2 font-display font-black uppercase text-[17px] leading-none tracking-wide text-[#06091A]">
-                        <CreditCard className="w-5 h-5" /> Karte / Überweisung
-                      </span>
-                      <span className="text-[11.5px] font-bold text-[#06091A]/60">Kreditkarte, Apple Pay, Google Pay</span>
-                    </a>
-                  )}
-                </div>
-              </>
-            ) : (
-              <p className="text-[13px] text-white/60 rounded-xl bg-white/[.04] px-3.5 py-3">Den Zahlungslink schicken wir dir in Kürze per E-Mail.</p>
-            )}
-          </Step>
-          <p className="text-[12px] text-white/40 leading-snug">Sobald die Zahlung eingegangen ist, bekommt ihr eine Bestätigung und euer Startplatz ist fix. Alles steht auch nochmal in eurer Bestätigungsmail.</p>
+          <CopyField label="Eure Buchungsnummer" value={reference.split(' · ')[0] || reference} />
+          <p className="text-[12px] text-white/45 leading-snug">Euer Startplatz ist mit der Buchung reserviert. Alles steht auch nochmal in eurer Bestätigungsmail.</p>
         </div>
       )}
     </div>
@@ -831,9 +923,9 @@ function DoneStep({ cfg, result, email }: { cfg: BookingPublicConfig; result: { 
       </motion.div>
       <h2 className="font-display font-black text-[32px] uppercase tracking-tight text-white leading-[.95]">Buchung eingegangen!</h2>
       <p className="text-white/60 text-[14.5px] mt-2 mb-6 leading-relaxed">
-        Eure verbindliche Buchung für {cfg.seasonLabel} ist bei uns. Die Bestätigung mit allen Infos und den Teilnahmebedingungen ist unterwegs an <strong className="text-white [overflow-wrap:anywhere]">{email}</strong>. Jetzt fehlt nur noch die Zahlung.
+        Eure verbindliche Buchung für {cfg.seasonLabel} ist bei uns. Die Bestätigung mit allen Infos und den Teilnahmebedingungen ist unterwegs an <strong className="text-white [overflow-wrap:anywhere]">{email}</strong>. Die Rechnung schicken wir euch separat.
       </p>
-      {result.booking ? <PaymentCard booking={result.booking} reference={result.reference} /> : <p className="text-white/60">Buchungsnummer: {result.reference}</p>}
+      {result.booking ? <PaymentCard booking={result.booking} days={cfg.paymentDays ?? 30} reference={result.reference} /> : <p className="text-white/60">Buchungsnummer: {result.reference}</p>}
     </div>
   );
 }

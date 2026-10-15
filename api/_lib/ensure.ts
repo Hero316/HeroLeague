@@ -82,7 +82,7 @@ export async function ensureSchema(): Promise<void> {
     // überspringt der Schnell-Check das ALTER auf bereits bestehenden Tabellen.
     await sql`SELECT entry FROM season_signups LIMIT 1`;
     // Verbindliche Season-2-Buchungen (Landingpage /season2).
-    await sql`SELECT team_id, transferred_at, source_team_id FROM season_bookings LIMIT 1`;
+    await sql`SELECT team_id, transferred_at, source_team_id, billing, invoice_no, invoice_at, invoice_sent_at FROM season_bookings LIMIT 1`;
     // WICHTIG: die neue Spalte `consent_at` (Einwilligung) mitprüfen, sonst
     // überspringt der Schnell-Check das ALTER auf bestehenden Datenbanken.
     await sql`SELECT consent_at FROM event_tickets LIMIT 1`;
@@ -367,6 +367,11 @@ export async function ensureSchema(): Promise<void> {
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     paid_at TIMESTAMPTZ, team_id TEXT NOT NULL DEFAULT '', transferred_at TIMESTAMPTZ)`);
   await run(sql`ALTER TABLE season_bookings ADD COLUMN IF NOT EXISTS team_id TEXT NOT NULL DEFAULT ''`);
+  // Rechnung statt Sofort-Zahlung: Rechnungsadresse + Rechnungsnummer/-datum/-versand.
+  await run(sql`ALTER TABLE season_bookings ADD COLUMN IF NOT EXISTS billing JSONB NOT NULL DEFAULT '{}'`);
+  await run(sql`ALTER TABLE season_bookings ADD COLUMN IF NOT EXISTS invoice_no TEXT NOT NULL DEFAULT ''`);
+  await run(sql`ALTER TABLE season_bookings ADD COLUMN IF NOT EXISTS invoice_at TIMESTAMPTZ`);
+  await run(sql`ALTER TABLE season_bookings ADD COLUMN IF NOT EXISTS invoice_sent_at TIMESTAMPTZ`);
   await run(sql`ALTER TABLE season_bookings ADD COLUMN IF NOT EXISTS transferred_at TIMESTAMPTZ`);
   await run(sql`ALTER TABLE season_bookings ADD COLUMN IF NOT EXISTS source_team_id TEXT NOT NULL DEFAULT ''`);
   await run(sql`CREATE INDEX IF NOT EXISTS idx_season_bookings_email ON season_bookings(email)`);
