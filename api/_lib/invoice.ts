@@ -129,9 +129,9 @@ export function invoiceHtml(b: InvoiceBooking, c: InvoiceContext, { forPrint = f
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
       <td style="${f}vertical-align:bottom;font-size:28px;font-weight:900;">Rechnung</td>
       <td style="${f}vertical-align:bottom;text-align:right;font-size:12.5px;line-height:1.6;color:#333;">
-        Rechnungsnummer: <b>${escapeHtml(b.invoiceNo)}</b><br>
-        Rechnungsdatum: ${date(d.at)}<br>
-        Buchungsnummer: ${escapeHtml(b.ref)}
+        Rechnungsnummer: <b style="white-space:nowrap;">${escapeHtml(b.invoiceNo)}</b><br>
+        Rechnungsdatum: <span style="white-space:nowrap;">${date(d.at)}</span><br>
+        Buchungsnummer: <span style="white-space:nowrap;">${escapeHtml(b.ref)}</span>
       </td>
     </tr></table>
   </td></tr>
@@ -155,10 +155,10 @@ export function invoiceHtml(b: InvoiceBooking, c: InvoiceContext, { forPrint = f
       </tr>
     </table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;">
-      <tr><td width="55%"></td><td>
+      <tr><td width="45%"></td><td>
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
           ${taxRows}
-          <tr><td style="${f}padding:8px 0;font-size:16px;font-weight:900;border-top:2px solid #111;">Rechnungsbetrag</td><td style="${f}padding:8px 0;font-size:16px;font-weight:900;text-align:right;border-top:2px solid #111;white-space:nowrap;">${money(d.gross)}</td></tr>
+          <tr><td style="${f}padding:8px 16px 8px 0;font-size:16px;font-weight:900;border-top:2px solid #111;">Rechnungsbetrag</td><td style="${f}padding:8px 0;font-size:16px;font-weight:900;text-align:right;border-top:2px solid #111;white-space:nowrap;">${money(d.gross)}</td></tr>
         </table>
       </td></tr>
     </table>
