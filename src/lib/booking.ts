@@ -35,6 +35,7 @@ export interface BookingPublicConfig {
   terms: string;
   rules: string;
   bindingNotice: string;
+  paymentDays?: number; // Zahlungsziel der Rechnung (Tage)
   termsCheckbox: string;
   jerseyCheckbox: string;
   turnstileSiteKey: string;
@@ -91,6 +92,15 @@ export interface BookingPayload {
   acceptJersey: boolean;
   acceptRules: boolean;
   acceptTerms: boolean;
+  billing: Billing;
+  confirmPayable: boolean; // zweite Bestätigung im Pop-up (zahlungspflichtig buchen)
+}
+
+export interface Billing {
+  name: string;
+  street: string;
+  zip: string;
+  city: string;
 }
 
 export interface BookingAdminRow {
@@ -123,6 +133,10 @@ export interface BookingAdminRow {
   teamId: string;
   transferredAt: string | null;
   sourceTeamId: string; // aktuelles Liga-Team (per Manager-E-Mail erkannt)
+  billing?: Partial<Billing>;
+  invoiceNo?: string;
+  invoiceAt?: string | null;
+  invoiceSentAt?: string | null;
 }
 
 export interface BookingInvitee {
@@ -135,9 +149,21 @@ export interface BookingInvitee {
   booking: BookingStatus | null;
 }
 
+export interface InvoiceSettings {
+  issuer: string; // Absender: Name + Anschrift (mehrzeilig)
+  contact: string;
+  taxId: string;
+  vatRate: number; // 0 = § 19 UStG
+  taxNote: string;
+  bank: string;
+  prefix: string;
+  nextNo: number;
+}
+
 export interface BookingAdminConfig {
   payLink: string; // PayPal-Taste (PayPal.me)
   revolutLink: string; // Taste „Karte / Überweisung" (Revolut-Link)
+  invoice: InvoiceSettings;
   published: boolean;
   open: boolean;
   preregOnly: boolean;
@@ -153,6 +179,7 @@ export interface BookingAdminConfig {
   priceOne: number;
   priceTwo: number;
   priceTwoEarly: number;
+  paymentDays: number;
   minSquad: number;
   maxSquad: number;
   maxTeams: number;
@@ -184,6 +211,8 @@ export const bookingAdminStatus = (id: string, status: BookingStatus, notify = t
 export const bookingAdminConfig = () => apiFetch<BookingAdminConfig>('/api/signup?action=admin-booking-config');
 export const bookingAdminSaveConfig = (cfg: BookingAdminConfig & { newKey?: boolean }) => post<BookingAdminConfig>('admin-booking-config', cfg);
 export const bookingAdminDelete = (id: string) => post<{ ok: boolean }>('admin-booking-delete', { id });
+export const bookingAdminInvoice = (id: string, send = false) =>
+  post<{ invoiceNo: string; invoiceAt: string; invoiceSentAt: string | null; html: string }>('admin-booking-invoice', { id, send });
 export const bookingAdminTransfer = (id: string, teamId: string) => post<{ ok: boolean }>('admin-booking-transfer', { id, teamId });
 export const bookingAdminInvitees = () => apiFetch<BookingInvitee[]>('/api/signup?action=admin-booking-invites');
 export const bookingAdminInvite = (emails: string[]) => post<{ ok: boolean; sent: string[]; failed: string[] }>('admin-booking-invite', { emails });

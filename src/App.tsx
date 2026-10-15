@@ -1964,7 +1964,7 @@ export default function App() {
                         id="season2-bookings"
                         category="buchungen" order={1}
                         title="Buchungen & Landingpage"
-                        subtitle="Verbindliche Buchungen mit Kader & Logo · Zahlung bestätigen · Vorregistrierte einladen · /season2 freigeben"
+                        subtitle="Verbindliche Buchungen mit Kader & Logo · Rechnungen senden · Zahlung bestätigen · Vorregistrierte einladen · /season2 freigeben"
                         icon={<Trophy className="w-5 h-5" />}
                         accent="#2F5BFF"
                       >

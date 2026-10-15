@@ -517,6 +517,8 @@ CREATE TABLE IF NOT EXISTS season_bookings (
   consents JSONB NOT NULL DEFAULT '{}', note TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(), updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   paid_at TIMESTAMPTZ, team_id TEXT NOT NULL DEFAULT '', transferred_at TIMESTAMPTZ,
-  source_team_id TEXT NOT NULL DEFAULT '' -- aktuelles Liga-Team (Manager-E-Mail), falls erkannt
+  source_team_id TEXT NOT NULL DEFAULT '', -- aktuelles Liga-Team (Manager-E-Mail), falls erkannt
+  billing JSONB NOT NULL DEFAULT '{}', -- Rechnungsadresse {name, street, zip, city}
+  invoice_no TEXT NOT NULL DEFAULT '', invoice_at TIMESTAMPTZ, invoice_sent_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_season_bookings_email ON season_bookings(email);

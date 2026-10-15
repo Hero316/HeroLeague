@@ -51,7 +51,7 @@ export default function SeasonSignupBanner({ onOpen, inline = false }: { onOpen:
           {cfg.startInfo && (
             <div className="mt-1.5 hidden sm:flex items-center gap-2 text-xs font-sans text-hl-soft">
               <CalendarClock className="w-3.5 h-3.5 text-[#5B7FFF]" />
-              {cfg.startInfo} · {landing.published ? (landing.canBook ? 'Buchung geöffnet' : 'Alle Infos & Preise') : 'unverbindlich'}
+              {cfg.startInfo} · {landing.published ? (landing.canBook ? 'Jetzt buchen – später per Rechnung zahlen' : 'Alle Infos & Preise') : 'unverbindlich'}
             </div>
           )}
         </div>
