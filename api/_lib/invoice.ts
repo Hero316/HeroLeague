@@ -101,91 +101,143 @@ export function invoiceData(b: InvoiceBooking, c: InvoiceContext) {
   return { at, due, to, item, period, gross, net, vat: gross - net };
 }
 
-// Druckfertige Rechnung (A4). Inline-Styles + Tabellen → funktioniert im Browser-Druck und in Mail-Programmen.
-export function invoiceHtml(b: InvoiceBooking, c: InvoiceContext, { forPrint = false } = {}): string {
+// Druckfertige Rechnung (A4) im Hero-League-Look. Inline-Styles + Tabellen → funktioniert
+// im Browser-Druck (→ PDF) und in Mail-Programmen; Spalten als inline-block, damit sie am Handy umbrechen.
+// Logo + Hero-Schrift kommen direkt von der Website (Mail-Programme laden sie von dort).
+export const INVOICE_ASSETS = 'https://hero-league.de';
+const NAVY = '#06091A';
+const BLUE = '#2F5BFF';
+const VOLT = '#D7FF3B';
+const INK = '#0B1020';
+const MUTED = '#5E6788';
+const LINE = '#E3E7F2';
+
+export function invoiceHtml(b: InvoiceBooking, c: InvoiceContext, { forPrint = false, assetBase = INVOICE_ASSETS } = {}): string {
   const d = invoiceData(b, c);
   const inv = c.inv;
-  const f = 'font-family:Arial,Helvetica,sans-serif;color:#111;';
+  const paid = b.status === 'paid';
+  const T = `font-family:Arial,Helvetica,sans-serif;color:${INK};`;
+  const D = `font-family:'Saira Condensed','Arial Narrow',Arial,sans-serif;font-weight:900;text-transform:uppercase;letter-spacing:.2px;`;
   const issuerLine = escapeHtml(inv.issuer.split('\n').map((l) => l.trim()).filter(Boolean).join(' · '));
+  const seasons = b.package === 'two' ? c.twoLabel.split(' + ') : [c.seasonLabel];
+  const dates = b.package === 'two' ? [c.seasonDates, c.nextSeasonDates] : [c.seasonDates];
+  const chip = (txt: string, bg: string, fg: string) =>
+    `<span style="${T}display:inline-block;background:${bg};color:${fg};font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:4px 9px;border-radius:999px;margin:0 4px 4px 0;">${txt}</span>`;
+  const kicker = (txt: string, color = MUTED) => `<div style="${T}font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:${color};margin-bottom:6px;">${txt}</div>`;
+  const metaRow = (k: string, v: string, strong = false) =>
+    `<tr><td style="${T}font-size:12.5px;color:${MUTED};padding:3px 14px 3px 0;white-space:nowrap;">${k}</td><td style="${T}font-size:12.5px;padding:3px 0;text-align:right;white-space:nowrap;${strong ? 'font-weight:700;' : ''}">${v}</td></tr>`;
   const taxRows = inv.vatRate > 0
-    ? `<tr><td style="${f}padding:4px 0;font-size:13px;color:#555;">Nettobetrag</td><td style="${f}padding:4px 0;font-size:13px;text-align:right;">${money(d.net)}</td></tr>
-       <tr><td style="${f}padding:4px 0;font-size:13px;color:#555;">zzgl. ${inv.vatRate} % USt.</td><td style="${f}padding:4px 0;font-size:13px;text-align:right;">${money(d.vat)}</td></tr>`
+    ? `<tr><td style="${T}padding:5px 16px 5px 0;font-size:13px;color:${MUTED};">Nettobetrag</td><td style="${T}padding:5px 0;font-size:13px;text-align:right;white-space:nowrap;">${money(d.net)}</td></tr>
+       <tr><td style="${T}padding:5px 16px 5px 0;font-size:13px;color:${MUTED};">zzgl. ${inv.vatRate} % USt.</td><td style="${T}padding:5px 0;font-size:13px;text-align:right;white-space:nowrap;">${money(d.vat)}</td></tr>`
     : '';
+  const col = (w: number, html: string, extra = '') => `<div style="display:inline-block;vertical-align:top;width:100%;max-width:${w}px;${extra}">${html}</div>`;
+
   const body = `
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:720px;margin:0 auto;background:#fff;">
-  <tr><td style="padding:40px 44px 0;">
+<table role="presentation" class="sheet" width="100%" cellpadding="0" cellspacing="0" style="max-width:720px;margin:0 auto;background:#ffffff;">
+  <!-- Kopf -->
+  <tr><td bgcolor="${NAVY}" style="background:${NAVY};background-image:linear-gradient(120deg,${NAVY} 0%,#0B1745 62%,#16277A 100%);padding:26px 36px 24px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-      <td style="${f}vertical-align:top;">
-        <div style="font-size:26px;font-weight:900;letter-spacing:-.5px;">HERO LEAGUE</div>
-      </td>
-      <td style="${f}vertical-align:top;text-align:right;font-size:12px;line-height:1.5;color:#444;">${lines(inv.issuer)}${inv.contact ? `<br>${lines(inv.contact)}` : ''}</td>
-    </tr></table>
-  </td></tr>
-  <tr><td style="padding:34px 44px 0;">
-    <div style="${f}font-size:9.5px;color:#777;border-bottom:1px solid #ccc;padding-bottom:3px;margin-bottom:8px;display:inline-block;">${issuerLine}</div>
-    <div style="${f}font-size:14px;line-height:1.5;">${d.to.map(escapeHtml).join('<br>')}</div>
-  </td></tr>
-  <tr><td style="padding:34px 44px 0;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-      <td style="${f}vertical-align:bottom;font-size:28px;font-weight:900;">Rechnung</td>
-      <td style="${f}vertical-align:bottom;text-align:right;font-size:12.5px;line-height:1.6;color:#333;">
-        Rechnungsnummer: <b style="white-space:nowrap;">${escapeHtml(b.invoiceNo)}</b><br>
-        Rechnungsdatum: <span style="white-space:nowrap;">${date(d.at)}</span><br>
-        Buchungsnummer: <span style="white-space:nowrap;">${escapeHtml(b.ref)}</span>
+      <td style="vertical-align:middle;"><img src="${assetBase}/assets/hero-league-logo.png" alt="Hero League" width="128" style="display:block;width:128px;height:auto;border:0;"></td>
+      <td style="vertical-align:middle;text-align:right;">
+        <div style="${D}color:#ffffff;font-size:40px;line-height:1;">Rechnung</div>
+        <div style="${T}color:${VOLT};font-size:13px;font-weight:700;letter-spacing:.06em;margin-top:6px;white-space:nowrap;">Nr. ${escapeHtml(b.invoiceNo)}</div>
       </td>
     </tr></table>
   </td></tr>
-  <tr><td style="padding:22px 44px 0;${f}font-size:14px;line-height:1.55;">
-    Vielen Dank für eure Buchung. Wir stellen euch folgende Leistung in Rechnung:
+  <tr><td style="padding:0;font-size:0;line-height:0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+    <td bgcolor="${BLUE}" width="72%" style="background:${BLUE};height:5px;font-size:0;line-height:0;">&nbsp;</td>
+    <td bgcolor="${VOLT}" style="background:${VOLT};height:5px;font-size:0;line-height:0;">&nbsp;</td>
+  </tr></table></td></tr>
+
+  <!-- Paket -->
+  <tr><td style="padding:26px 36px 0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F2F5FF;border:1px solid #DCE3FF;border-radius:16px;"><tr><td style="padding:18px 20px 16px;">
+      ${col(420, `
+        ${kicker('Euer Paket', BLUE)}
+        <div style="${D}color:${INK};font-size:34px;line-height:.95;">${seasons.map(escapeHtml).join(`<span style="color:${BLUE};"> + </span>`)}</div>
+        <div style="margin-top:10px;">${b.package === 'two' ? chip('Doppelpaket', NAVY, '#ffffff') : chip('Eine Season', NAVY, '#ffffff')}${b.earlyBird ? chip('Early Bird', VOLT, NAVY) : ''}</div>
+        <div style="${T}font-size:12.5px;color:${MUTED};line-height:1.55;margin-top:4px;">${seasons.map((sn, i) => (dates[i] ? `${escapeHtml(sn)}: ${escapeHtml(dates[i])}` : '')).filter(Boolean).join('<br>')}</div>
+      `)}${col(200, `
+        <div style="text-align:right;padding-top:6px;">
+          ${kicker('Rechnungsbetrag')}
+          <div style="${D}color:${INK};font-size:38px;line-height:1;white-space:nowrap;">${money(d.gross)}</div>
+          <div style="${T}font-size:12px;color:${paid ? '#0E8A4F' : MUTED};margin-top:6px;font-weight:${paid ? 700 : 400};">${paid ? 'Bezahlt – danke!' : `fällig bis ${date(d.due)}`}</div>
+        </div>
+      `, 'float:right;')}
+    </td></tr></table>
   </td></tr>
-  <tr><td style="padding:18px 44px 0;">
+
+  <!-- Empfänger + Daten -->
+  <tr><td style="padding:24px 36px 0;">
+    ${col(330, `
+      <div style="${T}font-size:9px;color:#8A93B0;border-bottom:1px solid ${LINE};padding-bottom:3px;margin-bottom:8px;display:inline-block;">${issuerLine}</div>
+      ${kicker('Rechnung an')}
+      <div style="${T}font-size:14.5px;line-height:1.5;">${d.to.map((l, i) => (i === 0 ? `<b>${escapeHtml(l)}</b>` : escapeHtml(l))).join('<br>')}</div>
+    `, 'margin-bottom:16px;')}${col(290, `
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin-left:auto;">
+        ${metaRow('Rechnungsnummer', escapeHtml(b.invoiceNo), true)}
+        ${metaRow('Rechnungsdatum', date(d.at))}
+        ${paid ? metaRow('Status', 'bezahlt') : metaRow('Fällig am', date(d.due))}
+        ${metaRow('Buchungsnummer', escapeHtml(b.ref))}
+        ${metaRow('Team', escapeHtml(b.teamName))}
+      </table>
+    `, 'float:right;')}
+  </td></tr>
+
+  <!-- Positionen -->
+  <tr><td style="padding:22px 36px 0;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
       <tr>
-        <td style="${f}font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#666;border-bottom:2px solid #111;padding:6px 0;">Pos.</td>
-        <td style="${f}font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#666;border-bottom:2px solid #111;padding:6px 8px;">Leistung</td>
-        <td style="${f}font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#666;border-bottom:2px solid #111;padding:6px 0;text-align:right;">Betrag</td>
+        <td style="${T}font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:${MUTED};border-bottom:2px solid ${INK};padding:0 0 7px;">Leistung</td>
+        <td style="${T}font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:${MUTED};border-bottom:2px solid ${INK};padding:0 0 7px;text-align:right;">Betrag</td>
       </tr>
       <tr>
-        <td style="${f}font-size:14px;padding:12px 0;vertical-align:top;border-bottom:1px solid #ddd;">1</td>
-        <td style="${f}font-size:14px;padding:12px 8px;vertical-align:top;border-bottom:1px solid #ddd;">
+        <td style="${T}font-size:14px;padding:13px 12px 13px 0;vertical-align:top;border-bottom:1px solid ${LINE};line-height:1.45;">
           <b>${escapeHtml(d.item)}</b><br>
-          <span style="font-size:12.5px;color:#555;">Startplatz für Team „${escapeHtml(b.teamName)}“${d.period ? `<br>Leistungszeitraum: ${escapeHtml(d.period)}` : ''}</span>
+          <span style="font-size:12.5px;color:${MUTED};">Startplatz für Team „${escapeHtml(b.teamName)}“${d.period ? ` · ${escapeHtml(d.period)}` : ''}</span>
         </td>
-        <td style="${f}font-size:14px;padding:12px 0;vertical-align:top;text-align:right;border-bottom:1px solid #ddd;white-space:nowrap;">${money(d.gross)}</td>
+        <td style="${T}font-size:14px;padding:13px 0;vertical-align:top;text-align:right;border-bottom:1px solid ${LINE};white-space:nowrap;">${money(d.gross)}</td>
       </tr>
     </table>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;">
-      <tr><td width="45%"></td><td>
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-          ${taxRows}
-          <tr><td style="${f}padding:8px 16px 8px 0;font-size:16px;font-weight:900;border-top:2px solid #111;">Rechnungsbetrag</td><td style="${f}padding:8px 0;font-size:16px;font-weight:900;text-align:right;border-top:2px solid #111;white-space:nowrap;">${money(d.gross)}</td></tr>
-        </table>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:10px 0 0 auto;min-width:260px;">
+      ${taxRows}
+      <tr><td colspan="2" style="padding-top:6px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${NAVY}" style="background:${NAVY};border-radius:12px;"><tr>
+          <td style="${D}color:#ffffff;font-size:17px;padding:12px 18px 12px 16px;">Gesamt</td>
+          <td style="${D}color:${VOLT};font-size:24px;padding:12px 16px;text-align:right;white-space:nowrap;">${money(d.gross)}</td>
+        </tr></table>
       </td></tr>
     </table>
+    ${inv.vatRate === 0 && inv.taxNote ? `<div style="${T}font-size:11.5px;color:${MUTED};text-align:right;margin-top:7px;">${escapeHtml(inv.taxNote)}</div>` : ''}
   </td></tr>
-  ${inv.vatRate === 0 && inv.taxNote ? `<tr><td style="padding:10px 44px 0;${f}font-size:12.5px;color:#444;">${escapeHtml(inv.taxNote)}</td></tr>` : ''}
-  <tr><td style="padding:22px 44px 0;${f}font-size:14px;line-height:1.6;">
-    ${b.status === 'paid'
-      ? '<b>Der Rechnungsbetrag ist bereits bei uns eingegangen – vielen Dank.</b>'
-      : `Bitte überweist den Rechnungsbetrag <b>bis zum ${date(d.due)}</b> (${c.paymentDays} Tage ab Rechnungsdatum) ohne Abzug auf das unten genannte Konto.
-    Verwendungszweck: <b>${escapeHtml(b.invoiceNo)}</b>`}
+
+  <!-- Zahlung -->
+  <tr><td style="padding:22px 36px 0;">
+    ${paid
+      ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#E9F8EF;border-left:4px solid #12A35B;border-radius:10px;"><tr><td style="${T}padding:14px 16px;font-size:14px;line-height:1.5;"><b>Bereits bezahlt.</b> Der Rechnungsbetrag ist bei uns eingegangen – vielen Dank!</td></tr></table>`
+      : `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F6F7FB;border-left:4px solid ${BLUE};border-radius:10px;"><tr><td style="padding:15px 18px;">
+          ${kicker('So bezahlt ihr', BLUE)}
+          <div style="${T}font-size:14px;line-height:1.55;">Bitte überweist den Betrag <b>bis zum ${date(d.due)}</b> (${c.paymentDays} Tage ab Rechnungsdatum) ohne Abzug.</div>
+          <div style="${T}font-size:13.5px;line-height:1.6;margin-top:8px;">${lines(inv.bank)}</div>
+          <div style="${T}font-size:13px;margin-top:10px;">Verwendungszweck: <span style="display:inline-block;background:${VOLT};color:${NAVY};font-weight:700;padding:3px 9px;border-radius:6px;white-space:nowrap;">${escapeHtml(b.invoiceNo)}</span></div>
+        </td></tr></table>`}
+    <div style="${T}font-size:12px;line-height:1.55;color:${MUTED};margin-top:14px;">Die Buchung ist verbindlich. Es gelten die bei der Buchung akzeptierten Teilnahmebedingungen. Wir freuen uns auf eine starke Season mit euch!</div>
   </td></tr>
-  <tr><td style="padding:16px 44px 0;">
-    <table role="presentation" cellpadding="0" cellspacing="0" style="background:#f3f5f9;border-radius:8px;"><tr><td style="${f}padding:12px 16px;font-size:13px;line-height:1.6;">${lines(inv.bank)}</td></tr></table>
-  </td></tr>
-  <tr><td style="padding:22px 44px 0;${f}font-size:12.5px;line-height:1.55;color:#444;">
-    Die Buchung ist verbindlich. Es gelten die bei der Buchung akzeptierten Teilnahmebedingungen.
-  </td></tr>
-  <tr><td style="padding:28px 44px 40px;">
-    <div style="${f}border-top:1px solid #ddd;padding-top:10px;font-size:10.5px;line-height:1.5;color:#777;">
-      ${issuerLine}${inv.taxId ? ` · Steuer-Nr./USt-IdNr.: ${escapeHtml(inv.taxId)}` : ''}
-    </div>
+
+  <!-- Fuß -->
+  <tr><td style="padding:26px 0 0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="${NAVY}" style="background:${NAVY};"><tr><td style="padding:16px 36px;">
+      <div style="${T}color:#C9D1EE;font-size:10.5px;line-height:1.6;">${issuerLine}${inv.taxId ? ` · Steuer-Nr./USt-IdNr.: ${escapeHtml(inv.taxId)}` : ''}${inv.contact ? `<br>${escapeHtml(inv.contact.split('\n').map((l) => l.trim()).filter(Boolean).join(' · '))}` : ''}</div>
+    </td></tr></table>
   </td></tr>
 </table>`;
-  if (!forPrint) return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Rechnung ${escapeHtml(b.invoiceNo)}</title></head><body style="margin:0;padding:16px 0;background:#eef0f4;">${body}</body></html>`;
-  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Rechnung ${escapeHtml(b.invoiceNo)} – ${escapeHtml(b.teamName)}</title>
-<style>@page{size:A4;margin:0}body{margin:0;background:#eef0f4}@media print{body{background:#fff}.np{display:none!important}}</style></head>
-<body><div class="np" style="text-align:center;padding:14px;font-family:Arial,sans-serif;"><button onclick="window.print()" style="font-size:15px;font-weight:700;padding:10px 22px;border-radius:10px;border:0;background:#2F5BFF;color:#fff;cursor:pointer;">Drucken / als PDF speichern</button></div>${body}</body></html>`;
+  const head = `<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<style>@font-face{font-family:'Saira Condensed';font-style:normal;font-weight:900;src:url(${assetBase}/fonts/EJRLQgErUN8XuHNEtX81i9TmEkrnIcxQ962f.woff2) format('woff2')}</style>`;
+  const colorExact = '*{-webkit-print-color-adjust:exact;print-color-adjust:exact}';
+  if (!forPrint) return `<!doctype html><html lang="de"><head>${head}<title>Rechnung ${escapeHtml(b.invoiceNo)}</title><style>${colorExact}</style></head><body style="margin:0;padding:16px 0;background:#EEF1F8;">${body}</body></html>`;
+  return `<!doctype html><html lang="de"><head>${head}<title>Rechnung ${escapeHtml(b.invoiceNo)} – ${escapeHtml(b.teamName)}</title>
+<style>${colorExact}@page{size:A4;margin:0}body{margin:0;background:#EEF1F8}.sheet{box-shadow:0 10px 40px rgba(6,9,26,.12)}@media print{body{background:#fff}.np{display:none!important}.sheet{max-width:none!important;box-shadow:none}}</style></head>
+<body><div class="np" style="text-align:center;padding:14px;font-family:Arial,sans-serif;"><button onclick="window.print()" style="font-size:15px;font-weight:700;padding:10px 22px;border-radius:10px;border:0;background:${BLUE};color:#fff;cursor:pointer;">Drucken / als PDF speichern</button></div>${body}<div class="np" style="height:24px"></div></body></html>`;
 }
 
 export function invoiceText(b: InvoiceBooking, c: InvoiceContext): string {
