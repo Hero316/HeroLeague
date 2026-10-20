@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getUsers, sql } from '../_lib/db.js';
-import { requireSuperadmin, normalizePermissions } from '../_lib/auth.js';
+import { requireSuperadmin, cleanPermissions, storePermissions } from '../_lib/auth.js';
 import { badRequest } from '../_lib/validate.js';
 import { ensureSchema } from '../_lib/ensure.js';
 
@@ -27,11 +27,11 @@ const createUser = requireSuperadmin(async (req: VercelRequest, res: VercelRespo
   const existing = await sql`SELECT id FROM users WHERE email = ${normalized}`;
   if (existing.length > 0) return badRequest(res, 'Diese E-Mail-Adresse ist bereits vergeben.');
 
-  const permissions = role === 'match_admin' || role === 'team_member' ? normalizePermissions(req.body?.permissions) : [];
+  const permissions = role === 'match_admin' || role === 'team_member' ? cleanPermissions(req.body?.permissions) : [];
   const id = `u-${Date.now()}`;
   await sql`
     INSERT INTO users (id, email, name, role, permissions, is_active)
-    VALUES (${id}, ${normalized}, ${(name ?? '').trim()}, ${role}, ${JSON.stringify(permissions)}::jsonb, true)
+    VALUES (${id}, ${normalized}, ${(name ?? '').trim()}, ${role}, ${JSON.stringify(storePermissions(permissions))}::jsonb, true)
   `;
 
   return res.json({ id, email: normalized, name: (name ?? '').trim(), role, permissions, isActive: true });

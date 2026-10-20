@@ -292,7 +292,7 @@ function keyOk(req: VercelRequest, cfg: BookingConfig): boolean {
 }
 async function isAdmin(req: VercelRequest): Promise<boolean> {
   const session = await getSession(req).catch(() => null);
-  return Boolean(session && hasPermission(session, 'signups'));
+  return Boolean(session && hasPermission(session, 'bookings'));
 }
 // Seite sichtbar? Veröffentlicht, per Vorab-Link oder als Admin (Vorschau).
 async function canView(req: VercelRequest, cfg: BookingConfig) {
@@ -707,7 +707,7 @@ async function bookingSubmit(req: VercelRequest, res: VercelResponse) {
 async function requireSignups(req: VercelRequest, res: VercelResponse): Promise<boolean> {
   const session = await getSession(req);
   if (!session) { res.status(401).json({ error: 'Nicht angemeldet' }); return false; }
-  if (!hasPermission(session, 'signups')) { res.status(403).json({ error: 'Keine Berechtigung.' }); return false; }
+  if (!hasPermission(session, 'bookings')) { res.status(403).json({ error: 'Keine Berechtigung.' }); return false; }
   return true;
 }
 

@@ -312,18 +312,23 @@ export type AdminPermission =
   | 'highlights'
   | 'homepage'
   | 'channels'
+  | 'partners'
+  | 'bookings'
   | 'signups'
   | 'tickets';
-export const ALL_ADMIN_PERMISSIONS: { id: AdminPermission; label: string; hint: string }[] = [
-  { id: 'tracking', label: 'Statistics Center (Tracking)', hint: 'Spiele tracken, Status setzen, Spieler zum Kader hinzufügen' },
-  { id: 'results', label: 'Ergebnisse & Spielplan', hint: 'Ergebnisse eintragen, Spiele LIVE stellen, Schiedsrichtermodus' },
-  { id: 'clubs', label: 'Klubs & Kader', hint: 'Kader, Kapitän, Torwart, Logos · Kader-Meldung der Manager' },
-  { id: 'awards', label: 'Auszeichnungen', hint: 'Spieler/Torwart des Spieltages · interne HERO-ONE-Rangliste' },
-  { id: 'highlights', label: 'Highlights', hint: 'Fotos & Clips auf der Website bearbeiten' },
-  { id: 'homepage', label: 'Startseite', hint: 'Hero-Bilder, Countdown, News-Laufband, Partner & Sponsoren-Klicks' },
-  { id: 'channels', label: 'Kanäle & Event', hint: 'Twitch, Social Media, OBS, Live-Streams, Testspiel/Event' },
-  { id: 'signups', label: 'Anmeldungen & Tippspiel', hint: 'Team-/Spieler-Anmeldungen, Tippspiel-Teilnehmer & Lösungen' },
-  { id: 'tickets', label: 'Zuschauer-Tickets', hint: 'Veranstaltungen, Plätze, Einlass & Spenden-Popup' },
+// Reihenfolge + Gruppen wie die Rubriken in der Backend-Seitenleiste.
+export const ALL_ADMIN_PERMISSIONS: { id: AdminPermission; label: string; hint: string; group: string }[] = [
+  { id: 'tracking', group: 'Spieltag', label: 'Statistics Center (Tracking)', hint: 'Spiele tracken, Status setzen, Spieler zum Kader hinzufügen' },
+  { id: 'results', group: 'Spieltag', label: 'Ergebnisse & Spielplan', hint: 'Ergebnisse eintragen, Spiele LIVE stellen, Spielplan, Ergebniszettel, Schiedsrichtermodus' },
+  { id: 'clubs', group: 'Liga & Teams', label: 'Klubs & Kader', hint: 'Vereine, Kader, Kapitän, Torwart, Logos, Team-Sponsoren · Kader-Meldung der Manager' },
+  { id: 'awards', group: 'Auszeichnungen', label: 'Auszeichnungen', hint: 'Spieler/Torwart des Spieltages · interne HERO-ONE-Rangliste' },
+  { id: 'channels', group: 'Livestream', label: 'Livestream & Testspiel', hint: 'Live-Regie (Studio-Overlay), OBS-Einblendungen, Live-Streams, Twitch & Social Media, Testspiel/Event' },
+  { id: 'homepage', group: 'Website', label: 'Startseite', hint: 'Startseiten-Bilder, Countdown, News-Laufband' },
+  { id: 'highlights', group: 'Website', label: 'Highlights', hint: 'Fotos & Clips auf der Website bearbeiten' },
+  { id: 'partners', group: 'Partner', label: 'Partner', hint: 'Partner-Logos, Sponsoren-Klicks, Partneranfragen & /partner-Seite' },
+  { id: 'bookings', group: 'Buchungen', label: 'Buchungen & Rechnungen', hint: 'Season-Buchungen, Rechnungen & Zahlungseingang, Vorregistrierungen, /season2 freigeben' },
+  { id: 'signups', group: 'Fans & Tippspiel', label: 'Tippspiel', hint: 'Tippspiel-Teilnehmer, CSV & Lösungen der Zusatzfragen' },
+  { id: 'tickets', group: 'Fans & Tippspiel', label: 'Zuschauer-Tickets', hint: 'Veranstaltungen, Plätze, Einlass & Spenden-Popup' },
 ];
 
 // Präsenz-Status (Slack-artig) mit Emoji + Farbe. Erweiterbar.

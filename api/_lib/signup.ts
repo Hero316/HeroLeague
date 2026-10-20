@@ -387,11 +387,11 @@ async function submit(req: VercelRequest, res: VercelResponse) {
   });
 }
 
-// --- Admin-Aktionen (nur Super-Admin) ---------------------------------------
+// --- Admin-Aktionen (Recht „Buchungen & Rechnungen“) ---------------------------------------
 async function requireSuper(req: VercelRequest, res: VercelResponse): Promise<boolean> {
   const session = await getSession(req);
   if (!session) { res.status(401).json({ error: 'Nicht angemeldet' }); return false; }
-  if (!hasPermission(session, 'signups')) { res.status(403).json({ error: 'Keine Berechtigung.' }); return false; }
+  if (!hasPermission(session, 'bookings')) { res.status(403).json({ error: 'Keine Berechtigung.' }); return false; }
   return true;
 }
 

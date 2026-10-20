@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { SignJWT, jwtVerify } from 'jose';
 import type { UserRole, AdminPermission, UserStatus } from '../../src/types';
 import { sql } from './db.js';
+import { AREA_IDS, effectivePermissions, normalizePermissions, cleanPermissions, storePermissions } from './perms.js';
 
 const COOKIE_NAME = 'hl_session';
 const SESSION_DAYS = 30;
@@ -22,45 +23,8 @@ export function normalizeStatus(value: unknown): UserStatus {
   return KNOWN_STATUS.includes(value as UserStatus) ? (value as UserStatus) : 'online';
 }
 
-// --- Backoffice-Bereiche (individuelle Rechte) ------------------------------
-// Ein Super-Admin kann pro Benutzer einzeln anhaken, welche Bereiche er sieht
-// und bearbeiten darf. MUSS mit ADMIN_AREAS in src/types.ts übereinstimmen.
-// Benutzerverwaltung + Saisons bleiben bewusst IMMER beim Super-Admin.
-export const AREA_IDS: AdminPermission[] = [
-  'tracking',
-  'results',
-  'clubs',
-  'awards',
-  'highlights',
-  'homepage',
-  'channels',
-  'signups',
-  'tickets',
-];
-
-// Standard-Rechte je Rolle, solange NICHT individuell eingestellt wurde.
-const ROLE_DEFAULTS: Record<UserRole, AdminPermission[]> = {
-  superadmin: AREA_IDS,
-  match_admin: ['tracking', 'results', 'clubs', 'awards', 'highlights'],
-  referee: [],
-  team_member: [],
-};
-
-// Nur bekannte Bereiche, ohne Doppelte.
-export function normalizePermissions(value: unknown): AdminPermission[] {
-  if (!Array.isArray(value)) return [];
-  return AREA_IDS.filter((id) => value.includes(id));
-}
-
-// Was darf diese Person WIRKLICH? Super-Admin: alles. Schiedsrichter: nur der
-// Schiedsrichtermodus (über seine Rolle). Sonst: individuell angehakte Bereiche,
-// und wenn nichts angehakt ist, die Standard-Rechte der Rolle.
-export function effectivePermissions(role: UserRole, permissions: unknown): AdminPermission[] {
-  if (role === 'superadmin') return AREA_IDS;
-  if (role === 'referee') return [];
-  const own = normalizePermissions(permissions);
-  return own.length > 0 ? own : ROLE_DEFAULTS[role];
-}
+// --- Backoffice-Bereiche (individuelle Rechte) → perms.ts --------------------
+export { AREA_IDS, effectivePermissions, normalizePermissions, cleanPermissions, storePermissions };
 
 export function hasPermission(session: SessionPayload | null, ...perms: AdminPermission[]): boolean {
   if (!session) return false;
@@ -153,7 +117,7 @@ export async function createSessionToken(user: SessionPayload): Promise<string> 
     email: user.email,
     name: user.name,
     role: user.role,
-    permissions: normalizePermissions(user.permissions),
+    permissions: storePermissions(normalizePermissions(user.permissions)), // mit Versions-Marker
     avatarUrl: typeof user.avatarUrl === 'string' ? user.avatarUrl : '',
     status: normalizeStatus(user.status),
   })

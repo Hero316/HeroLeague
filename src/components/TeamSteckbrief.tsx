@@ -4,6 +4,9 @@ import { X, ArrowLeft, Shield, Share2 } from 'lucide-react';
 import type { MatchPlayerStat, PlayerStat, ScoringConfig, Team } from '../types';
 import { seasonRanking, scorerRanking, assistRanking } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
+import { cardForPlayer } from '../lib/playerCards';
+import { normalizeCounts, sumCounts } from '../lib/rating';
+import { TIER } from './FifaCard';
 import { useBackClose } from '../lib/backStack';
 import { useBackdropDismiss, ModalPortal, TeamCrest, monogram, readable } from './ui';
 import { ShareSheet } from './ShareCard';
@@ -43,6 +46,28 @@ interface Props {
   resultsFor: (teamId: string) => TeamResult[];
   scoringConfig?: ScoringConfig;
   subtitle?: string; // z.B. „2. Testspieltag"
+  // Liga: ganzer Kader auf der Karte (mit Kartenwert, Toren, Auszeichnungen)
+  // plus Team-Werte aus dem Tracking; die Ergebnisliste wird zur Form-Leiste.
+  showSquad?: boolean;
+}
+
+// Ein Spieler im Kader-Raster der Karte.
+interface SquadMember {
+  name: string;
+  imageUrl?: string;
+  goals: number;
+  assists: number;
+  ges: number | null; // Kartenwert (nur mit Tracking)
+  tierAccent: string | null;
+  keeper: boolean;
+  badge: string; // ⚽ / 🅰 / ⭐ / 🧤 – Bester des Teams in dieser Kategorie
+}
+// Team-Werte aus den getrackten Aktionen aller Spieler.
+interface TeamTotals {
+  passQuote: number | null;
+  duelQuote: number | null;
+  shots: number;
+  rating: number | null; // Ø Kartenwert der besten (bis zu 8) Spieler
 }
 
 export default function TeamSteckbrief({
@@ -55,6 +80,7 @@ export default function TeamSteckbrief({
   resultsFor,
   scoringConfig,
   subtitle,
+  showSquad = false,
 }: Props) {
   useBackClose(open, onClose);
   const backdrop = useBackdropDismiss(onClose);
@@ -84,6 +110,46 @@ export default function TeamSteckbrief({
       keeper,
     };
   }, [teamId, trackingRows, cfg]);
+
+  // Ganzer Kader mit Kartenwert – sortiert nach Kartenwert, dann Toren.
+  const squad = useMemo<SquadMember[]>(() => {
+    if (!showSquad || !teamId) return [];
+    const b = best as { scorer: { playerName: string } | null; assist: { playerName: string } | null; player: { playerName: string } | null; keeper: { playerName: string } | null } | null;
+    const badgeOf = (n: string) =>
+      b?.scorer?.playerName === n ? '⚽' : b?.player?.playerName === n ? '⭐' : b?.keeper?.playerName === n ? '🧤' : b?.assist?.playerName === n ? '🅰' : '';
+    return players
+      .filter((p) => p.teamId === teamId)
+      .map((p) => {
+        const c = cardForPlayer(p.name, teamId, trackingRows, cfg);
+        const t = c?.total;
+        return {
+          name: p.name,
+          imageUrl: p.imageUrl,
+          goals: Math.max(p.goals, t ? t.goal + t.penalty_goal : 0),
+          assists: Math.max(p.assists, t ? t.assist : 0),
+          ges: c ? c.card.ges : null,
+          tierAccent: c ? TIER[c.card.tier].accent : null,
+          keeper: c?.role === 'keeper' || (p.gamesInGoal > 0 && p.gamesInGoal >= p.matchesPlayed / 2),
+          badge: badgeOf(p.name),
+        };
+      })
+      .sort((x, y) => (y.ges ?? -1) - (x.ges ?? -1) || y.goals - x.goals || x.name.localeCompare(y.name));
+  }, [showSquad, teamId, players, trackingRows, cfg, best]);
+
+  const totals = useMemo<TeamTotals | null>(() => {
+    if (!showSquad || !teamId) return null;
+    const rows = trackingRows.filter((r) => r.teamId === teamId);
+    if (rows.length === 0) return null;
+    const t = sumCounts(rows.map((r) => normalizeCounts(r.counts)));
+    const q = (a: number, b: number) => (a + b > 0 ? Math.round((a / (a + b)) * 100) : null);
+    const ges = squad.map((m) => m.ges).filter((g): g is number => g !== null).slice(0, 8);
+    return {
+      passQuote: q(t.pass_ok, t.pass_fail),
+      duelQuote: q(t.duel_won, t.duel_lost),
+      shots: t.goal + t.shot_on + t.shot_miss + t.shot_blocked_off,
+      rating: ges.length ? Math.round(ges.reduce((a, g) => a + g, 0) / ges.length) : null,
+    };
+  }, [showSquad, teamId, trackingRows, squad]);
 
   if (!open) return null;
 
@@ -152,7 +218,7 @@ export default function TeamSteckbrief({
                 <motion.div key="card" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }} transition={{ duration: 0.2 }}>
                   <div className="mt-4 mx-auto w-full max-w-[340px]">
                     <div className="rounded-3xl overflow-hidden" style={{ boxShadow: '0 30px 70px -25px rgba(0,0,0,.9)' }}>
-                      <TeamCard team={team} record={record} results={results} best={best} players={players} subtitle={subtitle} />
+                      <TeamCard team={team} record={record} results={results} best={best} players={players} subtitle={subtitle} squad={showSquad ? squad : null} totals={totals} />
                     </div>
                     <button
                       onClick={() => setShareOpen(true)}
@@ -172,7 +238,7 @@ export default function TeamSteckbrief({
                     filename={`hero-league-team-${team.name.replace(/\s+/g, '-').toLowerCase()}.png`}
                     shareText={`${team.name} – unser Hero League Steckbrief ⚽ hero-league.de`}
                   >
-                    <TeamCard team={team} record={record} results={results} best={best} players={players} subtitle={subtitle} inFrame />
+                    <TeamCard team={team} record={record} results={results} best={best} players={players} subtitle={subtitle} squad={showSquad ? squad : null} totals={totals} inFrame />
                   </ShareSheet>
                 </motion.div>
               )}
@@ -193,6 +259,8 @@ function TeamCard({
   best,
   players,
   subtitle,
+  squad = null,
+  totals = null,
   inFrame = false,
 }: {
   team: Team;
@@ -201,6 +269,8 @@ function TeamCard({
   best: { scorer: unknown; assist: unknown; player: unknown; keeper: unknown } | null;
   players: PlayerStat[];
   subtitle?: string;
+  squad?: SquadMember[] | null; // gesetzt ⇒ Liga-Variante mit ganzem Kader
+  totals?: TeamTotals | null;
   inFrame?: boolean;
 }) {
   const accent = team.logoColor || '#22DFC9';
@@ -259,6 +329,12 @@ function TeamCard({
             </div>
           )}
         </div>
+        {totals?.rating != null && (
+          <div style={{ textAlign: 'center', flexShrink: 0 }}>
+            <div style={{ fontFamily: display, fontWeight: 900, fontSize: 38, lineHeight: 0.9, color: ink }}>{totals.rating}</div>
+            <div style={{ fontFamily: display, fontWeight: 900, fontSize: 8.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,.6)', marginTop: 3 }}>Teamwert</div>
+          </div>
+        )}
       </div>
 
       {/* Platzierung */}
@@ -290,15 +366,104 @@ function TeamCard({
           ))}
         </div>
       )}
-      {record && (
+      {record && !squad && (
         <div style={{ marginTop: 7, fontSize: 12, color: 'rgba(255,255,255,.6)', textAlign: 'center' }}>
           <b style={{ color: '#5CFFAE' }}>{record.won}S</b> · <b style={{ color: '#F0CE77' }}>{record.drawn}U</b> ·{' '}
           <b style={{ color: '#FF8A7A' }}>{record.lost}N</b>
         </div>
       )}
+      {record && squad && (
+        <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,.6)', whiteSpace: 'nowrap' }}>
+            <b style={{ color: '#5CFFAE' }}>{record.won}S</b> · <b style={{ color: '#F0CE77' }}>{record.drawn}U</b> · <b style={{ color: '#FF8A7A' }}>{record.lost}N</b>
+          </span>
+          {results.length > 0 && (
+            <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 3 }}>
+              <span style={{ fontSize: 8.5, letterSpacing: '0.14em', color: 'rgba(255,255,255,.5)', marginRight: 3 }}>FORM</span>
+              {results.slice(-5).map((r, i) => {
+                const col = r.gf > r.ga ? '#5CFFAE' : r.gf === r.ga ? '#F0CE77' : '#FF8A7A';
+                return (
+                  <span key={i} style={{ width: 17, height: 17, borderRadius: 5, background: `${col}2b`, color: col, fontSize: 9, fontWeight: 900, display: 'grid', placeItems: 'center' }}>
+                    {r.gf > r.ga ? 'S' : r.gf === r.ga ? 'U' : 'N'}
+                  </span>
+                );
+              })}
+            </span>
+          )}
+        </div>
+      )}
+      {/* Team-Werte aus dem Tracking */}
+      {squad && totals && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, marginTop: 8 }}>
+          {[
+            { v: totals.passQuote == null ? '–' : `${totals.passQuote}%`, l: 'PÄSSE' },
+            { v: totals.duelQuote == null ? '–' : `${totals.duelQuote}%`, l: 'ZWEIKÄMPFE' },
+            { v: String(totals.shots), l: 'SCHÜSSE' },
+            { v: String(results.filter((r) => r.ga === 0).length), l: 'ZU NULL' },
+          ].map((s) => (
+            <div key={s.l} style={{ textAlign: 'center', border: '1px solid rgba(255,255,255,.1)', borderRadius: 10, padding: '6px 0 5px' }}>
+              <div style={{ fontFamily: display, fontWeight: 900, fontSize: 17, lineHeight: 1, color: ink }}>{s.v}</div>
+              <div style={{ fontSize: 7.5, letterSpacing: '0.1em', color: 'rgba(255,255,255,.55)', marginTop: 3 }}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Der ganze Kader */}
+      {squad && squad.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', marginBottom: 7 }}>
+            <span style={{ fontFamily: display, fontWeight: 900, fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,.6)' }}>Der Kader</span>
+            <span style={{ marginLeft: 'auto', fontSize: 10, color: 'rgba(255,255,255,.45)' }}>{squad.length} Spieler</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${squad.length > 8 ? 5 : 4}, 1fr)`, gap: 5 }}>
+            {squad.map((m) => {
+              const parts = m.name.trim().split(/\s+/);
+              const last = parts.length > 1 ? parts[parts.length - 1] : m.name;
+              const first = parts.length > 1 ? parts.slice(0, -1).join(' ') : '';
+              const size = squad.length > 8 ? 36 : 42;
+              return (
+                <div key={m.name} style={{ position: 'relative', textAlign: 'center', background: 'rgba(255,255,255,.05)', borderRadius: 10, padding: '6px 2px 5px', minWidth: 0 }}>
+                  <div style={{ position: 'relative', width: size, height: size, margin: '0 auto' }}>
+                    <div
+                      style={{
+                        width: size, height: size, borderRadius: 12, overflow: 'hidden',
+                        border: `1.5px solid ${m.tierAccent ?? `${accent}80`}`, background: `${accent}26`,
+                        display: 'grid', placeItems: 'center', fontFamily: display, fontWeight: 900, fontSize: size * 0.36, color: ink,
+                      }}
+                    >
+                      {m.imageUrl ? <img src={m.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} /> : monogram(m.name)}
+                    </div>
+                    {m.ges !== null && (
+                      <span
+                        style={{
+                          position: 'absolute', left: -4, bottom: -4, minWidth: 19, height: 15, padding: '0 3px', borderRadius: 6,
+                          background: '#05090b', border: `1px solid ${m.tierAccent}`, color: m.tierAccent ?? '#fff',
+                          fontFamily: display, fontWeight: 900, fontSize: 10, lineHeight: '13px', textAlign: 'center',
+                        }}
+                      >
+                        {m.ges}
+                      </span>
+                    )}
+                    {m.badge && <span style={{ position: 'absolute', right: -5, top: -5, fontSize: 11, lineHeight: 1 }}>{m.badge}</span>}
+                  </div>
+                  {first && <div style={{ marginTop: 5, fontSize: 7.5, color: 'rgba(255,255,255,.55)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.1 }}>{first}</div>}
+                  <div style={{ marginTop: first ? 0 : 5, fontFamily: display, fontWeight: 900, textTransform: 'uppercase', fontSize: 10, lineHeight: 1.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{last}</div>
+                  <div style={{ marginTop: 2, fontSize: 8, color: 'rgba(255,255,255,.6)', whiteSpace: 'nowrap' }}>
+                    {m.keeper ? 'TW' : `${m.goals}T · ${m.assists}V`}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ marginTop: 7, fontSize: 8.5, color: 'rgba(255,255,255,.45)', textAlign: 'center' }}>
+            ⚽ Top-Torschütze · ⭐ Bester Spieler · 🧤 Bester Torwart · 🅰 Top-Vorlagen
+          </div>
+        </div>
+      )}
 
       {/* Die Besten des Teams */}
-      {bestRows.length > 0 && (
+      {!squad && bestRows.length > 0 && (
         <div style={{ marginTop: 14 }}>
           <div style={{ fontFamily: display, fontWeight: 900, fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,.6)', marginBottom: 6 }}>
             Unsere Besten
@@ -326,7 +491,7 @@ function TeamCard({
       )}
 
       {/* Ergebnisse */}
-      {results.length > 0 && (
+      {!squad && results.length > 0 && (
         <div style={{ marginTop: 14 }}>
           <div style={{ fontFamily: display, fontWeight: 900, fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,.6)', marginBottom: 6 }}>
             Ergebnisse

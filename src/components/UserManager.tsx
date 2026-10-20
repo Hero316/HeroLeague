@@ -453,29 +453,37 @@ function RightsEditor({
               Alle abwählen
             </button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-            {ALL_ADMIN_PERMISSIONS.map((a) => {
-              const on = picked.includes(a.id);
-              return (
-                <label
-                  key={a.id}
-                  className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${
-                    on ? 'border-[rgba(233,196,106,.45)] bg-[rgba(233,196,106,.07)]' : 'border-white/[.07] bg-white/[.015] hover:border-white/20'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={on}
-                    onChange={() => toggle(a.id)}
-                    className="mt-0.5 w-4 h-4 accent-[#E9C46A] shrink-0 cursor-pointer"
-                  />
-                  <span className="min-w-0">
-                    <span className="block text-[13px] font-semibold text-white">{a.label}</span>
-                    <span className="block text-[11px] text-hl-mute leading-snug">{a.hint}</span>
-                  </span>
-                </label>
-              );
-            })}
+          {/* Gruppiert wie die Rubriken in der Backend-Seitenleiste */}
+          <div className="space-y-3">
+            {[...new Set(ALL_ADMIN_PERMISSIONS.map((p) => p.group))].map((group) => (
+              <div key={group}>
+                <div className="text-[10px] font-mono uppercase tracking-wider text-hl-faint mb-1.5">{group}</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {ALL_ADMIN_PERMISSIONS.filter((p) => p.group === group).map((a) => {
+                    const on = picked.includes(a.id);
+                    return (
+                      <label
+                        key={a.id}
+                        className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${
+                          on ? 'border-[rgba(233,196,106,.45)] bg-[rgba(233,196,106,.07)]' : 'border-white/[.07] bg-white/[.015] hover:border-white/20'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={() => toggle(a.id)}
+                          className="mt-0.5 w-4 h-4 accent-[#E9C46A] shrink-0 cursor-pointer"
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-[13px] font-semibold text-white">{a.label}</span>
+                          <span className="block text-[11px] text-hl-mute leading-snug">{a.hint}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
           <p className="text-[11px] text-hl-faint font-sans">
             Benutzerverwaltung und Saisons bleiben immer beim Super-Admin. Änderungen greifen nach wenigen Sekunden –

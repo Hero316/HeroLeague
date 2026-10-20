@@ -169,9 +169,11 @@ export default function App() {
   const canManageSeason = isSuperadmin; // Saison verwalten
   const canManagePom = perms.includes('awards'); // Auszeichnungen (Spieler/Torwart des Spieltages, HERO ONE intern)
   const canEditHighlights = perms.includes('highlights'); // Highlights (öffentlich, inline)
-  const canEditHomepage = perms.includes('homepage'); // Startseite (Hero/Countdown), News-Ticker, Partner & Sponsoren
+  const canEditHomepage = perms.includes('homepage'); // Startseite (Hero/Countdown), News-Ticker
+  const canManagePartners = perms.includes('partners'); // Partner-Logos, Sponsoren-Klicks, Partneranfragen & /partner
+  const canManageBookings = perms.includes('bookings'); // Season-Buchungen, Rechnungen, Vorregistrierungen
   const canManageChannels = perms.includes('channels'); // Twitch/Social, OBS, Streams, Event/Testspiel
-  const canManageSignups = perms.includes('signups'); // Anmeldungen & Tippspiel
+  const canManageSignups = perms.includes('signups'); // Tippspiel
   const canManageEventTickets = perms.includes('tickets'); // Zuschauer-Tickets
   const canManageUsers = isSuperadmin; // Benutzerverwaltung
   // Sichtbares Event – rollenabhängig:
@@ -1820,7 +1822,7 @@ export default function App() {
                   <AdminDashboard
                     teamsCount={visibleTeams.length}
                     matchesCount={currentSeasonMatches.length}
-                    canSeeSponsors={canEditHomepage}
+                    canSeeSponsors={canManagePartners}
                     canManageClubs={canManageClubs}
                     canSeeResults={canManageMatches}
                   />
@@ -1877,7 +1879,7 @@ export default function App() {
                     </>
                   )}
 
-                  {(canManageClubs || canManageSeason || canEditHomepage || canManagePom || canManageChannels) && (
+                  {(canManageClubs || canManageSeason || canEditHomepage || canManagePartners || canManagePom || canManageChannels) && (
                     <AdminPanel
                       teams={visibleTeams}
                       matches={currentSeasonMatches}
@@ -1889,6 +1891,7 @@ export default function App() {
                       canManageClubs={canManageClubs}
                       canManageSeason={canManageSeason}
                       canEditHomepage={canEditHomepage}
+                      canManagePartners={canManagePartners}
                       canManagePom={canManagePom}
                       canManageChannels={canManageChannels}
                       onAddTeam={handleAddTeam}
@@ -1958,7 +1961,7 @@ export default function App() {
                     </AccordionSection>
                   )}
 
-                  {canManageSignups && (
+                  {canManageBookings && (
                     <>
                       <AccordionSection
                         id="season2-bookings"
@@ -1971,16 +1974,6 @@ export default function App() {
                         <Season2BookingAdmin teams={visibleTeams} seasons={seasons.filter((s) => s.id !== demo.seasonId)} canEditClubs={canManageClubs} onTeamsChanged={fetchData} />
                       </AccordionSection>
                       <AccordionSection
-                        id="partner-requests"
-                        category="partner" order={2}
-                        title="Partneranfragen & /partner"
-                        subtitle="„Partner werden“-Anfragen · /partner an- und ausschalten · Zahlen auf der Seite pflegen"
-                        icon={<Handshake className="w-5 h-5" />}
-                        accent="#F2C14E"
-                      >
-                        <PartnerAdmin />
-                      </AccordionSection>
-                      <AccordionSection
                         id="season-signups"
                         category="buchungen" order={2}
                         title="Vorregistrierungen"
@@ -1990,6 +1983,24 @@ export default function App() {
                       >
                         <SignupAdmin />
                       </AccordionSection>
+                    </>
+                  )}
+
+                  {canManagePartners && (
+                    <AccordionSection
+                        id="partner-requests"
+                        category="partner" order={2}
+                        title="Partneranfragen & /partner"
+                        subtitle="„Partner werden“-Anfragen · /partner an- und ausschalten · Zahlen auf der Seite pflegen"
+                        icon={<Handshake className="w-5 h-5" />}
+                        accent="#F2C14E"
+                      >
+                        <PartnerAdmin />
+                    </AccordionSection>
+                  )}
+
+                  {canManageSignups && (
+                    <>
                       <AccordionSection
                         id="tipp-users"
                         category="fans" order={2}
