@@ -697,6 +697,39 @@ export function TicketDetail({
               </div>
             )}
 
+            {/* Status selbst setzen: zuständige Person bzw. Ersteller (ohne Super-Admin-Rechte) */}
+            {!canManage && (ticket.assignedTo === currentUserId || ticket.createdBy === currentUserId) && (
+              <div className="mt-5 hl-surf-soft border border-white/5 rounded-2xl p-4">
+                <div className="text-[11px] font-mono text-hl-dim uppercase tracking-wider mb-2">
+                  {ticket.assignedTo === currentUserId ? 'Dein Ticket – Status setzen' : 'Status setzen'}
+                </div>
+                {ticket.status === 'abgelehnt' ? (
+                  <p className="text-[13px] text-hl-mute">Dieses Ticket wurde abgelehnt. Wieder öffnen kann es ein Super-Admin.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {(['offen', 'in_bearbeitung', 'erledigt'] as const).map((s) => {
+                      const on = ticket.status === s;
+                      const text = s === 'offen' ? (ticket.status === 'erledigt' ? 'Wieder öffnen' : 'Offen') : s === 'in_bearbeitung' ? 'Ich bin dran' : 'Erledigt ✓';
+                      return (
+                        <button
+                          key={s}
+                          type="button"
+                          disabled={busy || on}
+                          onClick={() => patch({ status: s })}
+                          className={`rounded-xl px-3 py-2.5 text-[13px] font-bold border transition-colors cursor-pointer disabled:cursor-default ${
+                            on ? `${STATUS_STYLE[s]}` : 'border-white/10 bg-white/[.03] text-hl-soft hover:text-white hover:border-white/25'
+                          }`}
+                        >
+                          {on ? `● ${STATUS_LABEL[s]}` : text}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <p className="mt-2 text-[11px] text-hl-faint">Wer das Ticket erstellt hat und die Super-Admins bekommen eine Benachrichtigung.</p>
+              </div>
+            )}
+
             {/* Links */}
             <div className="mt-6">
               <h4 className="text-xs font-mono uppercase tracking-wider text-hl-dim mb-2">Links</h4>
@@ -998,7 +1031,7 @@ export default function TicketSystem({ currentUserId, canManage, persist = false
   }, [openId, persist]);
   // Handy-Zurück-Geste schließt das offene Ticket, statt die App zu verlassen.
   useBackClose(openId !== null, () => setOpenId(null));
-  const [filter, setFilter] = useState<'offen' | 'abgeschlossen' | 'alle'>('offen');
+  const [filter, setFilter] = useState<'meine' | 'offen' | 'abgeschlossen' | 'alle'>('offen');
   const members = useMemo(() => memberMap(team), [team]);
 
   const load = useCallback(async () => {
@@ -1018,6 +1051,7 @@ export default function TicketSystem({ currentUserId, canManage, persist = false
   }, [load]);
 
   const visible = tickets.filter((t) => {
+    if (filter === 'meine') return t.assignedTo === currentUserId && (t.status === 'offen' || t.status === 'in_bearbeitung');
     if (filter === 'offen') return t.status === 'offen' || t.status === 'in_bearbeitung';
     if (filter === 'abgeschlossen') return t.status === 'erledigt' || t.status === 'abgelehnt';
     return true;
@@ -1041,6 +1075,7 @@ export default function TicketSystem({ currentUserId, canManage, persist = false
           value={filter}
           onChange={(v) => setFilter(v)}
           options={[
+            { value: 'meine' as const, label: 'Meine' },
             { value: 'offen' as const, label: 'Offen' },
             { value: 'abgeschlossen' as const, label: 'Erledigt' },
             { value: 'alle' as const, label: 'Alle' },
