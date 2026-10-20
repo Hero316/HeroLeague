@@ -855,10 +855,24 @@ export async function ticket(req: VercelRequest, res: VercelResponse) {
       return res.json(rows[0]);
     }
 
-    // Verwalten/Löschen (Status, Zuweisung, Priorität, Löschen): nur Super-Admins.
+    // Verwalten/Löschen (Zuweisung, Priorität, Ablehnen, Löschen): nur Super-Admins.
+    // Den STATUS (offen → in Bearbeitung → erledigt) darf außerdem die zuständige
+    // Person bzw. der Ersteller selbst setzen – auch ohne jedes Backend-Recht.
     const mayManage = session.role === 'superadmin';
     if (!mayManage) {
-      return res.status(403).json({ error: 'Keine Berechtigung, Tickets zu bearbeiten.' });
+      const onlyStatus =
+        b.op === undefined && b.status !== undefined && b.priority === undefined && b.assignedTo === undefined && b.category === undefined;
+      if (!onlyStatus) return res.status(403).json({ error: 'Priorität, Zuständigkeit und Löschen darf nur ein Super-Admin ändern.' });
+      const own = (await sql`SELECT assigned_to AS "assignedTo", created_by AS "createdBy" FROM tickets WHERE id = ${id}`)[0] as
+        | { assignedTo: string | null; createdBy: string }
+        | undefined;
+      if (!own) return res.status(404).json({ error: 'Ticket nicht gefunden.' });
+      if (own.assignedTo !== session.userId && own.createdBy !== session.userId) {
+        return res.status(403).json({ error: 'Den Status kann nur die zuständige Person (oder wer das Ticket erstellt hat) ändern.' });
+      }
+      if (!['offen', 'in_bearbeitung', 'erledigt'].includes(String(b.status))) {
+        return res.status(403).json({ error: 'Ablehnen darf nur ein Super-Admin.' });
+      }
     }
 
     const existing = await sql`
@@ -920,6 +934,20 @@ export async function ticket(req: VercelRequest, res: VercelResponse) {
     `;
     if (assignmentChanged && assignedTo) {
       await notify(assignedTo, session.userId, 'ticket_assigned', 'ticket', id, `Dir wurde ein Ticket zugewiesen: „${cur.title}“`);
+    }
+    // Status geändert → Ersteller, zuständige Person und Super-Admins Bescheid geben
+    // (nie sich selbst), damit klar ist, dass sich etwas bewegt hat.
+    if (b.status !== undefined && b.status !== prevTicketStatus) {
+      const label: Record<string, string> = { offen: 'wieder geöffnet', in_bearbeitung: 'in Bearbeitung', erledigt: 'erledigt ✅', abgelehnt: 'abgelehnt' };
+      const who = sessionName(session);
+      const createdBy = (rows[0] as { createdBy?: string }).createdBy;
+      const recipients = new Set<string>([createdBy ?? '', assignedTo ?? '']);
+      for (const u of members.values()) if (u.role === 'superadmin') recipients.add(u.id);
+      recipients.delete(session.userId);
+      recipients.delete('');
+      for (const r of recipients) {
+        await notify(r, session.userId, 'ticket_status', 'ticket', id, `${who}: „${cur.title}“ ist ${label[b.status] ?? b.status}`);
+      }
     }
     // Hero-Punkte: frisch gelöstes Ticket belohnt die zuständige Person (sonst
     // den Ersteller). Nur beim Wechsel nach „erledigt".
