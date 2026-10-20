@@ -17,7 +17,7 @@ import {
   type StatLeader,
 } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
-import { Swords, Hand, IdCard, BarChart3, Send, Zap, Target, Shield, Goal, Crown, Handshake, Info } from 'lucide-react';
+import { Swords, Hand, IdCard, Users, BarChart3, Send, Zap, Target, Shield, Goal, Crown, Handshake, Info } from 'lucide-react';
 import StatTable, { pctFmt, sortStatRows, type StatTableCol, type StatTableRow } from './StatTable';
 import StatAccordion from './StatAccordion';
 import TrackingProgressBanner from './TrackingProgressBanner';
@@ -29,6 +29,8 @@ import { CountUp, Reveal, useSettledList } from './anim';
 import CompareOverlay from './CompareOverlay';
 import KeeperStats from './KeeperStats';
 import PlayerSteckbrief from './PlayerSteckbrief';
+import TeamSteckbrief, { type TeamRecord, type TeamResult } from './TeamSteckbrief';
+import { calculateStandings } from '../lib/standings';
 
 interface StatistikenProps {
   players: PlayerStat[];
@@ -200,6 +202,33 @@ export default function Statistiken({
   const [keeperOpen, setKeeperOpen] = React.useState(false);
   const [gloveInfo, setGloveInfo] = React.useState(false);
   const [steckbriefOpen, setSteckbriefOpen] = React.useState(false);
+  const [teamBriefOpen, setTeamBriefOpen] = React.useState(false);
+  // Team-Steckbrief: immer die ganze Saison (wie der Spieler-Steckbrief).
+  const seasonStandings = React.useMemo(() => calculateStandings(teams, allMatches), [teams, allMatches]);
+  const recordFor = React.useCallback(
+    (teamId: string): TeamRecord | null => {
+      const i = seasonStandings.findIndex((st) => st.teamId === teamId);
+      if (i < 0) return null;
+      const st = seasonStandings[i];
+      return { rank: i + 1, totalTeams: seasonStandings.length, played: st.played, won: st.won, drawn: st.drawn, lost: st.lost, goalsFor: st.goalsFor, goalsAgainst: st.goalsAgainst, points: st.points };
+    },
+    [seasonStandings]
+  );
+  const resultsFor = React.useCallback(
+    (teamId: string): TeamResult[] =>
+      allMatches
+        .filter((m) => m.status === 'beendet' && m.homeScore !== null && m.awayScore !== null && (m.homeTeamId === teamId || m.awayTeamId === teamId))
+        .sort((a, b) => a.matchday - b.matchday || (a.date || '').localeCompare(b.date || '') || (a.time || '').localeCompare(b.time || ''))
+        .map((m) => {
+          const home = m.homeTeamId === teamId;
+          return {
+            opponent: teams.find((t) => t.id === (home ? m.awayTeamId : m.homeTeamId))?.name ?? '',
+            gf: (home ? m.homeScore : m.awayScore) ?? 0,
+            ga: (home ? m.awayScore : m.homeScore) ?? 0,
+          };
+        }),
+    [allMatches, teams]
+  );
   // Spieltag-Filter: „Gesamt" (null) oder ein einzelner Spieltag. Alle Werte
   // der Seite (Kacheln, Team-Karten, Torschützen, Bestenlisten, Torhüter)
   // rechnen dann nur mit diesem Spieltag. Steckbrief & 1 gegen 1 bleiben
@@ -651,7 +680,7 @@ export default function Statistiken({
 
       {/* Aktionen: Steckbrief · 1 gegen 1 · Torhüter – gleich große Karten */}
       {(players.length > 0 || gloveRows.length > 0) && (
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
           {players.length > 0 && (
             <button
               onClick={() => setSteckbriefOpen(true)}
@@ -664,6 +693,21 @@ export default function Statistiken({
               <span className="min-w-0">
                 <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">Mein Steckbrief</span>
                 <span className="block text-[11px] sm:text-xs lg:text-[13px] font-sans font-semibold text-hl-mute mt-0.5 truncate">Deine Werte & Platzierungen · zum Teilen</span>
+              </span>
+            </button>
+          )}
+          {teams.length > 0 && (
+            <button
+              onClick={() => setTeamBriefOpen(true)}
+              className="group relative overflow-hidden flex items-center gap-3 rounded-2xl px-5 py-3.5 text-left cursor-pointer transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] border border-[#5B7FFF]/35"
+              style={{ background: 'linear-gradient(100deg, rgba(47,91,255,.20), rgba(34,223,201,.10))' }}
+            >
+              <span className="w-10 h-10 rounded-xl grid place-items-center bg-[#5B7FFF]/20 text-[#8FA8FF] shrink-0">
+                <Users className="w-5 h-5 transition-transform duration-300 group-hover:scale-110" />
+              </span>
+              <span className="min-w-0">
+                <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">Team-Steckbrief</span>
+                <span className="block text-[11px] sm:text-xs lg:text-[13px] font-sans font-semibold text-hl-mute mt-0.5 truncate">Ganzer Kader, Bilanz & Teamwerte · zum Teilen</span>
               </span>
             </button>
           )}
@@ -729,6 +773,18 @@ export default function Statistiken({
         matches={allMatches}
         scoringConfig={scoringConfig}
         seasonLabel={seasonLabel}
+      />
+      <TeamSteckbrief
+        open={teamBriefOpen}
+        onClose={() => setTeamBriefOpen(false)}
+        teams={teams}
+        players={players}
+        trackingRows={allRows}
+        recordFor={recordFor}
+        resultsFor={resultsFor}
+        scoringConfig={scoringConfig}
+        subtitle={seasonLabel || undefined}
+        showSquad
       />
       <KeeperStats
         open={keeperOpen}
