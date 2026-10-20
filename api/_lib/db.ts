@@ -1,5 +1,6 @@
 import { neon } from '@neondatabase/serverless';
-import type { AppUser, AdminPermission, UserRole, UserStatus, Match, Player, Season, Team } from '../../src/types';
+import { normalizePermissions } from './perms.js';
+import type { AppUser, UserRole, UserStatus, Match, Player, Season, Team } from '../../src/types';
 
 export const sql = neon(process.env.DATABASE_URL!);
 
@@ -114,7 +115,7 @@ function userFromJson(j: Record<string, unknown>): AppUser {
     email: typeof j.email === 'string' ? j.email : '',
     name: typeof j.name === 'string' ? j.name : '',
     role,
-    permissions: Array.isArray(j.permissions) ? (j.permissions as AdminPermission[]) : [],
+    permissions: normalizePermissions(j.permissions),
     avatarUrl: typeof j.avatar_url === 'string' ? j.avatar_url : '',
     status: typeof j.status === 'string' ? (j.status as UserStatus) : 'online',
     isActive: j.is_active !== false,

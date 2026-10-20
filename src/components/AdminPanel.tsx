@@ -291,7 +291,8 @@ interface AdminPanelProps {
   // Granulare Sichtbarkeit einzelner Sektionen (Spiel-Admin sieht nur einen Teil).
   canManageClubs: boolean; // Klubs/Kader
   canManageSeason: boolean; // Saison verwalten
-  canEditHomepage: boolean; // Startseite (Hero/Countdown), News-Ticker, Partner
+  canEditHomepage: boolean; // Startseite (Hero/Countdown), News-Ticker
+  canManagePartners: boolean; // Partner-Logos & Sponsoren-Klicks
   canManagePom: boolean; // Spieler des Monats
   canManageChannels: boolean; // Twitch/Social, Event/Testspiel
   onAddTeam: (team: Omit<Team, 'id'>) => Promise<boolean>;
@@ -361,6 +362,7 @@ export default function AdminPanel({
   canManageClubs,
   canManageSeason,
   canEditHomepage,
+  canManagePartners,
   canManagePom,
   canManageChannels,
   onAddTeam,
@@ -829,14 +831,14 @@ export default function AdminPanel({
     }
   };
 
-  // Sponsoren-Klick-Statistik – gehört zum Bereich „Startseite" (Partner).
+  // Sponsoren-Klick-Statistik – gehört zum Bereich „Partner".
   const [sponsorClicks, setSponsorClicks] = useState<SponsorClicksMap>({});
   const loadSponsorClicks = React.useCallback(() => {
-    if (!canEditHomepage) return;
+    if (!canManagePartners) return;
     fetchSponsorClicks()
       .then((data) => setSponsorClicks(data && typeof data === 'object' ? data : {}))
       .catch(() => { /* noch keine Klicks / kein Zugriff */ });
-  }, [canEditHomepage]);
+  }, [canManagePartners]);
   useEffect(() => { loadSponsorClicks(); }, [loadSponsorClicks]);
 
   // Klick-Zeilen für die Übersicht: bekannte Partner (auch mit 0 Klicks) +
@@ -872,7 +874,7 @@ export default function AdminPanel({
   // Partner werden für die Partner-Sektion (Super-Admin) UND für die
   // Sponsor-Auswahl beim „Spieler des Spieltages" (auch Spiel-Admins) gebraucht.
   useEffect(() => {
-    if (!canEditHomepage && !canManagePom) return;
+    if (!canManagePartners && !canManagePom) return;
     apiFetch<{ items: Partner[] }>('/api/twitch?resource=partners')
       .then((data) => {
         const items = (Array.isArray(data.items) ? data.items : []).map((p) => ({
@@ -885,7 +887,7 @@ export default function AdminPanel({
       .catch(() => {
         /* noch nicht konfiguriert */
       });
-  }, [canEditHomepage, canManagePom]);
+  }, [canManagePartners, canManagePom]);
 
   const addPartner = () => {
     setPartners((prev) => [
@@ -3167,8 +3169,8 @@ export default function AdminPanel({
         </div>
       </AccordionSection>
 
-      {/* Partner / Sponsoren-Logos – nur Super-Admin */}
-      {canEditHomepage && (
+      {/* Partner / Sponsoren-Logos – Recht „Partner" */}
+      {canManagePartners && (
         <AccordionSection
           id="partners"
           category="partner" order={1}
@@ -3357,8 +3359,8 @@ export default function AdminPanel({
         </AccordionSection>
       )}
 
-      {/* Sponsoren-Klicks – Auswertung (Super-Admin + Spiel-Admin) */}
-      {canEditHomepage && (
+      {/* Sponsoren-Klicks – Auswertung (Recht „Partner") */}
+      {canManagePartners && (
         <AccordionSection
           id="sponsor-clicks"
           category="partner" order={3}

@@ -88,7 +88,7 @@ async function saveRequests(list: PartnerRequest[]) {
 }
 async function isAdmin(req: VercelRequest): Promise<boolean> {
   const s = await getSession(req).catch(() => null);
-  return Boolean(s && hasPermission(s, 'signups'));
+  return Boolean(s && hasPermission(s, 'partners'));
 }
 
 // --- öffentlich ----------------------------------------------------------------
@@ -270,7 +270,7 @@ export async function partnerProgram(req: VercelRequest, res: VercelResponse, ac
   if (action.startsWith('admin-partner')) {
     const s = await getSession(req).catch(() => null);
     if (!s) return void res.status(401).json({ error: 'Nicht angemeldet' }), true;
-    if (!hasPermission(s, 'signups')) return void res.status(403).json({ error: 'Keine Berechtigung.' }), true;
+    if (!hasPermission(s, 'partners')) return void res.status(403).json({ error: 'Keine Berechtigung.' }), true;
     if (req.method === 'GET' && action === 'admin-partner') return void (await adminList(req, res)), true;
     if (req.method === 'POST' && action === 'admin-partner-config') return void (await adminConfig(req, res)), true;
     if (req.method === 'POST' && action === 'admin-partner-status') return void (await adminStatus(req, res)), true;

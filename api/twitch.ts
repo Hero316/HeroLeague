@@ -182,7 +182,7 @@ function safeImageUrl(input: unknown): string {
 }
 
 // Partner-Logos speichern. NUR Super-Admin (nicht der Spiel-Admin).
-const savePartners = requirePermission('homepage')(async (req: VercelRequest, res: VercelResponse) => {
+const savePartners = requirePermission('partners')(async (req: VercelRequest, res: VercelResponse) => {
   const rawItems = Array.isArray(req.body?.items) ? req.body.items : [];
   const items: Partner[] = rawItems
     .map((p: unknown, i: number) => {
@@ -971,10 +971,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'tipp-users') return adminListTippUsers(req, res);
       if (resource === 'tipp-bonus') return getBonus(req, res);
       if (resource === 'sponsor-clicks') {
-        // Auswertung nur für Super-Admin und Spiel-Admin (interne Analytics).
+        // Auswertung nur mit Recht „Partner“ (interne Analytics).
         const session = await getSession(req);
         if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
-        if (!hasPermission(session, 'homepage')) {
+        if (!hasPermission(session, 'partners')) {
           return res.status(403).json({ error: 'Keine Berechtigung für diese Auswertung.' });
         }
         const rows = await sql`SELECT value FROM settings WHERE key = 'sponsor-clicks'`;

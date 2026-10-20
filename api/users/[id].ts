@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getSession, requireSuperadmin, normalizePermissions, forgetUser } from '../_lib/auth.js';
+import { getSession, requireSuperadmin, normalizePermissions, cleanPermissions, storePermissions, forgetUser } from '../_lib/auth.js';
 import { sql } from '../_lib/db.js';
 import { badRequest } from '../_lib/validate.js';
 import { ensureSchema } from '../_lib/ensure.js';
@@ -49,13 +49,13 @@ const updateUser = requireSuperadmin(async (req: VercelRequest, res: VercelRespo
   const nextPermissions =
     nextRole === 'match_admin' || nextRole === 'team_member'
       ? permissions !== undefined
-        ? normalizePermissions(permissions)
+        ? cleanPermissions(permissions)
         : normalizePermissions(user.permissions)
       : [];
 
   await sql`
     UPDATE users SET name = ${nextName}, role = ${nextRole},
-      permissions = ${JSON.stringify(nextPermissions)}::jsonb, is_active = ${nextActive}
+      permissions = ${JSON.stringify(storePermissions(nextPermissions))}::jsonb, is_active = ${nextActive}
     WHERE id = ${id}
   `;
   forgetUser(id);
