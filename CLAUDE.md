@@ -107,3 +107,9 @@ Erstes Setup / Env-Variablen holen: `npx vercel link` → `npx vercel env pull .
 3. Auf **`staging`** committen und pushen (nicht `main`).
 4. Staging-Preview-URL öffnen und die konkrete Änderung dort real durchklicken.
 5. Erst wenn das passt: über einen Pull Request `staging → main` mergen (macht ein Mensch) — damit geht es live.
+
+### Live-Gang (so arbeitet der Nutzer)
+
+- Der Nutzer möchte, dass **du selbst live schaltest**: PR `staging → main` erstellen und mergen, danach `staging` per Fast-Forward auf `main` nachziehen.
+- **Vercel deployt nach jedem Merge auf `main` automatisch in Production.** Den Nutzer NICHT bitten, manuell „Create Deployment“ zu klicken.
+- Stattdessen selbst prüfen, ob es live ist: `gh api "repos/Hero316/HeroLeague/deployments?sha=<merge-sha>&environment=Production"` → Status der Deployment-ID abfragen (`…/deployments/<id>/statuses`, `state: success`). Erst wenn das `success` ist, „ist live“ melden. Nur wenn dort nach einigen Minuten nichts kommt oder `failure` steht, den Nutzer informieren.
