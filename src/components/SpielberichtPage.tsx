@@ -90,6 +90,34 @@ export default function SpielberichtPage({ match, teams, rows, cfg, onBack, onSe
       avgNote: es.length ? es.reduce((s, e) => s + e.note, 0) / es.length : null,
     };
   };
+  // Torschützen + Vorlagen je Team: getrackt (Tore, Eigentore zählen für den
+  // Gegner) – sonst die beim Ergebnis eingetragenen Namen (ohne „Unbekannt").
+  const goalsFor = (teamId: string) => {
+    const tracked = entries.some((e) => e.teamId === teamId);
+    if (tracked) {
+      const own = entries.filter((e) => e.teamId === teamId && e.counts.goal > 0).map((e) => ({ name: e.playerName, n: e.counts.goal, og: false }));
+      const og = entries.filter((e) => e.teamId !== teamId && e.counts.own_goal > 0).map((e) => ({ name: e.playerName, n: e.counts.own_goal, og: true }));
+      const assists = entries.filter((e) => e.teamId === teamId && e.counts.assist > 0).map((e) => ({ name: e.playerName, n: e.counts.assist }));
+      return { goals: [...own.sort((a, b) => b.n - a.n), ...og], assists: assists.sort((a, b) => b.n - a.n) };
+    }
+    const counts = new Map<string, number>();
+    const assists = new Map<string, number>();
+    for (const sc of match.scorers ?? []) {
+      if (sc.teamId !== teamId) continue;
+      const n = sc.playerName?.trim();
+      if (n && n !== 'Unbekannt') counts.set(n, (counts.get(n) ?? 0) + 1);
+      const a = sc.assistName?.trim();
+      if (a && a !== 'Unbekannt') assists.set(a, (assists.get(a) ?? 0) + 1);
+    }
+    return {
+      goals: [...counts].map(([name, n]) => ({ name, n, og: name === 'Eigentor' })),
+      assists: [...assists].map(([name, n]) => ({ name, n })),
+    };
+  };
+  const homeGoals = goalsFor(match.homeTeamId);
+  const awayGoals = goalsFor(match.awayTeamId);
+  const hasScorers = homeGoals.goals.length + awayGoals.goals.length > 0;
+
   const homeAgg = useMemo(() => aggFor(match.homeTeamId), [entries, match.homeTeamId]); // eslint-disable-line react-hooks/exhaustive-deps
   const awayAgg = useMemo(() => aggFor(match.awayTeamId), [entries, match.awayTeamId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -129,6 +157,30 @@ export default function SpielberichtPage({ match, teams, rows, cfg, onBack, onSe
           </div>
           <TeamHead team={away} onSelect={onSelectTeam} />
         </div>
+        {hasScorers && (
+          <div className={`grid grid-cols-2 gap-4 sm:gap-10 text-[13px] sm:text-sm ${hasData ? '-mt-2 pb-5 lg:pb-7 mb-5 lg:mb-7 border-b border-white/[.07]' : 'mt-5 pt-4 border-t border-white/[.07]'}`}>
+            {[homeGoals, awayGoals].map((g, side) => (
+              <div key={side} className={`min-w-0 space-y-1 ${side === 0 ? 'text-right' : 'text-left'}`}>
+                {g.goals.map((x) => (
+                  <div key={`${x.name}-${x.og}`} className={`flex items-center gap-1.5 min-w-0 ${side === 0 ? 'justify-end' : ''}`}>
+                    {side === 1 && <span className="shrink-0 text-[11px]">⚽</span>}
+                    <span className="truncate font-semibold text-white">
+                      {x.name}
+                      {x.og && x.name !== 'Eigentor' && <span className="font-normal text-hl-dim"> (ET)</span>}
+                    </span>
+                    {x.n > 1 && <span className="shrink-0 font-display font-black text-brand-accent-light">{x.n}×</span>}
+                    {side === 0 && <span className="shrink-0 text-[11px]">⚽</span>}
+                  </div>
+                ))}
+                {g.assists.length > 0 && (
+                  <div className="pt-1 text-[11.5px] text-hl-dim truncate">
+                    Vorlagen: {g.assists.map((a) => (a.n > 1 ? `${a.name} (${a.n})` : a.name)).join(', ')}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         {hasData && <TeamCompare home={home} away={away} homeAgg={homeAgg} awayAgg={awayAgg} />}
       </div>
 
@@ -160,7 +212,7 @@ export default function SpielberichtPage({ match, teams, rows, cfg, onBack, onSe
       </div>
 
       {!hasData ? (
-        <div className="hl-card p-8 text-center text-hl-mute">Für dieses Spiel sind noch keine Werte veröffentlicht.</div>
+        <div className="hl-card p-8 text-center text-hl-mute">Einzelnoten gibt es nur für getrackte Spiele – für dieses Spiel sind noch keine Werte veröffentlicht.</div>
       ) : (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           {[match.homeTeamId, match.awayTeamId].map((teamId) => (

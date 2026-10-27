@@ -1019,8 +1019,11 @@ export default function Spielplan({
               const isCompleted = match.status === 'beendet';
               const isLive = match.status === 'live';
               const isUpcoming = match.status === 'geplant' && match.homeScore === null;
-              // Ganze Karte anklickbar → Spielbericht, wenn getrackte Werte vorliegen.
-              const canOpenReport = !!(onOpenReport && reportMatchIds?.has(match.id));
+              // Ganze Karte anklickbar → Spielbericht, wenn getrackte Werte ODER
+              // eingetragene Torschützen vorliegen.
+              const tracked = !!reportMatchIds?.has(match.id);
+              const hasScorers = (isCompleted || isLive) && (match.scorers ?? []).some((s) => s.playerName && s.playerName !== 'Unbekannt');
+              const canOpenReport = !!onOpenReport && (tracked || hasScorers);
 
               return (
                 <FadeIn key={match.id} className="h-full" delay={Math.min(mIdx, 5) * 0.05}>
@@ -1097,41 +1100,18 @@ export default function Spielplan({
                     </div>
                   </div>
 
-                  {/* Torschützen bei beendeten & laufenden Spielen */}
-                  {(isCompleted || isLive) && match.scorers && match.scorers.length > 0 && (
-                    <div className="mt-3.5 pt-3 border-t border-white/[.06] text-xs font-sans">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="text-right space-y-1">
-                          {match.scorers.filter((s) => s.teamId === match.homeTeamId).map((s, idx) => (
-                            <div key={idx} className="truncate text-hl-soft">
-                              <span className="font-semibold text-hl-text">{s.playerName}</span>
-                              {s.assistName && <span className="text-[10px] text-hl-dim ml-1 italic">(Vorlage: {s.assistName})</span>}
-                              <span className="text-brand-accent-light text-[10px] ml-1.5">⚽</span>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="text-left space-y-1">
-                          {match.scorers.filter((s) => s.teamId === match.awayTeamId).map((s, idx) => (
-                            <div key={idx} className="truncate text-hl-soft">
-                              <span className="text-brand-accent-light text-[10px] mr-1.5">⚽</span>
-                              <span className="font-semibold text-hl-text">{s.playerName}</span>
-                              {s.assistName && <span className="text-[10px] text-hl-dim ml-1 italic">(Vorlage: {s.assistName})</span>}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  {/* Torschützen stehen bewusst NICHT auf der Karte (sonst bei manchen
+                      Spielen ja, bei anderen nicht) – sie kommen im Spielbericht. */}
 
-                  {/* Spielbericht: Einzelnoten (nur wenn getrackte Werte vorliegen) */}
-                  {onOpenReport && reportMatchIds?.has(match.id) && (
+                  {/* Spielbericht: Torschützen (+ Einzelnoten, wenn getrackt) */}
+                  {canOpenReport && (
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); onOpenReport(match.id); }}
                       className="mt-3.5 w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[rgba(34,223,201,.1)] hover:bg-[rgba(34,223,201,.18)] border border-[rgba(34,223,201,.3)] text-[12px] font-sans font-bold uppercase tracking-wider text-brand-accent-light transition-colors cursor-pointer"
                     >
                       <BarChart3 className="w-3.5 h-3.5" />
-                      <span>Spielbericht · Einzelnoten</span>
+                      <span>{tracked ? 'Spielbericht · Torschützen & Noten' : 'Spielbericht · Torschützen'}</span>
                     </button>
                   )}
 
