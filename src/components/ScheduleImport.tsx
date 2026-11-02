@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { ClipboardPaste, Check, AlertTriangle, Loader2 } from 'lucide-react';
+import { ClipboardPaste, Check, AlertTriangle, Loader2, Wand2 } from 'lucide-react';
 import type { Match, Team } from '../types';
 import { addMinutes, GAME_MINUTES, BREAK_MINUTES } from '../lib/matchTiming';
+import { MAX_IN_A_ROW, optimizeDay, planOf, planToText, streakIssues, type Placed } from '../lib/scheduleRest';
 
 // ===========================================================================
 // Spielplan aus Tabelle übernehmen (Backend → Spielplan verwalten)
@@ -194,8 +195,40 @@ export default function ScheduleImport({
       }
     }
     const untouched = dayMatches.filter((m) => !used.has(m.id));
-    return { rows, errors, ok, changes, untouched, shifted };
+    // Spielpausen-Regel für den NEUEN Plan prüfen (Hinweis, kein Blocker).
+    const finalPlan: Placed[] = ok
+      ? dayMatches.map((m) => {
+          const c = changes.find((x) => x.id === m.id);
+          return c ? { time: c.time, field: c.field, homeTeamId: c.homeTeamId, awayTeamId: c.awayTeamId } : planOf([m])[0];
+        })
+      : [];
+    const newIssues = ok ? streakIssues(finalPlan) : [];
+    return { rows, errors, ok, changes, untouched, shifted, newIssues };
   }, [text, teams, matches, md]);
+
+  // --- Spielpausen-Check: max. MAX_IN_A_ROW Spiele am Stück je Team ---------
+  const nameOfTeam = (id: string) => teams.find((t) => t.id === id)?.name ?? '?';
+  const restByDay = useMemo(
+    () =>
+      days.map((d) => {
+        const dm = matches.filter((m) => m.matchday === d);
+        return { day: d, issues: streakIssues(planOf(dm)), open: dm.length > 0 && dm.every((m) => m.status === 'geplant') };
+      }),
+    [days, matches]
+  );
+  const current = restByDay.find((r) => r.day === md);
+  const [optMsg, setOptMsg] = useState('');
+  const suggest = () => {
+    const dm = matches.filter((m) => m.matchday === md);
+    const plan = optimizeDay(dm);
+    if (!plan) {
+      setOptMsg('Keine Reihenfolge gefunden, bei der jedes Team höchstens zweimal am Stück spielt – mit diesen Paarungen und Zeiten geht es nicht ohne zusätzliche Anstoßzeit.');
+      return;
+    }
+    setOptMsg('');
+    setDone('');
+    setText(planToText(plan, nameOfTeam));
+  };
 
   const apply = async () => {
     if (!result.ok) return;
@@ -228,6 +261,53 @@ export default function ScheduleImport({
           </select>
         </label>
       </div>
+      {/* Spielpausen-Check */}
+      <div className={`mb-3 rounded-xl border px-3 py-2.5 ${current?.issues.length ? 'border-amber-400/35 bg-amber-400/10' : 'border-emerald-400/25 bg-emerald-400/[.07]'}`}>
+        <div className="text-[12px] font-sans font-bold text-white">
+          Spielpausen-Check · {md}. Spieltag
+          <span className="font-normal text-gray-400"> – kein Team mehr als {MAX_IN_A_ROW}× hintereinander</span>
+        </div>
+        {current && current.issues.length === 0 ? (
+          <div className="mt-1 text-[12px] text-emerald-300">✓ Passt – jedes Team hat spätestens nach {MAX_IN_A_ROW} Spielen eine Pause.</div>
+        ) : (
+          <div className="mt-1 space-y-0.5">
+            {current?.issues.map((i) => (
+              <div key={`${i.teamId}-${i.times[0]}`} className="text-[12px] text-amber-100">
+                ⚠ <b>{nameOfTeam(i.teamId)}</b> spielt {i.times.length}× am Stück ({i.times.join(', ')})
+              </div>
+            ))}
+            {current?.open ? (
+              <button
+                type="button"
+                onClick={suggest}
+                className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-amber-300 text-[#1a1203] cursor-pointer active:scale-95"
+              >
+                <Wand2 className="w-3.5 h-3.5" /> Reihenfolge automatisch reparieren
+              </button>
+            ) : (
+              <div className="mt-1 text-[11px] text-gray-400">Dieser Spieltag hat schon begonnen – bitte nur noch die offenen Spiele von Hand umstellen.</div>
+            )}
+          </div>
+        )}
+        {optMsg && <div className="mt-1.5 text-[12px] text-rose-300">{optMsg}</div>}
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {restByDay.map((r) => (
+            <button
+              key={r.day}
+              type="button"
+              onClick={() => { setDay(r.day); setOptMsg(''); }}
+              className={`px-2 py-0.5 rounded-md text-[11px] font-bold border cursor-pointer ${r.day === md ? 'border-white/40 text-white' : 'border-white/10 text-gray-400 hover:text-white'}`}
+            >
+              {r.day}. {r.issues.length ? `⚠ ${r.issues.length}` : '✓'}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-[11px] text-gray-400 leading-relaxed">
+          „Reparieren“ tauscht nur die Reihenfolge der vorhandenen Paarungen – Anstoßzeiten, Felder und Teams bleiben gleich. Der Vorschlag landet
+          unten im Feld; erst mit „Übernehmen“ wird gespeichert.
+        </p>
+      </div>
+
       <p className="text-[11px] text-gray-400 font-sans mb-3 leading-relaxed">
         Eine Zeile je Anstoß: <code className="text-brand-accent-light">19:00 | FC Apex – FC HODOD | Ninetys F.C. – Phalanx United</code> (Feld 1 | Feld 2,
         „Frei" = kein Spiel). Bestehende Spiele werden nur umgestellt (Anstoß, Feld, Heim/Gast) – nichts wird gelöscht. Nicht genannte Spiele
@@ -274,6 +354,17 @@ export default function ScheduleImport({
               </tbody>
             </table>
           </div>
+          {result.ok && result.newIssues.length > 0 && (
+            <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[12px] text-amber-100">
+              <b>Achtung, mit diesem Plan spielt noch ein Team mehr als {MAX_IN_A_ROW}× am Stück:</b>
+              {result.newIssues.map((i) => (
+                <div key={`${i.teamId}-${i.times[0]}`} className="text-[11px]">{nameOf(i.teamId)}: {i.times.join(', ')}</div>
+              ))}
+            </div>
+          )}
+          {result.ok && result.newIssues.length === 0 && (
+            <div className="text-[12px] text-emerald-300">✓ Spielpausen passen: kein Team spielt mehr als {MAX_IN_A_ROW}× am Stück.</div>
+          )}
           {result.ok && result.shifted.size > 0 && (
             <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-[12px] text-amber-100">
               <b>Weitere Spiele rücken nach hinten</b> (sonst würden sie sich mit dem neuen Block überschneiden):
