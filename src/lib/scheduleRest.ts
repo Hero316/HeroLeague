@@ -65,12 +65,26 @@ export const planOf = (dayMatches: Match[]): Placed[] =>
   dayMatches.map((m) => ({ time: m.time, field: m.field ?? 1, homeTeamId: m.homeTeamId, awayTeamId: m.awayTeamId }));
 
 // Neue Anordnung suchen. Behält Anstoßzeiten und Felder pro Zeitfenster bei und
-// verschiebt möglichst wenige Spiele. null = keine gültige Anordnung gefunden.
+// verschiebt möglichst wenige Spiele. Zusätzlich gilt:
+//  • Ein Spiel bleibt in SEINEM Block (Blöcke = durch eine Pause getrennt).
+//  • Kein Team spielt früher als sein bisher erstes Spiel an diesem Abend –
+//    so bleiben z. B. Teams, die erst ab dem 2. Block können (Süß FC,
+//    Trossingen), automatisch hinten.
+// null = keine gültige Anordnung gefunden.
 export function optimizeDay(dayMatches: Match[]): { match: Match; time: string; field: number }[] | null {
   const slots = [...new Set(dayMatches.map((m) => m.time))].sort((a, b) => mins(a) - mins(b));
   const fieldsAt = new Map(slots.map((t) => [t, dayMatches.filter((m) => m.time === t).map((m) => m.field ?? 1).sort((a, b) => a - b)]));
   const origSlot = new Map(dayMatches.map((m) => [m.id, slots.indexOf(m.time)]));
   const left = new Set(dayMatches.map((m) => m.id));
+  // Block je Zeitfenster: neuer Block, sobald zwischen zwei Anstößen mehr als ein Takt liegt.
+  const blockOf: number[] = [];
+  slots.forEach((t, i) => blockOf.push(i === 0 ? 0 : adjacent(slots[i - 1], t) ? blockOf[i - 1] : blockOf[i - 1] + 1));
+  // Frühestes bisheriges Zeitfenster je Team.
+  const earliest = new Map<string, number>();
+  for (const m of dayMatches) {
+    const si = slots.indexOf(m.time);
+    for (const t of [m.homeTeamId, m.awayTeamId]) earliest.set(t, Math.min(earliest.get(t) ?? Infinity, si));
+  }
   const byId = new Map(dayMatches.map((m) => [m.id, m]));
   // Laufende Serie je Team bis zum aktuellen Zeitfenster.
   const lastSlot = new Map<string, number>();
@@ -110,8 +124,12 @@ export function optimizeDay(dayMatches: Match[]): { match: Match; time: string; 
     const k = fieldsAt.get(slots[si])!.length;
     const prevAdj = si > 0 && adjacent(slots[si - 1], slots[si]);
     // Kandidaten: Teams, die sonst zum dritten Mal am Stück spielen würden, raus.
-    const ok = [...left].filter((id) =>
-      teamsOf(id).every((t) => !(prevAdj && lastSlot.get(t) === si - 1 && (runLen.get(t) ?? 0) >= MAX_IN_A_ROW))
+    const ok = [...left].filter(
+      (id) =>
+        blockOf[origSlot.get(id) ?? 0] === blockOf[si] &&
+        teamsOf(id).every(
+          (t) => si >= (earliest.get(t) ?? 0) && !(prevAdj && lastSlot.get(t) === si - 1 && (runLen.get(t) ?? 0) >= MAX_IN_A_ROW)
+        )
     );
     // Spiele, die ursprünglich hier lagen, zuerst probieren (= wenig Umstellung).
     ok.sort((a, b) => Math.abs((origSlot.get(a) ?? 0) - si) - Math.abs((origSlot.get(b) ?? 0) - si));

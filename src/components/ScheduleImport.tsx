@@ -222,7 +222,7 @@ export default function ScheduleImport({
     const dm = matches.filter((m) => m.matchday === md);
     const plan = optimizeDay(dm);
     if (!plan) {
-      setOptMsg('Keine Reihenfolge gefunden, bei der jedes Team höchstens zweimal am Stück spielt – mit diesen Paarungen und Zeiten geht es nicht ohne zusätzliche Anstoßzeit.');
+      setOptMsg('Keine Reihenfolge gefunden, bei der jedes Team höchstens zweimal am Stück spielt (ohne Spiele in einen anderen Block oder für ein Team nach vorne zu ziehen). Bitte von Hand lösen oder eine Anstoßzeit ergänzen.');
       return;
     }
     setOptMsg('');
@@ -303,8 +303,9 @@ export default function ScheduleImport({
           ))}
         </div>
         <p className="mt-2 text-[11px] text-gray-400 leading-relaxed">
-          „Reparieren“ tauscht nur die Reihenfolge der vorhandenen Paarungen – Anstoßzeiten, Felder und Teams bleiben gleich. Der Vorschlag landet
-          unten im Feld; erst mit „Übernehmen“ wird gespeichert.
+          „Reparieren“ tauscht nur die Reihenfolge der vorhandenen Paarungen innerhalb ihres Blocks – Anstoßzeiten, Felder und Gegner bleiben
+          gleich, und <b className="text-gray-300">kein Team spielt früher als bisher geplant</b> (Spätstarter wie Süß FC oder Trossingen bleiben
+          im 2. Block). Der Vorschlag landet unten im Feld; erst mit „Übernehmen“ wird gespeichert.
         </p>
       </div>
 
