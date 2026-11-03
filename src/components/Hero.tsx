@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActiveTab, HeroImages, Match, MatchPlayerStat, Partner, PlayerOfMonth, PlayerStat, ScoringConfig, Team } from '../types';
+import { ActiveTab, HeroImages, HeroSlideKind, Match, MatchPlayerStat, Partner, PlayerOfMonth, PlayerStat, ScoringConfig, Team } from '../types';
 import { apiFetch } from '../lib/api';
 import { MapPin } from 'lucide-react';
 import { calculateStandings } from '../lib/standings';
@@ -25,11 +25,16 @@ interface HeroProps {
   trackingRows?: MatchPlayerStat[]; // getrackte Einzelwerte der Saison (FIFA-Karten der Auszeichnungen)
   scoring?: ScoringConfig;
   seasonId?: string;
+  // Startseite: nur bestimmte Slides zeigen (z. B. die Auszeichnungen als eigenen
+  // Abschnitt, Spieltag + Tabelle als Karussell darunter).
+  only?: HeroSlideKind[];
+  fadeTop?: boolean; // weicher Übergang oben in den Abschnitt darüber (keine Kante)
+  fit?: boolean; // Höhe nach Inhalt statt Bildschirmhöhe (eigenständiger Abschnitt)
 }
 
 // Vollflächiges Hero-Carousel (Magenta-TV-Stil) mit drei Slides:
 // 1. Nächster Spieltag / Live-Spiel  2. Spieler des Monats  3. Tabellenführer
-export default function Hero({ teams, matches, players, seasonLabel, seasonNumber, heroImages, pom: pomProp, onNavigate, onSelectTeam, onOpenMatch, reportMatchIds, trackingRows, scoring, seasonId }: HeroProps) {
+export default function Hero({ teams, matches, players, seasonLabel, seasonNumber, heroImages, pom: pomProp, onNavigate, onSelectTeam, onOpenMatch, reportMatchIds, trackingRows, scoring, seasonId, only, fadeTop = false, fit = false }: HeroProps) {
   // pom kommt bevorzugt von oben (vorgeladen); nur ohne Prop selbst nachladen.
   const [pomState, setPomState] = useState<PlayerOfMonth | null>(null);
   // Läuft gerade ein Tracking? → kleiner Hinweis über den Auszeichnungen.
@@ -89,13 +94,14 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
   // – in der im Backoffice eingestellten Reihenfolge (erster Slide = beim Öffnen zuerst).
   const slides = useMemo(() => {
     const has = { match: !!featuredDay, pom: !!pom, table: hasTable };
-    const list = normalizeHeroOrder(heroImages?.order).filter((k) => has[k]);
-    if (list.length === 0) list.push('match'); // leerer Zustand
+    const list = normalizeHeroOrder(heroImages?.order).filter((k) => has[k] && (!only || only.includes(k)));
+    if (list.length === 0 && (!only || only.includes('match'))) list.push('match'); // leerer Zustand
     return list;
-  }, [featuredDay, pom, hasTable, heroImages?.order]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [featuredDay, pom, hasTable, heroImages?.order, only?.join()]);
 
   const count = slides.length;
-  const current = active % count;
+  const current = count ? active % count : 0;
 
   const arm = () => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -465,16 +471,18 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
     return renderTableSlide();
   };
 
+  if (count === 0) return null;
+
   return (
     <div
-      className="relative grid overflow-hidden min-h-[500px] sm:min-h-[640px] lg:min-h-[calc(100vh-118px)]"
+      className={`relative grid overflow-hidden ${fit ? '' : 'min-h-[500px] sm:min-h-[640px] lg:min-h-[calc(100vh-118px)]'}`}
       style={{ gridTemplateRows: 'minmax(min-content, 1fr)' }}
     >
       {/* Slides als Grid-Stack: Containerhöhe = höchster Slide, alle gleich hoch, nichts abgeschnitten */}
       {slides.map((kind, i) => (
         <div
           key={kind}
-          className="col-start-1 row-start-1 relative flex flex-col justify-center transition-opacity duration-1000"
+          className={`col-start-1 row-start-1 relative flex flex-col justify-center transition-opacity duration-1000 ${fadeTop ? 'pt-[40px] sm:pt-[96px]' : ''}`}
           style={{
             opacity: i === current ? 1 : 0,
             zIndex: i === current ? 2 : 1,
@@ -537,6 +545,9 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
 
       {/* Weicher Übergang in den Seitenhintergrund */}
       <div className="absolute left-0 right-0 bottom-0 h-[150px] z-[5] bg-[linear-gradient(to_top,#0A1415_8%,transparent)] pointer-events-none" />
+      {fadeTop && (
+        <div className="absolute left-0 right-0 top-0 h-[90px] sm:h-[160px] z-[5] bg-[linear-gradient(to_bottom,#0A1415_10%,transparent)] pointer-events-none" />
+      )}
     </div>
   );
 }
