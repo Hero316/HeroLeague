@@ -48,6 +48,8 @@ import PartnerAdmin from './components/PartnerAdmin';
 // Partner-Landingpage nur bei Bedarf laden (bringt die Livestream-Vorschau mit).
 const PartnerLanding = React.lazy(() => import('./components/partner/PartnerLanding'));
 import Season2BookingAdmin from './components/Season2BookingAdmin';
+import HomeIntro from './components/HomeIntro';
+import HomeMatchRow from './components/HomeMatchRow';
 import EventTickets from './components/EventTickets';
 import SelfCheckin from './components/SelfCheckin';
 import ManagerKader from './components/ManagerKader';
@@ -2175,22 +2177,39 @@ export default function App() {
             onSelectTeam={openTeamDetail}
             onOpenTable={() => goToTab('tabelle')}
           />
-          {countdown.active && (
-            <Countdown
-              target={countdown.target}
-              title={countdown.title}
-              kicker={countdown.kicker}
-              gold={countdown.gold}
-              ctaLabel={countdown.ctaLabel}
-              tickets={countdownTickets}
-              onCta={
-                countdown.ctaLabel
-                  ? () => navigateTo(countdown.ctaTicketKey ? `/tickets/${encodeURIComponent(countdown.ctaTicketKey)}` : '/tickets')
-                  : undefined
-              }
-            />
+          {/* 1. Startbild „Deine Kleinfeld-Liga" – der Countdown sitzt im Verlauf unten */}
+          <HomeIntro onNavigate={navigateTo} onOpenSchedule={() => goToTab('spielplan')}>
+            {countdown.active && (
+              <Countdown
+                blend
+                target={countdown.target}
+                title={countdown.title}
+                kicker={countdown.kicker}
+                gold={countdown.gold}
+                ctaLabel={countdown.ctaLabel}
+                tickets={countdownTickets}
+                onCta={
+                  countdown.ctaLabel
+                    ? () => navigateTo(countdown.ctaTicketKey ? `/tickets/${encodeURIComponent(countdown.ctaTicketKey)}` : '/tickets')
+                    : undefined
+                }
+              />
+            )}
+          </HomeIntro>
+          {/* 2. Spieler & Torwart des Spieltages als eigener Abschnitt */}
+          {pom && (
+            <Hero only={['pom']} fadeTop fit teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} trackingRows={trackingRows} scoring={scoring} seasonId={currentSeason?.id} />
           )}
-          <Hero teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} trackingRows={trackingRows} scoring={scoring} seasonId={currentSeason?.id} />
+          {/* 3. Die Spiele des laufenden / letzten Spieltags (mit Block-Filter) */}
+          <HomeMatchRow
+            teams={leagueTeams}
+            matches={currentSeasonMatches}
+            onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
+            reportMatchIds={reportMatchIds}
+            onOpenSchedule={goToMatchday}
+          />
+          {/* 4. Nächster Spieltag + Tabelle – wechseln automatisch */}
+          <Hero only={['match', 'table']} fadeTop teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} trackingRows={trackingRows} scoring={scoring} seasonId={currentSeason?.id} />
           {/* Season-2-Anmeldung sitzt bewusst zwischen Hero und Highlights,
               damit sie beim Scrollen mitten im Blickfeld liegt. */}
           <SeasonSignupBanner inline onOpen={(path) => navigateTo(path)} />

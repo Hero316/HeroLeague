@@ -10,12 +10,14 @@ interface CountdownProps {
   // Ticket-Stand der verknüpften Zuschauer-Anmeldung (optional): darunter steht
   // schlicht „52 / 75"; ausverkauft → Taste zeigt „Ausverkauft", darunter „75 / 75".
   tickets?: { capacity: number; remaining: number } | null;
+  // Sitzt im Verlauf des Startbilds: ohne eigene Kante/Linie, Farbschimmer läuft weich aus.
+  blend?: boolean;
 }
 
 // Fetter Countdown oben auf der Startseite bis zum Anstoß. Rechnet live gegen
 // den Zielzeitpunkt – egal wie oft an-/ausgeschaltet wird. Nach Ablauf bleibt
 // er (rot glühend) stehen, bis er im Backend deaktiviert wird.
-export default function Countdown({ target, title, kicker: kickerText, gold = false, ctaLabel, onCta, tickets }: CountdownProps) {
+export default function Countdown({ target, title, kicker: kickerText, gold = false, ctaLabel, onCta, tickets, blend = false }: CountdownProps) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -60,14 +62,15 @@ export default function Countdown({ target, title, kicker: kickerText, gold = fa
 
   return (
     <section
-      className={`relative overflow-hidden border-b ${
-        expired ? 'border-[rgba(255,84,66,.25)]' : gold ? 'border-hl-gold/25' : 'border-white/[.06]'
+      className={`relative overflow-hidden ${
+        blend ? '' : `border-b ${expired ? 'border-[rgba(255,84,66,.25)]' : gold ? 'border-hl-gold/25' : 'border-white/[.06]'}`
       }`}
     >
       {/* dezenter Farbschimmer + riesiges Hintergrundwort ("ganz leicht dahinter") */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
+          ...(blend ? { WebkitMaskImage: 'linear-gradient(180deg, transparent, #000 40%, #000 55%, transparent)', maskImage: 'linear-gradient(180deg, transparent, #000 40%, #000 55%, transparent)' } : {}),
           background: expired
             ? 'radial-gradient(120% 130% at 50% 0%, rgba(255,84,66,.16), transparent 60%)'
             : gold
