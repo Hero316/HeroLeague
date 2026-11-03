@@ -56,18 +56,34 @@ export default function HomeIntro({ image, onNavigate, onOpenSchedule, children 
     return () => ro.disconnect();
   }, []);
 
-  // Scroll-Effekt: Fortschritt 0…1 als CSS-Variable (nur Transform/Opacity).
+  // Scroll-Effekt NUR am Computer (Maus/Trackpad): Bild zoomt leicht, ein
+  // dunkler Schleier blendet ein, der Titel gleitet weg. Am Handy bewusst AUS –
+  // dort ruckelt ein an das Scrollen gekoppelter Effekt und bringt die
+  // weichgezeichnete Kopfleiste (iOS) zum Flackern. Nur transform/opacity,
+  // direkt an den drei Elementen gesetzt (keine CSS-Variable am ganzen Block).
+  const mediaRef = useRef<HTMLDivElement>(null);
+  const dimRef = useRef<HTMLDivElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const hero = heroRef.current;
     if (!hero) return;
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const desktop = window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
+    if (!desktop || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
     let raf = 0;
+    let last = -1;
     const onScroll = () => {
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
         const p = Math.min(1, Math.max(0, window.scrollY / Math.max(1, hero.offsetHeight * 0.8)));
-        hero.style.setProperty('--p', p.toFixed(3));
+        if (Math.abs(p - last) < 0.002) return;
+        last = p;
+        if (mediaRef.current) mediaRef.current.style.transform = `scale(${(1.04 + p * 0.12).toFixed(4)})`;
+        if (dimRef.current) dimRef.current.style.opacity = (p * 0.55).toFixed(3);
+        if (topRef.current) {
+          topRef.current.style.transform = `translate3d(0, ${(-p * 48).toFixed(1)}px, 0)`;
+          topRef.current.style.opacity = Math.max(0, 1 - p * 1.35).toFixed(3);
+        }
       });
     };
     onScroll();
@@ -79,10 +95,10 @@ export default function HomeIntro({ image, onNavigate, onOpenSchedule, children 
   }, []);
 
   return (
-    <header ref={heroRef} className="hl-intro relative overflow-hidden" style={{ ['--p' as string]: 0 }}>
+    <header ref={heroRef} className="hl-intro relative overflow-hidden">
       {/* Bild (leichter Kameraschwenk + Zoom beim Scrollen) */}
       <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
-        <div className="hl-intro-media absolute -inset-[4%]">
+        <div ref={mediaRef} className="hl-intro-media absolute -inset-[4%]">
           <img
             src={image || '/assets/season2-hero.webp'}
             alt=""
@@ -95,6 +111,8 @@ export default function HomeIntro({ image, onNavigate, onOpenSchedule, children 
           />
         </div>
       </div>
+      {/* Dunkler Schleier beim Scrollen (nur Computer, per opacity) */}
+      <div ref={dimRef} className="absolute inset-0 bg-[#0A1415] pointer-events-none" style={{ opacity: 0 }} aria-hidden="true" />
       {/* Verlauf: oben leicht dunkel, unten weich in den Seitenhintergrund (Countdown) */}
       <div
         className="absolute inset-0 pointer-events-none"
@@ -105,7 +123,7 @@ export default function HomeIntro({ image, onNavigate, onOpenSchedule, children 
         }}
       />
 
-      <div className="hl-intro-top relative z-[2] max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pt-[clamp(72px,12vw,168px)] pb-[clamp(14px,2.6vw,32px)]">
+      <div ref={topRef} className="hl-intro-top relative z-[2] max-w-[1320px] xl:max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-10 pt-[clamp(72px,12vw,168px)] pb-[clamp(14px,2.6vw,32px)]">
         <div ref={boxRef} className="w-full">
           <h1
             ref={titleRef}
