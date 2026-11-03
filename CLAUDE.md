@@ -88,6 +88,7 @@ Erstes Setup / Env-Variablen holen: `npx vercel link` → `npx vercel env pull .
 ## Konventionen (an den bestehenden Code halten)
 
 - **UI-Sprache ist Deutsch.** Neue Texte in der Oberfläche auf Deutsch.
+- **Keine Füll- und Erklärtexte in der Oberfläche.** Keine Zeilen wie „10 Spiele · zum Wischen“, keine Status-/Info-Pillen über Überschriften („Season läuft · jeder kann mitmachen“), keine beschreibenden Untertitel, die nur wiederholen, was man sieht. Nur Texte, die der Nutzer ausdrücklich will oder die echte Information tragen (Ergebnis, Datum, Zeit).
 - **Jeder schreibende API-Endpunkt muss serverseitig geschützt sein** — mit `requireAdmin(...)` aus `api/_lib/auth.ts` umschließen. Niemals einen Schreib-Endpunkt ohne diesen Schutz anlegen.
 - **Eingaben validieren** mit den Helfern aus `api/_lib/validate.ts`.
 - **API-Antworten camelCase** (in den SQL-SELECTs wird per Alias gemappt, siehe `api/_lib/db.ts`) — die Frontend-Typen bleiben unverändert.
