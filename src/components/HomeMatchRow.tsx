@@ -75,10 +75,6 @@ export default function HomeMatchRow({ teams, matches, onOpenMatch, reportMatchI
           <h2 className="mt-2 font-display font-black uppercase text-white text-[38px] sm:text-5xl lg:text-[60px] leading-[.9] [text-shadow:0_0_34px_rgba(34,223,201,.3)]">
             Die Spiele
           </h2>
-          <p className="mt-1.5 font-sans text-[12.5px] text-hl-dim">
-            {shown.length} {shown.length === 1 ? 'Spiel' : 'Spiele'}
-            {active !== 'all' ? ` in Block ${active}` : ''} · zum Wischen
-          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           {blocks.length > 1 && (
