@@ -267,6 +267,9 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
   const bgScale = useTransform(scrollYProgress, [0, 1], [1.08, 1.25]);
   const titleY = useTransform(scrollYProgress, [0, 1], ['0%', '40%']);
   const titleOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
+  // Parallax nur am Computer – am Handy ruckelt ein an das Scrollen gekoppelter
+  // Effekt und lässt weichgezeichnete Leisten (iOS) flackern.
+  const finePointer = useMemo(() => typeof window !== 'undefined' && !!window.matchMedia?.('(hover: hover) and (pointer: fine)').matches, []);
 
   const canBook = Boolean(cfg?.canBook);
   // Vorregistrierung noch offen? (im Backoffice abschaltbar) – sonst keine
@@ -426,18 +429,20 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
 
         {/* HERO */}
         <section ref={heroRef} className="relative min-h-[100svh] flex items-end overflow-hidden">
-          <motion.div className="absolute inset-0" style={{ y: bgY, scale: bgScale }}>
+          <motion.div className="absolute inset-0" style={finePointer ? { y: bgY, scale: bgScale } : { scale: 1.08 }}>
             <img src={heroBg} alt="" className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/assets/hero-stadium.png'; }} />
           </motion.div>
           <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, rgba(4,6,14,.55) 0%, rgba(4,6,14,.35) 35%, rgba(4,6,14,.85) 75%, ${S2.bg} 100%)` }} />
           <div className="absolute inset-0 opacity-[.13]" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)', backgroundSize: '64px 64px', maskImage: 'radial-gradient(70% 60% at 50% 40%, #000, transparent)' }} />
           {/* schwebende Lichtkugeln */}
-          <motion.div className="absolute -top-24 -left-24 w-[420px] h-[420px] rounded-full blur-[90px]" style={{ background: 'rgba(47,91,255,.45)' }} animate={{ x: [0, 80, 0], y: [0, 40, 0] }} transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }} />
-          <motion.div className="absolute top-1/3 -right-32 w-[380px] h-[380px] rounded-full blur-[100px]" style={{ background: 'rgba(215,255,59,.16)' }} animate={{ x: [0, -60, 0], y: [0, -50, 0] }} transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }} />
+          <motion.div className="absolute -top-24 -left-24 w-[420px] h-[420px] rounded-full blur-[90px]" style={{ background: 'rgba(47,91,255,.45)' }} animate={finePointer ? { x: [0, 80, 0], y: [0, 40, 0] } : undefined} transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }} />
+          <motion.div className="absolute top-1/3 -right-32 w-[380px] h-[380px] rounded-full blur-[100px]" style={{ background: 'rgba(215,255,59,.16)' }} animate={finePointer ? { x: [0, -60, 0], y: [0, -50, 0] } : undefined} transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }} />
           {/* Lichtstrahl */}
-          <motion.div className="absolute inset-y-0 w-1/3 -skew-x-12" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.07), transparent)' }} initial={{ left: '-40%' }} animate={{ left: ['-40%', '140%'] }} transition={{ duration: 6, repeat: Infinity, repeatDelay: 3, ease: 'easeInOut' }} />
+          {finePointer && (
+            <motion.div className="absolute inset-y-0 w-1/3 -skew-x-12" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.07), transparent)' }} initial={{ left: '-40%' }} animate={{ left: ['-40%', '140%'] }} transition={{ duration: 6, repeat: Infinity, repeatDelay: 3, ease: 'easeInOut' }} />
+          )}
 
-          <motion.div className="relative w-full max-w-6xl mx-auto px-4 pb-14 sm:pb-20 pt-32" style={{ y: titleY, opacity: titleOpacity }}>
+          <motion.div className="relative w-full max-w-6xl mx-auto px-4 pb-14 sm:pb-20 pt-32" style={finePointer ? { y: titleY, opacity: titleOpacity } : undefined}>
             {cfg.maxTeams ? (
               <motion.div initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.15, duration: 0.5 }}>
                 <SlotsBadge left={cfg.slotsLeft ?? 0} total={cfg.maxTeams} soldOut={soldOut} />

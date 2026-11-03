@@ -1247,20 +1247,16 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 
 /* ---------- Startbild „Deine Kleinfeld-Liga" (HomeIntro) ----------
-   --p = Scroll-Fortschritt 0…1 (per JS). Nur transform/opacity/filter. */
-.hl-intro-media {
-  transform: scale(calc(1.04 + var(--p, 0) * .14));
-  filter: brightness(calc(.95 - var(--p, 0) * .4));
-  will-change: transform;
+   Scroll-Effekt setzt HomeIntro direkt per JS (nur Computer). Kein filter,
+   keine Endlos-Animation am Handy – sonst flackert dort die Kopfleiste. */
+.hl-intro-media { transform: scale(1.04); }
+@media (hover: hover) and (pointer: fine) {
+  .hl-intro-media { will-change: transform; }
+  .hl-intro-media img { animation: hlIntroPan 26s ease-in-out infinite alternate; }
 }
-.hl-intro-media img { animation: hlIntroPan 26s ease-in-out infinite alternate; }
 @keyframes hlIntroPan {
-  from { transform: translate3d(-1.5%, -1%, 0) scale(1.02); }
-  to { transform: translate3d(1.5%, 1%, 0) scale(1.06); }
-}
-.hl-intro-top {
-  transform: translateY(calc(var(--p, 0) * -48px));
-  opacity: calc(1 - var(--p, 0) * 1.35);
+  from { transform: translate3d(-1.5%, -1%, 0); }
+  to { transform: translate3d(1.5%, 1%, 0); }
 }
 .hl-intro-word { animation: hlIntroRise 1s var(--ease-out, cubic-bezier(.22, 1, .36, 1)) both; }
 .hl-intro-word-2 { animation-delay: .12s; }
@@ -1268,6 +1264,5 @@ button { -webkit-tap-highlight-color: transparent; }
 .hl-intro-actions { animation: hlIntroIn .7s .4s ease both; }
 @keyframes hlIntroIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
-  .hl-intro-media, .hl-intro-top { transform: none; opacity: 1; filter: none; }
   .hl-intro-media img, .hl-intro-word, .hl-intro-actions { animation: none; }
 }
