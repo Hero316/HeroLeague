@@ -53,6 +53,14 @@ Für **zeitlich begrenzte Sonder-Aktionen** (z.B. Testspieltag) gibt es einen ei
 
 ---
 
+## Rechnungen (Buchhaltung) — nicht anfassen ohne Grund
+
+- Season-Buchungen werden per Rechnung bezahlt. Jede Rechnung/Stornorechnung liegt **einmal** im Archiv (Tabelle `invoices`: eingefrorene Daten + fertige PDF). Code: `api/_lib/invoiceArchive.ts` (Nummern, Archiv), `api/_lib/invoicePdf.ts` (PDF), `api/_lib/invoice.ts` (Vorlage/E-Mail).
+- **Rechnungen nie löschen oder nachträglich ändern.** Korrektur nur per Stornorechnung (eigene Nummer aus demselben Nummernkreis), danach ggf. neue Rechnung.
+- Nummernvergabe passiert atomar in **einer** SQL-Anweisung (Zähler `settings.season_booking.invoice.nextNo`) – nicht in mehrere Schritte aufteilen, sonst drohen doppelte Nummern oder Lücken. Testbuchungen bekommen `TEST-…` und ziehen keine echte Nummer.
+
+---
+
 ## Stack & lokale Entwicklung
 
 - **Frontend:** React + TypeScript + Vite + Tailwind CSS v4 (`src/`)

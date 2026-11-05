@@ -19,7 +19,11 @@ import {
   normEmail, sendBrandedMail, tooManyAttempts, verifyTurnstile,
 } from './publicforms.js';
 import { escapeHtml, sendMail } from './mail.js';
-import { cleanInvoice, DEFAULT_INVOICE, drawInvoiceNo, invoiceHtml, invoiceMissing, invoiceText, type InvoiceBooking, type InvoiceSettings } from './invoice.js';
+import { cleanInvoice, DEFAULT_INVOICE, invoiceHtml, invoiceMissing, invoiceText, type InvoiceBooking, type InvoiceContext, type InvoiceSettings } from './invoice.js';
+import {
+  backfillArchive, getInvoice, invoicePdfBytes, invoicesIssued, issueInvoice, issueStorno, issueTestInvoice, listInvoices,
+  markInvoiceSent, releaseTestInvoice, snapshotOf, type ArchivedInvoice,
+} from './invoiceArchive.js';
 
 const PURPOSE = 'season-booking';
 const FROM = 'Hero League – Season 2 <anmeldung@hero-league.de>';
@@ -724,6 +728,10 @@ async function adminBookings(_req: VercelRequest, res: VercelResponse) {
 async function adminBookingDelete(req: VercelRequest, res: VercelResponse) {
   const { id } = req.body ?? {};
   if (typeof id !== 'string' || !id) return badRequest(res, 'Ungültig.');
+  const cur = (await sql`SELECT invoice_no AS "invoiceNo" FROM season_bookings WHERE id = ${id}`)[0] as { invoiceNo: string } | undefined;
+  if (cur?.invoiceNo && !cur.invoiceNo.startsWith('TEST-')) {
+    return res.status(409).json({ error: `Diese Buchung hat die Rechnung ${cur.invoiceNo}. Rechnungen dürfen nicht einfach verschwinden – erst die Rechnung stornieren.` });
+  }
   await sql`DELETE FROM season_bookings WHERE id = ${id}`;
   return res.json({ ok: true });
 }
@@ -939,20 +947,34 @@ async function adminInvite(req: VercelRequest, res: VercelResponse) {
 }
 
 // Vorab-Schlüssel anlegen, falls noch keiner existiert.
+// Einstellungen speichern – der Rechnungszähler (invoice.nextNo) kann dabei NIE sinken,
+// auch wenn parallel gerade eine Rechnung erstellt wurde (sonst doppelte Nummern).
+async function saveConfig(next: BookingConfig): Promise<void> {
+  await sql`INSERT INTO settings (key, value) VALUES ('season_booking', ${JSON.stringify(next)}::jsonb)
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value || jsonb_build_object('invoice',
+      COALESCE(EXCLUDED.value->'invoice', '{}'::jsonb) || jsonb_build_object('nextNo', GREATEST(
+        COALESCE((settings.value->'invoice'->>'nextNo')::int, 1), COALESCE((EXCLUDED.value->'invoice'->>'nextNo')::int, 1))))`;
+}
+
 async function ensureAccessKey(cfg: BookingConfig, force = false): Promise<BookingConfig> {
   if (cfg.accessKey && !force) return cfg;
   const abc = 'abcdefghjkmnpqrstuvwxyz23456789';
   let key = '';
   for (let i = 0; i < 10; i++) key += abc[randomInt(0, abc.length)];
   const next = { ...cfg, accessKey: key };
-  await sql`INSERT INTO settings (key, value) VALUES ('season_booking', ${JSON.stringify(next)}::jsonb)
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`;
+  await saveConfig(next);
   return next;
 }
 
 async function adminBookingStatus(req: VercelRequest, res: VercelResponse) {
   const { id, status } = req.body ?? {};
   if (typeof id !== 'string' || !['pending', 'paid', 'cancelled'].includes(status)) return badRequest(res, 'Ungültig.');
+  if (status === 'cancelled') {
+    const cur = (await sql`SELECT invoice_no AS "invoiceNo" FROM season_bookings WHERE id = ${id}`)[0] as { invoiceNo: string } | undefined;
+    if (cur?.invoiceNo && !cur.invoiceNo.startsWith('TEST-')) {
+      return res.status(409).json({ error: `Zu dieser Buchung gibt es die Rechnung ${cur.invoiceNo} – bitte über „Rechnung stornieren" stornieren (dabei entsteht die Stornorechnung).` });
+    }
+  }
   const rows = await sql`UPDATE season_bookings SET status = ${status},
       paid_at = ${status === 'paid' ? new Date().toISOString() : null}, updated_at = now()
     WHERE id = ${id} RETURNING ref, email, team_name AS "teamName", contact_name AS "contactName", package, price_cents AS "priceCents"`;
@@ -984,7 +1006,7 @@ async function adminBookingConfig(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
     const cfg = await ensureAccessKey(await getBookingConfig());
     await earlyBirdReminders(cfg).catch(() => {});
-    return res.json(cfg);
+    return res.json({ ...cfg, invoicesIssued: await invoicesIssued() });
   }
   const c = (req.body ?? {}) as Partial<BookingConfig> & { newKey?: boolean };
   const cur = await ensureAccessKey(await getBookingConfig(), c.newKey === true);
@@ -997,6 +1019,7 @@ async function adminBookingConfig(req: VercelRequest, res: VercelResponse) {
     return Number.isFinite(n) && n >= 0 && n <= 10_000_000 ? n : fallback;
   };
   const openAt = clamp(c.openAt, 40);
+  const issued = await invoicesIssued();
   const next: BookingConfig = {
     published: c.published === true,
     open: c.open === true,
@@ -1019,7 +1042,11 @@ async function adminBookingConfig(req: VercelRequest, res: VercelResponse) {
     paymentDays: Math.min(90, Math.max(7, Math.round(Number(c.paymentDays ?? cur.paymentDays)) || 30)),
     payLink: link(c.payLink, cur.payLink),
     revolutLink: link(c.revolutLink, cur.revolutLink),
-    invoice: cleanInvoice(c.invoice, cur.invoice),
+    invoice: (() => {
+      const inv = cleanInvoice(c.invoice, cur.invoice);
+      // Sobald es Rechnungen gibt, ist die laufende Nummer fest (keine Lücken durch Hochsetzen).
+      return issued ? { ...inv, nextNo: cur.invoice.nextNo } : inv;
+    })(),
     minSquad: Math.min(30, Math.max(1, Math.round(Number(c.minSquad ?? cur.minSquad)) || cur.minSquad)),
     maxSquad: Math.min(40, Math.max(1, Math.round(Number(c.maxSquad ?? cur.maxSquad)) || cur.maxSquad)),
     maxTeams: Math.min(200, Math.max(1, Math.round(Number(c.maxTeams ?? cur.maxTeams)) || cur.maxTeams)),
@@ -1028,49 +1055,153 @@ async function adminBookingConfig(req: VercelRequest, res: VercelResponse) {
     terms: clamp(c.terms, 20000) || cur.terms,
     rules: clamp(c.rules, 30000) || cur.rules,
   };
-  await sql`INSERT INTO settings (key, value) VALUES ('season_booking', ${JSON.stringify(next)}::jsonb)
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`;
-  return res.json(next);
+  await saveConfig(next);
+  return res.json({ ...(await getBookingConfig()), invoicesIssued: issued });
 }
 
-// Rechnung: Nummer vergeben (einmalig), Vorlage zurückgeben, optional per E-Mail senden.
+// --- Rechnungen ---------------------------------------------------------------
+// Ablauf: „Rechnung erstellen" vergibt die Nummer (atomar, einmalig) und legt die
+// Rechnung mit eingefrorenen Daten + fertiger PDF im Archiv ab (invoiceArchive.ts).
+// Danach ändert sich an dieser Rechnung nichts mehr – Korrektur nur per Storno.
+function invoiceCtx(cfg: BookingConfig): InvoiceContext {
+  return {
+    seasonLabel: cfg.seasonLabel, twoLabel: twoSeasonsLabel(cfg), seasonDates: cfg.seasonDates,
+    nextSeasonDates: cfg.nextSeasonDates, paymentDays: cfg.paymentDays, inv: cfg.invoice,
+  };
+}
+type InvoiceRow = Omit<InvoiceBooking, 'invoiceNo' | 'invoiceAt'> & {
+  invoiceNo: string; invoiceAt: string | null; invoiceSentAt: string | null; status: string; consents: Record<string, unknown> | null;
+};
+const loadInvoiceRow = async (id: string) =>
+  (await sql`SELECT ref, email, team_name AS "teamName", contact_name AS "contactName", package,
+      price_cents AS "priceCents", early_bird AS "earlyBird", billing, invoice_no AS "invoiceNo", invoice_at AS "invoiceAt",
+      invoice_sent_at AS "invoiceSentAt", status, consents FROM season_bookings WHERE id = ${id}`)[0] as InvoiceRow | undefined;
+const pdfName = (inv: ArchivedInvoice) => `${inv.kind === 'storno' ? 'Stornorechnung' : 'Rechnung'}-${inv.no}.pdf`;
+
+// Rechnung erstellen (falls noch keine) und optional per E-Mail (mit PDF im Anhang) senden.
 async function adminBookingInvoice(req: VercelRequest, res: VercelResponse) {
   const { id, send } = req.body ?? {};
   if (typeof id !== 'string' || !id) return badRequest(res, 'Ungültig.');
   const cfg = await getBookingConfig();
-  const missing = invoiceMissing(cfg.invoice);
-  if (missing.length) return badRequest(res, `Erst die Rechnungsdaten in den Einstellungen ausfüllen: ${missing.join(', ')}.`);
-  const load = async () => (await sql`SELECT ref, email, team_name AS "teamName", contact_name AS "contactName", package,
-      price_cents AS "priceCents", early_bird AS "earlyBird", billing, invoice_no AS "invoiceNo", invoice_at AS "invoiceAt",
-      invoice_sent_at AS "invoiceSentAt", status FROM season_bookings WHERE id = ${id}`)[0] as (InvoiceBooking & { invoiceSentAt: string | null; status: string }) | undefined;
-  let b = await load();
+  const ctx = invoiceCtx(cfg);
+  await backfillArchive(ctx);
+  let b = await loadInvoiceRow(id);
   if (!b) return res.status(404).json({ error: 'Nicht gefunden' });
-  if (b.status === 'cancelled' && !b.invoiceNo) return badRequest(res, 'Für stornierte Buchungen wird keine Rechnung erstellt.');
   if (!b.invoiceNo) {
-    const no = await drawInvoiceNo(cfg.invoice);
-    await sql`UPDATE season_bookings SET invoice_no = ${no}, invoice_at = now(), updated_at = now() WHERE id = ${id} AND invoice_no = ''`;
-    b = (await load())!;
+    const missing = invoiceMissing(cfg.invoice);
+    if (missing.length) return badRequest(res, `Erst die Rechnungsdaten in den Einstellungen ausfüllen: ${missing.join(', ')}.`);
+    if (b.status === 'cancelled') return badRequest(res, 'Für stornierte Buchungen wird keine Rechnung erstellt.');
+    const snap = snapshotOf(b, ctx);
+    if (b.consents?.testMode) await issueTestInvoice(id, snap);
+    else await issueInvoice(id, snap);
+    b = (await loadInvoiceRow(id))!;
+    if (!b.invoiceNo) return res.status(409).json({ error: 'Die Rechnung konnte nicht erstellt werden – bitte noch einmal versuchen.' });
   }
-  const ctx = {
-    seasonLabel: cfg.seasonLabel, twoLabel: twoSeasonsLabel(cfg), seasonDates: cfg.seasonDates,
-    nextSeasonDates: cfg.nextSeasonDates, paymentDays: cfg.paymentDays, inv: cfg.invoice,
-  };
+  const inv = await getInvoice(b.invoiceNo);
+  if (!inv) return res.status(500).json({ error: 'Rechnung nicht im Archiv gefunden.' });
+  // PDF sofort erzeugen und ablegen (ab jetzt jederzeit herunterladbar).
+  const pdf = await invoicePdfBytes(inv.no);
+  if (!pdf) return res.status(500).json({ error: 'Die PDF konnte nicht erzeugt werden.' });
   if (send === true) {
     if (!process.env.RESEND_API_KEY) return res.status(500).json({ error: 'E-Mail-Versand ist nicht eingerichtet.' });
+    const doc = { ...inv.data.booking, invoiceNo: inv.no, invoiceAt: inv.issuedAt };
     try {
       await sendMail({
         to: b.email, from: FROM,
-        subject: `Rechnung ${b.invoiceNo} – ${b.teamName} · Hero League ${cfg.seasonLabel}`,
-        html: invoiceHtml(b, ctx),
-        text: invoiceText(b, ctx),
+        subject: `Rechnung ${inv.no} – ${inv.data.booking.teamName} · Hero League ${inv.data.ctx.seasonLabel}`,
+        html: invoiceHtml(doc, inv.data.ctx),
+        text: invoiceText(doc, inv.data.ctx),
+        attachments: [{ filename: pdfName(inv), content: pdf.toString('base64') }],
       });
     } catch {
       return res.status(502).json({ error: 'Die E-Mail konnte nicht verschickt werden.' });
     }
-    await sql`UPDATE season_bookings SET invoice_sent_at = now(), updated_at = now() WHERE id = ${id}`;
-    b = (await load())!;
+    await sql`UPDATE season_bookings SET invoice_sent_at = now(), updated_at = now() WHERE id = ${id} AND invoice_no = ${inv.no}`;
+    await markInvoiceSent(inv.no);
+    b = (await loadInvoiceRow(id))!;
   }
-  return res.json({ invoiceNo: b.invoiceNo, invoiceAt: b.invoiceAt, invoiceSentAt: b.invoiceSentAt, html: invoiceHtml(b, ctx, { forPrint: true }) });
+  return res.json({ invoiceNo: inv.no, invoiceAt: inv.issuedAt, invoiceSentAt: b.invoiceSentAt });
+}
+
+// Rechnung stornieren: Stornorechnung (eigene Nummer, PDF im Archiv). Wurde die Rechnung
+// verschickt, bekommt das Team die Stornorechnung automatisch per E-Mail. Optional wird
+// die Buchung gleich mit storniert.
+async function adminBookingInvoiceCancel(req: VercelRequest, res: VercelResponse) {
+  const { id, cancelBooking } = req.body ?? {};
+  if (typeof id !== 'string' || !id) return badRequest(res, 'Ungültig.');
+  const cfg = await getBookingConfig();
+  await backfillArchive(invoiceCtx(cfg));
+  const b = await loadInvoiceRow(id);
+  if (!b) return res.status(404).json({ error: 'Nicht gefunden' });
+  if (!b.invoiceNo) return badRequest(res, 'Zu dieser Buchung gibt es keine offene Rechnung.');
+  const orig = await getInvoice(b.invoiceNo);
+  if (!orig) return res.status(500).json({ error: 'Rechnung nicht im Archiv gefunden.' });
+  let stornoNo = '';
+  let mailed = false;
+  if (orig.kind === 'test') {
+    await releaseTestInvoice(orig.no);
+  } else {
+    const no = await issueStorno(orig);
+    if (!no) return res.status(409).json({ error: 'Die Rechnung ist bereits storniert.' });
+    stornoNo = no;
+    const storno = (await getInvoice(no))!;
+    const pdf = await invoicePdfBytes(no);
+    if (orig.sentAt && pdf && process.env.RESEND_API_KEY) {
+      try {
+        await sendBrandedMail({
+          to: b.email, from: FROM,
+          subject: `Stornorechnung ${no} zu Rechnung ${orig.no} – ${orig.teamName}`,
+          layout: {
+            preheader: `Die Rechnung ${orig.no} ist storniert.`,
+            heading: 'Stornorechnung', accent: ACCENT, accentDark: ACCENT_DARK,
+            intro: `Hi ${b.contactName}, die Rechnung ${orig.no} vom ${new Date(orig.issuedAt).toLocaleDateString('de-DE', { timeZone: 'Europe/Berlin' })} ist storniert. Im Anhang findet ihr die Stornorechnung ${no}.`,
+            bodyHtml: '',
+            footnote: 'Fragen? Antworte einfach auf diese E-Mail.',
+          },
+          text: `Die Rechnung ${orig.no} ist storniert. Im Anhang findet ihr die Stornorechnung ${no}.`,
+          attachments: [{ filename: pdfName(storno), content: pdf.toString('base64') }],
+        });
+        await markInvoiceSent(no);
+        mailed = true;
+      } catch {
+        /* Storno steht trotzdem im Archiv; Mail kann man von dort aus manuell nachschicken */
+      }
+    }
+  }
+  if (cancelBooking === true) await sql`UPDATE season_bookings SET status = 'cancelled', paid_at = NULL, updated_at = now() WHERE id = ${id}`;
+  return res.json({ ok: true, stornoNo, mailed });
+}
+
+// Rechnungsadresse korrigieren – nur ohne aktive Rechnung (sonst erst stornieren).
+async function adminBookingBilling(req: VercelRequest, res: VercelResponse) {
+  const { id, billing } = req.body ?? {};
+  if (typeof id !== 'string' || !id || !billing || typeof billing !== 'object') return badRequest(res, 'Ungültig.');
+  const bill = billing as Record<string, unknown>;
+  const next = { name: clamp(bill.name, 120), street: clamp(bill.street, 120), zip: clamp(bill.zip, 12), city: clamp(bill.city, 80) };
+  if (!next.name || !next.street || !next.zip || !next.city) return badRequest(res, 'Bitte Name, Straße, PLZ und Ort angeben.');
+  const rows = await sql`UPDATE season_bookings SET billing = ${JSON.stringify(next)}::jsonb, updated_at = now()
+    WHERE id = ${id} AND invoice_no = '' RETURNING id`;
+  if (!rows.length) return res.status(409).json({ error: 'Zu dieser Buchung gibt es schon eine Rechnung – erst stornieren, dann die Adresse ändern.' });
+  return res.json({ ok: true, billing: next });
+}
+
+// Archiv: alle Rechnungen + Stornorechnungen (ohne PDF-Daten).
+async function adminInvoiceList(_req: VercelRequest, res: VercelResponse) {
+  await backfillArchive(invoiceCtx(await getBookingConfig()));
+  return res.json(await listInvoices());
+}
+
+// Fertige PDF aus dem Archiv (ansehen oder herunterladen).
+async function adminInvoicePdf(req: VercelRequest, res: VercelResponse) {
+  const no = String(req.query.no ?? '').slice(0, 80);
+  const inv = no ? await getInvoice(no) : null;
+  const pdf = inv ? await invoicePdfBytes(no) : null;
+  if (!inv || !pdf) return res.status(404).json({ error: 'Rechnung nicht gefunden.' });
+  const name = pdfName(inv).replace(/[^\w.-]/g, '_');
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `${req.query.dl ? 'attachment' : 'inline'}; filename="${name}"`);
+  res.setHeader('Cache-Control', 'private, no-store');
+  return res.status(200).send(pdf);
 }
 
 // --- Dispatcher (aus seasonSignup aufgerufen) -------------------------------
@@ -1086,6 +1217,10 @@ export async function seasonBooking(req: VercelRequest, res: VercelResponse, act
     if (action === 'admin-booking-config') return void (await adminBookingConfig(req, res)), true;
     if (req.method === 'POST' && action === 'admin-booking-delete') return void (await adminBookingDelete(req, res)), true;
     if (req.method === 'POST' && action === 'admin-booking-invoice') return void (await adminBookingInvoice(req, res)), true;
+    if (req.method === 'POST' && action === 'admin-booking-invoice-cancel') return void (await adminBookingInvoiceCancel(req, res)), true;
+    if (req.method === 'POST' && action === 'admin-booking-billing') return void (await adminBookingBilling(req, res)), true;
+    if (req.method === 'GET' && action === 'admin-booking-invoices') return void (await adminInvoiceList(req, res)), true;
+    if (req.method === 'GET' && action === 'admin-booking-invoice-pdf') return void (await adminInvoicePdf(req, res)), true;
     if (req.method === 'POST' && action === 'admin-booking-transfer') return void (await adminBookingTransfer(req, res)), true;
     if (req.method === 'GET' && action === 'admin-booking-invites') return void (await adminInvites(req, res)), true;
     if (req.method === 'POST' && action === 'admin-booking-invite') return void (await adminInvite(req, res)), true;

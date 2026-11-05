@@ -1,7 +1,6 @@
-// Rechnungen für Season-Buchungen: Nummer vergeben, druckfertiges A4-HTML
-// erzeugen (Admin → Drucken/PDF) und dieselbe Rechnung per E-Mail verschicken.
-// Läuft über /api/signup?action=admin-booking-invoice (siehe booking.ts).
-import { sql } from './db.js';
+// Rechnungen für Season-Buchungen: Vorlage (Einstellungen), Rechnungsdaten und die
+// HTML-Fassung für die E-Mail. Nummernvergabe + Archiv: invoiceArchive.ts,
+// fertige PDF: invoicePdf.ts. Läuft über /api/signup?action=admin-booking-invoice…
 import { escapeHtml } from './mail.js';
 
 export interface InvoiceSettings {
@@ -50,15 +49,6 @@ export function invoiceMissing(inv: InvoiceSettings): string[] {
     !inv.bank && 'Bankverbindung',
     !inv.taxId && 'Steuernummer / USt-IdNr.',
   ].filter(Boolean) as string[];
-}
-
-// Nächste Nummer atomar ziehen (Zähler steckt in settings.season_booking.invoice.nextNo).
-export async function drawInvoiceNo(inv: InvoiceSettings): Promise<string> {
-  const rows = await sql`UPDATE settings SET value = value || jsonb_build_object('invoice',
-      COALESCE(value->'invoice', '{}'::jsonb) || jsonb_build_object('nextNo', COALESCE((value->'invoice'->>'nextNo')::int, 1) + 1))
-    WHERE key = 'season_booking' RETURNING (value->'invoice'->>'nextNo')::int - 1 AS no`;
-  const no = Number(rows[0]?.no) || inv.nextNo || 1;
-  return `${inv.prefix}${new Date().getFullYear()}-${String(no).padStart(3, '0')}`;
 }
 
 export interface InvoiceBooking {
