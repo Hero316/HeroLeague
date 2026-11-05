@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.0",
+    "@pdf-lib/fontkit": "^1.1.1",
     "@types/web-push": "^3.6.4",
     "@vercel/blob": "^1.1.1",
     "html-to-image": "^1.11.13",
@@ -19,6 +20,7 @@
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "onnxruntime-web": "^1.22.0",
+    "pdf-lib": "^1.17.1",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "web-push": "^3.6.7"

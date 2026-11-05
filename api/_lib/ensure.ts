@@ -83,6 +83,8 @@ export async function ensureSchema(): Promise<void> {
     await sql`SELECT entry FROM season_signups LIMIT 1`;
     // Verbindliche Season-2-Buchungen (Landingpage /season2).
     await sql`SELECT team_id, transferred_at, source_team_id, billing, invoice_no, invoice_at, invoice_sent_at FROM season_bookings LIMIT 1`;
+    // Rechnungsarchiv (fertige PDFs, Storno) mitprüfen.
+    await sql`SELECT no, cancels_no, cancelled_by, pdf, sent_at FROM invoices LIMIT 1`;
     // WICHTIG: die neue Spalte `consent_at` (Einwilligung) mitprüfen, sonst
     // überspringt der Schnell-Check das ALTER auf bestehenden Datenbanken.
     await sql`SELECT consent_at FROM event_tickets LIMIT 1`;
@@ -375,6 +377,14 @@ export async function ensureSchema(): Promise<void> {
   await run(sql`ALTER TABLE season_bookings ADD COLUMN IF NOT EXISTS transferred_at TIMESTAMPTZ`);
   await run(sql`ALTER TABLE season_bookings ADD COLUMN IF NOT EXISTS source_team_id TEXT NOT NULL DEFAULT ''`);
   await run(sql`CREATE INDEX IF NOT EXISTS idx_season_bookings_email ON season_bookings(email)`);
+  // Rechnungsarchiv: jede Rechnung/Stornorechnung einmal, mit eingefrorenen Daten + fertiger PDF.
+  // Wird nie gelöscht (keine Fremdschlüssel → bleibt auch, wenn eine Buchung verschwindet).
+  await run(sql`CREATE TABLE IF NOT EXISTS invoices (
+    no TEXT PRIMARY KEY, kind TEXT NOT NULL DEFAULT 'invoice', booking_id TEXT NOT NULL DEFAULT '',
+    ref TEXT NOT NULL DEFAULT '', team_name TEXT NOT NULL DEFAULT '', gross_cents INTEGER NOT NULL DEFAULT 0,
+    issued_at TIMESTAMPTZ NOT NULL DEFAULT now(), cancels_no TEXT NOT NULL DEFAULT '', cancelled_by TEXT NOT NULL DEFAULT '',
+    sent_at TIMESTAMPTZ, data JSONB NOT NULL DEFAULT '{}', pdf TEXT NOT NULL DEFAULT '')`);
+  await run(sql`CREATE INDEX IF NOT EXISTS idx_invoices_booking ON invoices(booking_id)`);
 
   // --- Zuschauer-Tickets (Testspieltag). Eine Zeile je (event_key, email);
   // Reservierung bis reserved_until, danach frei. Kapazität wird beim

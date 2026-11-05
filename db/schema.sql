@@ -522,3 +522,18 @@ CREATE TABLE IF NOT EXISTS season_bookings (
   invoice_no TEXT NOT NULL DEFAULT '', invoice_at TIMESTAMPTZ, invoice_sent_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_season_bookings_email ON season_bookings(email);
+
+-- Rechnungsarchiv (Buchhaltung): jede Rechnung/Stornorechnung genau einmal, mit
+-- eingefrorenen Daten (data) und fertiger PDF (pdf, Base64). Nie löschen/ändern –
+-- Korrektur nur per Stornorechnung. Wird automatisch über api/_lib/ensure.ts angelegt.
+CREATE TABLE IF NOT EXISTS invoices (
+  no TEXT PRIMARY KEY,                       -- z. B. HL-2026-001 (Testbuchungen: TEST-…)
+  kind TEXT NOT NULL DEFAULT 'invoice',      -- invoice | storno | test
+  booking_id TEXT NOT NULL DEFAULT '', ref TEXT NOT NULL DEFAULT '', team_name TEXT NOT NULL DEFAULT '',
+  gross_cents INTEGER NOT NULL DEFAULT 0,    -- Storno negativ
+  issued_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  cancels_no TEXT NOT NULL DEFAULT '',       -- Storno: aufgehobene Rechnung
+  cancelled_by TEXT NOT NULL DEFAULT '',     -- Rechnung: Nummer der Stornorechnung
+  sent_at TIMESTAMPTZ, data JSONB NOT NULL DEFAULT '{}', pdf TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_invoices_booking ON invoices(booking_id);

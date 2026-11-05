@@ -27,6 +27,7 @@ export async function sendMail(opts: {
   text: string;
   from?: string;
   replyTo?: string;
+  attachments?: { filename: string; content: string }[]; // content = Base64
 }): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -41,6 +42,7 @@ export async function sendMail(opts: {
     text: opts.text,
   };
   if (opts.replyTo) body.reply_to = opts.replyTo;
+  if (opts.attachments?.length) body.attachments = opts.attachments;
 
   const res = await fetch(RESEND_ENDPOINT, {
     method: 'POST',

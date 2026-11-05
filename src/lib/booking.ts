@@ -161,6 +161,7 @@ export interface InvoiceSettings {
 }
 
 export interface BookingAdminConfig {
+  invoicesIssued?: boolean; // gibt es schon echte Rechnungen? → laufende Nummer gesperrt
   payLink: string; // PayPal-Taste (PayPal.me)
   revolutLink: string; // Taste „Karte / Überweisung" (Revolut-Link)
   invoice: InvoiceSettings;
@@ -212,7 +213,26 @@ export const bookingAdminConfig = () => apiFetch<BookingAdminConfig>('/api/signu
 export const bookingAdminSaveConfig = (cfg: BookingAdminConfig & { newKey?: boolean }) => post<BookingAdminConfig>('admin-booking-config', cfg);
 export const bookingAdminDelete = (id: string) => post<{ ok: boolean }>('admin-booking-delete', { id });
 export const bookingAdminInvoice = (id: string, send = false) =>
-  post<{ invoiceNo: string; invoiceAt: string; invoiceSentAt: string | null; html: string }>('admin-booking-invoice', { id, send });
+  post<{ invoiceNo: string; invoiceAt: string; invoiceSentAt: string | null }>('admin-booking-invoice', { id, send });
+export const bookingAdminInvoiceCancel = (id: string, cancelBooking = false) =>
+  post<{ ok: boolean; stornoNo: string; mailed: boolean }>('admin-booking-invoice-cancel', { id, cancelBooking });
+export const bookingAdminBilling = (id: string, billing: Billing) => post<{ ok: boolean; billing: Billing }>('admin-booking-billing', { id, billing });
+
+// Rechnungsarchiv (fertige PDFs, nie verändert).
+export interface ArchivedInvoice {
+  no: string;
+  kind: 'invoice' | 'storno';
+  bookingId: string;
+  ref: string;
+  teamName: string;
+  grossCents: number;
+  issuedAt: string;
+  cancelsNo: string; // Storno: aufgehobene Rechnung
+  cancelledBy: string; // Rechnung: Nummer der Stornorechnung
+  sentAt: string | null;
+}
+export const bookingAdminInvoices = () => apiFetch<ArchivedInvoice[]>(url('admin-booking-invoices'));
+export const invoicePdfUrl = (no: string, download = false) => `${url('admin-booking-invoice-pdf')}&no=${encodeURIComponent(no)}${download ? '&dl=1' : ''}`;
 export const bookingAdminTransfer = (id: string, teamId: string) => post<{ ok: boolean }>('admin-booking-transfer', { id, teamId });
 export const bookingAdminInvitees = () => apiFetch<BookingInvitee[]>('/api/signup?action=admin-booking-invites');
 export const bookingAdminInvite = (emails: string[]) => post<{ ok: boolean; sent: string[]; failed: string[] }>('admin-booking-invite', { emails });
