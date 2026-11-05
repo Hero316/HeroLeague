@@ -24,6 +24,7 @@ import {
   backfillArchive, getInvoice, invoicePdfBytes, invoicesIssued, issueInvoice, issueStorno, issueTestInvoice, listInvoices,
   markInvoiceSent, releaseTestInvoice, snapshotOf, type ArchivedInvoice,
 } from './invoiceArchive.js';
+import { invoicePdf } from './invoicePdf.js';
 
 const PURPOSE = 'season-booking';
 const FROM = 'Hero League – Season 2 <anmeldung@hero-league.de>';
@@ -1185,6 +1186,41 @@ async function adminBookingBilling(req: VercelRequest, res: VercelResponse) {
   return res.json({ ok: true, billing: next });
 }
 
+// Testrechnung (Muster-Team) an eine beliebige Adresse – mit der gespeicherten Vorlage.
+// Nur Vorschau: keine echte Nummer, nichts im Archiv, deutlich als ungültig markiert.
+async function adminInvoiceTestMail(req: VercelRequest, res: VercelResponse) {
+  const raw = req.body?.email;
+  if (!isEmail(raw)) return badRequest(res, 'Bitte eine gültige E-Mail-Adresse angeben.');
+  const email = normEmail(raw);
+  const cfg = await getBookingConfig();
+  const missing = invoiceMissing(cfg.invoice);
+  if (missing.length) return badRequest(res, `Erst die Rechnungsdaten ausfüllen und speichern: ${missing.join(', ')}.`);
+  if (!process.env.RESEND_API_KEY) return res.status(500).json({ error: 'E-Mail-Versand ist nicht eingerichtet.' });
+  const ctx = invoiceCtx(cfg);
+  const two = req.body?.package !== 'one';
+  const booking = {
+    ref: 'S2-MUSTER', teamName: 'Musterteam FC', contactName: 'Max Muster', email,
+    package: (two ? 'two' : 'one') as 'one' | 'two', priceCents: two ? cfg.priceTwoEarly : cfg.priceOne, earlyBird: two,
+    billing: { name: 'Max Muster', street: 'Musterstraße 1', zip: '12345', city: 'Musterstadt' }, status: 'pending',
+  };
+  const no = 'TEST-MUSTER';
+  const issuedAt = new Date().toISOString();
+  const pdf = await invoicePdf({ kind: 'test', no, issuedAt, booking, ctx });
+  const doc = { ...booking, invoiceNo: no, invoiceAt: issuedAt };
+  try {
+    await sendMail({
+      to: email, from: FROM,
+      subject: `TESTRECHNUNG (nicht gültig) – Vorschau · Hero League ${cfg.seasonLabel}`,
+      html: invoiceHtml(doc, ctx),
+      text: `TESTRECHNUNG – nicht gültig, nur Vorschau.\n\n${invoiceText(doc, ctx)}`,
+      attachments: [{ filename: 'Testrechnung-Vorschau.pdf', content: Buffer.from(pdf).toString('base64') }],
+    });
+  } catch {
+    return res.status(502).json({ error: 'Die E-Mail konnte nicht verschickt werden.' });
+  }
+  return res.json({ ok: true });
+}
+
 // Archiv: alle Rechnungen + Stornorechnungen (ohne PDF-Daten).
 async function adminInvoiceList(_req: VercelRequest, res: VercelResponse) {
   await backfillArchive(invoiceCtx(await getBookingConfig()));
@@ -1218,6 +1254,7 @@ export async function seasonBooking(req: VercelRequest, res: VercelResponse, act
     if (req.method === 'POST' && action === 'admin-booking-delete') return void (await adminBookingDelete(req, res)), true;
     if (req.method === 'POST' && action === 'admin-booking-invoice') return void (await adminBookingInvoice(req, res)), true;
     if (req.method === 'POST' && action === 'admin-booking-invoice-cancel') return void (await adminBookingInvoiceCancel(req, res)), true;
+    if (req.method === 'POST' && action === 'admin-booking-invoice-test') return void (await adminInvoiceTestMail(req, res)), true;
     if (req.method === 'POST' && action === 'admin-booking-billing') return void (await adminBookingBilling(req, res)), true;
     if (req.method === 'GET' && action === 'admin-booking-invoices') return void (await adminInvoiceList(req, res)), true;
     if (req.method === 'GET' && action === 'admin-booking-invoice-pdf') return void (await adminInvoicePdf(req, res)), true;

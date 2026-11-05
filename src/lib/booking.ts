@@ -216,6 +216,7 @@ export const bookingAdminInvoice = (id: string, send = false) =>
   post<{ invoiceNo: string; invoiceAt: string; invoiceSentAt: string | null }>('admin-booking-invoice', { id, send });
 export const bookingAdminInvoiceCancel = (id: string, cancelBooking = false) =>
   post<{ ok: boolean; stornoNo: string; mailed: boolean }>('admin-booking-invoice-cancel', { id, cancelBooking });
+export const bookingAdminInvoiceTest = (email: string, pkg: 'one' | 'two') => post<{ ok: boolean }>('admin-booking-invoice-test', { email, package: pkg });
 export const bookingAdminBilling = (id: string, billing: Billing) => post<{ ok: boolean; billing: Billing }>('admin-booking-billing', { id, billing });
 
 // Rechnungsarchiv (fertige PDFs, nie verändert).

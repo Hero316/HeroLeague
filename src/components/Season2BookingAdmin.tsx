@@ -9,7 +9,7 @@ import { goBackLayer, useBackClose } from '../lib/backStack';
 import { apiFetch } from '../lib/api';
 import {
   bookingAdminConfig, bookingAdminDelete, bookingAdminInvite, bookingAdminInvitees, bookingAdminList, bookingAdminSaveConfig,
-  bookingAdminInvoice, bookingAdminInvoiceCancel, bookingAdminBilling, bookingAdminInvoices, invoicePdfUrl, bookingAdminStatus, bookingAdminTransfer, euro, formatDeadline,
+  bookingAdminInvoice, bookingAdminInvoiceCancel, bookingAdminBilling, bookingAdminInvoiceTest, bookingAdminInvoices, invoicePdfUrl, bookingAdminStatus, bookingAdminTransfer, euro, formatDeadline,
   type ArchivedInvoice, type Billing, type BookingAdminConfig, type InvoiceSettings, type BookingAdminRow, type BookingInvitee, type BookingStatus,
 } from '../lib/booking';
 import { makeZip } from '../lib/zip';
@@ -1049,6 +1049,32 @@ function SettingsTab({ cfg, onSaved }: { cfg: BookingAdminConfig; onSaved: (c: B
     ...invoiceMissing(c.invoice).map((m) => `Rechnung: ${m}`),
   ].filter(Boolean) as string[];
   const setInv = (p: Partial<InvoiceSettings>) => setC((x) => ({ ...x, invoice: { ...x.invoice, ...p } }));
+  const [testTo, setTestTo] = useState(() => {
+    try {
+      return localStorage.getItem('hl-invoice-test-to') ?? '';
+    } catch {
+      return '';
+    }
+  });
+  const [testPkg, setTestPkg] = useState<'one' | 'two'>('two');
+  const [testBusy, setTestBusy] = useState(false);
+  const sendTest = async () => {
+    if (dirty) return window.alert('Erst die Änderungen speichern – die Testrechnung nutzt die gespeicherte Vorlage.');
+    setTestBusy(true);
+    try {
+      await bookingAdminInvoiceTest(testTo.trim(), testPkg);
+      try {
+        localStorage.setItem('hl-invoice-test-to', testTo.trim());
+      } catch {
+        /* egal */
+      }
+      window.alert(`Testrechnung an ${testTo.trim()} geschickt ✓`);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Fehler.');
+    } finally {
+      setTestBusy(false);
+    }
+  };
 
   const save = async (extra: { newKey?: boolean } = {}) => {
     if (c.open && !cfg.open && missing.length && !window.confirm(`Buchung öffnen, obwohl noch fehlt:\n• ${missing.join('\n• ')}?`)) return;
@@ -1158,6 +1184,19 @@ function SettingsTab({ cfg, onSaved }: { cfg: BookingAdminConfig; onSaved: (c: B
         <p className="text-[12px] text-hl-mute leading-relaxed">
           {c.invoice.vatRate > 0 ? `Preise gelten als Bruttopreise – die Rechnung weist ${c.invoice.vatRate} % USt. aus.` : 'Kleinunternehmer: Die Rechnung weist keine Umsatzsteuer aus.'} Bitte mit Steuerberater abstimmen. Rechnungsnummern werden fortlaufend vergeben und nie doppelt.
         </p>
+        <L label="Testrechnung senden">
+          <div className="flex flex-wrap gap-2">
+            <input type="email" value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="deine@email.de" className={`${inp} flex-1 basis-48`} />
+            <div className="inline-flex shrink-0 rounded-xl bg-white/[.05] p-0.5">
+              {([['two', 'Doppelpaket'], ['one', 'Eine Season']] as const).map(([v, l]) => (
+                <button key={v} type="button" onClick={() => setTestPkg(v)} className={`px-3 py-2 rounded-[10px] text-[12.5px] font-bold cursor-pointer ${testPkg === v ? 'bg-brand-accent text-white' : 'text-hl-mute'}`}>{l}</button>
+              ))}
+            </div>
+            <button type="button" disabled={testBusy || !testTo.trim()} onClick={sendTest} className="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[13px] font-bold text-white bg-white/[.08] hover:bg-white/[.14] disabled:opacity-40 cursor-pointer">
+              {testBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Senden
+            </button>
+          </div>
+        </L>
       </section>
 
       <section className="space-y-3">
