@@ -212,25 +212,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const normalized = email.trim().toLowerCase();
 
+      // Versuch zuerst atomar zählen, dann vergleichen (parallele Anfragen
+      // können so nicht mehr als MAX_ATTEMPTS Codes durchprobieren).
       const rows = await sql`
-        SELECT code_hash AS "codeHash", attempts
-        FROM login_codes
-        WHERE email = ${normalized} AND expires_at > now()
-        ORDER BY created_at DESC LIMIT 1
+        UPDATE login_codes SET attempts = attempts + 1
+        WHERE email = ${normalized} AND expires_at > now() AND attempts < ${MAX_ATTEMPTS}
+        RETURNING code_hash AS "codeHash"
       `;
       if (rows.length === 0) {
+        const left = await sql`SELECT 1 FROM login_codes WHERE email = ${normalized} AND expires_at > now() LIMIT 1`;
         await sleep(400);
-        return res.status(401).json({ error: 'Code ungültig oder abgelaufen. Bitte neuen Code anfordern.' });
-      }
-
-      const row = rows[0] as { codeHash: string; attempts: number };
-      if (row.attempts >= MAX_ATTEMPTS) {
+        if (left.length === 0) return res.status(401).json({ error: 'Code ungültig oder abgelaufen. Bitte neuen Code anfordern.' });
         await sql`DELETE FROM login_codes WHERE email = ${normalized}`;
         return res.status(401).json({ error: 'Zu viele Fehlversuche. Bitte neuen Code anfordern.' });
       }
 
-      if (!timingSafeEqualHex(hashCode(code.trim()), row.codeHash)) {
-        await sql`UPDATE login_codes SET attempts = attempts + 1 WHERE email = ${normalized}`;
+      const hash = hashCode(code.trim());
+      if (!rows.some((r) => timingSafeEqualHex(hash, (r as { codeHash: string }).codeHash))) {
         await sleep(400);
         return res.status(401).json({ error: 'Code ungültig oder abgelaufen. Bitte neuen Code anfordern.' });
       }
@@ -335,25 +333,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: '6-stelliger Code erforderlich.' });
       }
 
+      // Versuch zuerst atomar zählen, dann vergleichen (parallele Anfragen
+      // können so nicht mehr als MAX_ATTEMPTS Codes durchprobieren).
       const rows = await sql`
-        SELECT code_hash AS "codeHash", attempts
-        FROM login_codes
-        WHERE email = ${MASTER_2FA_KEY} AND expires_at > now()
-        ORDER BY created_at DESC LIMIT 1
+        UPDATE login_codes SET attempts = attempts + 1
+        WHERE email = ${MASTER_2FA_KEY} AND expires_at > now() AND attempts < ${MAX_ATTEMPTS}
+        RETURNING code_hash AS "codeHash"
       `;
       if (rows.length === 0) {
+        const left = await sql`SELECT 1 FROM login_codes WHERE email = ${MASTER_2FA_KEY} AND expires_at > now() LIMIT 1`;
         await sleep(400);
-        return res.status(401).json({ error: 'Code ungültig oder abgelaufen. Bitte erneut mit dem Passwort anmelden.' });
-      }
-
-      const row = rows[0] as { codeHash: string; attempts: number };
-      if (row.attempts >= MAX_ATTEMPTS) {
+        if (left.length === 0) return res.status(401).json({ error: 'Code ungültig oder abgelaufen. Bitte erneut mit dem Passwort anmelden.' });
         await sql`DELETE FROM login_codes WHERE email = ${MASTER_2FA_KEY}`;
         return res.status(401).json({ error: 'Zu viele Fehlversuche. Bitte erneut mit dem Passwort anmelden.' });
       }
 
-      if (!timingSafeEqualHex(hashCode(code.trim()), row.codeHash)) {
-        await sql`UPDATE login_codes SET attempts = attempts + 1 WHERE email = ${MASTER_2FA_KEY}`;
+      const hash = hashCode(code.trim());
+      if (!rows.some((r) => timingSafeEqualHex(hash, (r as { codeHash: string }).codeHash))) {
         await sleep(400);
         return res.status(401).json({ error: 'Code ungültig oder abgelaufen.' });
       }

@@ -32,19 +32,17 @@ export function hasPermission(session: SessionPayload | null, ...perms: AdminPer
   return perms.some((p) => eff.includes(p));
 }
 
-// Rolle normalisieren. WICHTIG: Jede NICHT ausdrücklich bekannte Rolle fällt
-// bewusst auf 'superadmin' zurück (Alt-Sessions mit role 'admin'). Neue,
-// eingeschränkte Rollen MÜSSEN hier explizit stehen – sonst würde ein solches
-// Token fälschlich zu Super-Admin-Rechten eskalieren.
-function normalizeRole(raw: unknown): UserRole {
-  return raw === 'match_admin'
-    ? 'match_admin'
-    : raw === 'referee'
-      ? 'referee'
-      : // Alt-Rolle „ticket_manager" gibt es nicht mehr → wie Team-Mitglied behandeln.
-        raw === 'team_member' || raw === 'ticket_manager'
-        ? 'team_member'
-        : 'superadmin';
+// Rolle normalisieren. Nur ausdrücklich bekannte Rollen zählen; alles andere
+// (fehlende/unbekannte Rolle) ergibt null → KEIN Zugang. Früher fiel Unbekanntes
+// auf 'superadmin' zurück – damit wurde jedes fremde Token mit demselben
+// Geheimnis (z. B. Manager-Token ohne role) zum Super-Admin.
+function normalizeRole(raw: unknown): UserRole | null {
+  if (raw === 'superadmin' || raw === 'admin') return 'superadmin'; // 'admin' = Alt-Sessions
+  if (raw === 'match_admin') return 'match_admin';
+  if (raw === 'referee') return 'referee';
+  // Alt-Rolle „ticket_manager" gibt es nicht mehr → wie Team-Mitglied behandeln.
+  if (raw === 'team_member' || raw === 'ticket_manager') return 'team_member';
+  return null;
 }
 
 // Rolle/Rechte/aktiv FRISCH aus der DB (kurzer Cache je Instanz), damit eine
@@ -60,8 +58,9 @@ async function freshUser(userId: string): Promise<FreshUser | undefined> {
   try {
     const rows = await sql`SELECT to_jsonb(u) AS j FROM users u WHERE id = ${userId} LIMIT 1`;
     const j = rows[0]?.j as Record<string, unknown> | undefined;
-    const user: FreshUser = j
-      ? { role: normalizeRole(j.role), permissions: normalizePermissions(j.permissions), active: j.is_active !== false }
+    const role = j ? normalizeRole(j.role) : null;
+    const user: FreshUser = j && role
+      ? { role, permissions: normalizePermissions(j.permissions), active: j.is_active !== false }
       : null;
     userCache.set(userId, { at: Date.now(), user });
     return user;
@@ -191,12 +190,17 @@ export async function getSession(req: VercelRequest): Promise<SessionPayload | n
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, getSecret());
+    // Nur echte Login-Sitzungen: Andere Tokens mit demselben Geheimnis (Manager-
+    // Token haben aud 'hl-manager', keine Rolle) sind hier NIE gültig.
+    if (payload.aud !== undefined) return null;
 
     // Zwangs-Abmeldung: vor dem Stichtag ausgestellte Tokens verwerfen.
     const validFrom = await getSessionsValidFrom();
     const iat = typeof payload.iat === 'number' ? payload.iat : 0;
     if (validFrom > 0 && iat < validFrom) return null;
-    let role = normalizeRole(payload.role);
+    const tokenRole = normalizeRole(payload.role);
+    if (!tokenRole) return null;
+    let role: UserRole = tokenRole;
     let permissions = normalizePermissions(payload.permissions);
     const userId = typeof payload.userId === 'string' ? payload.userId : 'bootstrap';
     if (userId !== 'bootstrap') {

@@ -32,6 +32,14 @@ export function deriveVoterId(email: string): string {
   return 'v-' + createHash('sha256').update(`tipp-user:${normEmail(email)}:${pepper}`).digest('hex').slice(0, 20);
 }
 
+// Öffentliche Kennung für Ranglisten/Tipp-Listen. Die echte voterId dient zusammen
+// mit der E-Mail als Anmeldung und darf deshalb NIE öffentlich auftauchen.
+// Das Frontend rechnet dieselbe Kennung aus der eigenen voterId nach (src/lib/tips.ts).
+export function publicVoterId(voterId: string): string {
+  return 'p-' + createHash('sha256').update(`tipp-pub:${voterId}`).digest('hex').slice(0, 16);
+}
+const publicTip = (t: Tip): Tip => ({ ...t, voterId: publicVoterId(t.voterId) });
+
 // Zeitpunkt zur vollen Stunde in Europe/Berlin (DST-korrekt).
 function berlinInstant(dateStr: string, hh: number): Date {
   const noonUTC = new Date(`${dateStr}T12:00:00Z`);
@@ -246,7 +254,7 @@ export async function acceptTerms(req: VercelRequest, res: VercelResponse) {
 export async function getTips(_req: VercelRequest, res: VercelResponse) {
   const rows = await sql`SELECT value FROM settings WHERE key = 'tips'`;
   const store = (rows[0]?.value && typeof rows[0].value === 'object' ? rows[0].value : {}) as { tips?: Tip[] };
-  return res.json({ tips: Array.isArray(store.tips) ? store.tips : [] });
+  return res.json({ tips: Array.isArray(store.tips) ? store.tips.map(publicTip) : [] });
 }
 
 export async function submitTip(req: VercelRequest, res: VercelResponse) {
@@ -286,20 +294,19 @@ export async function submitTip(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  const rows = await sql`SELECT value FROM settings WHERE key = 'tips'`;
-  const store = (rows[0]?.value && typeof rows[0].value === 'object' ? rows[0].value : {}) as { tips?: Tip[] };
-  const tips: Tip[] = Array.isArray(store.tips) ? store.tips : [];
-  if (tips.some((t) => t.matchId === matchId && t.voterId === voterId)) {
-    return res.status(409).json({ error: 'Du hast dieses Spiel bereits getippt.' });
-  }
-
   const tip: Tip = { id: `tip-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, matchId, voterId, voterName: name, home, away, at: new Date().toISOString() };
-  tips.push(tip);
-  const trimmed = tips.slice(-20000);
-  await sql`
-    INSERT INTO settings (key, value) VALUES ('tips', ${JSON.stringify({ tips: trimmed })}::jsonb)
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`;
-  return res.json(tip);
+  // Atomar anhängen (eine Anweisung): gleichzeitige Tipps gehen nicht mehr verloren,
+  // und derselbe Teilnehmer kann ein Spiel nicht doppelt tippen.
+  const added = await sql`
+    INSERT INTO settings (key, value) VALUES ('tips', jsonb_build_object('tips', jsonb_build_array(${JSON.stringify(tip)}::jsonb)))
+    ON CONFLICT (key) DO UPDATE SET value = jsonb_set(
+      settings.value, '{tips}', COALESCE(settings.value->'tips', '[]'::jsonb) || jsonb_build_array(${JSON.stringify(tip)}::jsonb))
+    WHERE NOT EXISTS (
+      SELECT 1 FROM jsonb_array_elements(COALESCE(settings.value->'tips', '[]'::jsonb)) e
+      WHERE e->>'matchId' = ${matchId} AND e->>'voterId' = ${voterId})
+    RETURNING 1`;
+  if (added.length === 0) return res.status(409).json({ error: 'Du hast dieses Spiel bereits getippt.' });
+  return res.json(publicTip(tip));
 }
 
 // --- Saison-Zusatzfragen ----------------------------------------------------
@@ -366,14 +373,15 @@ export async function getBonus(req: VercelRequest, res: VercelResponse) {
         FROM tipp_bonus b LEFT JOIN tipp_users u ON u.voter_id = b.voter_id`;
 
   const scores = rows.map((r) => ({
-    voterId: r.voterId as string,
+    voterId: publicVoterId(r.voterId as string),
     name: (r.name as string) || 'Teilnehmer',
     points: scoreBonus((r.answers || {}) as Record<string, string>, solution),
   }));
 
   let mine: Record<string, string> | null = null;
   let submittedAt: string | null = null;
-  if (email && voterId) {
+  // Eigene Antworten nur, wenn E-Mail und Teilnehmer-ID zusammengehören.
+  if (email && voterId && (await verifiedDisplayName(email, voterId))) {
     const row = rows.find((r) => r.voterId === voterId);
     if (row) { mine = (row.answers || {}) as Record<string, string>; submittedAt = row.createdAt as string; }
   }

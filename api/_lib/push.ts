@@ -43,6 +43,18 @@ export async function saveSubscription(userId: string, sub: SubInput): Promise<v
   const p256dh = sub?.keys?.p256dh;
   const auth = sub?.keys?.auth;
   if (!endpoint || !p256dh || !auth) throw new Error('Ungültige Push-Anmeldung.');
+  // Nur echte Push-Dienste der Browser (sonst könnte man den Server beliebige
+  // Adressen anfragen lassen).
+  let host = '';
+  try {
+    const u = new URL(endpoint);
+    host = u.protocol === 'https:' ? u.hostname : '';
+  } catch {
+    host = '';
+  }
+  if (!/(^|\.)(fcm\.googleapis\.com|android\.googleapis\.com|push\.services\.mozilla\.com|push\.apple\.com|notify\.windows\.com)$/.test(host)) {
+    throw new Error('Ungültige Push-Anmeldung.');
+  }
   await sql`
     INSERT INTO push_subscriptions (endpoint, user_id, p256dh, auth)
     VALUES (${endpoint}, ${userId}, ${p256dh}, ${auth})
