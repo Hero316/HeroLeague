@@ -48,6 +48,7 @@ import PartnerAdmin from './components/PartnerAdmin';
 // Partner-Landingpage nur bei Bedarf laden (bringt die Livestream-Vorschau mit).
 const PartnerLanding = React.lazy(() => import('./components/partner/PartnerLanding'));
 import Season2BookingAdmin from './components/Season2BookingAdmin';
+import { FadeIn, Reveal } from './components/anim';
 import HomeIntro from './components/HomeIntro';
 import HomeMatchRow from './components/HomeMatchRow';
 import EventTickets from './components/EventTickets';
@@ -2197,22 +2198,33 @@ export default function App() {
             )}
           </HomeIntro>
           {/* 2. Spieler & Torwart des Spieltages als eigener Abschnitt */}
+          {/* Abschnitte darunter blenden beim Reinscrollen sanft ein (Hero nur per
+              Opacity – dort sitzt Glas/Unschärfe, die ein Transform auf Safari stört). */}
           {pom && (
+            <FadeIn duration={0.9}>
             <Hero only={['pom']} fadeTop fit teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} trackingRows={trackingRows} scoring={scoring} seasonId={currentSeason?.id} />
+            </FadeIn>
           )}
           {/* 3. Die Spiele des laufenden / letzten Spieltags (mit Block-Filter) */}
-          <HomeMatchRow
-            teams={leagueTeams}
-            matches={currentSeasonMatches}
-            onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
-            reportMatchIds={reportMatchIds}
-            onOpenSchedule={goToMatchday}
-          />
+          <Reveal y={26}>
+            <HomeMatchRow
+              teams={leagueTeams}
+              matches={currentSeasonMatches}
+              onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)}
+              reportMatchIds={reportMatchIds}
+              onOpenSchedule={goToMatchday}
+            />
+          </Reveal>
           {/* 4. Nächster Spieltag + Tabelle – wechseln automatisch */}
+          <FadeIn duration={0.9}>
           <Hero only={['match', 'table']} fadeTop teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} trackingRows={trackingRows} scoring={scoring} seasonId={currentSeason?.id} />
           {/* Season-2-Anmeldung sitzt bewusst zwischen Hero und Highlights,
               damit sie beim Scrollen mitten im Blickfeld liegt. */}
-          <SeasonSignupBanner inline onOpen={(path) => navigateTo(path)} />
+          </FadeIn>
+          <Reveal y={26}>
+            <SeasonSignupBanner inline onOpen={(path) => navigateTo(path)} />
+          </Reveal>
+          <Reveal y={26}>
           <HighlightsHome
             highlights={highlights}
             editMode={editMode && canEditHighlights}
@@ -2220,6 +2232,7 @@ export default function App() {
             onOpenAlbum={openHighlightsAlbum}
             onSave={persistHighlights}
           />
+          </Reveal>
         </>
       )}
 

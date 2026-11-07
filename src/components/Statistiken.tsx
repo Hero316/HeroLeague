@@ -652,7 +652,7 @@ export default function Statistiken({
         </div>
       )}
 
-      {/* Live-Tracking-Fortschritt („Das Team ist am Tracken · 40 %") */}
+      {/* Live-Tracking-Fortschritt („Das Team ist am Auswerten · 40 %") */}
       {progress
         .filter((d) => activeMd === null || d.matchday === activeMd)
         .map((d) => (
