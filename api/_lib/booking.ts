@@ -648,10 +648,30 @@ async function bookingSubmit(req: VercelRequest, res: VercelResponse) {
     userAgent: clamp(req.headers['user-agent'], 300),
     testMode: allowed.test,
   };
-  await sql`INSERT INTO season_bookings
-      (id, ref, email, status, team_name, contact_name, phone, package, price_cents, early_bird, roster, logo_url, consents, note, source_team_id, billing, created_at, updated_at)
-    VALUES (${id}, ${ref}, ${email}, 'pending', ${teamName}, ${contactName}, ${phone}, ${pkg}, ${price.cents}, ${early},
-      ${JSON.stringify(roster)}::jsonb, ${logoUrl}, ${JSON.stringify(consents)}::jsonb, ${clamp(b.note, 800)}, ${current?.id ?? ''}, ${JSON.stringify(billing)}::jsonb, now(), now())`;
+  // Platz-Prüfung + Speichern in EINER Transaktion unter Sperre: Zwei Teams, die
+  // gleichzeitig den letzten Platz buchen, können nicht beide durchkommen, und
+  // ein Doppelklick legt keine zweite Buchung zur selben E-Mail an.
+  const tx = await sql.transaction((txn) => [
+    txn`SELECT pg_advisory_xact_lock(hashtext('season_booking_submit'))`,
+    txn`INSERT INTO season_bookings
+        (id, ref, email, status, team_name, contact_name, phone, package, price_cents, early_bird, roster, logo_url, consents, note, source_team_id, billing, created_at, updated_at)
+      SELECT ${id}, ${ref}, ${email}, 'pending', ${teamName}, ${contactName}, ${phone}, ${pkg}, ${price.cents}, ${early},
+        ${JSON.stringify(roster)}::jsonb, ${logoUrl}, ${JSON.stringify(consents)}::jsonb, ${clamp(b.note, 800)}, ${current?.id ?? ''}, ${JSON.stringify(billing)}::jsonb, now(), now()
+      WHERE NOT EXISTS (SELECT 1 FROM season_bookings WHERE email = ${email} AND status <> 'cancelled')
+        AND (${allowed.test}::boolean OR (
+          (SELECT count(*) FROM season_bookings WHERE status <> 'cancelled' AND COALESCE((consents->>'testMode')::boolean, false) = false) < ${cfg.maxTeams}
+          AND (${pkg} <> 'two' OR (SELECT count(*) FROM season_bookings WHERE package = 'two' AND status <> 'cancelled'
+            AND COALESCE((consents->>'testMode')::boolean, false) = false) < ${cfg.maxTeamsNext})))
+      RETURNING id`,
+  ]);
+  const inserted = Array.isArray(tx?.[1]) ? tx[1] : [];
+  if (!inserted.length) {
+    const again = await bookingByEmail(email);
+    if (again && again.status !== 'cancelled') {
+      return res.status(409).json({ error: 'Zu dieser E-Mail gibt es schon eine verbindliche Buchung.', booking: again });
+    }
+    return res.status(409).json({ error: `Leider ausgebucht – alle Startplätze sind gerade vergeben worden.`, soldOut: true });
+  }
 
   // Bestätigung an das Team – inkl. Zahlung + vollständigen Teilnahmebedingungen.
   const reference = payReference(ref, teamName, price.label);

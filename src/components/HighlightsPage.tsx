@@ -7,6 +7,7 @@ import HighlightsLightbox from './HighlightsLightbox';
 import HighlightsMosaic from './HighlightsMosaic';
 import HighlightsEditor from './HighlightsEditor';
 import { mediaListHandlers, genAlbumId, useCoverUpload, albumCoverInfo, newestFirst } from './highlightsEdit';
+import { useBackClose } from '../lib/backStack';
 
 // Ordner-Titel bearbeiten: lokaler State (flüssiges Tippen), speichern erst beim
 // Verlassen des Feldes – kein Netzwerk-Aufruf pro Tastendruck.
@@ -100,6 +101,9 @@ export default function HighlightsPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [lightbox, setLightbox] = useState<{ index: number | null; dir: number }>({ index: null, dir: 0 });
+  // Handy-Zurück: erst Großansicht schließen, dann den offenen Ordner.
+  useBackClose(openAlbumId !== null, () => setOpenAlbumId(null));
+  useBackClose(lightbox.index !== null, () => setLightbox((l) => ({ ...l, index: null })));
 
   const openAlbum = albums.find((a) => a.id === openAlbumId) ?? null;
   const activeItems = openAlbum ? openAlbum.items : items;

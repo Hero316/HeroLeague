@@ -2514,10 +2514,18 @@ export default function ChatSystem({
     }
   }, [initialThreadId, messages]);
 
+  // Nur die jeweils NEUESTE Anfrage für die gerade offene Unterhaltung darf die
+  // Liste setzen – sonst landen nach schnellem Wechsel Nachrichten der vorigen
+  // Unterhaltung hier, oder ein älterer Abruf löscht eine gerade gesendete Nachricht.
+  const msgSeq = useRef(0);
+  const activeIdRef = useRef(activeId);
+  activeIdRef.current = activeId;
   const loadMessages = useCallback(async (id: string, quiet = false) => {
+    const seq = ++msgSeq.current;
     if (!quiet) setLoadingMsgs(true);
     try {
-      setMessages(await fetchMessages(id));
+      const list = await fetchMessages(id);
+      if (seq === msgSeq.current && id === activeIdRef.current) setMessages(list);
     } catch {
       /* still */
     } finally {
@@ -3060,6 +3068,7 @@ export default function ChatSystem({
               onTyping={onTyping}
               onStopTyping={onStopTyping}
               onSent={(m) => {
+                msgSeq.current++; // laufende ältere Abrufe verwerfen
                 setMessages((prev) => [...prev, m]);
                 loadConvs();
                 // Eigene Nachricht ⇒ IMMER ans Ende springen, egal wo man stand.

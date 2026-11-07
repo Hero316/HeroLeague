@@ -5,6 +5,7 @@ import { ActiveTab, HighlightAlbum, Match, SocialLinks, Team } from '../types';
 import { numberWord } from '../lib/heroAward';
 import { apiFetch } from '../lib/api';
 import SearchBar from './SearchBar';
+import { useBackClose } from '../lib/backStack';
 
 // Modulweiter Cache der Social-Links: nur einmal je Seitenaufruf laden, danach
 // zeigen alle Navbar-Instanzen die Symbole sofort (kein Flackern beim Wechsel).
@@ -75,6 +76,7 @@ export default function Navbar({
   onOpenAlbum,
 }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
+  useBackClose(isOpen, () => setIsOpen(false)); // Handy-Zurück schließt das Menü
   // Social-Links werden modulweit gecacht: einmal geladen, danach zeigt jede
   // (neu gemountete) Navbar die Symbole sofort – kein verzögertes „Auftauchen"
   // und kein erneutes Flackern beim Seitenwechsel.

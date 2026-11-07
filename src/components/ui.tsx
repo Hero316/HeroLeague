@@ -1531,6 +1531,15 @@ function AdminSectionSearch({
 }
 
 // Eine „dicke Taste": Kopf mit Symbol + Titel + Pfeil; klappt den Inhalt sanft auf.
+// Platzhalter, während ein erst bei Bedarf geladener Bereich nachlädt.
+function SectionLoading() {
+  return (
+    <div className="py-8 grid place-items-center" aria-busy="true">
+      <span className="w-5 h-5 rounded-full border-2 border-white/15 border-t-brand-accent-light animate-spin" />
+    </div>
+  );
+}
+
 export function AccordionSection({
   id,
   title,
@@ -1608,7 +1617,7 @@ export function AccordionSection({
             {subtitle && <span className="block text-[11px] sm:text-xs text-hl-mute font-sans mt-0.5">{subtitle}</span>}
           </span>
         </div>
-        <div id={panelId} className="px-4 sm:px-5 pb-5 pt-1 border-t border-white/[.06]">{children}</div>
+        <div id={panelId} className="px-4 sm:px-5 pb-5 pt-1 border-t border-white/[.06]"><React.Suspense fallback={<SectionLoading />}>{children}</React.Suspense></div>
       </div>
     );
   }
@@ -1652,7 +1661,7 @@ export function AccordionSection({
         className={`grid transition-[grid-template-rows] duration-300 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
       >
         <div className="overflow-hidden min-h-0">
-          <div className="px-4 sm:px-5 pb-5 pt-1 border-t border-white/[.06]">{children}</div>
+          <div className="px-4 sm:px-5 pb-5 pt-1 border-t border-white/[.06]"><React.Suspense fallback={<SectionLoading />}>{children}</React.Suspense></div>
         </div>
       </div>
     </div>

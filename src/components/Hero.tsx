@@ -17,6 +17,9 @@ interface HeroProps {
   seasonLabel: string;
   seasonNumber?: number;
   heroImages?: HeroImages;
+  // false = Bild-Einstellungen noch nicht geladen → noch kein Ersatzbild laden
+  // (sonst lädt jeder Besucher das Ersatzbild UND danach das eigene).
+  imagesReady?: boolean;
   pom?: PlayerOfMonth | null; // von oben vorgeladen (verhindert nachträglichen Slide → kein „Springen")
   onNavigate: (tab: ActiveTab) => void;
   onSelectTeam?: (teamId: string, playerName?: string) => void;
@@ -34,7 +37,7 @@ interface HeroProps {
 
 // Vollflächiges Hero-Carousel (Magenta-TV-Stil) mit drei Slides:
 // 1. Nächster Spieltag / Live-Spiel  2. Spieler des Monats  3. Tabellenführer
-export default function Hero({ teams, matches, players, seasonLabel, seasonNumber, heroImages, pom: pomProp, onNavigate, onSelectTeam, onOpenMatch, reportMatchIds, trackingRows, scoring, seasonId, only, fadeTop = false, fit = false }: HeroProps) {
+export default function Hero({ teams, matches, players, seasonLabel, seasonNumber, heroImages, imagesReady = true, pom: pomProp, onNavigate, onSelectTeam, onOpenMatch, reportMatchIds, trackingRows, scoring, seasonId, only, fadeTop = false, fit = false }: HeroProps) {
   // pom kommt bevorzugt von oben (vorgeladen); nur ohne Prop selbst nachladen.
   const [pomState, setPomState] = useState<PlayerOfMonth | null>(null);
   // Läuft gerade ein Tracking? → kleiner Hinweis über den Auszeichnungen.
@@ -156,7 +159,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
       <>
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute left-[-5%] right-[-5%] top-0 h-[112lvh] hl-zoom">
-            <img src={heroImages?.match || '/assets/hero-stadium.png'} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            {(heroImages?.match || imagesReady) && <img src={heroImages?.match || '/assets/hero-stadium.webp'} alt="" className="absolute inset-0 w-full h-full object-cover" />}
           </div>
           <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_78%_30%,rgba(232,62,140,.22),transparent_55%)]" />
           {/* warmer Gold-Schein unten links – bricht das Einerlei, mehr Wärme */}
@@ -372,7 +375,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
       <>
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute left-[-5%] right-[-5%] top-0 h-[112lvh] hl-zoom">
-            <img src={heroImages?.table || '/assets/hero-crowd.png'} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            {(heroImages?.table || imagesReady) && <img src={heroImages?.table || '/assets/hero-crowd.webp'} alt="" className="absolute inset-0 w-full h-full object-cover" />}
           </div>
           <div className="absolute inset-0 bg-[radial-gradient(120%_120%_at_80%_30%,rgba(34,223,201,.2),transparent_55%)]" />
           {/* warmer Gold-Schein unten links – etwas mehr Wärme im Hero */}
