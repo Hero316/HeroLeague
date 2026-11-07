@@ -23,7 +23,10 @@ createRoot(document.getElementById('root')!).render(
     ) : (
       <ErrorBoundary>
         <InstallProvider>
-          <App />
+          {/* Bereiche, die erst bei Bedarf geladen werden (Admin, Team-App …), zeigen kurz den dunklen Hintergrund. */}
+          <Suspense fallback={<div className="min-h-screen bg-[#050706]" />}>
+            <App />
+          </Suspense>
         </InstallProvider>
       </ErrorBoundary>
     )}
@@ -34,6 +37,7 @@ createRoot(document.getElementById('root')!).render(
 // späterer Deploy in einer neuen Sitzung wieder heilen darf.
 try {
   sessionStorage.removeItem('hl-recovered');
+  sessionStorage.removeItem('hl-chunk-reload');
 } catch {
   /* ignore */
 }

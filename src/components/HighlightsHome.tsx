@@ -3,6 +3,7 @@ import { motion, useScroll, useTransform } from 'motion/react';
 import { ArrowRight } from 'lucide-react';
 import type { HighlightsConfig } from '../types';
 import { Reveal } from './anim';
+import { useBackClose } from '../lib/backStack';
 import HighlightsLightbox from './HighlightsLightbox';
 import HighlightsCarousel from './HighlightsCarousel';
 import HighlightsEditor from './HighlightsEditor';
@@ -32,6 +33,9 @@ export default function HighlightsHome({
   const storyAlbums = useMemo(() => [...albums].reverse(), [albums]);
   const [lightbox, setLightbox] = useState<{ index: number | null; dir: number }>({ index: null, dir: 0 });
   const [storyAlbum, setStoryAlbum] = useState<number | null>(null);
+  // Handy-Zurück schließt Großansicht bzw. Story statt die Seite zu verlassen.
+  useBackClose(lightbox.index !== null, () => setLightbox((l) => ({ ...l, index: null })));
+  useBackClose(storyAlbum !== null, () => setStoryAlbum(null));
   // Karussell zeigt nur die mit Stern markierten Medien (aus allen Ordnern + losen
   // Highlights). Ist noch nichts markiert, greifen die losen Highlights als Vorgabe
   // – so bleibt die Startseite auch ohne Auswahl gefüllt. Neueste zuerst.

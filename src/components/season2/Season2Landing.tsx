@@ -430,7 +430,7 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
         {/* HERO */}
         <section ref={heroRef} className="relative min-h-[100svh] flex items-end overflow-hidden">
           <motion.div className="absolute inset-0" style={finePointer ? { y: bgY, scale: bgScale } : { scale: 1.08 }}>
-            <img src={heroBg} alt="" className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/assets/hero-stadium.png'; }} />
+            <img src={heroBg} alt="" className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/assets/hero-stadium.webp'; }} />
           </motion.div>
           <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, rgba(4,6,14,.55) 0%, rgba(4,6,14,.35) 35%, rgba(4,6,14,.85) 75%, ${S2.bg} 100%)` }} />
           <div className="absolute inset-0 opacity-[.13]" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)', backgroundSize: '64px 64px', maskImage: 'radial-gradient(70% 60% at 50% 40%, #000, transparent)' }} />
@@ -762,7 +762,7 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
         <section className="relative px-4 pt-24 sm:pt-32 pb-16">
           <Reveal className="max-w-5xl mx-auto">
             <div className="relative overflow-hidden rounded-[36px] border border-white/10 px-6 py-14 sm:py-20 text-center">
-              <img src={images[1] || '/assets/hero-crowd.png'} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" loading="lazy" />
+              <img src={images[1] || '/assets/hero-crowd.webp'} alt="" className="absolute inset-0 w-full h-full object-cover opacity-30" loading="lazy" />
               <div className="absolute inset-0" style={{ background: `radial-gradient(70% 80% at 50% 100%, rgba(47,91,255,.55), transparent 70%), linear-gradient(180deg, rgba(4,6,14,.6), rgba(4,6,14,.9))` }} />
               <div className="relative">
                 <h2 className="font-display font-black uppercase tracking-tight text-white text-[44px] sm:text-[84px] leading-[.85]">Seid dabei,<br /><span className="text-[#D7FF3B]">wenn’s losgeht.</span></h2>

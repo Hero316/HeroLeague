@@ -438,6 +438,27 @@ function toArchive(stored: unknown) {
   return { activeId: s.active ? single.id : null, previewId: null, events: [single] };
 }
 
+// Event-Archiv sicher ändern: lesen, ändern und nur schreiben, wenn der Wert in der
+// Zwischenzeit unverändert ist – sonst neu lesen und nochmal (z. B. zwei Schiris
+// tragen im selben Moment ein Tor ein: beide Tore bleiben erhalten).
+async function updateEventArchive(
+  mutate: (archive: EventArchive) => { status: number; error: string } | void,
+): Promise<{ ok: true; archive: ReturnType<typeof normalizeArchive> } | { ok: false; status: number; error: string }> {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const rows = await sql`SELECT value FROM settings WHERE key = 'event'`;
+    const raw = rows[0]?.value;
+    const archive = toArchive(raw) as EventArchive;
+    const err = mutate(archive);
+    if (err) return { ok: false, ...err };
+    const next = normalizeArchive(archive);
+    const written = raw === undefined
+      ? await sql`INSERT INTO settings (key, value) VALUES ('event', ${JSON.stringify(next)}::jsonb) ON CONFLICT (key) DO NOTHING RETURNING 1`
+      : await sql`UPDATE settings SET value = ${JSON.stringify(next)}::jsonb WHERE key = 'event' AND value = ${JSON.stringify(raw)}::jsonb RETURNING 1`;
+    if (written.length) return { ok: true, archive: next };
+  }
+  return { ok: false, status: 409, error: 'Gerade wird viel gleichzeitig gespeichert – bitte nochmal versuchen.' };
+}
+
 const saveEvent = requirePermission('channels', 'tracking')(async (req: VercelRequest, res: VercelResponse) => {
   const archive = normalizeArchive(req.body);
   await sql`
@@ -457,13 +478,6 @@ const saveEventMatch = requireMatchWrite(async (req: VercelRequest, res: VercelR
   const matchId = str(b.matchId).trim();
   if (!eventId || !matchId) return res.status(400).json({ error: 'eventId und matchId sind Pflicht.' });
   const patch = (b.patch && typeof b.patch === 'object' ? b.patch : {}) as Record<string, unknown>;
-
-  const rows = await sql`SELECT value FROM settings WHERE key = 'event'`;
-  const archive = toArchive(rows[0]?.value) as EventArchive;
-  const ev = archive.events.find((e) => e.id === eventId);
-  if (!ev) return res.status(404).json({ error: 'Testspiel nicht gefunden.' });
-  const m = ev.matches.find((mm) => mm.id === matchId) as EventMatch | undefined;
-  if (!m) return res.status(404).json({ error: 'Spiel nicht gefunden.' });
 
   // Match-Form (playerName/teamId) -> Event-Form (player/team).
   const mapScorers = (v: unknown) =>
@@ -486,6 +500,12 @@ const saveEventMatch = requireMatchWrite(async (req: VercelRequest, res: VercelR
         return { player: str(o.playerName ?? o.player).trim(), team: str(o.teamId ?? o.team).trim() };
       })
       .filter((a) => a.team);
+
+  const result = await updateEventArchive((archive) => {
+  const ev = archive.events.find((e) => e.id === eventId);
+  if (!ev) return { status: 404, error: 'Testspiel nicht gefunden.' };
+  const m = ev.matches.find((mm) => mm.id === matchId) as EventMatch | undefined;
+  if (!m) return { status: 404, error: 'Spiel nicht gefunden.' };
 
   if ('homeScore' in patch) m.homeScore = toScore(patch.homeScore);
   if ('awayScore' in patch) m.awayScore = toScore(patch.awayScore);
@@ -518,13 +538,9 @@ const saveEventMatch = requireMatchWrite(async (req: VercelRequest, res: VercelR
     }
     m.pausedAt = now;
   }
-
-  const next = normalizeArchive(archive);
-  await sql`
-    INSERT INTO settings (key, value) VALUES ('event', ${JSON.stringify(next)}::jsonb)
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
-  `;
-  return res.json(next);
+  });
+  if ('error' in result) return res.status(result.status).json({ error: result.error });
+  return res.json(result.archive);
 });
 
 // Anwesenheit (wer ist da) + Torwart für ein Testspiel setzen – schreibt die
@@ -537,13 +553,12 @@ const saveEventAttendance = requireMatchWrite(async (req: VercelRequest, res: Ve
   const teamsIn = (b.teams && typeof b.teams === 'object' ? b.teams : {}) as Record<string, { present?: unknown; goalkeeper?: unknown }>;
   const minutes = Number.isFinite(Number(b.minutes)) && str(b.minutes) !== '' ? Math.max(1, Math.min(120, Math.trunc(Number(b.minutes)))) : null;
 
-  const rows = await sql`SELECT value FROM settings WHERE key = 'event'`;
-  const archive = toArchive(rows[0]?.value) as EventArchive;
-  const ev = archive.events.find((e) => e.id === eventId);
-  if (!ev) return res.status(404).json({ error: 'Testspiel nicht gefunden.' });
-
   const nrm = (s: string) => s.toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ').trim();
   const leagueTeams = await getTeams();
+
+  const result = await updateEventArchive((archive) => {
+  const ev = archive.events.find((e) => e.id === eventId);
+  if (!ev) return { status: 404, error: 'Testspiel nicht gefunden.' };
   const rosterNamesOf = (teamName: string): string[] => {
     const own = ev.rosters?.find((r) => nrm(r.team) === nrm(teamName))?.players;
     if (own && own.length) return own.map((p) => p.name).filter(Boolean);
@@ -574,13 +589,9 @@ const saveEventAttendance = requireMatchWrite(async (req: VercelRequest, res: Ve
       ];
     }
   }
-
-  const next = normalizeArchive(archive);
-  await sql`
-    INSERT INTO settings (key, value) VALUES ('event', ${JSON.stringify(next)}::jsonb)
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
-  `;
-  return res.json(next);
+  });
+  if ('error' in result) return res.status(result.status).json({ error: result.error });
+  return res.json(result.archive);
 });
 
 // Testspiel-Demo befüllen/entfernen (nur Super-Admin). Legt ein separates
@@ -746,9 +757,11 @@ const saveRoster = requireMatchWrite(async (req: VercelRequest, res: VercelRespo
       const next = map[p.name] === null ? undefined : (map[p.name] as number);
       if (next === p.number) return p;
       changed = true;
-      const base: { name: string; imageUrl?: string; number?: number } = { name: p.name };
-      if (p.imageUrl) base.imageUrl = p.imageUrl;
-      if (next !== undefined) base.number = next;
+      // Alle übrigen Angaben (Foto, Freisteller, Kapitän, Torwart) behalten –
+      // nur die Nummer ändert sich.
+      const base = { ...p };
+      if (next === undefined) delete base.number;
+      else base.number = next;
       return base;
     });
     if (changed) {

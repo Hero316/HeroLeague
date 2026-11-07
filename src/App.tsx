@@ -9,63 +9,64 @@ import { DEFAULT_SCORING } from './lib/scoring';
 import { startPresence } from './lib/presence';
 import { disablePush, syncPush } from './lib/push';
 import { seasonName } from './lib/heroAward';
+import { lazyPage } from './lib/lazyPage';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import Tabelle from './components/Tabelle';
 import Spielplan from './components/Spielplan';
 import HeroOne from './components/HeroOne';
 import Statistiken from './components/Statistiken';
-import AdminPanel from './components/AdminPanel';
-import AdminDashboard from './components/AdminDashboard';
+const AdminPanel = lazyPage(() => import('./components/AdminPanel'));
+const AdminDashboard = lazyPage(() => import('./components/AdminDashboard'));
 import AdminLogin from './components/AdminLogin';
-import UserManager from './components/UserManager';
-import MatchManager from './components/MatchManager';
-import RefereeMode from './components/RefereeMode';
+const UserManager = lazyPage(() => import('./components/UserManager'));
+const MatchManager = lazyPage(() => import('./components/MatchManager'));
+const RefereeMode = lazyPage(() => import('./components/RefereeMode'));
 import TeamDetail from './components/TeamDetail';
 import LiveBanner from './components/LiveBanner';
 import LiveMatchTakeover from './components/LiveMatchTakeover';
 import LiveTicker from './components/LiveTicker';
-import TippspielPage from './components/TippspielPage';
-import TippAdmin from './components/TippAdmin';
-import TippBonusAdmin from './components/TippBonusAdmin';
+const TippspielPage = lazyPage(() => import('./components/TippspielPage'));
+const TippAdmin = lazyPage(() => import('./components/TippAdmin'));
+const TippBonusAdmin = lazyPage(() => import('./components/TippBonusAdmin'));
 import TippReminder from './components/TippReminder';
 import StreamStage, { LeagueStreamStage } from './components/StreamStage';
 import StreamAdmin, { ObsLinks } from './components/StreamAdmin';
-import StudioRegie from './components/StudioRegie';
+const StudioRegie = lazyPage(() => import('./components/StudioRegie'));
 import { fetchStreams, fetchLeagueStreams } from './lib/streams';
 import InstallPrompt from './components/InstallPrompt';
-import Ergebniszettel from './components/Ergebniszettel';
-import LegalPage from './components/LegalPage';
+const Ergebniszettel = lazyPage(() => import('./components/Ergebniszettel'));
+const LegalPage = lazyPage(() => import('./components/LegalPage'));
 import PageBackground from './components/PageBackground';
 import MobileDock from './components/MobileDock';
 import Countdown from './components/Countdown';
 import EventPage, { EventTab } from './components/EventPage';
 import EventBanner from './components/EventBanner';
-import SeasonSignup from './components/SeasonSignup';
+const SeasonSignup = lazyPage(() => import('./components/SeasonSignup'));
 import SeasonSignupBanner from './components/SeasonSignupBanner';
-import Season2Landing from './components/season2/Season2Landing';
-import PartnerAdmin from './components/PartnerAdmin';
+const Season2Landing = lazyPage(() => import('./components/season2/Season2Landing'));
+const PartnerAdmin = lazyPage(() => import('./components/PartnerAdmin'));
 // Partner-Landingpage nur bei Bedarf laden (bringt die Livestream-Vorschau mit).
 const PartnerLanding = React.lazy(() => import('./components/partner/PartnerLanding'));
-import Season2BookingAdmin from './components/Season2BookingAdmin';
+const Season2BookingAdmin = lazyPage(() => import('./components/Season2BookingAdmin'));
 import { FadeIn, Reveal } from './components/anim';
 import HomeIntro from './components/HomeIntro';
 import HomeMatchRow from './components/HomeMatchRow';
-import EventTickets from './components/EventTickets';
-import SelfCheckin from './components/SelfCheckin';
-import ManagerKader from './components/ManagerKader';
-import SignupAdmin from './components/SignupAdmin';
-import TicketAdmin from './components/TicketAdmin';
-import EventErgebniszettel from './components/EventErgebniszettel';
+const EventTickets = lazyPage(() => import('./components/EventTickets'));
+const SelfCheckin = lazyPage(() => import('./components/SelfCheckin'));
+const ManagerKader = lazyPage(() => import('./components/ManagerKader'));
+const SignupAdmin = lazyPage(() => import('./components/SignupAdmin'));
+const TicketAdmin = lazyPage(() => import('./components/TicketAdmin'));
+const EventErgebniszettel = lazyPage(() => import('./components/EventErgebniszettel'));
 import HighlightsHome from './components/HighlightsHome';
 import HighlightsPage from './components/HighlightsPage';
-import ChatApp from './components/ChatApp';
+const ChatApp = lazyPage(() => import('./components/ChatApp'));
 import Avatar from './components/Avatar';
 import DeepLinkModal from './components/DeepLinkModal';
 import { PageHeader, Footer, AccordionGroup, AccordionSection, loadPartners } from './components/ui';
 import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight, Target, Star, Twitch, MonitorPlay, Crown, Clapperboard, Handshake } from 'lucide-react';
-import TrackingCenter from './components/TrackingCenter';
-import HeroOneAdmin from './components/HeroOneAdmin';
+const TrackingCenter = lazyPage(() => import('./components/TrackingCenter'));
+const HeroOneAdmin = lazyPage(() => import('./components/HeroOneAdmin'));
 import { effectivePermissions } from './lib/permissions';
 import SpielberichtPage from './components/SpielberichtPage';
 import WertungenPage from './components/WertungenPage';
@@ -116,6 +117,7 @@ export default function App() {
   const [highlightsAlbumId, setHighlightsAlbumId] = useState<string | null>(null);
   // Eigene Hero-Hintergrundbilder (Startseite) – leer = Standard-Design
   const [heroImages, setHeroImages] = useState<HeroImages>({ match: '', pom: '', table: '' });
+  const [heroReady, setHeroReady] = useState(false); // Bild-Einstellungen geladen?
   // Countdown bis zum Anstoß (Startseite). active=false ⇒ normal.
   const [countdown, setCountdown] = useState<CountdownConfig>({ active: false, target: '2026-10-04T19:00', title: 'Till Season begins' });
   // Freie News fürs Laufband (im Admin gepflegt) – leer = nur automatische Ticker-Einträge
@@ -291,7 +293,13 @@ export default function App() {
 
   const hasLiveMatch = useMemo(() => currentSeasonMatches.some((m) => m.status === 'live'), [currentSeasonMatches]);
 
+  // Nur die NEUESTE Abfrage darf die Daten setzen: Eine ältere (z. B. ein
+  // Live-Nachladen, das vor dem Speichern eines Tores losging) kommt sonst evtl.
+  // später an und setzt den Spielstand auf dem Schiri-Handy wieder zurück.
+  const fetchSeq = useRef(0);
+  const eventSeq = useRef(0);
   const fetchData = useCallback(async () => {
+    const seq = ++fetchSeq.current;
     try {
       const [dataTeams, dataMatches, dataSeasons, dataDemo, dataPom] = await Promise.all([
         apiFetch<Team[]>('/api/teams'),
@@ -306,6 +314,7 @@ export default function App() {
         // Partner gleich mitladen – sonst ploppt das Sponsor-Logo auf der Startseite nach.
         loadPartners(),
       ]);
+      if (seq !== fetchSeq.current) return; // inzwischen neuer geladen
       setTeams(dataTeams);
       setMatches(dataMatches);
       setSeasons(dataSeasons);
@@ -314,7 +323,7 @@ export default function App() {
     } catch (err) {
       console.error('Fehler beim Laden der Liga-Daten', err);
     } finally {
-      setIsLoading(false);
+      if (seq === fetchSeq.current) setIsLoading(false);
     }
   }, []);
 
@@ -333,7 +342,8 @@ export default function App() {
       .then((data) => setHeroImages({ match: data.match || '', pom: data.pom || '', table: data.table || '', order: data.order }))
       .catch(() => {
         // Kein eigenes Bild gepflegt – Standard-Design bleibt
-      });
+      })
+      .finally(() => setHeroReady(true));
   }, []);
 
   // Countdown-Konfiguration laden (unkritisch – Fallback: aus)
@@ -393,14 +403,27 @@ export default function App() {
     fetchLeagueStreams().then(setLeagueStreams).catch(() => { /* nicht konfiguriert – Bereich bleibt aus */ });
   }, []);
 
-  // Spielerstatistiken hängen an der ausgewählten Saison
+  // Spielerstatistiken hängen an der ausgewählten Saison. Neu laden nur, wenn sich
+  // an Spielen/Kadern wirklich etwas geändert hat (nicht bei jedem Live-Nachladen
+  // mit identischen Daten); alte Antworten (Saison schnell gewechselt) verwerfen.
+  const statsKey = useMemo(
+    () =>
+      matches.map((m) => `${m.id}:${m.status}:${m.homeScore}:${m.awayScore}:${m.scorers?.length ?? 0}`).join('|') +
+      '#' +
+      teams.map((t) => `${t.id}:${t.spielerliste?.length ?? 0}`).join('|'),
+    [matches, teams]
+  );
   useEffect(() => {
+    let alive = true;
     const seasonId = selectedSeason?.id;
     const query = seasonId ? `?season=${encodeURIComponent(seasonId)}` : '';
     apiFetch<PlayerStat[]>(`/api/players${query}`)
-      .then(setPlayers)
+      .then((p) => alive && setPlayers(p))
       .catch((err) => console.error('Fehler beim Laden der Spielerstatistiken', err));
-  }, [selectedSeason?.id, matches, teams]);
+    return () => {
+      alive = false;
+    };
+  }, [selectedSeason?.id, statsKey]);
 
   // Solange ein Spiel live ist: regelmäßig nachladen, damit Besucher den Spielstand
   // und die Torschützen ohne Neuladen mitverfolgen. Endet das Spiel, stoppt das Polling.
@@ -411,9 +434,15 @@ export default function App() {
   const leagueStreamsOn = !!(leagueStreams?.active && (leagueStreams.field1?.trim() || leagueStreams.field2?.trim()));
   usePolling(fetchData, 15_000, { enabled: hasLiveMatch || leagueStreamsOn, immediate: false });
 
-  // Beim Zurückkehren zum Tab sofort den aktuellen Stand holen
+  // Beim Zurückkehren zum Tab den aktuellen Stand holen – höchstens alle 30 s
+  // (ein Klick in den Stream und zurück löst sonst jedes Mal 7 Anfragen aus).
+  const lastFocusFetch = useRef(0);
   useEffect(() => {
-    const onFocus = () => fetchData();
+    const onFocus = () => {
+      if (Date.now() - lastFocusFetch.current < 30_000) return;
+      lastFocusFetch.current = Date.now();
+      fetchData();
+    };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [fetchData]);
@@ -458,12 +487,14 @@ export default function App() {
   // Nur im sichtbaren Tab (usePolling); ohne laufendes Spiel reicht ein längerer Takt.
   usePolling(
     () => {
+      const seq = ++eventSeq.current;
       apiFetch<EventArchive>('/api/twitch?resource=event')
-        .then((data) => setEventArchive(data))
+        .then((data) => seq === eventSeq.current && setEventArchive(data))
         .catch(() => {});
     },
     eventHasLive ? 8_000 : streams?.active ? 10_000 : hasLiveMatch ? 20_000 : 60_000,
-    { immediate: false },
+    // Ohne aktives Testspiel gibt es nichts nachzuladen (kein Dauer-Abfragen).
+    { immediate: false, enabled: !!activeEvent },
   );
 
   // App-Identität je nach Bereich umschalten: unter /chat ist es die eigene
@@ -777,8 +808,10 @@ export default function App() {
   // Event-Archiv neu laden (für den Schiedsrichter-Refresh, damit parallele
   // Änderungen am zweiten Feld erscheinen).
   const refetchEventArchive = async () => {
+    const seq = ++eventSeq.current;
     try {
-      setEventArchive(await apiFetch<EventArchive>('/api/twitch?resource=event'));
+      const data = await apiFetch<EventArchive>('/api/twitch?resource=event');
+      if (seq === eventSeq.current) setEventArchive(data);
     } catch {
       /* egal – bleibt beim letzten Stand */
     }
@@ -789,6 +822,7 @@ export default function App() {
     if (!shownEvent) return false;
     try {
       const updated = await saveEventMatch(shownEvent.id, matchId, patch);
+      eventSeq.current++; // ältere, noch laufende Abrufe verwerfen
       setEventArchive(updated);
       return true;
     } catch (err) {
@@ -803,6 +837,7 @@ export default function App() {
     if (!shownEvent) return false;
     try {
       const updated = await saveEventAttendance(shownEvent.id, teams, minutes);
+      eventSeq.current++;
       setEventArchive(updated);
       return true;
     } catch (err) {
@@ -1642,7 +1677,7 @@ export default function App() {
   if (currentPath.startsWith('/chat')) {
     if (!isAdmin) {
       return (
-        <div className="h-screen flex flex-col bg-[#060E0F] text-hl-text">
+        <div className="h-dvh flex flex-col bg-[#060E0F] text-hl-text">
           <div className="flex-1 flex items-center justify-center p-6">
             <AdminLogin onLoginSuccess={(user) => setSessionUser(user)} />
           </div>
@@ -1687,7 +1722,7 @@ export default function App() {
   if (currentPath.startsWith('/tracking')) {
     if (!isAdmin) {
       return (
-        <div className="h-screen flex flex-col bg-[#060E0F] text-hl-text">
+        <div className="h-dvh flex flex-col bg-[#060E0F] text-hl-text">
           <div className="flex-1 flex items-center justify-center p-6">
             <AdminLogin onLoginSuccess={(user) => setSessionUser(user)} />
           </div>
@@ -2205,7 +2240,7 @@ export default function App() {
               Opacity – dort sitzt Glas/Unschärfe, die ein Transform auf Safari stört). */}
           {pom && (
             <FadeIn duration={0.9}>
-            <Hero only={['pom']} fadeTop fit teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} trackingRows={trackingRows} scoring={scoring} seasonId={currentSeason?.id} />
+            <Hero only={['pom']} fadeTop fit teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} imagesReady={heroReady} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} trackingRows={trackingRows} scoring={scoring} seasonId={currentSeason?.id} />
             </FadeIn>
           )}
           {/* 3. Die Spiele des laufenden / letzten Spieltags (mit Block-Filter) */}
@@ -2220,7 +2255,7 @@ export default function App() {
           </Reveal>
           {/* 4. Nächster Spieltag + Tabelle – wechseln automatisch */}
           <FadeIn duration={0.9}>
-          <Hero only={['match', 'table']} fadeTop teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} trackingRows={trackingRows} scoring={scoring} seasonId={currentSeason?.id} />
+          <Hero only={['match', 'table']} fadeTop teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} imagesReady={heroReady} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} trackingRows={trackingRows} scoring={scoring} seasonId={currentSeason?.id} />
           {/* Season-2-Anmeldung sitzt bewusst zwischen Hero und Highlights,
               damit sie beim Scrollen mitten im Blickfeld liegt. */}
           </FadeIn>

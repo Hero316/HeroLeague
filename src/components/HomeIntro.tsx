@@ -106,7 +106,7 @@ export default function HomeIntro({ image, onNavigate, onOpenSchedule, children 
             className="w-full h-full object-cover"
             style={{ objectPosition: '50% 38%' }}
             onError={(e) => {
-              (e.currentTarget as HTMLImageElement).src = '/assets/hero-stadium.png';
+              (e.currentTarget as HTMLImageElement).src = '/assets/hero-stadium.webp';
             }}
           />
         </div>

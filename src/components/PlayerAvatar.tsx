@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { shade } from './ui';
+import { useBackClose } from '../lib/backStack';
 
 interface PlayerAvatarProps {
   name: string;
@@ -22,6 +23,7 @@ const SIZES = {
 // Bei vorhandenem Foto per Klick als mittelgroße Lightbox anzeigbar.
 export default function PlayerAvatar({ name, imageUrl, color = '#22DFC9', size = 'md' }: PlayerAvatarProps) {
   const [open, setOpen] = useState(false);
+  useBackClose(open, () => setOpen(false)); // Handy-Zurück schließt die Großansicht
 
   const initials = name
     .split(/\s+/)

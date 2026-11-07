@@ -410,7 +410,7 @@ export default function ChatApp({
 
   return (
     <AudioPlayerProvider>
-    <div className="h-screen flex flex-col text-hl-text hl-app-bg">
+    <div className="h-dvh flex flex-col text-hl-text hl-app-bg">
       {/* Kopfzeile */}
       <header
         className="flex items-center justify-between gap-2 px-2 py-2 border-b border-white/10 hl-app-bar backdrop-blur-xl shrink-0"

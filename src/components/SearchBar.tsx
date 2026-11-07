@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Search, X, User, CalendarDays, Compass, Images } from 'lucide-react';
 import { ActiveTab, HighlightAlbum, Match, Team } from '../types';
 import { shortDate, TeamCrest, shade } from './ui';
+import { useBackClose } from '../lib/backStack';
 
 // Diakritika entfernen + Kleinschreibung → toleranter Vergleich (ä=a, ö=o …).
 const norm = (s: string) =>
@@ -49,6 +50,7 @@ export default function SearchBar({
 }: SearchBarProps) {
   const reduce = useReducedMotion();
   const [open, setOpen] = useState(false);
+  useBackClose(open, () => setOpen(false)); // Handy-Zurück schließt die Suche
   const [q, setQ] = useState('');
   const [active, setActive] = useState(0);
   // Position des Dropdowns: direkt unter dem Lupe-Button gemessen (robust – egal
