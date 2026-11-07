@@ -1,7 +1,7 @@
 import { Loader2 } from 'lucide-react';
 import type { TrackingDayProgress } from '../lib/trackingProgress';
 
-// „Das Team ist am Tracken" – Live-Fortschritt eines Spieltags, der gerade
+// „Das Team ist am Auswerten" – Live-Fortschritt eines Spieltags, der gerade
 // getrackt wird (Prozent = Spiele auf „Fertig" im Tracking Center).
 export default function TrackingProgressBanner({
   day,
@@ -13,14 +13,14 @@ export default function TrackingProgressBanner({
   className?: string;
 }) {
   const finishing = day.done >= day.total;
-  const title = finishing ? 'Auswertung wird abgeschlossen' : 'Das Team ist am Tracken';
+  const title = finishing ? 'Auswertung wird abgeschlossen' : 'Das Team ist am Auswerten';
   // Kompakt (Startseite): eine schlanke Pille mit Fortschritt als Unterstrich.
   if (compact) {
     return (
       <div className={`flex justify-center ${className}`} role="status" aria-live="polite">
         <div className="relative overflow-hidden inline-flex items-center gap-2 max-w-full rounded-full border border-[#22DFC9]/35 bg-[#0b1f1d]/80 backdrop-blur-sm pl-3 pr-3.5 py-1.5">
           <Loader2 className="w-3.5 h-3.5 text-[#22DFC9] animate-spin shrink-0" />
-          <span className="text-[11px] sm:text-[12px] font-bold uppercase tracking-wider text-white truncate">
+          <span className="min-w-0 text-[10px] min-[380px]:text-[11px] sm:text-[12px] font-bold uppercase tracking-[.04em] min-[380px]:tracking-wider text-white whitespace-nowrap truncate">
             {title} · {day.matchday}. Spieltag
           </span>
           <span className="text-[12px] font-display font-black tabular-nums text-[#22DFC9] shrink-0">{day.pct}%</span>

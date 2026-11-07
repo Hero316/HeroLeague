@@ -8,7 +8,7 @@ import { SponsorLink } from './ui';
 // Startseiten-Folie „Auszeichnungen des Spieltages": links der Spieler, rechts
 // der Torwart des Spieltages – spiegelsymmetrisch: die FIFA-Karten stehen
 // innen an der Mittellinie, die Spieltagswerte außen, Überschrift und Name sind
-// zur Mitte ausgerichtet. Oben groß „präsentiert von" mit dem Sponsor-Logo.
+// zur Mitte ausgerichtet. Oben „Auszeichnungen des Spieltages – präsentiert von" mit dem Sponsor-Logo.
 // Am Handy stehen die beiden Karten kleiner nebeneinander, darunter die Note.
 // Karte UND Werte = nur dieser Spieltag (bleibt fix, auch wenn später weitere Spieltage dazukommen).
 // Ohne Tracking-Daten fällt der Spieler auf die bisherige Foto-Karte zurück.
@@ -247,6 +247,7 @@ function SponsorHead({ sponsor }: { sponsor: Partner }) {
   const [ready, setReady] = useState(!sponsor.logoUrl);
   return (
     <div className="flex flex-col items-center text-center gap-2.5 sm:gap-3 transition-opacity duration-300" style={{ opacity: ready ? 1 : 0 }}>
+      <h2 className="font-display font-black uppercase text-white text-[22px] sm:text-3xl leading-none tracking-tight">Auszeichnungen des Spieltages</h2>
       <span className="font-sans font-bold text-[10px] sm:text-xs tracking-[3px] uppercase text-white/70">präsentiert von</span>
       <SponsorLink
         sponsorId={sponsor.id}

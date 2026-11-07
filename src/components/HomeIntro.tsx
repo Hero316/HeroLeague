@@ -129,11 +129,11 @@ export default function HomeIntro({ image, onNavigate, onOpenSchedule, children 
             ref={titleRef}
             className="inline-block font-display font-black uppercase leading-[.86] tracking-[-.012em] text-white [text-shadow:0_10px_40px_rgba(0,0,0,.45)] text-[15vw] min-[760px]:whitespace-nowrap"
           >
-            <span className="block min-[760px]:inline overflow-hidden pb-[.03em]">
+            <span className="block min-[760px]:inline pb-[.03em]">
               <span className="hl-intro-word inline-block">Deine</span>
             </span>
             <span className="hidden min-[760px]:inline"> </span>
-            <span className="block min-[760px]:inline overflow-hidden pb-[.03em]">
+            <span className="block min-[760px]:inline pb-[.03em]">
               <span
                 ref={longRef}
                 className="hl-intro-word hl-intro-word-2 inline-block whitespace-nowrap bg-clip-text text-transparent pr-[.05em]"
