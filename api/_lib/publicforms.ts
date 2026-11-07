@@ -139,10 +139,10 @@ export async function issueCode(
   } catch (err) {
     console.error('Bestätigungs-Mail fehlgeschlagen:', err);
   }
-  // Auf dev/preview (NIE in Produktion/live) den Code zusätzlich direkt
-  // zurückgeben, damit man ohne Postfach schnell durchtesten kann. Die Mail wird
-  // trotzdem verschickt. Auf der Live-Seite bleibt der Code geheim.
-  const exposeDev = process.env.VERCEL_ENV !== 'production';
+  // Lokal ohne Mailversand den Code direkt zurückgeben, damit man testen kann.
+  // Nur wenn KEIN Mailversand eingerichtet ist (lokal) – sonst könnte jeder mit
+  // dem Staging-Link Codes für fremde Adressen sehen.
+  const exposeDev = process.env.VERCEL_ENV !== 'production' && !process.env.RESEND_API_KEY;
   return exposeDev ? { ok: true, devCode: code } : { ok: true };
 }
 
@@ -155,16 +155,19 @@ export async function checkCode(purpose: string, email: string, code: unknown): 
   if (typeof code !== 'string' || !/^\d{6}$/.test(code.trim())) {
     return { ok: false, error: 'Bitte den 6-stelligen Code eingeben.' };
   }
-  const rows = await sql`SELECT code_hash AS "codeHash", attempts FROM public_codes
-    WHERE purpose = ${purpose} AND email = ${normalized} AND expires_at > now() LIMIT 1`;
-  if (rows.length === 0) return { ok: false, error: 'Der Code ist abgelaufen. Bitte fordere einen neuen an.' };
-  const row = rows[0] as { codeHash: string; attempts: number };
-  if (row.attempts >= MAX_CODE_ATTEMPTS) {
+  // Versuch ZUERST atomar zählen (nur solange noch Versuche frei sind), dann
+  // vergleichen – parallele Anfragen können so nicht mehr als 5 Codes testen.
+  const rows = await sql`UPDATE public_codes SET attempts = attempts + 1
+    WHERE purpose = ${purpose} AND email = ${normalized} AND expires_at > now() AND attempts < ${MAX_CODE_ATTEMPTS}
+    RETURNING code_hash AS "codeHash"`;
+  if (rows.length === 0) {
+    const left = await sql`SELECT 1 FROM public_codes WHERE purpose = ${purpose} AND email = ${normalized} AND expires_at > now() LIMIT 1`;
+    if (left.length === 0) return { ok: false, error: 'Der Code ist abgelaufen. Bitte fordere einen neuen an.' };
     await sql`DELETE FROM public_codes WHERE purpose = ${purpose} AND email = ${normalized}`;
     return { ok: false, error: 'Zu viele Fehlversuche. Bitte fordere einen neuen Code an.' };
   }
+  const row = rows[0] as { codeHash: string };
   if (!timingSafeEqualHex(hashCode(code.trim()), row.codeHash)) {
-    await sql`UPDATE public_codes SET attempts = attempts + 1 WHERE purpose = ${purpose} AND email = ${normalized}`;
     return { ok: false, error: 'Der Code stimmt nicht. Bitte prüfe deine E-Mail.' };
   }
   await sql`DELETE FROM public_codes WHERE purpose = ${purpose} AND email = ${normalized}`;

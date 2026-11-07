@@ -41,7 +41,8 @@ const MAX_BYTES = 3 * 1024 * 1024; // 3 MB dekodiert (Vercel-Request-Limit ~4,5 
 // Diese Funktion stellt nur ein kurzlebiges, signiertes Upload-Token aus
 // (?resource=blob) – die eigentlichen Daten fließen am Server vorbei.
 const BLOB_MAX_BYTES = 500 * 1024 * 1024; // 500 MB Obergrenze (reicht für Handy-Videos)
-const BLOB_ALLOWED = ['image/*', 'video/*', 'audio/*', 'application/pdf', 'application/zip'];
+// Bilder nur als feste Liste (kein SVG – darin kann Skript stecken).
+const BLOB_ALLOWED = [...Object.keys(IMAGE_TYPES), 'video/*', 'audio/*', 'application/pdf', 'application/zip'];
 
 async function blobClientUpload(req: VercelRequest, res: VercelResponse) {
   try {

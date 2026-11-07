@@ -316,7 +316,8 @@ async function submit(req: VercelRequest, res: VercelResponse) {
   // keine bestehende Anmeldung mehr versehentlich überschrieben.
   const existingBefore = await getExistingSignup(String(b.email));
   if (existingBefore && b.confirmOverwrite !== true) {
-    return res.json({ ok: false, needsConfirm: true, existing: existingBefore });
+    // Ohne geprüften Code keine Namen/Daten herausgeben (sonst abfragbar für fremde Adressen).
+    return res.json({ ok: false, needsConfirm: true, existing: { entry: existingBefore.entry } });
   }
   const check = await checkCode(PURPOSE, b.email, b.code);
   if (!check.ok) return badRequest(res, check.error || 'Code ungültig.');

@@ -244,6 +244,14 @@ export async function saveBonusSolution(answers: BonusAnswers): Promise<{ ok: bo
   });
 }
 
+// Öffentliche Kennung (wie publicVoterId im Server): Ranglisten und Tipp-Listen
+// zeigen nie die echte voterId – damit erkennt die Seite die eigenen Einträge.
+export async function publicVoterId(voterId: string): Promise<string> {
+  if (!voterId || !globalThis.crypto?.subtle) return '';
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`tipp-pub:${voterId}`));
+  return 'p-' + [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+}
+
 export async function fetchTips(): Promise<Tip[]> {
   const data = await apiFetch<{ tips: Tip[] }>('/api/twitch?resource=tips');
   return Array.isArray(data.tips) ? data.tips : [];

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, Lock, Trophy, Minus, Plus, Target, Loader2, LogOut, ShieldCheck, Clock, CalendarDays, ClipboardCheck, Flame, ChevronDown, Star, Check, X } from 'lucide-react';
 import type { Match, Team, Tip } from '../types';
-import { fetchTips, submitTip, getIdentity, clearIdentity, scoreTip, leaderboard, tipDeadline, mondayOpenAfter, TIP_POINTS, fetchBonus, submitBonus, acceptTerms, tippReminderKey, markTippReminderSeen, BONUS_QUESTIONS, BONUS_MAX, type TippIdentity, type BonusState, type BonusAnswers } from '../lib/tips';
+import { fetchTips, publicVoterId, submitTip, getIdentity, clearIdentity, scoreTip, leaderboard, tipDeadline, mondayOpenAfter, TIP_POINTS, fetchBonus, submitBonus, acceptTerms, tippReminderKey, markTippReminderSeen, BONUS_QUESTIONS, BONUS_MAX, type TippIdentity, type BonusState, type BonusAnswers } from '../lib/tips';
 import { TeamCrest, SegmentedControl } from './ui';
 import { Reveal } from './anim';
 import TippRegister from './TippRegister';
@@ -20,7 +20,15 @@ export default function TippspielPage({ matches, teams, seasonLabel, onNavigate 
   const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams]);
 
   const [identity, setIdentity] = useState<TippIdentity | null>(getIdentity());
-  const voterId = identity?.voterId ?? '';
+  // Eigene öffentliche Kennung (Listen enthalten nie die echte voterId).
+  const [voterId, setPubId] = useState('');
+  useEffect(() => {
+    let alive = true;
+    publicVoterId(identity?.voterId ?? '').then((p) => alive && setPubId(p)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [identity?.voterId]);
   const [tips, setTips] = useState<Tip[]>([]);
   const [loading, setLoading] = useState(true);
   const [drafts, setDrafts] = useState<Record<string, { home: number; away: number }>>({});

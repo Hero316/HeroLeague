@@ -7,7 +7,7 @@ import { fetchPublicStats, fetchEventStats, fetchScoring, saveEventMatch, saveEv
 import { eventTeamsAsTeams, eventMatchesAsMatches, eventPlayers } from './lib/eventView';
 import { DEFAULT_SCORING } from './lib/scoring';
 import { startPresence } from './lib/presence';
-import { syncPush } from './lib/push';
+import { disablePush, syncPush } from './lib/push';
 import { seasonName } from './lib/heroAward';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
@@ -537,6 +537,9 @@ export default function App() {
   };
 
   const handleLogout = async () => {
+    // Push-Abo dieses Geräts beenden (vor dem Abmelden – braucht die Sitzung),
+    // sonst kämen Chat-Vorschauen auf einem weitergegebenen Handy weiter an.
+    await Promise.race([disablePush().catch(() => {}), new Promise((r) => setTimeout(r, 3000))]);
     try {
       await apiFetch('/api/auth/logout', { method: 'POST' });
     } catch {

@@ -60,6 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Nicht unterstützt' });
   } catch (err) {
     console.error('Fehler in /api/push:', err);
-    return res.status(400).json({ error: err instanceof Error ? err.message : 'Interner Fehler' });
+    const msg = err instanceof Error && err.message.startsWith('Ungültige') ? err.message : 'Push konnte nicht eingerichtet werden.';
+    return res.status(400).json({ error: msg });
   }
 }

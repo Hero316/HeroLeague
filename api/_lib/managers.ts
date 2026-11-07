@@ -180,6 +180,9 @@ export async function managerVerify(req: VercelRequest, res: VercelResponse) {
   const b = (req.body ?? {}) as Record<string, unknown>;
   if (!isEmail(b.email)) return badRequest(res, 'Bitte eine gültige E-Mail-Adresse eingeben.');
   const email = normEmail(b.email as string);
+  if (await tooManyAttempts('manager-verify', clientIp(req), 20, 15)) {
+    return res.status(429).json({ error: 'Zu viele Versuche. Bitte in ein paar Minuten erneut probieren.' });
+  }
   const check = await checkCode(PURPOSE, email, b.code);
   if (!check.ok) return badRequest(res, check.error || 'Code ungültig.');
   const teamId = await teamOfEmail(email);
