@@ -242,6 +242,7 @@ export async function sendBrandedMail(opts: {
   layout: Parameters<typeof mailLayout>[0];
   text: string;
   attachments?: { filename: string; content: string }[];
+  bcc?: string[];
 }): Promise<void> {
-  await sendMail({ to: opts.to, subject: opts.subject, from: opts.from, html: mailLayout(opts.layout), text: opts.text, attachments: opts.attachments });
+  await sendMail({ to: opts.to, subject: opts.subject, from: opts.from, html: mailLayout(opts.layout), text: opts.text, attachments: opts.attachments, bcc: opts.bcc });
 }

@@ -1133,6 +1133,7 @@ async function adminBookingInvoice(req: VercelRequest, res: VercelResponse) {
         html: invoiceHtml(doc, inv.data.ctx),
         text: invoiceText(doc, inv.data.ctx),
         attachments: [{ filename: pdfName(inv), content: pdf.toString('base64') }],
+        bcc: cfg.invoice.copyTo ? [cfg.invoice.copyTo] : undefined, // Beleg-Kopie an die Liga
       });
     } catch {
       return res.status(502).json({ error: 'Die E-Mail konnte nicht verschickt werden.' });
@@ -1171,6 +1172,7 @@ async function adminBookingInvoiceCancel(req: VercelRequest, res: VercelResponse
       try {
         await sendBrandedMail({
           to: b.email, from: FROM,
+          bcc: cfg.invoice.copyTo ? [cfg.invoice.copyTo] : undefined, // Beleg-Kopie an die Liga
           subject: `Stornorechnung ${no} zu Rechnung ${orig.no} – ${orig.teamName}`,
           layout: {
             preheader: `Die Rechnung ${orig.no} ist storniert.`,

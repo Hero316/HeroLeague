@@ -1158,6 +1158,9 @@ function SettingsTab({ cfg, onSaved }: { cfg: BookingAdminConfig; onSaved: (c: B
           <L label="Kontakt (optional)">
             <textarea rows={4} value={c.invoice.contact} onChange={(e) => setInv({ contact: e.target.value })} placeholder={'info@hero-league.de\nhero-league.de'} className={inp} />
           </L>
+          <L label="Kopie jeder Rechnung an" hint="Jede verschickte Rechnung und Stornorechnung geht zusätzlich als Kopie (mit PDF) an diese Adresse. Leer = keine Kopie.">
+            <input type="email" value={c.invoice.copyTo ?? ''} onChange={(e) => setInv({ copyTo: e.target.value })} placeholder="heroleague.de@gmail.com" className={inp} />
+          </L>
           <L label="Bankverbindung" hint="Kontoinhaber, IBAN, BIC, Bank – je eine Zeile.">
             <textarea rows={4} value={c.invoice.bank} onChange={(e) => setInv({ bank: e.target.value })} placeholder={'Kontoinhaber: …\nIBAN: DE00 0000 0000 0000 0000 00\nBIC: …'} className={inp} />
           </L>

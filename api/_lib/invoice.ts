@@ -12,6 +12,7 @@ export interface InvoiceSettings {
   bank: string; // Kontoinhaber, IBAN, BIC, Bank (mehrzeilig)
   prefix: string; // z. B. „HL-" → HL-2026-001
   nextNo: number; // laufende Nummer der nächsten Rechnung
+  copyTo: string; // Kopie (BCC) jeder verschickten Rechnung/Stornorechnung an diese Adresse ('' = keine)
 }
 
 export const DEFAULT_INVOICE: InvoiceSettings = {
@@ -23,6 +24,7 @@ export const DEFAULT_INVOICE: InvoiceSettings = {
   bank: '',
   prefix: 'HL-',
   nextNo: 1,
+  copyTo: 'heroleague.de@gmail.com',
 };
 
 export function cleanInvoice(v: unknown, cur: InvoiceSettings): InvoiceSettings {
@@ -40,6 +42,10 @@ export function cleanInvoice(v: unknown, cur: InvoiceSettings): InvoiceSettings 
     prefix: txt(o.prefix, 12).replace(/[^A-Za-z0-9\-_/]/g, ''),
     // Nie unter die bereits vergebene Nummer zurückspringen (sonst doppelte Rechnungsnummern).
     nextNo: Math.max(cur.nextNo || 1, Number.isFinite(no) && no > 0 && no < 1_000_000 ? no : 1),
+    copyTo: (() => {
+      const m = txt(o.copyTo, 200).toLowerCase();
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m) ? m : '';
+    })(),
   };
 }
 

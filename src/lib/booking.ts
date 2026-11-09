@@ -158,6 +158,7 @@ export interface InvoiceSettings {
   bank: string;
   prefix: string;
   nextNo: number;
+  copyTo: string; // Kopie jeder verschickten Rechnung an diese Adresse ('' = keine)
 }
 
 export interface BookingAdminConfig {
