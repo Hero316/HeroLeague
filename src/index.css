@@ -1266,3 +1266,16 @@ button { -webkit-tap-highlight-color: transparent; }
 @media (prefers-reduced-motion: reduce) {
   .hl-intro-media img, .hl-intro-word, .hl-intro-actions { animation: none; }
 }
+
+/* ---------- Startseite: nahtlose Übergänge ----------
+   Hintergründe der Abschnitte laufen oben/unten weich ins DURCHSICHTIGE aus
+   (statt in eine feste Farbe). So scheint überall derselbe Seitenhintergrund
+   durch und es entstehen keine Kanten/Streifen zwischen den Bereichen.
+   Nur auf Hintergrund-Ebenen anwenden, nie auf Text/Tasten. */
+.hl-edge-fade {
+  --edge-top: clamp(70px, 11vw, 170px);
+  --edge-bottom: clamp(90px, 13vw, 200px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--edge-top), #000 calc(100% - var(--edge-bottom)), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--edge-top), #000 calc(100% - var(--edge-bottom)), transparent 100%);
+}
+.hl-edge-fade.hl-edge-notop { --edge-top: 0px; }

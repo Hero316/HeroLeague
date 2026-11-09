@@ -97,7 +97,7 @@ export default function HomeIntro({ image, onNavigate, onOpenSchedule, children 
   return (
     <header ref={heroRef} className="hl-intro relative overflow-hidden">
       {/* Bild (leichter Kameraschwenk + Zoom beim Scrollen) */}
-      <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
+      <div className="absolute inset-0 overflow-hidden hl-edge-fade hl-edge-notop" aria-hidden="true">
         <div ref={mediaRef} className="hl-intro-media absolute -inset-[4%]">
           <img
             src={image || '/assets/season2-hero.webp'}
@@ -112,10 +112,10 @@ export default function HomeIntro({ image, onNavigate, onOpenSchedule, children 
         </div>
       </div>
       {/* Dunkler Schleier beim Scrollen (nur Computer, per opacity) */}
-      <div ref={dimRef} className="absolute inset-0 bg-[#0A1415] pointer-events-none" style={{ opacity: 0 }} aria-hidden="true" />
+      <div ref={dimRef} className="absolute inset-0 bg-[#0A1415] pointer-events-none hl-edge-fade hl-edge-notop" style={{ opacity: 0 }} aria-hidden="true" />
       {/* Verlauf: oben leicht dunkel, unten weich in den Seitenhintergrund (Countdown) */}
       <div
-        className="absolute inset-0 pointer-events-none"
+        className="absolute inset-0 pointer-events-none hl-edge-fade hl-edge-notop"
         aria-hidden="true"
         style={{
           background:

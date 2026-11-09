@@ -67,7 +67,7 @@ export default function HighlightsHome({
           Scroll gekoppelt (Parallaxe) – der Übergang aus dem Hero wirkt lebendig. */}
       <motion.div
         aria-hidden
-        className="absolute inset-0 pointer-events-none"
+        className="absolute inset-0 pointer-events-none hl-edge-fade"
         initial={{ opacity: 0 }}
         whileInView={{ opacity: 1 }}
         viewport={{ once: true, margin: '-18% 0px' }}
