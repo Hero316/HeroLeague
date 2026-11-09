@@ -12,10 +12,17 @@ const PTS_DRAW = 1; // 0,1 pro eingesetztem Spieler bei Unentschieden
 // Spielerstatistiken (Tore, Assists, Einsätze, MOTM, Wertungspunkte) aus Kadern und den
 // Torschützen-/Bester-Spieler-Einträgen der beendeten Spiele ableiten – nie manuell gepflegt.
 // Die `points` werden intern in Zehnteln akkumuliert und erst am Ende in echte Punkte umgerechnet.
-// `notPlayed`: Einsätze, die laut Tracking NICHT gespielt wurden (Schlüssel
-// "matchId::teamId::Spieler" – „Spielt nicht" bzw. Feldspieler ohne Aktion).
-// Sie zählen wie eine Abwesenheit in diesem Spiel (Spiele, Siegquote, Punkte).
-export function calculatePlayers(teams: Team[], matches: Match[], notPlayed?: Set<string>): PlayerStat[] {
+// `tracking`: veröffentlichtes Tracking. Ist ein Team in einem Spiel getrackt
+// (`teams` enthält "matchId::teamId"), zählt dort NUR als eingesetzt, wer im
+// Tracking dieses Spiels vorkommt (`played`, Schlüssel "matchId::teamId::Spieler"),
+// als Torwart eingetragen ist oder ein Tor/eine Vorlage hat. Wer am Abend da war,
+// aber in diesem Spiel nicht erwähnt wurde, hat es nicht gespielt (z. B. 4 von 5).
+// Spiele/Teams ohne Tracking zählen wie bisher über die Anwesenheit.
+export interface TrackedPlay {
+  played: Set<string>;
+  teams: Set<string>;
+}
+export function calculatePlayers(teams: Team[], matches: Match[], tracking?: TrackedPlay): PlayerStat[] {
   // Verschlüsselt nach Team UND Name: Gleiche Spielernamen in verschiedenen Teams
   // (z.B. zwei „Jonathan Siegel") sind unterschiedliche Personen und dürfen NICHT
   // zu einem Eintrag verschmelzen. Innerhalb eines Teams ist der Name eindeutig.
@@ -140,12 +147,15 @@ export function calculatePlayers(teams: Team[], matches: Match[], notPlayed?: Se
     ([[homeTeam, 'home'], [awayTeam, 'away']] as const).forEach(([team, side]) => {
       if (!team) return;
       const result = teamResult(side);
+      const trackedTeam = !!tracking?.teams.has(`${m.id}::${team.id}`);
+      const keepers = new Set((m.goalkeepers || []).filter((g) => g.teamId === team.id).map((g) => g.playerName));
       (team.spielerliste || []).forEach((player) => {
         const stat = playerMap[keyOf(team.id, player.name)];
         if (!stat) return;
-        const isAbsent =
-          (absentKeys.has(`${team.id}::${player.name}`) || !!notPlayed?.has(`${m.id}::${team.id}::${player.name}`)) &&
-          !contributed.has(`${team.id}::${player.name}`);
+        const contributedHere = contributed.has(`${team.id}::${player.name}`);
+        const isAbsent = trackedTeam
+          ? !(tracking!.played.has(`${m.id}::${team.id}::${player.name}`) || keepers.has(player.name) || contributedHere)
+          : absentKeys.has(`${team.id}::${player.name}`) && !contributedHere;
         if (!isAbsent) {
           stat.matchesPlayed += 1;
           stat.points += resultPoints(side);

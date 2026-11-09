@@ -1,13 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getCurrentSeason, getMatches, getTeams, sql } from './_lib/db.js';
-import { calculatePlayers } from './_lib/league.js';
+import { calculatePlayers, type TrackedPlay } from './_lib/league.js';
 import { rowPlayed } from './_lib/played.js';
 
-// Einsätze, die laut (veröffentlichtem) Tracking NICHT gespielt wurden: „Spielt
-// nicht" bzw. Feldspieler ohne eine einzige Aktion. Nur live geschaltete
-// Spieltage/Spiele – ein laufendes Tracking verändert die Spiele-Zahl nicht.
-async function notPlayedKeys(seasonId: string | undefined): Promise<Set<string>> {
-  const out = new Set<string>();
+// Wer hat laut (veröffentlichtem) Tracking in welchem Spiel gespielt? Nur live
+// geschaltete Spieltage/Spiele – ein laufendes Tracking verändert die Zahlen nicht.
+// played = Spieler mit Tracking-Einsatz (rowPlayed), teams = getrackte Team-Spiele.
+async function trackedPlay(seasonId: string | undefined): Promise<TrackedPlay> {
+  const out: TrackedPlay = { played: new Set(), teams: new Set() };
   if (!seasonId) return out;
   try {
     const live = (await sql`SELECT value FROM settings WHERE key = 'tracking-live'`)[0]?.value as { days?: unknown } | undefined;
@@ -26,7 +26,11 @@ async function notPlayedKeys(seasonId: string | undefined): Promise<Set<string>>
       role: string;
       counts: unknown;
     }[];
-    for (const r of rows) if (!rowPlayed(r.role, r.counts)) out.add(`${r.matchId}::${r.teamId}::${r.playerName}`);
+    for (const r of rows) {
+      if (!rowPlayed(r.role, r.counts)) continue;
+      out.played.add(`${r.matchId}::${r.teamId}::${r.playerName}`);
+      out.teams.add(`${r.matchId}::${r.teamId}`);
+    }
   } catch {
     /* ohne Tracking-Daten zählt wie bisher die Anwesenheit */
   }
@@ -43,7 +47,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const seasonId = typeof req.query.season === 'string' && req.query.season ? req.query.season : currentSeason?.id;
     const seasonMatches = seasonId ? matches.filter((m) => m.seasonId === seasonId) : matches;
 
-    return res.json(calculatePlayers(teams, seasonMatches, await notPlayedKeys(seasonId)));
+    return res.json(calculatePlayers(teams, seasonMatches, await trackedPlay(seasonId)));
   } catch (err) {
     console.error('Fehler in /api/players:', err);
     return res.status(500).json({ error: 'Interner Fehler' });

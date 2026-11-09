@@ -52,7 +52,8 @@ export default function TrackingDayLeaders({
     const stats: MatchPlayerStat[] = [];
     for (const [k, r] of Object.entries(rows)) {
       const matchId = k.split('::')[0];
-      if (r.out || !any(r.counts)) continue;
+      // Gleiche Regel wie überall: „Spielt nicht" nie, Feldspieler nur mit Aktion, Torwart immer.
+      if (r.out || (r.role !== 'keeper' && !any(r.counts))) continue;
       teamNames.set(r.teamId, r.teamName);
       stats.push({ dayKey: '', matchId, teamId: r.teamId, playerName: r.playerName, role: r.role, counts: r.counts });
     }
