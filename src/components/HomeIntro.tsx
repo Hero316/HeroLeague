@@ -96,8 +96,10 @@ export default function HomeIntro({ image, onNavigate, onOpenSchedule, children 
 
   return (
     <header ref={heroRef} className="hl-intro relative overflow-hidden">
-      {/* Bild (leichter Kameraschwenk + Zoom beim Scrollen) */}
-      <div className="absolute inset-0 overflow-hidden hl-edge-fade hl-edge-notop" aria-hidden="true">
+      {/* Bild (leichter Kameraschwenk + Zoom beim Scrollen). Es blendet FRÜHER aus
+          als der dunkle Verlauf darüber – so ist das Foto unten schon weg, bevor der
+          Verlauf in den Seitenhintergrund übergeht (sonst wirkt es wie abgeschnitten). */}
+      <div className="absolute inset-0 overflow-hidden hl-intro-imgfade" aria-hidden="true">
         <div ref={mediaRef} className="hl-intro-media absolute -inset-[4%]">
           <img
             src={image || '/assets/season2-hero.webp'}

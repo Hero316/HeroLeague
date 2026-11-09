@@ -82,7 +82,9 @@ export default function Countdown({ target, title, kicker: kickerText, gold = fa
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
           <span
             className={`font-display font-black uppercase tracking-tight leading-none whitespace-nowrap text-[15vw] lg:text-[10vw] ${
-              expired ? 'text-hl-red/[.05]' : gold ? 'text-hl-gold/[.055]' : 'text-white/[.035]'
+              blend
+                ? 'text-white/[.2] [text-shadow:0_0_50px_rgba(255,255,255,.1)]'
+                : expired ? 'text-hl-red/[.05]' : gold ? 'text-hl-gold/[.055]' : 'text-white/[.035]'
             }`}
           >
             {title}
