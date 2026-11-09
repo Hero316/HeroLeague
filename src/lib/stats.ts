@@ -135,7 +135,8 @@ export function exportScoringToSheet(
 }
 
 // Eine Spieler-Zeile (Zähler) speichern.
-export function saveTally(row: StoredStatRow): Promise<{ ok: boolean }> {
+// `version` gesetzt = in die EIGENE Vergleichs-Version statt in die offiziellen Daten.
+export function saveTally(row: StoredStatRow & { version?: string | null }): Promise<{ ok: boolean }> {
   return apiFetch('/api/stats?resource=tally', { method: 'POST', body: JSON.stringify(row) });
 }
 
@@ -150,8 +151,26 @@ export function tallyOp(body: {
   op: 'merge' | 'swap' | 'delete';
   from: string;
   to?: string;
+  version?: string | null;
 }): Promise<{ ok: boolean }> {
   return apiFetch('/api/stats?resource=tally-op', { method: 'POST', body: JSON.stringify(body) });
+}
+
+// --- Vergleichsmodus: Tracking-Versionen je Person -------------------------
+export interface TrackVersion {
+  key: string; // „u:<userId>" bzw. „backup:<zeit>"
+  name: string;
+  updatedAt: string;
+  rows: StoredStatRow[];
+}
+export function fetchMatchVersions(matchId: string): Promise<{ me: { key: string; name: string }; canAdopt: boolean; versions: TrackVersion[] }> {
+  return apiFetch(`/api/stats?resource=versions&matchId=${encodeURIComponent(matchId)}`);
+}
+export function adoptVersion(matchId: string, version: string): Promise<{ ok: boolean }> {
+  return apiFetch('/api/stats?resource=version-adopt', { method: 'POST', body: JSON.stringify({ matchId, version }) });
+}
+export function deleteVersion(matchId: string, version: string): Promise<{ ok: boolean }> {
+  return apiFetch('/api/stats?resource=version-delete', { method: 'POST', body: JSON.stringify({ matchId, version }) });
 }
 
 // Anwesenheit/Torwart eines Spieltags speichern (Abend-Aufstellung). Schreibt

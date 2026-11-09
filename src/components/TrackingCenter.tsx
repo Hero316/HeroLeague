@@ -93,6 +93,8 @@ import {
 } from '../lib/stats';
 import { usePolling } from '../lib/usePolling';
 import TrackingDayLeaders from './TrackingDayLeaders';
+import { VersionBar, VersionCompare, type VersionView } from './TrackingVersions';
+import { fetchMatchVersions, adoptVersion, deleteVersion, type TrackVersion } from '../lib/stats';
 
 // ===========================================================================
 // Statistics Center — Erfassungs-Editor (Etappe 2 + 3)
@@ -244,6 +246,22 @@ export default function TrackingCenter({
   const [rows, setRows] = useState<RowMap>({});
   const rowsRef = useRef<RowMap>({});
   useEffect(() => { rowsRef.current = rows; }, [rows]);
+
+  // --- Vergleichsmodus (nur Liga-Spieltage) ---------------------------------
+  // view 'official' = offizielle Daten bearbeiten (wie bisher), 'mine' = eigene
+  // Vergleichs-Version (getrennt gespeichert), 'compare' = Gegenüberstellung.
+  const [verInfo, setVerInfo] = useState<{ me: { key: string; name: string }; canAdopt: boolean; versions: TrackVersion[] } | null>(null);
+  const [verView, setVerView] = useState<VersionView>('official');
+  const [versionRows, setVersionRows] = useState<RowMap>({});
+  const versionRowsRef = useRef<RowMap>({});
+  useEffect(() => { versionRowsRef.current = versionRows; }, [versionRows]);
+  // Wohin gehen Eingaben gerade? null = offiziell, sonst Schlüssel der EIGENEN Version.
+  const editVersionRef = useRef<string | null>(null);
+  const [verBusy, setVerBusy] = useState(false);
+  const setTargetRows = useCallback((fn: (prev: RowMap) => RowMap) => {
+    if (editVersionRef.current) setVersionRows(fn);
+    else setRows(fn);
+  }, []);
   const [dayMode, setDayMode] = useState<PublishMode>('off');
   const [liveMatchIds, setLiveMatchIds] = useState<Set<string>>(new Set());
   const [loadingDay, setLoadingDay] = useState(false);
@@ -558,8 +576,9 @@ export default function TrackingCenter({
   const pending = useRef<Set<string>>(new Set());
 
   const flushRow = useCallback(
-    async (k: string, row: EditRow, matchId: string) => {
-      pending.current.add(k);
+    async (k: string, row: EditRow, matchId: string, version: string | null = null) => {
+      const pk = `${version ?? ''}|${k}`;
+      pending.current.add(pk);
       setSaveState('saving');
       try {
         await saveTally({
@@ -569,11 +588,12 @@ export default function TrackingCenter({
           playerName: row.playerName,
           role: row.out ? 'out' : row.role,
           counts: row.counts,
+          version,
         });
       } catch {
         /* stiller Fehler – nächste Änderung versucht es erneut */
       } finally {
-        pending.current.delete(k);
+        pending.current.delete(pk);
         if (pending.current.size === 0) {
           setSaveState('saved');
           setTimeout(() => setSaveState((s) => (s === 'saved' ? 'idle' : s)), 1200);
@@ -585,8 +605,12 @@ export default function TrackingCenter({
 
   const scheduleSave = useCallback(
     (k: string, row: EditRow, matchId: string) => {
-      if (timers.current[k]) clearTimeout(timers.current[k]);
-      timers.current[k] = setTimeout(() => flushRow(k, row, matchId), 650);
+      // Ziel (offiziell / eigene Version) beim Planen festhalten – ein späterer
+      // Wechsel der Ansicht darf eine geplante Speicherung nicht umleiten.
+      const version = editVersionRef.current;
+      const tk = `${version ?? ''}|${k}`;
+      if (timers.current[tk]) clearTimeout(timers.current[tk]);
+      timers.current[tk] = setTimeout(() => flushRow(k, row, matchId, version), 650);
     },
     [flushRow]
   );
@@ -594,7 +618,7 @@ export default function TrackingCenter({
   // „Rückgängig"-Verlauf – jeder Eintrag merkt sich SEIN Spiel. Früher wurde die
   // letzte Aktion (evtl. aus einem anderen Spiel) auf das gerade offene Spiel
   // gebucht und legte dort Geister-Daten an.
-  const undoStack = useRef<{ k: string; matchId: string; action: keyof ActionCounts; delta: number }[]>([]);
+  const undoStack = useRef<{ k: string; matchId: string; action: keyof ActionCounts; delta: number; v: string | null }[]>([]);
   const [undoCount, setUndoCount] = useState(0);
 
   const applyDelta = useCallback(
@@ -602,7 +626,7 @@ export default function TrackingCenter({
       // Gekoppelte Aktion (Assist/Schlüsselpass ⇒ erfolgreicher Pass): dieselbe
       // Änderung mitführen. Gilt für Klick UND Sprechen, da beide hier durchlaufen.
       const coupled = COUPLED_ACTIONS[action] as keyof ActionCounts | undefined;
-      setRows((prev) => {
+      setTargetRows((prev) => {
         const row = prev[k];
         if (!row) return prev;
         const cur = row.counts[action] || 0;
@@ -618,11 +642,11 @@ export default function TrackingCenter({
         return { ...prev, [k]: updated };
       });
       if (track) {
-        undoStack.current.push({ k, matchId, action, delta });
+        undoStack.current.push({ k, matchId, action, delta, v: editVersionRef.current });
         setUndoCount(undoStack.current.length);
       }
     },
-    [scheduleSave]
+    [scheduleSave, setTargetRows]
   );
 
   const undo = useCallback(
@@ -630,7 +654,7 @@ export default function TrackingCenter({
       // Nur die letzte Aktion DIESES Spiels zurücknehmen – gebucht auf ihr Spiel.
       let idx = -1;
       for (let i = undoStack.current.length - 1; i >= 0; i--) {
-        if (undoStack.current[i].matchId === matchId) {
+        if (undoStack.current[i].matchId === matchId && undoStack.current[i].v === editVersionRef.current) {
           idx = i;
           break;
         }
@@ -645,7 +669,7 @@ export default function TrackingCenter({
 
   const setRole = useCallback(
     (k: string, matchId: string, role: StatRole) => {
-      setRows((prev) => {
+      setTargetRows((prev) => {
         const row = prev[k];
         if (!row) return prev;
         const updated = { ...row, role };
@@ -653,13 +677,13 @@ export default function TrackingCenter({
         return { ...prev, [k]: updated };
       });
     },
-    [scheduleSave]
+    [scheduleSave, setTargetRows]
   );
 
   // „Spielt nicht" für EIN Spiel an/aus (z. B. setzt jemand am Abend Spiele aus).
   const setOut = useCallback(
     (k: string, matchId: string, out: boolean) => {
-      setRows((prev) => {
+      setTargetRows((prev) => {
         const row = prev[k];
         if (!row) return prev;
         const updated = { ...row, out: out || undefined };
@@ -667,7 +691,7 @@ export default function TrackingCenter({
         return { ...prev, [k]: updated };
       });
     },
-    [scheduleSave]
+    [scheduleSave, setTargetRows]
   );
 
   // Spontan einen Spieler zu einem Spiel hinzufügen (Name kommt oft erst später,
@@ -678,15 +702,16 @@ export default function TrackingCenter({
       const name = rawName.trim();
       if (!name) return;
       const k = rowKey(matchId, teamId, name);
-      if (rowsRef.current[k]) return; // gibt es schon – nichts überschreiben
+      const version = editVersionRef.current;
+      if ((version ? versionRowsRef.current : rowsRef.current)[k]) return; // gibt es schon – nichts überschreiben
       const teamName = resolveTeam(teamId)?.name ?? teamId;
       const updated: EditRow = { teamId, teamName, playerName: name, role: 'field', counts: emptyCounts() };
-      setRows((prev) => (prev[k] ? prev : { ...prev, [k]: updated }));
-      saveTally({ dayKey, matchId, teamId, playerName: name, role: 'field', counts: emptyCounts() }).catch(() => {});
+      setTargetRows((prev) => (prev[k] ? prev : { ...prev, [k]: updated }));
+      saveTally({ dayKey, matchId, teamId, playerName: name, role: 'field', counts: emptyCounts(), version }).catch(() => {});
       // Auch in den echten Kader aufnehmen (öffentlicher Kader/Schiri/Tracking bleiben synchron).
       onAddRosterPlayer?.({ eventId: selectedEventId, teamKey: teamId, name });
     },
-    [dayKey, resolveTeam, onAddRosterPlayer, selectedEventId]
+    [dayKey, resolveTeam, onAddRosterPlayer, selectedEventId, setTargetRows]
   );
 
   // Den aktuell offenen Tag neu aus der DB laden (nach einer Umbuchung).
@@ -722,6 +747,39 @@ export default function TrackingCenter({
     [dayKey, dayMatches, reloadDay, reloadTracked]
   );
 
+  // Raster der EIGENEN Version: gleiche Spieler wie im offiziellen Raster dieses
+  // Spiels, aber mit den Werten aus der eigenen Version (leer, wenn neu).
+  const buildMineRows = useCallback(
+    (info: { me: { key: string }; versions: TrackVersion[] }, matchId: string): RowMap => {
+      const mine = info.versions.find((v) => v.key === info.me.key);
+      const saved = new Map((mine?.rows ?? []).map((r) => [rowKey(r.matchId, r.teamId, r.playerName), r]));
+      const next: RowMap = {};
+      for (const [k, r] of Object.entries(rowsRef.current)) {
+        if (!k.startsWith(`${matchId}::`)) continue;
+        const sv = saved.get(k);
+        next[k] = {
+          ...r,
+          role: sv ? (sv.role === 'keeper' ? 'keeper' : sv.role === 'out' ? r.role : 'field') : r.role,
+          counts: sv ? normalizeCounts(sv.counts) : emptyCounts(),
+          out: sv?.role === 'out' || undefined,
+        };
+      }
+      for (const [k, sv] of saved) {
+        if (next[k]) continue;
+        next[k] = {
+          teamId: sv.teamId,
+          teamName: resolveTeam(sv.teamId)?.name ?? sv.teamId,
+          playerName: sv.playerName,
+          role: sv.role === 'keeper' ? 'keeper' : 'field',
+          counts: normalizeCounts(sv.counts),
+          out: sv.role === 'out' || undefined,
+        };
+      }
+      return next;
+    },
+    [resolveTeam]
+  );
+
   // Getrackte Daten umbuchen: zusammenführen (from→to), tauschen (from⇄to) oder
   // löschen (from). `wholeDay` wendet es auf alle Spiele des Tages an, sonst nur
   // auf das aktuell offene Spiel. Danach frisch aus der DB laden.
@@ -736,18 +794,113 @@ export default function TrackingCenter({
       pending.current.clear();
       setReassignBusy(true);
       try {
-        await tallyOp({ dayKey, matchIds: ids, teamId, op, from, to });
+        const version = editVersionRef.current;
+        await tallyOp({ dayKey, matchIds: ids, teamId, op, from, to, version });
         // Undo-Verlauf verwerfen – er zeigt evtl. auf jetzt umgebuchte Zeilen.
         undoStack.current = [];
         setUndoCount(0);
-        await reloadDay();
+        if (version && selectedMatchId) {
+          const info = await fetchMatchVersions(selectedMatchId);
+          setVerInfo(info);
+          setVersionRows(buildMineRows(info, selectedMatchId));
+        } else await reloadDay();
       } catch {
         /* still – der Nutzer kann es erneut versuchen */
       } finally {
         setReassignBusy(false);
       }
     },
-    [dayKey, dayMatches, selectedMatchId, reloadDay]
+    [dayKey, dayMatches, selectedMatchId, reloadDay, buildMineRows]
+  );
+
+  // Vergleichsmodus: Versionen des offenen Liga-Spiels laden; beim Spielwechsel
+  // immer zurück auf „offiziell" (Eingaben gehen dann wieder in die offiziellen Daten).
+  const isLeagueMatch = !!selectedMatchId && !selectedEvent && !demoActive;
+  useEffect(() => {
+    editVersionRef.current = null;
+    setVerView('official');
+    setVerInfo(null);
+    setVersionRows({});
+    if (!isLeagueMatch || !selectedMatchId) return;
+    let alive = true;
+    fetchMatchVersions(selectedMatchId)
+      .then((info) => alive && setVerInfo(info))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [selectedMatchId, isLeagueMatch]);
+
+  const changeVersionView = useCallback(
+    async (v: VersionView) => {
+      if (!selectedMatchId) return;
+      undoStack.current = [];
+      setUndoCount(0);
+      setVerBusy(true);
+      try {
+        // Kurz warten, bis geplante Speicherungen (650 ms) raus sind – sonst fehlen
+        // die letzten Eingaben im Vergleich.
+        await new Promise((r) => setTimeout(r, 800));
+        const info = await fetchMatchVersions(selectedMatchId);
+        setVerInfo(info);
+        if (v === 'mine') {
+          setVersionRows(buildMineRows(info, selectedMatchId));
+          editVersionRef.current = info.me.key;
+        } else {
+          editVersionRef.current = null;
+        }
+        setVerView(v);
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : 'Versionen konnten nicht geladen werden.');
+      } finally {
+        setVerBusy(false);
+      }
+    },
+    [selectedMatchId, buildMineRows]
+  );
+
+  const adoptVersionFor = useCallback(
+    async (key: string, label: string) => {
+      if (!selectedMatchId) return;
+      if (!window.confirm(`„${label}" als OFFIZIELLE Daten dieses Spiels übernehmen?\n\nDie bisherigen offiziellen Werte werden nicht gelöscht, sondern als Sicherung aufgehoben.`)) return;
+      setVerBusy(true);
+      try {
+        await adoptVersion(selectedMatchId, key);
+        editVersionRef.current = null;
+        await reloadDay();
+        reloadTracked();
+        setVerInfo(await fetchMatchVersions(selectedMatchId));
+        setVerView('official');
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : 'Übernehmen fehlgeschlagen.');
+      } finally {
+        setVerBusy(false);
+      }
+    },
+    [selectedMatchId, reloadDay, reloadTracked]
+  );
+
+  const deleteVersionFor = useCallback(
+    async (key: string, label: string) => {
+      if (!selectedMatchId) return;
+      if (!window.confirm(`Version „${label}" für dieses Spiel löschen? Die offiziellen Daten bleiben unverändert.`)) return;
+      setVerBusy(true);
+      try {
+        await deleteVersion(selectedMatchId, key);
+        const info = await fetchMatchVersions(selectedMatchId);
+        setVerInfo(info);
+        if (key === info.me.key) {
+          editVersionRef.current = null;
+          setVersionRows({});
+        }
+        if (info.versions.length === 0 || key === info.me.key) setVerView('official');
+      } catch (err) {
+        window.alert(err instanceof Error ? err.message : 'Löschen fehlgeschlagen.');
+      } finally {
+        setVerBusy(false);
+      }
+    },
+    [selectedMatchId]
   );
 
   // Spieltag/Testspiel veröffentlichen: für alle · nur Super-Admins · verstecken.
@@ -1020,16 +1173,44 @@ export default function TrackingCenter({
 
         <main className={`flex-1 ${selectedMatchId ? 'max-w-[2600px]' : 'max-w-6xl'} w-full mx-auto px-4 py-5`}>
           {selectedMatchId ? (
+            <>
+            {isLeagueMatch && verInfo && (
+              <VersionBar
+                view={verView}
+                onView={(v) => { if (!verBusy) changeVersionView(v); }}
+                officialBy={trackStatus[`${dayKey}|${selectedMatchId}`]?.by}
+                me={verInfo.me}
+                hasMine={verInfo.versions.some((v) => v.key === verInfo.me.key)}
+                versionCount={verInfo.versions.length}
+              />
+            )}
+            {verView === 'compare' && verInfo ? (
+              <VersionCompare
+                match={dayMatches.find((m) => m.id === selectedMatchId)!}
+                resolveTeam={resolveTeam}
+                officialRows={Object.entries(rows)
+                  .filter(([k]) => k.startsWith(`${selectedMatchId}::`))
+                  .map(([, r]) => ({ teamId: r.teamId, playerName: r.playerName, role: r.role, out: r.out, counts: r.counts }))}
+                officialBy={trackStatus[`${dayKey}|${selectedMatchId}`]?.by}
+                versions={verInfo.versions}
+                cfg={cfg}
+                me={verInfo.me}
+                canAdopt={verInfo.canAdopt}
+                busy={verBusy}
+                onAdopt={adoptVersionFor}
+                onDelete={deleteVersionFor}
+              />
+            ) : (
             <MatchEditor
               match={dayMatches.find((m) => m.id === selectedMatchId)!}
               resolveTeam={resolveTeam}
-              rows={rows}
+              rows={verView === 'mine' ? versionRows : rows}
               cfg={cfg}
               onDelta={applyDelta}
               onRole={setRole}
               onOut={setOut}
               onUndo={undo}
-              undoCount={undoCount >= 0 ? undoStack.current.filter((e) => e.matchId === selectedMatchId).length : 0}
+              undoCount={undoCount >= 0 ? undoStack.current.filter((e) => e.matchId === selectedMatchId && e.v === editVersionRef.current).length : 0}
               onBack={goBackLayer}
               onAddPlayer={addPlayerRow}
               onReassign={reassignPlayers}
@@ -1037,6 +1218,8 @@ export default function TrackingCenter({
               dayGameCount={dayMatches.length}
               dayKey={dayKey}
             />
+            )}
+            </>
           ) : dayActive ? (
             <DayView
               title={selectedEvent ? selectedEvent.title || 'Testspiel' : `Spieltag ${selectedMatchday}`}
