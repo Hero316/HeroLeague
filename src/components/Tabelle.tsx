@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Team, Match, Standing } from '../types';
-import { calculateStandings } from '../lib/standings';
+import { calculateStandings, rankChanges } from '../lib/standings';
 import { TeamCrest, FormPill } from './ui';
 import { useSettledList } from './anim';
 
@@ -17,6 +17,8 @@ interface TabelleProps {
 // Mobil: weniger Spalten, volle Vereinsnamen dürfen zweizeilig umbrechen (kein Abschneiden).
 export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, compact = false }: TabelleProps) {
   const standings: Standing[] = React.useMemo(() => calculateStandings(teams, matches), [teams, matches]);
+  // Plätze gewonnen/verloren gegenüber dem Ende des letzten Spieltags.
+  const moves = React.useMemo(() => rankChanges(teams, matches), [teams, matches]);
 
   // Einsortier-Animation: startet alphabetisch und rutscht in die echte Tabelle.
   const { ref: listRef, items: displayStandings } = useSettledList(standings, (s) => s.teamName);
@@ -24,13 +26,13 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
   // Abstiegszone = letzte 3 (bei 12 Teams: Platz 10–12; nur bei genug Teams).
   const relegationStart = standings.length >= 6 ? standings.length - 3 : Number.POSITIVE_INFINITY;
 
-  const rankColors: Record<number, string> = { 1: '#E9C46A', 2: '#C9D1CC', 3: '#C98A5A' };
+  const rankColors: Record<number, string> = { 1: '#E9C46A', 2: '#DDE3DF', 3: '#D59A68' };
 
   // Spaltenraster: kompakt = #, Club, SP, (TORE ab sm), TD, PKT
   // voll = mobil wie kompakt (+ Zonen-Balken), ab md zusätzlich S/U/N + TORE, ab xl Form
   const gridCols = compact
-    ? 'grid-cols-[24px_minmax(0,1fr)_26px_36px_38px] sm:grid-cols-[28px_minmax(0,1fr)_34px_56px_42px_46px]'
-    : 'grid-cols-[32px_minmax(0,1fr)_26px_36px_38px] sm:grid-cols-[36px_minmax(0,1fr)_34px_56px_42px_46px] lg:grid-cols-[38px_minmax(0,1fr)_34px_30px_30px_30px_56px_44px_46px] xl:grid-cols-[38px_minmax(0,1fr)_34px_30px_30px_30px_56px_44px_46px_92px]';
+    ? 'grid-cols-[42px_minmax(0,1fr)_26px_36px_38px] sm:grid-cols-[50px_minmax(0,1fr)_34px_56px_42px_46px]'
+    : 'grid-cols-[46px_minmax(0,1fr)_26px_36px_40px] sm:grid-cols-[60px_minmax(0,1fr)_36px_60px_46px_50px] lg:grid-cols-[66px_minmax(0,1fr)_36px_32px_32px_32px_62px_48px_52px] xl:grid-cols-[66px_minmax(0,1fr)_36px_32px_32px_32px_62px_48px_52px_92px]';
 
   // Sichtbarkeit der Zusatzspalten je Variante
   const goalsCls = compact ? 'hidden sm:block' : 'hidden sm:block lg:block';
@@ -84,24 +86,18 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
                 : ''
             }`}
           >
-            {/* Rang */}
-            <span className="flex items-center gap-1 sm:gap-1.5">
-              {rankColors[rank] ? (
-                <span
-                  className="grid place-items-center w-[22px] h-[22px] sm:w-6 sm:h-6 lg:w-7 lg:h-7 rounded-[7px] font-display font-black text-[13px] sm:text-sm lg:text-base text-[#0b0f0b] shrink-0"
-                  style={{ background: rankColors[rank] }}
-                >
-                  {rank}
-                </span>
-              ) : (
-                <span
-                  className={`grid place-items-center w-[22px] h-[22px] sm:w-6 sm:h-6 lg:w-7 lg:h-7 font-sans font-bold text-[13px] sm:text-sm lg:text-base shrink-0 ${
-                    isReleg ? 'text-hl-red-soft' : 'text-hl-dim'
-                  }`}
-                >
-                  {rank}
-                </span>
-              )}
+            {/* Rang: große Zahl (Top 3 in Gold/Silber/Bronze, Abstieg rot), daneben
+                klein die Veränderung gegenüber dem letzten Spieltag. */}
+            <span className="flex items-end gap-[3px] min-w-0">
+              <span
+                className={`font-display font-black tabular-nums leading-[.85] ${
+                  compact ? 'text-[22px] sm:text-[26px]' : 'text-[26px] sm:text-[32px] lg:text-[36px]'
+                } ${rankColors[rank] ? '' : isReleg ? 'text-hl-red-soft' : 'text-white/85'}`}
+                style={rankColors[rank] ? { color: rankColors[rank] } : undefined}
+              >
+                {rank}
+              </span>
+              <RankMove move={moves[standing.teamId]} />
             </span>
 
             {/* Verein: voller Name, darf mobil zweizeilig umbrechen.
@@ -115,7 +111,7 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
                 size="md"
               />
               <span className="flex flex-col gap-1 min-w-0">
-                <span className={`font-sans font-semibold ${compact ? 'text-[13px] sm:text-sm' : 'text-sm sm:text-base lg:text-[17px]'} text-hl-text leading-tight break-words`}>
+                <span className={`font-sans font-bold ${compact ? 'text-[13.5px] sm:text-[15px]' : 'text-[15px] sm:text-[17px] lg:text-lg'} text-white leading-tight break-words`}>
                   {standing.teamName}
                 </span>
                 {standing.form.length > 0 && (
@@ -128,17 +124,17 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
               </span>
             </span>
 
-            <span className="text-center font-sans text-[13px] sm:text-sm lg:text-[15px] text-hl-mute">
+            <span className="text-center font-sans text-[13.5px] sm:text-[15px] lg:text-base text-hl-mute">
               {standing.played}
             </span>
-            <span className={`text-center font-sans text-[13px] sm:text-sm lg:text-[15px] text-hl-mute ${sunCls}`}>{standing.won}</span>
-            <span className={`text-center font-sans text-[13px] sm:text-sm lg:text-[15px] text-hl-mute ${sunCls}`}>{standing.drawn}</span>
-            <span className={`text-center font-sans text-[13px] sm:text-sm lg:text-[15px] text-hl-mute ${sunCls}`}>{standing.lost}</span>
-            <span className={`text-center font-sans text-[13px] sm:text-sm lg:text-[15px] text-hl-soft ${goalsCls}`}>
+            <span className={`text-center font-sans text-[13.5px] sm:text-[15px] lg:text-base text-hl-mute ${sunCls}`}>{standing.won}</span>
+            <span className={`text-center font-sans text-[13.5px] sm:text-[15px] lg:text-base text-hl-mute ${sunCls}`}>{standing.drawn}</span>
+            <span className={`text-center font-sans text-[13.5px] sm:text-[15px] lg:text-base text-hl-mute ${sunCls}`}>{standing.lost}</span>
+            <span className={`text-center font-sans text-[13.5px] sm:text-[15px] lg:text-base text-hl-soft ${goalsCls}`}>
               {standing.goalsFor}:{standing.goalsAgainst}
             </span>
             <span
-              className={`text-center font-sans font-bold text-[13px] sm:text-sm lg:text-[15px] ${
+              className={`text-center font-sans font-bold text-[13.5px] sm:text-[15px] lg:text-base ${
                 standing.goalDifference > 0
                   ? 'text-hl-green-soft'
                   : standing.goalDifference < 0
@@ -148,7 +144,7 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
             >
               {standing.goalDifference > 0 ? '+' : ''}{standing.goalDifference}
             </span>
-            <span className="text-center font-display font-black text-base sm:text-lg lg:text-xl text-white">
+            <span className={`text-center font-display font-black text-white ${compact ? 'text-lg sm:text-xl' : 'text-xl sm:text-2xl lg:text-[26px]'}`}>
               {standing.points}
             </span>
             <span className={`gap-1 justify-end ${formCls}`}>
@@ -180,5 +176,20 @@ export default function Tabelle({ teams, matches, seasonLabel, onSelectTeam, com
         </div>
       )}
     </div>
+  );
+}
+
+// Kleiner Pfeil + Anzahl Plätze neben der Platzierung (nichts bei unverändert).
+function RankMove({ move }: { move?: number }) {
+  if (!move) return null;
+  const up = move > 0;
+  return (
+    <span
+      className={`shrink-0 inline-flex items-center font-sans font-bold leading-none text-[9.5px] sm:text-[11px] pb-[2px] ${up ? 'text-hl-green-soft' : 'text-hl-red-soft'}`}
+      title={`${Math.abs(move)} ${Math.abs(move) === 1 ? 'Platz' : 'Plätze'} ${up ? 'gewonnen' : 'verloren'} seit dem letzten Spieltag`}
+    >
+      <span className="text-[7px] sm:text-[8px] mr-[1px]">{up ? '▲' : '▼'}</span>
+      {Math.abs(move)}
+    </span>
   );
 }

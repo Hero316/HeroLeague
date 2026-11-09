@@ -29,6 +29,8 @@ interface Props {
   pending?: boolean;
   mark?: string;
   label?: string; // ersetzt die Stufen-Bezeichnung (z. B. „Torwart")
+  // Veränderung der Gesamtwertung seit dem letzten Spieltag (+2 / −3); 0/null = nichts.
+  delta?: number | null;
 }
 
 export const TIER: Record<CardTier, { label: string; accent: string; border: string; bg1: string; bg2: string; glow?: string }> = {
@@ -39,7 +41,7 @@ export const TIER: Record<CardTier, { label: string; accent: string; border: str
   tots: { label: 'TOTS', accent: '#F6E8AC', border: '#F3E4A6', bg1: '#C9AE52', bg2: '#4A390C' },
 };
 
-export default function FifaCard({ card, name, imageUrl, team, className = '', pending = false, mark, label }: Props) {
+export default function FifaCard({ card, name, imageUrl, team, className = '', pending = false, mark, label, delta }: Props) {
   const t = TIER[card.tier];
   const parts = name.trim().split(/\s+/);
   const lastName = parts.length > 1 ? parts[parts.length - 1] : name;
@@ -141,8 +143,18 @@ export default function FifaCard({ card, name, imageUrl, team, className = '', p
       >
         {/* Gesamtwertung mittig, als Kopf der Werte-Gruppe (Stufe steht rechts am Rand) */}
         <div className="flex flex-col items-center" style={{ marginBottom: '1cqw' }}>
-          <div className="font-display font-black tabular-nums leading-none" style={{ fontSize: '26cqw', color: t.accent, textShadow: '0 3px 14px rgba(0,0,0,.9)', marginTop: '0.5cqw' }}>
+          <div className="relative font-display font-black tabular-nums leading-none" style={{ fontSize: '26cqw', color: t.accent, textShadow: '0 3px 14px rgba(0,0,0,.9)', marginTop: '0.5cqw' }}>
             {pending ? '–' : card.ges}
+            {!pending && !!delta && (
+              <span
+                className="absolute left-full top-1/2 flex items-center font-display font-black leading-none whitespace-nowrap"
+                style={{ fontSize: '7.5cqw', marginLeft: '2cqw', transform: 'translateY(-10%)', color: delta > 0 ? '#5CFFAE' : '#FF7A6B', textShadow: '0 2px 8px rgba(0,0,0,.9)' }}
+                title={`${delta > 0 ? '+' : ''}${delta} seit dem letzten Spieltag`}
+              >
+                <span style={{ fontSize: '5cqw', marginRight: '0.6cqw' }}>{delta > 0 ? '▲' : '▼'}</span>
+                {delta > 0 ? `+${delta}` : delta}
+              </span>
+            )}
           </div>
         </div>
         <div className="w-full" style={{ height: '1px', marginBottom: '2.5cqw', background: `${t.accent}55` }} />
