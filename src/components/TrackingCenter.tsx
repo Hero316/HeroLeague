@@ -92,6 +92,7 @@ import {
   MIN_DONE_ACTIONS,
 } from '../lib/stats';
 import { usePolling } from '../lib/usePolling';
+import TrackingDayLeaders from './TrackingDayLeaders';
 
 // ===========================================================================
 // Statistics Center — Erfassungs-Editor (Etappe 2 + 3)
@@ -1056,6 +1057,7 @@ export default function TrackingCenter({
               resetBusy={resetBusy}
               statusOf={(id) => trackStatus[`${dayKey}|${id}`]}
               onStatus={changeTrackStatus}
+              cfg={cfg}
             />
           ) : (
             <DayList
@@ -1388,7 +1390,9 @@ function DayView({
   resetBusy,
   statusOf,
   onStatus,
+  cfg,
 }: {
+  cfg: ScoringConfig;
   title: string;
   isEvent: boolean;
   dayMatches: Match[];
@@ -1474,6 +1478,8 @@ function DayView({
           <PublishSwitch mode={mode} onChange={onPublish} />
         </div>
       </div>
+
+      {!loading && <TrackingDayLeaders rows={rows} dayMatches={dayMatches} statusOf={statusOf} cfg={cfg} />}
 
       {loading ? (
         <div className="hl-card p-8 text-center text-hl-mute">Lade Daten…</div>
