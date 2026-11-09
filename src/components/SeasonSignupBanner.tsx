@@ -65,12 +65,9 @@ export default function SeasonSignupBanner({ onOpen, inline = false }: { onOpen:
   );
 
   if (!inline) return banner;
-  // Mitten auf der Seite: als Karte im normalen Inhaltsraster, auf demselben
-  // dunklen Grund wie Hero-Unterkante und Highlights (#0A1415) – so schimmert
-  // über und unter dem Banner kein anders gefärbter Seitenhintergrund durch.
+  // Mitten auf der Seite: als Karte im normalen Inhaltsraster, ohne eigene
+  // Hintergrundfläche – die Abschnitte darüber/darunter laufen weich aus.
   return (
-    <div className="bg-[#0A1415]">
-      <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-5 sm:py-7">{banner}</div>
-    </div>
+    <div className="max-w-[1320px] mx-auto px-4 sm:px-10 py-5 sm:py-7">{banner}</div>
   );
 }

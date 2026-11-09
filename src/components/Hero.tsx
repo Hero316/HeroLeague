@@ -157,7 +157,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
 
     return (
       <>
-        <div className="absolute inset-0 overflow-hidden">
+        <div className={`absolute inset-0 overflow-hidden hl-edge-fade ${fadeTop ? '' : 'hl-edge-notop'}`}>
           <div className="absolute left-[-5%] right-[-5%] top-0 h-[112lvh] hl-zoom">
             {(heroImages?.match || imagesReady) && <img src={heroImages?.match || '/assets/hero-stadium.webp'} alt="" className="absolute inset-0 w-full h-full object-cover" />}
           </div>
@@ -321,7 +321,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
         {/* Hintergrund: eigenes Foto (falls hochgeladen) mit Overlays, sonst das
             gestaltete Standard-Design – so bleiben Text und Karte gut lesbar. */}
         {heroImages?.pom ? (
-          <div className="absolute inset-0 overflow-hidden">
+          <div className={`absolute inset-0 overflow-hidden hl-edge-fade ${fadeTop ? '' : 'hl-edge-notop'}`}>
             <div className="absolute left-[-5%] right-[-5%] top-0 h-[112lvh] hl-zoom">
               <img src={heroImages.pom} alt="" className="absolute inset-0 w-full h-full object-cover" />
             </div>
@@ -330,7 +330,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
             <div className="absolute inset-0 bg-[linear-gradient(0deg,#08110f_2%,transparent_34%)]" />
           </div>
         ) : (
-          <div className="absolute inset-0 overflow-hidden">
+          <div className={`absolute inset-0 overflow-hidden hl-edge-fade ${fadeTop ? '' : 'hl-edge-notop'}`}>
             <div className="absolute inset-0 bg-[linear-gradient(180deg,#0c1a19,#0a1415_58%,#08110f)]" />
             <div className="absolute inset-0 bg-[radial-gradient(45%_65%_at_25%_55%,rgba(34,223,201,.16),transparent_60%)]" />
             <div className="absolute inset-0 bg-[radial-gradient(45%_65%_at_75%_55%,rgba(233,196,106,.13),transparent_60%)]" />
@@ -373,7 +373,7 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
     const rankColors: Record<number, string> = { 1: '#E9C46A', 2: '#C9D1CC', 3: '#C98A5A' };
     return (
       <>
-        <div className="absolute inset-0 overflow-hidden">
+        <div className={`absolute inset-0 overflow-hidden hl-edge-fade ${fadeTop ? '' : 'hl-edge-notop'}`}>
           <div className="absolute left-[-5%] right-[-5%] top-0 h-[112lvh] hl-zoom">
             {(heroImages?.table || imagesReady) && <img src={heroImages?.table || '/assets/hero-crowd.webp'} alt="" className="absolute inset-0 w-full h-full object-cover" />}
           </div>
@@ -546,11 +546,8 @@ export default function Hero({ teams, matches, players, seasonLabel, seasonNumbe
         </div>
       )}
 
-      {/* Weicher Übergang in den Seitenhintergrund */}
-      <div className="absolute left-0 right-0 bottom-0 h-[150px] z-[5] bg-[linear-gradient(to_top,#0A1415_8%,transparent)] pointer-events-none" />
-      {fadeTop && (
-        <div className="absolute left-0 right-0 top-0 h-[90px] sm:h-[160px] z-[5] bg-[linear-gradient(to_bottom,#0A1415_10%,transparent)] pointer-events-none" />
-      )}
+      {/* Übergänge oben/unten: die Hintergründe laufen per Maske ins Durchsichtige
+          aus (.hl-edge-fade) – keine festen Farbflächen, daher keine Kanten. */}
     </div>
   );
 }
