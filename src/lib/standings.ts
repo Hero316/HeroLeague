@@ -139,3 +139,22 @@ export function calculateStandings(teams: Team[], matches: Match[]): Standing[] 
     return a.teamName.localeCompare(b.teamName);
   });
 }
+
+// Platzveränderung je Team gegenüber dem Ende des VORHERIGEN Spieltags
+// (positiv = Plätze gewonnen). „Aktueller" Spieltag = höchster Spieltag mit
+// einem beendeten Spiel – läuft er gerade, zeigt die Tabelle live, wie sich die
+// Plätze gegenüber dem letzten Spieltag verschieben. Ohne vorherigen Spieltag: leer.
+export function rankChanges(teams: Team[], matches: Match[]): { [teamId: string]: number } {
+  const done = matches.filter((m) => m.status === 'beendet' && m.homeScore !== null && m.awayScore !== null);
+  if (done.length === 0) return {};
+  const current = Math.max(...done.map((m) => m.matchday));
+  const before = matches.filter((m) => m.matchday < current);
+  if (!before.some((m) => m.status === 'beendet' && m.homeScore !== null)) return {};
+  const prevRank = new Map(calculateStandings(teams, before).map((s, i) => [s.teamId, i]));
+  const out: { [teamId: string]: number } = {};
+  calculateStandings(teams, matches).forEach((s, i) => {
+    const p = prevRank.get(s.teamId);
+    if (p !== undefined) out[s.teamId] = p - i;
+  });
+  return out;
+}

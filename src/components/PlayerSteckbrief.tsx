@@ -268,6 +268,11 @@ function Steckbrief({
           <div style={{ textAlign: 'center', flexShrink: 0 }}>
             <div style={{ fontFamily: display, fontWeight: 900, fontSize: 40, lineHeight: 0.9, color: tier.accent }}>{card.card.ges}</div>
             <div style={{ fontFamily: display, fontWeight: 900, fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: tier.accent, marginTop: 3 }}>{tier.label}</div>
+            {!!card.delta && (
+              <div style={{ fontFamily: display, fontWeight: 900, fontSize: 11, marginTop: 3, color: card.delta > 0 ? '#5CFFAE' : '#FF7A6B' }}>
+                {card.delta > 0 ? `▲ +${card.delta}` : `▼ ${card.delta}`}
+              </div>
+            )}
           </div>
         )}
       </div>

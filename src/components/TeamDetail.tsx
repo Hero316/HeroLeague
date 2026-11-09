@@ -14,6 +14,7 @@ import FifaCard from './FifaCard';
 import CardExplainSheet from './CardExplainSheet';
 import { ShareSheet } from './ShareCard';
 import { TeamCrest, FormPill, MatchStatusBadge, shortDate, shade, monogram, readable, ImageZoom, SponsorLink } from './ui';
+import { cardGesDelta, latestLeagueDay } from '../lib/playerCards';
 
 // Note-Farbe (rot → gelb → grün) relativ zur Rating-Skala.
 function noteColorFor(note: number, cfg: ScoringConfig): string {
@@ -294,6 +295,25 @@ export default function TeamDetail({
         : null,
     [selected, playerRows, trackedTotal, trackedRole, scoringConfig, ignoreGamesCap]
   );
+  // Veränderung der Gesamtwertung seit dem letzten getrackten Spieltag –
+  // gleiche Regeln wie die Karte selbst, nur ohne den neuesten Spieltag.
+  const latestDay = useMemo(() => latestLeagueDay(trackingRows), [trackingRows]);
+  const cardDelta = useMemo(
+    () =>
+      selected && scoringConfig
+        ? cardGesDelta(playerRows, latestDay, (rows) =>
+            playerCard(
+              sumCounts(rows.map((r) => normalizeCounts(r.counts))),
+              rows.length,
+              trackedRole,
+              scoringConfig,
+              ignoreGamesCap,
+              countCleanSheets(rows.map((r) => ({ role: r.role, counts: normalizeCounts(r.counts) })))
+            )
+          )
+        : null,
+    [selected, playerRows, latestDay, trackedRole, scoringConfig, ignoreGamesCap]
+  );
   // Herleitung der Karte („i"-Knopf) – dieselben Argumente wie die Karte selbst.
   const cardExplainData = useMemo(
     () =>
@@ -482,6 +502,7 @@ export default function TeamDetail({
                     name={sizingPlayer.name}
                     imageUrl={sizingPlayer.imageUrl}
                     team={team}
+                    delta={cardDelta}
                   />
                   {/* „i": so entsteht die Karte – oben links über der Ecke, damit es
                       am Handy wie am PC sofort ins Auge fällt und nichts verdeckt. */}

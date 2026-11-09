@@ -340,7 +340,7 @@ export default function CompareOverlay({ open, onClose, players, teams, tracking
                           <p className="text-[11px] font-sans text-hl-mute mt-0.5">{i === 0 ? 'Links' : 'Rechts'}</p>
                         </div>
                       ) : side.card ? (
-                        <FifaCard card={side.card.card} name={side.p.name} imageUrl={side.p.imageUrl} team={side.team} />
+                        <FifaCard card={side.card.card} name={side.p.name} imageUrl={side.p.imageUrl} team={side.team} delta={side.card.delta} />
                       ) : (
                         <div
                           className="w-full rounded-3xl border border-white/10 hl-surf-soft flex flex-col items-center justify-center text-center px-3"
