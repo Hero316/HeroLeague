@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql } from './_lib/db.js';
-import { requirePermission, getSession } from './_lib/auth.js';
+import { requirePermission, requireSuperadmin, getSession, hasPermission } from './_lib/auth.js';
 import type { SessionPayload } from './_lib/auth.js';
 import { badRequest, isNonEmptyString } from './_lib/validate.js';
 import { sheetInfo } from './_lib/gsheets.js';
@@ -53,6 +53,43 @@ async function ensureStats(): Promise<void> {
   } catch (err) {
     console.error('ensureStats:', err);
   }
+}
+
+// --- Vergleichsmodus: eigene Tracking-Versionen je Person -------------------
+// Eine zweite Person kann ein schon getracktes Spiel „zum Vergleich" tracken.
+// Ihre Werte liegen GETRENNT in match_stat_versions – die offiziellen Daten
+// (match_player_stats), die Website, Karten, Export usw. lesen, bleiben
+// unberührt. Erst „Version übernehmen" (nur Super-Admin) kopiert eine Version
+// in die offiziellen Daten; die bisherige offizielle Version wird dabei als
+// Sicherung aufgehoben (nichts geht verloren).
+let versionsEnsured = false;
+async function ensureVersions(): Promise<void> {
+  if (versionsEnsured) return;
+  await sql`CREATE TABLE IF NOT EXISTS match_stat_versions (
+    version      TEXT NOT NULL,
+    version_name TEXT NOT NULL DEFAULT '',
+    day_key      TEXT NOT NULL,
+    match_id     TEXT NOT NULL,
+    team_id      TEXT NOT NULL,
+    player_name  TEXT NOT NULL,
+    role         TEXT NOT NULL DEFAULT 'field',
+    counts       JSONB NOT NULL DEFAULT '{}',
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (match_id, version, team_id, player_name))`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_match_stat_versions_match ON match_stat_versions(match_id)`;
+  versionsEnsured = true;
+}
+// Eigene Version der angemeldeten Person (Schlüssel + Anzeigename).
+function myVersion(s: SessionPayload): { key: string; name: string } {
+  return { key: `u:${s.userId}`, name: s.name || s.email || 'Super-Admin' };
+}
+// Nur die EIGENE Version darf beschrieben werden.
+async function ownVersion(req: VercelRequest, version: unknown): Promise<{ key: string; name: string } | null> {
+  if (!isNonEmptyString(version)) return null;
+  const session = await getSession(req);
+  if (!session) return null;
+  const me = myVersion(session);
+  return me.key === version ? me : null;
 }
 
 // Zähler säubern: nur bekannte-artige Schlüssel (kurz, a-z_) mit ganzzahligen,
@@ -134,6 +171,19 @@ const saveTally = requirePermission('tracking')(async (req: VercelRequest, res: 
   // 'out' = „Spielt nicht" in diesem Spiel (Zähler bleiben erhalten, zählen aber nicht).
   const role = b.role === 'keeper' ? 'keeper' : b.role === OUT_ROLE ? OUT_ROLE : 'field';
   const counts = sanitizeCounts(b.counts);
+  const vRaw = (req.body ?? {}).version;
+  if (vRaw !== undefined && vRaw !== null && vRaw !== '') {
+    const me = await ownVersion(req, vRaw);
+    if (!me) return res.status(403).json({ error: 'Nur die eigene Vergleichs-Version kann bearbeitet werden.' });
+    await ensureVersions();
+    await sql`
+      INSERT INTO match_stat_versions (version, version_name, day_key, match_id, team_id, player_name, role, counts, updated_at)
+      VALUES (${me.key}, ${me.name}, ${b.dayKey}, ${b.matchId}, ${b.teamId}, ${b.playerName}, ${role}, ${JSON.stringify(counts)}::jsonb, now())
+      ON CONFLICT (match_id, version, team_id, player_name)
+      DO UPDATE SET counts = EXCLUDED.counts, role = EXCLUDED.role, day_key = EXCLUDED.day_key, version_name = EXCLUDED.version_name, updated_at = now()
+    `;
+    return res.json({ ok: true });
+  }
   await sql`
     INSERT INTO match_player_stats (day_key, match_id, team_id, player_name, role, counts, updated_at)
     VALUES (${b.dayKey}, ${b.matchId}, ${b.teamId}, ${b.playerName}, ${role}, ${JSON.stringify(counts)}::jsonb, now())
@@ -145,12 +195,19 @@ const saveTally = requirePermission('tracking')(async (req: VercelRequest, res: 
 
 // --- Getrackte Daten umbuchen: zusammenführen / tauschen / löschen -----------
 // Eine Zeile lesen (Zähler + Rolle) für (matchId, teamId, playerName).
+// `ver` gesetzt = in dieser Vergleichs-Version statt in den offiziellen Daten.
+type Ver = { key: string; name: string } | null;
 async function readTallyRow(
   matchId: string,
   teamId: string,
-  playerName: string
+  playerName: string,
+  ver: Ver = null
 ): Promise<{ role: string; counts: Record<string, number> } | null> {
-  const rows = (await sql`
+  const rows = (ver
+    ? await sql`
+    SELECT role, counts FROM match_stat_versions
+    WHERE match_id = ${matchId} AND version = ${ver.key} AND team_id = ${teamId} AND player_name = ${playerName}`
+    : await sql`
     SELECT role, counts FROM match_player_stats
     WHERE match_id = ${matchId} AND team_id = ${teamId} AND player_name = ${playerName}`) as {
     role: string;
@@ -167,9 +224,18 @@ async function upsertTallyRow(
   teamId: string,
   playerName: string,
   role: string,
-  counts: Record<string, number>
+  counts: Record<string, number>,
+  ver: Ver = null
 ): Promise<void> {
   const r = role === 'keeper' || role === OUT_ROLE ? role : 'field';
+  if (ver) {
+    await sql`
+    INSERT INTO match_stat_versions (version, version_name, day_key, match_id, team_id, player_name, role, counts, updated_at)
+    VALUES (${ver.key}, ${ver.name}, ${dayKey}, ${matchId}, ${teamId}, ${playerName}, ${r}, ${JSON.stringify(counts)}::jsonb, now())
+    ON CONFLICT (match_id, version, team_id, player_name)
+    DO UPDATE SET counts = EXCLUDED.counts, role = EXCLUDED.role, day_key = EXCLUDED.day_key, updated_at = now()`;
+    return;
+  }
   await sql`
     INSERT INTO match_player_stats (day_key, match_id, team_id, player_name, role, counts, updated_at)
     VALUES (${dayKey}, ${matchId}, ${teamId}, ${playerName}, ${r}, ${JSON.stringify(counts)}::jsonb, now())
@@ -177,7 +243,11 @@ async function upsertTallyRow(
     DO UPDATE SET counts = EXCLUDED.counts, role = EXCLUDED.role, day_key = EXCLUDED.day_key, updated_at = now()`;
 }
 
-async function deleteTallyRow(matchId: string, teamId: string, playerName: string): Promise<void> {
+async function deleteTallyRow(matchId: string, teamId: string, playerName: string, ver: Ver = null): Promise<void> {
+  if (ver) {
+    await sql`DELETE FROM match_stat_versions WHERE match_id = ${matchId} AND version = ${ver.key} AND team_id = ${teamId} AND player_name = ${playerName}`;
+    return;
+  }
   await sql`DELETE FROM match_player_stats WHERE match_id = ${matchId} AND team_id = ${teamId} AND player_name = ${playerName}`;
 }
 
@@ -200,7 +270,14 @@ const tallyOp = requirePermission('tracking')(async (req: VercelRequest, res: Ve
     op?: unknown;
     from?: unknown;
     to?: unknown;
+    version?: unknown;
   };
+  let ver: Ver = null;
+  if (b.version !== undefined && b.version !== null && b.version !== '') {
+    ver = await ownVersion(req, b.version);
+    if (!ver) return res.status(403).json({ error: 'Nur die eigene Vergleichs-Version kann bearbeitet werden.' });
+    await ensureVersions();
+  }
   const op = b.op;
   const teamId = b.teamId;
   const from = b.from;
@@ -218,26 +295,26 @@ const tallyOp = requirePermission('tracking')(async (req: VercelRequest, res: Ve
   }
 
   for (const mid of matchIds) {
-    const fromRow = await readTallyRow(mid, teamId, from);
+    const fromRow = await readTallyRow(mid, teamId, from, ver);
     if (op === 'delete') {
-      await deleteTallyRow(mid, teamId, from);
+      await deleteTallyRow(mid, teamId, from, ver);
       continue;
     }
-    const toRow = await readTallyRow(mid, teamId, to as string);
+    const toRow = await readTallyRow(mid, teamId, to as string, ver);
     if (op === 'merge') {
       if (!fromRow) continue; // in diesem Spiel nichts zu verschieben
       const merged = addCounts(toRow?.counts ?? {}, fromRow.counts);
-      await upsertTallyRow(dayKey as string, mid, teamId, to as string, toRow?.role ?? fromRow.role, merged);
-      await deleteTallyRow(mid, teamId, from);
+      await upsertTallyRow(dayKey as string, mid, teamId, to as string, toRow?.role ?? fromRow.role, merged, ver);
+      await deleteTallyRow(mid, teamId, from, ver);
     } else {
       // swap: Momentaufnahmen zuerst lesen, dann beide Seiten setzen.
       if (!fromRow && !toRow) continue;
       // Ziel bekommt die Werte von `from` (bzw. wird geleert, wenn from leer war).
-      if (fromRow) await upsertTallyRow(dayKey as string, mid, teamId, to as string, toRow?.role ?? fromRow.role, fromRow.counts);
-      else await deleteTallyRow(mid, teamId, to as string);
+      if (fromRow) await upsertTallyRow(dayKey as string, mid, teamId, to as string, toRow?.role ?? fromRow.role, fromRow.counts, ver);
+      else await deleteTallyRow(mid, teamId, to as string, ver);
       // `from` bekommt die Werte von `to` (bzw. wird geleert, wenn to leer war).
-      if (toRow) await upsertTallyRow(dayKey as string, mid, teamId, from, fromRow?.role ?? toRow.role, toRow.counts);
-      else await deleteTallyRow(mid, teamId, from);
+      if (toRow) await upsertTallyRow(dayKey as string, mid, teamId, from, fromRow?.role ?? toRow.role, toRow.counts, ver);
+      else await deleteTallyRow(mid, teamId, from, ver);
     }
   }
   return res.json({ ok: true });
@@ -478,6 +555,71 @@ const voiceTracking = requirePermission('tracking')(async (req: VercelRequest, r
   }
 });
 
+// Alle Vergleichs-Versionen eines Spiels (nur Tracking-Team).
+async function listVersions(req: VercelRequest, res: VercelResponse) {
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (!hasPermission(session, 'tracking')) return res.status(403).json({ error: 'Keine Berechtigung.' });
+  const matchId = typeof req.query.matchId === 'string' ? req.query.matchId : '';
+  if (!matchId) return badRequest(res, 'matchId fehlt.');
+  await ensureVersions();
+  const rows = (await sql`
+    SELECT version, version_name AS "name", day_key AS "dayKey", match_id AS "matchId", team_id AS "teamId",
+           player_name AS "playerName", role, counts, updated_at AS "updatedAt"
+    FROM match_stat_versions WHERE match_id = ${matchId}`) as {
+    version: string; name: string; dayKey: string; matchId: string; teamId: string; playerName: string; role: string; counts: unknown; updatedAt: string;
+  }[];
+  const map = new Map<string, { key: string; name: string; updatedAt: string; rows: StatRow[] }>();
+  for (const r of rows) {
+    const v = map.get(r.version) ?? { key: r.version, name: r.name, updatedAt: '', rows: [] };
+    const at = new Date(r.updatedAt).toISOString();
+    if (at > v.updatedAt) v.updatedAt = at;
+    v.rows.push({ dayKey: r.dayKey, matchId: r.matchId, teamId: r.teamId, playerName: r.playerName, role: r.role, counts: sanitizeCounts(r.counts) } as StatRow);
+    map.set(r.version, v);
+  }
+  const versions = [...map.values()].sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+  return res.json({ me: myVersion(session), canAdopt: session.role === 'superadmin', versions });
+}
+
+// Eine Version zur offiziellen machen. Vorher offizielle Daten als Sicherung
+// aufheben – alles in EINER Transaktion (ganz oder gar nicht).
+const adoptVersion = requireSuperadmin(async (req: VercelRequest, res: VercelResponse) => {
+  const b = (req.body ?? {}) as { matchId?: unknown; version?: unknown };
+  if (!isNonEmptyString(b.matchId) || !isNonEmptyString(b.version)) return badRequest(res, 'matchId/version fehlt.');
+  await ensureVersions();
+  const src = (await sql`SELECT day_key AS "dayKey", version_name AS "name" FROM match_stat_versions
+    WHERE match_id = ${b.matchId} AND version = ${b.version} LIMIT 1`) as { dayKey: string; name: string }[];
+  if (!src[0]) return badRequest(res, 'Diese Version hat keine Daten.');
+  const dayKey = src[0].dayKey;
+  const stamp = new Date();
+  const bkKey = `backup:${stamp.getTime()}`;
+  const bkName = `Sicherung vom ${stamp.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' })} (vorher offiziell)`;
+  await sql.transaction((txn) => [
+    txn`INSERT INTO match_stat_versions (version, version_name, day_key, match_id, team_id, player_name, role, counts, updated_at)
+        SELECT ${bkKey}, ${bkName}, day_key, match_id, team_id, player_name, role, counts, updated_at
+        FROM match_player_stats WHERE match_id = ${b.matchId} AND day_key = ${dayKey}`,
+    txn`DELETE FROM match_player_stats WHERE match_id = ${b.matchId} AND day_key = ${dayKey}`,
+    txn`INSERT INTO match_player_stats (day_key, match_id, team_id, player_name, role, counts, updated_at)
+        SELECT day_key, match_id, team_id, player_name, role, counts, now()
+        FROM match_stat_versions WHERE match_id = ${b.matchId} AND version = ${b.version}`,
+  ]);
+  return res.json({ ok: true, backup: { key: bkKey, name: bkName } });
+});
+
+// Eigene Version löschen (Super-Admins dürfen jede Version löschen).
+const deleteVersion = requirePermission('tracking')(async (req: VercelRequest, res: VercelResponse) => {
+  const b = (req.body ?? {}) as { matchId?: unknown; version?: unknown };
+  if (!isNonEmptyString(b.matchId) || !isNonEmptyString(b.version)) return badRequest(res, 'matchId/version fehlt.');
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Nicht angemeldet' });
+  if (myVersion(session).key !== b.version && session.role !== 'superadmin') {
+    return res.status(403).json({ error: 'Nur die eigene Version kann gelöscht werden.' });
+  }
+  await ensureVersions();
+  await sql`DELETE FROM match_stat_versions WHERE match_id = ${b.matchId} AND version = ${b.version}`;
+  return res.json({ ok: true });
+});
+
 // --- Dispatcher -------------------------------------------------------------
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -639,6 +781,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             )`) as { matchId: string; dayKey: string }[];
         return res.json({ matchIds: [...new Set(rows.map((r) => r.matchId))], tracked: rows });
       }
+      if (resource === 'versions') return listVersions(req, res);
       if (resource === 'track-status') {
         if (!(await getSession(req))) return res.status(401).json({ error: 'Nicht angemeldet' });
         const rows = await sql`SELECT value FROM settings WHERE key = 'tracking-status'`;
@@ -657,6 +800,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (resource === 'scoring') return saveScoring(req, res);
       if (resource === 'tally') return saveTally(req, res);
       if (resource === 'tally-op') return tallyOp(req, res);
+      if (resource === 'version-adopt') return adoptVersion(req, res);
+      if (resource === 'version-delete') return deleteVersion(req, res);
       if (resource === 'tally-reset') return resetTally(req, res);
       if (resource === 'track-status') return saveTrackStatus(req, res);
       if (resource === 'publish') return savePublish(req, res);

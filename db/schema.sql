@@ -506,6 +506,24 @@ CREATE TABLE match_player_stats (
 );
 CREATE INDEX idx_match_player_stats_day ON match_player_stats(day_key);
 
+-- Vergleichsmodus im Statistik-Center: eigene Tracking-Versionen je Person
+-- (getrennt von den offiziellen Daten). „Übernehmen" (Super-Admin) kopiert eine
+-- Version nach match_player_stats; die alte offizielle Fassung bleibt als
+-- version 'backup:<zeit>' erhalten. Wird automatisch über api/stats.ts angelegt.
+CREATE TABLE IF NOT EXISTS match_stat_versions (
+  version      TEXT NOT NULL,           -- 'u:<userId>' bzw. 'backup:<zeit>'
+  version_name TEXT NOT NULL DEFAULT '',
+  day_key      TEXT NOT NULL,
+  match_id     TEXT NOT NULL,
+  team_id      TEXT NOT NULL,
+  player_name  TEXT NOT NULL,
+  role         TEXT NOT NULL DEFAULT 'field',
+  counts       JSONB NOT NULL DEFAULT '{}',
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (match_id, version, team_id, player_name)
+);
+CREATE INDEX IF NOT EXISTS idx_match_stat_versions_match ON match_stat_versions(match_id);
+
 -- Season 2: verbindliche Buchungen (Landingpage /season2). Wird automatisch
 -- über api/_lib/ensure.ts angelegt.
 CREATE TABLE IF NOT EXISTS season_bookings (
