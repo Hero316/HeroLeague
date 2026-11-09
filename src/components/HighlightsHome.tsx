@@ -91,9 +91,9 @@ export default function HighlightsHome({
           <div className="hl-drift-c w-full h-full rounded-full bg-[radial-gradient(circle,rgba(233,196,106,.12),transparent_66%)]" />
         </motion.div>
       </motion.div>
-      {/* Weiche Kanten: der farbige Bereich geht oben und unten sanft in den
-          Seiten-Hintergrund (#0A1415) über – kein dunkler Saum, kein harter Schnitt. */}
-      <div aria-hidden className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-[#0A1415] to-transparent pointer-events-none" />
+      {/* Oben KEINE feste Farbleiste: der Hintergrund läuft per Maske (hl-edge-fade)
+          ins Durchsichtige aus, sonst entsteht unter dem Season-2-Banner eine Kante.
+          Unten darf der Übergang zu den Partnern hart sein. */}
       <div aria-hidden className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#0A1415] via-[rgba(10,20,21,0.85)] to-transparent pointer-events-none" />
 
       <div className="relative z-[1] max-w-[1320px] mx-auto px-4 sm:px-10 pt-14 sm:pt-20 pb-6 sm:pb-9">
