@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import type { MatchPlayerStat, Partner, PlayerCard, PlayerOfMonth, ScoringConfig, StatRole, Team } from '../types';
-import { awardView, fmtNote } from '../lib/awards';
+import { awardView, fmtNote, latestTrackedMatchday } from '../lib/awards';
 import FifaCard from './FifaCard';
 import { SponsorLink } from './ui';
 
@@ -71,11 +71,13 @@ function AwardSide({
   side,
   data,
   pom,
+  day,
   props,
 }: {
   side: 'left' | 'right';
   data: SideData;
   pom: PlayerOfMonth;
+  day: number | null;
   props: Props;
 }) {
   const isP = data.role === 'field';
@@ -141,7 +143,7 @@ function AwardSide({
       >
         {isP ? 'Spieler' : 'Torwart'} des
         <br />
-        Spieltages
+        {dayWord(day)}
       </h2>
       <div className="mt-3 sm:mt-4 min-w-0 max-w-full">
       {/* Name wie die Überschrift ausrichten (links: zur Mitte hin rechtsbündig,
@@ -190,8 +192,11 @@ function AwardSide({
   );
 }
 
+// „Spieltages" bzw. „2. Spieltages" – mit Nummer, sobald der Spieltag bekannt ist.
+const dayWord = (day: number | null) => (day && day > 0 ? `${day}. Spieltages` : 'Spieltages');
+
 // Leerer Platz (noch niemand gekürt): nur Überschrift + Wartekarte – links wie rechts gleich.
-function PlaceholderSide({ role, side }: { role: StatRole; side: 'left' | 'right' }) {
+function PlaceholderSide({ role, side, day }: { role: StatRole; side: 'left' | 'right'; day: number | null }) {
   const accent = role === 'field' ? TEAL : GOLD;
   return (
     <div className={`row-span-3 grid grid-rows-subgrid justify-items-center text-center min-w-0 ${side === 'left' ? 'lg:justify-items-end lg:text-right' : 'lg:justify-items-start lg:text-left'}`}>
@@ -201,7 +206,7 @@ function PlaceholderSide({ role, side }: { role: StatRole; side: 'left' | 'right
       >
         {role === 'field' ? 'Spieler' : 'Torwart'} des
         <br />
-        Spieltages
+        {dayWord(day)}
       </h2>
       {/* leere Namenszeile – hält die Karte auf einer Höhe mit der Gegenseite */}
       <div aria-hidden="true" />
@@ -222,6 +227,18 @@ export default function AwardsSlide(props: Props) {
         return { role: 'keeper' as const, name: pom.keeper!.name, teamId: kTeam?.id || pom.keeper!.teamId || '', club: pom.keeper!.club, team: kTeam, image: pom.keeper!.image };
       })()
     : null;
+  // Spieltag der Auszeichnung: im Backend gesetzt (wird beim Übernehmen der
+  // Vorschläge automatisch eingetragen), sonst der letzte Spieltag, an dem der
+  // Spieler getrackt wurde. → „Spieler des 2. Spieltages" usw.
+  const day =
+    pom.matchday && pom.matchday > 0
+      ? pom.matchday
+      : props.seasonId
+        ? latestTrackedMatchday(
+            (props.trackingRows ?? []).filter((r) => r.teamId === player.teamId && r.playerName === player.name),
+            props.seasonId,
+          )
+        : null;
 
   return (
     <div className="relative w-full max-w-[1320px] mx-auto px-4 sm:px-10 pt-8 pb-24 sm:pt-8 sm:pb-24">
@@ -231,8 +248,8 @@ export default function AwardsSlide(props: Props) {
       {/* Die beiden Auszeichnungen – spiegelsymmetrisch zur Mittellinie */}
       <div className="relative mt-8 sm:mt-10 grid grid-cols-2 grid-rows-[auto_auto_auto] gap-x-3 sm:gap-x-10 lg:gap-x-14 items-start">
         <div className="hidden lg:block absolute left-1/2 -translate-x-1/2 top-4 bottom-4 w-px bg-gradient-to-b from-transparent via-white/15 to-transparent" />
-        {hasName(player.name) ? <AwardSide side="left" data={player} pom={pom} props={props} /> : <PlaceholderSide role="field" side="left" />}
-        {keeper ? <AwardSide side="right" data={keeper} pom={pom} props={props} /> : <PlaceholderSide role="keeper" side="right" />}
+        {hasName(player.name) ? <AwardSide side="left" data={player} pom={pom} day={day} props={props} /> : <PlaceholderSide role="field" side="left" day={day} />}
+        {keeper ? <AwardSide side="right" data={keeper} pom={pom} day={day} props={props} /> : <PlaceholderSide role="keeper" side="right" day={day} />}
       </div>
 
       {buttons && <div className="mt-8 sm:mt-9 flex gap-3 justify-center flex-wrap">{buttons}</div>}
