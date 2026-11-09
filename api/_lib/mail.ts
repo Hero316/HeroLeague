@@ -28,6 +28,7 @@ export async function sendMail(opts: {
   from?: string;
   replyTo?: string;
   attachments?: { filename: string; content: string }[]; // content = Base64
+  bcc?: string[]; // unsichtbare Kopie (z. B. Rechnungs-Kopie an die Liga)
 }): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -43,6 +44,8 @@ export async function sendMail(opts: {
   };
   if (opts.replyTo) body.reply_to = opts.replyTo;
   if (opts.attachments?.length) body.attachments = opts.attachments;
+  const bcc = (opts.bcc ?? []).filter((a) => a && a.toLowerCase() !== opts.to.toLowerCase());
+  if (bcc.length) body.bcc = bcc;
 
   const res = await fetch(RESEND_ENDPOINT, {
     method: 'POST',
