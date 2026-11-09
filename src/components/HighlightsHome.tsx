@@ -62,17 +62,10 @@ export default function HighlightsHome({
 
   return (
     <section ref={sectionRef} className="relative overflow-hidden">
-      {/* Animierter Farb-Hintergrund: taucht beim Reinscrollen auf und hebt den
-          Bereich deutlich vom schwarzen Rest ab. Die Glows sind zusätzlich an den
+      {/* Farb-Hintergrund: immer da (kein Einblenden beim Scrollen – sonst ändert
+          sich der Übergang unter dem Season-2-Banner sichtbar). Die Glows sind an den
           Scroll gekoppelt (Parallaxe) – der Übergang aus dem Hero wirkt lebendig. */}
-      <motion.div
-        aria-hidden
-        className="absolute inset-0 pointer-events-none hl-edge-fade"
-        initial={{ opacity: 0 }}
-        whileInView={{ opacity: 1 }}
-        viewport={{ once: true, margin: '-18% 0px' }}
-        transition={{ duration: 1, ease: 'easeOut' }}
-      >
+      <motion.div aria-hidden className="absolute inset-0 pointer-events-none hl-edge-fade">
         <div className="absolute inset-0 bg-[linear-gradient(180deg,#0A1415_0%,#082220_48%,#0A1415_100%)]" />
         <motion.div
           className="absolute inset-0 bg-[radial-gradient(95%_75%_at_50%_-8%,rgba(34,223,201,.24),transparent_62%)]"
