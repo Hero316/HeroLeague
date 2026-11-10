@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
+import { useHistoryState } from '../lib/historyState';
 import { PlayerStat, Match, Team, MatchPlayerStat, ScoringConfig } from '../types';
 import {
   scorerRanking as trackScorers,
@@ -231,8 +232,9 @@ export default function Statistiken({
   // Spieltag-Filter: „Gesamt" (null) oder ein einzelner Spieltag. Alle Werte
   // der Seite (Kacheln, Team-Karten, Torschützen, Bestenlisten, Torhüter)
   // rechnen dann nur mit diesem Spieltag. Steckbrief & 1 gegen 1 bleiben
-  // bewusst auf der ganzen Saison.
-  const [matchday, setMatchday] = React.useState<number | null>(null);
+  // bewusst auf der ganzen Saison. Gehört zur Seite in der Browser-History →
+  // „Zurück" (z. B. von einer Spielerseite) landet wieder bei diesem Filter.
+  const [matchday, setMatchday] = useHistoryState<number | null>('statistiken-spieltag', null);
   // Läuft gerade ein Tracking? Bei „Gesamt" alle laufenden Spieltage, sonst nur
   // der gefilterte.
   const progress = useTrackingProgress();
@@ -374,7 +376,7 @@ export default function Statistiken({
     () =>
       goldenGloveRanking(trackingRows, cfg).map((e) => ({
         ...resolvePlayer(e.teamId, e.playerName),
-        gamesInGoal: e.games,
+        gamesInGoal: e.keeperGames,
         cleanSheets: e.cleanSheets,
         goalsConceded: e.goalsConceded,
         score: e.goldenGloveScore,

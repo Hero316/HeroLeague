@@ -10,6 +10,7 @@ import { startPresence } from './lib/presence';
 import { disablePush, syncPush } from './lib/push';
 import { seasonName } from './lib/heroAward';
 import { lazyPage } from './lib/lazyPage';
+import { rememberScroll, restoreScroll, savedScroll } from './lib/historyState';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import Tabelle from './components/Tabelle';
@@ -477,7 +478,17 @@ export default function App() {
         /* noch nichts gepflegt – Bereich bleibt leer/unsichtbar */
       });
 
-    const handlePopState = () => setCurrentPath(window.location.pathname);
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      // Zurück/Vor auf eine ANDERE Seite: dorthin scrollen, wo man dort war.
+      // (Schließt „Zurück" nur ein Fenster/Overlay, bleibt die Seite gleich.)
+      if (path !== shownPath.current) {
+        const y = savedScroll();
+        if (y !== null) restoreScroll(y);
+      }
+      shownPath.current = path;
+      setCurrentPath(path);
+    };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [fetchData]);
@@ -541,9 +552,14 @@ export default function App() {
 
   // Merkt sich, ob innerhalb der App navigiert wurde (für „Zurück").
   const navigatedInApp = useRef(false);
+  // Pfad der gerade gezeigten Seite – damit „Zurück" Seitenwechsel von
+  // geschlossenen Fenstern/Overlays (gleicher Pfad) unterscheiden kann.
+  const shownPath = useRef(window.location.pathname);
 
   const navigateTo = (path: string, opts?: { keepScroll?: boolean }) => {
+    rememberScroll(); // Stelle der bisherigen Seite merken – „Zurück" landet wieder dort
     window.history.pushState({}, '', path);
+    shownPath.current = window.location.pathname;
     navigatedInApp.current = true;
     setCurrentPath(path);
     // Neue Seite (z.B. Vereinsseite) immer oben starten – außer bei reinen

@@ -5,6 +5,8 @@ import { Play, Check, RotateCcw, Plus, Minus, Pencil, Save, AlertTriangle, Users
 import { Absence, BestPlayer, Goalkeeper, Match, Scorer, Team } from '../types';
 import { TeamCrest, shortDate, useMatchClock, FieldTag } from './ui';
 import { FadeIn } from './anim';
+import { useHistoryState } from '../lib/historyState';
+import { defaultScheduleMatchday } from '../lib/scheduleDefault';
 
 export function LiveTimer({
   liveStartedAt,
@@ -63,7 +65,6 @@ export default function Spielplan({
   initialMatchday,
   onInitialMatchdayConsumed,
 }: SpielplanProps) {
-  const [activeMatchday, setActiveMatchday] = useState<number>(1);
   const [editingScores, setEditingScores] = useState<{
     [matchId: string]: { home: string; away: string };
   }>({});
@@ -71,12 +72,13 @@ export default function Spielplan({
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
   const matchdays = Array.from(new Set(matches.map((m) => m.matchday))).sort((a, b) => a - b);
-
-  useEffect(() => {
-    if (matchdays.length > 0 && !matchdays.includes(activeMatchday)) {
-      setActiveMatchday(matchdays[0]);
-    }
-  }, [matchdays, activeMatchday]);
+  // Vorauswahl: ab 3 Tage vor einem Spieltag (0 Uhr) dieser, sonst der zuletzt gespielte.
+  const defaultMatchday = React.useMemo(() => defaultScheduleMatchday(matches), [matches]);
+  // Selbst gewählter Spieltag (null = Vorauswahl). Gehört zur Seite in der
+  // Browser-History → „Zurück" (z. B. aus einem Spielbericht) landet wieder hier.
+  const [pickedMatchday, setActiveMatchday] = useHistoryState<number | null>('spielplan-spieltag', null);
+  const activeMatchday =
+    pickedMatchday !== null && matchdays.includes(pickedMatchday) ? pickedMatchday : defaultMatchday ?? matchdays[0] ?? 1;
 
   // Aus der Suche vorgegebenen Spieltag anzeigen (einmalig übernehmen).
   useEffect(() => {
@@ -86,13 +88,15 @@ export default function Spielplan({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialMatchday]);
 
+  // Aktiven Spieltag in der Leiste mittig zeigen – nur waagerecht, damit die
+  // Seite selbst nicht springt (sonst landet „Zurück" nicht an der alten Stelle).
   useEffect(() => {
-    if (scrollContainerRef.current) {
-      const activeBtn = scrollContainerRef.current.querySelector('[data-active="true"]');
-      if (activeBtn) {
-        activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-      }
-    }
+    const box = scrollContainerRef.current;
+    const btn = box?.querySelector<HTMLElement>('[data-active="true"]');
+    if (!box || !btn) return;
+    const b = btn.getBoundingClientRect();
+    const c = box.getBoundingClientRect();
+    box.scrollBy({ left: b.left + b.width / 2 - (c.left + c.width / 2) });
   }, [activeMatchday]);
 
   const activeIndex = matchdays.indexOf(activeMatchday);

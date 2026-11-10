@@ -187,7 +187,7 @@ function RankRow({
       <div className="flex-1 min-w-0">
         <div className="font-semibold truncate">{p.playerName}</div>
         <div className="text-[11px] text-hl-dim truncate">
-          {team?.name ?? p.teamId} · {p.games} {p.games === 1 ? 'Spiel' : 'Spiele'}
+          {team?.name ?? p.teamId} · {keeper ? `${p.keeperGames} ${p.keeperGames === 1 ? 'Spiel' : 'Spiele'} im Tor` : `${p.games} ${p.games === 1 ? 'Spiel' : 'Spiele'}`}
           {keeper && p.cleanSheets > 0 ? ` · ${p.cleanSheets}× zu null` : ''}
         </div>
       </div>
