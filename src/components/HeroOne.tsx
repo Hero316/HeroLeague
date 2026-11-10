@@ -5,6 +5,7 @@ import type { Match, MatchPlayerStat, ScoringConfig, Team } from '../types';
 import { monogram } from './ui';
 import { validCutout } from '../lib/playerPhoto';
 import { numberWord } from '../lib/heroAward';
+import { useHistoryState } from '../lib/historyState';
 import TrackingProgressBanner from './TrackingProgressBanner';
 import { useTrackingProgress } from '../lib/trackingProgress';
 import { heroRanking, type HeroRanked } from '../lib/trackingAwards';
@@ -58,7 +59,8 @@ export default function HeroOne({ rows, cfg, matches, teams, seasonNumber, seaso
 
   const word = numberWord(seasonNumber ?? 1);
   const progress = useTrackingProgress();
-  const [openId, setOpenId] = React.useState<string | null>(null);
+  // Aufgeklappter Spieler – bleibt nach „Zurück" (z. B. von der Spielerseite) offen.
+  const [openId, setOpenId] = useHistoryState<string | null>('heroone-offen', null);
   const teamOf = (p: HeroEntry) => teams.find((t) => t.id === p.teamId);
   const goPlayer = (p: HeroEntry) => {
     const t = teamOf(p);
@@ -163,7 +165,7 @@ function NomineeCard({
   const shots = t.goal + t.shot_on + t.shot_miss + t.shot_blocked_off;
   const stats: { label: string; value: string }[] = keeper
     ? [
-        { label: 'Spiele im Tor', value: String(p.games) },
+        { label: 'Spiele im Tor', value: String(p.keeperGames) },
         { label: 'Paraden', value: String(t.save) },
         { label: 'Paradenquote', value: pct(t.save, t.save + t.gk_goal_against) },
         { label: 'Glanzparaden', value: String(t.save_top) },
@@ -188,7 +190,7 @@ function NomineeCard({
         { label: 'Ballgewinne', value: String(t.interception + t.duel_won) },
       ];
   const short = keeper
-    ? `${p.games} ${p.games === 1 ? 'Spiel' : 'Spiele'} · ${t.save} Paraden${p.cleanSheets > 0 ? ` · ${p.cleanSheets}× zu null` : ''}`
+    ? `${p.keeperGames} ${p.keeperGames === 1 ? 'Spiel' : 'Spiele'} im Tor · ${t.save} Paraden${p.cleanSheets > 0 ? ` · ${p.cleanSheets}× zu null` : ''}`
     : `${p.games} ${p.games === 1 ? 'Spiel' : 'Spiele'} · ${goals} ${goals === 1 ? 'Tor' : 'Tore'} · ${t.assist} ${t.assist === 1 ? 'Vorlage' : 'Vorlagen'}`;
 
   return (

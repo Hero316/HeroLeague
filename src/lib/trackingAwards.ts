@@ -11,6 +11,7 @@ export interface RankedPlayer {
   teamId: string;
   playerName: string;
   games: number;
+  keeperGames: number; // davon im Tor (bei Wechsel Feld/Tor ≠ games)
   role: StatRole;
   score: number; // Summe der Rohscores
   avgNote: number; // Ø Note (6–10)
@@ -57,6 +58,7 @@ function aggregate(rows: MatchPlayerStat[], cfg: ScoringConfig, matchFilter?: Se
       teamId: a.teamId,
       playerName: a.playerName,
       games: a.games,
+      keeperGames: a.keeperGames,
       role,
       score: Math.round(a.scoreSum * 10) / 10,
       avgNote: Math.round((a.noteSum / Math.max(1, a.games)) * 100) / 100,
@@ -342,7 +344,7 @@ export function goldenGloveRanking(rows: MatchPlayerStat[], cfg: ScoringConfig):
   const gaPerShot = leagueGaPerShot(keepers.map((p) => p.total));
 
   return keepers
-    .filter((p) => p.games >= KEEPER_MIN_GAMES)
+    .filter((p) => p.keeperGames >= KEEPER_MIN_GAMES)
     .map((p) => {
       const gc = p.total.gk_goal_against;
       const saves = p.total.save;
@@ -398,9 +400,10 @@ export function keeperBoards(rows: MatchPlayerStat[], cfg: ScoringConfig): Keepe
   // eine kleine Stichprobe kein Problem, anders als bei den Quoten.
   const all = aggregate(rows, cfg).filter((p) => p.role === 'keeper');
 
-  const games = (p: RankedPlayer) => Math.max(1, p.games);
+  // Nur Spiele im Tor zählen – wer auch im Feld spielt, hat sonst „10 Spiele im Tor".
+  const games = (p: RankedPlayer) => Math.max(1, p.keeperGames);
   const gkActions = (p: RankedPlayer) => p.total.save + p.total.gk_goal_against;
-  const spiele = (p: RankedPlayer) => `${p.games} ${p.games === 1 ? 'Spiel' : 'Spiele'} im Tor`;
+  const spiele = (p: RankedPlayer) => `${p.keeperGames} ${p.keeperGames === 1 ? 'Spiel' : 'Spiele'} im Tor`;
 
   const board = (
     id: string,
@@ -439,7 +442,7 @@ export function keeperBoards(rows: MatchPlayerStat[], cfg: ScoringConfig): Keepe
         teamId: p.teamId,
         playerName: p.playerName,
         value: p.goldenGloveScore,
-        sub: `${p.games} Spiele · ${p.cleanSheets}× zu null · ${p.goalsConceded} Gegentore`,
+        sub: `${p.keeperGames} Spiele im Tor · ${p.cleanSheets}× zu null · ${p.goalsConceded} Gegentore`,
       })),
     });
 
@@ -467,9 +470,9 @@ export function keeperBoards(rows: MatchPlayerStat[], cfg: ScoringConfig): Keepe
       `Gegentore pro Spiel · ab ${KEEPER_MIN_GAMES} Spielen im Tor`,
       'Gegentore pro Spiel',
       2,
-      all.filter((p) => p.games >= KEEPER_MIN_GAMES),
+      all.filter((p) => p.keeperGames >= KEEPER_MIN_GAMES),
       (p) => p.total.gk_goal_against / games(p),
-      (p) => `${p.total.gk_goal_against} Gegentore in ${p.games} Spielen`,
+      (p) => `${p.total.gk_goal_against} Gegentore in ${p.keeperGames} Spielen`,
       { asc: true, keepZero: true }
     ),
     board('top', 'Glanzparaden', 'Die Paraden, bei denen alle aufstehen', 'Glanzparaden', 0, all, (p) => p.total.save_top, (p) =>

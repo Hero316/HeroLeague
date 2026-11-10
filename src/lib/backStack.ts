@@ -47,7 +47,12 @@ function registerLayer(close: () => void): () => void {
   install();
   const layer: Layer = { close };
   const id = ++layerSeq;
-  window.history.pushState({ __hlLayer: true, __hlId: id }, '');
+  // Seiten-Schlüssel (historyState.ts) mitnehmen: Wird aus der Ebene heraus auf
+  // eine andere Seite gewechselt, findet „Zurück" auf diesen Eintrag die Ansicht
+  // der Seite (gewählter Spieltag, Filter …) wieder.
+  const prev = window.history.state as { __hlKey?: unknown } | null;
+  const pageKey = typeof prev?.__hlKey === 'string' ? { __hlKey: prev.__hlKey } : {};
+  window.history.pushState({ __hlLayer: true, __hlId: id, ...pageKey }, '');
   stack.push(layer);
   return () => {
     const idx = stack.indexOf(layer);

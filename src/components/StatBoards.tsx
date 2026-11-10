@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { ArrowDown, Hand, Shirt } from 'lucide-react';
 import type { PlayerStat, Team } from '../types';
 import { sortStatRows, type StatTableCol, type StatTableRow } from './StatTable';
 import { TeamCrest, monogram, shade } from './ui';
 import { validCutout } from '../lib/playerPhoto';
+import { useHistoryState } from '../lib/historyState';
 
 // ===========================================================================
 // Bestenlisten der Saison – statt Aufklapp-Liste ein „Leaderboard":
@@ -56,9 +57,11 @@ export default function StatBoards({
   players: PlayerStat[];
   onSelectTeam?: (teamId: string, playerName?: string) => void;
 }) {
-  const [group, setGroup] = useState<Group>('field');
-  const [picked, setPicked] = useState<Record<Group, string | null>>({ field: null, keeper: null });
-  const [sortBy, setSortBy] = useState<Record<string, string>>({});
+  // Auswahl gehört zur Seite in der Browser-History → „Zurück" (z. B. von einer
+  // Spielerseite) zeigt wieder dieselbe Liste.
+  const [group, setGroup] = useHistoryState<Group>('bestenlisten-gruppe', 'field');
+  const [picked, setPicked] = useHistoryState<Record<Group, string | null>>('bestenlisten-kategorie', { field: null, keeper: null });
+  const [sortBy, setSortBy] = useHistoryState<Record<string, string>>('bestenlisten-sortierung', {});
   const reduce = useReducedMotion();
 
   const boards = group === 'field' ? field : keeper;
@@ -184,7 +187,7 @@ function BoardView({
   players: PlayerStat[];
   onSelectTeam?: (teamId: string, playerName?: string) => void;
 }) {
-  const [all, setAll] = useState(false);
+  const [all, setAll] = useHistoryState(`bestenlisten-alle-${board.id}`, false);
   const sorted = useMemo(() => (board.kind === 'table' ? sortStatRows(board.rows, sortKey) : []), [board, sortKey]);
 
   // Podest-Einträge (Platz 1–3) – bei Tabellen nach der gewählten Spalte.
