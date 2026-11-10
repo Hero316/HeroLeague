@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import type { MatchPlayerStat, Partner, PlayerCard, PlayerOfMonth, ScoringConfig, StatRole, Team } from '../types';
 import { awardView, fmtNote, latestTrackedMatchday } from '../lib/awards';
+import { cardForPlayer } from '../lib/playerCards';
 import FifaCard from './FifaCard';
 import { SponsorLink } from './ui';
 
@@ -10,7 +11,8 @@ import { SponsorLink } from './ui';
 // innen an der Mittellinie, die Spieltagswerte außen, Überschrift und Name sind
 // zur Mitte ausgerichtet. Oben „Auszeichnungen des Spieltages – präsentiert von" mit dem Sponsor-Logo.
 // Am Handy stehen die beiden Karten kleiner nebeneinander, darunter die Note.
-// Karte UND Werte = nur dieser Spieltag (bleibt fix, auch wenn später weitere Spieltage dazukommen).
+// Karte = die normale Saisonkarte (genau wie auf der Spielerseite, inkl. ▲/▼ seit
+// dem letzten Spieltag). Note + Werte daneben = nur dieser Spieltag.
 // Ohne Tracking-Daten fällt der Spieler auf die bisherige Foto-Karte zurück.
 // Fehlt jemand, steht dort nur die Überschrift mit einer leeren Wartekarte.
 // ===========================================================================
@@ -86,7 +88,9 @@ function AwardSide({
   const view =
     scoring && seasonId && data.teamId
       ? awardView(trackingRows, seasonId, scoring, data.teamId, data.name, data.role, pom.matchday)
-      : { card: null, note: null, stats: [] };
+      : { note: null, stats: [] };
+  // Saisonkarte – dieselbe Rechnung wie Spielerseite, Steckbrief und Vergleich.
+  const season = scoring && data.teamId ? cardForPlayer(data.name, data.teamId, trackingRows, scoring) : null;
   // Foto: im Backend hinterlegt, sonst aus dem Kader.
   const image = data.image || data.team?.spielerliste?.find((p) => p.name === data.name)?.imageUrl;
   const parts = data.name.trim().split(/\s+/);
@@ -98,7 +102,7 @@ function AwardSide({
   const stats: { value: string; label: string; accent?: boolean }[] = [];
   if (view.note !== null) stats.push({ value: fmtNote(view.note), label: 'Spieltagsnote', accent: true });
   if (view.stats.length) stats.push(...view.stats);
-  else if (isP && !view.card && ((pom.goals ?? 0) > 0 || (pom.assists ?? 0) > 0)) {
+  else if (isP && ((pom.goals ?? 0) > 0 || (pom.assists ?? 0) > 0)) {
     // Ohne Tracking: Tore/Vorlagen aus dem Backend.
     stats.push({ value: String(pom.goals ?? 0), label: 'Tore' }, { value: String(pom.assists ?? 0), label: 'Vorlagen' });
   }
@@ -112,8 +116,8 @@ function AwardSide({
       label={`${data.name} – Spielerseite öffnen`}
       className={`shrink-0 w-[150px] sm:w-[220px] xl:w-[240px] ${open ? 'transition-transform duration-200 hover:-translate-y-1' : ''}`}
     >
-      {view.card ? (
-        <FifaCard card={view.card} name={data.name} imageUrl={image} team={data.team} />
+      {season ? (
+        <FifaCard card={season.card} name={data.name} imageUrl={image} team={data.team} delta={season.delta} />
       ) : (
         <FifaCard card={pendingCard(data.role)} name={data.name} imageUrl={image} team={data.team} pending label={isP ? 'Spieler' : 'Torwart'} />
       )}
