@@ -5,8 +5,9 @@ import { countCleanSheets, normalizeCounts, playerCard, sumCounts } from './rati
 // Baut die FC-/FIFA-Karte eines Spielers – EXAKT wie die Team-Detailseite:
 // die getrackten Zähler dieses Spielers summieren und über die Score-Config
 // (ScoringConfig) werten. Rolle (Feld/Torwart) wird aus den getrackten Zeilen
-// abgeleitet (Mehrheit „keeper" ⇒ Torwart). So ist die Karte im Vergleich,
-// im Rückblick und auf der Team-Seite garantiert identisch.
+// abgeleitet (mindestens die Hälfte als Torwart ⇒ Torwart – dieselbe Regel wie
+// Team-Seite und Statistiken). So ist die Karte auf der Startseite, im
+// Vergleich, im Rückblick und auf der Team-Seite garantiert identisch.
 // ---------------------------------------------------------------------------
 
 export interface PlayerCardResult {
@@ -26,7 +27,7 @@ export function cardForPlayer(
   const rows = trackingRows.filter((r) => r.teamId === teamId && r.playerName === playerName);
   if (rows.length === 0) return null;
   const keeperRows = rows.filter((r) => r.role === 'keeper').length;
-  const role: StatRole = keeperRows > rows.length / 2 ? 'keeper' : 'field';
+  const role: StatRole = keeperRows * 2 >= rows.length ? 'keeper' : 'field';
   const build = (rs: MatchPlayerStat[]) => {
     const norm = rs.map((r) => ({ role: r.role, counts: normalizeCounts(r.counts) }));
     const total = sumCounts(norm.map((r) => r.counts));

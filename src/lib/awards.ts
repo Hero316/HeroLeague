@@ -1,5 +1,5 @@
-import type { ActionCounts, MatchPlayerStat, PlayerCard, ScoringConfig, StatRole } from '../types';
-import { countCleanSheets, matchNote, normalizeCounts, passversuche, playerCard, sumCounts } from './rating';
+import type { ActionCounts, MatchPlayerStat, ScoringConfig, StatRole } from '../types';
+import { countCleanSheets, matchNote, normalizeCounts, passversuche, sumCounts } from './rating';
 import { leagueDayKey } from './stats';
 import { gloveScore, leagueGaPerShot } from './trackingAwards';
 
@@ -7,9 +7,9 @@ import { gloveScore, leagueGaPerShot } from './trackingAwards';
 // Auszeichnungen des Spieltages (Spieler + Torwart) aus den GETRACKTEN Daten.
 //  • bestOfDay: wer hatte am Spieltag die beste Note (Schnitt seiner Spiele)?
 //    → Vorschlag für „Automatisch berechnen" im Backend.
-//  • awardView: alles, was die Startseite zu einem Ausgezeichneten zeigt –
-//    Karte + Werte NUR aus diesem Spieltag (die Saison-Karte ändert sich mit
-//    jedem weiteren Spieltag – die Auszeichnung soll aber fix bleiben).
+//  • awardView: Spieltagsnote + Werte NUR aus diesem Spieltag (sie begründen
+//    die Auszeichnung). Die Karte daneben ist die normale Saisonkarte
+//    (cardForPlayer in playerCards.ts) – genau wie auf der Spielerseite.
 // Liga-Spieltage haben den Schlüssel "s:<saison>:<spieltag>".
 // ===========================================================================
 
@@ -110,12 +110,11 @@ export function bestOfDay(
 }
 
 export interface AwardView {
-  card: PlayerCard | null; // Spieltags-Karte (nur dieser Spieltag; null = noch nichts getrackt)
-  note: number | null; // Spieltagsnote (Schnitt)
+  note: number | null; // Spieltagsnote (Schnitt; null = an diesem Spieltag nicht getrackt)
   stats: { value: string; label: string }[]; // Werte des Spieltags (ohne Note)
 }
 
-// Karte + Spieltagswerte eines Ausgezeichneten. `role` = Feldspieler/Torwart.
+// Spieltagsnote + Spieltagswerte eines Ausgezeichneten. `role` = Feldspieler/Torwart.
 export function awardView(
   rows: MatchPlayerStat[],
   seasonId: string,
@@ -126,7 +125,7 @@ export function awardView(
   matchday?: number | null
 ): AwardView {
   const mine = rows.filter((r) => r.teamId === teamId && r.playerName === name && r.dayKey.startsWith(`s:${seasonId}:`));
-  if (mine.length === 0) return { card: null, note: null, stats: [] };
+  if (mine.length === 0) return { note: null, stats: [] };
 
   // Spieltag: der gewählte, sonst der letzte, an dem der Spieler getrackt wurde.
   const md =
@@ -134,13 +133,10 @@ export function awardView(
       ? matchday
       : Math.max(...mine.map((r) => matchdayOf(r.dayKey, seasonId) ?? 0));
   const day = mine.filter((r) => r.dayKey === leagueDayKey(seasonId, md));
-  if (day.length === 0) return { card: null, note: null, stats: [] };
+  if (day.length === 0) return { note: null, stats: [] };
 
   const dayRows = day.map((r) => ({ role: r.role, counts: normalizeCounts(r.counts) }));
   const total = sumCounts(dayRows.map((r) => r.counts));
-  // Karte NUR aus diesem Spieltag – ohne „wenige Spiele"-Deckel (ein Abend hat
-  // naturgemäß nur ein paar Spiele), wie beim Testspieltag.
-  const card = playerCard(total, dayRows.length, role, cfg, true, countCleanSheets(dayRows));
   const note = round1(dayRows.reduce((s, r) => s + matchNote(r.counts, cfg, r.role), 0) / dayRows.length);
 
   const stats =
@@ -166,7 +162,7 @@ export function awardView(
             { value: tries > 0 ? `${Math.round((total.pass_ok / tries) * 100)} %` : '–', label: 'Passquote' },
           ];
         })();
-  return { card, note, stats };
+  return { note, stats };
 }
 
 // Note deutsch formatiert (8,7).
