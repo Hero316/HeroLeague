@@ -14,12 +14,13 @@ import {
   GOLDEN_GLOVE_EXPLAIN,
   ballWinnerLeaders,
   headerGoalLeaders,
+  keeperBoards,
   type StatLeader,
 } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
-import { Swords, Hand, IdCard, Users, BarChart3, Send, Zap, Target, Shield, Goal, Crown, Handshake, Info } from 'lucide-react';
-import StatTable, { pctFmt, sortStatRows, type StatTableCol, type StatTableRow } from './StatTable';
-import StatAccordion from './StatAccordion';
+import { Swords, Hand, IdCard, Users, Send, Zap, Target, Shield, Goal, Crown, Handshake, Info, ShieldCheck, Percent } from 'lucide-react';
+import { pctFmt, type StatTableCol, type StatTableRow } from './StatTable';
+import StatBoards, { type Board } from './StatBoards';
 import TrackingProgressBanner from './TrackingProgressBanner';
 import { useTrackingProgress } from '../lib/trackingProgress';
 import PlayerCrest from './PlayerCrest';
@@ -27,7 +28,6 @@ import { TeamCrest, monogram, shade } from './ui';
 import { validCutout } from '../lib/playerPhoto';
 import { CountUp, Reveal, useSettledList } from './anim';
 import CompareOverlay from './CompareOverlay';
-import KeeperStats from './KeeperStats';
 import PlayerSteckbrief from './PlayerSteckbrief';
 import TeamSteckbrief, { type TeamRecord, type TeamResult } from './TeamSteckbrief';
 import { calculateStandings } from '../lib/standings';
@@ -199,7 +199,6 @@ export default function Statistiken({
   onSelectTeam,
 }: StatistikenProps) {
   const [compareOpen, setCompareOpen] = React.useState(false);
-  const [keeperOpen, setKeeperOpen] = React.useState(false);
   const [gloveInfo, setGloveInfo] = React.useState(false);
   const [steckbriefOpen, setSteckbriefOpen] = React.useState(false);
   const [teamBriefOpen, setTeamBriefOpen] = React.useState(false);
@@ -430,6 +429,7 @@ export default function Statistiken({
     const tables: {
       id: string;
       title: string;
+      label: string;
       accent: string;
       icon: React.ReactNode;
       rows: StatTableRow[];
@@ -438,12 +438,12 @@ export default function Statistiken({
       note: string;
     }[] = [
       {
-        id: 'shots', title: 'Torschüsse', accent: '#F0559E', icon: <Target className="w-4 h-4" />, rows: shotRows, defaultSort: 'value',
+        id: 'shots', title: 'Torschüsse', label: 'Schüsse', accent: '#F0559E', icon: <Target className="w-4 h-4" />, rows: shotRows, defaultSort: 'value',
         cols: [{ key: 'all', label: 'Gesamt' }, { key: 'on', label: 'Aufs Tor' }, { key: 'quote', label: 'Quote', fmt: pctFmt }, { key: 'value', label: 'Wert', fmt: (v) => v.toFixed(1) }],
         note: `Quote = Schüsse aufs Tor (inkl. Tore) ÷ alle Schüsse · Wert = aufs Tor × Quote · ab ${SHOT_MIN} Schüssen`,
       },
       {
-        id: 'pass', title: 'Pässe', accent: '#22DFC9', icon: <Send className="w-4 h-4" />, rows: passRows, defaultSort: 'value',
+        id: 'pass', title: 'Pässe', label: 'Pässe', accent: '#22DFC9', icon: <Send className="w-4 h-4" />, rows: passRows, defaultSort: 'value',
         cols: [
           { key: 'all', label: 'Gesamt' },
           { key: 'ok', label: 'Ange\u00ADkommen' },
@@ -454,12 +454,12 @@ export default function Statistiken({
         note: `Quote = angekommene ÷ alle Pässe · Wert = angekommene × Quote · ab ${PASS_MIN} Pässen · Schlüsselpass = Pass, der direkt zur Torchance führt`,
       },
       {
-        id: 'duel', title: 'Zweikämpfe', accent: '#43E5A0', icon: <Swords className="w-4 h-4" />, rows: duelRows, defaultSort: 'value',
+        id: 'duel', title: 'Zweikämpfe', label: 'Zweikämpfe', accent: '#43E5A0', icon: <Swords className="w-4 h-4" />, rows: duelRows, defaultSort: 'value',
         cols: [{ key: 'all', label: 'Gesamt' }, { key: 'won', label: 'Gewonnen' }, { key: 'quote', label: 'Quote', fmt: pctFmt }, { key: 'value', label: 'Wert', fmt: (v) => v.toFixed(1) }],
         note: `Quote = gewonnene ÷ alle Zweikämpfe · Wert = gewonnene × Quote · ab ${DUEL_MIN} Zweikämpfen`,
       },
       {
-        id: 'drib', title: 'Beste Dribbler', accent: '#E9C46A', icon: <Zap className="w-4 h-4" />, rows: dribRows, defaultSort: 'value',
+        id: 'drib', title: 'Beste Dribbler', label: 'Dribbler', accent: '#E9C46A', icon: <Zap className="w-4 h-4" />, rows: dribRows, defaultSort: 'value',
         cols: [
           { key: 'all', label: 'Gesamt' },
           { key: 'won', label: 'Erfolg\u00ADreich' },
@@ -470,14 +470,14 @@ export default function Statistiken({
       },
     ];
     const lists = [
-      { id: 'goals', title: 'Torschützen', accent: '#E9C46A', icon: <Crown className="w-4 h-4" />, mode: 'count' as const,
+      { id: 'goals', title: 'Torschützen', label: 'Tore', unit: 'Tore', accent: '#E9C46A', icon: <Crown className="w-4 h-4" />,
         rows: trackScorers(trackingRows, cfg).slice(0, 10).map((e) => toLeader(e, e.goals)) },
-      { id: 'assists', title: 'Vorlagen', accent: '#22DFC9', icon: <Handshake className="w-4 h-4" />, mode: 'count' as const,
+      { id: 'assists', title: 'Vorlagen', label: 'Vorlagen', unit: 'Vorlagen', accent: '#22DFC9', icon: <Handshake className="w-4 h-4" />,
         rows: trackAssists(trackingRows, cfg).slice(0, 10).map((e) => toLeader(e, e.assists)) },
-      { id: 'scorer', title: 'Scorerpunkte (Tore + Vorlagen)', accent: '#43E5A0', icon: <Target className="w-4 h-4" />, mode: 'count' as const,
+      { id: 'scorer', title: 'Scorerpunkte', label: 'Scorer', unit: 'Tore + Vorlagen', accent: '#43E5A0', icon: <Target className="w-4 h-4" />,
         rows: [...scorePts.values()].sort((a, b) => b.value - a.value || a.playerName.localeCompare(b.playerName)).slice(0, 10) },
-      { id: 'win', title: 'Balleroberer', accent: '#58F0CD', icon: <Shield className="w-4 h-4" />, mode: 'count' as const, rows: ballWinnerLeaders(trackingRows, cfg) },
-      { id: 'head', title: 'Kopfballtore', accent: '#F0559E', icon: <Goal className="w-4 h-4" />, mode: 'count' as const, rows: headerGoalLeaders(trackingRows, cfg) },
+      { id: 'win', title: 'Balleroberer', label: 'Balleroberer', unit: 'Ballgewinne', accent: '#58F0CD', icon: <Shield className="w-4 h-4" />, rows: ballWinnerLeaders(trackingRows, cfg) },
+      { id: 'head', title: 'Kopfballtore', label: 'Kopfball', unit: 'Kopfballtore', accent: '#F0559E', icon: <Goal className="w-4 h-4" />, rows: headerGoalLeaders(trackingRows, cfg) },
     ].filter((b) => b.rows.length > 0);
     return {
       lists,
@@ -485,17 +485,100 @@ export default function Statistiken({
     };
   }, [trackingRows, cfg]);
 
-  const listItem = (b: (typeof boards.lists)[number]) => {
-    const top = b.rows[0];
-    return {
+  // Bestenlisten als Leaderboard: Feldspieler- und Torhüter-Kategorien.
+  const fieldBoards = React.useMemo<Board[]>(() => {
+    const list = (b: (typeof boards.lists)[number]): Board => ({
+      kind: 'list',
       id: b.id,
+      label: b.label,
       title: b.title,
+      unit: b.unit,
       accent: b.accent,
       icon: b.icon,
-      preview: top ? `1. ${top.playerName} · ${top.value}` : undefined,
-      content: <LeaderList rows={b.rows} mode={b.mode} accent={b.accent} teams={teams} onSelect={onSelectTeam} />,
+      entries: b.rows.map((r) => ({
+        teamId: r.teamId,
+        playerName: r.playerName,
+        value: r.value,
+        display: String(r.value),
+        sub: r.games ? `${r.games} ${r.games === 1 ? 'Spiel' : 'Spiele'}` : undefined,
+      })),
+    });
+    const table = (t: (typeof boards.tables)[number]): Board => ({
+      kind: 'table',
+      id: t.id,
+      label: t.label,
+      title: t.title,
+      accent: t.accent,
+      icon: t.icon,
+      rows: t.rows,
+      cols: t.cols,
+      defaultSort: t.defaultSort,
+      note: t.note,
+    });
+    return [...boards.lists.slice(0, 3).map(list), ...boards.tables.map(table), ...boards.lists.slice(3).map(list)];
+  }, [boards]);
+
+  const keeperBoardList = React.useMemo<Board[]>(() => {
+    const kb = keeperBoards(trackingRows, cfg);
+    const SHORT: Record<string, string> = { glove: 'Handschuh', saveRate: 'Quote', clean: 'Weiße Westen', conceded: 'Gegentore', pens: 'Elfmeter', pass: 'Passquote' };
+    const ICON: Record<string, React.ReactNode> = {
+      glove: <Crown className="w-4 h-4" />,
+      saveRate: <Percent className="w-4 h-4" />,
+      clean: <ShieldCheck className="w-4 h-4" />,
+      conceded: <Shield className="w-4 h-4" />,
+      pens: <Target className="w-4 h-4" />,
+      pass: <Send className="w-4 h-4" />,
     };
-  };
+    const fmt = (b: (typeof kb)[number], v: number) => (b.percent ? `${Math.round(v * 100)}%` : b.decimals > 0 ? v.toFixed(b.decimals) : String(v));
+    const list = (b: (typeof kb)[number]): Board => {
+      const first = b.rows[0]?.value ?? 0;
+      return {
+        kind: 'list',
+        id: b.id,
+        label: SHORT[b.id] ?? b.label,
+        title: b.label,
+        unit: b.unit || (b.percent ? 'Quote' : ''),
+        accent: b.id === 'glove' ? '#E9C46A' : '#22DFC9',
+        icon: ICON[b.id] ?? <Hand className="w-4 h-4" />,
+        note: b.hint,
+        entries: b.rows.map((r) => ({
+          teamId: r.teamId,
+          playerName: r.playerName,
+          // „Wenigste Gegentore": kleiner ist besser → Balken umgedreht.
+          value: b.id === 'conceded' ? (r.value > 0 ? first / r.value : 1) : r.value,
+          display: fmt(b, r.value),
+          sub: r.sub,
+        })),
+      };
+    };
+    // Paraden · Glanzparaden · Standparaden in EINER sortierbaren Tabelle.
+    const saveRows: StatTableRow[] = playerTotals(trackingRows, cfg)
+      .filter((p) => p.role === 'keeper' || p.total.save + p.total.gk_position_save > 0)
+      .filter((p) => p.total.save + p.total.save_top + p.total.gk_position_save > 0)
+      .map((p) => ({ teamId: p.teamId, playerName: p.playerName, values: { save: p.total.save, top: p.total.save_top, pos: p.total.gk_position_save } }));
+    const merged = new Set(['saves', 'top', 'pos']);
+    const saves: Board[] = saveRows.length
+      ? [
+          {
+            kind: 'table',
+            id: 'saves',
+            label: 'Paraden',
+            title: 'Paraden',
+            accent: '#22DFC9',
+            icon: <Hand className="w-4 h-4" />,
+            rows: saveRows,
+            cols: [
+              { key: 'save', label: 'Paraden' },
+              { key: 'top', label: 'Glanz\u00ADparaden' },
+              { key: 'pos', label: 'Stand\u00ADparaden' },
+            ],
+            defaultSort: 'save',
+            note: 'Glanzparaden zählen auch als Parade · Standparade = sicher gefangen, ohne Gefahr',
+          },
+        ]
+      : [];
+    return [...kb.filter((b) => b.id === 'glove').map(list), ...saves, ...kb.filter((b) => b.id !== 'glove' && !merged.has(b.id)).map(list)];
+  }, [trackingRows, cfg]);
 
   const topScorer = scorerRows[0] ?? null;
   const topAssist = assistRows[0] ?? null;
@@ -678,80 +761,66 @@ export default function Statistiken({
         ))}
       </div>
 
-      {/* Aktionen: Steckbrief · 1 gegen 1 · Torhüter – gleich große Karten */}
-      {(players.length > 0 || gloveRows.length > 0) && (
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {players.length > 0 && (
-            <button
-              onClick={() => setSteckbriefOpen(true)}
-              className="group relative overflow-hidden flex items-center gap-3 rounded-2xl px-5 py-3.5 text-left cursor-pointer transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] border border-hl-gold/30"
-              style={{ background: 'linear-gradient(100deg, rgba(233,196,106,.16), rgba(34,223,201,.10))' }}
-            >
-              <span className="w-10 h-10 rounded-xl grid place-items-center bg-hl-gold/20 text-hl-gold shrink-0">
-                <IdCard className="w-5 h-5 transition-transform duration-300 group-hover:-rotate-6" />
-              </span>
-              <span className="min-w-0">
-                <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">Mein Steckbrief</span>
-                <span className="block text-[11px] sm:text-xs lg:text-[13px] font-sans font-semibold text-hl-mute mt-0.5 truncate">Deine Werte & Platzierungen · zum Teilen</span>
-              </span>
-            </button>
-          )}
-          {teams.length > 0 && (
-            <button
-              onClick={() => setTeamBriefOpen(true)}
-              className="group relative overflow-hidden flex items-center gap-3 rounded-2xl px-5 py-3.5 text-left cursor-pointer transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] border border-[#5B7FFF]/35"
-              style={{ background: 'linear-gradient(100deg, rgba(47,91,255,.20), rgba(34,223,201,.10))' }}
-            >
-              <span className="w-10 h-10 rounded-xl grid place-items-center bg-[#5B7FFF]/20 text-[#8FA8FF] shrink-0">
-                <Users className="w-5 h-5 transition-transform duration-300 group-hover:scale-110" />
-              </span>
-              <span className="min-w-0">
-                <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">Team-Steckbrief</span>
-                <span className="block text-[11px] sm:text-xs lg:text-[13px] font-sans font-semibold text-hl-mute mt-0.5 truncate">Ganzer Kader, Bilanz & Teamwerte · zum Teilen</span>
-              </span>
-            </button>
-          )}
-          {/* 1 gegen 1: Duell-Karte mit VS-Abzeichen */}
-          {players.length >= 2 && (
-            <button
-              onClick={() => setCompareOpen(true)}
-              className="group relative overflow-hidden flex items-center gap-3 rounded-2xl px-5 py-3.5 text-left cursor-pointer transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] border border-brand-accent-light/35"
-              style={{ background: 'linear-gradient(100deg, rgba(34,223,201,.18), rgba(230,35,142,.14))' }}
-            >
-              {/* Diagonaler Schnitt im Hintergrund – Duell-Look */}
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-y-0 right-0 w-1/2 opacity-60"
-                style={{ background: 'linear-gradient(115deg, transparent 49.5%, rgba(255,255,255,.07) 50%, transparent 50.5%)' }}
-              />
-              <span className="relative w-10 h-10 rounded-xl grid place-items-center bg-brand-accent-light/20 text-brand-accent-light shrink-0">
-                <Swords className="w-5 h-5 transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110" />
-              </span>
-              <span className="relative min-w-0 flex-1">
-                <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">1 gegen 1</span>
-                <span className="block text-[11px] sm:text-xs lg:text-[13px] font-sans font-semibold text-hl-mute mt-0.5 truncate">Zwei Spieler direkt vergleichen</span>
-              </span>
-              <span className="relative shrink-0 font-display font-black italic text-[22px] leading-none tracking-tight bg-gradient-to-r from-brand-accent-light to-[#E6238E] bg-clip-text text-transparent transition-transform duration-300 group-hover:scale-110">
-                VS
-              </span>
-            </button>
-          )}
-          {/* Eigene Rubrik für die Keeper */}
-          {gloveRows.length > 0 && (
-            <button
-              onClick={() => setKeeperOpen(true)}
-              className="group relative overflow-hidden flex items-center gap-3 rounded-2xl px-5 py-3.5 text-left cursor-pointer transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] border border-hl-gold/25"
-              style={{ background: 'linear-gradient(100deg, rgba(233,196,106,.12), rgba(255,255,255,.03))' }}
-            >
-              <span className="w-10 h-10 rounded-xl grid place-items-center bg-hl-gold/15 text-hl-gold shrink-0">
-                <Hand className="w-5 h-5 transition-transform duration-300 group-hover:-rotate-12" />
-              </span>
-              <span className="min-w-0">
-                <span className="block font-display font-black uppercase tracking-tight text-white text-lg leading-none">Torhüter</span>
-                <span className="block text-[11px] sm:text-xs lg:text-[13px] font-sans font-semibold text-hl-mute mt-0.5 truncate">Paraden, Zu-null-Spiele & Bestenliste</span>
-              </span>
-            </button>
-          )}
+      {/* Aktionen: Steckbrief · 1 gegen 1 · Team-Steckbrief – eine Reihe */}
+      {players.length > 0 && (
+        <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
+          {(
+            [
+              {
+                id: 'me',
+                on: true,
+                title: 'Mein Steckbrief',
+                sub: 'Deine Werte & Platzierungen',
+                icon: <IdCard className="w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 group-hover:-rotate-6" />,
+                color: '#E9C46A',
+                bg: 'linear-gradient(135deg, rgba(233,196,106,.22), rgba(233,196,106,.04) 70%)',
+                open: () => setSteckbriefOpen(true),
+              },
+              {
+                id: 'vs',
+                on: players.length >= 2,
+                title: '1 gegen 1',
+                sub: 'Zwei Spieler vergleichen',
+                icon: <Swords className="w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110" />,
+                color: '#22DFC9',
+                bg: 'linear-gradient(135deg, rgba(34,223,201,.22), rgba(230,35,142,.10) 70%)',
+                open: () => setCompareOpen(true),
+              },
+              {
+                id: 'team',
+                on: teams.length > 0,
+                title: 'Team-Steckbrief',
+                sub: 'Kader, Bilanz & Teamwerte',
+                icon: <Users className="w-5 h-5 sm:w-6 sm:h-6 transition-transform duration-300 group-hover:scale-110" />,
+                color: '#8FA8FF',
+                bg: 'linear-gradient(135deg, rgba(47,91,255,.26), rgba(47,91,255,.05) 70%)',
+                open: () => setTeamBriefOpen(true),
+              },
+            ] as const
+          )
+            .filter((a) => a.on)
+            .map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={a.open}
+                className="group relative overflow-hidden min-w-0 flex flex-col sm:flex-row items-center sm:items-center gap-2 sm:gap-3.5 rounded-2xl px-2 py-3.5 sm:px-5 sm:py-4 text-center sm:text-left cursor-pointer transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] border"
+                style={{ background: a.bg, borderColor: `${a.color}55` }}
+              >
+                <span className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl grid place-items-center shrink-0" style={{ background: `${a.color}26`, color: a.color }}>
+                  {a.icon}
+                </span>
+                <span className="min-w-0 sm:flex-1">
+                  <span className="block font-display font-black uppercase tracking-tight text-white text-[13px] leading-[1.05] sm:text-xl sm:leading-none">{a.title}</span>
+                  <span className="hidden sm:block text-xs lg:text-[13px] font-sans font-semibold text-hl-mute mt-1 truncate">{a.sub}</span>
+                </span>
+                {a.id === 'vs' && (
+                  <span className="hidden lg:block shrink-0 font-display font-black italic text-[22px] leading-none tracking-tight bg-gradient-to-r from-brand-accent-light to-[#E6238E] bg-clip-text text-transparent transition-transform duration-300 group-hover:scale-110">
+                    VS
+                  </span>
+                )}
+              </button>
+            ))}
         </div>
       )}
 
@@ -785,15 +854,6 @@ export default function Statistiken({
         scoringConfig={scoringConfig}
         subtitle={seasonLabel || undefined}
         showSquad
-      />
-      <KeeperStats
-        open={keeperOpen}
-        onClose={() => setKeeperOpen(false)}
-        rows={trackingRows}
-        teams={teams}
-        players={players}
-        scoringConfig={scoringConfig}
-        onSelectTeam={onSelectTeam}
       />
 
       {/* Leader-Cards */}
@@ -885,20 +945,20 @@ export default function Statistiken({
 
       {/* Auszeichnungen: Torschützenkönig + Goldener Handschuh nebeneinander */}
       {(scorerRanking.length > 0 || gloveRanking.length > 0) && (
-        <Reveal className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+        <Reveal className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8 items-stretch">
           {/* Torschützenkönig – Top 5 nach erzielten Toren */}
           {scorerRanking.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2.5 mb-4">
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2.5 mb-4 min-h-[36px]">
                 <span className="text-2xl">⚽</span>
                 <h3 className="font-display font-black text-xl sm:text-2xl lg:text-3xl uppercase tracking-tight text-white">
                   Torschützenkönig
                 </h3>
                 <span className="font-sans font-bold text-[11px] sm:text-xs tracking-[1.5px] text-hl-dim mt-1">TOP 5 · SPIELER</span>
               </div>
-              <div className="relative rounded-[20px] overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] border border-white/10 backdrop-blur-lg shadow-[0_20px_50px_rgba(0,0,0,.35)]">
+              <div className="relative flex-1 flex flex-col rounded-[20px] overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] border border-white/10 backdrop-blur-lg shadow-[0_20px_50px_rgba(0,0,0,.35)]">
                 <div className="absolute top-0 right-0 w-[220px] h-[220px] pointer-events-none" style={{ background: GLOW.gold }} />
-                <div ref={scorer.ref} className="relative divide-y divide-white/[.06] hl-cascade-soft">
+                <div ref={scorer.ref} className="relative flex-1 flex flex-col divide-y divide-white/[.06] hl-cascade-soft">
                   {scorer.items.map((p, idx) => {
                     const rankColor =
                       idx === 0 ? 'text-hl-gold' : idx === 1 ? 'text-[#C7D0DA]' : idx === 2 ? 'text-[#E0A46B]' : 'text-hl-dim';
@@ -915,7 +975,7 @@ export default function Statistiken({
                         layout="position"
                         transition={{ type: 'spring', stiffness: 240, damping: 32 }}
                         key={p.id}
-                        className="flex items-center gap-3.5 sm:gap-4 px-4 sm:px-6 py-3.5 sm:py-4"
+                        className="flex-1 flex items-center gap-3.5 sm:gap-4 px-4 sm:px-6 py-3.5 sm:py-4"
                       >
                         <div className={`font-display font-black text-2xl sm:text-3xl lg:text-[40px] w-7 sm:w-8 text-center shrink-0 ${rankColor}`}>
                           {idx + 1}
@@ -947,8 +1007,8 @@ export default function Statistiken({
 
           {/* Goldener Handschuh – Torhüterwertung (Top 5 nach „zu null") */}
           {gloveRanking.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2.5 mb-4">
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2.5 mb-4 min-h-[36px]">
                 <span className="text-2xl">🧤</span>
                 <h3 className="font-display font-black text-xl sm:text-2xl lg:text-3xl uppercase tracking-tight text-white">
                   Goldener Handschuh
@@ -974,9 +1034,9 @@ export default function Statistiken({
                   </ul>
                 </div>
               )}
-              <div className="relative rounded-[20px] overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] border border-white/10 backdrop-blur-lg shadow-[0_20px_50px_rgba(0,0,0,.35)]">
+              <div className="relative flex-1 flex flex-col rounded-[20px] overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] border border-white/10 backdrop-blur-lg shadow-[0_20px_50px_rgba(0,0,0,.35)]">
                 <div className="absolute top-0 right-0 w-[220px] h-[220px] pointer-events-none" style={{ background: GLOW.teal }} />
-                <div ref={glove.ref} className="relative divide-y divide-white/[.06] hl-cascade-soft">
+                <div ref={glove.ref} className="relative flex-1 flex flex-col divide-y divide-white/[.06] hl-cascade-soft">
                   {glove.items.map((p, idx) => {
                     const rankColor =
                       idx === 0 ? 'text-hl-gold' : idx === 1 ? 'text-[#C7D0DA]' : idx === 2 ? 'text-[#E0A46B]' : 'text-hl-dim';
@@ -993,7 +1053,7 @@ export default function Statistiken({
                         layout="position"
                         transition={{ type: 'spring', stiffness: 240, damping: 32 }}
                         key={p.id}
-                        className="flex items-center gap-3.5 sm:gap-4 px-4 sm:px-6 py-3.5 sm:py-4"
+                        className="flex-1 flex items-center gap-3.5 sm:gap-4 px-4 sm:px-6 py-3.5 sm:py-4"
                       >
                         <div className={`font-display font-black text-2xl sm:text-3xl lg:text-[40px] w-7 sm:w-8 text-center shrink-0 ${rankColor}`}>
                           {idx + 1}
@@ -1025,93 +1085,19 @@ export default function Statistiken({
         </Reveal>
       )}
 
-      {/* Bestenlisten der Saison – aufklappbar, je Liste Platz 1 bis 10 */}
-      {(boards.lists.length > 0 || boards.tables.length > 0) && (
-        <Reveal className="mt-10">
-          <div className="flex items-center gap-2 mb-4">
-            <BarChart3 className="w-5 h-5 text-brand-accent-light" />
-            <h2 className="font-display font-black text-xl sm:text-2xl uppercase tracking-tight text-white">
-              {activeMd === null ? 'Bestenlisten der Saison' : `Bestenlisten · ${activeMd}. Spieltag`}
-            </h2>
-          </div>
-          <StatAccordion
-            items={[
-              ...boards.lists.slice(0, 3).map((b) => listItem(b)),
-              ...boards.tables.map((t) => {
-                const top = sortStatRows(t.rows, t.defaultSort)[0];
-                const col = t.cols.find((c) => c.key === t.defaultSort);
-                const v = top?.values[t.defaultSort];
-                return {
-                  id: t.id,
-                  title: t.title,
-                  accent: t.accent,
-                  icon: t.icon,
-                  preview: top && v != null ? `1. ${top.playerName} · ${col?.fmt ? col.fmt(v) : v}` : undefined,
-                  content: (
-                    <StatTable rows={t.rows} cols={t.cols} defaultSort={t.defaultSort} accent={t.accent} teams={teams} note={t.note} onSelect={onSelectTeam} />
-                  ),
-                };
-              }),
-              ...boards.lists.slice(3).map((b) => listItem(b)),
-            ]}
+      {/* Bestenlisten der Saison – Feldspieler/Torhüter, Kategorien, Podest + Liste */}
+      {(fieldBoards.length > 0 || keeperBoardList.length > 0) && (
+        <Reveal className="mt-12">
+          <StatBoards
+            title={activeMd === null ? 'Bestenlisten der Saison' : `Bestenlisten · ${activeMd}. Spieltag`}
+            field={fieldBoards}
+            keeper={keeperBoardList}
+            teams={teams}
+            players={players}
+            onSelectTeam={onSelectTeam}
           />
         </Reveal>
       )}
     </div>
-  );
-}
-
-// Top-10-Liste einer Bestenliste (Rang, Wappen, Name, Hauptwert, ggf. Quote).
-function LeaderList({
-  rows,
-  mode,
-  accent,
-  teams,
-  onSelect,
-}: {
-  rows: StatLeader[];
-  mode: 'count' | 'quote';
-  accent: string;
-  teams: Team[];
-  onSelect?: (teamId: string, playerName?: string) => void;
-}) {
-  return (
-    <ol className="space-y-0.5 pt-1 min-w-0">
-      {rows.map((p, i) => {
-        const t = teams.find((x) => x.id === p.teamId);
-        const pct = p.quote != null ? `${Math.round(p.quote * 100)}%` : null;
-        return (
-          <li key={`${p.teamId}::${p.playerName}`}>
-            <button
-              type="button"
-              onClick={onSelect ? () => onSelect(p.teamId, p.playerName) : undefined}
-              className="w-full flex items-center gap-2 sm:gap-3 rounded-lg px-1.5 sm:px-2.5 py-1.5 sm:py-2 lg:py-2.5 hover:bg-white/[.05] transition-colors cursor-pointer text-left min-w-0"
-            >
-              <span className="w-5 sm:w-7 shrink-0 text-center font-display font-black tabular-nums text-xs sm:text-sm lg:text-base" style={{ color: i === 0 ? accent : undefined }}>
-                {i + 1}
-              </span>
-              {t && (
-                <>
-                  <span className="sm:hidden shrink-0"><TeamCrest name={t.name} shortName={t.shortName} color={t.logoColor} logoUrl={t.logoUrl} size="xs" /></span>
-                  <span className="hidden sm:inline-flex shrink-0"><TeamCrest name={t.name} shortName={t.shortName} color={t.logoColor} logoUrl={t.logoUrl} size="sm" /></span>
-                </>
-              )}
-              <span className="flex-1 min-w-0 truncate font-sans font-semibold text-sm sm:text-base lg:text-[17px] text-white">{p.playerName}</span>
-              {mode === 'quote' ? (
-                <>
-                  <span className="shrink-0 font-mono text-[11px] sm:text-xs lg:text-sm text-hl-dim tabular-nums">{p.value}×</span>
-                  <span className="shrink-0 w-10 sm:w-14 text-right font-display font-black tabular-nums text-white text-sm sm:text-lg lg:text-xl">{pct ?? '–'}</span>
-                </>
-              ) : (
-                <>
-                  {pct && <span className="shrink-0 font-mono text-[11px] sm:text-xs lg:text-sm text-hl-dim tabular-nums">{pct}</span>}
-                  <span className="shrink-0 min-w-7 sm:min-w-9 text-right font-display font-black tabular-nums text-white text-sm sm:text-lg lg:text-xl">{p.value}</span>
-                </>
-              )}
-            </button>
-          </li>
-        );
-      })}
-    </ol>
   );
 }
