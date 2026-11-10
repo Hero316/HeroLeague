@@ -277,9 +277,12 @@ export function assistRanking(rows: MatchPlayerStat[], cfg: ScoringConfig): Scor
 }
 
 // --- Goldener Handschuh – NEU: eigener Torwart-Score rein aus den getrackten
-// Torwart-Aktionen. Belohnt: unter dem Liga-Schnitt kassieren (GSAA), Paraden,
-// Spiele zu null, gehaltene Elfmeter und Stellungsspiel. Fair gegen den
-// dynamischen Liga-Durchschnitt der Gegentore pro Torwart-Spiel gewichtet.
+// Torwart-Aktionen. Belohnt: weniger kassieren als ERWARTET, Paraden, Spiele zu
+// null, gehaltene Elfmeter und Stellungsspiel. „Erwartet" richtet sich nach den
+// Schüssen, die auf SEIN Tor kamen (Paraden + Gegentore) × Liga-Schnitt der
+// Gegentore pro Schuss – wer hinter einer schwachen Abwehr viel zu tun bekommt,
+// wird dafür nicht bestraft (früher: Gegentore pro SPIEL → Stammkeeper schwacher
+// Teams rutschten trotz vieler Paraden ins Minus).
 export interface KeeperEntry extends RankedPlayer {
   goldenGloveScore: number;
   goalsConceded: number;
@@ -290,7 +293,7 @@ export interface KeeperEntry extends RankedPlayer {
 }
 // Mindestanzahl Torwart-Spiele, ab der ein Keeper gerankt wird.
 export const KEEPER_MIN_GAMES = 3;
-const GG_W_GSAA = 0.4; // „Goals Saved Above Average" – weniger kassieren als der Schnitt
+const GG_W_GSAA = 0.4; // je Gegentor weniger als erwartet (nach Schüssen aufs Tor)
 const GG_W_SAVE = 0.08; // je Parade
 const GG_W_CLEAN = 0.5; // je Spiel zu null
 const GG_W_PEN = 1.0; // je gehaltenem Elfmeter
@@ -299,18 +302,19 @@ const GG_W_POS = 0.15; // je Stellungsspiel-Parade
 // Erklärung der Goldener-Handschuh-Punkte (Info-Knopf auf der Website).
 export const GOLDEN_GLOVE_EXPLAIN: string[] = [
   `Gewertet ab ${KEEPER_MIN_GAMES} Spielen im Tor.`,
-  `+${GG_W_GSAA} je Gegentor weniger als der Liga-Schnitt (pro Spiel hochgerechnet)`,
+  `+${GG_W_GSAA} je Gegentor weniger als erwartet (bzw. − je Tor mehr). Erwartet = Schüsse aufs eigene Tor × Liga-Schnitt – wer viel zu tun bekommt, wird dafür nicht bestraft`,
   `+${GG_W_CLEAN} je Spiel zu null`,
   `+${GG_W_SAVE} je Parade`,
   `+${GG_W_POS} je Standparade`,
   `+${GG_W_PEN} je gehaltenem Elfmeter`,
 ];
 
-// Goldener-Handschuh-Punkte aus Summen + Spielen. `avgConceded` = Liga-Schnitt
-// der Gegentore pro Torwart-Spiel (Saison bzw. – beim Torwart des Spieltages –
-// nur dieser Spieltag).
-export function gloveScore(total: ActionCounts, games: number, cleanSheets: number, avgConceded: number): number {
-  const gsaa = avgConceded * games - total.gk_goal_against;
+// Goldener-Handschuh-Punkte aus den Summen. `gaPerShot` = Liga-Schnitt der
+// Gegentore pro Schuss aufs Tor (Saison bzw. – beim Torwart des Spieltages – nur
+// dieser Spieltag), siehe `leagueGaPerShot`.
+export function gloveScore(total: ActionCounts, cleanSheets: number, gaPerShot: number): number {
+  const shots = total.save + total.gk_goal_against;
+  const gsaa = shots * gaPerShot - total.gk_goal_against;
   const score =
     GG_W_GSAA * gsaa +
     GG_W_SAVE * total.save +
@@ -320,16 +324,20 @@ export function gloveScore(total: ActionCounts, games: number, cleanSheets: numb
   return Math.round(score * 10) / 10;
 }
 
+// Liga-Schnitt: Anteil der Schüsse aufs Tor, die drin waren (über alle Keeper).
+export function leagueGaPerShot(totals: ActionCounts[]): number {
+  let ga = 0;
+  let shots = 0;
+  for (const t of totals) {
+    ga += t.gk_goal_against;
+    shots += t.save + t.gk_goal_against;
+  }
+  return shots > 0 ? ga / shots : 0;
+}
+
 export function goldenGloveRanking(rows: MatchPlayerStat[], cfg: ScoringConfig): KeeperEntry[] {
   const keepers = aggregate(rows, cfg).filter((p) => p.role === 'keeper');
-  // Dynamischer Liga-Schnitt: Gegentore pro Torwart-Spiel über alle Keeper.
-  let totalConceded = 0;
-  let totalGames = 0;
-  for (const p of keepers) {
-    totalConceded += p.total.gk_goal_against;
-    totalGames += p.games;
-  }
-  const avgConceded = totalGames > 0 ? totalConceded / totalGames : 0;
+  const gaPerShot = leagueGaPerShot(keepers.map((p) => p.total));
 
   return keepers
     .filter((p) => p.games >= KEEPER_MIN_GAMES)
@@ -339,7 +347,7 @@ export function goldenGloveRanking(rows: MatchPlayerStat[], cfg: ScoringConfig):
       const gkActions = saves + gc;
       return {
         ...p,
-        goldenGloveScore: gloveScore(p.total, p.games, p.cleanSheets, avgConceded),
+        goldenGloveScore: gloveScore(p.total, p.cleanSheets, gaPerShot),
         goalsConceded: gc,
         saves,
         penaltySaves: p.total.penalty_save,
