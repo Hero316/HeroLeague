@@ -31,7 +31,7 @@ Projekt: **Hero League** — Fußballliga-Plattform (öffentliche Website + gesc
 
 ## 👥 Zwei Personen arbeiten gleichzeitig (Maik & Elias) — IMMER einhalten
 
-An der Website arbeiten **Maik und Elias gleichzeitig** mit Claude (GitHub: `Hero316`). Beide pushen auf `staging` und schalten über einen PR `staging → main` selbst live. Damit keine Crashes entstehen:
+An der Website arbeiten zwei Personen **gleichzeitig** mit Claude: **Maik** und **Elias** (GitHub: `Hero316`). Beide pushen auf `staging` und schalten über einen PR `staging → main` selbst live. Damit keine Crashes entstehen:
 
 1. **Vor Arbeitsbeginn den neuesten Stand holen** – nie auf einem alten Stand anfangen:
    ```bash
