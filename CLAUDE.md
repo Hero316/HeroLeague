@@ -21,11 +21,41 @@ Projekt: **Hero League** — Fußballliga-Plattform (öffentliche Website + gesc
    npm run lint      # TypeScript-Check
    npm run build     # Produktions-Build
    ```
-   Läuft es nicht durch: **nicht committen**, erst den Fehler beheben.
+   Läuft es nicht durch: **nicht committen**, erst den Fehler beheben. (Einzige Ausnahme bei lint: der bekannte alte Fehler `scripts/import-schedule.ts: Cannot find module 'xlsx'` – siehe „Zwei Personen arbeiten gleichzeitig".)
 3. **Getestet wird auf der Staging-Preview-URL** (Vercel deployt jeden Push auf `staging` automatisch auf dieselbe URL) — **nie** direkt auf der Live-Seite.
 4. **Keine Secrets committen.** `.env`, `.env.local`, Passwörter, Tokens bleiben lokal (stehen in `.gitignore`). Committe niemals echte Zugangsdaten.
 5. **Bei riskanten Aktionen STOPP und nachfragen:** Daten löschen, `--force`, `git reset --hard`, Force-Push, `db:setup --force` (löscht die ganze Datenbank), Dateien/Verzeichnisse entfernen.
-6. Nach der Arbeit: committen und **auf `staging`** (nicht `main`) pushen. Den Merge `staging → main` (= Live-Gang) bestätigt ein Mensch über einen Pull Request auf GitHub.
+6. Nach der Arbeit: committen und **auf `staging`** (nicht `main`) pushen, dann über einen Pull Request `staging → main` live schalten (siehe „Live-Gang" und „Zwei Personen arbeiten gleichzeitig").
+
+---
+
+## 👥 Zwei Personen arbeiten gleichzeitig (Maik & Elias) — IMMER einhalten
+
+An der Website arbeiten **Maik und Elias gleichzeitig** mit Claude (GitHub: `Hero316`). Beide pushen auf `staging` und schalten über einen PR `staging → main` selbst live. Damit keine Crashes entstehen:
+
+1. **Vor Arbeitsbeginn den neuesten Stand holen** – nie auf einem alten Stand anfangen:
+   ```bash
+   git fetch origin && git checkout staging && git pull origin staging
+   ```
+2. **Vor jedem Push nochmal holen:**
+   ```bash
+   git pull --no-rebase origin staging
+   ```
+   Konflikte sauber zusammenführen, dabei **nichts vom anderen wegwerfen**. Danach `npm run lint` und `npm run build`. Der Build muss fehlerfrei sein. Bei lint ist **nur** der bekannte Fehler `scripts/import-schedule.ts: Cannot find module 'xlsx'` erlaubt (alt, betrifft die Website nicht). Jeder andere Fehler heißt: **nicht pushen.**
+3. **Niemals Force-Push, kein `git reset --hard` auf `staging` oder `main`** – das kann die Arbeit des anderen löschen.
+4. **Vor jedem Live-Gang prüfen, was auf `staging` liegt und noch nicht live ist:**
+   ```bash
+   git fetch origin && git log origin/main..origin/staging --format="%h %s"
+   ```
+   Achtung: Bei beiden steht als Autor „Claude" – also am Commit-Titel und an den eigenen Commits **dieser Sitzung** erkennen, was von dir ist. Liegt dort etwas, das nicht von dir aus dieser Sitzung stammt: **nicht einfach mit live schalten**, sondern den Nutzer dieser Sitzung fragen: „Auf staging liegt noch eine Änderung, die nicht von mir ist und nicht live ist: [Titel]. Soll die mit?"
+5. **Fertige Änderungen sofort live schalten**, damit auf `staging` nie lange halbfertige Sachen liegen, die der andere aus Versehen mitschickt.
+6. **Vor größeren Umbauten nachfragen**, ob der andere (Maik bzw. Elias) gerade an derselben Stelle arbeitet – besonders bei Statistik-Seite, Startseite, Statistik-Center/Tracking und Rechnungen. **Änderungen an der Datenbank** (neue Tabellen oder Spalten in `api/_lib/ensure.ts` bzw. `db/schema.sql`) **immer vorher absprechen.**
+7. **Neue Dateien in `api/` sind erlaubt.** Wir haben Vercel Pro, die Live-Seite läuft bereits mit 21 Funktionen.
+8. **Nach dem Merge des PRs `staging` auf `main` nachziehen:**
+   ```bash
+   git fetch origin main && git merge --ff-only origin/main && git push origin staging
+   ```
+   Erst „ist live" melden, wenn das Production-Deployment auf Vercel `success` zeigt (Prüfung siehe „Live-Gang" ganz unten).
 
 ---
 
@@ -42,7 +72,7 @@ Projekt: **Hero League** — Fußballliga-Plattform (öffentliche Website + gesc
 
 Für **zeitlich begrenzte Sonder-Aktionen** (z.B. Testspieltag) gibt es einen eigenen **Event-Modus** — bewusst getrennt vom Liga-Betrieb.
 
-- **Datenhaltung:** Ein **Archiv** aller Testspiele (`EventArchive = { activeId, events: EventConfig[] }`) steckt in **einem** Settings-Eintrag (`settings`-Tabelle, key `event`) und wird über den bestehenden Endpunkt `api/twitch.ts` via **`/api/twitch?resource=event`** (GET/POST) gelesen/geschrieben. Vergangene Testspiele bleiben gespeichert (wie Saisons); `activeId` bestimmt, welches sichtbar ist (null = keins). **Keinen neuen `api/`-Endpunkt anlegen** — Vercel-Hobby erlaubt nur **12 Serverless-Funktionen** (aktuell genau 12 ausgeschöpft!). Neue Endpunkte immer in eine bestehende Datei per `?resource=...` einhängen.
+- **Datenhaltung:** Ein **Archiv** aller Testspiele (`EventArchive = { activeId, events: EventConfig[] }`) steckt in **einem** Settings-Eintrag (`settings`-Tabelle, key `event`) und wird über den bestehenden Endpunkt `api/twitch.ts` via **`/api/twitch?resource=event`** (GET/POST) gelesen/geschrieben. Vergangene Testspiele bleiben gespeichert (wie Saisons); `activeId` bestimmt, welches sichtbar ist (null = keins).
 - **Isolation:** Das Event beeinflusst **niemals** die echte Liga (keine Kader, keine Liga-Tabelle, keine Liga-Statistiken). Event-Tabelle wird rein namensbasiert aus den Event-Ergebnissen berechnet (`src/lib/eventStandings.ts`).
 - **An/Aus:** Schalter im Admin unter „Testspiel / Event". `active:false` ⇒ Website ist komplett normal (kein Banner, kein Menüpunkt). Ergebnisse werden dort auch gepflegt (wie im Original).
 - **Anzeige:** `EventBanner` (Startseite, oben), farbiger Navbar-Menüpunkt, eigene Seite unter **`/testspiel`** (`EventPage`: Tabelle + Spielplan + Abend-Statistiken). Eigene Magenta/Gold-Farbwelt (`#E6238E`).
@@ -111,14 +141,14 @@ Erstes Setup / Env-Variablen holen: `npx vercel link` → `npx vercel env pull .
 
 ## Nach einer Änderung: Checkliste
 
-1. `npm run lint` und `npm run build` grün?
+1. `npm run lint` und `npm run build` grün? (Bei lint ist nur der bekannte `xlsx`-Fehler erlaubt.)
 2. Lokal mit `vercel dev` ausprobiert?
-3. Auf **`staging`** committen und pushen (nicht `main`).
+3. Auf **`staging`** committen, vor dem Push `git pull --no-rebase origin staging`, dann pushen (nicht `main`).
 4. Staging-Preview-URL öffnen und die konkrete Änderung dort real durchklicken.
-5. Erst wenn das passt: über einen Pull Request `staging → main` mergen (macht ein Mensch) — damit geht es live.
+5. Erst wenn das passt: prüfen, ob auf `staging` fremde, noch nicht live geschaltete Commits liegen (Regel 4 unter „Zwei Personen arbeiten gleichzeitig"), dann Pull Request `staging → main` erstellen und mergen — damit geht es live.
 
 ### Live-Gang (so arbeitet der Nutzer)
 
-- Der Nutzer möchte, dass **du selbst live schaltest**: PR `staging → main` erstellen und mergen, danach `staging` per Fast-Forward auf `main` nachziehen.
+- Der Nutzer möchte, dass **du selbst live schaltest**: PR `staging → main` erstellen und mergen, danach `staging` per Fast-Forward auf `main` nachziehen (`git fetch origin main && git merge --ff-only origin/main && git push origin staging`).
 - **Vercel deployt nach jedem Merge auf `main` automatisch in Production.** Den Nutzer NICHT bitten, manuell „Create Deployment“ zu klicken.
 - Stattdessen selbst prüfen, ob es live ist: `gh api "repos/Hero316/HeroLeague/deployments?sha=<merge-sha>&environment=Production"` → Status der Deployment-ID abfragen (`…/deployments/<id>/statuses`, `state: success`). Erst wenn das `success` ist, „ist live“ melden. Nur wenn dort nach einigen Minuten nichts kommt oder `failure` steht, den Nutzer informieren.
