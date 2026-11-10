@@ -1,7 +1,7 @@
 import type { ActionCounts, MatchPlayerStat, PlayerCard, ScoringConfig, StatRole } from '../types';
 import { countCleanSheets, matchNote, normalizeCounts, passversuche, playerCard, sumCounts } from './rating';
 import { leagueDayKey } from './stats';
-import { gloveScore } from './trackingAwards';
+import { gloveScore, leagueGaPerShot } from './trackingAwards';
 
 // ===========================================================================
 // Auszeichnungen des Spieltages (Spieler + Torwart) aus den GETRACKTEN Daten.
@@ -80,10 +80,9 @@ export function rankDay(
     list.push({ teamId: g[0].teamId, name: g[0].playerName, note, games: g.length, counts, cleanSheets: countCleanSheets(norm) });
   }
   if (role === 'keeper') {
-    // Schnitt der Gegentore pro Torwart-Spiel an DIESEM Spieltag.
-    const games = list.reduce((s, c) => s + c.games, 0);
-    const avg = games > 0 ? list.reduce((s, c) => s + c.counts.gk_goal_against, 0) / games : 0;
-    for (const c of list) c.glove = gloveScore(c.counts, c.games, c.cleanSheets ?? 0, avg);
+    // Schnitt der Gegentore pro Schuss aufs Tor an DIESEM Spieltag.
+    const rate = leagueGaPerShot(list.map((c) => c.counts));
+    for (const c of list) c.glove = gloveScore(c.counts, c.cleanSheets ?? 0, rate);
     return list.sort(
       (a, b) =>
         (b.glove ?? 0) - (a.glove ?? 0) ||
