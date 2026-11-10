@@ -294,17 +294,18 @@ export interface KeeperEntry extends RankedPlayer {
 // Mindestanzahl Torwart-Spiele, ab der ein Keeper gerankt wird.
 export const KEEPER_MIN_GAMES = 3;
 const GG_W_GSAA = 0.4; // je Gegentor weniger als erwartet (nach Schüssen aufs Tor)
-const GG_W_SAVE = 0.08; // je Parade
+const GG_W_SAVE = 0.1; // je Parade
+const GG_W_TOP = 0.1; // Bonus je Glanzparade (zählt zusätzlich schon als Parade → insgesamt 0,2)
 const GG_W_CLEAN = 0.5; // je Spiel zu null
 const GG_W_PEN = 1.0; // je gehaltenem Elfmeter
-const GG_W_POS = 0.15; // je Stellungsspiel-Parade
+const GG_W_POS = 0.05; // je Standparade (sicher gefangen, ohne Gefahr – weniger als eine Parade)
 
 // Erklärung der Goldener-Handschuh-Punkte (Info-Knopf auf der Website).
 export const GOLDEN_GLOVE_EXPLAIN: string[] = [
   `Gewertet ab ${KEEPER_MIN_GAMES} Spielen im Tor.`,
   `+${GG_W_GSAA} je Gegentor weniger als erwartet (bzw. − je Tor mehr). Erwartet = Schüsse aufs eigene Tor × Liga-Schnitt – wer viel zu tun bekommt, wird dafür nicht bestraft`,
   `+${GG_W_CLEAN} je Spiel zu null`,
-  `+${GG_W_SAVE} je Parade`,
+  `+${GG_W_SAVE} je Parade, Glanzparade insgesamt +${GG_W_SAVE + GG_W_TOP}`,
   `+${GG_W_POS} je Standparade`,
   `+${GG_W_PEN} je gehaltenem Elfmeter`,
 ];
@@ -318,6 +319,7 @@ export function gloveScore(total: ActionCounts, cleanSheets: number, gaPerShot: 
   const score =
     GG_W_GSAA * gsaa +
     GG_W_SAVE * total.save +
+    GG_W_TOP * total.save_top +
     GG_W_CLEAN * cleanSheets +
     GG_W_PEN * total.penalty_save +
     GG_W_POS * total.gk_position_save;
