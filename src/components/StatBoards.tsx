@@ -115,8 +115,10 @@ export default function StatBoards({
       </div>
 
       {/* Kategorien: am Handy eine wischbare Reihe, am PC umbrechend */}
-      <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto no-scrollbar">
-        <div className="flex sm:flex-wrap gap-2 w-max sm:w-auto pb-1" role="tablist" aria-label="Kategorie wählen">
+      {/* Innenabstand rundum (mit Gegen-Rand): Die Leiste schneidet sonst den Schein
+          der gewählten Taste ab – overflow-x schneidet auch oben/unten. */}
+      <div className="-mx-4 px-4 sm:-mx-3 sm:px-3 -my-4 py-4 overflow-x-auto no-scrollbar">
+        <div className="flex sm:flex-wrap gap-2 w-max sm:w-auto" role="tablist" aria-label="Kategorie wählen">
           {boards.map((b) => {
             const on = b.id === board.id;
             return (
@@ -129,7 +131,7 @@ export default function StatBoards({
                 className="shrink-0 inline-flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-full border font-sans font-extrabold text-[12.5px] sm:text-sm uppercase tracking-wider cursor-pointer transition-[color,background-color,border-color] duration-200"
                 style={
                   on
-                    ? { color: '#fff', borderColor: `${b.accent}aa`, background: `linear-gradient(135deg, ${b.accent}38, ${b.accent}12)`, boxShadow: `0 8px 22px -12px ${b.accent}` }
+                    ? { color: '#fff', borderColor: `${b.accent}aa`, background: `linear-gradient(135deg, ${b.accent}38, ${b.accent}12)`, boxShadow: `0 6px 18px -10px ${b.accent}99` }
                     : { color: 'rgba(255,255,255,.62)', borderColor: 'rgba(255,255,255,.12)', background: 'rgba(255,255,255,.03)' }
                 }
               >
