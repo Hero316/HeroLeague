@@ -1272,13 +1272,17 @@ button { -webkit-tap-highlight-color: transparent; }
    (statt in eine feste Farbe). So scheint überall derselbe Seitenhintergrund
    durch und es entstehen keine Kanten/Streifen zwischen den Bereichen.
    Nur auf Hintergrund-Ebenen anwenden, nie auf Text/Tasten. */
+/* Die äußersten 4px sind ganz durchsichtig („Sicherheitsrand"): Beim Laden/Einblenden
+   rundet Safari Ebenen-Kanten teils um 1px – ohne Rand blitzt dann kurz die oberste
+   Bildzeile als dünne Linie auf. */
 .hl-edge-fade {
   --edge-top: clamp(70px, 11vw, 170px);
   --edge-bottom: clamp(90px, 13vw, 200px);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--edge-top), #000 calc(100% - var(--edge-bottom)), transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--edge-top), #000 calc(100% - var(--edge-bottom)), transparent 100%);
+  --edge-guard: 4px;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent var(--edge-guard), #000 var(--edge-top), #000 calc(100% - var(--edge-bottom)), transparent calc(100% - 4px));
+  mask-image: linear-gradient(to bottom, transparent 0, transparent var(--edge-guard), #000 var(--edge-top), #000 calc(100% - var(--edge-bottom)), transparent calc(100% - 4px));
 }
-.hl-edge-fade.hl-edge-notop { --edge-top: 0px; }
+.hl-edge-fade.hl-edge-notop { --edge-top: 0px; --edge-guard: 0px; }
 /* Startbild: Foto läuft schon ab der Mitte aus, unter dem dunklen Verlauf. */
 .hl-intro-imgfade {
   -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 52%, transparent 90%);
