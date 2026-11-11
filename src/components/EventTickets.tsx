@@ -5,6 +5,7 @@ import {
   Loader2, RefreshCw, Minus, Plus, CalendarDays, MapPin, Heart, PartyPopper, Camera, X, Check,
 } from 'lucide-react';
 import { useBackClose } from '../lib/backStack';
+import { TeamLogoImg } from './ui';
 import {
   fetchTicketConfig, requestTicketCode, confirmTicket, useTurnstile, type TicketConfig, type TicketBlockPublic,
 } from '../lib/register';
@@ -513,7 +514,7 @@ function BlockPicker({
                   {o.teams.map((t) => (
                     <span key={t.id} className="inline-flex items-center gap-1.5 min-w-0 max-w-full">
                       {t.logoUrl ? (
-                        <img src={t.logoUrl} alt="" loading="lazy" className="w-5 h-5 object-contain shrink-0" />
+                        <TeamLogoImg url={t.logoUrl} className="w-5 h-5" />
                       ) : (
                         <span className="w-5 h-5 rounded-full grid place-items-center text-[8px] font-black text-white shrink-0" style={{ background: t.color }}>
                           {(t.shortName || t.name).slice(0, 2).toUpperCase()}

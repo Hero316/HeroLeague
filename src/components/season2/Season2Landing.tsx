@@ -10,6 +10,7 @@ import {
 } from '../../lib/booking';
 import BookingFlow, { newDraft, type BookingDraft, type Step } from './BookingFlow';
 import { S2 } from './theme';
+import { TeamLogoImg } from '../ui';
 
 // ===========================================================================
 // /season2 – eigenständige Verkaufs-Landingpage für Season 2 mit
@@ -624,7 +625,9 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
               <Marquee duration={35}>
                 {logos.map((t) => (
                   <div key={t.id} className="px-4 sm:px-6">
-                    <img src={t.logoUrl} alt={t.name} title={t.name} className="h-14 sm:h-20 w-auto max-w-[110px] object-contain opacity-80 hover:opacity-100 transition-opacity" loading="lazy" />
+                    <span title={t.name} className="block">
+                      <TeamLogoImg url={t.logoUrl!} alt={t.name} className="h-14 w-14 sm:h-20 sm:w-20 opacity-80 hover:opacity-100 transition-opacity" />
+                    </span>
                   </div>
                 ))}
               </Marquee>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { User2 } from 'lucide-react';
 import { PlayerOfMonth } from '../types';
-import { TeamCrest } from './ui';
+import { TeamCrest, TeamLogoImg } from './ui';
 import { CountUp } from './anim';
 
 interface CrestInfo {
@@ -58,15 +58,12 @@ export default function PlayerOfMonthCard({ pom, crest, points, onSelect }: Play
             // Vereinswappen groß im Hintergrund – bewusst über die Kartenränder
             // hinaus (angeschnitten) und mit Verlauf: oben heller, nach unten
             // ausblendend (durchsichtig), damit es hinter dem Spieler verschwimmt.
-            <img
-              src={crest.logoUrl}
-              alt=""
+            <div
               aria-hidden="true"
-              loading="lazy"
-              decoding="async"
-              referrerPolicy="no-referrer"
-              className="absolute left-1/2 top-[36%] -translate-x-1/2 -translate-y-1/2 w-[132%] max-w-none object-contain opacity-30 select-none pointer-events-none [mask-image:linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,0,0,.7)_50%,rgba(0,0,0,0)_82%)] [-webkit-mask-image:linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,0,0,.7)_50%,rgba(0,0,0,0)_82%)]"
-            />
+              className="absolute left-1/2 top-[36%] -translate-x-1/2 -translate-y-1/2 w-[132%] aspect-square opacity-30 select-none pointer-events-none [mask-image:linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,0,0,.7)_50%,rgba(0,0,0,0)_82%)] [-webkit-mask-image:linear-gradient(180deg,rgba(0,0,0,1)_0%,rgba(0,0,0,.7)_50%,rgba(0,0,0,0)_82%)]"
+            >
+              <TeamLogoImg url={crest.logoUrl} className="w-full h-full" />
+            </div>
           ) : (
             <div className="absolute inset-x-0 top-[30%] -translate-y-1/2 text-center font-display font-black text-[62px] leading-[.8] tracking-tighter uppercase text-white/[.05] select-none pointer-events-none">
               Hero

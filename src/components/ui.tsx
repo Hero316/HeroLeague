@@ -244,7 +244,7 @@ export function TeamCrest({ name, shortName, color, logoUrl, size = 'md', onSele
   const isLogo = Boolean(logoUrl);
 
   const inner = isLogo ? (
-    <img src={logoUrl} alt={name} loading="lazy" decoding="async" className={`${s.img} object-contain`} referrerPolicy="no-referrer" />
+    <TeamLogoImg url={logoUrl!} alt={name} className={s.img} />
   ) : (
     monogram(shortName || name)
   );
@@ -397,8 +397,27 @@ export function SponsorLink({
 // dadurch wirkten gleich „große" Logos unterschiedlich groß. Einmal pro URL
 // berechnet und gemerkt. Klappt das Auslesen nicht (z. B. fremde Domain ohne
 // CORS), bleibt es bei null → Logo wird wie bisher ungeschnitten gezeigt.
-type LogoBox = { x: number; y: number; w: number; h: number; ratio: number };
+// ratio = Seitenverhältnis des Inhalts, ar = Seitenverhältnis der ganzen Datei.
+type LogoBox = { x: number; y: number; w: number; h: number; ratio: number; ar: number };
 const logoBoxCache = new Map<string, LogoBox | null>();
+// Gemessene Logos auch über Seitenaufrufe hinweg merken → beim nächsten Besuch
+// sofort richtig zugeschnitten, ohne kurzes Ausblenden.
+const LOGO_BOX_KEY = 'hl:logo-box:v1';
+try {
+  const saved = JSON.parse(localStorage.getItem(LOGO_BOX_KEY) || '{}') as Record<string, LogoBox>;
+  for (const [u, b] of Object.entries(saved)) if (b && typeof b.ar === 'number') logoBoxCache.set(u, b);
+} catch {
+  /* kein Speicher verfügbar → es wird eben neu gemessen */
+}
+function rememberLogoBox(url: string, box: LogoBox) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LOGO_BOX_KEY) || '{}') as Record<string, LogoBox>;
+    saved[url] = box;
+    localStorage.setItem(LOGO_BOX_KEY, JSON.stringify(saved));
+  } catch {
+    /* egal – nur ein Merkzettel */
+  }
+}
 
 function measureLogo(url: string): Promise<LogoBox | null> {
   return new Promise((resolve) => {
@@ -437,7 +456,7 @@ function measureLogo(url: string): Promise<LogoBox | null> {
         }
         if (x1 < 0) return resolve(null);
         const box = { x: x0 / cw, y: y0 / ch, w: (x1 - x0 + 1) / cw, h: (y1 - y0 + 1) / ch };
-        resolve({ ...box, ratio: (box.w * nw) / (box.h * nh) });
+        resolve({ ...box, ratio: (box.w * nw) / (box.h * nh), ar: nw / nh });
       } catch {
         resolve(null); // Canvas „tainted" (kein CORS) → ungeschnitten anzeigen
       }
@@ -460,6 +479,7 @@ function useLogoBox(url: string): LogoBox | null | undefined {
     let alive = true;
     measureLogo(url).then((b) => {
       logoBoxCache.set(url, b);
+      if (b) rememberLogoBox(url, b);
       if (alive) setBox(b);
     });
     return () => {
@@ -467,6 +487,67 @@ function useLogoBox(url: string): LogoBox | null | undefined {
     };
   }, [url]);
   return box;
+}
+
+// Vereinslogo, zugeschnitten auf seinen sichtbaren Inhalt und mittig in eine
+// QUADRATISCHE Box eingepasst: Die äußersten Kanten (links/rechts/oben/unten)
+// jedes Logos füllen dieselbe Box – egal wie viel durchsichtigen Rand die
+// hochgeladene Datei hat. Zwei runde Wappen sind so immer gleich groß.
+// Größe (und z. B. drop-shadow) kommen über className/style; die Box muss
+// quadratisch sein (w-12 h-12, 15cqw × 15cqw, aspect-square …).
+export function TeamLogoImg({
+  url,
+  alt = '',
+  className = '',
+  style,
+}: {
+  url: string;
+  alt?: string;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const box = useLogoBox(url);
+  if (!box) {
+    // Noch nicht vermessen (kurz unsichtbar) bzw. nicht messbar (wie bisher, ungeschnitten).
+    return (
+      <img
+        src={url}
+        alt={alt}
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        className={`object-contain ${className}`}
+        style={box === undefined ? { ...style, opacity: 0 } : style}
+      />
+    );
+  }
+  // Lage/Größe der ganzen Datei in % der Box, so dass der Inhalt mit seiner
+  // längeren Seite genau die Box füllt und mittig sitzt.
+  const wide = box.ratio >= 1;
+  const imgW = wide ? 100 / box.w : (100 / box.h) * box.ar;
+  const imgH = wide ? 100 / box.w / box.ar : 100 / box.h;
+  const left = (100 - box.w * imgW) / 2 - box.x * imgW;
+  const top = (100 - box.h * imgH) / 2 - box.y * imgH;
+  return (
+    <span
+      role={alt ? 'img' : undefined}
+      aria-label={alt || undefined}
+      aria-hidden={alt ? undefined : true}
+      className={`relative block shrink-0 overflow-hidden ${className}`}
+      style={style}
+    >
+      <img
+        src={url}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        referrerPolicy="no-referrer"
+        draggable={false}
+        className="absolute max-w-none"
+        style={{ width: `${imgW}%`, height: `${imgH}%`, left: `${left}%`, top: `${top}%` }}
+      />
+    </span>
+  );
 }
 
 // Ein einzelnes Partner-Logo. Drei Varianten:
@@ -987,12 +1068,14 @@ export function ImageZoom({
   className,
   zoomClassName,
   style,
+  logo = false,
 }: {
   src: string;
   alt: string;
   className?: string; // Darstellung im normalen Fluss
   zoomClassName?: string; // Darstellung in der Lightbox
   style?: React.CSSProperties; // z.B. Team-Farbe am Rand
+  logo?: boolean; // Vereinslogo: im Fluss auf den sichtbaren Inhalt zugeschnitten (TeamLogoImg)
 }) {
   const [open, setOpen] = React.useState(false);
 
@@ -1016,7 +1099,11 @@ export function ImageZoom({
         title={`${alt} – vergrößern`}
         className="shrink-0 cursor-zoom-in transition-transform duration-150 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-brand-accent-light rounded-2xl"
       >
-        <img src={src} alt={alt} loading="lazy" decoding="async" referrerPolicy="no-referrer" className={className} style={style} />
+        {logo ? (
+          <TeamLogoImg url={src} alt={alt} className={className} style={style} />
+        ) : (
+          <img src={src} alt={alt} loading="lazy" decoding="async" referrerPolicy="no-referrer" className={className} style={style} />
+        )}
       </button>
 
       {createPortal(
