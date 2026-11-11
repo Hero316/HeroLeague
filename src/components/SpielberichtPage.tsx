@@ -410,14 +410,13 @@ interface TeamAgg {
 // Zeile: große Zahlen beider Teams + ein zweifarbiger Balken, der den Anteil zeigt.
 // Feste Hero-League-Logofarben statt Vereinsfarben: links Weiß, rechts Neongrün.
 // Viele Vereine haben Gold-, Beige- oder Grautöne, die sich bissen oder kaum zu
-// unterscheiden waren. Der bessere Wert leuchtet voll, der schwächere ist
-// abgedunkelt. Direkt „unter" den beiden Teams.
+// unterscheiden waren. Alle Zahlen einer Seite haben dieselbe Farbe – egal,
+// welches Team vorne liegt. Direkt „unter" den beiden Teams.
 const HOME_COLOR = '#F2F5F1'; // Weiß aus dem Logo („HERO")
 const AWAY_COLOR = '#C6FF3A'; // Neongrün aus dem Logo („LEAGUE")
 
 function TeamCompare({ homeAgg, awayAgg }: { homeAgg: TeamAgg; awayAgg: TeamAgg }) {
-
-  type Metric = { label: string; icon: string; h: number | null; a: number | null; pct?: boolean; decimal?: boolean; lowerBetter?: boolean };
+  type Metric = { label: string; icon: string; h: number | null; a: number | null; pct?: boolean; decimal?: boolean };
   const metrics: Metric[] = [
     { label: 'Torschüsse', icon: '⚽', h: homeAgg.shots, a: awayAgg.shots },
     { label: 'Schüsse aufs Tor', icon: '🎯', h: homeAgg.shotsOn, a: awayAgg.shotsOn },
@@ -426,7 +425,7 @@ function TeamCompare({ homeAgg, awayAgg }: { homeAgg: TeamAgg; awayAgg: TeamAgg 
     { label: 'Zweikämpfe gewonnen', icon: '🛡️', h: homeAgg.duelWon, a: awayAgg.duelWon },
     { label: 'Dribblings', icon: '✨', h: homeAgg.dribbles, a: awayAgg.dribbles },
     { label: 'Balleroberungen', icon: '🧲', h: homeAgg.interceptions, a: awayAgg.interceptions },
-    { label: 'Ballverluste', icon: '⚠️', h: homeAgg.turnovers, a: awayAgg.turnovers, lowerBetter: true },
+    { label: 'Ballverluste', icon: '⚠️', h: homeAgg.turnovers, a: awayAgg.turnovers },
     { label: 'Paraden', icon: '🧤', h: homeAgg.saves, a: awayAgg.saves },
     { label: 'Ø Note', icon: '⭐', h: homeAgg.avgNote, a: awayAgg.avgNote, decimal: true },
   ].filter((m) => (m.h ?? 0) + (m.a ?? 0) > 0);
@@ -440,13 +439,12 @@ function TeamCompare({ homeAgg, awayAgg }: { homeAgg: TeamAgg; awayAgg: TeamAgg 
           const a = m.a ?? 0;
           const total = h + a;
           const hw = total > 0 ? (h / total) * 100 : 50;
-          const better = m.lowerBetter ? (h < a ? 'h' : a < h ? 'a' : '') : h > a ? 'h' : a > h ? 'a' : '';
           return (
             <div key={m.label}>
               <div className="flex items-center justify-between gap-3">
                 <span
                   className="font-display font-black tabular-nums text-xl sm:text-2xl lg:text-[30px] leading-none shrink-0 w-14 lg:w-20"
-                  style={{ color: HOME_COLOR, opacity: better === 'a' ? 0.5 : 1 }}
+                  style={{ color: HOME_COLOR }}
                 >
                   {fmt(m.h, m)}
                 </span>
@@ -456,7 +454,7 @@ function TeamCompare({ homeAgg, awayAgg }: { homeAgg: TeamAgg; awayAgg: TeamAgg 
                 </span>
                 <span
                   className="font-display font-black tabular-nums text-xl sm:text-2xl lg:text-[30px] leading-none shrink-0 w-14 lg:w-20 text-right"
-                  style={{ color: AWAY_COLOR, opacity: better === 'h' ? 0.5 : 1 }}
+                  style={{ color: AWAY_COLOR }}
                 >
                   {fmt(m.a, m)}
                 </span>
