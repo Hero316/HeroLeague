@@ -408,12 +408,13 @@ interface TeamAgg {
 
 // Team-Statistiken als Kopf-an-Kopf-Vergleich (heim links, gast rechts). Jede
 // Zeile: große Zahlen beider Teams + ein zweifarbiger Balken, der den Anteil zeigt.
-// Feste Hero-League-Logofarben statt Vereinsfarben: links Weiß, rechts Neongrün.
+// Feste Hero-League-Logofarben statt Vereinsfarben: links Weiß, rechts Neongrün –
+// beide gedämpft, weil reines Weiß und volles Neon auf dem dunklen Grund blendeten.
 // Viele Vereine haben Gold-, Beige- oder Grautöne, die sich bissen oder kaum zu
 // unterscheiden waren. Alle Zahlen einer Seite haben dieselbe Farbe – egal,
 // welches Team vorne liegt. Direkt „unter" den beiden Teams.
-const HOME_COLOR = '#F2F5F1'; // Weiß aus dem Logo („HERO")
-const AWAY_COLOR = '#C6FF3A'; // Neongrün aus dem Logo („LEAGUE")
+const HOME_COLOR = '#CDD3CF'; // Logo-Weiß („HERO", #F2F5F1), leicht abgegraut
+const AWAY_COLOR = '#AAD147'; // Logo-Neongrün („LEAGUE", #C6FF3A), gedämpft
 
 function TeamCompare({ homeAgg, awayAgg }: { homeAgg: TeamAgg; awayAgg: TeamAgg }) {
   type Metric = { label: string; icon: string; h: number | null; a: number | null; pct?: boolean; decimal?: boolean };
