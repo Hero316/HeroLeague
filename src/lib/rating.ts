@@ -97,6 +97,16 @@ export function isKeeperActive(c: ActionCounts): boolean {
   return c.save > 0 || c.gk_position_save > 0 || c.penalty_save > 0 || passversuche(c) > 0;
 }
 
+// Eine Karte bewertet nur die Spiele in IHRER Rolle: die Torwart-Karte nur die
+// Spiele im Tor, die Feldspieler-Karte nur die Spiele im Feld. Wer wechselt
+// (z. B. 5× Feld, 5× Tor), hätte sonst halbierte Werte pro Spiel.
+// strict = true: ohne Spiel in dieser Rolle leer zurück (z. B. für „▲/▼ seit dem
+// letzten Spieltag": vorher nie im Tor → keine vergleichbare Torwart-Karte).
+export function rowsForCard<T extends { role: string }>(rows: T[], role: StatRole, strict = false): T[] {
+  const own = rows.filter((r) => (r.role === 'keeper') === (role === 'keeper'));
+  return own.length > 0 || strict ? own : rows;
+}
+
 // Spiele zu null eines Torwarts – EINE Regel für Karte, Goldenen Handschuh und
 // Ranglisten: als Torwart getrackt, aktiv im Spiel, kein Gegentor.
 export function countCleanSheets(rows: { role: StatRole; counts: ActionCounts }[]): number {

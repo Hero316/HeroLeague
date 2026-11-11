@@ -1,5 +1,5 @@
 import type { ActionCounts, MatchPlayerStat, PlayerCard, ScoringConfig, StatRole } from '../types';
-import { countCleanSheets, normalizeCounts, playerCard, sumCounts } from './rating';
+import { countCleanSheets, normalizeCounts, playerCard, rowsForCard, sumCounts } from './rating';
 
 // ---------------------------------------------------------------------------
 // Baut die FC-/FIFA-Karte eines Spielers – EXAKT wie die Team-Detailseite:
@@ -28,13 +28,17 @@ export function cardForPlayer(
   if (rows.length === 0) return null;
   const keeperRows = rows.filter((r) => r.role === 'keeper').length;
   const role: StatRole = keeperRows * 2 >= rows.length ? 'keeper' : 'field';
-  const build = (rs: MatchPlayerStat[]) => {
+  const build = (rs: MatchPlayerStat[], strict: boolean) => {
     const norm = rs.map((r) => ({ role: r.role, counts: normalizeCounts(r.counts) }));
     const total = sumCounts(norm.map((r) => r.counts));
-    return { card: playerCard(total, rs.length, role, cfg, false, countCleanSheets(norm)), total };
+    // Karte nur aus den Spielen in der Rolle der Karte (Torwart-Karte = Spiele im Tor).
+    const own = rowsForCard(norm, role, strict);
+    const card = own.length ? playerCard(sumCounts(own.map((r) => r.counts)), own.length, role, cfg, false, countCleanSheets(own)) : null;
+    return { card, total };
   };
-  const { card, total } = build(rows);
-  const delta = cardGesDelta(rows, latestLeagueDay(trackingRows), (rs) => build(rs).card);
+  const { card, total } = build(rows, false);
+  if (!card) return null;
+  const delta = cardGesDelta(rows, latestLeagueDay(trackingRows), (rs) => build(rs, true).card);
   return { card, role, games: rows.length, total, delta };
 }
 

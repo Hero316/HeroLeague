@@ -1,5 +1,5 @@
 import type { ActionCounts, MatchPlayerStat, PlayerCard, Quotas, ScoringConfig, StatRole } from '../types';
-import { emptyCounts, matchNote, normalizeCounts, playerCard, quotas, sumCounts, countCleanSheets } from './rating';
+import { emptyCounts, matchNote, normalizeCounts, playerCard, quotas, sumCounts, countCleanSheets, rowsForCard } from './rating';
 
 // ===========================================================================
 // Ansicht-Helfer für die öffentliche Anzeige: aus den veröffentlichten Roh-
@@ -63,7 +63,11 @@ export function aggregatePlayers(rows: MatchPlayerStat[], cfg: ScoringConfig): M
       role,
       games,
       total,
-      card: playerCard(total, games, role, cfg, false, countCleanSheets(a.perMatch)),
+      card: (() => {
+        // Karte nur aus den Spielen in der Rolle der Karte (Torwart-Karte = Spiele im Tor).
+        const own = rowsForCard(a.perMatch, role);
+        return playerCard(sumCounts(own.map((m) => m.counts)), own.length, role, cfg, false, countCleanSheets(own));
+      })(),
       quotas: quotas(total, cfg),
       perMatch: a.perMatch,
     });
