@@ -12,6 +12,7 @@ export interface RankedPlayer {
   playerName: string;
   games: number;
   keeperGames: number; // davon im Tor (bei Wechsel Feld/Tor ≠ games)
+  keeperDays: number; // an so vielen Spieltagen/Abenden mindestens einmal im Tor
   role: StatRole;
   score: number; // Summe der Rohscores
   avgNote: number; // Ø Note (6–10)
@@ -29,6 +30,7 @@ interface Acc {
   noteSum: number;
   counts: ActionCounts[];
   roleRows: { role: StatRole; counts: ActionCounts }[]; // je Spiel mit Rolle (für die Karte)
+  keeperDays: Set<string>;
   cleanSheets: number;
 }
 
@@ -41,11 +43,14 @@ function aggregate(rows: MatchPlayerStat[], cfg: ScoringConfig, matchFilter?: Se
     const k = `${r.teamId}::${r.playerName}`;
     let a = map.get(k);
     if (!a) {
-      a = { teamId: r.teamId, playerName: r.playerName, games: 0, keeperGames: 0, scoreSum: 0, noteSum: 0, counts: [], roleRows: [], cleanSheets: 0 };
+      a = { teamId: r.teamId, playerName: r.playerName, games: 0, keeperGames: 0, scoreSum: 0, noteSum: 0, counts: [], roleRows: [], keeperDays: new Set(), cleanSheets: 0 };
       map.set(k, a);
     }
     a.games += 1;
-    if (role === 'keeper') a.keeperGames += 1;
+    if (role === 'keeper') {
+      a.keeperGames += 1;
+      a.keeperDays.add(r.dayKey);
+    }
     a.scoreSum += rohscore(counts, cfg, role);
     a.noteSum += matchNote(counts, cfg, role);
     a.counts.push(counts);
@@ -63,6 +68,7 @@ function aggregate(rows: MatchPlayerStat[], cfg: ScoringConfig, matchFilter?: Se
       playerName: a.playerName,
       games: a.games,
       keeperGames: a.keeperGames,
+      keeperDays: a.keeperDays.size,
       role,
       score: Math.round(a.scoreSum * 10) / 10,
       avgNote: Math.round((a.noteSum / Math.max(1, a.games)) * 100) / 100,
@@ -290,7 +296,8 @@ export function assistRanking(rows: MatchPlayerStat[], cfg: ScoringConfig): Scor
 // wird dafür nicht bestraft (früher: Gegentore pro SPIEL → Stammkeeper schwacher
 // Teams rutschten trotz vieler Paraden ins Minus).
 export interface KeeperEntry extends RankedPlayer {
-  goldenGloveScore: number;
+  goldenGloveScore: number; // Punkte PRO SPIEL im Tor (danach wird sortiert)
+  goldenGlovePoints: number; // Punkte gesamt (Summe über alle Spiele im Tor)
   goalsConceded: number;
   saves: number;
   penaltySaves: number;
@@ -299,6 +306,14 @@ export interface KeeperEntry extends RankedPlayer {
 }
 // Mindestanzahl Torwart-Spiele, ab der ein Keeper gerankt wird.
 export const KEEPER_MIN_GAMES = 3;
+// Goldener Handschuh: gewertet wird der Schnitt PRO SPIEL – wer einen Abend
+// fehlt (krank, Torwart-Wechsel im Team), hat damit keinen Nachteil. Dabei ist,
+// wer an mindestens 60 % der bisherigen Spieltage im Tor stand (wächst mit:
+// nach 2 Spieltagen 2, nach 3 → 2, nach 4 → 3, nach 5 → 3).
+export const KEEPER_MIN_MATCHDAY_SHARE = 0.6;
+export function keeperMinMatchdays(totalMatchdays: number): number {
+  return Math.max(1, Math.ceil(totalMatchdays * KEEPER_MIN_MATCHDAY_SHARE - 1e-9));
+}
 const GG_W_GSAA = 0.4; // je Gegentor weniger als erwartet (nach Schüssen aufs Tor)
 const GG_W_SAVE = 0.1; // je Parade
 const GG_W_TOP = 0.1; // Bonus je Glanzparade (zählt zusätzlich schon als Parade → insgesamt 0,2)
@@ -308,7 +323,7 @@ const GG_W_POS = 0.05; // je Standparade (sicher gefangen, ohne Gefahr – wenig
 
 // Erklärung der Goldener-Handschuh-Punkte (Info-Knopf auf der Website).
 export const GOLDEN_GLOVE_EXPLAIN: string[] = [
-  `Gewertet ab ${KEEPER_MIN_GAMES} Spielen im Tor.`,
+  `Gewertet wird der Schnitt pro Spiel im Tor. Dabei ist, wer an mindestens ${Math.round(KEEPER_MIN_MATCHDAY_SHARE * 100)} % der bisherigen Spieltage im Tor stand (und mindestens ${KEEPER_MIN_GAMES} Spiele).`,
   `+${GG_W_GSAA} je Gegentor weniger als erwartet (bzw. − je Tor mehr). Erwartet = Schüsse aufs eigene Tor × Liga-Schnitt – wer viel zu tun bekommt, wird dafür nicht bestraft`,
   `+${GG_W_CLEAN} je Spiel zu null`,
   `+${GG_W_SAVE} je Parade, Glanzparade insgesamt +${GG_W_SAVE + GG_W_TOP}`,
@@ -319,17 +334,20 @@ export const GOLDEN_GLOVE_EXPLAIN: string[] = [
 // Goldener-Handschuh-Punkte aus den Summen. `gaPerShot` = Liga-Schnitt der
 // Gegentore pro Schuss aufs Tor (Saison bzw. – beim Torwart des Spieltages – nur
 // dieser Spieltag), siehe `leagueGaPerShot`.
-export function gloveScore(total: ActionCounts, cleanSheets: number, gaPerShot: number): number {
+function gloveRaw(total: ActionCounts, cleanSheets: number, gaPerShot: number): number {
   const shots = total.save + total.gk_goal_against;
   const gsaa = shots * gaPerShot - total.gk_goal_against;
-  const score =
+  return (
     GG_W_GSAA * gsaa +
     GG_W_SAVE * total.save +
     GG_W_TOP * total.save_top +
     GG_W_CLEAN * cleanSheets +
     GG_W_PEN * total.penalty_save +
-    GG_W_POS * total.gk_position_save;
-  return Math.round(score * 10) / 10;
+    GG_W_POS * total.gk_position_save
+  );
+}
+export function gloveScore(total: ActionCounts, cleanSheets: number, gaPerShot: number): number {
+  return Math.round(gloveRaw(total, cleanSheets, gaPerShot) * 10) / 10;
 }
 
 // Liga-Schnitt: Anteil der Schüsse aufs Tor, die drin waren (über alle Keeper).
@@ -346,16 +364,20 @@ export function leagueGaPerShot(totals: ActionCounts[]): number {
 export function goldenGloveRanking(rows: MatchPlayerStat[], cfg: ScoringConfig): KeeperEntry[] {
   const keepers = aggregate(rows, cfg).filter((p) => p.role === 'keeper');
   const gaPerShot = leagueGaPerShot(keepers.map((p) => p.total));
+  // Bisherige Spieltage/Abende in den Daten → wie oft man mindestens im Tor stehen muss.
+  const minDays = keeperMinMatchdays(new Set(rows.map((r) => r.dayKey)).size);
 
   return keepers
-    .filter((p) => p.keeperGames >= KEEPER_MIN_GAMES)
+    .filter((p) => p.keeperGames >= KEEPER_MIN_GAMES && p.keeperDays >= minDays)
     .map((p) => {
       const gc = p.total.gk_goal_against;
       const saves = p.total.save;
       const gkActions = saves + gc;
+      const raw = gloveRaw(p.total, p.cleanSheets, gaPerShot);
       return {
         ...p,
-        goldenGloveScore: gloveScore(p.total, p.cleanSheets, gaPerShot),
+        goldenGloveScore: Math.round((raw / p.keeperGames) * 100) / 100,
+        goldenGlovePoints: Math.round(raw * 10) / 10,
         goalsConceded: gc,
         saves,
         penaltySaves: p.total.penalty_save,
@@ -439,9 +461,9 @@ export function keeperBoards(rows: MatchPlayerStat[], cfg: ScoringConfig): Keepe
     out.push({
       id: 'glove',
       label: 'Goldener Handschuh',
-      hint: `Gesamtwertung · ab ${KEEPER_MIN_GAMES} Spielen im Tor`,
-      unit: 'Punkte',
-      decimals: 1,
+      hint: `Punkte pro Spiel · ab ${Math.round(KEEPER_MIN_MATCHDAY_SHARE * 100)} % der Spieltage im Tor`,
+      unit: 'pro Spiel',
+      decimals: 2,
       rows: glove.slice(0, 10).map((p) => ({
         teamId: p.teamId,
         playerName: p.playerName,

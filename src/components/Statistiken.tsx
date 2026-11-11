@@ -1073,9 +1073,9 @@ export default function Statistiken({
                         </div>
                         <div className="flex items-baseline gap-1 shrink-0 pl-2">
                           <span className="font-display font-black text-2xl sm:text-[34px] lg:text-[44px] leading-none text-brand-accent-light tabular-nums">
-                            <CountUp value={p.score} decimals={1} />
+                            <CountUp value={p.score} decimals={2} />
                           </span>
-                          <span className="font-sans font-bold text-[10px] sm:text-[11px] lg:text-xs tracking-wider text-hl-dim">PUNKTE</span>
+                          <span className="font-sans font-bold text-[10px] sm:text-[11px] lg:text-xs tracking-wider text-hl-dim">PRO SPIEL</span>
                         </div>
                       </motion.div>
                     );

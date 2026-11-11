@@ -315,13 +315,13 @@ export default function EventPage({ event, teams, onBack, onSelectTeam, isAdmin,
       list.push({
         id: 'keeper', icon: <Hand className="w-4 h-4" />, label: 'Bester Torwart',
         playerName: glove.playerName, teamId: glove.teamId,
-        sub: `${glove.goldenGloveScore.toFixed(1)} Punkte${glove.cleanSheets > 0 ? ` · ${glove.cleanSheets}× zu null` : ''} · ${glove.teamId}`,
+        sub: `${glove.goldenGloveScore.toFixed(2)} pro Spiel${glove.cleanSheets > 0 ? ` · ${glove.cleanSheets}× zu null` : ''} · ${glove.teamId}`,
         // WICHTIG: derselbe Wert, nach dem auch sortiert wird (Torwart-Score) –
         // sonst steht in der Liste eine Zahlenfolge, die nicht absteigt.
         rows: keepers.map((r) => ({
           playerName: r.playerName,
           teamId: r.teamId,
-          value: r.goldenGloveScore.toFixed(1),
+          value: r.goldenGloveScore.toFixed(2),
           note: `${r.saves} Par. · ${r.goalsConceded} Geg.`,
         })),
       });
