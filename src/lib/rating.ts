@@ -270,7 +270,10 @@ export function fieldCardExplain(total: ActionCounts, games: number, cfg: Scorin
   const c = cfg.card;
 
   // PAS = gewichteter Index aus Pass-Index (Quote+Menge), Schlüsselpässen und Vorlagen.
+  // Jede Vorlage ist auch ein Schlüsselpass – getrackt wird sie aber als eigene
+  // Taste (statt Schlüsselpass). Deshalb zählen hier beide zusammen.
   const passes = passversuche(total);
+  const keyPasses = total.key_pass + total.assist;
   const PAS = attrExplain(
     'PAS',
     'Passspiel',
@@ -278,7 +281,7 @@ export function fieldCardExplain(total: ActionCounts, games: number, cfg: Scorin
     [
       { label: 'Passquote', value: passRate(total), ziel: p.zielPassquote, kind: 'percent', weight: p.gewPassindex * p.indexGewQuote, ratio: safeDiv(passRate(total), p.zielPassquote) },
       { label: 'Pässe pro Spiel', value: passes / g, ziel: p.zielPaesseSpiel, kind: 'perGame', weight: p.gewPassindex * p.indexGewMenge, ratio: mengeRatio(passes / g, p.zielPaesseSpiel, mm) },
-      { label: 'Schlüsselpässe pro Spiel', value: total.key_pass / g, ziel: p.zielKeySpiel, kind: 'perGame', weight: p.gewKey, ratio: mengeRatio(total.key_pass / g, p.zielKeySpiel, mm) },
+      { label: 'Schlüsselpässe + Vorlagen pro Spiel', value: keyPasses / g, ziel: p.zielKeySpiel, kind: 'perGame', weight: p.gewKey, ratio: mengeRatio(keyPasses / g, p.zielKeySpiel, mm) },
       { label: 'Vorlagen pro Spiel', value: total.assist / g, ziel: p.zielAssistsSpiel, kind: 'perGame', weight: p.gewAssist, ratio: mengeRatio(total.assist / g, p.zielAssistsSpiel, mm) },
     ],
     passes, voll.pas, 'Pässe', cap, cfg
