@@ -53,6 +53,7 @@ export const DEFAULT_SCORING: ScoringConfig = {
     caps: { g1_2: 85, g3_4: 89, g5_7: 92, g8plus: 94 },
     spanne: 46,
     mengeMax: 1.5,
+    neutral: 60,
     vollAktionen: { pas: 18, sch: 6, dri: 8, def: 10, par: 8, sic: 8, stl: 4 },
     pas: {
       zielPassquote: 0.92,
@@ -101,6 +102,7 @@ export function mergeScoring(saved: unknown): ScoringConfig {
       caps: { ...d.card.caps, ...(s.card?.caps ?? {}) },
       spanne: num(s.card?.spanne, d.card.spanne),
       mengeMax: num(s.card?.mengeMax, d.card.mengeMax),
+      neutral: num(s.card?.neutral, d.card.neutral),
       vollAktionen: { ...d.card.vollAktionen, ...(s.card?.vollAktionen ?? {}) },
       pas: { ...d.card.pas, ...(s.card?.pas ?? {}) },
       sch: { ...d.card.sch, ...(s.card?.sch ?? {}) },

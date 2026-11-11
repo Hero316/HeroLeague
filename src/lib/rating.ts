@@ -165,19 +165,27 @@ export function capForGames(games: number, cfg: ScoringConfig): number {
 
 // Verlässlichkeit aus dem Stichprobenumfang: R = min(1, √(vol / vollAktionen)).
 // √-Kurve = sanft (früher Anstieg, dann abflachend). Bei wenig Aktionen zieht
-// der Wert Richtung Basis, statt sofort den Höchstwert zu erreichen.
+// der Wert Richtung Neutralwert (60) – weder Höchstwert noch Strafe.
 function reliability(vol: number, voll: number): number {
   if (voll <= 0) return 1;
   return Math.min(1, Math.sqrt(Math.max(0, vol) / voll));
 }
 
-// Kartenwert: Wert = basis + R · Index · Spanne, gedeckelt bei `cap`.
-// R (Verlässlichkeit) dämpft bei wenig Aktionen; die Spanne bestimmt, wie viel
-// „Ziel erreicht" (Index 1,00) einbringt. Alle Werte kommen aus den
-// Score-Einstellungen und sind im Tracking Center justierbar.
+// Kartenwert aus zwei Schritten:
+//   Leistung = Basis + Index · Spanne        (was die Aktionen hergeben)
+//   Wert     = Neutral + R · (Leistung − Neutral), gedeckelt bei `cap`
+// R = 1 (genug Aktionen) → reine Leistung. R = 0 (keine Aktion) → Neutralwert.
+// Dazwischen wird gemischt: wenige gute Aktionen landen über, wenige schlechte
+// unter dem Neutralwert – aber niemand fällt nur wegen fehlender Daten auf 40.
+// Alle Werte kommen aus den Score-Einstellungen und sind im Tracking Center justierbar.
+function performance(index: number, cfg: ScoringConfig): number {
+  return cfg.card.basis + Math.max(0, index) * cfg.card.spanne;
+}
+function blendedValue(index: number, r: number, cfg: ScoringConfig): number {
+  return cfg.card.neutral + r * (performance(index, cfg) - cfg.card.neutral);
+}
 function cardValue(index: number, vol: number, voll: number, cap: number, cfg: ScoringConfig): number {
-  const R = reliability(vol, voll);
-  const raw = cfg.card.basis + R * Math.max(0, index) * cfg.card.spanne;
+  const raw = blendedValue(index, reliability(vol, voll), cfg);
   return Math.round(clamp(raw, cfg.card.basis, cap));
 }
 
@@ -207,6 +215,7 @@ export interface ExplainAttr {
   voll: number; // ab so vielen Aktionen volle Verlässlichkeit
   volLabel: string; // z.B. „Pässe"
   r: number; // Verlässlichkeit 0..1
+  perf: number; // Leistung = Basis + Index · Spanne (ohne Verlässlichkeit)
   raw: number; // vor dem Deckel
 }
 export interface CardExplain {
@@ -214,6 +223,7 @@ export interface CardExplain {
   games: number;
   basis: number;
   spanne: number;
+  neutral: number; // Wert ohne Aktionen (wenig Daten → Richtung Neutralwert)
   cap: number;
   capNote: string;
   attrs: ExplainAttr[];
@@ -234,8 +244,9 @@ function attrExplain(
 ): ExplainAttr {
   const index = parts.reduce((sum, p) => sum + p.weight * p.ratio, 0);
   const r = reliability(vol, voll);
-  const raw = cfg.card.basis + r * Math.max(0, index) * cfg.card.spanne;
-  return { key, label, what, value: cardValue(index, vol, voll, cap, cfg), parts, index, vol, voll, volLabel, r, raw };
+  const perf = performance(index, cfg);
+  const raw = blendedValue(index, r, cfg);
+  return { key, label, what, value: cardValue(index, vol, voll, cap, cfg), parts, index, vol, voll, volLabel, r, perf, raw };
 }
 
 function capNoteFor(games: number, cfg: ScoringConfig, ignoreGamesCap: boolean): string {
@@ -342,7 +353,7 @@ export function fieldCardExplain(total: ActionCounts, games: number, cfg: Scorin
   // Gesamtwert wird ABGERUNDET: erst ab vollem Schnitt gibt es die Zahl
   // (85,5 → 85, nicht 86), damit sich die Spitze nicht auf einer Zahl staut.
   const ges = Math.floor(attrs.reduce((sum, a) => sum + a.value, 0) / 4);
-  return { role: 'field', games, basis: c.basis, spanne: c.spanne, cap, capNote: capNoteFor(games, cfg, ignoreGamesCap), attrs, ges, tier: cardTier(ges, cfg) };
+  return { role: 'field', games, basis: c.basis, spanne: c.spanne, neutral: c.neutral, cap, capNote: capNoteFor(games, cfg, ignoreGamesCap), attrs, ges, tier: cardTier(ges, cfg) };
 }
 
 export function fieldCard(total: ActionCounts, games: number, cfg: ScoringConfig, ignoreGamesCap = false): PlayerCard {
@@ -436,7 +447,7 @@ export function keeperCardExplain(
   // Gesamtwert wird ABGERUNDET: erst ab vollem Schnitt gibt es die Zahl
   // (85,5 → 85, nicht 86), damit sich die Spitze nicht auf einer Zahl staut.
   const ges = Math.floor(attrs.reduce((sum, a) => sum + a.value, 0) / 4);
-  return { role: 'keeper', games, basis: c.basis, spanne: c.spanne, cap, capNote: capNoteFor(games, cfg, ignoreGamesCap), attrs, ges, tier: cardTier(ges, cfg) };
+  return { role: 'keeper', games, basis: c.basis, spanne: c.spanne, neutral: c.neutral, cap, capNote: capNoteFor(games, cfg, ignoreGamesCap), attrs, ges, tier: cardTier(ges, cfg) };
 }
 
 export function keeperCard(
