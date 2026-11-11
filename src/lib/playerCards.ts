@@ -28,18 +28,37 @@ export function cardForPlayer(
   if (rows.length === 0) return null;
   const keeperRows = rows.filter((r) => r.role === 'keeper').length;
   const role: StatRole = keeperRows * 2 >= rows.length ? 'keeper' : 'field';
-  const build = (rs: MatchPlayerStat[], strict: boolean) => {
+  const build = (rs: MatchPlayerStat[], strict: boolean, c: ScoringConfig = cfg) => {
     const norm = rs.map((r) => ({ role: r.role, counts: normalizeCounts(r.counts) }));
     const total = sumCounts(norm.map((r) => r.counts));
     // Karte nur aus den Spielen in der Rolle der Karte (Torwart-Karte = Spiele im Tor).
     const own = rowsForCard(norm, role, strict);
-    const card = own.length ? playerCard(sumCounts(own.map((r) => r.counts)), own.length, role, cfg, false, countCleanSheets(own)) : null;
+    const card = own.length ? playerCard(sumCounts(own.map((r) => r.counts)), own.length, role, c, false, countCleanSheets(own)) : null;
     return { card, total };
   };
   const { card, total } = build(rows, false);
   if (!card) return null;
-  const delta = cardGesDelta(rows, latestLeagueDay(trackingRows), (rs) => build(rs, true).card);
+  const latest = latestLeagueDay(trackingRows);
+  const prevCfg = deltaBaselineCfg(latest, cfg) ?? cfg;
+  const delta = cardGesDelta(rows, latest, (rs) => build(rs, true).card, (rs) => build(rs, true, prevCfg).card);
   return { card, role, games: rows.length, total, delta };
+}
+
+// --- Einmalige Ausnahme für „▲/▼ seit dem letzten Spieltag" -----------------
+// Nach dem 2. Spieltag 2026/27 wurde die Kartenrechnung angepasst: Vorlagen
+// zählen als Schlüsselpass, Neutralwert 60 statt Zug Richtung 40, Torwart-
+// Sicherheit 25 % zu null / 4 Gegentore statt 40 % / 1,5. Damit ▲/▼ zu dem
+// passt, was die Spieler nach dem 1. Spieltag tatsächlich auf der Karte hatten,
+// rechnet der VORHER-Wert für diesen einen Spieltag mit der alten Rechnung
+// (stimmt für alle Spieler exakt mit dem damaligen Stand überein). Ist der
+// 3. Spieltag live, greift die Ausnahme nicht mehr – dann kann der Block weg.
+const DELTA_BASELINE_DAY = 's:saison-2026-27:2';
+export function deltaBaselineCfg(latestDay: string | null, cfg: ScoringConfig): ScoringConfig | null {
+  if (latestDay !== DELTA_BASELINE_DAY) return null;
+  return {
+    ...cfg,
+    card: { ...cfg.card, neutral: cfg.card.basis, keyPassesInclAssists: false, sic: { ...cfg.card.sic, zielQuote: 0.4, zielMenge: 1.5 } },
+  };
 }
 
 // --- Veränderung der Gesamtwertung (wie bei der ICON-League-Karte) ----------
@@ -64,13 +83,14 @@ export function latestLeagueDay(rows: MatchPlayerStat[]): string | null {
 export function cardGesDelta(
   playerRows: MatchPlayerStat[],
   latestDay: string | null,
-  build: (rows: MatchPlayerStat[]) => PlayerCard | null
+  build: (rows: MatchPlayerStat[]) => PlayerCard | null,
+  buildPrev: (rows: MatchPlayerStat[]) => PlayerCard | null = build // Vorher-Wert (siehe deltaBaselineCfg)
 ): number | null {
   if (!latestDay || !playerRows.some((r) => r.dayKey === latestDay)) return null;
   const before = playerRows.filter((r) => r.dayKey !== latestDay);
   if (before.length === 0) return null;
   const now = build(playerRows);
-  const prev = build(before);
+  const prev = buildPrev(before);
   if (!now || !prev) return null;
   return now.ges - prev.ges;
 }

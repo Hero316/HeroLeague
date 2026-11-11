@@ -836,6 +836,9 @@ export interface ScoringConfig {
     // Neutralwert (60): Wert eines Bereichs, in dem es noch KEINE Aktionen gibt.
     // Bei wenig Aktionen liegt der Wert zwischen Neutralwert und Leistung.
     neutral: number;
+    // Vorlagen zählen im Passspiel auch als Schlüsselpass (Standard: ja). Nur
+    // intern auf false, um alte Kartenstände nachzurechnen (siehe playerCards.ts).
+    keyPassesInclAssists?: boolean;
     // Verlässlichkeit: ab so vielen Aktionen zählt ein Attribut voll. Darunter
     // wird der Wert Richtung Neutralwert gezogen (√-Kurve), damit 2 Aktionen
     // mit 100 % nicht sofort Höchstwert ergeben – und 0 Aktionen keine Strafe sind.
