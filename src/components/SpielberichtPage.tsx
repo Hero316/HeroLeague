@@ -147,15 +147,15 @@ export default function SpielberichtPage({ match, teams, rows, cfg, onBack, onSe
       {/* Ergebnis-Kopf UND Team-Statistiken in EINEM Block – die Wappen stehen nur
           einmal (außen), darunter direkt die Statistik. */}
       <div className="hl-card p-4 sm:p-6 lg:p-8 mb-6">
-        <div className={`flex items-center justify-center gap-2 sm:gap-6 lg:gap-10 ${hasData ? 'pb-5 lg:pb-7 mb-5 lg:mb-7 border-b border-white/[.07]' : ''}`}>
-          <TeamHead team={home} onSelect={onSelectTeam} />
+        <div className={`flex items-center justify-center gap-2 sm:gap-6 lg:gap-8 ${hasData ? 'pb-5 lg:pb-7 mb-5 lg:mb-7 border-b border-white/[.07]' : ''}`}>
+          <TeamHead team={home} side="home" onSelect={onSelectTeam} />
           <div className="text-center shrink-0 px-1">
-            <div className="font-display font-black text-3xl sm:text-4xl lg:text-5xl tabular-nums leading-none">
+            <div className="font-display font-black text-4xl sm:text-5xl lg:text-[64px] xl:text-[72px] tabular-nums leading-none">
               {match.homeScore ?? '–'}<span className="text-hl-faint mx-0.5 sm:mx-1">:</span>{match.awayScore ?? '–'}
             </div>
-            <div className="text-[9px] sm:text-[10px] lg:text-[11px] uppercase tracking-[2px] text-hl-dim mt-1 whitespace-nowrap">Spieltag {match.matchday}</div>
+            <div className="text-[9px] sm:text-[10px] lg:text-xs uppercase tracking-[2px] text-hl-dim mt-1 lg:mt-2 whitespace-nowrap">Spieltag {match.matchday}</div>
           </div>
-          <TeamHead team={away} onSelect={onSelectTeam} />
+          <TeamHead team={away} side="away" onSelect={onSelectTeam} />
         </div>
         {hasScorers && (
           <div className={`grid grid-cols-2 gap-4 sm:gap-10 text-[13px] sm:text-sm ${hasData ? '-mt-2 pb-5 lg:pb-7 mb-5 lg:mb-7 border-b border-white/[.07]' : 'mt-5 pt-4 border-t border-white/[.07]'}`}>
@@ -360,32 +360,41 @@ function PlayerMatchDetail({
   );
 }
 
-// Team im Ergebnis-Kopf: Wappen oben, Name darunter mittig – so bekommt der Name
-// die volle Spaltenbreite und wird am Handy NICHT abgeschnitten (bricht bei Bedarf um).
-function TeamHead({ team, onSelect }: { team?: Team; onSelect?: (teamId: string) => void }) {
+// Team im Ergebnis-Kopf. Am Handy: Wappen oben, Name darunter mittig – so bekommt
+// der Name die volle Spaltenbreite und wird NICHT abgeschnitten (bricht bei Bedarf um).
+// Ab Tablet-Breite nebeneinander und zur Mitte gerückt: links „Name Wappen", rechts
+// gespiegelt „Wappen Name" – die Wappen stehen direkt neben dem Ergebnis.
+function TeamHead({ team, side, onSelect }: { team?: Team; side: 'home' | 'away'; onSelect?: (teamId: string) => void }) {
   const clickable = !!(onSelect && team);
+  const home = side === 'home';
   return (
     <button
       type="button"
       onClick={clickable ? () => onSelect!(team!.id) : undefined}
       disabled={!clickable}
-      className={`flex flex-col items-center gap-2 flex-1 min-w-0 ${clickable ? 'cursor-pointer group' : 'cursor-default'}`}
+      className={`flex flex-col items-center gap-2 md:gap-4 lg:gap-5 flex-1 min-w-0 ${home ? 'md:flex-row-reverse' : 'md:flex-row'} md:justify-start ${clickable ? 'cursor-pointer group' : 'cursor-default'}`}
       title={clickable ? `${team?.name} – Vereinsseite öffnen` : undefined}
     >
       <Crest team={team} />
-      <span className={`font-display font-black uppercase tracking-tight text-center leading-tight text-[13px] sm:text-[15px] break-words w-full ${clickable ? 'group-hover:text-brand-accent-light transition-colors' : ''}`}>
+      <span
+        className={`font-display font-black uppercase tracking-tight text-center leading-tight text-[13px] sm:text-[15px] md:text-xl lg:text-[28px] xl:text-[32px] break-words w-full md:w-auto min-w-0 ${
+          home ? 'md:text-right' : 'md:text-left'
+        } ${clickable ? 'group-hover:text-brand-accent-light transition-colors' : ''}`}
+      >
         {team?.name ?? '—'}
       </span>
     </button>
   );
 }
 
+const CREST_SIZE = 'w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 xl:w-24 xl:h-24';
+
 function Crest({ team }: { team?: Team }) {
-  if (!team) return <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-white/5 shrink-0" />;
+  if (!team) return <div className={`${CREST_SIZE} rounded-xl bg-white/5 shrink-0`} />;
   return team.logoUrl ? (
-    <img src={team.logoUrl} alt="" className="w-10 h-10 lg:w-12 lg:h-12 object-contain shrink-0" />
+    <img src={team.logoUrl} alt="" className={`${CREST_SIZE} object-contain shrink-0`} />
   ) : (
-    <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl grid place-items-center text-xl shrink-0" style={{ background: `${team.logoColor}22`, color: readable(team.logoColor) }}>
+    <div className={`${CREST_SIZE} rounded-xl grid place-items-center text-2xl md:text-3xl lg:text-4xl shrink-0`} style={{ background: `${team.logoColor}22`, color: readable(team.logoColor) }}>
       {team.logoIcon || '⚽'}
     </div>
   );
