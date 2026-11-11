@@ -1,5 +1,5 @@
 import type { ActionCounts, Match, MatchPlayerStat, PlayerCard, ScoringConfig, StatRole } from '../types';
-import { isKeeperActive, matchNote, normalizeCounts, playerCard, rohscore, sumCounts } from './rating';
+import { isKeeperActive, matchNote, normalizeCounts, playerCard, rohscore, rowsForCard, sumCounts } from './rating';
 
 // ===========================================================================
 // Auszeichnungen aus den getrackten Daten: Man of the Matchday, Top 5, HERO ONE
@@ -28,6 +28,7 @@ interface Acc {
   scoreSum: number;
   noteSum: number;
   counts: ActionCounts[];
+  roleRows: { role: StatRole; counts: ActionCounts }[]; // je Spiel mit Rolle (für die Karte)
   cleanSheets: number;
 }
 
@@ -40,7 +41,7 @@ function aggregate(rows: MatchPlayerStat[], cfg: ScoringConfig, matchFilter?: Se
     const k = `${r.teamId}::${r.playerName}`;
     let a = map.get(k);
     if (!a) {
-      a = { teamId: r.teamId, playerName: r.playerName, games: 0, keeperGames: 0, scoreSum: 0, noteSum: 0, counts: [], cleanSheets: 0 };
+      a = { teamId: r.teamId, playerName: r.playerName, games: 0, keeperGames: 0, scoreSum: 0, noteSum: 0, counts: [], roleRows: [], cleanSheets: 0 };
       map.set(k, a);
     }
     a.games += 1;
@@ -48,12 +49,15 @@ function aggregate(rows: MatchPlayerStat[], cfg: ScoringConfig, matchFilter?: Se
     a.scoreSum += rohscore(counts, cfg, role);
     a.noteSum += matchNote(counts, cfg, role);
     a.counts.push(counts);
+    a.roleRows.push({ role, counts });
     if (role === 'keeper' && counts.gk_goal_against === 0 && isKeeperActive(counts)) a.cleanSheets += 1;
   }
   const out: RankedPlayer[] = [];
   for (const a of map.values()) {
     const role: StatRole = a.keeperGames * 2 >= a.games ? 'keeper' : 'field';
     const total = sumCounts(a.counts);
+    // Karte nur aus den Spielen in der Rolle der Karte (Torwart-Karte = Spiele im Tor).
+    const own = rowsForCard(a.roleRows, role);
     out.push({
       teamId: a.teamId,
       playerName: a.playerName,
@@ -63,7 +67,7 @@ function aggregate(rows: MatchPlayerStat[], cfg: ScoringConfig, matchFilter?: Se
       score: Math.round(a.scoreSum * 10) / 10,
       avgNote: Math.round((a.noteSum / Math.max(1, a.games)) * 100) / 100,
       total,
-      card: playerCard(total, a.games, role, cfg, false, a.cleanSheets),
+      card: playerCard(sumCounts(own.map((x) => x.counts)), own.length, role, cfg, false, a.cleanSheets),
       cleanSheets: a.cleanSheets,
     });
   }

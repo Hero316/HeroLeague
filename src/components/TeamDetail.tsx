@@ -3,7 +3,7 @@ import { ArrowLeft, ChevronDown, Share2, Info } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Match, MatchPlayerStat, Player, PlayerStat, ScoringConfig, StatRole, Team, TeamSponsorsMap } from '../types';
 import { calculateStandings } from '../lib/standings';
-import { matchNote, normalizeCounts, playerCard, cardExplain, quotas, sumCounts, countCleanSheets } from '../lib/rating';
+import { matchNote, normalizeCounts, playerCard, cardExplain, quotas, sumCounts, countCleanSheets, rowsForCard } from '../lib/rating';
 import { apiFetch } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
 import BestLineup, { type XIEntry } from './BestLineup';
@@ -281,54 +281,39 @@ export default function TeamDetail({
   );
   const trackedTotal = useMemo(() => sumCounts(playerRows.map((r) => normalizeCounts(r.counts))), [playerRows]);
   const trackedRole: StatRole = selected && positionLabel(selected) === 'Torwart' ? 'keeper' : 'field';
-  const playerCardData = useMemo(
-    () =>
-      selected && playerRows.length > 0 && scoringConfig
-        ? playerCard(
-            trackedTotal,
-            playerRows.length,
-            trackedRole,
-            scoringConfig,
-            ignoreGamesCap,
-            countCleanSheets(playerRows.map((r) => ({ role: r.role, counts: normalizeCounts(r.counts) })))
-          )
-        : null,
-    [selected, playerRows, trackedTotal, trackedRole, scoringConfig, ignoreGamesCap]
+  // Karte nur aus den Spielen in der Rolle der Karte (Torwart-Karte = Spiele im Tor).
+  const cardInput = useCallback(
+    (rows: MatchPlayerStat[], strict = false) => {
+      const own = rowsForCard(rows.map((r) => ({ role: r.role, counts: normalizeCounts(r.counts) })), trackedRole, strict);
+      return { total: sumCounts(own.map((r) => r.counts)), games: own.length, clean: countCleanSheets(own) };
+    },
+    [trackedRole]
   );
+  const playerCardData = useMemo(() => {
+    if (!selected || playerRows.length === 0 || !scoringConfig) return null;
+    const ci = cardInput(playerRows);
+    return playerCard(ci.total, ci.games, trackedRole, scoringConfig, ignoreGamesCap, ci.clean);
+  }, [selected, playerRows, cardInput, trackedRole, scoringConfig, ignoreGamesCap]);
   // Veränderung der Gesamtwertung seit dem letzten getrackten Spieltag –
   // gleiche Regeln wie die Karte selbst, nur ohne den neuesten Spieltag.
   const latestDay = useMemo(() => latestLeagueDay(trackingRows), [trackingRows]);
   const cardDelta = useMemo(
     () =>
       selected && scoringConfig
-        ? cardGesDelta(playerRows, latestDay, (rows) =>
-            playerCard(
-              sumCounts(rows.map((r) => normalizeCounts(r.counts))),
-              rows.length,
-              trackedRole,
-              scoringConfig,
-              ignoreGamesCap,
-              countCleanSheets(rows.map((r) => ({ role: r.role, counts: normalizeCounts(r.counts) })))
-            )
-          )
+        ? cardGesDelta(playerRows, latestDay, (rows) => {
+            const ci = cardInput(rows, true);
+            if (ci.games === 0) return null; // vorher nie in dieser Rolle → nichts zu vergleichen
+            return playerCard(ci.total, ci.games, trackedRole, scoringConfig, ignoreGamesCap, ci.clean);
+          })
         : null,
-    [selected, playerRows, latestDay, trackedRole, scoringConfig, ignoreGamesCap]
+    [selected, playerRows, latestDay, cardInput, trackedRole, scoringConfig, ignoreGamesCap]
   );
   // Herleitung der Karte („i"-Knopf) – dieselben Argumente wie die Karte selbst.
-  const cardExplainData = useMemo(
-    () =>
-      selected && playerRows.length > 0 && scoringConfig
-        ? cardExplain(
-            trackedTotal,
-            playerRows.length,
-            trackedRole,
-            scoringConfig,
-            ignoreGamesCap,
-            countCleanSheets(playerRows.map((r) => ({ role: r.role, counts: normalizeCounts(r.counts) })))
-          )
-        : null,
-    [selected, playerRows, trackedTotal, trackedRole, scoringConfig, ignoreGamesCap]
-  );
+  const cardExplainData = useMemo(() => {
+    if (!selected || playerRows.length === 0 || !scoringConfig) return null;
+    const ci = cardInput(playerRows);
+    return cardExplain(ci.total, ci.games, trackedRole, scoringConfig, ignoreGamesCap, ci.clean);
+  }, [selected, playerRows, cardInput, trackedRole, scoringConfig, ignoreGamesCap]);
   const [cardInfoOpen, setCardInfoOpen] = useState(false);
   const trackedQuotas = useMemo(
     () => (playerRows.length > 0 && scoringConfig ? quotas(trackedTotal, scoringConfig) : null),
