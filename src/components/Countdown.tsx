@@ -2,13 +2,13 @@ import React, { useEffect, useState } from 'react';
 
 interface CountdownProps {
   target: string; // lokale datetime-local-Zeichenkette, z. B. "2026-10-04T19:00"
-  title: string; // großes, dezentes Wort im Hintergrund
-  kicker?: string; // kleine Zeile über den Zahlen (leer = wie `title`)
+  title: string; // Überschrift über dem Countdown (z. B. „3. Spieltag")
+  kicker?: string; // kleine Zeile unter der Überschrift (z. B. Datum + Uhrzeit)
   gold?: boolean; // goldene Opening-Night-Farbwelt statt Türkis
   ctaLabel?: string; // Taste unter dem Timer (leer = keine Taste)
   onCta?: () => void;
-  // Ticket-Stand der verknüpften Zuschauer-Anmeldung (optional): darunter steht
-  // schlicht „52 / 75"; ausverkauft → Taste zeigt „Ausverkauft", darunter „75 / 75".
+  // Ticket-Stand der verknüpften Zuschauer-Anmeldung (optional): darunter ein
+  // schmaler Balken und „52 / 75"; ausverkauft → Taste zeigt „Ausverkauft", darunter „75 / 75".
   tickets?: { capacity: number; remaining: number } | null;
   // Sitzt im Verlauf des Startbilds: ohne eigene Kante/Linie, Farbschimmer läuft weich aus.
   blend?: boolean;
@@ -55,10 +55,14 @@ export default function Countdown({ target, title, kicker: kickerText, gold = fa
   const sold = hasTickets ? Math.min(tickets!.capacity, Math.max(0, tickets!.capacity - tickets!.remaining)) : 0;
   const soldOut = hasTickets && tickets!.remaining <= 0;
 
-  // Überschrift: ohne eingegebenen Text bleibt es textlos (nur die Zahlen).
-  // Kleine Zeile oben: eigener Text, sonst derselbe wie das Wort im Hintergrund.
-  const top = (kickerText || '').trim() || title;
-  const kicker = expired ? (top ? 'Anpfiff — es geht los!' : '') : top;
+  // Überschrift + kleine Zeile darunter. Früher stand der Titel als riesiges,
+  // halb durchsichtiges Wort HINTER den Zahlen – am Handy lief es mitten durch
+  // „Tage / Stunden …". Jetzt ist er eine normale Überschrift. Ohne Texte
+  // bleiben nur die Zahlen. Nach Ablauf ersetzt „Anpfiff" die kleine Zeile.
+  const heading = (title || '').trim();
+  const line = (kickerText || '').trim();
+  const sub = expired ? (heading || line ? 'Anpfiff — es geht los!' : '') : line;
+  const soldPct = hasTickets ? Math.round((sold / tickets!.capacity) * 100) : 0;
 
   return (
     <section
@@ -66,7 +70,7 @@ export default function Countdown({ target, title, kicker: kickerText, gold = fa
         blend ? '' : `border-b ${expired ? 'border-[rgba(255,84,66,.25)]' : gold ? 'border-hl-gold/25' : 'border-white/[.06]'}`
       }`}
     >
-      {/* dezenter Farbschimmer + riesiges Hintergrundwort ("ganz leicht dahinter") */}
+      {/* dezenter Farbschimmer */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -78,32 +82,28 @@ export default function Countdown({ target, title, kicker: kickerText, gold = fa
               : 'radial-gradient(120% 130% at 50% 0%, rgba(34,223,201,.14), transparent 60%)',
         }}
       />
-      {title && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-          <span
-            className={`font-display font-black uppercase tracking-tight leading-none whitespace-nowrap text-[15vw] lg:text-[10vw] ${
-              blend
-                ? 'text-white/[.2] [text-shadow:0_0_50px_rgba(255,255,255,.1)]'
-                : expired ? 'text-hl-red/[.05]' : gold ? 'text-hl-gold/[.055]' : 'text-white/[.035]'
-            }`}
-          >
-            {title}
-          </span>
-        </div>
-      )}
 
       <div
         className={`relative max-w-[1320px] mx-auto px-4 sm:px-10 text-center hl-fade ${
           showCta ? 'py-7 sm:py-6 lg:py-7' : 'py-5'
         }`}
       >
-        {kicker && (
-          <div
-            className={`font-sans font-extrabold text-[11px] sm:text-xs tracking-[3.5px] uppercase mb-5 sm:mb-3.5 ${
-              expired ? 'text-hl-red-soft' : gold ? 'text-hl-gold' : 'text-brand-accent-light'
-            }`}
-          >
-            {kicker}
+        {(heading || sub) && (
+          <div className="mb-5 sm:mb-4">
+            {heading && (
+              <h2 className="font-display font-black uppercase leading-none tracking-tight text-white text-[22px] sm:text-[26px] lg:text-[30px]">
+                {heading}
+              </h2>
+            )}
+            {sub && (
+              <div
+                className={`font-sans font-extrabold text-[11px] sm:text-xs tracking-[3px] sm:tracking-[3.5px] uppercase ${heading ? 'mt-2' : ''} ${
+                  expired ? 'text-hl-red-soft' : gold ? 'text-hl-gold' : 'text-brand-accent-light'
+                }`}
+              >
+                {sub}
+              </div>
+            )}
           </div>
         )}
 
@@ -133,7 +133,7 @@ export default function Countdown({ target, title, kicker: kickerText, gold = fa
 
         {/* Untere Hälfte: direkt anmelden, ohne die Seite zu verlassen. */}
         {showCta && (
-          <div className="mt-6 sm:mt-5 flex flex-col items-center gap-2">
+          <div className="mt-6 sm:mt-5 flex flex-col items-center">
             {soldOut ? (
               // Ausverkauft: keine Anmelde-Taste mehr, sondern ein klares Schild.
               <span
@@ -155,9 +155,14 @@ export default function Countdown({ target, title, kicker: kickerText, gold = fa
               </button>
             )}
             {hasTickets && (
-              <span className="font-sans font-bold text-[12px] tracking-[1.5px] text-hl-dim tabular-nums">
-                {sold} / <span className="text-hl-gold">{tickets!.capacity}</span>
-              </span>
+              <div className="mt-3 w-full max-w-[220px]">
+                <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div className="h-full rounded-full bg-hl-gold" style={{ width: `${soldPct}%` }} />
+                </div>
+                <div className="mt-1.5 font-sans font-bold text-[11px] sm:text-[12px] tracking-[1.5px] text-hl-dim tabular-nums">
+                  {sold} / <span className="text-hl-gold">{tickets!.capacity}</span>
+                </div>
+              </div>
             )}
           </div>
         )}

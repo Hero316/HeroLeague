@@ -2818,7 +2818,7 @@ export default function AdminPanel({
               </div>
               <div>
                 <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
-                  Großer Text im Hintergrund
+                  Überschrift
                 </label>
                 <input
                   type="text"
@@ -2830,13 +2830,13 @@ export default function AdminPanel({
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
-                  Kleine Zeile über den Zahlen
+                  Kleine Zeile unter der Überschrift
                 </label>
                 <input
                   type="text"
                   value={countdownKicker}
                   onChange={(e) => setCountdownKicker(e.target.value)}
-                  placeholder={`leer = „${countdownTitle.trim() || 'Text im Hintergrund'}“ · z.B. Sonntag, 4. Oktober · 19 Uhr`}
+                  placeholder="leer = keine Zeile · z.B. Sonntag, 4. Oktober · 19 Uhr"
                   className={inputClass}
                 />
               </div>
