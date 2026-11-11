@@ -304,8 +304,8 @@ export default function TeamDetail({
       if (ci.games === 0) return null; // vorher nie in dieser Rolle → nichts zu vergleichen
       return playerCard(ci.total, ci.games, trackedRole, c, ignoreGamesCap, ci.clean);
     };
-    // Vorher-Wert: einmalig mit der alten Torwart-Rechnung (siehe deltaBaselineCfg).
-    const prevCfg = deltaBaselineCfg(latestDay, trackedRole, scoringConfig) ?? scoringConfig;
+    // Vorher-Wert: einmalig mit der alten Rechnung (siehe deltaBaselineCfg).
+    const prevCfg = deltaBaselineCfg(latestDay, scoringConfig) ?? scoringConfig;
     return cardGesDelta(playerRows, latestDay, (rows) => build(rows, scoringConfig), (rows) => build(rows, prevCfg));
   }, [selected, playerRows, latestDay, cardInput, trackedRole, scoringConfig, ignoreGamesCap]);
   // Herleitung der Karte („i"-Knopf) – dieselben Argumente wie die Karte selbst.

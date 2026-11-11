@@ -294,7 +294,7 @@ export function fieldCardExplain(total: ActionCounts, games: number, cfg: Scorin
   // Jede Vorlage ist auch ein Schlüsselpass – getrackt wird sie aber als eigene
   // Taste (statt Schlüsselpass). Deshalb zählen hier beide zusammen.
   const passes = passversuche(total);
-  const keyPasses = total.key_pass + total.assist;
+  const keyPasses = total.key_pass + (cfg.card.keyPassesInclAssists === false ? 0 : total.assist);
   const PAS = attrExplain(
     'PAS',
     'Passspiel',

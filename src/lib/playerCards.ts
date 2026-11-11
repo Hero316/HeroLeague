@@ -39,22 +39,26 @@ export function cardForPlayer(
   const { card, total } = build(rows, false);
   if (!card) return null;
   const latest = latestLeagueDay(trackingRows);
-  const prevCfg = deltaBaselineCfg(latest, role, cfg) ?? cfg;
+  const prevCfg = deltaBaselineCfg(latest, cfg) ?? cfg;
   const delta = cardGesDelta(rows, latest, (rs) => build(rs, true).card, (rs) => build(rs, true, prevCfg).card);
   return { card, role, games: rows.length, total, delta };
 }
 
-// --- Einmalige Ausnahme für „▲/▼ seit dem letzten Spieltag" (Torhüter) -------
-// Nach dem 2. Spieltag 2026/27 wurde die Torwart-Rechnung umgestellt (Neutral-
-// wert 60 statt Zug Richtung 40, Sicherheits-Ziele 25 % zu null / 4 Gegentore
-// statt 40 % / 1,5). Damit ▲/▼ zu dem passt, was die Torhüter nach dem
-// 1. Spieltag tatsächlich auf der Karte hatten, rechnet der VORHER-Wert für
-// diesen einen Spieltag mit der alten Rechnung. Ist der 3. Spieltag live, greift
-// die Ausnahme nicht mehr – dann kann dieser Block entfernt werden.
-const KEEPER_DELTA_BASELINE_DAY = 's:saison-2026-27:2';
-export function deltaBaselineCfg(latestDay: string | null, role: StatRole, cfg: ScoringConfig): ScoringConfig | null {
-  if (role !== 'keeper' || latestDay !== KEEPER_DELTA_BASELINE_DAY) return null;
-  return { ...cfg, card: { ...cfg.card, neutral: cfg.card.basis, sic: { ...cfg.card.sic, zielQuote: 0.4, zielMenge: 1.5 } } };
+// --- Einmalige Ausnahme für „▲/▼ seit dem letzten Spieltag" -----------------
+// Nach dem 2. Spieltag 2026/27 wurde die Kartenrechnung angepasst: Vorlagen
+// zählen als Schlüsselpass, Neutralwert 60 statt Zug Richtung 40, Torwart-
+// Sicherheit 25 % zu null / 4 Gegentore statt 40 % / 1,5. Damit ▲/▼ zu dem
+// passt, was die Spieler nach dem 1. Spieltag tatsächlich auf der Karte hatten,
+// rechnet der VORHER-Wert für diesen einen Spieltag mit der alten Rechnung
+// (stimmt für alle Spieler exakt mit dem damaligen Stand überein). Ist der
+// 3. Spieltag live, greift die Ausnahme nicht mehr – dann kann der Block weg.
+const DELTA_BASELINE_DAY = 's:saison-2026-27:2';
+export function deltaBaselineCfg(latestDay: string | null, cfg: ScoringConfig): ScoringConfig | null {
+  if (latestDay !== DELTA_BASELINE_DAY) return null;
+  return {
+    ...cfg,
+    card: { ...cfg.card, neutral: cfg.card.basis, keyPassesInclAssists: false, sic: { ...cfg.card.sic, zielQuote: 0.4, zielMenge: 1.5 } },
+  };
 }
 
 // --- Veränderung der Gesamtwertung (wie bei der ICON-League-Karte) ----------
