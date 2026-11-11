@@ -181,7 +181,7 @@ export default function SpielberichtPage({ match, teams, rows, cfg, onBack, onSe
             ))}
           </div>
         )}
-        {hasData && <TeamCompare home={home} away={away} homeAgg={homeAgg} awayAgg={awayAgg} />}
+        {hasData && <TeamCompare homeAgg={homeAgg} awayAgg={awayAgg} />}
       </div>
 
       {/* Angeklickter Spieler taucht smooth darunter auf – die Notenliste rutscht runter.
@@ -408,23 +408,15 @@ interface TeamAgg {
 
 // Team-Statistiken als Kopf-an-Kopf-Vergleich (heim links, gast rechts). Jede
 // Zeile: große Zahlen beider Teams + ein zweifarbiger Balken, der den Anteil zeigt.
-// Der bessere Wert wird grün hervorgehoben. Direkt „unter" den beiden Teams.
-function TeamCompare({
-  home,
-  away,
-  homeAgg,
-  awayAgg,
-}: {
-  home?: Team;
-  away?: Team;
-  homeAgg: TeamAgg;
-  awayAgg: TeamAgg;
-}) {
-  // Lesbare Varianten der Vereinsfarben (Zahlen + Balken auf dunklem Grund).
-  const hc = readable(home?.logoColor || '#22DFC9');
-  const ac = readable(away?.logoColor || '#E9C46A');
+// Feste Hero-League-Logofarben statt Vereinsfarben: links Weiß, rechts Neongrün.
+// Viele Vereine haben Gold-, Beige- oder Grautöne, die sich bissen oder kaum zu
+// unterscheiden waren. Alle Zahlen einer Seite haben dieselbe Farbe – egal,
+// welches Team vorne liegt. Direkt „unter" den beiden Teams.
+const HOME_COLOR = '#F2F5F1'; // Weiß aus dem Logo („HERO")
+const AWAY_COLOR = '#C6FF3A'; // Neongrün aus dem Logo („LEAGUE")
 
-  type Metric = { label: string; icon: string; h: number | null; a: number | null; pct?: boolean; decimal?: boolean; lowerBetter?: boolean };
+function TeamCompare({ homeAgg, awayAgg }: { homeAgg: TeamAgg; awayAgg: TeamAgg }) {
+  type Metric = { label: string; icon: string; h: number | null; a: number | null; pct?: boolean; decimal?: boolean };
   const metrics: Metric[] = [
     { label: 'Torschüsse', icon: '⚽', h: homeAgg.shots, a: awayAgg.shots },
     { label: 'Schüsse aufs Tor', icon: '🎯', h: homeAgg.shotsOn, a: awayAgg.shotsOn },
@@ -433,7 +425,7 @@ function TeamCompare({
     { label: 'Zweikämpfe gewonnen', icon: '🛡️', h: homeAgg.duelWon, a: awayAgg.duelWon },
     { label: 'Dribblings', icon: '✨', h: homeAgg.dribbles, a: awayAgg.dribbles },
     { label: 'Balleroberungen', icon: '🧲', h: homeAgg.interceptions, a: awayAgg.interceptions },
-    { label: 'Ballverluste', icon: '⚠️', h: homeAgg.turnovers, a: awayAgg.turnovers, lowerBetter: true },
+    { label: 'Ballverluste', icon: '⚠️', h: homeAgg.turnovers, a: awayAgg.turnovers },
     { label: 'Paraden', icon: '🧤', h: homeAgg.saves, a: awayAgg.saves },
     { label: 'Ø Note', icon: '⭐', h: homeAgg.avgNote, a: awayAgg.avgNote, decimal: true },
   ].filter((m) => (m.h ?? 0) + (m.a ?? 0) > 0);
@@ -447,13 +439,12 @@ function TeamCompare({
           const a = m.a ?? 0;
           const total = h + a;
           const hw = total > 0 ? (h / total) * 100 : 50;
-          const better = m.lowerBetter ? (h < a ? 'h' : a < h ? 'a' : '') : h > a ? 'h' : a > h ? 'a' : '';
           return (
             <div key={m.label}>
               <div className="flex items-center justify-between gap-3">
                 <span
                   className="font-display font-black tabular-nums text-xl sm:text-2xl lg:text-[30px] leading-none shrink-0 w-14 lg:w-20"
-                  style={{ color: better === 'h' ? '#43E5A0' : '#d7ded9' }}
+                  style={{ color: HOME_COLOR }}
                 >
                   {fmt(m.h, m)}
                 </span>
@@ -463,14 +454,14 @@ function TeamCompare({
                 </span>
                 <span
                   className="font-display font-black tabular-nums text-xl sm:text-2xl lg:text-[30px] leading-none shrink-0 w-14 lg:w-20 text-right"
-                  style={{ color: better === 'a' ? '#43E5A0' : '#d7ded9' }}
+                  style={{ color: AWAY_COLOR }}
                 >
                   {fmt(m.a, m)}
                 </span>
               </div>
-              <div className="mt-1.5 lg:mt-2 flex h-1.5 lg:h-2 rounded-full overflow-hidden bg-white/[.06]">
-                <div style={{ width: `${hw}%`, background: hc }} className="h-full" />
-                <div style={{ width: `${100 - hw}%`, background: ac }} className="h-full" />
+              <div className="mt-1.5 lg:mt-2 flex gap-[3px] h-1.5 lg:h-2">
+                {hw > 0 && <div style={{ width: `${hw}%`, background: HOME_COLOR }} className="h-full rounded-full" />}
+                {hw < 100 && <div style={{ width: `${100 - hw}%`, background: AWAY_COLOR }} className="h-full rounded-full" />}
               </div>
             </div>
           );
