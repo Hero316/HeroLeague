@@ -14,7 +14,7 @@ import FifaCard from './FifaCard';
 import CardExplainSheet from './CardExplainSheet';
 import { ShareSheet } from './ShareCard';
 import { TeamCrest, FormPill, MatchStatusBadge, shortDate, shade, monogram, readable, ImageZoom, SponsorLink } from './ui';
-import { cardGesDelta, latestLeagueDay } from '../lib/playerCards';
+import { cardGesDelta, deltaBaselineCfg, latestLeagueDay } from '../lib/playerCards';
 
 // Note-Farbe (rot → gelb → grün) relativ zur Rating-Skala.
 function noteColorFor(note: number, cfg: ScoringConfig): string {
@@ -297,17 +297,17 @@ export default function TeamDetail({
   // Veränderung der Gesamtwertung seit dem letzten getrackten Spieltag –
   // gleiche Regeln wie die Karte selbst, nur ohne den neuesten Spieltag.
   const latestDay = useMemo(() => latestLeagueDay(trackingRows), [trackingRows]);
-  const cardDelta = useMemo(
-    () =>
-      selected && scoringConfig
-        ? cardGesDelta(playerRows, latestDay, (rows) => {
-            const ci = cardInput(rows, true);
-            if (ci.games === 0) return null; // vorher nie in dieser Rolle → nichts zu vergleichen
-            return playerCard(ci.total, ci.games, trackedRole, scoringConfig, ignoreGamesCap, ci.clean);
-          })
-        : null,
-    [selected, playerRows, latestDay, cardInput, trackedRole, scoringConfig, ignoreGamesCap]
-  );
+  const cardDelta = useMemo(() => {
+    if (!selected || !scoringConfig) return null;
+    const build = (rows: MatchPlayerStat[], c: ScoringConfig) => {
+      const ci = cardInput(rows, true);
+      if (ci.games === 0) return null; // vorher nie in dieser Rolle → nichts zu vergleichen
+      return playerCard(ci.total, ci.games, trackedRole, c, ignoreGamesCap, ci.clean);
+    };
+    // Vorher-Wert: einmalig mit der alten Torwart-Rechnung (siehe deltaBaselineCfg).
+    const prevCfg = deltaBaselineCfg(latestDay, trackedRole, scoringConfig) ?? scoringConfig;
+    return cardGesDelta(playerRows, latestDay, (rows) => build(rows, scoringConfig), (rows) => build(rows, prevCfg));
+  }, [selected, playerRows, latestDay, cardInput, trackedRole, scoringConfig, ignoreGamesCap]);
   // Herleitung der Karte („i"-Knopf) – dieselben Argumente wie die Karte selbst.
   const cardExplainData = useMemo(() => {
     if (!selected || playerRows.length === 0 || !scoringConfig) return null;
