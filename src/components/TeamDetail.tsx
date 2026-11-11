@@ -710,6 +710,7 @@ export default function TeamDetail({
               <div className="flex w-full items-start justify-between gap-4 sm:contents">
                 {team.logoUrl ? (
                   <ImageZoom
+                    logo
                     src={team.logoUrl}
                     alt={team.name}
                     className="w-[118px] h-[118px] object-contain"

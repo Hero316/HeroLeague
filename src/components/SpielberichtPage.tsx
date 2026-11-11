@@ -5,7 +5,7 @@ import type { ActionCounts, Match, MatchPlayerStat, ScoringConfig, Team } from '
 import { notesForMatch, type MatchNoteEntry } from '../lib/trackingView';
 import { ACTION_META, type ActionTone } from '../lib/scoring';
 import { sumCounts, gesamtschuesse, passversuche } from '../lib/rating';
-import { ImageZoom, readable } from './ui';
+import { ImageZoom, TeamLogoImg, readable } from './ui';
 import { useBackClose, goBackLayer } from '../lib/backStack';
 
 // ===========================================================================
@@ -392,7 +392,7 @@ const CREST_SIZE = 'w-12 h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 xl:w-24 xl:h-24';
 function Crest({ team }: { team?: Team }) {
   if (!team) return <div className={`${CREST_SIZE} rounded-xl bg-white/5 shrink-0`} />;
   return team.logoUrl ? (
-    <img src={team.logoUrl} alt="" className={`${CREST_SIZE} object-contain shrink-0`} />
+    <TeamLogoImg url={team.logoUrl} className={CREST_SIZE} />
   ) : (
     <div className={`${CREST_SIZE} rounded-xl grid place-items-center text-2xl md:text-3xl lg:text-4xl shrink-0`} style={{ background: `${team.logoColor}22`, color: readable(team.logoColor) }}>
       {team.logoIcon || '⚽'}

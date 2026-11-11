@@ -25,7 +25,7 @@ import StatBoards, { type Board } from './StatBoards';
 import TrackingProgressBanner from './TrackingProgressBanner';
 import { useTrackingProgress } from '../lib/trackingProgress';
 import PlayerCrest from './PlayerCrest';
-import { TeamCrest, monogram, shade } from './ui';
+import { TeamCrest, TeamLogoImg, monogram, shade } from './ui';
 import { validCutout } from '../lib/playerPhoto';
 import { CountUp, Reveal, useSettledList } from './anim';
 import CompareOverlay from './CompareOverlay';
@@ -115,7 +115,7 @@ function cutoutOf(visual: CardVisual, teams: Team[]): string | undefined {
 
 function BigLogo({ team, onSelect }: { team: Team; onSelect?: () => void }) {
   const inner = team.logoUrl ? (
-    <img src={team.logoUrl} alt={team.name} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="w-full h-full object-contain drop-shadow-[0_8px_18px_rgba(0,0,0,.45)]" />
+    <TeamLogoImg url={team.logoUrl} alt={team.name} className="w-full h-full drop-shadow-[0_8px_18px_rgba(0,0,0,.45)]" />
   ) : (
     <span
       className="w-full h-full rounded-[22%] grid place-items-center font-display font-black text-white text-[34cqw] leading-none"

@@ -1,5 +1,6 @@
 import React from 'react';
 import type { CardTier, PlayerCard } from '../types';
+import { TeamLogoImg } from './ui';
 
 // ===========================================================================
 // FC-/FIFA-artige Spielerkarte. Das Porträt füllt die ganze Karte. Der Name
@@ -141,7 +142,7 @@ export default function FifaCard({ card, name, imageUrl, team, className = '', p
       <div className="absolute z-20" style={{ top: '3cqw', right: '3.5cqw' }}>
         {team &&
           (team.logoUrl ? (
-            <img src={team.logoUrl} alt="" style={{ width: '15cqw', height: '15cqw' }} className="object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,.7)]" />
+            <TeamLogoImg url={team.logoUrl} style={{ width: '15cqw', height: '15cqw' }} className="drop-shadow-[0_2px_8px_rgba(0,0,0,.7)]" />
           ) : (
             <div className="rounded-lg grid place-items-center" style={{ width: '15cqw', height: '15cqw', fontSize: '7cqw', background: `${team.logoColor || '#16BDA9'}33`, color: team.logoColor || '#22DFC9' }}>
               {team.logoIcon || '⚽'}

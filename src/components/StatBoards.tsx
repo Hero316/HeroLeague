@@ -3,7 +3,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { ArrowDown, Hand, Shirt } from 'lucide-react';
 import type { PlayerStat, Team } from '../types';
 import { sortStatRows, type StatTableCol, type StatTableRow } from './StatTable';
-import { TeamCrest, monogram, shade } from './ui';
+import { TeamCrest, TeamLogoImg, monogram, shade } from './ui';
 import { validCutout } from '../lib/playerPhoto';
 import { useHistoryState } from '../lib/historyState';
 
@@ -386,7 +386,7 @@ function Visual({ entry, team, players, big }: { entry: BoardEntry; team?: Team;
   return (
     <div className={`${box} flex items-center justify-center`}>
       {team?.logoUrl ? (
-        <img src={team.logoUrl} alt={team.name} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-[88%] w-auto object-contain drop-shadow-[0_10px_22px_rgba(0,0,0,.5)]" />
+        <TeamLogoImg url={team.logoUrl} alt={team.name} className="h-[88%] aspect-square drop-shadow-[0_10px_22px_rgba(0,0,0,.5)]" />
       ) : (
         <span
           className="h-[88%] aspect-square rounded-[22%] grid place-items-center font-display font-black text-white leading-none shadow-[0_12px_30px_rgba(0,0,0,.45)]"

@@ -2,7 +2,7 @@ import React from 'react';
 import { Star, Crown, ChevronDown } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import type { Match, MatchPlayerStat, ScoringConfig, Team } from '../types';
-import { monogram } from './ui';
+import { TeamLogoImg, monogram } from './ui';
 import { validCutout } from '../lib/playerPhoto';
 import { numberWord } from '../lib/heroAward';
 import { useHistoryState } from '../lib/historyState';
@@ -211,7 +211,7 @@ function NomineeCard({
             {p.imageUrl ? (
               <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
             ) : team?.logoUrl ? (
-              <img src={team.logoUrl} alt={team.name} className="w-[86%] h-[86%] object-contain" loading="lazy" />
+              <TeamLogoImg url={team.logoUrl} alt={team.name} className="w-[86%] h-[86%]" />
             ) : (
               <span className="font-display font-black text-4xl text-hl-gold">{monogram(p.name)}</span>
             )}

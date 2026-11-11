@@ -8,7 +8,7 @@ import { cardForPlayer } from '../lib/playerCards';
 import { normalizeCounts, sumCounts } from '../lib/rating';
 import { TIER } from './FifaCard';
 import { useBackClose } from '../lib/backStack';
-import { useBackdropDismiss, ModalPortal, TeamCrest, monogram, readable } from './ui';
+import { useBackdropDismiss, ModalPortal, TeamCrest, TeamLogoImg, monogram, readable } from './ui';
 import { ShareSheet } from './ShareCard';
 
 // ===========================================================================
@@ -314,7 +314,7 @@ function TeamCard({
           }}
         >
           {team.logoUrl ? (
-            <img src={team.logoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+            <TeamLogoImg url={team.logoUrl} style={{ width: '100%', height: '100%' }} />
           ) : (
             team.shortName || monogram(team.name)
           )}
