@@ -68,11 +68,14 @@ export default function FifaCard({ card, name, imageUrl, team, className = '', p
       {/* Porträt füllt die Karte und wird herangezoomt → Spieler groß & klar */}
       <div className="absolute inset-0 overflow-hidden">
         {imageUrl ? (
+          // Leicht nach oben gesetzt (4 %) – über `top` statt transform: ein
+          // transform legt das Foto in Safari auf eine eigene Ebene, und an den
+          // Rändern darüberliegender Schleier entstehen dann feine Linien (iPhone).
           <img
             src={imageUrl}
             alt={name}
-            className="w-full h-full object-cover"
-            style={{ objectPosition: 'center 15%', transform: 'scale(1.0) translateY(-4%)', transformOrigin: 'center 15%' }}
+            className="relative w-full h-full object-cover"
+            style={{ objectPosition: 'center 15%', top: '-4%' }}
           />
         ) : (
           <div className="w-full h-full grid place-items-center">
@@ -83,10 +86,20 @@ export default function FifaCard({ card, name, imageUrl, team, className = '', p
         )}
       </div>
 
-      {/* Vignette links (für den Namen) + oben (fürs Wappen) */}
-      <div className="absolute inset-y-0 left-0 w-1/3 z-10" style={{ background: 'linear-gradient(90deg, rgba(0,0,0,.55), transparent)' }} />
-      <div className="absolute inset-x-0 top-0 h-1/5 z-10" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,.5), transparent)' }} />
-      <div className="absolute inset-y-0 right-0 w-1/5 z-10" style={{ background: 'linear-gradient(270deg, rgba(0,0,0,.4), transparent)' }} />
+      {/* Vignette links (für den Namen), oben (fürs Wappen) und rechts – EIN
+          Schleier über die ganze Karte. Früher drei Teilflächen: an deren Kanten
+          (z. B. bei einem Drittel der Breite) zeichnete Safari am iPhone eine
+          feine senkrechte Linie. Ohne Kante mitten auf der Karte kann keine entstehen. */}
+      <div
+        className="absolute inset-0 z-10"
+        style={{
+          background: [
+            'linear-gradient(90deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,0) 33.333%)',
+            'linear-gradient(180deg, rgba(0,0,0,.5) 0%, rgba(0,0,0,0) 20%)',
+            'linear-gradient(270deg, rgba(0,0,0,.4) 0%, rgba(0,0,0,0) 20%)',
+          ].join(', '),
+        }}
+      />
 
       {/* Name senkrecht am linken Rand, von unten (knapp über der Linie) nach oben
           lesbar – z-30, damit ihn der dunkle Streifen unten NICHT verdeckt. */}
