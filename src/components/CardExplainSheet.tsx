@@ -90,15 +90,14 @@ export default function CardExplainSheet({ open, onClose, explain, name, cfg }: 
                   <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[13px] text-hl-soft">
                     <Chip>{explain.basis}</Chip>
                     <span>+</span>
-                    <Chip tone="accent">Verlässlichkeit</Chip>
-                    <span>×</span>
                     <Chip tone="accent">Index</Chip>
                     <span>×</span>
                     <Chip>{explain.spanne}</Chip>
                   </div>
                   <div className="mt-2.5 font-sans text-[12px] text-hl-mute leading-snug">
                     <span className="text-hl-soft font-semibold">Index</span> = wie nah du am Elite-Ziel bist (1,00 = Ziel erreicht, mehr geht).{' '}
-                    <span className="text-hl-soft font-semibold">Verlässlichkeit</span> = wie viele Aktionen dahinterstehen – bei wenigen zieht es Richtung {explain.basis}.
+                    <span className="text-hl-soft font-semibold">Verlässlichkeit</span> = wie viele Aktionen dahinterstehen – bei genug zählt die volle Leistung,
+                    bei wenigen zieht es Richtung {explain.neutral} (ohne Aktion genau {explain.neutral}).
                     Gesamtwert = Schnitt der vier, abgerundet (85,5 → 85).
                   </div>
                 </div>
@@ -178,13 +177,28 @@ function AttrBlock({ a, explain }: { a: ExplainAttr; explain: CardExplain }) {
             ({a.vol} von {a.voll} {a.volLabel})
           </span>
         </div>
-        <div>
-          {explain.basis} + {de(a.r, 2)} × {de(Math.max(0, a.index), 2)} × {explain.spanne} ={' '}
-          <span className="text-white">{de(a.raw, 1)}</span>
-          {capped && <span className="text-hl-gold"> → gedeckelt bei {explain.cap}</span>}
-          {floored && <span> → mindestens {explain.basis}</span>}
-          {!capped && !floored && <span> → {a.value}</span>}
-        </div>
+        {a.r >= 1 ? (
+          <div>
+            {explain.basis} + {de(Math.max(0, a.index), 2)} × {explain.spanne} ={' '}
+            <span className="text-white">{de(a.raw, 1)}</span>
+            {capped && <span className="text-hl-gold"> → gedeckelt bei {explain.cap}</span>}
+            {floored && <span> → mindestens {explain.basis}</span>}
+            {!capped && !floored && <span> → {a.value}</span>}
+          </div>
+        ) : (
+          <>
+            <div>
+              Leistung {explain.basis} + {de(Math.max(0, a.index), 2)} × {explain.spanne} = {de(a.perf, 1)}
+            </div>
+            <div>
+              wenig Daten: {explain.neutral} + {de(a.r, 2)} × ({de(a.perf, 1)} − {explain.neutral}) ={' '}
+              <span className="text-white">{de(a.raw, 1)}</span>
+              {capped && <span className="text-hl-gold"> → gedeckelt bei {explain.cap}</span>}
+              {floored && <span> → mindestens {explain.basis}</span>}
+              {!capped && !floored && <span> → {a.value}</span>}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

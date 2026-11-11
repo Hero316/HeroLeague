@@ -3215,7 +3215,7 @@ function CardTuningPanel({ cfg, onSave, onClose }: { cfg: ScoringConfig; onSave:
   const [previewEvent, setPreviewEvent] = useState(true);
   useBackClose(true, onClose);
 
-  type CardNumKey = 'basis' | 'elite' | 'spanne' | 'mengeMax' | 'fullGames' | 'totsStart';
+  type CardNumKey = 'basis' | 'elite' | 'spanne' | 'mengeMax' | 'fullGames' | 'totsStart' | 'neutral';
   const setCard = (key: CardNumKey, v: number) => setDraft((d) => ({ ...d, card: { ...d.card, [key]: v } }));
   const setVoll = (key: keyof ScoringConfig['card']['vollAktionen'], v: number) =>
     setDraft((d) => ({ ...d, card: { ...d.card, vollAktionen: { ...d.card.vollAktionen, [key]: v } } }));
@@ -3297,7 +3297,8 @@ function CardTuningPanel({ cfg, onSave, onClose }: { cfg: ScoringConfig; onSave:
               />
             </div>
             <p className="text-[11px] text-hl-dim mt-2 leading-relaxed">
-              <span className="text-hl-soft font-semibold">Wert = Basis + Verlässlichkeit × Index × Spanne.</span>{' '}
+              <span className="text-hl-soft font-semibold">Leistung = Basis + Index × Spanne.</span>{' '}
+              Bei wenig Aktionen wird der Wert Richtung Neutralwert gezogen (ohne Aktion = Neutralwert).{' '}
               Der Index ist 1,00, wenn ein Spieler das Elite-Ziel genau erreicht. Höchstwert {draft.card.elite}{' '}
               gibt's ab Index{' '}
               <span className="text-hl-soft font-semibold">
@@ -3308,6 +3309,7 @@ function CardTuningPanel({ cfg, onSave, onClose }: { cfg: ScoringConfig; onSave:
             <div className="grid grid-cols-2 gap-2 mt-2">
               <NumField label="Basis" value={draft.card.basis} step={1} onChange={(v) => setCard('basis', v)} />
               <NumField label="Höchstwert" value={draft.card.elite} step={1} onChange={(v) => setCard('elite', v)} />
+              <NumField label="Neutralwert (wenig Daten)" value={draft.card.neutral} step={1} onChange={(v) => setCard('neutral', v)} />
             </div>
           </Collapse>
 

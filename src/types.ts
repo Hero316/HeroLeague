@@ -833,9 +833,12 @@ export interface ScoringConfig {
     // Mengen-Deckel: Wie weit die Menge ÜBER dem Ziel noch belohnt wird
     // (1,0 = gar nicht, 1,5 = bis zum 1,5-fachen des Ziels).
     mengeMax: number;
+    // Neutralwert (60): Wert eines Bereichs, in dem es noch KEINE Aktionen gibt.
+    // Bei wenig Aktionen liegt der Wert zwischen Neutralwert und Leistung.
+    neutral: number;
     // Verlässlichkeit: ab so vielen Aktionen zählt ein Attribut voll. Darunter
-    // wird der Wert Richtung Basis gedämpft (√-Kurve), damit 2 Aktionen mit
-    // 100 % nicht sofort Höchstwert ergeben.
+    // wird der Wert Richtung Neutralwert gezogen (√-Kurve), damit 2 Aktionen
+    // mit 100 % nicht sofort Höchstwert ergeben – und 0 Aktionen keine Strafe sind.
     vollAktionen: { pas: number; sch: number; dri: number; def: number; par: number; sic: number; stl: number };
     pas: {
       zielPassquote: number;
