@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
-import { shade } from './ui';
 import { useBackClose } from '../lib/backStack';
+import PlayerPlaceholder from './PlayerPlaceholder';
 
 interface PlayerAvatarProps {
   name: string;
   imageUrl?: string;
-  color?: string; // Vereinsfarbe für den Initialen-Fallback
+  color?: string; // Vereinsfarbe für den Rahmen
   size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
@@ -19,7 +19,7 @@ const SIZES = {
   xl: 'w-[104px] h-[104px] text-4xl rounded-[26px]',
 };
 
-// Spielerfoto mit Initialen-Fallback in Vereinsfarbe.
+// Spielerfoto; ohne Foto der Spielerbild-Hintergrund mit Initialen.
 // Bei vorhandenem Foto per Klick als mittelgroße Lightbox anzeigbar.
 export default function PlayerAvatar({ name, imageUrl, color = '#22DFC9', size = 'md' }: PlayerAvatarProps) {
   const [open, setOpen] = useState(false);
@@ -42,15 +42,8 @@ export default function PlayerAvatar({ name, imageUrl, color = '#22DFC9', size =
   }, [open]);
 
   if (!imageUrl) {
-    return (
-      <span
-        className={`${SIZES[size]} grid place-items-center font-display font-black text-white shrink-0 shadow-[inset_0_0_0_1px_rgba(255,255,255,.18)]`}
-        style={{ background: `linear-gradient(140deg, ${color}, ${shade(color, 0.45)})` }}
-        title={name}
-      >
-        {initials || '?'}
-      </span>
-    );
+    // Kein Foto: Spielerbild-Hintergrund mit Initialen (wie alle Spieler ohne Foto).
+    return <PlayerPlaceholder name={name} mark={initials || '?'} className={`${SIZES[size]} border`} style={{ borderColor: color }} />;
   }
 
   return (

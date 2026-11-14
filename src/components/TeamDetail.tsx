@@ -6,6 +6,7 @@ import { calculateStandings } from '../lib/standings';
 import { matchNote, normalizeCounts, playerCard, cardExplain, quotas, sumCounts, countCleanSheets, rowsForCard } from '../lib/rating';
 import { apiFetch } from '../lib/api';
 import PlayerAvatar from './PlayerAvatar';
+import PlayerPlaceholder from './PlayerPlaceholder';
 import BestLineup, { type XIEntry } from './BestLineup';
 import { trackedLineup, type LineupPlayer } from '../lib/bestLineup';
 import { fewDataHint, fewDataHintShort, fieldQuotas } from '../lib/displayQuotas';
@@ -523,12 +524,11 @@ export default function TeamDetail({
                       zoomClassName="w-72 sm:w-96 max-w-[85vw] max-h-[80vh] object-contain"
                     />
                   ) : (
-                    <span
-                      className="relative grid place-items-center w-[150px] h-[150px] rounded-[32px] font-display font-black text-6xl text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,.18)]"
-                      style={{ background: `linear-gradient(140deg, ${color}, ${shade(color, 0.45)})` }}
-                    >
-                      {monogram(sizingPlayer.name)}
-                    </span>
+                    <PlayerPlaceholder
+                      name={sizingPlayer.name}
+                      className="w-[150px] h-[150px] rounded-[32px] border-2 text-6xl"
+                      style={{ borderColor: color }}
+                    />
                   )}
                 </div>
               )}
@@ -895,12 +895,11 @@ export default function TeamDetail({
                         style={{ borderColor: color }}
                       />
                     ) : (
-                      <span
-                        className="grid place-items-center w-11 h-11 lg:w-[52px] lg:h-[52px] rounded-[13px] font-display font-black text-white shrink-0 text-base lg:text-xl shadow-[inset_0_0_0_1px_rgba(255,255,255,.18)]"
-                        style={{ background: `linear-gradient(140deg, ${color}, ${shade(color, 0.45)})` }}
-                      >
-                        {monogram(player.name)}
-                      </span>
+                      <PlayerPlaceholder
+                        name={player.name}
+                        className="w-11 h-11 lg:w-[52px] lg:h-[52px] rounded-[13px] border text-base lg:text-xl"
+                        style={{ borderColor: color }}
+                      />
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
@@ -1165,12 +1164,11 @@ export default function TeamDetail({
                     style={{ borderColor: color }}
                   />
                 ) : (
-                  <span
-                    className="grid place-items-center w-[58px] h-[58px] rounded-[16px] font-display font-black text-white shrink-0 text-xl shadow-[inset_0_0_0_1px_rgba(255,255,255,.18)]"
-                    style={{ background: `linear-gradient(140deg, ${color}, ${shade(color, 0.45)})` }}
-                  >
-                    {monogram(star.name)}
-                  </span>
+                  <PlayerPlaceholder
+                    name={star.name}
+                    className="w-[58px] h-[58px] rounded-[16px] border text-xl"
+                    style={{ borderColor: color }}
+                  />
                 )}
                 <div>
                   <div className="font-display font-black text-[22px] lg:text-[27px] uppercase text-white leading-[.95] group-hover:opacity-90">{star.name}</div>

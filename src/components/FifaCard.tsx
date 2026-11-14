@@ -1,6 +1,7 @@
 import React from 'react';
 import type { CardTier, PlayerCard } from '../types';
 import { TeamLogoImg } from './ui';
+import PlayerPlaceholder from './PlayerPlaceholder';
 
 // ===========================================================================
 // FC-/FIFA-artige Spielerkarte. Das Porträt füllt die ganze Karte. Der Name
@@ -44,8 +45,6 @@ export const TIER: Record<CardTier, { label: string; accent: string; border: str
 
 export default function FifaCard({ card, name, imageUrl, team, className = '', pending = false, mark, label, delta }: Props) {
   const t = TIER[card.tier];
-  const parts = name.trim().split(/\s+/);
-  const lastName = parts.length > 1 ? parts[parts.length - 1] : name;
 
   // Der senkrechte Name füllt IMMER die volle Höhe zwischen oberem Rand und der
   // grünen Linie: je länger der Name, desto kleiner die Schrift (in cqw, damit es
@@ -79,11 +78,14 @@ export default function FifaCard({ card, name, imageUrl, team, className = '', p
             style={{ objectPosition: 'center 15%', top: '-4%' }}
           />
         ) : (
-          <div className="w-full h-full grid place-items-center">
-            <span className="font-display font-black" style={{ fontSize: '46cqw', color: `${t.accent}20` }}>
-              {mark ?? lastName.charAt(0)}
-            </span>
-          </div>
+          // Kein Foto: Spielerbild-Hintergrund mit Initialen – dort, wo sonst das
+          // Gesicht sitzt (unten liegt der Werte-Streifen).
+          <PlayerPlaceholder
+            name={name}
+            mark={mark}
+            className="w-full h-full"
+            textStyle={{ fontSize: '30cqw', color: `${t.accent}80`, marginBottom: '38cqw' }}
+          />
         )}
       </div>
 

@@ -9,6 +9,7 @@ import { normalizeCounts, sumCounts } from '../lib/rating';
 import { TIER } from './FifaCard';
 import { useBackClose } from '../lib/backStack';
 import { useBackdropDismiss, ModalPortal, TeamCrest, TeamLogoImg, monogram, readable } from './ui';
+import PlayerPlaceholder from './PlayerPlaceholder';
 import { ShareSheet } from './ShareCard';
 
 // ===========================================================================
@@ -432,7 +433,11 @@ function TeamCard({
                         display: 'grid', placeItems: 'center', fontFamily: display, fontWeight: 900, fontSize: size * 0.36, color: ink,
                       }}
                     >
-                      {m.imageUrl ? <img src={m.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} /> : monogram(m.name)}
+                      {m.imageUrl ? (
+                        <img src={m.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      ) : (
+                        <PlayerPlaceholder name={m.name} className="w-full h-full" textStyle={{ fontSize: size * 0.36 }} />
+                      )}
                     </div>
                     {m.ges !== null && (
                       <span
