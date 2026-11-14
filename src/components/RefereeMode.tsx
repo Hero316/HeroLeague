@@ -752,11 +752,11 @@ function RosterEditor({
           if (!presentSet.has(n) && !absent.has(n)) presentSet.add(n);
         });
       }
-      // Fester Torwart aus dem Kader als Vorauswahl, solange für diesen Abend noch
-      // keiner gesetzt wurde. Bleibt änderbar (kann jederzeit überschrieben werden).
-      const fixedGk = (teamById.get(id)?.spielerliste ?? []).find((p) => p.goalkeeper)?.name;
-      const goalkeeper =
-        stored?.goalkeeper ?? (fixedGk && presentSet.has(fixedGk) ? fixedGk : '');
+      // Torwart aus dem Kader als Vorauswahl, solange für diesen Abend noch keiner
+      // gesetzt wurde: der erste markierte Torwart, der da ist (ein Team kann
+      // mehrere haben). Bleibt änderbar (kann jederzeit überschrieben werden).
+      const fixedGk = (teamById.get(id)?.spielerliste ?? []).find((p) => p.goalkeeper && presentSet.has(p.name))?.name;
+      const goalkeeper = stored?.goalkeeper ?? fixedGk ?? '';
       init[id] = { present: presentSet, goalkeeper };
     });
     return init;

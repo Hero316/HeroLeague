@@ -409,15 +409,17 @@ export default function TrackingCenter({
           .flatMap((m) => m.goalkeepers ?? [])
           .find((g) => normName(g.team) === normName(key))?.player;
         const club = resolveTeam(key)?.spielerliste ?? [];
-        return list
-          .filter((p) => p.name)
-          .filter((p) => !absent || !absent.has(p.name))
+        const here = list.filter((p) => p.name).filter((p) => !absent || !absent.has(p.name));
+        // Ohne Abend-Torwart: nur der ERSTE markierte Torwart steht im Tor (ein
+        // Team kann mehrere Torhüter haben, im Spiel aber nur einen).
+        const keeperName = eveningKeeper ?? here.find((p) => p.goalkeeper)?.name;
+        return here
           .map((p) => {
             // Event-Kader hat oft kein Foto – dann das des gleichnamigen Vereinsspielers nehmen.
             const fromClub = club.find((c) => normName(c.name) === normName(p.name));
             return {
               name: p.name,
-              role: ((eveningKeeper ? p.name === eveningKeeper : p.goalkeeper) ? 'keeper' : 'field') as StatRole,
+              role: (p.name === keeperName ? 'keeper' : 'field') as StatRole,
               number: (p as { number?: number }).number ?? fromClub?.number,
               imageUrl: (p as { imageUrl?: string }).imageUrl || fromClub?.imageUrl,
             };
@@ -427,15 +429,18 @@ export default function TrackingCenter({
       if (!team) return [];
       const rt = rk ? (rmap ?? rosterState)[rk]?.teams?.[team.id] : undefined;
       const present = rt?.present;
-      const keeper = rt?.goalkeeper;
-      return (team.spielerliste || [])
+      const here = (team.spielerliste || [])
         // Gespeicherte Anwesenheit gilt – aber wer erst NACH dem Speichern in den
         // Kader kam (weder „da" noch als abwesend eingetragen), wird gezeigt.
         .filter((p) => (present && present.length ? present.includes(p.name) || !absent?.has(p.name) : true))
-        .filter((p) => !absent || !absent.has(p.name))
+        .filter((p) => !absent || !absent.has(p.name));
+      // Abend-Torwart; sonst der ERSTE markierte Torwart, der da ist (ein Team kann
+      // mehrere Torhüter haben, im Spiel steht aber nur einer im Tor).
+      const keeper = rt?.goalkeeper ?? here.find((p) => p.goalkeeper)?.name;
+      return here
         .map((p) => ({
           name: p.name,
-          role: (keeper ? p.name === keeper : p.goalkeeper) ? ('keeper' as StatRole) : ('field' as StatRole),
+          role: p.name === keeper ? ('keeper' as StatRole) : ('field' as StatRole),
           number: p.number,
           imageUrl: p.imageUrl,
         }));
@@ -2930,7 +2935,8 @@ function AttendancePanel({
           if (!present.has(p.name) && !absentByTeam[tid]?.has(p.name)) present.add(p.name);
         });
       }
-      const keeper = rt?.goalkeeper ?? squad.find((p) => p.goalkeeper)?.name;
+      // Abend-Torwart; sonst der erste markierte Torwart, der da ist (mehrere möglich).
+      const keeper = rt?.goalkeeper ?? squad.find((p) => p.goalkeeper && present.has(p.name))?.name;
       init[tid] = { present, keeper: keeper && present.has(keeper) ? keeper : undefined };
     });
     return init;
