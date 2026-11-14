@@ -8,7 +8,7 @@ import { ticketAdminList, type TicketAdminConfig } from '../lib/register';
 import { calculateEventStandings, calculateEventAwards } from '../lib/eventStandings';
 import PlayerAvatar from './PlayerAvatar';
 import { CutoutBatch, CutoutButton } from './CutoutTools';
-import { makeCutout } from '../lib/cutout';
+import PlayerPhotoStudio from './PlayerPhotoStudio';
 import { validCutout } from '../lib/playerPhoto';
 import { HERO_SLIDE_LABELS, normalizeHeroOrder } from '../lib/heroSlides';
 import { AccordionSection, TeamCrest } from './ui';
@@ -126,6 +126,7 @@ function RosterEditor({
   cutouts?: boolean; // Freisteller (Schere) anzeigen – nur Liga-Kader
 }) {
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
+  const [studio, setStudio] = useState<{ index: number; file: File; name: string } | null>(null);
   // Immer den NEUESTEN Kader ändern – Uploads/Freistellen dauern ein paar
   // Sekunden, in denen sich der Kader schon geändert haben kann.
   const rosterRef = React.useRef(roster);
@@ -153,18 +154,16 @@ function RosterEditor({
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
+      // Liga-Kader: Foto-Studio – freistellen, auf den Spielerbild-Hintergrund
+      // setzen, Vorschau. Erst „Übernehmen" lädt hoch.
+      if (cutouts) {
+        setStudio({ index, file, name: rosterRef.current[index]?.name ?? '' });
+        return;
+      }
       setUploadingIndex(index);
       try {
         const imageUrl = await uploadImage(file);
         updatePlayer(index, { imageUrl, cutoutUrl: undefined, cutoutSrc: undefined });
-        // Gleich freistellen (aus der Originaldatei – schärfer als das verkleinerte Foto).
-        if (cutouts) {
-          try {
-            updatePlayer(index, { cutoutUrl: await makeCutout(file), cutoutSrc: imageUrl });
-          } catch (cutErr) {
-            console.warn('Freistellen fehlgeschlagen:', cutErr);
-          }
-        }
       } catch (err) {
         alert(err instanceof Error ? err.message : 'Fehler beim Bild-Upload.');
       } finally {
@@ -274,6 +273,14 @@ function RosterEditor({
         <Plus className="w-3.5 h-3.5" />
         Spieler hinzufügen
       </button>
+      {studio && (
+        <PlayerPhotoStudio
+          file={studio.file}
+          playerName={studio.name}
+          onClose={() => setStudio(null)}
+          onDone={(patch) => updatePlayer(studio.index, patch)}
+        />
+      )}
     </div>
   );
 }
@@ -2212,8 +2219,9 @@ export default function AdminPanel({
                   </label>
                   <RosterEditor roster={editTeamRoster} teamColor={editTeamColor} onChange={setEditTeamRoster} cutouts />
                   <p className="text-[10px] text-gray-400 font-sans mt-1.5">
-                    Diese Spieler stehen im Spielplan zur Torschützen- und Vorlagen-Zuweisung bereit. Neue Fotos werden
-                    automatisch freigestellt (Schere ✂ = freistellen bzw. Freistellung entfernen) – nach dem Hochladen speichern.
+                    Diese Spieler stehen im Spielplan zur Torschützen- und Vorlagen-Zuweisung bereit. Kamera = Foto wählen:
+                    Der Spieler wird automatisch freigestellt und auf den Spielerbild-Hintergrund gesetzt (mit Vorschau).
+                    Schere ✂ = Freistellung erneuern bzw. entfernen. Danach „Änderungen speichern".
                   </p>
 
                 </div>

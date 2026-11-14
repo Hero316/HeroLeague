@@ -7,7 +7,8 @@ import { playerPlacements } from '../lib/trackingAwards';
 import { DEFAULT_SCORING } from '../lib/scoring';
 import { fewDataHint, fieldQuotas, keeperQuotas } from '../lib/displayQuotas';
 import { useBackClose } from '../lib/backStack';
-import { useBackdropDismiss, ModalPortal, TeamCrest, monogram, readable } from './ui';
+import { useBackdropDismiss, ModalPortal, TeamCrest, readable } from './ui';
+import PlayerPlaceholder from './PlayerPlaceholder';
 import { ShareSheet } from './ShareCard';
 import { TIER } from './FifaCard';
 
@@ -182,12 +183,7 @@ function Avatar({ p, color, size }: { p: PlayerStat; color: string; size: number
   return p.imageUrl ? (
     <img src={p.imageUrl} alt="" className="rounded-full object-cover shrink-0 border" style={{ width: size, height: size, borderColor: `${color}80` }} />
   ) : (
-    <span
-      className="rounded-full grid place-items-center font-display font-black shrink-0"
-      style={{ width: size, height: size, background: `${color}26`, color: readable(color), fontSize: size * 0.38 }}
-    >
-      {monogram(p.name)}
-    </span>
+    <PlayerPlaceholder name={p.name} className="rounded-full border" style={{ width: size, height: size, borderColor: `${color}80` }} textStyle={{ fontSize: size * 0.38 }} />
   );
 }
 
@@ -255,7 +251,11 @@ function Steckbrief({
             display: 'grid', placeItems: 'center', fontFamily: display, fontWeight: 900, fontSize: 30, color: ink,
           }}
         >
-          {player.imageUrl ? <img src={player.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} /> : monogram(player.name)}
+          {player.imageUrl ? (
+            <img src={player.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          ) : (
+            <PlayerPlaceholder name={player.name} className="w-full h-full" textStyle={{ fontSize: 30 }} />
+          )}
         </div>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontFamily: display, fontWeight: 900, textTransform: 'uppercase', fontSize: 26, lineHeight: 0.92, letterSpacing: '-0.01em' }}>{player.name}</div>

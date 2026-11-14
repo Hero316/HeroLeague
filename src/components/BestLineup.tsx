@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Team } from '../types';
 import { shade, readable } from './ui';
+import PlayerPlaceholder from './PlayerPlaceholder';
 
 // Beste Aufstellung als team-farbiges Mini-Fußballfeld: Torwart unten, 2 vorne,
 // 2 hinten, 2 auf der Bank. Mit Tracking-Daten aus src/lib/bestLineup.ts
@@ -87,12 +88,12 @@ const Chip = React.memo(function Chip({
             style={{ borderColor: color }}
           />
         ) : (
-          <span
-            className={`grid place-items-center ${av} rounded-full font-display font-black text-white text-sm border-2 shadow-[0_4px_12px_rgba(0,0,0,.45)]`}
-            style={{ borderColor: color, background: `linear-gradient(140deg, ${color}, ${shade(color, 0.45)})` }}
-          >
-            {initials(name) || '?'}
-          </span>
+          <PlayerPlaceholder
+            name={name}
+            mark={initials(name) || '?'}
+            className={`${av} rounded-full border-2 shadow-[0_4px_12px_rgba(0,0,0,.45)] text-sm`}
+            style={{ borderColor: color }}
+          />
         )}
         {badge && (
           <span

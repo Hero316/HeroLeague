@@ -7,6 +7,7 @@ import { useBackClose } from '../lib/backStack';
 import FifaCard from './FifaCard';
 import StatRadar, { type RadarSeries } from './StatRadar';
 import { ModalPortal, monogram, TeamCrest } from './ui';
+import PlayerPlaceholder from './PlayerPlaceholder';
 
 // ---------------------------------------------------------------------------
 // Head-to-Head: zwei Spieler direkt gegenüberstellen – FC-Karten, ein
@@ -190,9 +191,7 @@ function PlayerPicker({
                   {p.imageUrl ? (
                     <img src={p.imageUrl} alt="" loading="lazy" className="w-9 h-9 rounded-full object-cover shrink-0" />
                   ) : (
-                    <span className="w-9 h-9 rounded-full grid place-items-center shrink-0 text-[12px] font-display font-black text-white" style={{ background: t?.logoColor || '#22DFC9' }}>
-                      {monogram(p.name)}
-                    </span>
+                    <PlayerPlaceholder name={p.name} className="w-9 h-9 rounded-full text-[12px]" />
                   )}
                   <span className="min-w-0 flex-1">
                     <span className="block text-[14px] font-semibold text-white truncate">{p.name}</span>

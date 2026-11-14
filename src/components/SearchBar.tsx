@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { Search, X, User, CalendarDays, Compass, Images } from 'lucide-react';
+import { Search, X, CalendarDays, Compass, Images } from 'lucide-react';
 import { ActiveTab, HighlightAlbum, Match, Team } from '../types';
-import { shortDate, TeamCrest, shade } from './ui';
+import { shortDate, TeamCrest } from './ui';
+import PlayerPlaceholder from './PlayerPlaceholder';
 import { useBackClose } from '../lib/backStack';
 
 // Diakritika entfernen + Kleinschreibung → toleranter Vergleich (ä=a, ö=o …).
@@ -304,12 +305,7 @@ export default function SearchBar({
                               style={{ borderColor: r.color }}
                             />
                           ) : (
-                            <span
-                              className="shrink-0 w-8 h-8 rounded-lg grid place-items-center font-display font-black text-white text-sm tabular-nums"
-                              style={{ background: `linear-gradient(140deg, ${r.color}, ${shade(r.color, 0.45)})` }}
-                            >
-                              {typeof r.number === 'number' ? r.number : <User className="w-4 h-4" />}
-                            </span>
+                            <PlayerPlaceholder name={r.label} className="w-8 h-8 rounded-lg border text-[11px]" style={{ borderColor: r.color }} />
                           ))}
                         {r.kind === 'match' && (
                           <span className="shrink-0 w-8 h-8 rounded-lg bg-[rgba(67,229,160,.12)] grid place-items-center text-hl-green">
