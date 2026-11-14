@@ -59,8 +59,12 @@ export function trackedLineup(
   }
   if (acc.size === 0) return null;
 
-  // Torwart: Kader-Auswahl zuerst, sonst meiste Spiele im Tor.
-  const flagged = kader.find((p) => p.goalkeeper)?.name;
+  // Torwart: Kader-Auswahl zuerst (bei mehreren markierten der mit den meisten
+  // Spielen im Tor), sonst meiste Spiele im Tor.
+  const flagged = kader
+    .filter((p) => p.goalkeeper)
+    .map((p) => p.name)
+    .sort((x, y) => (acc.get(y)?.keeperGames ?? 0) - (acc.get(x)?.keeperGames ?? 0))[0];
   const keeperName =
     flagged ??
     [...acc.entries()].filter(([, a]) => a.keeperGames > 0).sort((x, y) => y[1].keeperGames - x[1].keeperGames)[0]?.[0] ??

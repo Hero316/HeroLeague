@@ -682,8 +682,7 @@ function TransferDialog({ b, teams, seasons, onClose, onDone }: { b: BookingAdmi
   const [err, setErr] = useState('');
 
   const roster: Player[] = useMemo(() => {
-    const firstKeeper = b.roster.findIndex((r) => r.keeper);
-    return b.roster.map((r, i) => {
+    return b.roster.map((r) => {
       const n = fullName(r);
       const prev = source?.spielerliste?.find((p) => norm(p.name) === norm(n));
       const p: Player = { name: n };
@@ -691,7 +690,7 @@ function TransferDialog({ b, teams, seasons, onClose, onDone }: { b: BookingAdmi
       if (prev?.cutoutUrl) { p.cutoutUrl = prev.cutoutUrl; p.cutoutSrc = prev.cutoutSrc; }
       if (r.number !== null) p.number = r.number;
       if (r.captain) p.captain = true;
-      if (i === firstKeeper) p.goalkeeper = true;
+      if (r.keeper) p.goalkeeper = true; // alle angegebenen Torhüter (mehrere möglich)
       return p;
     });
   }, [b.roster, source]);
