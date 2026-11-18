@@ -823,7 +823,6 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
   );
 }
 
-// Großer, roter Hinweis: „Nur noch X von 24 Plätzen frei" (pulsiert leicht).
 // „Jetzt noch nichts zahlen" – taucht bewusst mehrfach auf der Seite auf,
 // damit klar ist: gebucht wird verbindlich, bezahlt wird per Rechnung.
 function PayLaterNote({ days, big = false }: { days: number; big?: boolean }) {
@@ -850,7 +849,21 @@ function PayLaterNote({ days, big = false }: { days: number; big?: boolean }) {
   );
 }
 
+// Knappheit erst zeigen, wenn sie wirklich da ist: „18 von 24 frei" klingt nach
+// „wir haben noch Zeit". Deshalb gestaffelt – und jede Stufe bleibt wahr:
+//  • mehr als die Hälfte frei → „Startplätze begrenzt"
+//  • die Hälfte oder weniger frei → „Über die Hälfte vergeben"
+//  • höchstens ein Drittel frei (bei 24: ab 8) → „Nur noch 7 von 24 Plätzen frei"
 function SlotsBadge({ left, total, soldOut, big = false }: { left: number; total: number; soldOut: boolean; big?: boolean }) {
+  const text = soldOut || left <= 0 ? (
+    <>Ausgebucht – alle Plätze vergeben</>
+  ) : left <= Math.ceil(total / 3) ? (
+    <>Nur noch <span className="text-rose-300">{left}</span> von {total} Plätzen frei</>
+  ) : left <= total / 2 ? (
+    <>Über die Hälfte vergeben</>
+  ) : (
+    <>Startplätze begrenzt</>
+  );
   return (
     <motion.div
       animate={soldOut ? undefined : { boxShadow: ['0 0 0 0 rgba(244,63,94,.45)', '0 0 0 14px rgba(244,63,94,0)', '0 0 0 0 rgba(244,63,94,0)'] }}
@@ -860,7 +873,7 @@ function SlotsBadge({ left, total, soldOut, big = false }: { left: number; total
     >
       <span className="relative flex w-2.5 h-2.5 shrink-0"><span className="absolute inset-0 rounded-full bg-rose-400 animate-ping opacity-75" /><span className="relative w-2.5 h-2.5 rounded-full bg-rose-500" /></span>
       <span className={`font-display font-black uppercase tracking-tight leading-none ${big ? 'text-[22px] sm:text-[28px]' : 'text-[18px] sm:text-[22px]'}`}>
-        {soldOut ? <>Ausgebucht – alle Plätze vergeben</> : <>Nur noch <span className="text-rose-300">{left}</span> von {total} Plätzen frei</>}
+        {text}
       </span>
     </motion.div>
   );
