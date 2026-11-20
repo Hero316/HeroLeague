@@ -26,7 +26,7 @@ import TrackingProgressBanner from './TrackingProgressBanner';
 import { useTrackingProgress } from '../lib/trackingProgress';
 import PlayerCrest from './PlayerCrest';
 import { TeamCrest, TeamLogoImg, monogram, shade } from './ui';
-import { validCutout } from '../lib/playerPhoto';
+import { listPortrait } from '../lib/playerPhoto';
 import { CountUp, Reveal, useSettledList } from './anim';
 import CompareOverlay from './CompareOverlay';
 import PlayerSteckbrief from './PlayerSteckbrief';
@@ -87,7 +87,7 @@ function RowPortrait({
   onSelectTeam?: (teamId: string, playerName?: string) => void;
   onPlayer?: () => void;
 }) {
-  const cut = validCutout(teams.find((t) => t.id === p.teamId)?.spielerliste?.find((x) => x.name === p.name));
+  const cut = listPortrait(teams.find((t) => t.id === p.teamId)?.spielerliste?.find((x) => x.name === p.name));
   return (
     <div className="shrink-0 w-[60px] sm:w-[74px] lg:w-[84px] self-stretch flex items-center justify-center">
       {cut ? (
@@ -106,11 +106,11 @@ function RowPortrait({
   );
 }
 
-// Freigestelltes Foto des Spielers (falls vorhanden) – aus dem Kader des Vereins.
+// Porträt bzw. freigestelltes Foto des Spielers (falls vorhanden) – aus dem Kader des Vereins.
 function cutoutOf(visual: CardVisual, teams: Team[]): string | undefined {
   if (visual.type !== 'player') return undefined;
   const p = teams.find((t) => t.id === visual.teamId)?.spielerliste?.find((x) => x.name === visual.name);
-  return validCutout(p);
+  return listPortrait(p);
 }
 
 function BigLogo({ team, onSelect }: { team: Team; onSelect?: () => void }) {

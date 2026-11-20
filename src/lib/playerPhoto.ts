@@ -9,3 +9,12 @@ export function validCutout(p: { imageUrl?: string; cutoutUrl?: string; cutoutSr
 // setzt das Foto-Studio im Backoffice die freigestellten Spieler; Spieler ohne
 // Foto zeigen ihn mit ihren Initialen (PlayerPlaceholder).
 export const PLAYER_PHOTO_BG = '/assets/spieler-hintergrund.webp';
+
+// Bild für Listen/Podeste (Hero One, Statistik, Bestenlisten): das eigene
+// Porträt (Kopf & Schultern) hat Vorrang – Action-Fotos der FIFA-Karte wären
+// dort winzige Ganzkörper-Figuren. Sonst die Freistellung des Kartenbilds.
+export function listPortrait(
+  p: { imageUrl?: string; cutoutUrl?: string; cutoutSrc?: string; portraitUrl?: string } | undefined
+): string | undefined {
+  return p?.portraitUrl || validCutout(p);
+}

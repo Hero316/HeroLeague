@@ -4,7 +4,7 @@ import { ArrowDown, Hand, Shirt } from 'lucide-react';
 import type { PlayerStat, Team } from '../types';
 import { sortStatRows, type StatTableCol, type StatTableRow } from './StatTable';
 import { TeamCrest, TeamLogoImg, monogram, shade } from './ui';
-import { validCutout } from '../lib/playerPhoto';
+import { listPortrait } from '../lib/playerPhoto';
 import { useHistoryState } from '../lib/historyState';
 
 // ===========================================================================
@@ -364,10 +364,10 @@ function Podium({
   );
 }
 
-// Großes Bild im Podest: freigestelltes Foto → Foto → Vereinslogo → Initialen.
+// Großes Bild im Podest: Porträt bzw. freigestelltes Foto → Foto → Vereinslogo → Initialen.
 function Visual({ entry, team, players, big }: { entry: BoardEntry; team?: Team; players: PlayerStat[]; big: boolean }) {
   const squad = team?.spielerliste?.find((x) => x.name === entry.playerName);
-  const cut = validCutout(squad);
+  const cut = listPortrait(squad);
   const photo = players.find((p) => p.teamId === entry.teamId && p.name === entry.playerName)?.imageUrl || squad?.imageUrl;
   const color = team?.logoColor || '#22DFC9';
   const box = big ? 'h-[96px] sm:h-[120px] lg:h-[170px]' : 'h-[86px] sm:h-[110px]';
