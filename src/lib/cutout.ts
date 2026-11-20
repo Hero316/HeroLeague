@@ -10,63 +10,15 @@
 // ===========================================================================
 
 import { uploadImage } from './api';
+import { modelSession } from './onnx';
 
 const MODEL_URLS = [
   'https://huggingface.co/Xenova/modnet/resolve/main/onnx/model.onnx',
   'https://huggingface.co/Xenova/modnet/resolve/main/onnx/model_quantized.onnx',
 ];
-const MODEL_CACHE = 'hl-cutout-model-v1';
-const OUT_MAX = 900; // längste Kante des freigestellten Bildes
+const OUT_MAX = 900; // längste Kante des freigestellten Bildes (Standard)
 
-type Ort = typeof import('onnxruntime-web/wasm');
-type Session = Awaited<ReturnType<Ort['InferenceSession']['create']>>;
-
-let sessionP: Promise<{ ort: Ort; session: Session }> | null = null;
-
-async function fetchModel(): Promise<ArrayBuffer> {
-  let cache: Cache | null = null;
-  try {
-    cache = await caches.open(MODEL_CACHE);
-  } catch {
-    /* kein Cache-API (z. B. privater Modus) – dann eben jedes Mal laden */
-  }
-  for (const url of MODEL_URLS) {
-    try {
-      const hit = cache ? await cache.match(url) : undefined;
-      if (hit) return await hit.arrayBuffer();
-      const res = await fetch(url);
-      if (!res.ok) continue;
-      if (cache) await cache.put(url, res.clone()).catch(() => {});
-      return await res.arrayBuffer();
-    } catch {
-      /* nächste Variante probieren */
-    }
-  }
-  throw new Error('Freistell-Modell konnte nicht geladen werden (Internet?).');
-}
-
-function loadSession() {
-  if (!sessionP) {
-    sessionP = (async () => {
-      const ort = await import('onnxruntime-web/wasm');
-      // Die WASM-Datei liefert Vite als eigenes Asset aus (nur bei Bedarf geladen).
-      const [wasmUrl, mjsUrl] = await Promise.all([
-        import('../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm?url').then((m) => m.default),
-        import('../../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.mjs?url').then((m) => m.default),
-      ]);
-      ort.env.wasm.wasmPaths = { wasm: wasmUrl, mjs: mjsUrl };
-      ort.env.wasm.numThreads = 1;
-      const model = await fetchModel();
-      const session = await ort.InferenceSession.create(model, { executionProviders: ['wasm'] });
-      return { ort, session };
-    })();
-    // Fehlschlag nicht dauerhaft merken – nächster Versuch lädt neu.
-    sessionP.catch(() => {
-      sessionP = null;
-    });
-  }
-  return sessionP;
-}
+const loadSession = modelSession(MODEL_URLS, 'Freistell-Modell');
 
 async function toBitmap(source: Blob | string): Promise<ImageBitmap> {
   const blob = typeof source === 'string' ? await (await fetch(source, { mode: 'cors' })).blob() : source;
@@ -83,7 +35,9 @@ function canvas(w: number, h: number) {
 }
 
 // Hintergrund entfernen → transparentes Bild (Blob, WebP bzw. PNG).
-export async function removeBackground(source: Blob | string): Promise<Blob> {
+// maxSide = längste Kante des Ergebnisses (das Foto-Studio nimmt mehr, damit
+// auch ein Porträt-Ausschnitt aus einem Ganzkörperfoto noch scharf ist).
+export async function removeBackground(source: Blob | string, opts?: { maxSide?: number }): Promise<Blob> {
   const { ort, session } = await loadSession();
   const bmp = await toBitmap(source);
 
@@ -152,7 +106,7 @@ export async function removeBackground(source: Blob | string): Promise<Blob> {
   m.ctx.putImageData(mImg, 0, 0);
 
   // In Ausgabegröße: Foto zeichnen, dann mit der Maske ausstanzen.
-  const k = Math.min(1, OUT_MAX / Math.max(bmp.width, bmp.height));
+  const k = Math.min(1, (opts?.maxSide ?? OUT_MAX) / Math.max(bmp.width, bmp.height));
   const ow = Math.round(bmp.width * k);
   const oh = Math.round(bmp.height * k);
   const o = canvas(ow, oh);

@@ -18,3 +18,12 @@ export function listPortrait(
 ): string | undefined {
   return p?.portraitUrl || validCutout(p);
 }
+
+// „Nur Kartenbild" ändern: Hatte der Spieler kein eigenes Porträt, zeigten die
+// Listen bisher die Freistellung des alten Kartenbilds. Die wird jetzt als
+// Porträt festgehalten, damit sich dort nichts ändert.
+export function keepPortrait(p: { imageUrl?: string; cutoutUrl?: string; cutoutSrc?: string; portraitUrl?: string } | undefined): { portraitUrl?: string } {
+  if (!p || p.portraitUrl) return {};
+  const old = validCutout(p);
+  return old ? { portraitUrl: old } : {};
+}
