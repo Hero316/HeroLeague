@@ -457,7 +457,7 @@ export default function Statistiken({
       },
       {
         id: 'duel', title: 'Zweikämpfe', label: 'Zweikämpfe', accent: '#43E5A0', icon: <Swords className="w-4 h-4" />, rows: duelRows, defaultSort: 'value',
-        cols: [{ key: 'all', label: 'Gesamt' }, { key: 'won', label: 'Gewonnen' }, { key: 'quote', label: 'Quote', fmt: pctFmt }, { key: 'value', label: 'Wert', fmt: (v) => v.toFixed(1) }],
+        cols: [{ key: 'all', label: 'Gesamt' }, { key: 'won', label: 'Gewon\u00ADnen' }, { key: 'quote', label: 'Quote', fmt: pctFmt }, { key: 'value', label: 'Wert', fmt: (v) => v.toFixed(1) }],
         note: `Quote = gewonnene ÷ alle Zweikämpfe · Wert = gewonnene × Quote · ab ${DUEL_MIN} Zweikämpfen`,
       },
       {

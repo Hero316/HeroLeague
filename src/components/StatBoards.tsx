@@ -333,7 +333,7 @@ function Podium({
               {/* Platz 1 am Handy (Bild links neben dem Text): Die Spalte ist breiter als
                   das Bild, das Bild steht rechts darin – so liegt die Medaille in der
                   freien Ecke und nicht auf dem Kopf des Spielers. */}
-              <div className={`relative shrink-0 ${first ? 'w-[120px] sm:w-[150px] lg:w-full' : 'w-full'}`}>
+              <div className={`relative shrink-0 ${first ? 'w-[104px] sm:w-[150px] lg:w-full' : 'w-full'}`}>
                 {/* Medaille mit Platz-Nummer */}
                 <span
                   className={`absolute z-[1] -top-1 -left-1 rounded-full grid place-items-center font-display font-black leading-none text-[#0b1415] shadow-[0_6px_16px_rgba(0,0,0,.5)] ring-2 ring-[#0b1415]/60 w-8 h-8 text-lg sm:w-9 sm:h-9 sm:text-xl ${
@@ -475,14 +475,16 @@ function TableRest({
   const wide = cols.length >= 3;
   const one =
     cols.length >= 5
-      ? { row: 'lg:flex-nowrap', name: 'lg:basis-0', head: 'lg:visible', first: 'lg:ml-0' }
-      : { row: 'md:flex-nowrap', name: 'md:basis-0', head: 'md:visible', first: 'md:ml-0' };
+      ? { row: 'lg:flex-nowrap', name: 'lg:basis-0', head: 'lg:block', first: 'lg:ml-0' }
+      : { row: 'md:flex-nowrap', name: 'md:basis-0', head: 'md:block', first: 'md:ml-0' };
   const colW = 'w-[46px] sm:w-[72px] lg:w-[104px]';
   return (
     <div className="relative mt-3 sm:mt-4 min-w-0">
-      <div className="flex items-end gap-1.5 sm:gap-3 px-3 sm:px-4 pb-2">
-        <span className="w-6 sm:w-8 shrink-0" />
-        <span className={`flex-1 min-w-0 text-[10px] lg:text-xs font-bold uppercase tracking-wider text-hl-faint ${wide ? `invisible ${one.head}` : ''}`}>Spieler</span>
+      {/* Solange die Zahlen in der zweiten Zeile stehen, gibt es links keinen Platzhalter:
+          die Spaltenköpfe sitzen rechtsbündig genau über den Zahlen (auch bei 360 px). */}
+      <div className={`flex items-end gap-1.5 sm:gap-3 px-3 sm:px-4 pb-2 ${wide ? 'justify-end' : ''}`}>
+        <span className={`w-6 sm:w-8 shrink-0 ${wide ? `hidden ${one.head}` : ''}`} />
+        <span className={`flex-1 min-w-0 text-[10px] lg:text-xs font-bold uppercase tracking-wider text-hl-faint ${wide ? `hidden ${one.head}` : ''}`}>Spieler</span>
         {cols.map((c) => {
           const on = c.key === sortKey;
           return (
@@ -496,7 +498,9 @@ function TableRest({
               style={on ? { color: accent } : undefined}
             >
               <span className="min-w-0 text-right leading-tight hyphens-manual break-words">{c.label}</span>
-              {on && <ArrowDown className="w-3 h-3 shrink-0 mb-px" />}
+              {/* Am Handy ohne Pfeil (die aktive Spalte ist farbig) – in 46 px bräche
+                  der Spaltenkopf sonst mitten im Wort. */}
+              {on && <ArrowDown className="hidden sm:block w-3 h-3 shrink-0 mb-px" />}
             </button>
           );
         })}
