@@ -82,9 +82,10 @@ export function clampCardPan(l: Layout, size: number, pan: Pt): Pt {
   const H = 1;
   const b = placeCard(W, H, l, size, { x: 0, y: 0 });
   const minY = (H - (l.box.y + l.box.h) * b.s - b.y) / H; // unterer Rand ≥ Bildrand
+  const maxY = Math.max(minY, (0.8 * H - l.box.y * b.s - b.y) / H); // Kopf nicht tiefer als 80 %
   const minX = (0.15 * W - (l.box.x + l.box.w) * b.s - b.x) / W; // rechter Rand nicht links von 15 %
   const maxX = (0.85 * W - l.box.x * b.s - b.x) / W; // linker Rand nicht rechts von 85 %
-  return { x: Math.min(maxX, Math.max(minX, pan.x)), y: Math.max(minY, pan.y) };
+  return { x: Math.min(maxX, Math.max(minX, pan.x)), y: Math.min(maxY, Math.max(minY, pan.y)) };
 }
 
 // Kartenbild zeichnen: Hintergrund + Spieler.

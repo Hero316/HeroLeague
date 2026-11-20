@@ -36,7 +36,10 @@ import { CardPreview, PortraitPreviews } from './PhotoPreviews';
 // Personen) gilt für beide. Rechts bzw. darunter: Vorschau, wie es auf der
 // Seite aussieht. Erst „Übernehmen" lädt hoch.
 // Mit Foto (Kamera) = neues Bild; ohne (Klick aufs Spielerbild) = vorhandene
-// Bilder bearbeiten – dann ohne erneutes Freistellen aus der Freistellung.
+// Bilder bearbeiten – ohne erneutes Freistellen: fürs Porträt aus dem eigenen
+// Porträt des Spielers, sonst aus der Freistellung des Kartenbilds.
+// Die Vorschau zeigt immer alle drei Stellen so, wie sie NACH dem Übernehmen
+// aussehen – auch das Bild, das unverändert bleibt.
 // ===========================================================================
 
 const OUT_W = 800;
@@ -50,6 +53,7 @@ const SIZE_MAX = 3.5;
 const UNDO_MAX = 6;
 
 type Phase = 'loading' | 'ready' | 'saving' | 'error';
+type Loaded = Exclude<Phase, 'saving'>;
 type Tool = 'move' | 'erase';
 type Target = 'both' | 'card' | 'portrait';
 type View = 'card' | 'portrait';
@@ -104,6 +108,26 @@ async function uploadCanvas(c: HTMLCanvasElement, base: string, maxDimension: nu
   return uploadImage(fileFrom(await canvasBlob(c), base), { maxDimension });
 }
 
+async function fetchImage(url: string): Promise<Blob> {
+  try {
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) throw new Error(String(res.status));
+    return await res.blob();
+  } catch {
+    throw new Error('Das Bild konnte nicht geladen werden.');
+  }
+}
+
+// Ganze Freistellung, klein – für die Vorschau (Listen zeigen das Kartenbild).
+function cutoutPreview(work: HTMLCanvasElement): string | undefined {
+  const k = Math.min(1, 500 / Math.max(work.width, work.height));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(work.width * k));
+  c.height = Math.max(1, Math.round(work.height * k));
+  ctx2d(c).drawImage(work, 0, 0, c.width, c.height);
+  return trim(c)?.toDataURL('image/webp', 0.86);
+}
+
 export default function PlayerPhotoStudio({
   player,
   team,
@@ -134,20 +158,38 @@ export default function PlayerPhotoStudio({
   const [cursor, setCursor] = useState<Pt | null>(null);
   const [version, setVersion] = useState(0); // neu zeichnen nach dem Radieren
   const [undoCount, setUndoCount] = useState(0);
-  const [previews, setPreviews] = useState<{ card?: string; portrait?: string }>({});
+  const [previews, setPreviews] = useState<{ card?: string; portrait?: string; full?: string }>({});
+  const [armed, setArmed] = useState(true); // Zurück-Ebene (wird nach „Zurück" beim Speichern neu angelegt)
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const undoRef = useRef<ImageData[]>([]);
   const dragRef = useRef<{ start: Pt; pan0: Pt } | null>(null);
   const strokeRef = useRef<Pt | null>(null);
   const erasedRef = useRef(false); // seit dem Wechsel auf „Radieren" etwas weggewischt?
   const facesRef = useRef<FaceBox[]>([]); // Gesichter der unberührten Freistellung („Alles zurück")
+  const pointerRef = useRef<number | null>(null); // nur EIN Finger zeichnet/zieht
+  const genRef = useRef(0); // verwirft veraltete Gesichtserkennungen
+  const loadedRef = useRef<Loaded>('loading'); // Stand des Ladens – auch während gespeichert wird
   const saving = phase === 'saving';
   const editing = !file; // vorhandene Bilder bearbeiten
   const active: View = target === 'both' ? view : target; // was gerade im Rahmen bearbeitet wird
+  // Bearbeiten: Was bisher in den Listen zu sehen ist, und das eigene Porträt
+  // (falls es ein anderes Bild ist als die Freistellung des Kartenbilds).
+  const cardCutout = validCutout(player);
+  const ownPortrait = player.portraitUrl && player.portraitUrl !== cardCutout ? player.portraitUrl : undefined;
+  // Quelle der Freistellung: neues Foto, das eigene Porträt (nur „Nur Porträt") oder das Kartenbild
+  const source: 'file' | 'portrait' | 'card' = file ? 'file' : target === 'portrait' && ownPortrait ? 'portrait' : 'card';
   const close = () => {
     if (!saving) onClose();
   };
-  useBackClose(true, close); // Handy-Zurück schließt das Studio
+  // Handy-Zurück schließt das Studio. Während gespeichert wird, bleibt es offen –
+  // dann die Zurück-Ebene neu anlegen, sonst verließe das nächste „Zurück" die Seite.
+  useBackClose(armed, () => {
+    if (saving) setArmed(false);
+    else onClose();
+  });
+  useEffect(() => {
+    if (!armed) setArmed(true);
+  }, [armed]);
 
   // Porträt-Ausschnitt bei 100 % (Kopf & Schultern) – aus Gesicht + Freistellung.
   const anchor = useMemo(() => (cut && layout ? portraitAnchor(cut.work, layout, faces) : null), [cut, layout, faces]);
@@ -155,6 +197,14 @@ export default function PlayerPhotoStudio({
   // Freistellung laden: neues Foto freistellen bzw. vorhandene Freistellung holen
   useEffect(() => {
     let alive = true;
+    const gen = ++genRef.current;
+    const settle = (next: Loaded, message = '') => {
+      loadedRef.current = next;
+      // Ein laufendes Speichern („Ohne Bearbeitung hochladen") nicht unterbrechen
+      setPhase((p) => (p === 'saving' ? p : next));
+      if (message) setErr((e) => e || message);
+    };
+    loadedRef.current = 'loading';
     setPhase('loading');
     setErr('');
     setCut(null);
@@ -169,11 +219,11 @@ export default function PlayerPhotoStudio({
     (async () => {
       try {
         let blob: Blob;
-        const existingCut = validCutout(player) || player.portraitUrl;
         if (file) blob = await removeBackground(file, { maxSide: CUT_MAX });
-        else if (validCutout(player)) blob = await (await fetch(validCutout(player)!, { mode: 'cors' })).blob();
+        else if (source === 'portrait' && ownPortrait) blob = await fetchImage(ownPortrait);
+        else if (cardCutout) blob = await fetchImage(cardCutout);
         else if (player.imageUrl) blob = await removeBackground(player.imageUrl, { maxSide: CUT_MAX });
-        else if (existingCut) blob = await (await fetch(existingCut, { mode: 'cors' })).blob();
+        else if (player.portraitUrl) blob = await fetchImage(player.portraitUrl);
         else throw new Error('Kein Bild vorhanden.');
         const [orig, bgImg] = await Promise.all([createImageBitmap(blob), loadBackground()]);
         if (!alive) {
@@ -190,7 +240,7 @@ export default function PlayerPhotoStudio({
           throw new Error('Auf dem Foto wurde keine Person erkannt.');
         }
         const found = await detectFaces(work).catch(() => [] as FaceBox[]);
-        if (!alive) {
+        if (!alive || genRef.current !== gen) {
           orig.close();
           return;
         }
@@ -199,20 +249,25 @@ export default function PlayerPhotoStudio({
         setBg(bgImg);
         setCut({ work, orig });
         setLayout(l);
-        setPhase('ready');
+        settle('ready');
       } catch (e) {
         if (!alive) return;
-        setErr(e instanceof Error ? e.message : 'Freistellen fehlgeschlagen.');
-        setPhase('error');
+        settle('error', e instanceof Error ? e.message : 'Freistellen fehlgeschlagen.');
       }
     })();
     return () => {
       alive = false;
     };
-  }, [file]); // nur bei neuem Foto neu laden (player = Stand beim Öffnen)
+  }, [file, source]); // neu laden bei neuem Foto bzw. anderer Quelle (player = Stand beim Öffnen)
 
   // Bild-Speicher freigeben, sobald eine Freistellung ersetzt wird
   useEffect(() => () => cut?.orig.close(), [cut]);
+
+  // Porträt-Verschiebung immer begrenzt – genau wie im fertigen Bild (renderPortrait).
+  const portraitPan = useMemo(
+    () => (layout && anchor ? clampPortraitPan(layout, anchor, portrait.size, portrait.pan) : portrait.pan),
+    [layout, anchor, portrait]
+  );
 
   // Rahmen zeichnen (+ Pinsel-Umriss beim Radieren)
   useEffect(() => {
@@ -221,7 +276,7 @@ export default function PlayerPhotoStudio({
     const ctx = c.getContext('2d');
     if (!ctx) return;
     if (active === 'card') drawCard(ctx, c.width, c.height, bg, cut.work, layout, card.size, card.pan);
-    else if (anchor) drawPortraitFrame(ctx, c.width, c.height, bg, cut.work, anchor, portrait.size, portrait.pan);
+    else if (anchor) drawPortraitFrame(ctx, c.width, c.height, bg, cut.work, anchor, portrait.size, portraitPan);
     if (tool === 'erase' && cursor) {
       ctx.save();
       ctx.beginPath();
@@ -233,12 +288,13 @@ export default function PlayerPhotoStudio({
       ctx.stroke();
       ctx.restore();
     }
-  }, [cut, bg, layout, anchor, active, card, portrait, version, tool, cursor, brush]);
+  }, [cut, bg, layout, anchor, active, card, portrait, portraitPan, version, tool, cursor, brush]);
 
   // Vorschauen (FIFA-Karte, Hero One, Statistik) – höchstens ~8× pro Sekunde
   // neu berechnen, auch während gezogen wird.
-  const latest = useRef({ cut, bg, layout, anchor, card, portrait, target });
-  latest.current = { cut, bg, layout, anchor, card, portrait, target };
+  const keepsList = Boolean(player.portraitUrl || cardCutout); // „Nur Kartenbild": Listen behalten ihr Bild
+  const latest = useRef({ cut, bg, layout, anchor, card, portrait, target, keepsList });
+  latest.current = { cut, bg, layout, anchor, card, portrait, target, keepsList };
   const previewTimer = useRef<number | null>(null);
   useEffect(() => {
     if (!cut || !bg || !layout || previewTimer.current !== null) return;
@@ -246,7 +302,9 @@ export default function PlayerPhotoStudio({
       previewTimer.current = null;
       const v = latest.current;
       if (!v.cut || !v.bg || !v.layout) return;
-      const next: { card?: string; portrait?: string } = {};
+      const next: { card?: string; portrait?: string; full?: string } = {};
+      // „Nur Kartenbild" ohne bisheriges Listenbild: Die Listen zeigen dann die neue Freistellung.
+      if (v.target === 'card' && !v.keepsList) next.full = cutoutPreview(v.cut.work);
       if (v.target !== 'portrait') {
         const c = document.createElement('canvas');
         c.width = 400;
@@ -273,7 +331,7 @@ export default function PlayerPhotoStudio({
     if (v === 'card') return clampCardPan(layout, size, pan);
     return anchor ? clampPortraitPan(layout, anchor, size, pan) : pan;
   };
-  const frameOf = (v: View) => (v === 'card' ? card : portrait);
+  const frameOf = (v: View): Frame => (v === 'card' ? card : { size: portrait.size, pan: portraitPan });
   const setFrame = (v: View, f: Frame) => (v === 'card' ? setCard(f) : setPortrait(f));
   const changeSize = (next: number) => {
     const f = frameOf(active);
@@ -307,7 +365,7 @@ export default function PlayerPhotoStudio({
   const placement = (c: HTMLCanvasElement) =>
     active === 'card' || !anchor
       ? placeCard(c.width, c.height, layout!, card.size, card.pan)
-      : placePortrait(c.width, c.height, anchor, portrait.size, portrait.pan);
+      : placePortrait(c.width, c.height, anchor, portrait.size, portraitPan);
 
   const eraseLine = (a: Pt, b: Pt) => {
     if (!cut || !layout) return;
@@ -338,6 +396,8 @@ export default function PlayerPhotoStudio({
   const onPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!cut || !layout || saving) return;
     e.preventDefault();
+    if (pointerRef.current !== null) return; // zweiter Finger: ignorieren
+    pointerRef.current = e.pointerId;
     e.currentTarget.setPointerCapture(e.pointerId);
     const pt = toCanvas(e);
     if (tool === 'move') {
@@ -356,6 +416,7 @@ export default function PlayerPhotoStudio({
 
   const onPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!layout) return;
+    if (pointerRef.current !== null && e.pointerId !== pointerRef.current) return;
     const pt = toCanvas(e);
     if (tool === 'move') {
       const d = dragRef.current;
@@ -373,6 +434,8 @@ export default function PlayerPhotoStudio({
   };
 
   const onPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (pointerRef.current !== null && e.pointerId !== pointerRef.current) return;
+    pointerRef.current = null;
     dragRef.current = null;
     strokeRef.current = null;
     if (e.pointerType !== 'mouse') setCursor(null); // am Handy den Pinsel-Umriss wieder ausblenden
@@ -396,6 +459,7 @@ export default function PlayerPhotoStudio({
     undoRef.current = [];
     setUndoCount(0);
     erasedRef.current = false;
+    genRef.current++; // eine noch laufende Gesichtserkennung zählt nicht mehr
     setLayout(measure(cut.work));
     setFaces(facesRef.current);
     setCard(FRESH);
@@ -405,20 +469,24 @@ export default function PlayerPhotoStudio({
 
   // Nach dem Radieren den übrig gebliebenen Spieler neu einpassen – Kartenbild
   // und Porträt (Gesichter neu suchen, weggewischte zählen nicht mehr).
-  const refit = async () => {
+  const refit = () => {
     if (!cut) return;
     const l = measure(cut.work);
     if (!l) return;
-    const found = await detectFaces(cut.work).catch(() => faces);
     setLayout(l);
-    setFaces(found);
     setCard(FRESH);
     setPortrait(FRESH);
+    const gen = ++genRef.current;
+    detectFaces(cut.work)
+      .then((found) => {
+        if (genRef.current === gen) setFaces(found);
+      })
+      .catch(() => {});
   };
 
   const switchTool = (next: Tool) => {
     if (next === tool) return;
-    if (tool === 'erase' && erasedRef.current) void refit();
+    if (tool === 'erase' && erasedRef.current) refit();
     erasedRef.current = false;
     setCursor(null);
     setTool(next);
@@ -508,14 +576,15 @@ export default function PlayerPhotoStudio({
       onClose();
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Hochladen fehlgeschlagen.');
-      setPhase(hadCut ? 'ready' : 'error');
+      setPhase(loadedRef.current); // weiter, wo das Laden inzwischen steht
     }
   };
 
   const ready = Boolean(cut && layout);
   const frame = frameOf(active);
-  const showCard = target !== 'portrait';
-  const showPortrait = target !== 'card';
+  // Vorschau = Stand NACH dem Übernehmen: neu, wo etwas geändert wird, sonst das bisherige Bild.
+  const cardShown = target !== 'portrait' ? previews.card : player.imageUrl;
+  const listShown = target !== 'card' ? previews.portrait : player.portraitUrl || cardCutout || previews.full;
   const toolBtn = (on: boolean) =>
     `inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold cursor-pointer transition-colors disabled:opacity-40 ${
       on ? 'bg-white/10 text-white border border-brand-accent-light/60' : 'border border-white/10 text-gray-400 hover:text-white hover:bg-white/5'
@@ -683,8 +752,8 @@ export default function PlayerPhotoStudio({
             {ready && (
               <div className="min-w-0 space-y-4">
                 <div className="text-[11px] font-mono uppercase tracking-wider text-gray-400">Vorschau</div>
-                {showCard && <CardPreview name={playerName} imageUrl={previews.card} team={team} />}
-                {showPortrait && <PortraitPreviews name={playerName} teamName={team?.name} url={previews.portrait} />}
+                <CardPreview name={playerName} imageUrl={cardShown} team={team} />
+                <PortraitPreviews name={playerName} teamName={team?.name} url={listShown} />
               </div>
             )}
           </div>
