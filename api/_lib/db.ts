@@ -48,6 +48,8 @@ export function normalizeRoster(roster: unknown): Player[] {
           ...(p.imageUrl && typeof p.cutoutUrl === 'string' && p.cutoutUrl && p.cutoutSrc === p.imageUrl
             ? { cutoutUrl: p.cutoutUrl, cutoutSrc: p.cutoutSrc }
             : {}),
+          // Porträt für Listen (Hero One) – unabhängig vom Kartenbild.
+          ...(typeof p.portraitUrl === 'string' && p.portraitUrl ? { portraitUrl: p.portraitUrl } : {}),
           ...(num !== undefined && num >= 0 ? { number: num } : {}),
           ...(p.captain === true ? { captain: true } : {}),
           ...(p.goalkeeper === true ? { goalkeeper: true } : {}),

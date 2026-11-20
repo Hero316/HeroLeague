@@ -8,6 +8,7 @@ import { ticketAdminList, type TicketAdminConfig } from '../lib/register';
 import { calculateEventStandings, calculateEventAwards } from '../lib/eventStandings';
 import PlayerAvatar from './PlayerAvatar';
 import { CutoutBatch, CutoutButton } from './CutoutTools';
+import { PortraitRestore } from './PortraitRestore';
 import PlayerPhotoStudio from './PlayerPhotoStudio';
 import { validCutout } from '../lib/playerPhoto';
 import { HERO_SLIDE_LABELS, normalizeHeroOrder } from '../lib/heroSlides';
@@ -2102,6 +2103,14 @@ export default function AdminPanel({
           <div className="mb-6 rounded-xl border border-white/10 bg-white/[.03] px-3.5 py-3">
             <div className="text-[11px] font-mono text-gray-400 uppercase tracking-wider mb-2">Spielerfotos freistellen (Hintergrund entfernen)</div>
             <CutoutBatch
+              teams={teams}
+              onEditTeam={onEditTeam}
+              onTeamSaved={(teamId, roster) => {
+                if (teamId === selectedEditTeamId) setEditTeamRoster(roster);
+              }}
+            />
+            {/* Einmalig: vorherige Porträts für Hero One zurückholen (verschwindet danach). */}
+            <PortraitRestore
               teams={teams}
               onEditTeam={onEditTeam}
               onTeamSaved={(teamId, roster) => {

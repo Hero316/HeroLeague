@@ -26,6 +26,7 @@ interface HeroEntry extends HeroRanked {
   name: string;
   imageUrl?: string;
   cutoutUrl?: string; // freigestellt (ohne Hintergrund)
+  portraitUrl?: string; // eigenes Porträt (Kopf & Schultern) – hat Vorrang vor der Freistellung
   teamName: string;
   teamLogoColor: string;
 }
@@ -44,12 +45,14 @@ export default function HeroOne({ rows, cfg, matches, teams, seasonNumber, seaso
       .slice(0, NOMINEES)
       .map((p) => {
         const team = teams.find((t) => t.id === p.teamId);
+        const squad = team?.spielerliste?.find((s) => s.name === p.playerName);
         return {
           ...p,
           id: `${p.teamId}::${p.playerName}`,
           name: p.playerName,
-          imageUrl: team?.spielerliste?.find((s) => s.name === p.playerName)?.imageUrl,
-          cutoutUrl: validCutout(team?.spielerliste?.find((s) => s.name === p.playerName)),
+          imageUrl: squad?.imageUrl,
+          cutoutUrl: validCutout(squad),
+          portraitUrl: squad?.portraitUrl,
           teamName: team?.name ?? '',
           teamLogoColor: team?.logoColor || '#3B82F6',
         };
@@ -198,13 +201,14 @@ function NomineeCard({
       className={`rounded-2xl border overflow-hidden transition-colors duration-300 ${open ? 'border-[rgba(233,196,106,.45)] bg-[rgba(233,196,106,.06)]' : 'border-white/10 bg-white/[.03]'}`}
     >
       <button type="button" onClick={onToggle} aria-expanded={open} className="w-full flex items-center gap-3 sm:gap-4 px-3 sm:px-4 py-3 text-left cursor-pointer min-w-0">
-        {/* Immer gleich breit. Freigestellt: Spieler steht ohne Rahmen unten auf
-            der Kartenkante. Sonst Foto bzw. Vereinslogo – ohne goldenen Kasten. */}
-        {p.cutoutUrl ? (
+        {/* Immer gleich breit. Porträt bzw. Freistellung: Spieler steht ohne Rahmen
+            unten auf der Kartenkante. Sonst Foto bzw. Platzhalter – ohne goldenen Kasten.
+            Das eigene Porträt hat Vorrang: Action-Fotos der FIFA-Karte wären hier winzig. */}
+        {p.portraitUrl || p.cutoutUrl ? (
           // Schnittkante bündig an der linken Kartenkante; so breit wie das Bild,
           // damit der Text direkt daneben nachrückt.
           <span className="shrink-0 h-[116px] -ml-3 sm:-ml-4 -mb-3 -mt-1 flex items-end" title={p.name}>
-            <img src={p.cutoutUrl} alt={p.name} className="h-full w-auto max-w-[150px] object-contain object-left-bottom drop-shadow-[0_8px_18px_rgba(0,0,0,.5)]" loading="lazy" />
+            <img src={p.portraitUrl || p.cutoutUrl} alt={p.name} className="h-full w-auto max-w-[150px] object-contain object-left-bottom drop-shadow-[0_8px_18px_rgba(0,0,0,.5)]" loading="lazy" />
           </span>
         ) : (
           <span className="shrink-0 w-[104px] h-[104px] rounded-[26px] grid place-items-center overflow-hidden" title={p.name}>
