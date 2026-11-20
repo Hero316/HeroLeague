@@ -3,6 +3,9 @@ export interface Player {
   imageUrl?: string;
   cutoutUrl?: string; // freigestelltes Foto (ohne Hintergrund), automatisch erzeugt
   cutoutSrc?: string; // aus welchem Foto (imageUrl) die Freistellung entstand
+  // Porträt (freigestellt, Kopf & Schultern) für Listen wie Hero One – unabhängig
+  // vom Kartenbild (imageUrl): ein neues Action-Foto für die FIFA-Karte ändert es nicht.
+  portraitUrl?: string;
   number?: number; // feste Trikotnummer (ab Saisonstart), optional
   captain?: boolean; // Mannschaftskapitän (max. einer pro Team, vom Superadmin gesetzt)
   goalkeeper?: boolean; // Torwart (ein Team kann mehrere haben) – nur Vorauswahl für die Abend-Aufstellung, dort weiter änderbar

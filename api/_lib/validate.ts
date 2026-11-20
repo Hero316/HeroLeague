@@ -77,6 +77,7 @@ export function isRoster(value: unknown): value is Player[] {
         ((p as Player).imageUrl === undefined || typeof (p as Player).imageUrl === 'string') &&
         ((p as Player).cutoutUrl === undefined || typeof (p as Player).cutoutUrl === 'string') &&
         ((p as Player).cutoutSrc === undefined || typeof (p as Player).cutoutSrc === 'string') &&
+        ((p as Player).portraitUrl === undefined || typeof (p as Player).portraitUrl === 'string') &&
         // Kapitäns-Flag optional: fehlt oder boolean
         ((p as Player).captain === undefined || typeof (p as Player).captain === 'boolean') &&
         // Torwart-Flag optional: fehlt oder boolean
