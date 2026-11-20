@@ -688,6 +688,7 @@ function TransferDialog({ b, teams, seasons, onClose, onDone }: { b: BookingAdmi
       const p: Player = { name: n };
       if (prev?.imageUrl) p.imageUrl = prev.imageUrl;
       if (prev?.cutoutUrl) { p.cutoutUrl = prev.cutoutUrl; p.cutoutSrc = prev.cutoutSrc; }
+      if (prev?.portraitUrl) p.portraitUrl = prev.portraitUrl; // Porträt (Hero One, Statistik) nicht verlieren
       if (r.number !== null) p.number = r.number;
       if (r.captain) p.captain = true;
       if (r.keeper) p.goalkeeper = true; // alle angegebenen Torhüter (mehrere möglich)
