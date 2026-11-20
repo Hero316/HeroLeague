@@ -8,9 +8,8 @@ import { ticketAdminList, type TicketAdminConfig } from '../lib/register';
 import { calculateEventStandings, calculateEventAwards } from '../lib/eventStandings';
 import PlayerAvatar from './PlayerAvatar';
 import { CutoutBatch, CutoutButton } from './CutoutTools';
-import { PortraitRestore } from './PortraitRestore';
 import PlayerPhotoStudio from './PlayerPhotoStudio';
-import { validCutout } from '../lib/playerPhoto';
+import { listPortrait, validCutout } from '../lib/playerPhoto';
 import { HERO_SLIDE_LABELS, normalizeHeroOrder } from '../lib/heroSlides';
 import { AccordionSection, TeamCrest } from './ui';
 import { GAME_MINUTES, BREAK_MINUTES, slotTimes, isHHMM } from '../lib/matchTiming';
@@ -120,14 +119,17 @@ function RosterEditor({
   teamColor,
   onChange,
   cutouts = false,
+  team,
 }: {
   roster: Player[];
   teamColor: string;
   onChange: (roster: Player[]) => void;
-  cutouts?: boolean; // Freisteller (Schere) anzeigen – nur Liga-Kader
+  cutouts?: boolean; // Foto-Studio + Freisteller (Schere) – nur Liga-Kader
+  team?: { name?: string; logoUrl?: string; logoColor?: string }; // für die Vorschau im Foto-Studio
 }) {
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
-  const [studio, setStudio] = useState<{ index: number; file: File; name: string } | null>(null);
+  // Foto-Studio: mit file = neues Foto, ohne = vorhandene Bilder bearbeiten
+  const [studio, setStudio] = useState<{ index: number; file?: File; player: Player } | null>(null);
   // Immer den NEUESTEN Kader ändern – Uploads/Freistellen dauern ein paar
   // Sekunden, in denen sich der Kader schon geändert haben kann.
   const rosterRef = React.useRef(roster);
@@ -156,10 +158,11 @@ function RosterEditor({
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file) return;
-      // Liga-Kader: Foto-Studio – freistellen, auf den Spielerbild-Hintergrund
-      // setzen, Vorschau. Erst „Übernehmen" lädt hoch.
+      // Liga-Kader: Foto-Studio – freistellen, Kartenbild und/oder Porträt
+      // zuschneiden, Vorschau. Erst „Übernehmen" lädt hoch.
       if (cutouts) {
-        setStudio({ index, file, name: rosterRef.current[index]?.name ?? '' });
+        const current = rosterRef.current[index];
+        if (current) setStudio({ index, file, player: current });
         return;
       }
       setUploadingIndex(index);
@@ -179,7 +182,22 @@ function RosterEditor({
     <div className="space-y-2">
       {roster.map((player, index) => (
         <div key={index} className="flex items-center gap-2 bg-[#060E0F]/60 border border-white/5 rounded-lg px-2.5 py-2">
-          {validCutout(player) ? (
+          {cutouts && (player.imageUrl || player.portraitUrl) ? (
+            // Liga-Kader: Porträt (sonst Kartenbild) – Klick öffnet das Foto-Studio
+            // zum Bearbeiten der vorhandenen Bilder.
+            <button
+              type="button"
+              onClick={() => setStudio({ index, player })}
+              title="Bilder bearbeiten (Kartenbild / Porträt)"
+              className="shrink-0 w-8 h-8 grid place-items-end overflow-hidden rounded-md bg-[repeating-conic-gradient(#ffffff14_0_25%,transparent_0_50%)] bg-[length:8px_8px] cursor-pointer ring-1 ring-white/10 hover:ring-brand-accent-light transition-shadow"
+            >
+              {listPortrait(player) ? (
+                <img src={listPortrait(player)} alt="" className="max-w-full max-h-full object-contain object-bottom" />
+              ) : (
+                <img src={player.imageUrl} alt="" className="w-full h-full object-cover" />
+              )}
+            </button>
+          ) : validCutout(player) ? (
             // Vorschau der Freistellung
             <span className="shrink-0 w-8 h-8 grid place-items-end overflow-hidden rounded-md bg-[repeating-conic-gradient(#ffffff14_0_25%,transparent_0_50%)] bg-[length:8px_8px]" title="Freigestellt">
               <img src={validCutout(player)} alt="" className="max-w-full max-h-full object-contain object-bottom" />
@@ -247,11 +265,11 @@ function RosterEditor({
             )}
           </button>
           {cutouts && <CutoutButton player={player} onDone={(patch) => updatePlayer(index, patch)} />}
-          {player.imageUrl && (
+          {(player.imageUrl || player.portraitUrl) && (
             <button
               type="button"
-              onClick={() => updatePlayer(index, { imageUrl: undefined, cutoutUrl: undefined, cutoutSrc: undefined })}
-              title="Foto entfernen"
+              onClick={() => updatePlayer(index, { imageUrl: undefined, cutoutUrl: undefined, cutoutSrc: undefined, portraitUrl: undefined })}
+              title="Fotos entfernen (Kartenbild und Porträt)"
               className="shrink-0 p-1.5 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-md transition-colors cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
@@ -278,7 +296,8 @@ function RosterEditor({
       {studio && (
         <PlayerPhotoStudio
           file={studio.file}
-          playerName={studio.name}
+          player={studio.player}
+          team={team}
           onClose={() => setStudio(null)}
           onDone={(patch) => updatePlayer(studio.index, patch)}
         />
@@ -2109,14 +2128,6 @@ export default function AdminPanel({
                 if (teamId === selectedEditTeamId) setEditTeamRoster(roster);
               }}
             />
-            {/* Einmalig: vorherige Porträts für Hero One zurückholen (verschwindet danach). */}
-            <PortraitRestore
-              teams={teams}
-              onEditTeam={onEditTeam}
-              onTeamSaved={(teamId, roster) => {
-                if (teamId === selectedEditTeamId) setEditTeamRoster(roster);
-              }}
-            />
           </div>
 
           <div className="space-y-5">
@@ -2227,11 +2238,18 @@ export default function AdminPanel({
                   <label className="block text-xs font-mono text-gray-400 mb-1.5 uppercase tracking-wider">
                     SPIELER-KADER (MIT OPTIONALEM FOTO)
                   </label>
-                  <RosterEditor roster={editTeamRoster} teamColor={editTeamColor} onChange={setEditTeamRoster} cutouts />
+                  <RosterEditor
+                    roster={editTeamRoster}
+                    teamColor={editTeamColor}
+                    onChange={setEditTeamRoster}
+                    cutouts
+                    team={{ name: editTeamName, logoUrl: editTeamLogoUrl, logoColor: editTeamColor }}
+                  />
                   <p className="text-[10px] text-gray-400 font-sans mt-1.5">
-                    Diese Spieler stehen im Spielplan zur Torschützen- und Vorlagen-Zuweisung bereit. Kamera = Foto wählen:
-                    Der Spieler wird automatisch freigestellt und auf den Spielerbild-Hintergrund gesetzt (mit Vorschau).
-                    Schere ✂ = Freistellung erneuern bzw. entfernen. Danach „Änderungen speichern".
+                    Diese Spieler stehen im Spielplan zur Torschützen- und Vorlagen-Zuweisung bereit. Jeder Spieler hat ein
+                    Kartenbild (FIFA-Karte, Kader) und ein Porträt (Hero One, Statistik) – ohne eigenes Porträt gilt das
+                    Kartenbild für alles. Kamera = neues Foto, Klick aufs Spielerbild = vorhandene Bilder bearbeiten (jeweils
+                    mit Vorschau). Schere ✂ = Freistellung erneuern bzw. entfernen. Danach „Änderungen speichern".
                   </p>
 
                 </div>
