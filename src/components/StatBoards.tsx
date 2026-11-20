@@ -330,11 +330,14 @@ function Podium({
                 first ? 'flex lg:flex-col items-center lg:items-stretch gap-3 sm:gap-4 p-3.5 sm:p-5' : 'flex flex-col p-3 sm:p-4'
               }`}
             >
-              <div className={`relative shrink-0 ${first ? 'w-[96px] sm:w-[120px] lg:w-full' : 'w-full'}`}>
+              {/* Platz 1 am Handy (Bild links neben dem Text): Die Spalte ist breiter als
+                  das Bild, das Bild steht rechts darin – so liegt die Medaille in der
+                  freien Ecke und nicht auf dem Kopf des Spielers. */}
+              <div className={`relative shrink-0 ${first ? 'w-[120px] sm:w-[150px] lg:w-full' : 'w-full'}`}>
                 {/* Medaille mit Platz-Nummer */}
                 <span
-                  className={`absolute z-[1] -top-1 -left-1 rounded-full grid place-items-center font-display font-black leading-none text-[#0b1415] shadow-[0_6px_16px_rgba(0,0,0,.5)] ring-2 ring-[#0b1415]/60 ${
-                    first ? 'w-9 h-9 text-[20px] sm:w-11 sm:h-11 sm:text-2xl lg:w-12 lg:h-12 lg:text-[26px]' : 'w-8 h-8 text-lg sm:w-9 sm:h-9 sm:text-xl'
+                  className={`absolute z-[1] -top-1 -left-1 rounded-full grid place-items-center font-display font-black leading-none text-[#0b1415] shadow-[0_6px_16px_rgba(0,0,0,.5)] ring-2 ring-[#0b1415]/60 w-8 h-8 text-lg sm:w-9 sm:h-9 sm:text-xl ${
+                    first ? 'lg:w-12 lg:h-12 lg:text-[26px]' : ''
                   }`}
                   style={{ background: `linear-gradient(145deg, ${MEDAL[i]}, ${shade(MEDAL[i], 0.7)})` }}
                 >
@@ -371,20 +374,22 @@ function Visual({ entry, team, players, big }: { entry: BoardEntry; team?: Team;
   const photo = players.find((p) => p.teamId === entry.teamId && p.name === entry.playerName)?.imageUrl || squad?.imageUrl;
   const color = team?.logoColor || '#22DFC9';
   const box = big ? 'h-[96px] sm:h-[120px] lg:h-[170px]' : 'h-[86px] sm:h-[110px]';
+  // Platz 1 am Handy: Bild rechts in der Spalte (links oben sitzt die Medaille).
+  const side = big ? 'justify-end lg:justify-center' : 'justify-center';
   if (cut)
     return (
-      <div className={`${box} flex items-end justify-center`}>
+      <div className={`${box} flex items-end ${side}`}>
         <img src={cut} alt={entry.playerName} loading="lazy" decoding="async" className="h-full w-auto max-w-full object-contain object-bottom drop-shadow-[0_10px_22px_rgba(0,0,0,.55)]" />
       </div>
     );
   if (photo)
     return (
-      <div className={`${box} flex items-center justify-center`}>
+      <div className={`${box} flex items-center ${side}`}>
         <img src={photo} alt={entry.playerName} loading="lazy" decoding="async" className="h-full aspect-square object-cover rounded-2xl border-2 shadow-[0_12px_30px_rgba(0,0,0,.45)]" style={{ borderColor: color }} />
       </div>
     );
   return (
-    <div className={`${box} flex items-center justify-center`}>
+    <div className={`${box} flex items-center ${side}`}>
       {team?.logoUrl ? (
         <TeamLogoImg url={team.logoUrl} alt={team.name} className="h-[88%] aspect-square drop-shadow-[0_10px_22px_rgba(0,0,0,.5)]" />
       ) : (
@@ -464,14 +469,20 @@ function TableRest({
   onSelectTeam?: (teamId: string, playerName?: string) => void;
 }) {
   if (rows.length === 0) return null;
-  // Viele Spalten: am Handy steht der Name in einer eigenen Zeile über den Zahlen.
-  const wide = cols.length >= 5;
-  const colW = 'w-[46px] sm:w-[84px] lg:w-[104px]';
+  // Am Handy und am Tablet steht der Name in einer eigenen Zeile über den Zahlen –
+  // neben drei und mehr Zahlenspalten bliebe sonst nur Platz für „Jo…". In eine
+  // Zeile passt alles ab 768 px, mit fünf Spalten (Pässe) erst ab 1024 px.
+  const wide = cols.length >= 3;
+  const one =
+    cols.length >= 5
+      ? { row: 'lg:flex-nowrap', name: 'lg:basis-0', head: 'lg:visible', first: 'lg:ml-0' }
+      : { row: 'md:flex-nowrap', name: 'md:basis-0', head: 'md:visible', first: 'md:ml-0' };
+  const colW = 'w-[46px] sm:w-[72px] lg:w-[104px]';
   return (
     <div className="relative mt-3 sm:mt-4 min-w-0">
       <div className="flex items-end gap-1.5 sm:gap-3 px-3 sm:px-4 pb-2">
         <span className="w-6 sm:w-8 shrink-0" />
-        <span className={`flex-1 min-w-0 text-[10px] lg:text-xs font-bold uppercase tracking-wider text-hl-faint ${wide ? 'invisible sm:visible' : ''}`}>Spieler</span>
+        <span className={`flex-1 min-w-0 text-[10px] lg:text-xs font-bold uppercase tracking-wider text-hl-faint ${wide ? `invisible ${one.head}` : ''}`}>Spieler</span>
         {cols.map((c) => {
           const on = c.key === sortKey;
           return (
@@ -498,10 +509,10 @@ function TableRest({
               <button
                 type="button"
                 onClick={onSelectTeam && t ? () => onSelectTeam(t.id, r.playerName) : undefined}
-                className={`w-full flex items-center ${wide ? 'flex-wrap sm:flex-nowrap gap-y-1.5' : ''} gap-1.5 sm:gap-3 rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 bg-white/[.03] hover:bg-white/[.06] border border-white/[.06] transition-colors cursor-pointer text-left min-w-0`}
+                className={`w-full flex items-center ${wide ? `flex-wrap ${one.row} gap-y-1.5` : ''} gap-1.5 sm:gap-3 rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 bg-white/[.03] hover:bg-white/[.06] border border-white/[.06] transition-colors cursor-pointer text-left min-w-0`}
               >
                 <span className="w-6 sm:w-8 shrink-0 text-center font-display font-black tabular-nums text-lg sm:text-2xl text-hl-dim">{start + i + 1}</span>
-                <span className={`${wide ? 'basis-[calc(100%-2.5rem)] sm:basis-0' : ''} flex-1 min-w-0 flex items-center gap-2 sm:gap-3`}>
+                <span className={`${wide ? `basis-[calc(100%-2.5rem)] sm:basis-[calc(100%-3rem)] ${one.name}` : ''} flex-1 min-w-0 flex items-center gap-2 sm:gap-3`}>
                   {t && (
                     <span className="shrink-0">
                       <TeamCrest name={t.name} shortName={t.shortName} color={t.logoColor} logoUrl={t.logoUrl} size="md" />
@@ -509,14 +520,15 @@ function TableRest({
                   )}
                   <span className="min-w-0 truncate font-sans font-extrabold text-[14.5px] sm:text-lg text-white">{r.playerName}</span>
                 </span>
-                {wide && <span className="sm:hidden flex-1" />}
-                {cols.map((c) => {
+                {cols.map((c, ci) => {
                   const v = r.values[c.key];
                   const on = c.key === sortKey;
                   return (
                     <span
                       key={c.key}
-                      className={`shrink-0 ${colW} text-right tabular-nums ${on ? 'font-display font-black text-[17px] sm:text-2xl' : 'font-sans font-bold text-[12.5px] sm:text-[15px] text-hl-soft'}`}
+                      // Zahlen in der zweiten Zeile: nach rechts schieben, damit jede
+                      // Zahl unter ihrem Spaltenkopf steht.
+                      className={`shrink-0 ${colW} ${wide && ci === 0 ? `ml-auto ${one.first}` : ''} text-right tabular-nums ${on ? 'font-display font-black text-[17px] sm:text-2xl' : 'font-sans font-bold text-[12.5px] sm:text-[15px] text-hl-soft'}`}
                       style={on ? { color: accent } : undefined}
                     >
                       {v == null ? '–' : c.fmt ? c.fmt(v) : v}
