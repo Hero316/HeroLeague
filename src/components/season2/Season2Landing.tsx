@@ -850,17 +850,21 @@ function PayLaterNote({ days, big = false }: { days: number; big?: boolean }) {
 }
 
 // Knappheit erst zeigen, wenn sie wirklich da ist: „18 von 24 frei" klingt nach
-// „wir haben noch Zeit". Deshalb gestaffelt – und jede Stufe bleibt wahr:
-//  • mehr als die Hälfte frei → „Startplätze begrenzt"
-//  • die Hälfte oder weniger frei → „Über die Hälfte vergeben"
-//  • höchstens ein Drittel frei (bei 24: ab 8) → „Nur noch 7 von 24 Plätzen frei"
+// „wir haben noch Zeit". Deshalb gestaffelt – und jede Stufe bleibt wahr.
+// Gerechnet wird mit EINER Liga (12 Teams): Ob es eine zweite Liga gibt, ist
+// offen – maxTeams (Buchungsgrenze) kann deshalb größer sein.
+//  • unter der Hälfte einer Liga gebucht → „Startplätze begrenzt"
+//  • ab der Hälfte einer Liga gebucht (6 Teams) → „Die Hälfte der Plätze ist weg"
+//  • höchstens ein Drittel der Buchungsgrenze frei → „Nur noch 7 von 24 Plätzen frei"
+const LEAGUE_SIZE = 12;
 function SlotsBadge({ left, total, soldOut, big = false }: { left: number; total: number; soldOut: boolean; big?: boolean }) {
+  const booked = Math.max(0, total - left);
   const text = soldOut || left <= 0 ? (
     <>Ausgebucht – alle Plätze vergeben</>
   ) : left <= Math.ceil(total / 3) ? (
     <>Nur noch <span className="text-rose-300">{left}</span> von {total} Plätzen frei</>
-  ) : left <= total / 2 ? (
-    <>Über die Hälfte vergeben</>
+  ) : booked >= LEAGUE_SIZE / 2 ? (
+    <>Die Hälfte der Plätze ist weg</>
   ) : (
     <>Startplätze begrenzt</>
   );
