@@ -118,6 +118,30 @@ function Countdown({ target, compact = false }: { target: string; compact?: bool
   );
 }
 
+// Anmeldefrist Season 2 (Do, 7. Januar 2027, 23:59 Uhr deutscher Zeit). Danach
+// verschwindet der Countdown von selbst – die Buchung selbst wird damit NICHT
+// geschlossen (das bleibt der Schalter im Admin).
+const REG_DEADLINE = '2027-01-07T23:59:00+01:00';
+
+function RegDeadline() {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
+  if (now >= new Date(REG_DEADLINE).getTime()) return null;
+  return (
+    <div className="w-full max-w-[400px]">
+      <div className="font-display font-black uppercase tracking-tight text-white text-[20px] sm:text-[24px] leading-none">
+        Anmeldefrist für <span className="text-[#D7FF3B]">Season 2</span> endet in:
+      </div>
+      <div className="mt-3">
+        <Countdown target={REG_DEADLINE} />
+      </div>
+    </div>
+  );
+}
+
 function SectionHead({ kicker, title, text, center = false }: { kicker: string; title: React.ReactNode; text?: string; center?: boolean }) {
   return (
     <Reveal className={`mb-9 sm:mb-12 ${center ? 'text-center mx-auto' : ''} max-w-3xl`}>
@@ -444,6 +468,9 @@ export default function Season2Landing({ teams, matches, players, trackingRows, 
           )}
 
           <motion.div className="relative w-full max-w-6xl mx-auto px-4 pb-14 sm:pb-20 pt-32" style={finePointer ? { y: titleY, opacity: titleOpacity } : undefined}>
+            <motion.div className="mb-5" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.5 }}>
+              <RegDeadline />
+            </motion.div>
             {cfg.maxTeams ? (
               <motion.div initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.15, duration: 0.5 }}>
                 <SlotsBadge left={cfg.slotsLeft ?? 0} total={cfg.maxTeams} soldOut={soldOut} />
