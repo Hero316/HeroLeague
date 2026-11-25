@@ -68,6 +68,8 @@ import { PageHeader, Footer, AccordionGroup, AccordionSection, loadPartners } fr
 import { Shield, Sparkles, LogOut, ArrowLeft, CalendarPlus, History, Users, Printer, Pencil, Ticket, Trophy, ChevronRight, Target, Star, Twitch, MonitorPlay, Crown, Clapperboard, Handshake } from 'lucide-react';
 const TrackingCenter = lazyPage(() => import('./components/TrackingCenter'));
 const HeroOneAdmin = lazyPage(() => import('./components/HeroOneAdmin'));
+// Admin-Vorschau „Starting Five" (/starting-five) – nur für Super-Admins.
+const StartingFiveSection = lazyPage(() => import('./components/StartingFiveSection'));
 import { effectivePermissions } from './lib/permissions';
 import SpielberichtPage from './components/SpielberichtPage';
 import WertungenPage from './components/WertungenPage';
@@ -146,6 +148,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false); // Login-Status geladen?
   // Aus einer Benachrichtigung direkt geöffnetes Ticket/Aufgabe (Deep-Link).
   const [deepOpen, setDeepOpen] = useState<{ type: 'ticket' | 'task'; id: string } | null>(null);
   const isAdmin = sessionUser !== null;
@@ -463,7 +466,8 @@ export default function App() {
     fetchData();
     apiFetch<{ isAdmin: boolean; user: SessionUser | null }>('/api/auth/session')
       .then((data) => setSessionUser(data.user))
-      .catch(() => setSessionUser(null));
+      .catch(() => setSessionUser(null))
+      .finally(() => setSessionChecked(true));
     apiFetch<EventArchive>('/api/twitch?resource=event')
       .then((data) => setEventArchive(data))
       .catch(() => setEventArchive(null));
@@ -526,6 +530,26 @@ export default function App() {
     setAttr('meta[name="apple-mobile-web-app-title"]', 'content', inChat ? 'Hero Team' : 'Hero League');
     setAttr('meta[name="theme-color"]', 'content', inChat ? '#070d0c' : '#060E0F');
   }, [currentPath]);
+
+  // Admin-Vorschau „Starting Five": nur Super-Admins. Alle anderen landen auf der
+  // Startseite; die Adresse wird nicht von Suchmaschinen aufgenommen.
+  const onStartingFive = (currentPath.replace(/\/+$/, '') || '/') === '/starting-five';
+  const showStartingFive = onStartingFive && isSuperadmin;
+  useEffect(() => {
+    if (onStartingFive && sessionChecked && !isSuperadmin) navigateTo('/');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onStartingFive, sessionChecked, isSuperadmin]);
+  useEffect(() => {
+    if (!onStartingFive) return;
+    const existing = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
+    const meta = existing ?? document.head.appendChild(Object.assign(document.createElement('meta'), { name: 'robots' }));
+    const before = existing?.content;
+    meta.content = 'noindex, nofollow';
+    return () => {
+      if (existing) existing.content = before ?? '';
+      else meta.remove();
+    };
+  }, [onStartingFive]);
 
   // Team-Mitglieder haben kein Backoffice: Wer als team_member auf /admin landet
   // (z.B. nach dem Login über die Anmeldemaske dort), wird auf die normale
@@ -2258,6 +2282,12 @@ export default function App() {
             <FadeIn duration={0.9}>
             <Hero only={['pom']} fadeTop fit teams={leagueTeams} matches={currentSeasonMatches} players={players} seasonLabel={currentSeasonName} seasonNumber={currentSeasonNumber} heroImages={heroImages} imagesReady={heroReady} pom={pom} onNavigate={goToTab} onSelectTeam={openTeamDetail} onOpenMatch={(id) => navigateTo(`/spiel/${encodeURIComponent(id)}`)} reportMatchIds={reportMatchIds} trackingRows={trackingRows} scoring={scoring} seasonId={currentSeason?.id} />
             </FadeIn>
+          )}
+          {/* Nur Admin-Vorschau /starting-five: Starting Five des Spieltages */}
+          {showStartingFive && (
+            <React.Suspense fallback={null}>
+              <StartingFiveSection trackingRows={trackingRows} scoring={scoring} seasonId={currentSeason?.id} teams={leagueTeams} pom={pom} onSelectTeam={openTeamDetail} />
+            </React.Suspense>
           )}
           {/* 3. Die Spiele des laufenden / letzten Spieltags (mit Block-Filter) */}
           <Reveal y={26}>
